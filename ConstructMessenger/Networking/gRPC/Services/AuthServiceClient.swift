@@ -81,7 +81,7 @@ final class AuthServiceClient: Sendable {
                 sessionToken: response.tokens.accessToken,
                 refreshToken: response.tokens.refreshToken,
                 expires: response.tokens.expiresAt,
-                veilBridgeCert: response.tokens.hasIceBridgeCert ? response.tokens.iceBridgeCert : nil
+                veilBridgeCert: response.tokens.hasVeilBridgeCert ? response.tokens.veilBridgeCert : nil
             )
         }
     }
@@ -107,7 +107,7 @@ final class AuthServiceClient: Sendable {
                 refreshToken: response.tokens.refreshToken,
                 expiresAt: response.tokens.expiresAt,
                 expiresIn: nil,
-                iceBridgeCert: response.tokens.hasIceBridgeCert ? response.tokens.iceBridgeCert : nil
+                veilBridgeCert: response.tokens.hasVeilBridgeCert ? response.tokens.veilBridgeCert : nil
             )
         }
     }
@@ -244,7 +244,7 @@ final class AuthServiceClient: Sendable {
                 refreshToken: response.tokens.refreshToken,
                 expiresAt: response.tokens.expiresAt,
                 expiresIn: nil,
-                iceBridgeCert: response.tokens.hasIceBridgeCert ? response.tokens.iceBridgeCert : nil
+                veilBridgeCert: response.tokens.hasVeilBridgeCert ? response.tokens.veilBridgeCert : nil
             )
         }
     }
@@ -275,7 +275,7 @@ final class AuthServiceClient: Sendable {
         let accessToken: String
         let refreshToken: String
         let expiresAt: Int64
-        let iceBridgeCert: String?
+        let veilBridgeCert: String?
     }
 
     /// Device B calls this after scanning the QR code.
@@ -298,7 +298,7 @@ final class AuthServiceClient: Sendable {
                 accessToken: response.tokens.accessToken,
                 refreshToken: response.tokens.refreshToken,
                 expiresAt: response.tokens.expiresAt,
-                iceBridgeCert: response.tokens.hasIceBridgeCert ? response.tokens.iceBridgeCert : nil
+                veilBridgeCert: response.tokens.hasVeilBridgeCert ? response.tokens.veilBridgeCert : nil
             )
         }
     }
@@ -402,7 +402,7 @@ final class AuthServiceClient: Sendable {
                     accessToken: t.accessToken,
                     refreshToken: t.refreshToken,
                     expiresAt: t.expiresAt,
-                    iceBridgeCert: t.hasIceBridgeCert ? t.iceBridgeCert : nil
+                    veilBridgeCert: t.hasVeilBridgeCert ? t.veilBridgeCert : nil
                 )
             case .rejected:
                 throw DeviceLinkError.rejected

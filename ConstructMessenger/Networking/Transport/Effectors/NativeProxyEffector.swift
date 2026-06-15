@@ -31,10 +31,15 @@ actor NativeProxyEffector: ProxyEffector {
         }
         do {
             let result = try await proxy.ensure(relay: relay)
+            await VeilProxyManager.shared.reportLastError(nil)
             return .proxyStarted(relay: relay.address, port: result.port, restarted: result.restarted)
         } catch {
             pool.recordFailure(relay)
-            return .proxyStartFailed(relay: relay.address, reason: "\(error)")
+            // Prefer the clean, real reason (veil_last_error → VeilProxyRuntimeError)
+            // over the raw nested enum description.
+            let reason = (error as? VeilProxyError)?.localizedDescription ?? "\(error)"
+            await VeilProxyManager.shared.reportLastError(reason)
+            return .proxyStartFailed(relay: relay.address, reason: reason)
         }
     }
 

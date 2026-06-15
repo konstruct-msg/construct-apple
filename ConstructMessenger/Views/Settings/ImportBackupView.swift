@@ -94,7 +94,7 @@ struct ImportBackupView: View {
                                     .foregroundStyle(Color.CT.accent)
                             }
                             Spacer()
-                            Text("[→]")
+                            Image(systemName: "chevron.right")
                                 .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.accent)
                         }

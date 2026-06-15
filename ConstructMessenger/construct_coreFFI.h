@@ -907,6 +907,27 @@ RustBuffer uniffi_construct_core_fn_func_generate_mnemonic(uint8_t word_count, R
 uint64_t uniffi_construct_core_fn_func_heartbeat_interval_ms(uint64_t base_interval_sec, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HYBRID_PUBLIC_KEY_FROM_PRIVATE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HYBRID_PUBLIC_KEY_FROM_PRIVATE
+RustBuffer uniffi_construct_core_fn_func_hybrid_public_key_from_private(RustBuffer private_key, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HYBRID_SIGN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HYBRID_SIGN
+RustBuffer uniffi_construct_core_fn_func_hybrid_sign(RustBuffer private_key, RustBuffer message, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HYBRID_SIGNATURE_KEYGEN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HYBRID_SIGNATURE_KEYGEN
+RustBuffer uniffi_construct_core_fn_func_hybrid_signature_keygen(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HYBRID_VERIFY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HYBRID_VERIFY
+int8_t uniffi_construct_core_fn_func_hybrid_verify(RustBuffer public_key, RustBuffer message, RustBuffer signature, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IS_DUMMY_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IS_DUMMY_MESSAGE
 int8_t uniffi_construct_core_fn_func_is_dummy_message(RustBuffer data, RustCallStatus *_Nonnull out_status
@@ -915,6 +936,22 @@ int8_t uniffi_construct_core_fn_func_is_dummy_message(RustBuffer data, RustCallS
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_JITTERED_INTERVAL_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_JITTERED_INTERVAL_MS
 uint64_t uniffi_construct_core_fn_func_jittered_interval_ms(uint64_t base_ms, uint64_t jitter_ms, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLDSA65_KEYGEN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLDSA65_KEYGEN
+RustBuffer uniffi_construct_core_fn_func_mldsa65_keygen(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLDSA65_SIGN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLDSA65_SIGN
+RustBuffer uniffi_construct_core_fn_func_mldsa65_sign(RustBuffer secret_key, RustBuffer message, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLDSA65_VERIFY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLDSA65_VERIFY
+int8_t uniffi_construct_core_fn_func_mldsa65_verify(RustBuffer public_key, RustBuffer message, RustBuffer signature, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLKEM768_DECAPSULATE
@@ -1374,6 +1411,30 @@ uint16_t uniffi_construct_core_checksum_func_heartbeat_interval_ms(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HYBRID_PUBLIC_KEY_FROM_PRIVATE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HYBRID_PUBLIC_KEY_FROM_PRIVATE
+uint16_t uniffi_construct_core_checksum_func_hybrid_public_key_from_private(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HYBRID_SIGN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HYBRID_SIGN
+uint16_t uniffi_construct_core_checksum_func_hybrid_sign(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HYBRID_SIGNATURE_KEYGEN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HYBRID_SIGNATURE_KEYGEN
+uint16_t uniffi_construct_core_checksum_func_hybrid_signature_keygen(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HYBRID_VERIFY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HYBRID_VERIFY
+uint16_t uniffi_construct_core_checksum_func_hybrid_verify(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_IS_DUMMY_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_IS_DUMMY_MESSAGE
 uint16_t uniffi_construct_core_checksum_func_is_dummy_message(void
@@ -1383,6 +1444,24 @@ uint16_t uniffi_construct_core_checksum_func_is_dummy_message(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_JITTERED_INTERVAL_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_JITTERED_INTERVAL_MS
 uint16_t uniffi_construct_core_checksum_func_jittered_interval_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLDSA65_KEYGEN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLDSA65_KEYGEN
+uint16_t uniffi_construct_core_checksum_func_mldsa65_keygen(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLDSA65_SIGN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLDSA65_SIGN
+uint16_t uniffi_construct_core_checksum_func_mldsa65_sign(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLDSA65_VERIFY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLDSA65_VERIFY
+uint16_t uniffi_construct_core_checksum_func_mldsa65_verify(void
     
 );
 #endif

@@ -21,8 +21,8 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
-enum Shared_Proto_Services_V1_AdminRole: SwiftProtobuf.Enum, Swift.CaseIterable {
-  typealias RawValue = Int
+public enum Shared_Proto_Services_V1_AdminRole: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
   case unspecified // = 0
 
   /// Full admin: invite, remove, delegate, dissolve
@@ -32,11 +32,11 @@ enum Shared_Proto_Services_V1_AdminRole: SwiftProtobuf.Enum, Swift.CaseIterable 
   case moderator // = 2
   case UNRECOGNIZED(Int)
 
-  init() {
+  public init() {
     self = .unspecified
   }
 
-  init?(rawValue: Int) {
+  public init?(rawValue: Int) {
     switch rawValue {
     case 0: self = .unspecified
     case 1: self = .full
@@ -45,7 +45,7 @@ enum Shared_Proto_Services_V1_AdminRole: SwiftProtobuf.Enum, Swift.CaseIterable 
     }
   }
 
-  var rawValue: Int {
+  public var rawValue: Int {
     switch self {
     case .unspecified: return 0
     case .full: return 1
@@ -55,7 +55,7 @@ enum Shared_Proto_Services_V1_AdminRole: SwiftProtobuf.Enum, Swift.CaseIterable 
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  static let allCases: [Shared_Proto_Services_V1_AdminRole] = [
+  public static let allCases: [Shared_Proto_Services_V1_AdminRole] = [
     .unspecified,
     .full,
     .moderator,
@@ -63,8 +63,8 @@ enum Shared_Proto_Services_V1_AdminRole: SwiftProtobuf.Enum, Swift.CaseIterable 
 
 }
 
-enum Shared_Proto_Services_V1_GroupErrorCode: SwiftProtobuf.Enum, Swift.CaseIterable {
-  typealias RawValue = Int
+public enum Shared_Proto_Services_V1_GroupErrorCode: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
   case unspecified // = 0
 
   /// Caller is not a member of this group
@@ -92,11 +92,11 @@ enum Shared_Proto_Services_V1_GroupErrorCode: SwiftProtobuf.Enum, Swift.CaseIter
   case noKeyPackage // = 8
   case UNRECOGNIZED(Int)
 
-  init() {
+  public init() {
     self = .unspecified
   }
 
-  init?(rawValue: Int) {
+  public init?(rawValue: Int) {
     switch rawValue {
     case 0: self = .unspecified
     case 1: self = .notMember
@@ -111,7 +111,7 @@ enum Shared_Proto_Services_V1_GroupErrorCode: SwiftProtobuf.Enum, Swift.CaseIter
     }
   }
 
-  var rawValue: Int {
+  public var rawValue: Int {
     switch self {
     case .unspecified: return 0
     case .notMember: return 1
@@ -127,7 +127,7 @@ enum Shared_Proto_Services_V1_GroupErrorCode: SwiftProtobuf.Enum, Swift.CaseIter
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  static let allCases: [Shared_Proto_Services_V1_GroupErrorCode] = [
+  public static let allCases: [Shared_Proto_Services_V1_GroupErrorCode] = [
     .unspecified,
     .notMember,
     .epochMismatch,
@@ -141,711 +141,787 @@ enum Shared_Proto_Services_V1_GroupErrorCode: SwiftProtobuf.Enum, Swift.CaseIter
 
 }
 
-struct Shared_Proto_Services_V1_CreateGroupRequest: Sendable {
+public struct Shared_Proto_Services_V1_CreateGroupRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Client-generated group ID (UUID v4)
-  var groupID: String = String()
+  public var groupID: String = String()
 
   /// Initial MLS ratchet tree (creator as sole leaf node)
-  var initialRatchetTree: Data = Data()
+  public var initialRatchetTree: Data = Data()
 
   /// Encrypted group context: name, description, avatar hash
   /// Encrypted with initial group epoch secret. Only readable by members.
-  var encryptedGroupContext: Data = Data()
+  public var encryptedGroupContext: Data = Data()
 
   /// Maximum number of members (1-2048)
-  var maxMembers: UInt32 = 0
+  public var maxMembers: UInt32 = 0
 
   /// Message retention in days (default: 90, max: 365)
   /// Messages older than this are permanently deleted server-side.
-  var messageRetentionDays: UInt32 = 0
+  public var messageRetentionDays: UInt32 = 0
 
   /// Enable thread/topic support (future UI feature)
-  var threadsEnabled: Bool = false
+  public var threadsEnabled: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_CreateGroupResponse: Sendable {
+public struct Shared_Proto_Services_V1_CreateGroupResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
   /// Initial epoch is always 0
-  var epoch: UInt64 = 0
+  public var epoch: UInt64 = 0
 
-  var createdAt: Int64 = 0
+  public var createdAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GetGroupStateRequest: Sendable {
+public struct Shared_Proto_Services_V1_GetGroupStateRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
   /// If provided, server returns only commits since this epoch
-  var knownEpoch: UInt64 {
+  public var knownEpoch: UInt64 {
     get {_knownEpoch ?? 0}
     set {_knownEpoch = newValue}
   }
   /// Returns true if `knownEpoch` has been explicitly set.
-  var hasKnownEpoch: Bool {self._knownEpoch != nil}
+  public var hasKnownEpoch: Bool {self._knownEpoch != nil}
   /// Clears the value of `knownEpoch`. Subsequent reads from it will return its default value.
-  mutating func clearKnownEpoch() {self._knownEpoch = nil}
+  public mutating func clearKnownEpoch() {self._knownEpoch = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _knownEpoch: UInt64? = nil
 }
 
-struct Shared_Proto_Services_V1_GetGroupStateResponse: Sendable {
+public struct Shared_Proto_Services_V1_GetGroupStateResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var epoch: UInt64 = 0
+  public var epoch: UInt64 = 0
 
   /// Full ratchet tree blob (if no known_epoch or epoch too stale)
-  var ratchetTree: Data {
+  public var ratchetTree: Data {
     get {_ratchetTree ?? Data()}
     set {_ratchetTree = newValue}
   }
   /// Returns true if `ratchetTree` has been explicitly set.
-  var hasRatchetTree: Bool {self._ratchetTree != nil}
+  public var hasRatchetTree: Bool {self._ratchetTree != nil}
   /// Clears the value of `ratchetTree`. Subsequent reads from it will return its default value.
-  mutating func clearRatchetTree() {self._ratchetTree = nil}
+  public mutating func clearRatchetTree() {self._ratchetTree = nil}
 
   /// Commits since known_epoch (if known_epoch is recent enough)
-  var pendingCommits: [Shared_Proto_Services_V1_CommitEnvelope] = []
+  public var pendingCommits: [Shared_Proto_Services_V1_CommitEnvelope] = []
 
-  var settings: Shared_Proto_Services_V1_GroupSettings {
+  public var settings: Shared_Proto_Services_V1_GroupSettings {
     get {_settings ?? Shared_Proto_Services_V1_GroupSettings()}
     set {_settings = newValue}
   }
   /// Returns true if `settings` has been explicitly set.
-  var hasSettings: Bool {self._settings != nil}
+  public var hasSettings: Bool {self._settings != nil}
   /// Clears the value of `settings`. Subsequent reads from it will return its default value.
-  mutating func clearSettings() {self._settings = nil}
+  public mutating func clearSettings() {self._settings = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _ratchetTree: Data? = nil
   fileprivate var _settings: Shared_Proto_Services_V1_GroupSettings? = nil
 }
 
-struct Shared_Proto_Services_V1_GroupSettings: Sendable {
+public struct Shared_Proto_Services_V1_GroupSettings: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var maxMembers: UInt32 = 0
+  public var maxMembers: UInt32 = 0
 
   /// Current member count (number of devices in group)
-  var memberCount: UInt32 = 0
+  public var memberCount: UInt32 = 0
 
-  var messageRetentionDays: UInt32 = 0
+  public var messageRetentionDays: UInt32 = 0
 
-  var threadsEnabled: Bool = false
+  public var threadsEnabled: Bool = false
 
-  var createdAt: Int64 = 0
+  public var createdAt: Int64 = 0
 
   /// Messages older than this have been deleted server-side
-  var messagesDeletedBefore: Int64 = 0
+  public var messagesDeletedBefore: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_DissolveGroupRequest: Sendable {
+public struct Shared_Proto_Services_V1_DissolveGroupRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
   /// Ed25519 signature over "CONSTRUCT_DISSOLVE_GROUP:{group_id}:{timestamp}"
-  var adminProof: Data = Data()
+  public var adminProof: Data = Data()
 
-  var signatureTimestamp: Int64 = 0
+  public var signatureTimestamp: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_DissolveGroupResponse: Sendable {
+public struct Shared_Proto_Services_V1_DissolveGroupResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var dissolvedAt: Int64 = 0
+  public var dissolvedAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_InviteToGroupRequest: Sendable {
+public struct Shared_Proto_Services_V1_InviteToGroupRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
   /// MLS Welcome message encrypted for the invitee using their KeyPackage
-  var mlsWelcome: Data = Data()
+  public var mlsWelcome: Data = Data()
 
   /// Reference to the KeyPackage that was consumed (for server-side validation)
-  var keyPackageRef: Data = Data()
+  public var keyPackageRef: Data = Data()
 
   /// Epoch at time of invite creation
-  var epoch: UInt64 = 0
+  public var epoch: UInt64 = 0
 
   /// Invite expiry in seconds from now (max: 604800 = 7 days)
-  var expiresInSeconds: UInt32 = 0
+  public var expiresInSeconds: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_InviteToGroupResponse: Sendable {
+public struct Shared_Proto_Services_V1_InviteToGroupResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Server-assigned invite ID
-  var inviteID: String = String()
+  public var inviteID: String = String()
 
-  var expiresAt: Int64 = 0
+  public var expiresAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_AcceptGroupInviteRequest: Sendable {
+public struct Shared_Proto_Services_V1_AcceptGroupInviteRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
-  var inviteID: String = String()
+  public var inviteID: String = String()
 
   /// Explicit consent proof: Ed25519 signature over
   /// "CONSTRUCT_GROUP_JOIN:{group_id}:{invite_id}:{timestamp}"
   /// Signed with user's identity key. Cryptographically proves voluntary join.
-  var acceptanceSignature: Data = Data()
+  public var acceptanceSignature: Data = Data()
 
-  var signatureTimestamp: Int64 = 0
+  public var signatureTimestamp: Int64 = 0
 
   /// MLS Commit to add self to the ratchet tree
   /// Generated by client after processing the Welcome message locally
-  var mlsCommit: Data = Data()
+  public var mlsCommit: Data = Data()
 
   /// Updated ratchet tree after self-add
-  var newRatchetTree: Data = Data()
+  public var newRatchetTree: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_AcceptGroupInviteResponse: Sendable {
+public struct Shared_Proto_Services_V1_AcceptGroupInviteResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
   /// New epoch after join commit
-  var newEpoch: UInt64 = 0
+  public var newEpoch: UInt64 = 0
 
-  var joinedAt: Int64 = 0
+  public var joinedAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_DeclineGroupInviteRequest: Sendable {
+public struct Shared_Proto_Services_V1_DeclineGroupInviteRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
-  var inviteID: String = String()
+  public var inviteID: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_DeclineGroupInviteResponse: Sendable {
+public struct Shared_Proto_Services_V1_DeclineGroupInviteResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GetPendingInvitesRequest: Sendable {
+public struct Shared_Proto_Services_V1_GetPendingInvitesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var deviceID: String = String()
+  public var deviceID: String = String()
 
-  var cursor: String {
+  public var cursor: String {
     get {_cursor ?? String()}
     set {_cursor = newValue}
   }
   /// Returns true if `cursor` has been explicitly set.
-  var hasCursor: Bool {self._cursor != nil}
+  public var hasCursor: Bool {self._cursor != nil}
   /// Clears the value of `cursor`. Subsequent reads from it will return its default value.
-  mutating func clearCursor() {self._cursor = nil}
+  public mutating func clearCursor() {self._cursor = nil}
 
-  var limit: UInt32 = 0
+  public var limit: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _cursor: String? = nil
 }
 
-struct Shared_Proto_Services_V1_GetPendingInvitesResponse: Sendable {
+public struct Shared_Proto_Services_V1_GetPendingInvitesResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var invites: [Shared_Proto_Services_V1_PendingGroupInvite] = []
+  public var invites: [Shared_Proto_Services_V1_PendingGroupInvite] = []
 
-  var nextCursor: String {
+  public var nextCursor: String {
     get {_nextCursor ?? String()}
     set {_nextCursor = newValue}
   }
   /// Returns true if `nextCursor` has been explicitly set.
-  var hasNextCursor: Bool {self._nextCursor != nil}
+  public var hasNextCursor: Bool {self._nextCursor != nil}
   /// Clears the value of `nextCursor`. Subsequent reads from it will return its default value.
-  mutating func clearNextCursor() {self._nextCursor = nil}
+  public mutating func clearNextCursor() {self._nextCursor = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _nextCursor: String? = nil
 }
 
-struct Shared_Proto_Services_V1_PendingGroupInvite: Sendable {
+public struct Shared_Proto_Services_V1_PendingGroupInvite: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var inviteID: String = String()
+  public var inviteID: String = String()
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
   /// Encrypted Welcome message - client processes this to join the group
-  var mlsWelcome: Data = Data()
+  public var mlsWelcome: Data = Data()
 
-  var expiresAt: Int64 = 0
+  public var expiresAt: Int64 = 0
 
-  var invitedAt: Int64 = 0
+  public var invitedAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_LeaveGroupRequest: Sendable {
+public struct Shared_Proto_Services_V1_LeaveGroupRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
   /// MLS Remove Proposal for self, generated by leaving member
-  var mlsRemoveProposal: Data = Data()
+  public var mlsRemoveProposal: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_LeaveGroupResponse: Sendable {
+public struct Shared_Proto_Services_V1_LeaveGroupResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var leftAt: Int64 = 0
+  public var leftAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_RemoveMemberRequest: Sendable {
+public struct Shared_Proto_Services_V1_RemoveMemberRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
   /// Device ID to remove
-  var targetDeviceID: String = String()
+  public var targetDeviceID: String = String()
 
   /// MLS Remove Proposal generated by admin
-  var mlsRemoveProposal: Data = Data()
+  public var mlsRemoveProposal: Data = Data()
 
   /// Admin proof: Ed25519 sig over "CONSTRUCT_REMOVE_MEMBER:{group_id}:{target_device_id}:{timestamp}"
-  var adminProof: Data = Data()
+  public var adminProof: Data = Data()
 
-  var signatureTimestamp: Int64 = 0
+  public var signatureTimestamp: Int64 = 0
 
   /// Optional reason, encrypted with group epoch key (admin audit only)
-  var encryptedReason: Data {
+  public var encryptedReason: Data {
     get {_encryptedReason ?? Data()}
     set {_encryptedReason = newValue}
   }
   /// Returns true if `encryptedReason` has been explicitly set.
-  var hasEncryptedReason: Bool {self._encryptedReason != nil}
+  public var hasEncryptedReason: Bool {self._encryptedReason != nil}
   /// Clears the value of `encryptedReason`. Subsequent reads from it will return its default value.
-  mutating func clearEncryptedReason() {self._encryptedReason = nil}
+  public mutating func clearEncryptedReason() {self._encryptedReason = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _encryptedReason: Data? = nil
 }
 
-struct Shared_Proto_Services_V1_RemoveMemberResponse: Sendable {
+public struct Shared_Proto_Services_V1_RemoveMemberResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var newEpoch: UInt64 = 0
+  public var newEpoch: UInt64 = 0
 
-  var removedAt: Int64 = 0
+  public var removedAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_DelegateAdminRequest: Sendable {
+public struct Shared_Proto_Services_V1_DelegateAdminRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
   /// Device ID receiving admin rights
-  var targetDeviceID: String = String()
+  public var targetDeviceID: String = String()
 
-  var role: Shared_Proto_Services_V1_AdminRole = .unspecified
+  public var role: Shared_Proto_Services_V1_AdminRole = .unspecified
 
   /// Proof of current admin rights
-  var adminProof: Data = Data()
+  public var adminProof: Data = Data()
 
-  var signatureTimestamp: Int64 = 0
+  public var signatureTimestamp: Int64 = 0
 
   /// Admin capabilities token, encrypted with target's identity key
-  var encryptedAdminToken: Data = Data()
+  public var encryptedAdminToken: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_DelegateAdminResponse: Sendable {
+public struct Shared_Proto_Services_V1_DelegateAdminResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var delegatedAt: Int64 = 0
+  public var delegatedAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_SubmitCommitRequest: Sendable {
+public struct Shared_Proto_Services_V1_TransferOwnershipRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
+
+  /// Device ID of the new owner (must be current FULL admin)
+  public var newOwnerDeviceID: String = String()
+
+  /// Current owner's signature: Ed25519.sign(
+  ///   "CONSTRUCT_TRANSFER_OWNERSHIP:{group_id}:{new_owner_device_id}:{timestamp}"
+  /// )
+  public var ownerSignature: Data = Data()
+
+  /// New owner's acceptance signature: Ed25519.sign(
+  ///   "CONSTRUCT_ACCEPT_OWNERSHIP:{group_id}:{previous_owner_device_id}:{timestamp}"
+  /// )
+  /// Proves new owner agrees to be creator (cannot be stripped by others)
+  public var newOwnerAcceptance: Data = Data()
+
+  public var signatureTimestamp: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_TransferOwnershipResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var success: Bool = false
+
+  public var transferredAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_SubmitCommitRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var groupID: String = String()
 
   /// Epoch before this commit
-  var epoch: UInt64 = 0
+  public var epoch: UInt64 = 0
 
   /// MLS Commit message
-  var mlsCommit: Data = Data()
+  public var mlsCommit: Data = Data()
 
   /// Welcome deliveries for newly added members (if commit adds members)
-  var welcomeDeliveries: [Shared_Proto_Services_V1_WelcomeDelivery] = []
+  public var welcomeDeliveries: [Shared_Proto_Services_V1_WelcomeDelivery] = []
 
   /// Updated ratchet tree after applying this commit
-  var newRatchetTree: Data = Data()
+  public var newRatchetTree: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_WelcomeDelivery: Sendable {
+public struct Shared_Proto_Services_V1_WelcomeDelivery: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Device ID to deliver Welcome to
-  var deviceID: String = String()
+  public var deviceID: String = String()
 
   /// KeyPackage ref used for this member (for server-side validation)
-  var keyPackageRef: Data = Data()
+  public var keyPackageRef: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_SubmitCommitResponse: Sendable {
+public struct Shared_Proto_Services_V1_SubmitCommitResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var newEpoch: UInt64 = 0
+  public var newEpoch: UInt64 = 0
 
-  var committedAt: Int64 = 0
+  public var committedAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_FetchCommitsRequest: Sendable {
+public struct Shared_Proto_Services_V1_FetchCommitsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
-  var sinceEpoch: UInt64 = 0
+  public var sinceEpoch: UInt64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_CommitEnvelope: Sendable {
+public struct Shared_Proto_Services_V1_CommitEnvelope: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
-  var epochFrom: UInt64 = 0
+  public var epochFrom: UInt64 = 0
 
-  var epochTo: UInt64 = 0
+  public var epochTo: UInt64 = 0
 
-  var mlsCommit: Data = Data()
+  public var mlsCommit: Data = Data()
 
   /// Updated ratchet tree after this commit
-  var ratchetTree: Data = Data()
+  public var ratchetTree: Data = Data()
 
   /// Welcome message for THIS device (populated if this device was added)
-  var mlsWelcome: Data {
+  public var mlsWelcome: Data {
     get {_mlsWelcome ?? Data()}
     set {_mlsWelcome = newValue}
   }
   /// Returns true if `mlsWelcome` has been explicitly set.
-  var hasMlsWelcome: Bool {self._mlsWelcome != nil}
+  public var hasMlsWelcome: Bool {self._mlsWelcome != nil}
   /// Clears the value of `mlsWelcome`. Subsequent reads from it will return its default value.
-  mutating func clearMlsWelcome() {self._mlsWelcome = nil}
+  public mutating func clearMlsWelcome() {self._mlsWelcome = nil}
 
-  var committedAt: Int64 = 0
+  public var committedAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _mlsWelcome: Data? = nil
 }
 
-struct Shared_Proto_Services_V1_SendGroupMessageRequest: Sendable {
+public struct Shared_Proto_Services_V1_SendGroupMessageRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
   /// MLS ApplicationMessage - fully E2EE, server stores opaque ciphertext
-  var mlsCiphertext: Data = Data()
+  public var mlsCiphertext: Data = Data()
 
   /// Current epoch (server rejects if epoch mismatch)
-  var epoch: UInt64 = 0
+  public var epoch: UInt64 = 0
 
   /// Client-generated ID for deduplication
-  var clientMessageID: String = String()
+  public var clientMessageID: String = String()
 
   /// Thread ID: client generates UUID for first message in a thread.
   /// Replies reference the same thread_id. Feature gated by threads_enabled.
-  var threadID: String {
+  public var threadID: String {
     get {_threadID ?? String()}
     set {_threadID = newValue}
   }
   /// Returns true if `threadID` has been explicitly set.
-  var hasThreadID: Bool {self._threadID != nil}
+  public var hasThreadID: Bool {self._threadID != nil}
   /// Clears the value of `threadID`. Subsequent reads from it will return its default value.
-  mutating func clearThreadID() {self._threadID = nil}
+  public mutating func clearThreadID() {self._threadID = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  /// Topic ID: route message to a specific topic within the group.
+  /// NULL = default topic (first topic or #general equivalent).
+  public var topicID: String {
+    get {_topicID ?? String()}
+    set {_topicID = newValue}
+  }
+  /// Returns true if `topicID` has been explicitly set.
+  public var hasTopicID: Bool {self._topicID != nil}
+  /// Clears the value of `topicID`. Subsequent reads from it will return its default value.
+  public mutating func clearTopicID() {self._topicID = nil}
 
-  init() {}
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 
   fileprivate var _threadID: String? = nil
+  fileprivate var _topicID: String? = nil
 }
 
-struct Shared_Proto_Services_V1_SendGroupMessageResponse: Sendable {
+public struct Shared_Proto_Services_V1_SendGroupMessageResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Server-assigned message ID
-  var messageID: String = String()
+  public var messageID: String = String()
 
-  var sentAt: Int64 = 0
+  public var sentAt: Int64 = 0
 
   /// Monotonically increasing sequence number within group
-  var sequenceNumber: UInt64 = 0
+  public var sequenceNumber: UInt64 = 0
 
   /// Auto-delete scheduled for
-  var expiresAt: Int64 = 0
+  public var expiresAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_FetchGroupMessagesRequest: Sendable {
+public struct Shared_Proto_Services_V1_FetchGroupMessagesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
   /// Pagination: fetch messages after this sequence number
-  var afterSequence: UInt64 {
+  public var afterSequence: UInt64 {
     get {_afterSequence ?? 0}
     set {_afterSequence = newValue}
   }
   /// Returns true if `afterSequence` has been explicitly set.
-  var hasAfterSequence: Bool {self._afterSequence != nil}
+  public var hasAfterSequence: Bool {self._afterSequence != nil}
   /// Clears the value of `afterSequence`. Subsequent reads from it will return its default value.
-  mutating func clearAfterSequence() {self._afterSequence = nil}
+  public mutating func clearAfterSequence() {self._afterSequence = nil}
 
-  var limit: UInt32 = 0
+  public var limit: UInt32 = 0
 
   /// Filter by thread (future use)
-  var threadID: String {
+  public var threadID: String {
     get {_threadID ?? String()}
     set {_threadID = newValue}
   }
   /// Returns true if `threadID` has been explicitly set.
-  var hasThreadID: Bool {self._threadID != nil}
+  public var hasThreadID: Bool {self._threadID != nil}
   /// Clears the value of `threadID`. Subsequent reads from it will return its default value.
-  mutating func clearThreadID() {self._threadID = nil}
+  public mutating func clearThreadID() {self._threadID = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  /// Filter by topic (NULL = fetch all topics)
+  public var topicID: String {
+    get {_topicID ?? String()}
+    set {_topicID = newValue}
+  }
+  /// Returns true if `topicID` has been explicitly set.
+  public var hasTopicID: Bool {self._topicID != nil}
+  /// Clears the value of `topicID`. Subsequent reads from it will return its default value.
+  public mutating func clearTopicID() {self._topicID = nil}
 
-  init() {}
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 
   fileprivate var _afterSequence: UInt64? = nil
   fileprivate var _threadID: String? = nil
+  fileprivate var _topicID: String? = nil
 }
 
-struct Shared_Proto_Services_V1_GroupMessageEnvelope: Sendable {
+public struct Shared_Proto_Services_V1_GroupMessageEnvelope: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var messageID: String = String()
+  public var messageID: String = String()
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
   /// MLS epoch when message was sent (for key ratcheting)
-  var epoch: UInt64 = 0
+  public var epoch: UInt64 = 0
 
   /// MLS ApplicationMessage - server cannot read this
-  var mlsCiphertext: Data = Data()
+  public var mlsCiphertext: Data = Data()
 
-  var sentAt: Int64 = 0
+  public var sentAt: Int64 = 0
 
-  var sequenceNumber: UInt64 = 0
+  public var sequenceNumber: UInt64 = 0
 
   /// Thread ID if message is part of a thread
-  var threadID: String {
+  public var threadID: String {
     get {_threadID ?? String()}
     set {_threadID = newValue}
   }
   /// Returns true if `threadID` has been explicitly set.
-  var hasThreadID: Bool {self._threadID != nil}
+  public var hasThreadID: Bool {self._threadID != nil}
   /// Clears the value of `threadID`. Subsequent reads from it will return its default value.
-  mutating func clearThreadID() {self._threadID = nil}
+  public mutating func clearThreadID() {self._threadID = nil}
+
+  /// Topic ID if message belongs to a specific topic (NULL = default topic)
+  public var topicID: String {
+    get {_topicID ?? String()}
+    set {_topicID = newValue}
+  }
+  /// Returns true if `topicID` has been explicitly set.
+  public var hasTopicID: Bool {self._topicID != nil}
+  /// Clears the value of `topicID`. Subsequent reads from it will return its default value.
+  public mutating func clearTopicID() {self._topicID = nil}
 
   /// When this message will be permanently deleted server-side
-  var expiresAt: Int64 = 0
+  public var expiresAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _threadID: String? = nil
+  fileprivate var _topicID: String? = nil
 }
 
-struct Shared_Proto_Services_V1_GroupStreamRequest: Sendable {
+public struct Shared_Proto_Services_V1_GroupStreamRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var request: Shared_Proto_Services_V1_GroupStreamRequest.OneOf_Request? = nil
+  public var request: Shared_Proto_Services_V1_GroupStreamRequest.OneOf_Request? = nil
 
-  var subscribe: Shared_Proto_Services_V1_GroupSubscribeRequest {
+  public var subscribe: Shared_Proto_Services_V1_GroupSubscribeRequest {
     get {
       if case .subscribe(let v)? = request {return v}
       return Shared_Proto_Services_V1_GroupSubscribeRequest()
@@ -853,7 +929,7 @@ struct Shared_Proto_Services_V1_GroupStreamRequest: Sendable {
     set {request = .subscribe(newValue)}
   }
 
-  var send: Shared_Proto_Services_V1_SendGroupMessageRequest {
+  public var send: Shared_Proto_Services_V1_SendGroupMessageRequest {
     get {
       if case .send(let v)? = request {return v}
       return Shared_Proto_Services_V1_SendGroupMessageRequest()
@@ -861,7 +937,7 @@ struct Shared_Proto_Services_V1_GroupStreamRequest: Sendable {
     set {request = .send(newValue)}
   }
 
-  var heartbeat: Shared_Proto_Services_V1_GroupHeartbeat {
+  public var heartbeat: Shared_Proto_Services_V1_GroupHeartbeat {
     get {
       if case .heartbeat(let v)? = request {return v}
       return Shared_Proto_Services_V1_GroupHeartbeat()
@@ -869,29 +945,29 @@ struct Shared_Proto_Services_V1_GroupStreamRequest: Sendable {
     set {request = .heartbeat(newValue)}
   }
 
-  var requestID: String = String()
+  public var requestID: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  enum OneOf_Request: Equatable, Sendable {
+  public enum OneOf_Request: Equatable, Sendable {
     case subscribe(Shared_Proto_Services_V1_GroupSubscribeRequest)
     case send(Shared_Proto_Services_V1_SendGroupMessageRequest)
     case heartbeat(Shared_Proto_Services_V1_GroupHeartbeat)
 
   }
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
+public struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var response: Shared_Proto_Services_V1_GroupStreamResponse.OneOf_Response? = nil
+  public var response: Shared_Proto_Services_V1_GroupStreamResponse.OneOf_Response? = nil
 
   /// Incoming group message
-  var message: Shared_Proto_Services_V1_GroupMessageEnvelope {
+  public var message: Shared_Proto_Services_V1_GroupMessageEnvelope {
     get {
       if case .message(let v)? = response {return v}
       return Shared_Proto_Services_V1_GroupMessageEnvelope()
@@ -900,7 +976,7 @@ struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
   }
 
   /// New MLS commit (membership or key change)
-  var commit: Shared_Proto_Services_V1_CommitEnvelope {
+  public var commit: Shared_Proto_Services_V1_CommitEnvelope {
     get {
       if case .commit(let v)? = response {return v}
       return Shared_Proto_Services_V1_CommitEnvelope()
@@ -909,7 +985,7 @@ struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
   }
 
   /// Acknowledgment of sent message
-  var ack: Shared_Proto_Services_V1_GroupMessageAck {
+  public var ack: Shared_Proto_Services_V1_GroupMessageAck {
     get {
       if case .ack(let v)? = response {return v}
       return Shared_Proto_Services_V1_GroupMessageAck()
@@ -918,7 +994,7 @@ struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
   }
 
   /// Stream-level error
-  var error: Shared_Proto_Services_V1_GroupStreamError {
+  public var error: Shared_Proto_Services_V1_GroupStreamError {
     get {
       if case .error(let v)? = response {return v}
       return Shared_Proto_Services_V1_GroupStreamError()
@@ -926,7 +1002,7 @@ struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
     set {response = .error(newValue)}
   }
 
-  var heartbeatAck: Shared_Proto_Services_V1_GroupHeartbeatAck {
+  public var heartbeatAck: Shared_Proto_Services_V1_GroupHeartbeatAck {
     get {
       if case .heartbeatAck(let v)? = response {return v}
       return Shared_Proto_Services_V1_GroupHeartbeatAck()
@@ -935,7 +1011,7 @@ struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
   }
 
   /// New invite notification
-  var invite: Shared_Proto_Services_V1_PendingGroupInvite {
+  public var invite: Shared_Proto_Services_V1_PendingGroupInvite {
     get {
       if case .invite(let v)? = response {return v}
       return Shared_Proto_Services_V1_PendingGroupInvite()
@@ -944,7 +1020,7 @@ struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
   }
 
   /// Group dissolved by admin
-  var dissolved: Shared_Proto_Services_V1_GroupDissolvedNotice {
+  public var dissolved: Shared_Proto_Services_V1_GroupDissolvedNotice {
     get {
       if case .dissolved(let v)? = response {return v}
       return Shared_Proto_Services_V1_GroupDissolvedNotice()
@@ -952,18 +1028,18 @@ struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
     set {response = .dissolved(newValue)}
   }
 
-  var responseID: String {
+  public var responseID: String {
     get {_responseID ?? String()}
     set {_responseID = newValue}
   }
   /// Returns true if `responseID` has been explicitly set.
-  var hasResponseID: Bool {self._responseID != nil}
+  public var hasResponseID: Bool {self._responseID != nil}
   /// Clears the value of `responseID`. Subsequent reads from it will return its default value.
-  mutating func clearResponseID() {self._responseID = nil}
+  public mutating func clearResponseID() {self._responseID = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  enum OneOf_Response: Equatable, Sendable {
+  public enum OneOf_Response: Equatable, Sendable {
     /// Incoming group message
     case message(Shared_Proto_Services_V1_GroupMessageEnvelope)
     /// New MLS commit (membership or key change)
@@ -980,216 +1056,473 @@ struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
 
   }
 
-  init() {}
+  public init() {}
 
   fileprivate var _responseID: String? = nil
 }
 
-struct Shared_Proto_Services_V1_GroupSubscribeRequest: Sendable {
+public struct Shared_Proto_Services_V1_GroupSubscribeRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupIds: [String] = []
+  public var groupIds: [String] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GroupHeartbeat: Sendable {
+public struct Shared_Proto_Services_V1_GroupHeartbeat: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var timestamp: Int64 = 0
+  public var timestamp: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GroupHeartbeatAck: Sendable {
+public struct Shared_Proto_Services_V1_GroupHeartbeatAck: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var timestamp: Int64 = 0
+  public var timestamp: Int64 = 0
 
-  var serverTimestamp: Int64 = 0
+  public var serverTimestamp: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GroupMessageAck: Sendable {
+public struct Shared_Proto_Services_V1_GroupMessageAck: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var clientMessageID: String = String()
+  public var clientMessageID: String = String()
 
-  var serverMessageID: String = String()
+  public var serverMessageID: String = String()
 
-  var sequenceNumber: UInt64 = 0
+  public var sequenceNumber: UInt64 = 0
 
-  var serverTimestamp: Int64 = 0
+  public var serverTimestamp: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GroupStreamError: Sendable {
+public struct Shared_Proto_Services_V1_GroupStreamError: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var requestID: String = String()
+  public var requestID: String = String()
 
-  var errorCode: Shared_Proto_Services_V1_GroupErrorCode = .unspecified
+  public var errorCode: Shared_Proto_Services_V1_GroupErrorCode = .unspecified
 
-  var errorMessage: String = String()
+  public var errorMessage: String = String()
 
-  var retryable: Bool = false
+  public var retryable: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GroupDissolvedNotice: Sendable {
+public struct Shared_Proto_Services_V1_GroupDissolvedNotice: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var groupID: String = String()
+  public var groupID: String = String()
 
-  var dissolvedAt: Int64 = 0
+  public var dissolvedAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_PublishKeyPackageRequest: Sendable {
+public struct Shared_Proto_Services_V1_PublishKeyPackageRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var deviceID: String = String()
+  public var deviceID: String = String()
 
   /// MLS KeyPackages (opaque blobs per RFC 9420)
   /// Each is single-use. Recommend publishing 20+ for availability.
-  var keyPackages: [Data] = []
+  public var keyPackages: [Data] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_PublishKeyPackageResponse: Sendable {
+public struct Shared_Proto_Services_V1_PublishKeyPackageResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Total KeyPackages now available for this device
-  var count: UInt32 = 0
+  public var count: UInt32 = 0
 
-  var publishedAt: Int64 = 0
+  public var publishedAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ConsumeKeyPackageRequest: Sendable {
+public struct Shared_Proto_Services_V1_ConsumeKeyPackageRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// User ID to invite
-  var userID: String = String()
+  public var userID: String = String()
 
   /// Prefer a specific device (optional)
-  var preferredDeviceID: String {
+  public var preferredDeviceID: String {
     get {_preferredDeviceID ?? String()}
     set {_preferredDeviceID = newValue}
   }
   /// Returns true if `preferredDeviceID` has been explicitly set.
-  var hasPreferredDeviceID: Bool {self._preferredDeviceID != nil}
+  public var hasPreferredDeviceID: Bool {self._preferredDeviceID != nil}
   /// Clears the value of `preferredDeviceID`. Subsequent reads from it will return its default value.
-  mutating func clearPreferredDeviceID() {self._preferredDeviceID = nil}
+  public mutating func clearPreferredDeviceID() {self._preferredDeviceID = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _preferredDeviceID: String? = nil
 }
 
-struct Shared_Proto_Services_V1_ConsumeKeyPackageResponse: Sendable {
+public struct Shared_Proto_Services_V1_ConsumeKeyPackageResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// KeyPackage blob - use this to construct MLS Welcome
-  var keyPackage: Data = Data()
+  public var keyPackage: Data = Data()
 
   /// Which device this KeyPackage belongs to
-  var deviceID: String = String()
+  public var deviceID: String = String()
 
   /// Opaque reference included in InviteToGroupRequest and Welcome Commit
-  var keyPackageRef: Data = Data()
+  public var keyPackageRef: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GetKeyPackageCountRequest: Sendable {
+public struct Shared_Proto_Services_V1_GetKeyPackageCountRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var userID: String = String()
+  public var userID: String = String()
 
-  var deviceID: String {
+  public var deviceID: String {
     get {_deviceID ?? String()}
     set {_deviceID = newValue}
   }
   /// Returns true if `deviceID` has been explicitly set.
-  var hasDeviceID: Bool {self._deviceID != nil}
+  public var hasDeviceID: Bool {self._deviceID != nil}
   /// Clears the value of `deviceID`. Subsequent reads from it will return its default value.
-  mutating func clearDeviceID() {self._deviceID = nil}
+  public mutating func clearDeviceID() {self._deviceID = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _deviceID: String? = nil
 }
 
-struct Shared_Proto_Services_V1_GetKeyPackageCountResponse: Sendable {
+public struct Shared_Proto_Services_V1_GetKeyPackageCountResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Available KeyPackages for this user (all devices)
-  var count: UInt32 = 0
+  public var count: UInt32 = 0
 
   /// Client should publish more if count falls below this
-  var recommendedMinimum: UInt32 = 0
+  public var recommendedMinimum: UInt32 = 0
 
-  var lastPublishedAt: Int64 = 0
+  public var lastPublishedAt: Int64 = 0
 
   /// True if user has zero KeyPackages (cannot be invited to any group)
-  var cannotBeInvited: Bool = false
+  public var cannotBeInvited: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_CreateTopicRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var groupID: String = String()
+
+  /// Topic name encrypted with the current group epoch key.
+  /// Server cannot read the name.
+  public var encryptedName: Data = Data()
+
+  /// Position hint (0-based). Server normalises sort_order on creation.
+  public var sortOrder: UInt32 = 0
+
+  /// Admin proof: Ed25519 sig over "CONSTRUCT_CREATE_TOPIC:{group_id}:{timestamp}"
+  public var adminProof: Data = Data()
+
+  public var signatureTimestamp: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_CreateTopicResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var topicID: String = String()
+
+  public var createdAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_ListTopicsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var groupID: String = String()
+
+  /// If true, include archived topics
+  public var includeArchived: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_ListTopicsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var topics: [Shared_Proto_Services_V1_TopicInfo] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_TopicInfo: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var topicID: String = String()
+
+  public var groupID: String = String()
+
+  /// Encrypted name — only group members can decrypt
+  public var encryptedName: Data = Data()
+
+  public var sortOrder: UInt32 = 0
+
+  public var createdAt: Int64 = 0
+
+  /// NULL if not archived
+  public var archivedAt: Int64 {
+    get {_archivedAt ?? 0}
+    set {_archivedAt = newValue}
+  }
+  /// Returns true if `archivedAt` has been explicitly set.
+  public var hasArchivedAt: Bool {self._archivedAt != nil}
+  /// Clears the value of `archivedAt`. Subsequent reads from it will return its default value.
+  public mutating func clearArchivedAt() {self._archivedAt = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _archivedAt: Int64? = nil
+}
+
+public struct Shared_Proto_Services_V1_ArchiveTopicRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var groupID: String = String()
+
+  public var topicID: String = String()
+
+  /// Admin proof: Ed25519 sig over "CONSTRUCT_ARCHIVE_TOPIC:{group_id}:{topic_id}:{timestamp}"
+  public var adminProof: Data = Data()
+
+  public var signatureTimestamp: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_ArchiveTopicResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var success: Bool = false
+
+  public var archivedAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_CreateInviteLinkRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var groupID: String = String()
+
+  /// Admin proof: Ed25519 sig over "CONSTRUCT_CREATE_INVITE_LINK:{group_id}:{timestamp}"
+  public var adminProof: Data = Data()
+
+  public var signatureTimestamp: Int64 = 0
+
+  /// Maximum number of times this link can be used (0 = unlimited)
+  public var maxUses: UInt32 = 0
+
+  /// Expiry in seconds from now (0 = no expiry)
+  public var expiresInSeconds: UInt32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_CreateInviteLinkResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// 32-char hex token — build URL as https://app.konstruct.cc/join/{token}
+  public var token: String = String()
+
+  public var createdAt: Int64 = 0
+
+  /// NULL if no expiry
+  public var expiresAt: Int64 {
+    get {_expiresAt ?? 0}
+    set {_expiresAt = newValue}
+  }
+  /// Returns true if `expiresAt` has been explicitly set.
+  public var hasExpiresAt: Bool {self._expiresAt != nil}
+  /// Clears the value of `expiresAt`. Subsequent reads from it will return its default value.
+  public mutating func clearExpiresAt() {self._expiresAt = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _expiresAt: Int64? = nil
+}
+
+public struct Shared_Proto_Services_V1_RevokeInviteLinkRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var groupID: String = String()
+
+  public var token: String = String()
+
+  /// Admin proof: Ed25519 sig over "CONSTRUCT_REVOKE_INVITE_LINK:{group_id}:{token}:{timestamp}"
+  public var adminProof: Data = Data()
+
+  public var signatureTimestamp: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_RevokeInviteLinkResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var success: Bool = false
+
+  public var revokedAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_ResolveInviteLinkRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The 32-char hex token from the invite URL
+  public var token: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_ResolveInviteLinkResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var groupID: String = String()
+
+  /// Approximate member count (device count, not user count)
+  public var memberCount: UInt32 = 0
+
+  /// True if link is still valid (not revoked, not expired, not over max_uses)
+  public var valid: Bool = false
+
+  /// NULL if no expiry
+  public var expiresAt: Int64 {
+    get {_expiresAt ?? 0}
+    set {_expiresAt = newValue}
+  }
+  /// Returns true if `expiresAt` has been explicitly set.
+  public var hasExpiresAt: Bool {self._expiresAt != nil}
+  /// Clears the value of `expiresAt`. Subsequent reads from it will return its default value.
+  public mutating func clearExpiresAt() {self._expiresAt = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _expiresAt: Int64? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -1197,18 +1530,18 @@ struct Shared_Proto_Services_V1_GetKeyPackageCountResponse: Sendable {
 fileprivate let _protobuf_package = "shared.proto.services.v1"
 
 extension Shared_Proto_Services_V1_AdminRole: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ADMIN_ROLE_UNSPECIFIED\0\u{1}ADMIN_ROLE_FULL\0\u{1}ADMIN_ROLE_MODERATOR\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ADMIN_ROLE_UNSPECIFIED\0\u{1}ADMIN_ROLE_FULL\0\u{1}ADMIN_ROLE_MODERATOR\0")
 }
 
 extension Shared_Proto_Services_V1_GroupErrorCode: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GROUP_ERROR_CODE_UNSPECIFIED\0\u{1}GROUP_ERROR_CODE_NOT_MEMBER\0\u{1}GROUP_ERROR_CODE_EPOCH_MISMATCH\0\u{1}GROUP_ERROR_CODE_GROUP_FULL\0\u{1}GROUP_ERROR_CODE_DISSOLVED\0\u{1}GROUP_ERROR_CODE_RATE_LIMIT\0\u{1}GROUP_ERROR_CODE_NOT_ADMIN\0\u{1}GROUP_ERROR_CODE_INVITE_EXPIRED\0\u{1}GROUP_ERROR_CODE_NO_KEY_PACKAGE\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GROUP_ERROR_CODE_UNSPECIFIED\0\u{1}GROUP_ERROR_CODE_NOT_MEMBER\0\u{1}GROUP_ERROR_CODE_EPOCH_MISMATCH\0\u{1}GROUP_ERROR_CODE_GROUP_FULL\0\u{1}GROUP_ERROR_CODE_DISSOLVED\0\u{1}GROUP_ERROR_CODE_RATE_LIMIT\0\u{1}GROUP_ERROR_CODE_NOT_ADMIN\0\u{1}GROUP_ERROR_CODE_INVITE_EXPIRED\0\u{1}GROUP_ERROR_CODE_NO_KEY_PACKAGE\0")
 }
 
 extension Shared_Proto_Services_V1_CreateGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".CreateGroupRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}initial_ratchet_tree\0\u{3}encrypted_group_context\0\u{3}max_members\0\u{3}message_retention_days\0\u{3}threads_enabled\0\u{c}\u{7}\u{e}")
+  public static let protoMessageName: String = _protobuf_package + ".CreateGroupRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}initial_ratchet_tree\0\u{3}encrypted_group_context\0\u{3}max_members\0\u{3}message_retention_days\0\u{3}threads_enabled\0\u{c}\u{7}\u{e}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1225,7 +1558,7 @@ extension Shared_Proto_Services_V1_CreateGroupRequest: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
     }
@@ -1247,7 +1580,7 @@ extension Shared_Proto_Services_V1_CreateGroupRequest: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_CreateGroupRequest, rhs: Shared_Proto_Services_V1_CreateGroupRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_CreateGroupRequest, rhs: Shared_Proto_Services_V1_CreateGroupRequest) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.initialRatchetTree != rhs.initialRatchetTree {return false}
     if lhs.encryptedGroupContext != rhs.encryptedGroupContext {return false}
@@ -1260,10 +1593,10 @@ extension Shared_Proto_Services_V1_CreateGroupRequest: SwiftProtobuf.Message, Sw
 }
 
 extension Shared_Proto_Services_V1_CreateGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".CreateGroupResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}created_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".CreateGroupResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}created_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1277,7 +1610,7 @@ extension Shared_Proto_Services_V1_CreateGroupResponse: SwiftProtobuf.Message, S
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
     }
@@ -1290,7 +1623,7 @@ extension Shared_Proto_Services_V1_CreateGroupResponse: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_CreateGroupResponse, rhs: Shared_Proto_Services_V1_CreateGroupResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_CreateGroupResponse, rhs: Shared_Proto_Services_V1_CreateGroupResponse) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.epoch != rhs.epoch {return false}
     if lhs.createdAt != rhs.createdAt {return false}
@@ -1300,10 +1633,10 @@ extension Shared_Proto_Services_V1_CreateGroupResponse: SwiftProtobuf.Message, S
 }
 
 extension Shared_Proto_Services_V1_GetGroupStateRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetGroupStateRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}known_epoch\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetGroupStateRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}known_epoch\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1316,7 +1649,7 @@ extension Shared_Proto_Services_V1_GetGroupStateRequest: SwiftProtobuf.Message, 
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -1330,7 +1663,7 @@ extension Shared_Proto_Services_V1_GetGroupStateRequest: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetGroupStateRequest, rhs: Shared_Proto_Services_V1_GetGroupStateRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetGroupStateRequest, rhs: Shared_Proto_Services_V1_GetGroupStateRequest) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs._knownEpoch != rhs._knownEpoch {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1339,10 +1672,10 @@ extension Shared_Proto_Services_V1_GetGroupStateRequest: SwiftProtobuf.Message, 
 }
 
 extension Shared_Proto_Services_V1_GetGroupStateResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetGroupStateResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}epoch\0\u{3}ratchet_tree\0\u{3}pending_commits\0\u{1}settings\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetGroupStateResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}epoch\0\u{3}ratchet_tree\0\u{3}pending_commits\0\u{1}settings\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1357,7 +1690,7 @@ extension Shared_Proto_Services_V1_GetGroupStateResponse: SwiftProtobuf.Message,
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -1377,7 +1710,7 @@ extension Shared_Proto_Services_V1_GetGroupStateResponse: SwiftProtobuf.Message,
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetGroupStateResponse, rhs: Shared_Proto_Services_V1_GetGroupStateResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetGroupStateResponse, rhs: Shared_Proto_Services_V1_GetGroupStateResponse) -> Bool {
     if lhs.epoch != rhs.epoch {return false}
     if lhs._ratchetTree != rhs._ratchetTree {return false}
     if lhs.pendingCommits != rhs.pendingCommits {return false}
@@ -1388,10 +1721,10 @@ extension Shared_Proto_Services_V1_GetGroupStateResponse: SwiftProtobuf.Message,
 }
 
 extension Shared_Proto_Services_V1_GroupSettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GroupSettings"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}max_members\0\u{3}member_count\0\u{3}message_retention_days\0\u{3}threads_enabled\0\u{3}created_at\0\u{3}messages_deleted_before\0")
+  public static let protoMessageName: String = _protobuf_package + ".GroupSettings"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}max_members\0\u{3}member_count\0\u{3}message_retention_days\0\u{3}threads_enabled\0\u{3}created_at\0\u{3}messages_deleted_before\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1408,7 +1741,7 @@ extension Shared_Proto_Services_V1_GroupSettings: SwiftProtobuf.Message, SwiftPr
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.maxMembers != 0 {
       try visitor.visitSingularUInt32Field(value: self.maxMembers, fieldNumber: 1)
     }
@@ -1430,7 +1763,7 @@ extension Shared_Proto_Services_V1_GroupSettings: SwiftProtobuf.Message, SwiftPr
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GroupSettings, rhs: Shared_Proto_Services_V1_GroupSettings) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GroupSettings, rhs: Shared_Proto_Services_V1_GroupSettings) -> Bool {
     if lhs.maxMembers != rhs.maxMembers {return false}
     if lhs.memberCount != rhs.memberCount {return false}
     if lhs.messageRetentionDays != rhs.messageRetentionDays {return false}
@@ -1443,10 +1776,10 @@ extension Shared_Proto_Services_V1_GroupSettings: SwiftProtobuf.Message, SwiftPr
 }
 
 extension Shared_Proto_Services_V1_DissolveGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DissolveGroupRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}admin_proof\0\u{3}signature_timestamp\0")
+  public static let protoMessageName: String = _protobuf_package + ".DissolveGroupRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}admin_proof\0\u{3}signature_timestamp\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1460,7 +1793,7 @@ extension Shared_Proto_Services_V1_DissolveGroupRequest: SwiftProtobuf.Message, 
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
     }
@@ -1473,7 +1806,7 @@ extension Shared_Proto_Services_V1_DissolveGroupRequest: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_DissolveGroupRequest, rhs: Shared_Proto_Services_V1_DissolveGroupRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_DissolveGroupRequest, rhs: Shared_Proto_Services_V1_DissolveGroupRequest) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.adminProof != rhs.adminProof {return false}
     if lhs.signatureTimestamp != rhs.signatureTimestamp {return false}
@@ -1483,10 +1816,10 @@ extension Shared_Proto_Services_V1_DissolveGroupRequest: SwiftProtobuf.Message, 
 }
 
 extension Shared_Proto_Services_V1_DissolveGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DissolveGroupResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}dissolved_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".DissolveGroupResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}dissolved_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1499,7 +1832,7 @@ extension Shared_Proto_Services_V1_DissolveGroupResponse: SwiftProtobuf.Message,
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
@@ -1509,7 +1842,7 @@ extension Shared_Proto_Services_V1_DissolveGroupResponse: SwiftProtobuf.Message,
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_DissolveGroupResponse, rhs: Shared_Proto_Services_V1_DissolveGroupResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_DissolveGroupResponse, rhs: Shared_Proto_Services_V1_DissolveGroupResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.dissolvedAt != rhs.dissolvedAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1518,10 +1851,10 @@ extension Shared_Proto_Services_V1_DissolveGroupResponse: SwiftProtobuf.Message,
 }
 
 extension Shared_Proto_Services_V1_InviteToGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".InviteToGroupRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}mls_welcome\0\u{3}key_package_ref\0\u{1}epoch\0\u{3}expires_in_seconds\0\u{c}\u{6}\u{a}")
+  public static let protoMessageName: String = _protobuf_package + ".InviteToGroupRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}mls_welcome\0\u{3}key_package_ref\0\u{1}epoch\0\u{3}expires_in_seconds\0\u{c}\u{6}\u{a}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1537,7 +1870,7 @@ extension Shared_Proto_Services_V1_InviteToGroupRequest: SwiftProtobuf.Message, 
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
     }
@@ -1556,7 +1889,7 @@ extension Shared_Proto_Services_V1_InviteToGroupRequest: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_InviteToGroupRequest, rhs: Shared_Proto_Services_V1_InviteToGroupRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_InviteToGroupRequest, rhs: Shared_Proto_Services_V1_InviteToGroupRequest) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.mlsWelcome != rhs.mlsWelcome {return false}
     if lhs.keyPackageRef != rhs.keyPackageRef {return false}
@@ -1568,10 +1901,10 @@ extension Shared_Proto_Services_V1_InviteToGroupRequest: SwiftProtobuf.Message, 
 }
 
 extension Shared_Proto_Services_V1_InviteToGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".InviteToGroupResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}invite_id\0\u{3}expires_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".InviteToGroupResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}invite_id\0\u{3}expires_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1584,7 +1917,7 @@ extension Shared_Proto_Services_V1_InviteToGroupResponse: SwiftProtobuf.Message,
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.inviteID.isEmpty {
       try visitor.visitSingularStringField(value: self.inviteID, fieldNumber: 1)
     }
@@ -1594,7 +1927,7 @@ extension Shared_Proto_Services_V1_InviteToGroupResponse: SwiftProtobuf.Message,
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_InviteToGroupResponse, rhs: Shared_Proto_Services_V1_InviteToGroupResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_InviteToGroupResponse, rhs: Shared_Proto_Services_V1_InviteToGroupResponse) -> Bool {
     if lhs.inviteID != rhs.inviteID {return false}
     if lhs.expiresAt != rhs.expiresAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1603,10 +1936,10 @@ extension Shared_Proto_Services_V1_InviteToGroupResponse: SwiftProtobuf.Message,
 }
 
 extension Shared_Proto_Services_V1_AcceptGroupInviteRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".AcceptGroupInviteRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}invite_id\0\u{3}acceptance_signature\0\u{3}signature_timestamp\0\u{3}mls_commit\0\u{3}new_ratchet_tree\0\u{c}\u{7}\u{9}")
+  public static let protoMessageName: String = _protobuf_package + ".AcceptGroupInviteRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}invite_id\0\u{3}acceptance_signature\0\u{3}signature_timestamp\0\u{3}mls_commit\0\u{3}new_ratchet_tree\0\u{c}\u{7}\u{9}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1623,7 +1956,7 @@ extension Shared_Proto_Services_V1_AcceptGroupInviteRequest: SwiftProtobuf.Messa
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
     }
@@ -1645,7 +1978,7 @@ extension Shared_Proto_Services_V1_AcceptGroupInviteRequest: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_AcceptGroupInviteRequest, rhs: Shared_Proto_Services_V1_AcceptGroupInviteRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_AcceptGroupInviteRequest, rhs: Shared_Proto_Services_V1_AcceptGroupInviteRequest) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.inviteID != rhs.inviteID {return false}
     if lhs.acceptanceSignature != rhs.acceptanceSignature {return false}
@@ -1658,10 +1991,10 @@ extension Shared_Proto_Services_V1_AcceptGroupInviteRequest: SwiftProtobuf.Messa
 }
 
 extension Shared_Proto_Services_V1_AcceptGroupInviteResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".AcceptGroupInviteResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_epoch\0\u{3}joined_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".AcceptGroupInviteResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_epoch\0\u{3}joined_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1675,7 +2008,7 @@ extension Shared_Proto_Services_V1_AcceptGroupInviteResponse: SwiftProtobuf.Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
@@ -1688,7 +2021,7 @@ extension Shared_Proto_Services_V1_AcceptGroupInviteResponse: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_AcceptGroupInviteResponse, rhs: Shared_Proto_Services_V1_AcceptGroupInviteResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_AcceptGroupInviteResponse, rhs: Shared_Proto_Services_V1_AcceptGroupInviteResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.newEpoch != rhs.newEpoch {return false}
     if lhs.joinedAt != rhs.joinedAt {return false}
@@ -1698,10 +2031,10 @@ extension Shared_Proto_Services_V1_AcceptGroupInviteResponse: SwiftProtobuf.Mess
 }
 
 extension Shared_Proto_Services_V1_DeclineGroupInviteRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DeclineGroupInviteRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}invite_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".DeclineGroupInviteRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}invite_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1714,7 +2047,7 @@ extension Shared_Proto_Services_V1_DeclineGroupInviteRequest: SwiftProtobuf.Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
     }
@@ -1724,7 +2057,7 @@ extension Shared_Proto_Services_V1_DeclineGroupInviteRequest: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_DeclineGroupInviteRequest, rhs: Shared_Proto_Services_V1_DeclineGroupInviteRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_DeclineGroupInviteRequest, rhs: Shared_Proto_Services_V1_DeclineGroupInviteRequest) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.inviteID != rhs.inviteID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1733,10 +2066,10 @@ extension Shared_Proto_Services_V1_DeclineGroupInviteRequest: SwiftProtobuf.Mess
 }
 
 extension Shared_Proto_Services_V1_DeclineGroupInviteResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DeclineGroupInviteResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
+  public static let protoMessageName: String = _protobuf_package + ".DeclineGroupInviteResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1748,14 +2081,14 @@ extension Shared_Proto_Services_V1_DeclineGroupInviteResponse: SwiftProtobuf.Mes
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_DeclineGroupInviteResponse, rhs: Shared_Proto_Services_V1_DeclineGroupInviteResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_DeclineGroupInviteResponse, rhs: Shared_Proto_Services_V1_DeclineGroupInviteResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1763,10 +2096,10 @@ extension Shared_Proto_Services_V1_DeclineGroupInviteResponse: SwiftProtobuf.Mes
 }
 
 extension Shared_Proto_Services_V1_GetPendingInvitesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetPendingInvitesRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}cursor\0\u{1}limit\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetPendingInvitesRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}cursor\0\u{1}limit\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1780,7 +2113,7 @@ extension Shared_Proto_Services_V1_GetPendingInvitesRequest: SwiftProtobuf.Messa
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -1797,7 +2130,7 @@ extension Shared_Proto_Services_V1_GetPendingInvitesRequest: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetPendingInvitesRequest, rhs: Shared_Proto_Services_V1_GetPendingInvitesRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetPendingInvitesRequest, rhs: Shared_Proto_Services_V1_GetPendingInvitesRequest) -> Bool {
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs._cursor != rhs._cursor {return false}
     if lhs.limit != rhs.limit {return false}
@@ -1807,10 +2140,10 @@ extension Shared_Proto_Services_V1_GetPendingInvitesRequest: SwiftProtobuf.Messa
 }
 
 extension Shared_Proto_Services_V1_GetPendingInvitesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetPendingInvitesResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}invites\0\u{3}next_cursor\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetPendingInvitesResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}invites\0\u{3}next_cursor\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1823,7 +2156,7 @@ extension Shared_Proto_Services_V1_GetPendingInvitesResponse: SwiftProtobuf.Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -1837,7 +2170,7 @@ extension Shared_Proto_Services_V1_GetPendingInvitesResponse: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetPendingInvitesResponse, rhs: Shared_Proto_Services_V1_GetPendingInvitesResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetPendingInvitesResponse, rhs: Shared_Proto_Services_V1_GetPendingInvitesResponse) -> Bool {
     if lhs.invites != rhs.invites {return false}
     if lhs._nextCursor != rhs._nextCursor {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1846,10 +2179,10 @@ extension Shared_Proto_Services_V1_GetPendingInvitesResponse: SwiftProtobuf.Mess
 }
 
 extension Shared_Proto_Services_V1_PendingGroupInvite: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PendingGroupInvite"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}invite_id\0\u{3}group_id\0\u{3}mls_welcome\0\u{3}expires_at\0\u{3}invited_at\0\u{c}\u{6}\u{a}")
+  public static let protoMessageName: String = _protobuf_package + ".PendingGroupInvite"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}invite_id\0\u{3}group_id\0\u{3}mls_welcome\0\u{3}expires_at\0\u{3}invited_at\0\u{c}\u{6}\u{a}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1865,7 +2198,7 @@ extension Shared_Proto_Services_V1_PendingGroupInvite: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.inviteID.isEmpty {
       try visitor.visitSingularStringField(value: self.inviteID, fieldNumber: 1)
     }
@@ -1884,7 +2217,7 @@ extension Shared_Proto_Services_V1_PendingGroupInvite: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_PendingGroupInvite, rhs: Shared_Proto_Services_V1_PendingGroupInvite) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_PendingGroupInvite, rhs: Shared_Proto_Services_V1_PendingGroupInvite) -> Bool {
     if lhs.inviteID != rhs.inviteID {return false}
     if lhs.groupID != rhs.groupID {return false}
     if lhs.mlsWelcome != rhs.mlsWelcome {return false}
@@ -1896,10 +2229,10 @@ extension Shared_Proto_Services_V1_PendingGroupInvite: SwiftProtobuf.Message, Sw
 }
 
 extension Shared_Proto_Services_V1_LeaveGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".LeaveGroupRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}mls_remove_proposal\0")
+  public static let protoMessageName: String = _protobuf_package + ".LeaveGroupRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}mls_remove_proposal\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1912,7 +2245,7 @@ extension Shared_Proto_Services_V1_LeaveGroupRequest: SwiftProtobuf.Message, Swi
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
     }
@@ -1922,7 +2255,7 @@ extension Shared_Proto_Services_V1_LeaveGroupRequest: SwiftProtobuf.Message, Swi
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_LeaveGroupRequest, rhs: Shared_Proto_Services_V1_LeaveGroupRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_LeaveGroupRequest, rhs: Shared_Proto_Services_V1_LeaveGroupRequest) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.mlsRemoveProposal != rhs.mlsRemoveProposal {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1931,10 +2264,10 @@ extension Shared_Proto_Services_V1_LeaveGroupRequest: SwiftProtobuf.Message, Swi
 }
 
 extension Shared_Proto_Services_V1_LeaveGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".LeaveGroupResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}left_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".LeaveGroupResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}left_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1947,7 +2280,7 @@ extension Shared_Proto_Services_V1_LeaveGroupResponse: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
@@ -1957,7 +2290,7 @@ extension Shared_Proto_Services_V1_LeaveGroupResponse: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_LeaveGroupResponse, rhs: Shared_Proto_Services_V1_LeaveGroupResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_LeaveGroupResponse, rhs: Shared_Proto_Services_V1_LeaveGroupResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.leftAt != rhs.leftAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1966,10 +2299,10 @@ extension Shared_Proto_Services_V1_LeaveGroupResponse: SwiftProtobuf.Message, Sw
 }
 
 extension Shared_Proto_Services_V1_RemoveMemberRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".RemoveMemberRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}target_device_id\0\u{3}mls_remove_proposal\0\u{3}admin_proof\0\u{3}signature_timestamp\0\u{3}encrypted_reason\0\u{c}\u{7}\u{9}")
+  public static let protoMessageName: String = _protobuf_package + ".RemoveMemberRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}target_device_id\0\u{3}mls_remove_proposal\0\u{3}admin_proof\0\u{3}signature_timestamp\0\u{3}encrypted_reason\0\u{c}\u{7}\u{9}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1986,7 +2319,7 @@ extension Shared_Proto_Services_V1_RemoveMemberRequest: SwiftProtobuf.Message, S
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -2012,7 +2345,7 @@ extension Shared_Proto_Services_V1_RemoveMemberRequest: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_RemoveMemberRequest, rhs: Shared_Proto_Services_V1_RemoveMemberRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_RemoveMemberRequest, rhs: Shared_Proto_Services_V1_RemoveMemberRequest) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.targetDeviceID != rhs.targetDeviceID {return false}
     if lhs.mlsRemoveProposal != rhs.mlsRemoveProposal {return false}
@@ -2025,10 +2358,10 @@ extension Shared_Proto_Services_V1_RemoveMemberRequest: SwiftProtobuf.Message, S
 }
 
 extension Shared_Proto_Services_V1_RemoveMemberResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".RemoveMemberResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_epoch\0\u{3}removed_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".RemoveMemberResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_epoch\0\u{3}removed_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2042,7 +2375,7 @@ extension Shared_Proto_Services_V1_RemoveMemberResponse: SwiftProtobuf.Message, 
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
@@ -2055,7 +2388,7 @@ extension Shared_Proto_Services_V1_RemoveMemberResponse: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_RemoveMemberResponse, rhs: Shared_Proto_Services_V1_RemoveMemberResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_RemoveMemberResponse, rhs: Shared_Proto_Services_V1_RemoveMemberResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.newEpoch != rhs.newEpoch {return false}
     if lhs.removedAt != rhs.removedAt {return false}
@@ -2065,10 +2398,10 @@ extension Shared_Proto_Services_V1_RemoveMemberResponse: SwiftProtobuf.Message, 
 }
 
 extension Shared_Proto_Services_V1_DelegateAdminRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DelegateAdminRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}target_device_id\0\u{1}role\0\u{3}admin_proof\0\u{3}signature_timestamp\0\u{3}encrypted_admin_token\0")
+  public static let protoMessageName: String = _protobuf_package + ".DelegateAdminRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}target_device_id\0\u{1}role\0\u{3}admin_proof\0\u{3}signature_timestamp\0\u{3}encrypted_admin_token\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2085,7 +2418,7 @@ extension Shared_Proto_Services_V1_DelegateAdminRequest: SwiftProtobuf.Message, 
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
     }
@@ -2107,7 +2440,7 @@ extension Shared_Proto_Services_V1_DelegateAdminRequest: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_DelegateAdminRequest, rhs: Shared_Proto_Services_V1_DelegateAdminRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_DelegateAdminRequest, rhs: Shared_Proto_Services_V1_DelegateAdminRequest) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.targetDeviceID != rhs.targetDeviceID {return false}
     if lhs.role != rhs.role {return false}
@@ -2120,10 +2453,10 @@ extension Shared_Proto_Services_V1_DelegateAdminRequest: SwiftProtobuf.Message, 
 }
 
 extension Shared_Proto_Services_V1_DelegateAdminResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DelegateAdminResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}delegated_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".DelegateAdminResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}delegated_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2136,7 +2469,7 @@ extension Shared_Proto_Services_V1_DelegateAdminResponse: SwiftProtobuf.Message,
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
@@ -2146,7 +2479,7 @@ extension Shared_Proto_Services_V1_DelegateAdminResponse: SwiftProtobuf.Message,
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_DelegateAdminResponse, rhs: Shared_Proto_Services_V1_DelegateAdminResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_DelegateAdminResponse, rhs: Shared_Proto_Services_V1_DelegateAdminResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.delegatedAt != rhs.delegatedAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -2154,11 +2487,96 @@ extension Shared_Proto_Services_V1_DelegateAdminResponse: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_SubmitCommitRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SubmitCommitRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}mls_commit\0\u{3}welcome_deliveries\0\u{3}new_ratchet_tree\0\u{c}\u{6}\u{a}")
+extension Shared_Proto_Services_V1_TransferOwnershipRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TransferOwnershipRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}new_owner_device_id\0\u{3}owner_signature\0\u{3}new_owner_acceptance\0\u{3}signature_timestamp\0\u{c}\u{6}\u{a}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.groupID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.newOwnerDeviceID) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.ownerSignature) }()
+      case 4: try { try decoder.decodeSingularBytesField(value: &self.newOwnerAcceptance) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.signatureTimestamp) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.groupID.isEmpty {
+      try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
+    }
+    if !self.newOwnerDeviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.newOwnerDeviceID, fieldNumber: 2)
+    }
+    if !self.ownerSignature.isEmpty {
+      try visitor.visitSingularBytesField(value: self.ownerSignature, fieldNumber: 3)
+    }
+    if !self.newOwnerAcceptance.isEmpty {
+      try visitor.visitSingularBytesField(value: self.newOwnerAcceptance, fieldNumber: 4)
+    }
+    if self.signatureTimestamp != 0 {
+      try visitor.visitSingularInt64Field(value: self.signatureTimestamp, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_TransferOwnershipRequest, rhs: Shared_Proto_Services_V1_TransferOwnershipRequest) -> Bool {
+    if lhs.groupID != rhs.groupID {return false}
+    if lhs.newOwnerDeviceID != rhs.newOwnerDeviceID {return false}
+    if lhs.ownerSignature != rhs.ownerSignature {return false}
+    if lhs.newOwnerAcceptance != rhs.newOwnerAcceptance {return false}
+    if lhs.signatureTimestamp != rhs.signatureTimestamp {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_TransferOwnershipResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TransferOwnershipResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}transferred_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.success) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.transferredAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.success != false {
+      try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
+    }
+    if self.transferredAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.transferredAt, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_TransferOwnershipResponse, rhs: Shared_Proto_Services_V1_TransferOwnershipResponse) -> Bool {
+    if lhs.success != rhs.success {return false}
+    if lhs.transferredAt != rhs.transferredAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_SubmitCommitRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SubmitCommitRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}mls_commit\0\u{3}welcome_deliveries\0\u{3}new_ratchet_tree\0\u{c}\u{6}\u{a}")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2174,7 +2592,7 @@ extension Shared_Proto_Services_V1_SubmitCommitRequest: SwiftProtobuf.Message, S
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
     }
@@ -2193,7 +2611,7 @@ extension Shared_Proto_Services_V1_SubmitCommitRequest: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_SubmitCommitRequest, rhs: Shared_Proto_Services_V1_SubmitCommitRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_SubmitCommitRequest, rhs: Shared_Proto_Services_V1_SubmitCommitRequest) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.epoch != rhs.epoch {return false}
     if lhs.mlsCommit != rhs.mlsCommit {return false}
@@ -2205,10 +2623,10 @@ extension Shared_Proto_Services_V1_SubmitCommitRequest: SwiftProtobuf.Message, S
 }
 
 extension Shared_Proto_Services_V1_WelcomeDelivery: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".WelcomeDelivery"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}key_package_ref\0")
+  public static let protoMessageName: String = _protobuf_package + ".WelcomeDelivery"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}key_package_ref\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2221,7 +2639,7 @@ extension Shared_Proto_Services_V1_WelcomeDelivery: SwiftProtobuf.Message, Swift
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.deviceID.isEmpty {
       try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 1)
     }
@@ -2231,7 +2649,7 @@ extension Shared_Proto_Services_V1_WelcomeDelivery: SwiftProtobuf.Message, Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_WelcomeDelivery, rhs: Shared_Proto_Services_V1_WelcomeDelivery) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_WelcomeDelivery, rhs: Shared_Proto_Services_V1_WelcomeDelivery) -> Bool {
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs.keyPackageRef != rhs.keyPackageRef {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -2240,10 +2658,10 @@ extension Shared_Proto_Services_V1_WelcomeDelivery: SwiftProtobuf.Message, Swift
 }
 
 extension Shared_Proto_Services_V1_SubmitCommitResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SubmitCommitResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_epoch\0\u{3}committed_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".SubmitCommitResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_epoch\0\u{3}committed_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2257,7 +2675,7 @@ extension Shared_Proto_Services_V1_SubmitCommitResponse: SwiftProtobuf.Message, 
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
@@ -2270,7 +2688,7 @@ extension Shared_Proto_Services_V1_SubmitCommitResponse: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_SubmitCommitResponse, rhs: Shared_Proto_Services_V1_SubmitCommitResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_SubmitCommitResponse, rhs: Shared_Proto_Services_V1_SubmitCommitResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.newEpoch != rhs.newEpoch {return false}
     if lhs.committedAt != rhs.committedAt {return false}
@@ -2280,10 +2698,10 @@ extension Shared_Proto_Services_V1_SubmitCommitResponse: SwiftProtobuf.Message, 
 }
 
 extension Shared_Proto_Services_V1_FetchCommitsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".FetchCommitsRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}since_epoch\0")
+  public static let protoMessageName: String = _protobuf_package + ".FetchCommitsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}since_epoch\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2296,7 +2714,7 @@ extension Shared_Proto_Services_V1_FetchCommitsRequest: SwiftProtobuf.Message, S
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
     }
@@ -2306,7 +2724,7 @@ extension Shared_Proto_Services_V1_FetchCommitsRequest: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_FetchCommitsRequest, rhs: Shared_Proto_Services_V1_FetchCommitsRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_FetchCommitsRequest, rhs: Shared_Proto_Services_V1_FetchCommitsRequest) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.sinceEpoch != rhs.sinceEpoch {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -2315,10 +2733,10 @@ extension Shared_Proto_Services_V1_FetchCommitsRequest: SwiftProtobuf.Message, S
 }
 
 extension Shared_Proto_Services_V1_CommitEnvelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".CommitEnvelope"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}epoch_from\0\u{3}epoch_to\0\u{3}mls_commit\0\u{3}ratchet_tree\0\u{3}mls_welcome\0\u{3}committed_at\0\u{c}\u{8}\u{8}")
+  public static let protoMessageName: String = _protobuf_package + ".CommitEnvelope"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}epoch_from\0\u{3}epoch_to\0\u{3}mls_commit\0\u{3}ratchet_tree\0\u{3}mls_welcome\0\u{3}committed_at\0\u{c}\u{8}\u{8}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2336,7 +2754,7 @@ extension Shared_Proto_Services_V1_CommitEnvelope: SwiftProtobuf.Message, SwiftP
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -2365,7 +2783,7 @@ extension Shared_Proto_Services_V1_CommitEnvelope: SwiftProtobuf.Message, SwiftP
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_CommitEnvelope, rhs: Shared_Proto_Services_V1_CommitEnvelope) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_CommitEnvelope, rhs: Shared_Proto_Services_V1_CommitEnvelope) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.epochFrom != rhs.epochFrom {return false}
     if lhs.epochTo != rhs.epochTo {return false}
@@ -2379,10 +2797,10 @@ extension Shared_Proto_Services_V1_CommitEnvelope: SwiftProtobuf.Message, SwiftP
 }
 
 extension Shared_Proto_Services_V1_SendGroupMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SendGroupMessageRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}mls_ciphertext\0\u{1}epoch\0\u{3}client_message_id\0\u{3}thread_id\0\u{c}\u{6}\u{a}")
+  public static let protoMessageName: String = _protobuf_package + ".SendGroupMessageRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}mls_ciphertext\0\u{1}epoch\0\u{3}client_message_id\0\u{3}thread_id\0\u{3}topic_id\0\u{c}\u{7}\u{9}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2393,12 +2811,13 @@ extension Shared_Proto_Services_V1_SendGroupMessageRequest: SwiftProtobuf.Messag
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self.epoch) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.clientMessageID) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self._threadID) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self._topicID) }()
       default: break
       }
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -2418,25 +2837,29 @@ extension Shared_Proto_Services_V1_SendGroupMessageRequest: SwiftProtobuf.Messag
     try { if let v = self._threadID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 5)
     } }()
+    try { if let v = self._topicID {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 6)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_SendGroupMessageRequest, rhs: Shared_Proto_Services_V1_SendGroupMessageRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_SendGroupMessageRequest, rhs: Shared_Proto_Services_V1_SendGroupMessageRequest) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.mlsCiphertext != rhs.mlsCiphertext {return false}
     if lhs.epoch != rhs.epoch {return false}
     if lhs.clientMessageID != rhs.clientMessageID {return false}
     if lhs._threadID != rhs._threadID {return false}
+    if lhs._topicID != rhs._topicID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
 extension Shared_Proto_Services_V1_SendGroupMessageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SendGroupMessageResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}sent_at\0\u{3}sequence_number\0\u{3}expires_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".SendGroupMessageResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}sent_at\0\u{3}sequence_number\0\u{3}expires_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2451,7 +2874,7 @@ extension Shared_Proto_Services_V1_SendGroupMessageResponse: SwiftProtobuf.Messa
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.messageID.isEmpty {
       try visitor.visitSingularStringField(value: self.messageID, fieldNumber: 1)
     }
@@ -2467,7 +2890,7 @@ extension Shared_Proto_Services_V1_SendGroupMessageResponse: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_SendGroupMessageResponse, rhs: Shared_Proto_Services_V1_SendGroupMessageResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_SendGroupMessageResponse, rhs: Shared_Proto_Services_V1_SendGroupMessageResponse) -> Bool {
     if lhs.messageID != rhs.messageID {return false}
     if lhs.sentAt != rhs.sentAt {return false}
     if lhs.sequenceNumber != rhs.sequenceNumber {return false}
@@ -2478,10 +2901,10 @@ extension Shared_Proto_Services_V1_SendGroupMessageResponse: SwiftProtobuf.Messa
 }
 
 extension Shared_Proto_Services_V1_FetchGroupMessagesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".FetchGroupMessagesRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}after_sequence\0\u{1}limit\0\u{3}thread_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".FetchGroupMessagesRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}after_sequence\0\u{1}limit\0\u{3}thread_id\0\u{3}topic_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2491,12 +2914,13 @@ extension Shared_Proto_Services_V1_FetchGroupMessagesRequest: SwiftProtobuf.Mess
       case 2: try { try decoder.decodeSingularUInt64Field(value: &self._afterSequence) }()
       case 3: try { try decoder.decodeSingularUInt32Field(value: &self.limit) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self._threadID) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self._topicID) }()
       default: break
       }
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -2513,24 +2937,28 @@ extension Shared_Proto_Services_V1_FetchGroupMessagesRequest: SwiftProtobuf.Mess
     try { if let v = self._threadID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 4)
     } }()
+    try { if let v = self._topicID {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 5)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_FetchGroupMessagesRequest, rhs: Shared_Proto_Services_V1_FetchGroupMessagesRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_FetchGroupMessagesRequest, rhs: Shared_Proto_Services_V1_FetchGroupMessagesRequest) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs._afterSequence != rhs._afterSequence {return false}
     if lhs.limit != rhs.limit {return false}
     if lhs._threadID != rhs._threadID {return false}
+    if lhs._topicID != rhs._topicID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
 extension Shared_Proto_Services_V1_GroupMessageEnvelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GroupMessageEnvelope"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}group_id\0\u{1}epoch\0\u{3}mls_ciphertext\0\u{3}sent_at\0\u{3}sequence_number\0\u{3}thread_id\0\u{3}expires_at\0\u{c}\u{9}\u{7}")
+  public static let protoMessageName: String = _protobuf_package + ".GroupMessageEnvelope"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}group_id\0\u{1}epoch\0\u{3}mls_ciphertext\0\u{3}sent_at\0\u{3}sequence_number\0\u{3}thread_id\0\u{3}expires_at\0\u{3}topic_id\0\u{c}\u{a}\u{6}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2544,12 +2972,13 @@ extension Shared_Proto_Services_V1_GroupMessageEnvelope: SwiftProtobuf.Message, 
       case 6: try { try decoder.decodeSingularUInt64Field(value: &self.sequenceNumber) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self._threadID) }()
       case 8: try { try decoder.decodeSingularInt64Field(value: &self.expiresAt) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self._topicID) }()
       default: break
       }
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -2578,10 +3007,13 @@ extension Shared_Proto_Services_V1_GroupMessageEnvelope: SwiftProtobuf.Message, 
     if self.expiresAt != 0 {
       try visitor.visitSingularInt64Field(value: self.expiresAt, fieldNumber: 8)
     }
+    try { if let v = self._topicID {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 9)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GroupMessageEnvelope, rhs: Shared_Proto_Services_V1_GroupMessageEnvelope) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GroupMessageEnvelope, rhs: Shared_Proto_Services_V1_GroupMessageEnvelope) -> Bool {
     if lhs.messageID != rhs.messageID {return false}
     if lhs.groupID != rhs.groupID {return false}
     if lhs.epoch != rhs.epoch {return false}
@@ -2589,6 +3021,7 @@ extension Shared_Proto_Services_V1_GroupMessageEnvelope: SwiftProtobuf.Message, 
     if lhs.sentAt != rhs.sentAt {return false}
     if lhs.sequenceNumber != rhs.sequenceNumber {return false}
     if lhs._threadID != rhs._threadID {return false}
+    if lhs._topicID != rhs._topicID {return false}
     if lhs.expiresAt != rhs.expiresAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -2596,10 +3029,10 @@ extension Shared_Proto_Services_V1_GroupMessageEnvelope: SwiftProtobuf.Message, 
 }
 
 extension Shared_Proto_Services_V1_GroupStreamRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GroupStreamRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}subscribe\0\u{1}send\0\u{1}heartbeat\0\u{4}\u{7}request_id\0\u{c}\u{4}\u{6}\u{c}\u{b}\u{a}")
+  public static let protoMessageName: String = _protobuf_package + ".GroupStreamRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}subscribe\0\u{1}send\0\u{1}heartbeat\0\u{4}\u{7}request_id\0\u{c}\u{4}\u{6}\u{c}\u{b}\u{a}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2650,7 +3083,7 @@ extension Shared_Proto_Services_V1_GroupStreamRequest: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -2676,7 +3109,7 @@ extension Shared_Proto_Services_V1_GroupStreamRequest: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GroupStreamRequest, rhs: Shared_Proto_Services_V1_GroupStreamRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GroupStreamRequest, rhs: Shared_Proto_Services_V1_GroupStreamRequest) -> Bool {
     if lhs.request != rhs.request {return false}
     if lhs.requestID != rhs.requestID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -2685,10 +3118,10 @@ extension Shared_Proto_Services_V1_GroupStreamRequest: SwiftProtobuf.Message, Sw
 }
 
 extension Shared_Proto_Services_V1_GroupStreamResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GroupStreamResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}commit\0\u{1}ack\0\u{1}error\0\u{3}heartbeat_ack\0\u{1}invite\0\u{1}dissolved\0\u{4}\u{3}response_id\0\u{c}\u{8}\u{2}\u{c}\u{b}\u{a}")
+  public static let protoMessageName: String = _protobuf_package + ".GroupStreamResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}commit\0\u{1}ack\0\u{1}error\0\u{3}heartbeat_ack\0\u{1}invite\0\u{1}dissolved\0\u{4}\u{3}response_id\0\u{c}\u{8}\u{2}\u{c}\u{b}\u{a}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2791,7 +3224,7 @@ extension Shared_Proto_Services_V1_GroupStreamResponse: SwiftProtobuf.Message, S
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -2833,7 +3266,7 @@ extension Shared_Proto_Services_V1_GroupStreamResponse: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GroupStreamResponse, rhs: Shared_Proto_Services_V1_GroupStreamResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GroupStreamResponse, rhs: Shared_Proto_Services_V1_GroupStreamResponse) -> Bool {
     if lhs.response != rhs.response {return false}
     if lhs._responseID != rhs._responseID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -2842,10 +3275,10 @@ extension Shared_Proto_Services_V1_GroupStreamResponse: SwiftProtobuf.Message, S
 }
 
 extension Shared_Proto_Services_V1_GroupSubscribeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GroupSubscribeRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_ids\0")
+  public static let protoMessageName: String = _protobuf_package + ".GroupSubscribeRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_ids\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2857,14 +3290,14 @@ extension Shared_Proto_Services_V1_GroupSubscribeRequest: SwiftProtobuf.Message,
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupIds.isEmpty {
       try visitor.visitRepeatedStringField(value: self.groupIds, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GroupSubscribeRequest, rhs: Shared_Proto_Services_V1_GroupSubscribeRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GroupSubscribeRequest, rhs: Shared_Proto_Services_V1_GroupSubscribeRequest) -> Bool {
     if lhs.groupIds != rhs.groupIds {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -2872,10 +3305,10 @@ extension Shared_Proto_Services_V1_GroupSubscribeRequest: SwiftProtobuf.Message,
 }
 
 extension Shared_Proto_Services_V1_GroupHeartbeat: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GroupHeartbeat"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}timestamp\0")
+  public static let protoMessageName: String = _protobuf_package + ".GroupHeartbeat"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}timestamp\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2887,14 +3320,14 @@ extension Shared_Proto_Services_V1_GroupHeartbeat: SwiftProtobuf.Message, SwiftP
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.timestamp != 0 {
       try visitor.visitSingularInt64Field(value: self.timestamp, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GroupHeartbeat, rhs: Shared_Proto_Services_V1_GroupHeartbeat) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GroupHeartbeat, rhs: Shared_Proto_Services_V1_GroupHeartbeat) -> Bool {
     if lhs.timestamp != rhs.timestamp {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -2902,10 +3335,10 @@ extension Shared_Proto_Services_V1_GroupHeartbeat: SwiftProtobuf.Message, SwiftP
 }
 
 extension Shared_Proto_Services_V1_GroupHeartbeatAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GroupHeartbeatAck"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}timestamp\0\u{3}server_timestamp\0")
+  public static let protoMessageName: String = _protobuf_package + ".GroupHeartbeatAck"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}timestamp\0\u{3}server_timestamp\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2918,7 +3351,7 @@ extension Shared_Proto_Services_V1_GroupHeartbeatAck: SwiftProtobuf.Message, Swi
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.timestamp != 0 {
       try visitor.visitSingularInt64Field(value: self.timestamp, fieldNumber: 1)
     }
@@ -2928,7 +3361,7 @@ extension Shared_Proto_Services_V1_GroupHeartbeatAck: SwiftProtobuf.Message, Swi
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GroupHeartbeatAck, rhs: Shared_Proto_Services_V1_GroupHeartbeatAck) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GroupHeartbeatAck, rhs: Shared_Proto_Services_V1_GroupHeartbeatAck) -> Bool {
     if lhs.timestamp != rhs.timestamp {return false}
     if lhs.serverTimestamp != rhs.serverTimestamp {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -2937,10 +3370,10 @@ extension Shared_Proto_Services_V1_GroupHeartbeatAck: SwiftProtobuf.Message, Swi
 }
 
 extension Shared_Proto_Services_V1_GroupMessageAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GroupMessageAck"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}client_message_id\0\u{3}server_message_id\0\u{3}sequence_number\0\u{3}server_timestamp\0")
+  public static let protoMessageName: String = _protobuf_package + ".GroupMessageAck"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}client_message_id\0\u{3}server_message_id\0\u{3}sequence_number\0\u{3}server_timestamp\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2955,7 +3388,7 @@ extension Shared_Proto_Services_V1_GroupMessageAck: SwiftProtobuf.Message, Swift
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.clientMessageID.isEmpty {
       try visitor.visitSingularStringField(value: self.clientMessageID, fieldNumber: 1)
     }
@@ -2971,7 +3404,7 @@ extension Shared_Proto_Services_V1_GroupMessageAck: SwiftProtobuf.Message, Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GroupMessageAck, rhs: Shared_Proto_Services_V1_GroupMessageAck) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GroupMessageAck, rhs: Shared_Proto_Services_V1_GroupMessageAck) -> Bool {
     if lhs.clientMessageID != rhs.clientMessageID {return false}
     if lhs.serverMessageID != rhs.serverMessageID {return false}
     if lhs.sequenceNumber != rhs.sequenceNumber {return false}
@@ -2982,10 +3415,10 @@ extension Shared_Proto_Services_V1_GroupMessageAck: SwiftProtobuf.Message, Swift
 }
 
 extension Shared_Proto_Services_V1_GroupStreamError: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GroupStreamError"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}request_id\0\u{3}error_code\0\u{3}error_message\0\u{1}retryable\0")
+  public static let protoMessageName: String = _protobuf_package + ".GroupStreamError"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}request_id\0\u{3}error_code\0\u{3}error_message\0\u{1}retryable\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -3000,7 +3433,7 @@ extension Shared_Proto_Services_V1_GroupStreamError: SwiftProtobuf.Message, Swif
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.requestID.isEmpty {
       try visitor.visitSingularStringField(value: self.requestID, fieldNumber: 1)
     }
@@ -3016,7 +3449,7 @@ extension Shared_Proto_Services_V1_GroupStreamError: SwiftProtobuf.Message, Swif
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GroupStreamError, rhs: Shared_Proto_Services_V1_GroupStreamError) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GroupStreamError, rhs: Shared_Proto_Services_V1_GroupStreamError) -> Bool {
     if lhs.requestID != rhs.requestID {return false}
     if lhs.errorCode != rhs.errorCode {return false}
     if lhs.errorMessage != rhs.errorMessage {return false}
@@ -3027,10 +3460,10 @@ extension Shared_Proto_Services_V1_GroupStreamError: SwiftProtobuf.Message, Swif
 }
 
 extension Shared_Proto_Services_V1_GroupDissolvedNotice: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GroupDissolvedNotice"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}dissolved_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".GroupDissolvedNotice"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}dissolved_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -3043,7 +3476,7 @@ extension Shared_Proto_Services_V1_GroupDissolvedNotice: SwiftProtobuf.Message, 
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
     }
@@ -3053,7 +3486,7 @@ extension Shared_Proto_Services_V1_GroupDissolvedNotice: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GroupDissolvedNotice, rhs: Shared_Proto_Services_V1_GroupDissolvedNotice) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GroupDissolvedNotice, rhs: Shared_Proto_Services_V1_GroupDissolvedNotice) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.dissolvedAt != rhs.dissolvedAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -3062,10 +3495,10 @@ extension Shared_Proto_Services_V1_GroupDissolvedNotice: SwiftProtobuf.Message, 
 }
 
 extension Shared_Proto_Services_V1_PublishKeyPackageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PublishKeyPackageRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}key_packages\0\u{c}\u{3}\u{8}")
+  public static let protoMessageName: String = _protobuf_package + ".PublishKeyPackageRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}key_packages\0\u{c}\u{3}\u{8}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -3078,7 +3511,7 @@ extension Shared_Proto_Services_V1_PublishKeyPackageRequest: SwiftProtobuf.Messa
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.deviceID.isEmpty {
       try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 1)
     }
@@ -3088,7 +3521,7 @@ extension Shared_Proto_Services_V1_PublishKeyPackageRequest: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_PublishKeyPackageRequest, rhs: Shared_Proto_Services_V1_PublishKeyPackageRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_PublishKeyPackageRequest, rhs: Shared_Proto_Services_V1_PublishKeyPackageRequest) -> Bool {
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs.keyPackages != rhs.keyPackages {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -3097,10 +3530,10 @@ extension Shared_Proto_Services_V1_PublishKeyPackageRequest: SwiftProtobuf.Messa
 }
 
 extension Shared_Proto_Services_V1_PublishKeyPackageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PublishKeyPackageResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}count\0\u{3}published_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".PublishKeyPackageResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}count\0\u{3}published_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -3113,7 +3546,7 @@ extension Shared_Proto_Services_V1_PublishKeyPackageResponse: SwiftProtobuf.Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.count != 0 {
       try visitor.visitSingularUInt32Field(value: self.count, fieldNumber: 1)
     }
@@ -3123,7 +3556,7 @@ extension Shared_Proto_Services_V1_PublishKeyPackageResponse: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_PublishKeyPackageResponse, rhs: Shared_Proto_Services_V1_PublishKeyPackageResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_PublishKeyPackageResponse, rhs: Shared_Proto_Services_V1_PublishKeyPackageResponse) -> Bool {
     if lhs.count != rhs.count {return false}
     if lhs.publishedAt != rhs.publishedAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -3132,10 +3565,10 @@ extension Shared_Proto_Services_V1_PublishKeyPackageResponse: SwiftProtobuf.Mess
 }
 
 extension Shared_Proto_Services_V1_ConsumeKeyPackageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ConsumeKeyPackageRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}preferred_device_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".ConsumeKeyPackageRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}preferred_device_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -3148,7 +3581,7 @@ extension Shared_Proto_Services_V1_ConsumeKeyPackageRequest: SwiftProtobuf.Messa
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -3162,7 +3595,7 @@ extension Shared_Proto_Services_V1_ConsumeKeyPackageRequest: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ConsumeKeyPackageRequest, rhs: Shared_Proto_Services_V1_ConsumeKeyPackageRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ConsumeKeyPackageRequest, rhs: Shared_Proto_Services_V1_ConsumeKeyPackageRequest) -> Bool {
     if lhs.userID != rhs.userID {return false}
     if lhs._preferredDeviceID != rhs._preferredDeviceID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -3171,10 +3604,10 @@ extension Shared_Proto_Services_V1_ConsumeKeyPackageRequest: SwiftProtobuf.Messa
 }
 
 extension Shared_Proto_Services_V1_ConsumeKeyPackageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ConsumeKeyPackageResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_package\0\u{3}device_id\0\u{3}key_package_ref\0")
+  public static let protoMessageName: String = _protobuf_package + ".ConsumeKeyPackageResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_package\0\u{3}device_id\0\u{3}key_package_ref\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -3188,7 +3621,7 @@ extension Shared_Proto_Services_V1_ConsumeKeyPackageResponse: SwiftProtobuf.Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.keyPackage.isEmpty {
       try visitor.visitSingularBytesField(value: self.keyPackage, fieldNumber: 1)
     }
@@ -3201,7 +3634,7 @@ extension Shared_Proto_Services_V1_ConsumeKeyPackageResponse: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ConsumeKeyPackageResponse, rhs: Shared_Proto_Services_V1_ConsumeKeyPackageResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ConsumeKeyPackageResponse, rhs: Shared_Proto_Services_V1_ConsumeKeyPackageResponse) -> Bool {
     if lhs.keyPackage != rhs.keyPackage {return false}
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs.keyPackageRef != rhs.keyPackageRef {return false}
@@ -3211,10 +3644,10 @@ extension Shared_Proto_Services_V1_ConsumeKeyPackageResponse: SwiftProtobuf.Mess
 }
 
 extension Shared_Proto_Services_V1_GetKeyPackageCountRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetKeyPackageCountRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetKeyPackageCountRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -3227,7 +3660,7 @@ extension Shared_Proto_Services_V1_GetKeyPackageCountRequest: SwiftProtobuf.Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -3241,7 +3674,7 @@ extension Shared_Proto_Services_V1_GetKeyPackageCountRequest: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetKeyPackageCountRequest, rhs: Shared_Proto_Services_V1_GetKeyPackageCountRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetKeyPackageCountRequest, rhs: Shared_Proto_Services_V1_GetKeyPackageCountRequest) -> Bool {
     if lhs.userID != rhs.userID {return false}
     if lhs._deviceID != rhs._deviceID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -3250,10 +3683,10 @@ extension Shared_Proto_Services_V1_GetKeyPackageCountRequest: SwiftProtobuf.Mess
 }
 
 extension Shared_Proto_Services_V1_GetKeyPackageCountResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetKeyPackageCountResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}count\0\u{3}recommended_minimum\0\u{3}last_published_at\0\u{3}cannot_be_invited\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetKeyPackageCountResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}count\0\u{3}recommended_minimum\0\u{3}last_published_at\0\u{3}cannot_be_invited\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -3268,7 +3701,7 @@ extension Shared_Proto_Services_V1_GetKeyPackageCountResponse: SwiftProtobuf.Mes
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.count != 0 {
       try visitor.visitSingularUInt32Field(value: self.count, fieldNumber: 1)
     }
@@ -3284,11 +3717,553 @@ extension Shared_Proto_Services_V1_GetKeyPackageCountResponse: SwiftProtobuf.Mes
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetKeyPackageCountResponse, rhs: Shared_Proto_Services_V1_GetKeyPackageCountResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetKeyPackageCountResponse, rhs: Shared_Proto_Services_V1_GetKeyPackageCountResponse) -> Bool {
     if lhs.count != rhs.count {return false}
     if lhs.recommendedMinimum != rhs.recommendedMinimum {return false}
     if lhs.lastPublishedAt != rhs.lastPublishedAt {return false}
     if lhs.cannotBeInvited != rhs.cannotBeInvited {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_CreateTopicRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CreateTopicRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}encrypted_name\0\u{3}sort_order\0\u{3}admin_proof\0\u{3}signature_timestamp\0\u{c}\u{6}\u{a}")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.groupID) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.encryptedName) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.sortOrder) }()
+      case 4: try { try decoder.decodeSingularBytesField(value: &self.adminProof) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.signatureTimestamp) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.groupID.isEmpty {
+      try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
+    }
+    if !self.encryptedName.isEmpty {
+      try visitor.visitSingularBytesField(value: self.encryptedName, fieldNumber: 2)
+    }
+    if self.sortOrder != 0 {
+      try visitor.visitSingularUInt32Field(value: self.sortOrder, fieldNumber: 3)
+    }
+    if !self.adminProof.isEmpty {
+      try visitor.visitSingularBytesField(value: self.adminProof, fieldNumber: 4)
+    }
+    if self.signatureTimestamp != 0 {
+      try visitor.visitSingularInt64Field(value: self.signatureTimestamp, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_CreateTopicRequest, rhs: Shared_Proto_Services_V1_CreateTopicRequest) -> Bool {
+    if lhs.groupID != rhs.groupID {return false}
+    if lhs.encryptedName != rhs.encryptedName {return false}
+    if lhs.sortOrder != rhs.sortOrder {return false}
+    if lhs.adminProof != rhs.adminProof {return false}
+    if lhs.signatureTimestamp != rhs.signatureTimestamp {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_CreateTopicResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CreateTopicResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_id\0\u{3}created_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.topicID) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.createdAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.topicID.isEmpty {
+      try visitor.visitSingularStringField(value: self.topicID, fieldNumber: 1)
+    }
+    if self.createdAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.createdAt, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_CreateTopicResponse, rhs: Shared_Proto_Services_V1_CreateTopicResponse) -> Bool {
+    if lhs.topicID != rhs.topicID {return false}
+    if lhs.createdAt != rhs.createdAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_ListTopicsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListTopicsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}include_archived\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.groupID) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.includeArchived) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.groupID.isEmpty {
+      try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
+    }
+    if self.includeArchived != false {
+      try visitor.visitSingularBoolField(value: self.includeArchived, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_ListTopicsRequest, rhs: Shared_Proto_Services_V1_ListTopicsRequest) -> Bool {
+    if lhs.groupID != rhs.groupID {return false}
+    if lhs.includeArchived != rhs.includeArchived {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_ListTopicsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListTopicsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}topics\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.topics) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.topics.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.topics, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_ListTopicsResponse, rhs: Shared_Proto_Services_V1_ListTopicsResponse) -> Bool {
+    if lhs.topics != rhs.topics {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_TopicInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TopicInfo"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_id\0\u{3}group_id\0\u{3}encrypted_name\0\u{3}sort_order\0\u{3}created_at\0\u{3}archived_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.topicID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.groupID) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.encryptedName) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.sortOrder) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.createdAt) }()
+      case 6: try { try decoder.decodeSingularInt64Field(value: &self._archivedAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.topicID.isEmpty {
+      try visitor.visitSingularStringField(value: self.topicID, fieldNumber: 1)
+    }
+    if !self.groupID.isEmpty {
+      try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 2)
+    }
+    if !self.encryptedName.isEmpty {
+      try visitor.visitSingularBytesField(value: self.encryptedName, fieldNumber: 3)
+    }
+    if self.sortOrder != 0 {
+      try visitor.visitSingularUInt32Field(value: self.sortOrder, fieldNumber: 4)
+    }
+    if self.createdAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.createdAt, fieldNumber: 5)
+    }
+    try { if let v = self._archivedAt {
+      try visitor.visitSingularInt64Field(value: v, fieldNumber: 6)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_TopicInfo, rhs: Shared_Proto_Services_V1_TopicInfo) -> Bool {
+    if lhs.topicID != rhs.topicID {return false}
+    if lhs.groupID != rhs.groupID {return false}
+    if lhs.encryptedName != rhs.encryptedName {return false}
+    if lhs.sortOrder != rhs.sortOrder {return false}
+    if lhs.createdAt != rhs.createdAt {return false}
+    if lhs._archivedAt != rhs._archivedAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_ArchiveTopicRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ArchiveTopicRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}topic_id\0\u{3}admin_proof\0\u{3}signature_timestamp\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.groupID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.topicID) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.adminProof) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.signatureTimestamp) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.groupID.isEmpty {
+      try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
+    }
+    if !self.topicID.isEmpty {
+      try visitor.visitSingularStringField(value: self.topicID, fieldNumber: 2)
+    }
+    if !self.adminProof.isEmpty {
+      try visitor.visitSingularBytesField(value: self.adminProof, fieldNumber: 3)
+    }
+    if self.signatureTimestamp != 0 {
+      try visitor.visitSingularInt64Field(value: self.signatureTimestamp, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_ArchiveTopicRequest, rhs: Shared_Proto_Services_V1_ArchiveTopicRequest) -> Bool {
+    if lhs.groupID != rhs.groupID {return false}
+    if lhs.topicID != rhs.topicID {return false}
+    if lhs.adminProof != rhs.adminProof {return false}
+    if lhs.signatureTimestamp != rhs.signatureTimestamp {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_ArchiveTopicResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ArchiveTopicResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}archived_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.success) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.archivedAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.success != false {
+      try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
+    }
+    if self.archivedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.archivedAt, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_ArchiveTopicResponse, rhs: Shared_Proto_Services_V1_ArchiveTopicResponse) -> Bool {
+    if lhs.success != rhs.success {return false}
+    if lhs.archivedAt != rhs.archivedAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_CreateInviteLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CreateInviteLinkRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}admin_proof\0\u{3}signature_timestamp\0\u{3}max_uses\0\u{3}expires_in_seconds\0\u{c}\u{6}\u{a}")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.groupID) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.adminProof) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.signatureTimestamp) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.maxUses) }()
+      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.expiresInSeconds) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.groupID.isEmpty {
+      try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
+    }
+    if !self.adminProof.isEmpty {
+      try visitor.visitSingularBytesField(value: self.adminProof, fieldNumber: 2)
+    }
+    if self.signatureTimestamp != 0 {
+      try visitor.visitSingularInt64Field(value: self.signatureTimestamp, fieldNumber: 3)
+    }
+    if self.maxUses != 0 {
+      try visitor.visitSingularUInt32Field(value: self.maxUses, fieldNumber: 4)
+    }
+    if self.expiresInSeconds != 0 {
+      try visitor.visitSingularUInt32Field(value: self.expiresInSeconds, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_CreateInviteLinkRequest, rhs: Shared_Proto_Services_V1_CreateInviteLinkRequest) -> Bool {
+    if lhs.groupID != rhs.groupID {return false}
+    if lhs.adminProof != rhs.adminProof {return false}
+    if lhs.signatureTimestamp != rhs.signatureTimestamp {return false}
+    if lhs.maxUses != rhs.maxUses {return false}
+    if lhs.expiresInSeconds != rhs.expiresInSeconds {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_CreateInviteLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CreateInviteLinkResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0\u{3}created_at\0\u{3}expires_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.token) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.createdAt) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self._expiresAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.token.isEmpty {
+      try visitor.visitSingularStringField(value: self.token, fieldNumber: 1)
+    }
+    if self.createdAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.createdAt, fieldNumber: 2)
+    }
+    try { if let v = self._expiresAt {
+      try visitor.visitSingularInt64Field(value: v, fieldNumber: 3)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_CreateInviteLinkResponse, rhs: Shared_Proto_Services_V1_CreateInviteLinkResponse) -> Bool {
+    if lhs.token != rhs.token {return false}
+    if lhs.createdAt != rhs.createdAt {return false}
+    if lhs._expiresAt != rhs._expiresAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_RevokeInviteLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RevokeInviteLinkRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}token\0\u{3}admin_proof\0\u{3}signature_timestamp\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.groupID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.token) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.adminProof) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.signatureTimestamp) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.groupID.isEmpty {
+      try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
+    }
+    if !self.token.isEmpty {
+      try visitor.visitSingularStringField(value: self.token, fieldNumber: 2)
+    }
+    if !self.adminProof.isEmpty {
+      try visitor.visitSingularBytesField(value: self.adminProof, fieldNumber: 3)
+    }
+    if self.signatureTimestamp != 0 {
+      try visitor.visitSingularInt64Field(value: self.signatureTimestamp, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_RevokeInviteLinkRequest, rhs: Shared_Proto_Services_V1_RevokeInviteLinkRequest) -> Bool {
+    if lhs.groupID != rhs.groupID {return false}
+    if lhs.token != rhs.token {return false}
+    if lhs.adminProof != rhs.adminProof {return false}
+    if lhs.signatureTimestamp != rhs.signatureTimestamp {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_RevokeInviteLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RevokeInviteLinkResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}revoked_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.success) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.revokedAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.success != false {
+      try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
+    }
+    if self.revokedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.revokedAt, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_RevokeInviteLinkResponse, rhs: Shared_Proto_Services_V1_RevokeInviteLinkResponse) -> Bool {
+    if lhs.success != rhs.success {return false}
+    if lhs.revokedAt != rhs.revokedAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_ResolveInviteLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ResolveInviteLinkRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.token) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.token.isEmpty {
+      try visitor.visitSingularStringField(value: self.token, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_ResolveInviteLinkRequest, rhs: Shared_Proto_Services_V1_ResolveInviteLinkRequest) -> Bool {
+    if lhs.token != rhs.token {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_ResolveInviteLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ResolveInviteLinkResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}member_count\0\u{1}valid\0\u{3}expires_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.groupID) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.memberCount) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.valid) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self._expiresAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.groupID.isEmpty {
+      try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
+    }
+    if self.memberCount != 0 {
+      try visitor.visitSingularUInt32Field(value: self.memberCount, fieldNumber: 2)
+    }
+    if self.valid != false {
+      try visitor.visitSingularBoolField(value: self.valid, fieldNumber: 3)
+    }
+    try { if let v = self._expiresAt {
+      try visitor.visitSingularInt64Field(value: v, fieldNumber: 4)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_ResolveInviteLinkResponse, rhs: Shared_Proto_Services_V1_ResolveInviteLinkResponse) -> Bool {
+    if lhs.groupID != rhs.groupID {return false}
+    if lhs.memberCount != rhs.memberCount {return false}
+    if lhs.valid != rhs.valid {return false}
+    if lhs._expiresAt != rhs._expiresAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

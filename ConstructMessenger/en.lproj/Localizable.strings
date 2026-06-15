@@ -103,6 +103,11 @@
 "pin_code_length" = "PIN must be 6-12 digits";
 "pin_codes_dont_match" = "PIN codes don't match";
 "wrong_pin_code" = "Wrong PIN Code";
+"cant_unlock" = "Can't sign in?";
+"pin_reset_title" = "Reset this device?";
+"pin_reset_explain" = "All local data will be erased from this device. Your identity can be restored later with your seed phrase, only if recovery was set up.";
+"pin_reset_action" = "Reset";
+"pin_reset_countdown" = "Resetting in %d… enter your PIN to cancel";
 "lock_delay" = "Lock After";
 "lock_now" = "Lock Now";
 "lock_delay_immediate" = "Immediately";
@@ -413,7 +418,19 @@
 "veil_title" = "VEIL";
 "veil_footer" = "VEIL masks your traffic to make it indistinguishable from regular HTTPS. The configuration is provided automatically by the server.";
 "veil_unavailable" = "Not available on this server";
+"veil_establishing" = "Establishing veil-front tunnel…";
 "veil_retry" = "Retry VEIL connection";
+"veil_import_err_malformed" = "Invalid configuration code";
+"veil_import_err_signature" = "Configuration signature is invalid";
+"veil_import_err_expired" = "This configuration has expired — request a new one";
+"veil_import_err_unknown_relay" = "Configuration is for an unknown relay";
+"veil_config_import_ok" = "VEIL access configured";
+"veil_config_scan" = "Scan configuration QR";
+"veil_config_paste" = "Paste configuration code";
+"veil_config_import" = "Import";
+"veil_config_section" = "VEIL ACCESS";
+"veil_config_active" = "Access configured for %@";
+"veil_config_none" = "No access configured";
 "traffic_protection" = "Traffic Protection";
 "veil_footer_short" = "VEIL masks traffic as standard HTTPS. Configuration is provided automatically.";
 
@@ -673,14 +690,14 @@
 "keys_recovery_warning_body" = "Your device crypto keys could not be loaded from Keychain. This may be a temporary system issue, or the keys may be permanently lost.\n\nYour messages and sessions cannot be accessed until this is resolved.";
 "keys_recovery_section_retry" = "retry";
 "keys_recovery_retry_hint" = "Keys may be temporarily unavailable due to a system issue. Try reloading.";
-"keys_recovery_retry_action" = "retry keychain read [→]";
+"keys_recovery_retry_action" = "retry keychain read";
 "keys_recovery_retry_failed" = "still unavailable";
 "keys_recovery_section_seed" = "restore from seed phrase";
 "keys_recovery_seed_hint" = "If you saved your 12-word recovery phrase, use it to restore access to your existing identity.";
-"keys_recovery_seed_action" = "enter recovery phrase [→]";
+"keys_recovery_seed_action" = "enter recovery phrase";
 "keys_recovery_section_new" = "create new account";
 "keys_recovery_new_hint" = "Create a completely new identity. Your existing account and messages will be permanently lost.";
-"keys_recovery_new_action" = "create new account [→]";
+"keys_recovery_new_action" = "create new account";
 "keys_recovery_wipe_confirm_title" = "create new account?";
 "keys_recovery_wipe_confirm_body" = "This will permanently delete your current identity and all local data. This cannot be undone.";
 "keys_recovery_wipe_confirm_action" = "delete and continue";
@@ -721,7 +738,7 @@
 "contact_request_spam_block" = "[⚠] report spam + block";
 "contact_request_sent" = "request sent";
 "contact_request_pending" = "[pending]";
-"contact_request_send_action" = "[→ send request]";
+"contact_request_send_action" = "[send request]";
 "contact_request_sheet_title" = "contact request";
 "contact_request_from_title" = "wants to connect";
 "contact_request_empty_inbox" = "no pending requests";
@@ -866,6 +883,7 @@
 "history_sync_offer_skip" = "Skip";
 "history_sync_user_mismatch" = "History transfer failed: this history belongs to a different account.";
 "call_error_not_contacts" = "Cannot call this node. Make sure you are mutual contacts.";
+"call_error_busy" = "You're already in a call.";
 "call_error_peer_offline" = "Node is offline. Try again later.";
 
 /* Tab bar labels */

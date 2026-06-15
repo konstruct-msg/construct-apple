@@ -24,10 +24,13 @@ final class SignalingServiceClient: Sendable {
     // MARK: - TURN
 
     func getTurnCredentials(callId: String? = nil) async throws -> Shared_Proto_Signaling_V1_TurnCredentials {
-        // TURN credentials may be call-scoped on the server (HMAC bound to callId).
-        // Never serve cached creds for a specific call — they may be invalid for this callId.
-        // Cache is only used for anonymous/non-call-scoped requests.
-        if callId == nil, let cached = await turnCache.getIfValid() {
+        // TURN credentials are user-scoped, NOT call-scoped: the server derives them as
+        // coturn-REST HMAC(secret, "<expiry>:<user_id>") — callId is not part of the
+        // credential (see signaling-service turn.rs). So a still-valid credential is reusable
+        // for any call until it expires. Reuse the cache across calls regardless of callId —
+        // fetching fresh per call hammered the per-user TURN rate limiter, which returned
+        // resourceExhausted on rapid back-to-back calls → STUN-only → failed/silent calls.
+        if let cached = await turnCache.getIfValid() {
             return cached
         }
 
@@ -39,8 +42,7 @@ final class SignalingServiceClient: Sendable {
             return resp.credentials
         }
 
-        // Only cache non-call-scoped credentials.
-        if callId == nil { await turnCache.store(creds) }
+        await turnCache.store(creds)
         return creds
     }
 

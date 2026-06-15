@@ -52,14 +52,11 @@ enum TransportReducer {
         case .direct(let fails):
             return reduceDirect(fails: fails, event: event, config: config, now: now)
 
-        case .veilProbing(let attempt):
-            return reduceProbing(attempt: attempt, event: event, config: config, now: now)
+        case .veilProbing:
+            return reduceProbing(event: event, config: config, now: now)
 
         case .veilActive(let relay, let port, let since):
             return reduceActive(relay: relay, port: port, since: since, event: event, config: config, now: now)
-
-        case .veilDegraded(let relay, let port, let fails):
-            return reduceDegraded(relay: relay, port: port, fails: fails, event: event, config: config, now: now)
 
         case .veilCooldown(let until):
             return reduceCooldown(until: until, event: event, config: config, now: now)
@@ -82,7 +79,7 @@ enum TransportReducer {
 
     private static func reduceVEILConfigChanged(state: TransportState) -> Outcome {
         switch state {
-        case .veilActive, .veilDegraded:
+        case .veilActive:
             // Active VEIL — drop the current proxy and probe again with the new config.
             return rotateRelay()
         case .veilProbing:
@@ -115,22 +112,18 @@ enum TransportReducer {
             return (.direct(consecutiveFails: 0), [.requestProxyStop, .setVeilPort(nil), .invalidateGRPCClient])
         case .on:
             switch state {
-            case .veilActive, .veilDegraded, .veilProbing:
+            case .veilActive, .veilProbing:
                 return (state, [])
             default:
-                return (.veilProbing(attempt: 1), [.requestProxyStart])
+                return (.veilProbing, [.requestProxyStart])
             }
         case .auto:
-            // On a censored network the user toggling to .auto is an explicit request for
-            // VEIL protection. Otherwise .auto means "stay on direct, escalate on failures."
-            if censored {
-                switch state {
-                case .veilActive, .veilDegraded, .veilProbing:
-                    return (state, [])
-                default:
-                    return (.veilProbing(attempt: 1), [.requestProxyStart])
-                }
-            }
+            // Auto never force-starts VEIL from the censored heuristic. It means "stay
+            // on the current path; escalate to VEIL only when direct actually fails"
+            // (see reduceDirect). Geography alone must not abandon a working direct
+            // connection. Toggling to auto just stops forcing — keep the current state
+            // and let RPC outcomes drive the next transition. `censored` is unused here.
+            _ = censored
             return (state, [])
         }
     }
@@ -148,8 +141,9 @@ enum TransportReducer {
                 return (.direct(consecutiveFails: fails), [])
             }
             let newFails = fails + 1
-            if newFails >= config.directFailThreshold {
-                return (.veilProbing(attempt: 1), [.requestProxyStart, .invalidateGRPCClient])
+            if config.allowDirectToVeilEscalation,
+               newFails >= config.directFailThreshold {
+                return (.veilProbing, [.requestProxyStart, .invalidateGRPCClient])
             }
             return (.direct(consecutiveFails: newFails), [])
 
@@ -164,7 +158,7 @@ enum TransportReducer {
         }
     }
 
-    private static func reduceProbing(attempt: Int, event: TransportEvent, config: TransportConfig, now: Date) -> Outcome {
+    private static func reduceProbing(event: TransportEvent, config: TransportConfig, now: Date) -> Outcome {
         switch event {
         case .proxyStarted(let relay, let port, let restarted):
             var effects: [TransportEffect] = [.setVeilPort(port)]
@@ -172,16 +166,15 @@ enum TransportReducer {
             return (.veilActive(relay: relay, port: port, since: now), effects)
 
         case .proxyStartFailed:
-            let nextAttempt = attempt + 1
-            if nextAttempt > config.maxProbeAttempts {
-                let until = now.addingTimeInterval(config.veilCooldownDuration)
-                return (.veilCooldown(until: until), [.setVeilPort(nil), .scheduleCooldownEnd(at: until)])
-            }
-            return (.veilProbing(attempt: nextAttempt), [.requestProxyStart])
+            // The single `veil_start` ran the full coordinator probe (happy-eyeballs +
+            // internal retries) and still failed — it's a real failure, so back off in
+            // cooldown rather than re-firing `veil_start` (the old retry loop = churn).
+            let until = now.addingTimeInterval(config.veilCooldownDuration)
+            return (.veilCooldown(until: until), [.setVeilPort(nil), .scheduleCooldownEnd(at: until)])
 
         default:
             // While probing we don't react to RPC events — the proxy isn't up yet.
-            return (.veilProbing(attempt: attempt), [])
+            return (.veilProbing, [])
         }
     }
 
@@ -211,28 +204,6 @@ enum TransportReducer {
         }
     }
 
-    private static func reduceDegraded(relay: String, port: UInt16, fails: Int, event: TransportEvent, config: TransportConfig, now: Date) -> Outcome {
-        switch event {
-        case .rpcSucceeded:
-            // Recovered. Reset to active with a fresh `since`.
-            return (.veilActive(relay: relay, port: port, since: now), [])
-
-        case .rpcFailed(let kind, let via, let foreground):
-            guard foreground, via.isVEIL, kind.isTransportFailure else {
-                return (.veilDegraded(relay: relay, port: port, consecutiveFails: fails), [])
-            }
-            if isHardRelayFailure(kind) {
-                return rotateRelay()
-            }
-            // Soft failure in degraded — same logic as active: recycle the gRPC client,
-            // keep the proxy. Move back to veilActive so success will re-mark Connected.
-            return (.veilActive(relay: relay, port: port, since: now), [.invalidateGRPCClient])
-
-        default:
-            return (.veilDegraded(relay: relay, port: port, consecutiveFails: fails), [])
-        }
-    }
-
     // MARK: - Helpers
 
     /// A relay failure that means "this relay is observably broken right now" —
@@ -252,7 +223,7 @@ enum TransportReducer {
 
     /// Effects for "stop current proxy, drop port + grpc client, start a fresh probe."
     private static func rotateRelay() -> Outcome {
-        return (.veilProbing(attempt: 1),
+        return (.veilProbing,
                 [.requestProxyStop, .setVeilPort(nil), .requestProxyStart, .invalidateGRPCClient])
     }
 

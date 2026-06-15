@@ -27,7 +27,7 @@ struct STTSettingsSection: View {
     @AppStorage("stt_preferred_model") private var preferredModelRaw: String = WhisperModel.tiny.rawValue
     @AppStorage("stt_translate")       private var translateEnabled: Bool = false
     @AppStorage("stt_language")        private var transcriptionLanguage: String = "auto"
-
+    
     @State private var isDownloading: WhisperModel? = nil
     @State private var showDeleteConfirm: WhisperModel? = nil
     @State private var showLanguagePicker: Bool = false
@@ -55,8 +55,7 @@ struct STTSettingsSection: View {
                 .padding(.vertical, 9)
 
                 CTSep(style: .thin)
-
-                // Translation toggle
+                
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(NSLocalizedString("stt_translate_toggle", comment: ""))
@@ -120,7 +119,8 @@ struct STTSettingsSection: View {
             CTSettingsRow(
                 label: NSLocalizedString("stt_language_label", comment: ""),
                 value: currentName,
-                isAction: true
+                isAction: true,
+                disclosure: true
             )
         }
         #else
@@ -228,7 +228,7 @@ struct STTSettingsSection: View {
                 Task { await modelManager.downloadModel(model) }
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "arrow.down.circle")
+                    Image(systemName: "arrow.down.circle.fill")
                         .font(.system(size: 13))
                     Text(NSLocalizedString("stt_download", comment: ""))
                         .font(CTFont.regular(12))
@@ -298,3 +298,12 @@ struct STTSettingsSection: View {
         return formatter.string(fromByteCount: bytes)
     }
 }
+
+#if DEBUG
+#Preview {
+    NavigationStack {
+        STTSettingsSection()
+    }
+    .preferredColorScheme(.dark)
+}
+#endif

@@ -389,7 +389,7 @@ final class PQCKeyManager {
 
 // MARK: - Errors
 
-enum PQCError: Error {
+enum PQCError: Error, ApplicationLayerError {
     case keychainSaveFailed
     case keyNotFound
     case coreNotInitialized

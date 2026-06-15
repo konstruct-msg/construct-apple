@@ -2,7 +2,7 @@ import Foundation
 import os.log
 
 /// Errors specific to the session-init layer (distinct from CryptoManagerError).
-enum SessionError: Error, LocalizedError {
+enum SessionError: Error, LocalizedError, ApplicationLayerError {
     /// Server returned a bundle whose SPK rotation epoch is older than the last
     /// seen epoch for this contact — possible replay attack.
     case staleSPKBundle(epoch: UInt32, knownEpoch: UInt32)

@@ -32,17 +32,15 @@ struct ErrorToastView: View {
     @ViewBuilder
     private func toast(for error: AppError) -> some View {
         HStack(spacing: 10) {
-            Text(asciiIcon(for: error))
+            Text(icon(for: error))
                 .font(CTFont.bold(14))
                 .foregroundColor(tintColor(for: error))
                 .lineLimit(1).fixedSize()
-
             VStack(alignment: .leading, spacing: 2) {
                 Text(error.errorDescription ?? "An error occurred")
                     .font(CTFont.regular(13))
                     .foregroundColor(Color.CT.text)
                     .lineLimit(2)
-
                 if let suggestion = error.recoverySuggestion {
                     Text(suggestion)
                         .font(CTFont.regular(11))
@@ -61,8 +59,8 @@ struct ErrorToastView: View {
                 Button {
                     router.dismiss()
                 } label: {
-                    Text("[x]")
-                        .font(CTFont.regular(13))
+                    Image(systemName: "xmark.circle.fill")
+                        .font(CTFont.regular(14))
                         .foregroundColor(Color.CT.textDim)
                         .frame(width: 36, height: 36)
                         .contentShape(Rectangle())
@@ -72,10 +70,11 @@ struct ErrorToastView: View {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 14)
-        .background(Color.CT.bgMsg)
+        .background(Color.CT.bgMsg).opacity(0.6)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
-            Rectangle()
-                .stroke(tintColor(for: error).opacity(0.4), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(tintColor(for: error).opacity(0.8), lineWidth: 1)
         )
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -98,17 +97,23 @@ struct ErrorToastView: View {
         case .critical: return Color.CT.danger
         }
     }
-
-    private func asciiIcon(for error: AppError) -> String {
+    
+    private func icon(for error: AppError) -> Image {
         switch error {
-        case .network, .streamDisconnected:                     return "[~]"
+        case .network, .streamDisconnected:
+            return Image(systemName: "wifi.slash")
         case .sessionInitFailed, .decryptionFailed,
-             .cryptoCoreUnavailable, .keyOperationFailed:       return "[!]"
+             .cryptoCoreUnavailable, .keyOperationFailed:
+            return Image(systemName: "exclamationmark.triangle.fill")
         case .mediaUploadFailed, .mediaDownloadFailed,
-             .mediaOptimizationFailed:                          return "[!]"
-        case .validation:                                       return "[?]"
-        case .authFailed, .sessionExpired:                      return "[🔒]"
-        case .unknown:                                          return "[err]"
+                .mediaOptimizationFailed:
+            return Image(systemName: "exclamationmark.icloud.fill")
+        case .validation:
+            return Image(systemName: "exclamationmark.bubble.fill")
+        case .authFailed, .sessionExpired:
+            return Image(systemName: "lock.rotation")
+        case .unknown:
+            return Image(systemName: "exclamationmark.bubble.fill")
         }
     }
 
@@ -133,3 +138,34 @@ extension View {
         modifier(ErrorToastModifier())
     }
 }
+
+
+#if DEBUG
+/// ErrorToastView renders only when `ErrorRouter.shared.currentError != nil`, so each
+/// preview seeds the shared router first. Critical errors (or any error with a recovery
+/// handler) stay visible — auto-dismiss only fires for non-critical errors with no
+/// recovery action. Rendered on the CT background to match in-app appearance.
+@MainActor
+private func errorToastPreview(_ error: AppError, recovery: (() -> Void)? = nil) -> some View {
+    ErrorRouter.shared.report(error, recovery: recovery)
+    return ZStack(alignment: .top) {
+        Color.CT.bg.ignoresSafeArea()
+        ErrorToastView()
+    }
+}
+
+#Preview("Critical · action") {
+    // .sessionExpired → "Log in again" button + recovery suggestion line
+    errorToastPreview(.sessionExpired, recovery: {})
+}
+
+#Preview("Warning · reconnect") {
+    // .network → "Reconnect" button (recovery handler keeps it from auto-dismissing)
+    errorToastPreview(.network(.connectionFailed), recovery: {})
+}
+
+#Preview("Critical · dismissable") {
+    // No recovery handler → the × dismiss button branch
+    errorToastPreview(.unknown("Server error (code 13)"))
+}
+#endif

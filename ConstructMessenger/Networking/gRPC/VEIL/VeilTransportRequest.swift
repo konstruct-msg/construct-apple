@@ -29,13 +29,17 @@ enum VeilTransportRequest: Sendable {
 enum VeilProxyRuntimeError: Error, Sendable {
     /// Rust returned code 2 — local network interface is unreachable.
     case networkUnreachable
-    /// Any non-zero return code other than `networkUnreachable` (bad cert, bad address, etc.).
-    case startFailed(code: Int32)
+    /// Any non-zero return code other than `networkUnreachable`. `reason` carries
+    /// the real failing stage from `veil_last_error` (e.g. "veil-front: timeout
+    /// after 7003ms"), or nil when none was available.
+    case startFailed(code: Int32, reason: String?)
 
     var userFacingMessage: String {
         switch self {
         case .networkUnreachable: return "Failed to start proxy (network unreachable)"
-        case .startFailed:        return "Failed to start proxy (check bridge cert)"
+        case .startFailed(let code, let reason):
+            if let reason, !reason.isEmpty { return reason }
+            return "Failed to start proxy (code \(code))"
         }
     }
 }

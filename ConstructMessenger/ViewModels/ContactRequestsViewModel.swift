@@ -44,20 +44,29 @@ final class ContactRequestsViewModel {
         error = nil
         defer { isLoading = false }
 
+        Log.info("Loading contact requests", category: "ContactRequests")
         do {
             let result = try await userServiceClient.getContactRequests()
 
-            incomingRequests = result.incoming.map { proto in
+            var resolvedIncomingRequests: [IncomingRequest] = []
+            resolvedIncomingRequests.reserveCapacity(result.incoming.count)
+
+            for proto in result.incoming {
                 var req = IncomingRequest(
                     id: proto.requestID,
                     fromUserId: proto.fromUserID,
                     createdAt: Date(timeIntervalSince1970: TimeInterval(proto.createdAt))
                 )
-                // Resolve display info from local CoreData cache.
-                req.displayName = resolveDisplayName(for: proto.fromUserID)
-                req.username = resolveUsername(for: proto.fromUserID)
-                return req
+                let identity = await resolveIncomingIdentity(
+                    fromUserId: proto.fromUserID,
+                    fallbackDisplayName: proto.fromDisplayName,
+                    fallbackUsername: proto.fromUsername
+                )
+                req.displayName = identity.displayName
+                req.username = identity.username
+                resolvedIncomingRequests.append(req)
             }
+            incomingRequests = resolvedIncomingRequests
 
             sentRequests = result.sent.map { proto in
                 SentRequest(
@@ -66,7 +75,12 @@ final class ContactRequestsViewModel {
                     createdAt: Date(timeIntervalSince1970: TimeInterval(proto.createdAt))
                 )
             }
+            Log.info(
+                "Loaded contact requests: incoming=\(incomingRequests.count) sent=\(sentRequests.count)",
+                category: "ContactRequests"
+            )
         } catch {
+            Log.error("Failed to load contact requests: \(error)", category: "ContactRequests")
             self.error = error.localizedDescription
         }
     }
@@ -108,12 +122,35 @@ final class ContactRequestsViewModel {
             action: Shared_Proto_Services_V1_ContactRequestAction.accept
         )
         incomingRequests.removeAll { $0.id == request.id }
-        return try ContactLinkService.shared.createOrUpdateContact(
+
+        var displayName = request.displayName
+        var username = request.username
+        if displayName == nil && username == nil {
+            let identity = await resolveIncomingIdentity(
+                fromUserId: request.fromUserId,
+                fallbackDisplayName: nil,
+                fallbackUsername: nil
+            )
+            displayName = identity.displayName
+            username = identity.username
+        }
+
+        let user = try ContactLinkService.shared.createOrUpdateContact(
             userId: request.fromUserId,
-            username: request.username,
-            displayName: request.displayName,
+            username: username,
+            displayName: displayName,
             context: context
         )
+
+        // Rebuild the message-stream subscription set and prewarm the session for
+        // the freshly-accepted contact. Without this the stream stays subscribed
+        // to the pre-acceptance contact set, so the server delivers none of this
+        // contact's messages (ChatsViewModel observes this notification and calls
+        // forceReconnect). The sender side gets the same treatment via
+        // ContactRequestService.checkAndCreateContacts.
+        NotificationCenter.default.post(name: .contactRequestAccepted, object: nil)
+
+        return user
     }
 
     func declineAndBlock(requestId: String) async throws {
@@ -148,6 +185,46 @@ final class ContactRequestsViewModel {
         request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
         request.fetchLimit = 1
         return try? viewContext.fetch(request).first?.username
+    }
+
+    private func normalizedValue(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func resolveIncomingIdentity(
+        fromUserId: String,
+        fallbackDisplayName: String?,
+        fallbackUsername: String?
+    ) async -> (displayName: String?, username: String?) {
+        let cachedDisplayName = resolveDisplayName(for: fromUserId)
+        let cachedUsername = resolveUsername(for: fromUserId)
+        if cachedDisplayName != nil || cachedUsername != nil {
+            return (cachedDisplayName, cachedUsername)
+        }
+
+        let requestDisplayName = fallbackDisplayName.flatMap(normalizedValue)
+        let requestUsername = fallbackUsername.flatMap(normalizedValue)
+        if requestDisplayName != nil || requestUsername != nil {
+            return (requestDisplayName, requestUsername)
+        }
+
+        do {
+            let profile = try await userServiceClient.getUserProfile(userId: fromUserId)
+            let profileDisplayName = profile.hasDisplayName ? normalizedValue(profile.displayName) : nil
+            let profileUsername = profile.hasUsername ? normalizedValue(profile.username) : nil
+            Log.info(
+                "Resolved incoming request identity from profile for \(fromUserId.prefix(8))…",
+                category: "ContactRequests"
+            )
+            return (profileDisplayName, profileUsername)
+        } catch {
+            Log.error(
+                "Failed to resolve incoming request identity for \(fromUserId.prefix(8))…: \(error)",
+                category: "ContactRequests"
+            )
+            return (nil, nil)
+        }
     }
 }
 

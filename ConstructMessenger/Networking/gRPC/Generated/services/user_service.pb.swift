@@ -927,6 +927,24 @@ public struct Shared_Proto_Services_V1_SentContactRequest: Sendable {
   public init() {}
 }
 
+/// Sender identity snapshot captured at request time.
+/// Server validates username against caller's stored hash; display_name is self-asserted.
+public struct Shared_Proto_Services_V1_ContactIdentitySnapshot: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Normalized lowercase username without '@'. Empty if sender has no username.
+  public var username: String = String()
+
+  /// Sender-chosen visible name at request time. Empty if unavailable.
+  public var displayName: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// SendContactRequest
 public struct Shared_Proto_Services_V1_SendContactRequestRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -936,9 +954,21 @@ public struct Shared_Proto_Services_V1_SendContactRequestRequest: Sendable {
   /// User ID of the target (must be discoverable).
   public var toUserID: String = String()
 
+  /// Sender identity snapshot at request time. Optional — legacy clients omit this.
+  public var fromIdentity: Shared_Proto_Services_V1_ContactIdentitySnapshot {
+    get {_fromIdentity ?? Shared_Proto_Services_V1_ContactIdentitySnapshot()}
+    set {_fromIdentity = newValue}
+  }
+  /// Returns true if `fromIdentity` has been explicitly set.
+  public var hasFromIdentity: Bool {self._fromIdentity != nil}
+  /// Clears the value of `fromIdentity`. Subsequent reads from it will return its default value.
+  public mutating func clearFromIdentity() {self._fromIdentity = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _fromIdentity: Shared_Proto_Services_V1_ContactIdentitySnapshot? = nil
 }
 
 public struct Shared_Proto_Services_V1_SendContactRequestResponse: Sendable {
@@ -1008,6 +1038,33 @@ public struct Shared_Proto_Services_V1_RespondToContactRequestResponse: Sendable
 
   /// Final status after the action.
   public var status: Shared_Proto_Services_V1_ContactRequestStatus = .unspecified
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_SetGroupInvitePolicyRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// true = contacts can invite you to groups via InviteToGroup
+  /// false (default) = only invite links work
+  public var allowContactInvites: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_SetGroupInvitePolicyResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Current state after the update
+  public var allowContactInvites: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -2291,9 +2348,44 @@ extension Shared_Proto_Services_V1_SentContactRequest: SwiftProtobuf.Message, Sw
   }
 }
 
+extension Shared_Proto_Services_V1_ContactIdentitySnapshot: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ContactIdentitySnapshot"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}username\0\u{3}display_name\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.username) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.username.isEmpty {
+      try visitor.visitSingularStringField(value: self.username, fieldNumber: 1)
+    }
+    if !self.displayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.displayName, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_ContactIdentitySnapshot, rhs: Shared_Proto_Services_V1_ContactIdentitySnapshot) -> Bool {
+    if lhs.username != rhs.username {return false}
+    if lhs.displayName != rhs.displayName {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension Shared_Proto_Services_V1_SendContactRequestRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendContactRequestRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}to_user_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}to_user_id\0\u{3}from_identity\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2302,20 +2394,29 @@ extension Shared_Proto_Services_V1_SendContactRequestRequest: SwiftProtobuf.Mess
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.toUserID) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._fromIdentity) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.toUserID.isEmpty {
       try visitor.visitSingularStringField(value: self.toUserID, fieldNumber: 1)
     }
+    try { if let v = self._fromIdentity {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_SendContactRequestRequest, rhs: Shared_Proto_Services_V1_SendContactRequestRequest) -> Bool {
     if lhs.toUserID != rhs.toUserID {return false}
+    if lhs._fromIdentity != rhs._fromIdentity {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2470,6 +2571,66 @@ extension Shared_Proto_Services_V1_RespondToContactRequestResponse: SwiftProtobu
 
   public static func ==(lhs: Shared_Proto_Services_V1_RespondToContactRequestResponse, rhs: Shared_Proto_Services_V1_RespondToContactRequestResponse) -> Bool {
     if lhs.status != rhs.status {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_SetGroupInvitePolicyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetGroupInvitePolicyRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}allow_contact_invites\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.allowContactInvites) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.allowContactInvites != false {
+      try visitor.visitSingularBoolField(value: self.allowContactInvites, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_SetGroupInvitePolicyRequest, rhs: Shared_Proto_Services_V1_SetGroupInvitePolicyRequest) -> Bool {
+    if lhs.allowContactInvites != rhs.allowContactInvites {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_SetGroupInvitePolicyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetGroupInvitePolicyResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}allow_contact_invites\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.allowContactInvites) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.allowContactInvites != false {
+      try visitor.visitSingularBoolField(value: self.allowContactInvites, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_SetGroupInvitePolicyResponse, rhs: Shared_Proto_Services_V1_SetGroupInvitePolicyResponse) -> Bool {
+    if lhs.allowContactInvites != rhs.allowContactInvites {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -283,7 +283,12 @@ enum NetworkTiming {
     // MARK: - Calls (signaling / UI)
 
     enum Calls {
-        static let signalingKeepaliveInterval: TimeInterval = 25
+        // Must stay below the signaling server's per-side keepalive-staleness threshold
+        // (15s in signaling-service registry's call reaper). At 25s a healthy E2EE-flow call —
+        // where the server never sees an `answered` signal and relies solely on keepalives —
+        // went stale between pings and was reaped with HangupReason::Timeout ~40s in. 10s keeps
+        // both sides comfortably fresh within the 15s window.
+        static let signalingKeepaliveInterval: TimeInterval = 10
         static let signalingStreamOpenAcceptTimeout: TimeInterval = 2.5
         static let endedAutoClearDelay: TimeInterval = 3
         static let audioPreferredSampleRateHz: Double = 48_000

@@ -204,6 +204,27 @@ public struct Shared_Proto_Services_V1_MessageStreamRequest: Sendable {
     set {request = .heartbeat(newValue)}
   }
 
+  /// P2P handoff acknowledgment: client reports outcome of P2P establishment attempt.
+  /// Sent after receiving P2PHandoffRequest from server.
+  /// See: signaling/p2p.proto
+  public var p2PHandoffAck: Shared_Proto_Signaling_V1_P2PHandoffAck {
+    get {
+      if case .p2PHandoffAck(let v)? = request {return v}
+      return Shared_Proto_Signaling_V1_P2PHandoffAck()
+    }
+    set {request = .p2PHandoffAck(newValue)}
+  }
+
+  /// P2P disconnect: client notifies server it is dropping direct P2P connection.
+  /// Server resumes relaying messages for this pair after receiving this.
+  public var p2PDisconnect: Shared_Proto_Signaling_V1_P2PDisconnect {
+    get {
+      if case .p2PDisconnect(let v)? = request {return v}
+      return Shared_Proto_Signaling_V1_P2PDisconnect()
+    }
+    set {request = .p2PDisconnect(newValue)}
+  }
+
   /// Request ID (for correlation)
   public var requestID: String = String()
 
@@ -235,6 +256,13 @@ public struct Shared_Proto_Services_V1_MessageStreamRequest: Sendable {
     case unsubscribe(Shared_Proto_Services_V1_UnsubscribeRequest)
     /// Heartbeat/keepalive
     case heartbeat(Shared_Proto_Services_V1_Heartbeat)
+    /// P2P handoff acknowledgment: client reports outcome of P2P establishment attempt.
+    /// Sent after receiving P2PHandoffRequest from server.
+    /// See: signaling/p2p.proto
+    case p2PHandoffAck(Shared_Proto_Signaling_V1_P2PHandoffAck)
+    /// P2P disconnect: client notifies server it is dropping direct P2P connection.
+    /// Server resumes relaying messages for this pair after receiving this.
+    case p2PDisconnect(Shared_Proto_Signaling_V1_P2PDisconnect)
 
   }
 
@@ -315,6 +343,17 @@ public struct Shared_Proto_Services_V1_MessageStreamResponse: Sendable {
     set {response = .heartbeatAck(newValue)}
   }
 
+  /// P2P handoff: server instructs client to establish direct connection with peer.
+  /// Only sent when both peers have DEVICE_CAPABILITIES_P2P_MESSAGING capability.
+  /// See: signaling/p2p.proto
+  public var p2PHandoff: Shared_Proto_Signaling_V1_P2PHandoffRequest {
+    get {
+      if case .p2PHandoff(let v)? = response {return v}
+      return Shared_Proto_Signaling_V1_P2PHandoffRequest()
+    }
+    set {response = .p2PHandoff(newValue)}
+  }
+
   /// Response ID (correlates to request_id)
   public var responseID: String {
     get {_responseID ?? String()}
@@ -377,6 +416,10 @@ public struct Shared_Proto_Services_V1_MessageStreamResponse: Sendable {
     case presence(Shared_Proto_Signaling_V1_PresenceUpdate)
     /// Heartbeat response
     case heartbeatAck(Shared_Proto_Services_V1_HeartbeatAck)
+    /// P2P handoff: server instructs client to establish direct connection with peer.
+    /// Only sent when both peers have DEVICE_CAPABILITIES_P2P_MESSAGING capability.
+    /// See: signaling/p2p.proto
+    case p2PHandoff(Shared_Proto_Signaling_V1_P2PHandoffRequest)
 
   }
 
@@ -971,7 +1014,7 @@ extension Shared_Proto_Services_V1_ReactionEventType: SwiftProtobuf._ProtoNamePr
 
 extension Shared_Proto_Services_V1_MessageStreamRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageStreamRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}send\0\u{1}receipt\0\u{1}typing\0\u{1}subscribe\0\u{1}unsubscribe\0\u{1}heartbeat\0\u{4}\u{4}request_id\0\u{4}\u{b}attempt_id\0\u{c}\u{7}\u{3}\u{c}\u{b}\u{a}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}send\0\u{1}receipt\0\u{1}typing\0\u{1}subscribe\0\u{1}unsubscribe\0\u{1}heartbeat\0\u{3}p2p_handoff_ack\0\u{3}p2p_disconnect\0\u{4}\u{2}request_id\0\u{4}\u{b}attempt_id\0\u{c}\u{9}\u{1}\u{c}\u{b}\u{a}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1057,6 +1100,32 @@ extension Shared_Proto_Services_V1_MessageStreamRequest: SwiftProtobuf.Message, 
           self.request = .heartbeat(v)
         }
       }()
+      case 7: try {
+        var v: Shared_Proto_Signaling_V1_P2PHandoffAck?
+        var hadOneofValue = false
+        if let current = self.request {
+          hadOneofValue = true
+          if case .p2PHandoffAck(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.request = .p2PHandoffAck(v)
+        }
+      }()
+      case 8: try {
+        var v: Shared_Proto_Signaling_V1_P2PDisconnect?
+        var hadOneofValue = false
+        if let current = self.request {
+          hadOneofValue = true
+          if case .p2PDisconnect(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.request = .p2PDisconnect(v)
+        }
+      }()
       case 10: try { try decoder.decodeSingularStringField(value: &self.requestID) }()
       case 21: try { try decoder.decodeSingularStringField(value: &self._attemptID) }()
       default: break
@@ -1094,6 +1163,14 @@ extension Shared_Proto_Services_V1_MessageStreamRequest: SwiftProtobuf.Message, 
       guard case .heartbeat(let v)? = self.request else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
     }()
+    case .p2PHandoffAck?: try {
+      guard case .p2PHandoffAck(let v)? = self.request else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    }()
+    case .p2PDisconnect?: try {
+      guard case .p2PDisconnect(let v)? = self.request else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    }()
     case nil: break
     }
     if !self.requestID.isEmpty {
@@ -1116,7 +1193,7 @@ extension Shared_Proto_Services_V1_MessageStreamRequest: SwiftProtobuf.Message, 
 
 extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageStreamResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}receipt\0\u{1}typing\0\u{1}ack\0\u{1}error\0\u{1}presence\0\u{3}heartbeat_ack\0\u{4}\u{3}response_id\0\u{3}stream_cursor\0\u{4}\u{a}rate_limit_challenge\0\u{3}attempt_id\0\u{c}\u{8}\u{2}\u{c}\u{c}\u{9}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}receipt\0\u{1}typing\0\u{1}ack\0\u{1}error\0\u{1}presence\0\u{3}heartbeat_ack\0\u{3}p2p_handoff\0\u{4}\u{2}response_id\0\u{3}stream_cursor\0\u{4}\u{a}rate_limit_challenge\0\u{3}attempt_id\0\u{c}\u{9}\u{1}\u{c}\u{c}\u{9}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1215,6 +1292,19 @@ extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProtobuf.Message,
           self.response = .heartbeatAck(v)
         }
       }()
+      case 8: try {
+        var v: Shared_Proto_Signaling_V1_P2PHandoffRequest?
+        var hadOneofValue = false
+        if let current = self.response {
+          hadOneofValue = true
+          if case .p2PHandoff(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.response = .p2PHandoff(v)
+        }
+      }()
       case 10: try { try decoder.decodeSingularStringField(value: &self._responseID) }()
       case 11: try { try decoder.decodeSingularStringField(value: &self._streamCursor) }()
       case 21: try { try decoder.decodeSingularMessageField(value: &self._rateLimitChallenge) }()
@@ -1257,6 +1347,10 @@ extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProtobuf.Message,
     case .heartbeatAck?: try {
       guard case .heartbeatAck(let v)? = self.response else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    }()
+    case .p2PHandoff?: try {
+      guard case .p2PHandoff(let v)? = self.response else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
     }()
     case nil: break
     }

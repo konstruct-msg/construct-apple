@@ -43,6 +43,7 @@ actor TransportRouter {
     // MARK: - State
 
     private var config: TransportConfig
+    private var currentMode: VeilMode
     private(set) var state: TransportState
     private var transitionLog: [TransitionLogEntry] = []
     private let transitionLogCapacity = 200
@@ -61,6 +62,7 @@ actor TransportRouter {
         self.channelEffector = channelEffector
         self.uiEffector = uiEffector
         let mode = VeilProxyStore.loadMode()
+        self.currentMode = mode
         let censored = CensoredNetworkDetector.isCensored
         let reachable = NetworkReachabilityManager.shared.isReachable
         self.state = .initial(mode: mode, censored: censored, reachable: reachable)
@@ -73,7 +75,14 @@ actor TransportRouter {
     /// the resulting state transition and effects are applied serially before returning.
     func send(_ event: TransportEvent) async {
         let now = Date()
-        let outcome = TransportReducer.reduce(state: state, event: event, config: config, now: now)
+        let modeForEvent = resolvedMode(for: event)
+        currentMode = modeForEvent
+        let outcome = TransportReducer.reduce(
+            state: state,
+            event: event,
+            config: effectiveConfig(for: modeForEvent),
+            now: now
+        )
         let oldState = state
         state = outcome.state
 
@@ -179,6 +188,23 @@ actor TransportRouter {
             transitionLog.removeFirst(transitionLog.count - transitionLogCapacity)
         }
     }
+
+    private func resolvedMode(for event: TransportEvent) -> VeilMode {
+        switch event {
+        case .veilModeChanged(let mode, _):
+            return mode
+        case .networkPathChanged(_, _, let mode):
+            return mode
+        default:
+            return currentMode
+        }
+    }
+
+    private func effectiveConfig(for mode: VeilMode) -> TransportConfig {
+        var effective = config
+        effective.allowDirectToVeilEscalation = mode != .off
+        return effective
+    }
 }
 
 // MARK: - Bridge for initial relay snapshot
@@ -209,12 +235,22 @@ enum ConnectionLoopRelayBridge {
         let wtHostHeader: String?
 
         if useTLS {
+            // A binary-pinned relay's SPKI is the source of truth. `sniSync` falls back
+            // to the hardcoded SNI, so `serverPushedSNI` is non-nil for every relay we
+            // ship an SNI for — which made the cached-manifest pin (spkiPinSync) win
+            // unconditionally and the hardcoded pin below dead code. A stale cached
+            // manifest then handed `veil_start` a wrong SPKI → the relay's real cert
+            // failed the pin check → `HandshakeFailure`. It is also a downgrade vector:
+            // the untrusted server manifest must never override a pin baked into the
+            // binary. So the hardcoded pin always wins; the manifest pin is only used
+            // for relays we do not pin ourselves.
+            let hardcodedPin = VEILConfig.hardcodedRelaySPKIs[address]
             if let s = serverPushedSNI, !s.isEmpty {
                 sni = s
-                pin = VeilCertFetcher.spkiPinSync(for: address)
+                pin = hardcodedPin ?? VeilCertFetcher.spkiPinSync(for: address)
             } else if let explicitSNI = hardcodedSNI {
                 sni = explicitSNI
-                pin = VEILConfig.hardcodedRelaySPKIs[address]
+                pin = hardcodedPin
             } else {
                 sni = address.components(separatedBy: ":").first.flatMap { $0.isEmpty ? nil : $0 }
                 pin = nil
@@ -237,7 +273,10 @@ enum ConnectionLoopRelayBridge {
             wtPath: wtPath,
             wtHostHeader: wtHostHeader,
             alternativeSNIs: altSNIs,
-            manifestId: nil
+            manifestId: nil,
+            // Per-user ticket imported out-of-band (signed config blob → Keychain);
+            // never hardcoded in the binary. nil → coordinator excludes veil-front.
+            veilFrontTicket: VeilTicketStore.ticket(for: address)
         )
     }
 }

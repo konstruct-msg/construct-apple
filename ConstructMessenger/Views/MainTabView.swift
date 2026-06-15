@@ -18,7 +18,7 @@ struct MainTabView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     // Call overlays
-    @State private var callManager = CallManager.shared
+    @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
 
     /// Tracks which tab indices have been visited at least once.
     /// A tab's content view is only inserted into the ZStack after its first visit,
@@ -56,7 +56,9 @@ struct MainTabView: View {
                         session: session,
                         isConnecting: isConnectingState,
                         endReason: callEndReason,
-                        quality: callManager.callQuality,
+                        quality: callManager?.callQuality ?? .good,
+                        onEnd: { callManager?.endCall() },
+                        onMuteChanged: { muted in callManager?.setMuted(muted) },
                         onMinimize: { isCallExpanded = false }
                     )
                 }
@@ -74,7 +76,7 @@ struct MainTabView: View {
     /// as a minimise request — the call itself stays alive on `CallManager`.
     private var fullScreenCoverBinding: Binding<Bool> {
         Binding(
-            get: { CallsFeature.isEnabled && isActiveOrConnecting && isCallExpanded },
+            get: { CallsFeature.isEnabled && callManager != nil && isActiveOrConnecting && isCallExpanded },
             set: { newValue in
                 if !newValue { isCallExpanded = false }
             }
@@ -143,19 +145,20 @@ struct MainTabView: View {
 
     private var tabItems: [CTTabItem] {
         var items: [CTTabItem] = [
-            CTTabItem(symbol: CTSymbol.tabChats, sfName: "message"),
-            CTTabItem(symbol: CTSymbol.tabSynaps, sfName: "circle.grid.cross"),
+            CTTabItem(sfName: "message"),
+            CTTabItem(sfName: "circle.grid.cross"),
         ]
         if CallsFeature.isEnabled {
-            items.append(CTTabItem(symbol: CTSymbol.tabCalls, sfName: "phone"))
+            items.append(CTTabItem(sfName: "phone"))
         }
-        items.append(CTTabItem(symbol: CTSymbol.tabSettings, sfName: "gearshape"))
+        items.append(CTTabItem(sfName: "gearshape"))
         return items
     }
 
     // MARK: - Call state helpers
 
     private var isActiveOrConnecting: Bool {
+        guard let callManager else { return false }
         switch callManager.state {
         case .dialing, .active, .connecting, .ringing, .ended: return true
         default: return false
@@ -163,13 +166,15 @@ struct MainTabView: View {
     }
 
     private var isConnectingState: Bool {
+        guard let callManager else { return false }
         switch callManager.state {
         case .dialing, .connecting, .ringing: return true
         default: return false
         }
     }
 
-    private var activeCallSession: CallManager.CallSession? {
+    private var activeCallSession: CallSession? {
+        guard let callManager else { return nil }
         switch callManager.state {
         case .dialing(let s), .active(let s), .connecting(let s), .ringing(let s): return s
         case .ended(let s, _): return s
@@ -177,7 +182,8 @@ struct MainTabView: View {
         }
     }
 
-    private var callEndReason: CallManager.EndReason? {
+    private var callEndReason: CallEndReason? {
+        guard let callManager else { return nil }
         if case .ended(_, let reason) = callManager.state { return reason }
         return nil
     }

@@ -317,16 +317,40 @@ final class GRPCCallExecutor: Sendable {
             serverRejected = refreshError == nil   // refreshIfPossible() returned false
         }
         if serverRejected {
+            // Concurrent-refresh race guard: another caller may have already rotated to a
+            // fresh, valid token while this attempt was using the now-consumed one. A server
+            // "already used / revoked" then means *this* attempt lost the race, NOT that the
+            // session is dead. If we now hold a valid session, retry with the new token instead
+            // of wiping it — wiping here was the launch-time death spiral (good tokens nuked by
+            // a stale racer). Applies to both transport paths.
+            let haveValidSession = await MainActor.run {
+                AuthSessionManager.shared.sessionToken != nil && AuthSessionManager.shared.isSessionValid
+            }
+            if haveValidSession {
+                Log.info("Refresh rejected, but a concurrent refresh produced a valid session — retrying with the new token", category: "GRPCChannel")
+                await TokenRefreshCoordinator.shared.resetInvalidation()
+                return .retry
+            }
+
             // A hostile or broken VEIL relay can synthesise an UNAUTHENTICATED / PERMISSION_DENIED
             // response that is indistinguishable from a real server rejection at the gRPC layer.
             // On the direct path the response is end-to-end TLS to our server, so trust it.
-            // On the VEIL path we cannot tell — rotate the relay and retry; if the rejection is
-            // real it will surface again on a clean relay (or, eventually, on the direct path)
-            // and be honored at that point.
+            // On the VEIL path we cannot tell — rotate the relay and retry, but only a bounded
+            // number of times (maxSuspectRotations). With a single veil-front relay, rotation
+            // restarts the same relay, so an unbounded loop would churn forever AND keep tearing
+            // down the gRPC channel mid-RPC (killing device re-auth). Past the budget, honor the
+            // rejection as real so a genuinely dead token can recover via device re-auth.
             if usingVEIL {
-                Log.info("Refresh rejected over VEIL relay \(capturedRelayAddr ?? "?") — not wiping tokens, will rotate", category: "GRPCChannel")
-                // Router rotation is requested by the caller of handleAuthRetry on .suspectRejection.
-                return .suspectRejection
+                let attempts = await TokenRefreshCoordinator.shared.recordSuspectRejection()
+                if attempts <= TokenRefreshCoordinator.maxSuspectRotations {
+                    Log.info("Refresh rejected over VEIL relay \(capturedRelayAddr ?? "?") (rotation \(attempts)/\(TokenRefreshCoordinator.maxSuspectRotations)) — not wiping tokens, will rotate", category: "GRPCChannel")
+                    // Router rotation is requested by the caller of handleAuthRetry on .suspectRejection.
+                    return .suspectRejection
+                }
+                Log.info("Refresh rejected across \(attempts) VEIL relay rotations — honoring as a real rejection, triggering device re-auth", category: "GRPCChannel")
+                await TokenRefreshCoordinator.shared.resetInvalidation()
+                await MainActor.run { AuthSessionManager.shared.invalidateTokensForReauth() }
+                return .serverRejected
             }
             Log.info("Refresh rejected by server — triggering device re-auth", category: "GRPCChannel")
             await MainActor.run { AuthSessionManager.shared.invalidateTokensForReauth() }

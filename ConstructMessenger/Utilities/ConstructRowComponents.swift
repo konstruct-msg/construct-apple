@@ -138,7 +138,7 @@ struct ConstructNavRow<Destination: View>: View {
 
             Spacer()
 
-            Text("[→]")
+            Image(systemName: "chevron.right")
                 .font(CTFont.regular(12))
                 .foregroundStyle(Color.CT.textDim)
         }

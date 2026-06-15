@@ -92,8 +92,8 @@ struct DiagnosticsView: View {
                 // MARK: - Status
                 CTSectionGroup {
                     HStack(spacing: SettingsLayout.rowContentSpacing) {
-                        Text(CTSymbol.log)
-                            .font(CTFont.bold(14))
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(isLogCollectionEnabled ? Color.CT.accent : Color.CT.textDim)
                             .lineLimit(1)
                             .fixedSize()
@@ -114,8 +114,8 @@ struct DiagnosticsView: View {
                     if !logSize.isEmpty {
                         ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
                         HStack(spacing: SettingsLayout.rowContentSpacing) {
-                            Text(CTSymbol.disk)
-                                .font(CTFont.bold(14))
+                            Image(systemName: "externaldrive")
+                                .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(Color.CT.textDim)
                                 .lineLimit(1)
                                 .fixedSize()

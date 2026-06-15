@@ -76,8 +76,13 @@ class AuthViewModel {
     private var restoreInFlight = false
     private var lastRestoreAttemptAt: Date?
 
-    init(context: NSManagedObjectContext) {
+    init(context: NSManagedObjectContext, startRuntime: Bool? = nil) {
         self.viewContext = context
+        let shouldStartRuntime = startRuntime ?? !PreviewDetector.isRunningInPreview
+        guard shouldStartRuntime else {
+            refreshDeviceKeyState()
+            return
+        }
         setupSubscribers()
         startTokenRefreshMonitoring()
         setupSessionExpiredListener()
@@ -202,12 +207,16 @@ class AuthViewModel {
             loadUserFromCoreData(userId: userId)
             #if !os(macOS)
             // Engine manages SPK rotation on macOS.
-            Task {
+            Task { [weak self] in
+                guard self != nil else { return }
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             }
             #endif
-            Task { await ServerKeyManager.shared.prefetch() }
+            Task { [weak self] in
+                guard self != nil else { return }
+                await ServerKeyManager.shared.prefetch()
+            }
         }
 
         if let _ = AuthSessionManager.shared.sessionToken,
@@ -235,26 +244,24 @@ class AuthViewModel {
         // This is faster and less error-prone than full device auth, and keeps the gRPC stream stable.
         if AuthSessionManager.shared.sessionToken != nil,
            let userId = resolvedUserId(),
-           let refresh = AuthSessionManager.shared.refreshToken {
+           AuthSessionManager.shared.refreshToken != nil {
             do {
-                Log.info("Session token expired — attempting refresh", category: "Auth")
-                let response = try await AuthServiceClient.shared.refreshToken(refreshToken: refresh)
-
-                let expiresIn: Int
-                if let expiresAt = response.expiresAt {
-                    expiresIn = max(Int(expiresAt - Int64(Date().timeIntervalSince1970)), 0)
-                } else {
-                    expiresIn = response.expiresIn ?? 3600
+                Log.info("Session token expired — attempting refresh (via coordinator)", category: "Auth")
+                // Route through the single-flight coordinator instead of calling refreshToken
+                // directly. At launch several components hit .unauthenticated at once; a direct
+                // call here raced the coordinator on the same stored refresh token, one side got
+                // "already used / revoked", and the rejection wiped the freshly-rotated good
+                // tokens. Sharing the coordinator's in-flight task makes every caller observe the
+                // same outcome and use the same rotated token. The coordinator persists the new
+                // access+refresh+expiry on success.
+                let refreshed = try await TokenRefreshCoordinator.shared.refreshIfPossible()
+                guard refreshed else {
+                    Log.info("Coordinator refresh did not yield a valid session — falling back to device auth", category: "Auth")
+                    throw NetworkError.connectionFailed
                 }
-
-                // Preserve userId even if the refresh response doesn't include it.
-                let refreshedUserId = response.userId.isEmpty ? userId : response.userId
-                AuthSessionManager.shared.saveTokens(
-                    accessToken: response.accessToken,
-                    refreshToken: response.refreshToken,
-                    expiresIn: expiresIn,
-                    userId: refreshedUserId
-                )
+                // saveTokens(userId:) inside the coordinator is called with nil userId (refresh
+                // doesn't change identity); ensure the resolved userId is persisted/in-memory.
+                AuthSessionManager.shared.updateUserId(userId)
 
                 if !CryptoManager.shared.isInitialized {
                     self.currentUserId = userId
@@ -332,7 +339,7 @@ class AuthViewModel {
                 userId: response.userId
             )
             
-            VeilProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
+            VeilProxyManager.shared.configureFromServer(cert: response.veilBridgeCert ?? "")
             Log.info("Device-based authentication successful")
             finishAuth(userId: response.userId)
             
@@ -519,7 +526,8 @@ class AuthViewModel {
     }
 
     func logout() {
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             await SessionLifecycleController.shared.sendEndSessionToAllContacts(reason: "logout")
             Log.info("END_SESSION sent to all contacts on logout", category: "Auth")
             
@@ -556,7 +564,8 @@ class AuthViewModel {
     /// Signs out of ALL devices simultaneously (invalidates all refresh tokens server-side),
     /// then performs local logout. Use when a device may have been compromised.
     func logoutAllDevices() {
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             if AuthSessionManager.shared.sessionToken != nil {
                 do {
                     try await AuthServiceClient.shared.logout(allDevices: true)
@@ -582,7 +591,8 @@ class AuthViewModel {
         
         Log.info("Requesting account deletion", category: "AuthViewModel")
         
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             do {
                 try await self.deleteAccountWithDeviceSignature()
                 await MainActor.run { self.handleDeleteAccountSuccess() }
@@ -618,11 +628,16 @@ class AuthViewModel {
     /// Immediately wipes all local data; attempts server deletion best-effort in background.
     func triggerDuressWipe() {
         Log.info("Duress PIN triggered — initiating silent wipe", category: "AuthViewModel")
-        Task {
-            _ = try? await UserServiceClient.shared.deleteAccount(
-                confirmation: "DELETE",
-                reason: "duress"
-            )
+        Task { [weak self] in
+            guard self != nil else { return }
+            do {
+                _ = try await UserServiceClient.shared.deleteAccount(
+                    confirmation: "DELETE",
+                    reason: "duress"
+                )
+            } catch {
+                Log.error("Duress wipe: remote delete failed: \(error.localizedDescription)", category: "AuthViewModel")
+            }
         }
         handleDeleteAccountSuccess()
     }
@@ -717,7 +732,8 @@ class AuthViewModel {
         // Request push permission (first login) or ensure the token is on the server
         // (subsequent logins where permission is already granted). Both paths end with
         // the device token reliably registered in the backend DB.
-        Task {
+        Task { [weak self] in
+            guard self != nil else { return }
             #if canImport(UIKit)
             let granted = await PushNotificationManager.shared.requestPermission()
             if granted {
@@ -919,11 +935,22 @@ extension AuthViewModel {
         user.displayName = displayName
         return user
     }
+
+    static func makePreview(
+        context: NSManagedObjectContext,
+        username: String = "john_doe",
+        displayName: String = "John Doe"
+    ) -> AuthViewModel {
+        let viewModel = AuthViewModel(context: context, startRuntime: false)
+        viewModel.configureMockAuth(username: username, displayName: displayName)
+        return viewModel
+    }
     
     /// Configures AuthViewModel for previews with mock data
     func configureMockAuth(username: String = "john_doe", displayName: String = "John Doe") {
         self.isAuthenticated = true
         self.currentUserId = UUID().uuidString
+        self.hasRegisteredDeviceKeys = true
         self.currentUser = AuthViewModel.createMockUser(context: viewContext, username: username, displayName: displayName)
     }
 }

@@ -51,17 +51,17 @@ struct SettingsView: View {
                         // MARK: Share
                         CTSectionGroup {
                             Button { showingQRCode = true } label: {
-                                CTSettingsRow(label: NSLocalizedString("show_qr_code", comment: "").uppercased(), value: CTSymbol.forward, icon: "qrcode", isAction: true)
+                                CTSettingsRow(label: NSLocalizedString("show_qr_code", comment: "").uppercased(), icon: "qrcode", isAction: true, disclosure: true)
                             }
                             .buttonStyle(.plain)
                             CTSep(style: .thin)
+                            
                             Button { copyContactLink() } label: {
                                 CTSettingsRow(
                                     label: linkCopied ? NSLocalizedString("link_copied", comment: "").uppercased() : NSLocalizedString("copy_contact_link", comment: "").uppercased(),
-                                    value: linkCopied ? CTSymbol.ok : CTSymbol.forward,
-                                    icon: "link",
-                                    valueColor: linkCopied ? Color.CT.accentDim : Color.CT.text,
-                                    isAction: !linkCopied
+                                    icon: linkCopied ? "checkmark" : "link",
+                                    labelColor: linkCopied ? Color.CT.accentDim : Color.CT.text,
+                                    disclosure: !linkCopied
                                 )
                             }
                             .buttonStyle(.plain)
@@ -71,28 +71,28 @@ struct SettingsView: View {
                         // MARK: Settings
                         CTSectionGroup {
                             NavigationLink(destination: DevicesView()) {
-                                CTSettingsRow(label: NSLocalizedString("linked_devices", comment: "").uppercased(), value: CTSymbol.forward, icon: "laptopcomputer")
+                                CTSettingsRow(label: NSLocalizedString("linked_devices", comment: "").uppercased(), icon: "laptopcomputer", disclosure: true)
                             }
                             .buttonStyle(.plain)
                             CTSep(style: .thin)
                             NavigationLink(destination: AppearanceSettingsView()) {
-                                CTSettingsRow(label: NSLocalizedString("appearance", comment: "").uppercased(), value: CTSymbol.forward, icon: "paintbrush")
+                                CTSettingsRow(label: NSLocalizedString("appearance", comment: "").uppercased(), icon: "paintbrush", disclosure: true)
                             }
                             .buttonStyle(.plain)
                             CTSep(style: .thin)
                             NavigationLink(destination: SecurityView()
                                 .environment(viewModel)) {
-                                CTSettingsRow(label: NSLocalizedString("security", comment: "").uppercased(), value: CTSymbol.forward, icon: "lock")
+                                CTSettingsRow(label: NSLocalizedString("security", comment: "").uppercased(), icon: "lock", disclosure: true)
                             }
                             .buttonStyle(.plain)
                             CTSep(style: .thin)
                             NavigationLink(destination: DataStorageSettingsView()) {
-                                CTSettingsRow(label: NSLocalizedString("data_and_storage", comment: "").uppercased(), value: CTSymbol.forward, icon: "externaldrive")
+                                CTSettingsRow(label: NSLocalizedString("data_and_storage", comment: "").uppercased(), icon: "externaldrive", disclosure: true)
                             }
                             .buttonStyle(.plain)
                             CTSep(style: .thin)
                             NavigationLink(destination: NotificationsSettingsView()) {
-                                CTSettingsRow(label: NSLocalizedString("notifications", comment: "").uppercased(), value: CTSymbol.forward, icon: "bell")
+                                CTSettingsRow(label: NSLocalizedString("notifications", comment: "").uppercased(), icon: "bell", disclosure: true)
                             }
                             .buttonStyle(.plain)
                             CTSep(style: .thin)
@@ -101,7 +101,8 @@ struct SettingsView: View {
                                     label: NSLocalizedString("background_fetch", comment: "").uppercased(),
                                     value: BackgroundFetchConfig.shouldBeEnabled ? "[on]" : "[off]",
                                     icon: "arrow.clockwise.circle",
-                                    valueColor: BackgroundFetchConfig.shouldBeEnabled ? Color.CT.accentDim : Color.CT.textDim
+                                    valueColor: BackgroundFetchConfig.shouldBeEnabled ? Color.CT.accentDim : Color.CT.textDim,
+                                    disclosure: true
                                 )
                             }
                             .buttonStyle(.plain)
@@ -111,13 +112,14 @@ struct SettingsView: View {
                                     label: NSLocalizedString("network", comment: "").uppercased(),
                                     value: connectionStatus.isConnected ? "[ok]" : "[err]",
                                     icon: "globe",
-                                    valueColor: connectionStatus.isConnected ? Color.CT.accentDim : Color.CT.danger
+                                    valueColor: connectionStatus.isConnected ? Color.CT.accentDim : Color.CT.danger,
+                                    disclosure: true
                                 )
                             }
                             .buttonStyle(.plain)
                             CTSep(style: .thin)
                             NavigationLink(destination: DraftsView()) {
-                                CTSettingsRow(label: NSLocalizedString("drafts", comment: "").uppercased(), value: CTSymbol.forward, icon: "folder")
+                                CTSettingsRow(label: NSLocalizedString("drafts", comment: "").uppercased(), icon: "folder", disclosure: true)
                             }
                             .buttonStyle(.plain)
                         }
@@ -125,13 +127,13 @@ struct SettingsView: View {
                         // MARK: About
 
                         CTSectionGroup {
-                            CTSettingsRow(label: NSLocalizedString("version", comment: "").uppercased(), value: "v\(AppConstants.appVersion)", icon: "info.circle")
+                            CTSettingsRow(label: NSLocalizedString("version", comment: "").uppercased(), value: "v\(AppConstants.appVersion) (\(AppConstants.buildNumber))", icon: "info.circle")
                         }
 
                         // MARK: Developer
                         CTSectionGroup {
                             NavigationLink(destination: DiagnosticsView()) {
-                                CTSettingsRow(label: NSLocalizedString("diagnostics_logs", comment: "").uppercased(), value: CTSymbol.forward, labelColor: .orange, valueColor: .orange)
+                                CTSettingsRow(label: NSLocalizedString("diagnostics_logs", comment: "").uppercased(), labelColor: .orange, disclosure: true)
                             }
                             .buttonStyle(.plain)
                         }
@@ -187,7 +189,7 @@ struct SettingsView: View {
                     .foregroundColor(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.noise)
             }
             Spacer()
-            Text(CTSymbol.forward)
+            Image(systemName: "chevron.right")
                 .font(CTFont.bold(14))
                 .foregroundColor(Color.CT.accent)
         }

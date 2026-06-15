@@ -23,7 +23,7 @@ struct ChatView: View {
     /// Message opened for "Quote & Reply" selection sheet.
     @State private var quotingMessage: Message? = nil
     @State private var showingUserProfile = false
-    @State private var callManager = CallManager.shared
+    @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
 
     @State private var searchText = ""
     @State private var isSearchActive = false
@@ -318,12 +318,12 @@ struct ChatView: View {
             )
         }
         #endif
-        .alert(callManager.lastError ?? "", isPresented: Binding(
-            get: { callManager.lastError != nil },
-            set: { if !$0 { callManager.clearLastError() } }
+        .alert(callManager?.lastError ?? "", isPresented: Binding(
+            get: { callManager?.lastError != nil },
+            set: { if !$0 { callManager?.clearLastError() } }
         )) {
             Button(NSLocalizedString("ok", comment: ""), role: .cancel) {
-                callManager.clearLastError()
+                callManager?.clearLastError()
             }
         }
     }
@@ -391,6 +391,7 @@ struct ChatView: View {
                         replyToContentOverride: replyQuoteText
                     )
                     messageText = ""
+                    DraftStore.shared.clear(for: viewModel.chat.id)
                     replyingTo = nil
                     replyQuoteText = nil
 
@@ -488,6 +489,7 @@ struct ChatView: View {
 
     private var canStartCall: Bool {
         guard CallsFeature.isEnabled,
+              let callManager,
               viewModel.chat.otherUser != nil,
               case .idle = callManager.state else { return false }
         return true
@@ -503,6 +505,7 @@ struct ChatView: View {
 
     private func startOutgoingCall(hasVideo: Bool) {
         guard let otherUser = viewModel.chat.otherUser else { return }
+        guard let callManager else { return }
         Task {
             await callManager.startOutgoingCall(
                 to: otherUser.id,
@@ -512,23 +515,14 @@ struct ChatView: View {
         }
     }
 
-    /// Returns nil when everything is healthy (no subtitle shown).
     private var navigationStatusSubtitle: String? {
-        // Only show "Encrypting..." while actively establishing a session (user tapped Send).
-        // Absence of a session before first send is normal — don't show a misleading subtitle.
-        if viewModel.isInitializingSession {
-            return NSLocalizedString("status_encrypting", comment: "")
-        } else if connectionManager.connectionStatus == .connecting {
-            return NSLocalizedString("status_connecting", comment: "")
-        } else if !connectionManager.isConnected {
-            return NSLocalizedString("status_no_connection", comment: "")
-        }
-        return nil
+        connectionManager.navigationStatusSubtitle(
+            isInitializingSession: viewModel.isInitializingSession
+        )
     }
-    
 
     // MARK: - Computed Properties
-    
+
     private var filteredMessages: [Message] {
         // Guard against accessing deleted/faulted Core Data objects that the FRC
         // may not have removed from viewModel.messages before SwiftUI re-evaluates.
@@ -557,6 +551,10 @@ struct ChatView: View {
 
     private func handleViewAppear() {
         guard !isPreviewRuntime else { return }
+        // Restore an unsent draft saved when we last left this chat.
+        if viewModel.editingMessage == nil, messageText.isEmpty {
+            messageText = DraftStore.shared.draft(for: viewModel.chat.id)
+        }
         markChatAsRead()
         viewModel.onViewAppear()
         loadContactKTStatus()
@@ -565,6 +563,11 @@ struct ChatView: View {
 
     private func handleViewDisappear() {
         guard !isPreviewRuntime else { return }
+        // Preserve a half-typed message across navigation. Skip while editing,
+        // so the edit buffer never leaks into the new-message draft.
+        if viewModel.editingMessage == nil {
+            DraftStore.shared.save(messageText, for: viewModel.chat.id)
+        }
         setActiveChatState(isActive: false)
     }
 

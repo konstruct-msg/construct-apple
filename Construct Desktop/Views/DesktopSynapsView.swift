@@ -113,7 +113,7 @@ struct DesktopSynapsView: View {
             // Back to Chats (visible when Synaps occupies full canvas)
             if let switchBack = onSwitchToChats {
                 Button(action: switchBack) {
-                    Text("[← CHATS]")
+                    Text("CHATS")
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                 }
@@ -195,7 +195,7 @@ struct DesktopSynapsView: View {
             Button {
                 NotificationCenter.default.post(name: .desktopShowAddContact, object: nil)
             } label: {
-                Text("[+ ADD NODE]")
+                Text("ADD NODE")
                     .font(CTFont.regular(12))
                     .foregroundStyle(Color.CT.accent)
                     .padding(.horizontal, 12)

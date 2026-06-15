@@ -382,9 +382,9 @@ enum UserDefaultsKey: String {
     // Traffic Protection
     case trafficProtectionEnabled = "trafficProtection_enabled"
 
-    // ICE — traffic obfuscation (Intrusion Countermeasures Electronics)
-    case veilEnabled = "ice_enabled"
-    case veilMode = "ice_mode"
+    // VEIL — traffic obfuscation (Intrusion Countermeasures Electronics)
+    case veilEnabled = "veil_enabled"
+    case veilMode = "veil_mode"
 
     // Background Fetch
     case backgroundFetchEnabled = "backgroundFetch_enabled"
@@ -461,14 +461,24 @@ struct VEILConfig {
     // 45.135.233.5:52143 (VKCS SPb, s3.vkcs.cloud SNI) — IP blocked by RU DPI (TCP RST at TLS handshake).
     // VPS deleted. Replaced by ruRelay below (2026-05-16).
 
-    // ── Relay 3: RU relay (194.87.232.51 / api.divany-kresla.uk) ─────────────
-    /// construct-relay on VKCS, SNI-camouflaged behind Nginx, anti-probe → Apple CDN.
-    /// Upstream: ams.konstruct.cc:443. Provisioned 2026-05-16.
+    // ── Relay 3: RU relay (api.divany-kresla.uk) ─────────────────────────────
+    /// 2026-06-11: VPS repurposed as the **veil-front relay** (honest-front HTTPS +
+    /// session-bound ticket auth). It terminates veil-TLS with its own Let's Encrypt
+    /// cert and re-wraps gRPC over TLS to ams.konstruct.cc:443 (--backend-tls).
+    /// SPKI below is now that veil-front cert. obfs4/WebTunnel are no longer served
+    /// here — veil-front wins the coordinator race via `ruRelayVeilFrontTicket`.
+    /// 2026-06-14: relay moved to a new VPS (195.133.44.113); cert reissued, so the
+    /// pinned SPKI below was rotated. `api.divany-kresla.uk` A-record must point at
+    /// the new IP for the on-wire SNI to match a resolvable host.
     static let ruRelayAddress    = "api.divany-kresla.uk:443"
     static let ruRelaySNI        = "api.divany-kresla.uk"
-    static let ruRelayPinnedSPKI = "bb42af0f12a95779fb45dcbe3039746616b51aacf8c7cc954ba6cbb048055943"
-    /// Update when relay container is recreated (new keypair in /data/relay.obfs4).
+    static let ruRelayPinnedSPKI = "5621e47a745614de08efb054b01388f3bcf32c763ecf5f0aeaeb6b0785ff6861"
+    /// Stale obfs4 keypair cert — kept only so the obfs4 probe has a bridge line; it
+    /// fails fast (relay no longer speaks obfs4) and veil-front wins the race.
     static let ruRelayBridgeCert = "zdfEJKLpy4nVo09zbd/5q3Yx02FyL7Tlr+5Aurww51IbYacIWIqbcTndB1UL+n2g68XBQw"
+    // The veil-front ticket is per-user auth material — NOT hardcoded here. It is
+    // imported out-of-band via a signed config blob (QR / konstruct://veil-config deep
+    // link) into VeilTicketStore. See VeilTicketProvisioning.swift.
 
     /// Ed25519 public key used to verify `.well-known/construct-server` signature.
     /// This is the ONLY value hardcoded permanently — everything else is OTA-updatable.

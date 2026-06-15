@@ -83,42 +83,42 @@ public enum Shared_Proto_Services_V1_PushEnvironment: SwiftProtobuf.Enum, Swift.
   public typealias RawValue = Int
 
   /// Unspecified environment (must be 0)
-  case pushEnvUnspecified // = 0
+  case unspecified // = 0
 
   /// Sandbox (APNS development / debug builds)
-  case pushEnvSandbox // = 1
+  case sandbox // = 1
 
   /// Production (App Store / TestFlight production builds)
-  case pushEnvProduction // = 2
+  case production // = 2
   case UNRECOGNIZED(Int)
 
   public init() {
-    self = .pushEnvUnspecified
+    self = .unspecified
   }
 
   public init?(rawValue: Int) {
     switch rawValue {
-    case 0: self = .pushEnvUnspecified
-    case 1: self = .pushEnvSandbox
-    case 2: self = .pushEnvProduction
+    case 0: self = .unspecified
+    case 1: self = .sandbox
+    case 2: self = .production
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
 
   public var rawValue: Int {
     switch self {
-    case .pushEnvUnspecified: return 0
-    case .pushEnvSandbox: return 1
-    case .pushEnvProduction: return 2
+    case .unspecified: return 0
+    case .sandbox: return 1
+    case .production: return 2
     case .UNRECOGNIZED(let i): return i
     }
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
   public static let allCases: [Shared_Proto_Services_V1_PushEnvironment] = [
-    .pushEnvUnspecified,
-    .pushEnvSandbox,
-    .pushEnvProduction,
+    .unspecified,
+    .sandbox,
+    .production,
   ]
 
 }
@@ -238,9 +238,47 @@ public struct Shared_Proto_Services_V1_DevicePublicKeys: Sendable {
   /// Suite identifier, e.g. "Curve25519+Ed25519"
   public var cryptoSuite: String = String()
 
+  /// Hybrid identity public key, 1984 bytes = [ed25519_pk(32)] [mldsa65_pk(1952)].
+  /// The Ed25519 half is independent; binding is the cross-signature below
+  /// (no [0..32]==verifying_key invariant).
+  public var hybridIdentityKey: Data {
+    get {_hybridIdentityKey ?? Data()}
+    set {_hybridIdentityKey = newValue}
+  }
+  /// Returns true if `hybridIdentityKey` has been explicitly set.
+  public var hasHybridIdentityKey: Bool {self._hybridIdentityKey != nil}
+  /// Clears the value of `hybridIdentityKey`. Subsequent reads from it will return its default value.
+  public mutating func clearHybridIdentityKey() {self._hybridIdentityKey = nil}
+
+  /// Ed25519 cross-signature (64 bytes) over ("KonstruktHybridId-v1" || hybrid_identity_key),
+  /// verifiable with verifying_key.
+  public var hybridIdentitySignature: Data {
+    get {_hybridIdentitySignature ?? Data()}
+    set {_hybridIdentitySignature = newValue}
+  }
+  /// Returns true if `hybridIdentitySignature` has been explicitly set.
+  public var hasHybridIdentitySignature: Bool {self._hybridIdentitySignature != nil}
+  /// Clears the value of `hybridIdentitySignature`. Subsequent reads from it will return its default value.
+  public mutating func clearHybridIdentitySignature() {self._hybridIdentitySignature = nil}
+
+  /// Hybrid signature over the SPK sign-message (3373 bytes); proves the SPK under the
+  /// hybrid key in addition to signed_prekey_signature. (scope B)
+  public var signedPrekeyHybridSignature: Data {
+    get {_signedPrekeyHybridSignature ?? Data()}
+    set {_signedPrekeyHybridSignature = newValue}
+  }
+  /// Returns true if `signedPrekeyHybridSignature` has been explicitly set.
+  public var hasSignedPrekeyHybridSignature: Bool {self._signedPrekeyHybridSignature != nil}
+  /// Clears the value of `signedPrekeyHybridSignature`. Subsequent reads from it will return its default value.
+  public mutating func clearSignedPrekeyHybridSignature() {self._signedPrekeyHybridSignature = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _hybridIdentityKey: Data? = nil
+  fileprivate var _hybridIdentitySignature: Data? = nil
+  fileprivate var _signedPrekeyHybridSignature: Data? = nil
 }
 
 public struct Shared_Proto_Services_V1_PowSolution: Sendable {
@@ -333,22 +371,22 @@ public struct Shared_Proto_Services_V1_AuthTokensResponse: Sendable {
 
   public var expiresAt: Int64 = 0
 
-  /// ICE (obfs4) bridge cert for transport obfuscation.
-  /// Populated only when the server has ICE_ENABLED=true.
-  public var iceBridgeCert: String {
-    get {_iceBridgeCert ?? String()}
-    set {_iceBridgeCert = newValue}
+  /// VEIL (obfs4) bridge cert for transport obfuscation.
+  /// Populated only when the server has VEIL_ENABLED=true.
+  public var veilBridgeCert: String {
+    get {_veilBridgeCert ?? String()}
+    set {_veilBridgeCert = newValue}
   }
-  /// Returns true if `iceBridgeCert` has been explicitly set.
-  public var hasIceBridgeCert: Bool {self._iceBridgeCert != nil}
-  /// Clears the value of `iceBridgeCert`. Subsequent reads from it will return its default value.
-  public mutating func clearIceBridgeCert() {self._iceBridgeCert = nil}
+  /// Returns true if `veilBridgeCert` has been explicitly set.
+  public var hasVeilBridgeCert: Bool {self._veilBridgeCert != nil}
+  /// Clears the value of `veilBridgeCert`. Subsequent reads from it will return its default value.
+  public mutating func clearVeilBridgeCert() {self._veilBridgeCert = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _iceBridgeCert: String? = nil
+  fileprivate var _veilBridgeCert: String? = nil
 }
 
 /// Per-RPC response wrappers (buf lint RPC_RESPONSE_STANDARD_NAME)
@@ -750,7 +788,7 @@ public struct Shared_Proto_Services_V1_UpdatePushTokenRequest: Sendable {
   public var provider: Shared_Proto_Services_V1_PushProvider = .unspecified
 
   /// Environment (production/sandbox)
-  public var environment: Shared_Proto_Services_V1_PushEnvironment = .pushEnvUnspecified
+  public var environment: Shared_Proto_Services_V1_PushEnvironment = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1464,7 +1502,7 @@ extension Shared_Proto_Services_V1_PushProvider: SwiftProtobuf._ProtoNameProvidi
 }
 
 extension Shared_Proto_Services_V1_PushEnvironment: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PUSH_ENV_UNSPECIFIED\0\u{1}PUSH_ENV_SANDBOX\0\u{1}PUSH_ENV_PRODUCTION\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PUSH_ENVIRONMENT_UNSPECIFIED\0\u{1}PUSH_ENVIRONMENT_SANDBOX\0\u{1}PUSH_ENVIRONMENT_PRODUCTION\0")
 }
 
 extension Shared_Proto_Services_V1_RecoveryErrorCode: SwiftProtobuf._ProtoNameProviding {
@@ -1532,7 +1570,7 @@ extension Shared_Proto_Services_V1_GetPowChallengeResponse: SwiftProtobuf.Messag
 
 extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DevicePublicKeys"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}verifying_key\0\u{3}identity_public\0\u{3}signed_prekey_public\0\u{3}signed_prekey_signature\0\u{3}crypto_suite\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}verifying_key\0\u{3}identity_public\0\u{3}signed_prekey_public\0\u{3}signed_prekey_signature\0\u{3}crypto_suite\0\u{3}hybrid_identity_key\0\u{3}hybrid_identity_signature\0\u{3}signed_prekey_hybrid_signature\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1545,12 +1583,19 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
       case 3: try { try decoder.decodeSingularBytesField(value: &self.signedPrekeyPublic) }()
       case 4: try { try decoder.decodeSingularBytesField(value: &self.signedPrekeySignature) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.cryptoSuite) }()
+      case 6: try { try decoder.decodeSingularBytesField(value: &self._hybridIdentityKey) }()
+      case 7: try { try decoder.decodeSingularBytesField(value: &self._hybridIdentitySignature) }()
+      case 8: try { try decoder.decodeSingularBytesField(value: &self._signedPrekeyHybridSignature) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.verifyingKey.isEmpty {
       try visitor.visitSingularBytesField(value: self.verifyingKey, fieldNumber: 1)
     }
@@ -1566,6 +1611,15 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
     if !self.cryptoSuite.isEmpty {
       try visitor.visitSingularStringField(value: self.cryptoSuite, fieldNumber: 5)
     }
+    try { if let v = self._hybridIdentityKey {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 6)
+    } }()
+    try { if let v = self._hybridIdentitySignature {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 7)
+    } }()
+    try { if let v = self._signedPrekeyHybridSignature {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 8)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1575,6 +1629,9 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
     if lhs.signedPrekeyPublic != rhs.signedPrekeyPublic {return false}
     if lhs.signedPrekeySignature != rhs.signedPrekeySignature {return false}
     if lhs.cryptoSuite != rhs.cryptoSuite {return false}
+    if lhs._hybridIdentityKey != rhs._hybridIdentityKey {return false}
+    if lhs._hybridIdentitySignature != rhs._hybridIdentitySignature {return false}
+    if lhs._signedPrekeyHybridSignature != rhs._signedPrekeyHybridSignature {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1711,7 +1768,7 @@ extension Shared_Proto_Services_V1_AuthenticateDeviceRequest: SwiftProtobuf.Mess
 
 extension Shared_Proto_Services_V1_AuthTokensResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AuthTokensResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}access_token\0\u{3}refresh_token\0\u{3}expires_at\0\u{3}ice_bridge_cert\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}access_token\0\u{3}refresh_token\0\u{3}expires_at\0\u{3}veil_bridge_cert\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1723,7 +1780,7 @@ extension Shared_Proto_Services_V1_AuthTokensResponse: SwiftProtobuf.Message, Sw
       case 2: try { try decoder.decodeSingularStringField(value: &self.accessToken) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.refreshToken) }()
       case 4: try { try decoder.decodeSingularInt64Field(value: &self.expiresAt) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self._iceBridgeCert) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self._veilBridgeCert) }()
       default: break
       }
     }
@@ -1746,7 +1803,7 @@ extension Shared_Proto_Services_V1_AuthTokensResponse: SwiftProtobuf.Message, Sw
     if self.expiresAt != 0 {
       try visitor.visitSingularInt64Field(value: self.expiresAt, fieldNumber: 4)
     }
-    try { if let v = self._iceBridgeCert {
+    try { if let v = self._veilBridgeCert {
       try visitor.visitSingularStringField(value: v, fieldNumber: 5)
     } }()
     try unknownFields.traverse(visitor: &visitor)
@@ -1757,7 +1814,7 @@ extension Shared_Proto_Services_V1_AuthTokensResponse: SwiftProtobuf.Message, Sw
     if lhs.accessToken != rhs.accessToken {return false}
     if lhs.refreshToken != rhs.refreshToken {return false}
     if lhs.expiresAt != rhs.expiresAt {return false}
-    if lhs._iceBridgeCert != rhs._iceBridgeCert {return false}
+    if lhs._veilBridgeCert != rhs._veilBridgeCert {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2429,7 +2486,7 @@ extension Shared_Proto_Services_V1_UpdatePushTokenRequest: SwiftProtobuf.Message
     if self.provider != .unspecified {
       try visitor.visitSingularEnumField(value: self.provider, fieldNumber: 3)
     }
-    if self.environment != .pushEnvUnspecified {
+    if self.environment != .unspecified {
       try visitor.visitSingularEnumField(value: self.environment, fieldNumber: 4)
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -3449,7 +3506,7 @@ extension Shared_Proto_Services_V1_CheckJoinRequestStatusResponse: SwiftProtobuf
 }
 
 extension Shared_Proto_Services_V1_CheckJoinRequestStatusResponse.Status: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PENDING\0\u{1}APPROVED\0\u{1}REJECTED\0\u{1}EXPIRED\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0STATUS_PENDING\0\u{1}STATUS_APPROVED\0\u{1}STATUS_REJECTED\0\u{1}STATUS_EXPIRED\0")
 }
 
 extension Shared_Proto_Services_V1_ApproveJoinRequestRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

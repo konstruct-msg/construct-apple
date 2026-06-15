@@ -179,7 +179,7 @@ public struct Shared_Proto_Services_V1_RegisterDeviceTokenRequest: Sendable {
   public var provider: Shared_Proto_Services_V1_PushProvider = .unspecified
 
   /// APNs environment (sandbox for debug builds, production for release)
-  public var environment: Shared_Proto_Services_V1_PushEnvironment = .pushEnvUnspecified
+  public var environment: Shared_Proto_Services_V1_PushEnvironment = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -291,7 +291,7 @@ public struct Shared_Proto_Services_V1_RegisterVoipTokenRequest: Sendable {
   public var platform: String = String()
 
   /// APNs environment for this token
-  public var environment: Shared_Proto_Services_V1_PushEnvironment = .pushEnvUnspecified
+  public var environment: Shared_Proto_Services_V1_PushEnvironment = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -502,7 +502,7 @@ extension Shared_Proto_Services_V1_RegisterDeviceTokenRequest: SwiftProtobuf.Mes
     if self.provider != .unspecified {
       try visitor.visitSingularEnumField(value: self.provider, fieldNumber: 5)
     }
-    if self.environment != .pushEnvUnspecified {
+    if self.environment != .unspecified {
       try visitor.visitSingularEnumField(value: self.environment, fieldNumber: 6)
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -718,7 +718,7 @@ extension Shared_Proto_Services_V1_RegisterVoipTokenRequest: SwiftProtobuf.Messa
     if !self.platform.isEmpty {
       try visitor.visitSingularStringField(value: self.platform, fieldNumber: 3)
     }
-    if self.environment != .pushEnvUnspecified {
+    if self.environment != .unspecified {
       try visitor.visitSingularEnumField(value: self.environment, fieldNumber: 4)
     }
     try unknownFields.traverse(visitor: &visitor)

@@ -5,15 +5,6 @@
 //  Terminal design system — single source of truth.
 //  iOS · macOS Desktop · TUI share the same aesthetic.
 //
-//  Usage:
-//    Color.CT.accent          → brand blue
-//    CTFont.bold(14)          → JetBrains Mono Bold 14pt
-//    CTSymbol.back            → "[←]"
-//    CTHexAvatar(initials: "AX", size: .medium)
-//    CTNoise()                → ASCII noise background layer
-//    CTNavBar(title: "CHATS", trailingSymbol: CTSymbol.add)
-//    Text("hello").ctMessageBlock(outgoing: false)
-//    myView.ctBackground()    → dark bg + noise layer
 //
 //
 
@@ -45,6 +36,10 @@ extension Color {
         static let text       = Color(dark: 0xE8E8E8, light: 0x111111)
         /// Timestamps, metadata, inactive.
         static let textDim    = Color(dark: 0x818181, light: 0x333333)
+        /// Text/icons inside outgoing bubbles. Dark: #FFFFFF (on #111111) /
+        /// Light: #111111 (on #E9E9E9). Adaptive — never hardcode `.white` here,
+        /// or it becomes unreadable on the light outgoing background.
+        static let outMsgText = Color(dark: 0xFFFFFF, light: 0x111111)
 
         // MARK: Structure
         /// ASCII noise chars, dividers. Dark: #1E1E1E / Light: #C8C8C8
@@ -164,73 +159,7 @@ extension Color {
 
 // MARK: - Symbol Table
 
-/// All UI symbols as named constants. Never hardcode "[←]" inline.
 enum CTSymbol {
-
-    static let star8 = "✷"
-
-    // Navigation
-    static let back     = "[←]"
-    static let forward  = "[→]"
-
-    // Actions
-    static let add      = "[+]"
-    static let close    = "[×]"
-    static let send     = "[→]"
-    static let media    = "[◎]"
-    static let menu     = "[***]"
-    static let edit     = "[edit]"
-    static let refresh  = "[↺]"
-    static let retry    = "[↺]"
-    static let upload   = "[↑]"
-    static let callOut  = "[↗]"
-
-    // Status
-    static let ok          = "[✓]"
-    static let read        = "[↵]"
-    static let delivered   = "[✓✓]"
-    static let error       = "[!]"
-    static let online      = "[[ONLINE]]"
-    static let cursor      = "_"
-    static let loading     = "[···]"
-    static let empty       = "[ — ]"
-
-    // State
-    static let pin         = "[pin]"
-    static let scan        = "[scan]"
-    static let search      = "[srch]"
-    static let drafts      = "[dft]"
-    static let ttl         = "[ttl]"
-    static let setup       = "[setup →]"
-
-    // Security / Settings row icons
-    static let biometric   = "[bio]"
-    static let key         = "[key]"
-    static let lock        = "[lock]"
-    static let log         = "[log]"
-    static let disk        = "[disk]"
-    static let image       = "[img]"
-
-    // Calls
-    static let callEnd     = "[end]"
-    static let callAnswer  = "[ans]"
-
-    // Devices / Platform
-    static let deviceGeneric  = "[dev]"
-    static let deviceIOS      = "[iOS]"
-    static let deviceMac      = "[mac]"
-    static let deviceAndroid  = "[drd]"
-
-    // Tab bar
-    static let tabChats    = "[msg]"
-    static let tabSynaps   = "[syn]"
-    static let tabCalls    = "[tel]"
-    static let tabContacts = "[syn]"
-    static let tabSettings = "[cfg]"
-
-    // Input
-    static let mic         = "[mic]"
-    static let attach      = "[+]"
 
     // Separators — call as functions for custom length
     static func thin(_ count: Int = 25)  -> String { String(repeating: "- ", count: count) }
@@ -290,22 +219,6 @@ struct CTRowIcon: View {
     }
 }
 
-// MARK: - Hexagonal Avatar Shape
-
-struct CTHexShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let cx = rect.midX, cy = rect.midY
-        let r  = min(rect.width, rect.height) / 2
-        var p  = Path()
-        for i in 0..<6 {
-            let a  = CGFloat(i) * .pi / 3 - .pi / 6
-            let pt = CGPoint(x: cx + r * cos(a), y: cy + r * sin(a))
-            i == 0 ? p.move(to: pt) : p.addLine(to: pt)
-        }
-        p.closeSubpath()
-        return p
-    }
-}
 
 // MARK: - CTHexAvatar
 
@@ -621,7 +534,6 @@ struct CTNavBar: View {
 // MARK: - Tab Bar
 
 struct CTTabItem {
-    let symbol: String
     var sfName: String
 }
 
@@ -637,9 +549,9 @@ struct CTTabBar: View {
 
     static var defaultItems: [CTTabItem] {
         [
-            CTTabItem(symbol: CTSymbol.tabChats, sfName: "message"),
-            CTTabItem(symbol: CTSymbol.tabSynaps, sfName: "circle.grid.cross"),
-            CTTabItem(symbol: CTSymbol.tabSettings, sfName: "gearshape"),
+            CTTabItem(sfName: "message"),
+            CTTabItem(sfName: "circle.grid.cross"),
+            CTTabItem(sfName: "gearshape"),
         ]
     }
 
@@ -686,12 +598,14 @@ struct CTSettingsSectionHeader: View {
 
 struct CTSettingsRow: View {
     let label: String
-    let value: String
+    /// Optional trailing value text (status / detail). Empty = no value shown.
+    var value: String       = ""
     var icon: String?       = nil
     var labelColor: Color   = Color.CT.text
     var valueColor: Color   = Color.CT.text
     var isAction: Bool      = false
     var isDestructive: Bool = false
+    var disclosure: Bool    = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -707,13 +621,21 @@ struct CTSettingsRow: View {
                 .foregroundColor(isDestructive ? Color.CT.danger : labelColor)
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 8)
-            Text(value)
-                .font(isAction ? CTFont.bold(13) : CTFont.regular(13))
-                .foregroundColor(
-                    isDestructive ? Color.CT.danger :
-                    isAction      ? Color.CT.accent : valueColor
-                )
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            if !value.isEmpty {
+                Text(value)
+                    .font(isAction ? CTFont.bold(13) : CTFont.regular(13))
+                    .foregroundColor(
+                        isDestructive ? Color.CT.danger :
+                        isAction      ? Color.CT.accent : valueColor
+                    )
+                    .multilineTextAlignment(.trailing)
+            }
+            if disclosure {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isDestructive ? Color.CT.danger : Color.CT.textDim)
+                    .padding(.leading, value.isEmpty ? 0 : 6)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)

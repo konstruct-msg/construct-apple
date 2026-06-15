@@ -398,8 +398,28 @@ class BackgroundFetchManager: NSObject {
             // Track per-chat last-message info (overwritten on each successful message so
             // the final successful message per chat wins — matches original behaviour).
             var lastDecryptedByChatId: [String: (text: String, timestamp: UInt64)] = [:]
+            // Profile-share messages found in this batch — applied on the main actor after the
+            // background save merges into viewContext (ProfileSharingManager is @MainActor and
+            // operates on the viewContext). Routing these (and edits below) mirrors the live
+            // stream's handleSpecialMessage; the batch path previously saved them as regular
+            // rows, so profile updates and edits delivered via background fetch were never applied.
+            var deferredProfileMessages: [(from: String, content: String)] = []
 
             for item in eligible {
+                // Ephemeral control/signaling messages are NOT chat content: call signals (12),
+                // heartbeat (13), delivery receipt (14), webrtc (10), presence (11). The live
+                // stream routes these via the orchestrator (callSignalDecrypted / receipt
+                // handler / discard); the background batch path has no such routing and would
+                // otherwise save them as a regular bubble whose non-text bytes render as
+                // "Message not available". Consume (ACK) and skip — they are moot in the
+                // background (e.g. an old call signal for a call that is already over), and
+                // ACKing stops the server re-delivering a stuck, never-decryptable one.
+                // Session-control types (20-24) are left to the foreground orchestrator.
+                if (10...14).contains(item.messageData.contentType) {
+                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
+                    continue
+                }
+
                 guard let batchResult = resultsByMessageId[item.messageData.id],
                       batchResult.succeeded else {
                     // Decrypt failed — do not create Message entity. The foreground stream
@@ -432,6 +452,35 @@ class BackgroundFetchManager: NSObject {
                     }
                 }
 
+                let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+
+                // Edit: update the original message in place instead of saving a new row.
+                // editsMessageId is a wire-envelope field, so this is independent of content.
+                if !item.messageData.editsMessageId.isEmpty {
+                    let editsId = item.messageData.editsMessageId
+                    let fr = Message.fetchRequest()
+                    fr.predicate = NSPredicate(format: "id == %@", editsId)
+                    fr.fetchLimit = 1
+                    if let original = try? backgroundContext.fetch(fr).first {
+                        original.applyStoredEncryption(plaintext: decryptedString, contactId: item.messageData.from)
+                        original.isEdited = true
+                        original.editedAt = Date(timeIntervalSince1970: TimeInterval(item.messageData.timestamp))
+                        Log.info("BG fetch: applied edit to \(editsId.prefix(8))…", category: "BackgroundFetch")
+                    } else {
+                        Log.error("BG fetch: original message to edit not found: \(editsId.prefix(8))…", category: "BackgroundFetch")
+                    }
+                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
+                    continue
+                }
+
+                // Profile share: defer application to the main actor (post-merge). Cheap string
+                // pre-check avoids a per-message main-thread hop; parseProfileMessage re-validates.
+                if decryptedString.contains("\"type\":\"profile\"") {
+                    deferredProfileMessages.append((from: item.messageData.from, content: decryptedString))
+                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
+                    continue
+                }
+
                 // Persist ACK to Core Data (durable across restarts).
                 PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
 
@@ -440,7 +489,6 @@ class BackgroundFetchManager: NSObject {
                 message.id = item.messageData.id
                 message.fromUserId = item.messageData.from
                 message.toUserId = item.messageData.to
-                let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) } ?? ""
                 message.contentType = .regular
                 message.timestamp = Date(timeIntervalSince1970: TimeInterval(item.messageData.timestamp))
                 message.isSentByMe = false
@@ -485,6 +533,13 @@ class BackgroundFetchManager: NSObject {
                     // Merge changes into viewContext on main thread — FRC/Observable updates fire here safely.
                     if let notification = capturedNotification {
                         context.mergeChanges(fromContextDidSave: notification)
+                    }
+                    // Apply profile shares from this batch now that the contact's User row is
+                    // merged into viewContext. Mirrors the live stream's handleSpecialMessage.
+                    for profile in deferredProfileMessages {
+                        if let parsed = ProfileSharingManager.shared.parseProfileMessage(profile.content) {
+                            ProfileSharingManager.shared.handleProfileMessage(parsed, from: profile.from, in: context)
+                        }
                     }
                     context.saveAndLog()
 

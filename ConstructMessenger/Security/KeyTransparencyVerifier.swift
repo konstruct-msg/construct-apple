@@ -5,9 +5,10 @@
 //  RFC 6962-style Merkle inclusion proof verifier.
 //  Algorithm must match key-service/src/kt.rs exactly:
 //
-//    Leaf hash : SHA-256(0x00 || device_id_utf8 || identity_key_raw)
-//    Node hash : SHA-256(0x01 || left_hash || right_hash)
-//    split(n)  : largest power-of-2 strictly less than n (n >= 2)
+//    Identity leaf : SHA-256(0x00 || device_id_utf8 || identity_key_raw)
+//    Hybrid   leaf : SHA-256(0x02 || device_id_utf8 || hybrid_identity_key)
+//    Node hash     : SHA-256(0x01 || left_hash || right_hash)
+//    split(n)      : largest power-of-2 strictly less than n (n >= 2)
 //
 //  The server signs the Signed Tree Head (STH) with its Ed25519 bundle key:
 //    "ConstructKT-v1" || tree_size (8 bytes BE) || root_hash (32 bytes)
@@ -24,7 +25,7 @@ enum KTVerificationResult: Equatable {
     case unavailable
 }
 
-enum KTVerificationError: Error, Equatable {
+enum KTVerificationError: Error, Equatable, ApplicationLayerError {
     case malformedProof
     case inclusionProofInvalid
     case rootMismatch
@@ -38,10 +39,11 @@ struct KeyTransparencyVerifier {
 
     // MARK: Hash primitives
 
-    private static func leafHash(deviceId: String, identityKey: Data) -> Data {
-        var buf = Data([0x00])
+    /// Leaf hash with a domain byte: 0x00 for the identity leaf, 0x02 for the hybrid leaf.
+    private static func leafHash(domain: UInt8, deviceId: String, key: Data) -> Data {
+        var buf = Data([domain])
         buf.append(deviceId.data(using: .utf8)!)
-        buf.append(identityKey)
+        buf.append(key)
         return Data(SHA256.hash(data: buf))
     }
 
@@ -115,6 +117,52 @@ struct KeyTransparencyVerifier {
         identityKey: Data,
         serverBundleSigningPublicKey: Data?
     ) -> KTVerificationResult {
+        let lhash = leafHash(domain: 0x00, deviceId: deviceId, key: identityKey)
+        return verifyProof(
+            leaf: lhash,
+            leafIndex: leafIndex,
+            treeSize: treeSize,
+            rootHash: rootHash,
+            proofHashes: proofHashes,
+            treeHeadSignature: treeHeadSignature,
+            serverBundleSigningPublicKey: serverBundleSigningPublicKey
+        )
+    }
+
+    /// Verify a Key Transparency inclusion proof for the device's HYBRID identity key
+    /// (leaf kind 1, domain byte 0x02). Same Merkle tree / STH as the identity proof.
+    static func verifyHybrid(
+        leafIndex: UInt64,
+        treeSize: UInt64,
+        rootHash: Data,
+        proofHashes: [Data],
+        treeHeadSignature: Data,
+        deviceId: String,
+        hybridIdentityKey: Data,
+        serverBundleSigningPublicKey: Data?
+    ) -> KTVerificationResult {
+        let lhash = leafHash(domain: 0x02, deviceId: deviceId, key: hybridIdentityKey)
+        return verifyProof(
+            leaf: lhash,
+            leafIndex: leafIndex,
+            treeSize: treeSize,
+            rootHash: rootHash,
+            proofHashes: proofHashes,
+            treeHeadSignature: treeHeadSignature,
+            serverBundleSigningPublicKey: serverBundleSigningPublicKey
+        )
+    }
+
+    /// Shared inclusion-proof + STH verification for a precomputed leaf hash.
+    private static func verifyProof(
+        leaf: Data,
+        leafIndex: UInt64,
+        treeSize: UInt64,
+        rootHash: Data,
+        proofHashes: [Data],
+        treeHeadSignature: Data,
+        serverBundleSigningPublicKey: Data?
+    ) -> KTVerificationResult {
 
         // 1. Basic sanity
         guard treeSize > 0, leafIndex < treeSize,
@@ -123,8 +171,8 @@ struct KeyTransparencyVerifier {
             return .failed(.malformedProof)
         }
 
-        // 2. Compute leaf hash
-        let lhash = leafHash(deviceId: deviceId, identityKey: identityKey)
+        // 2. Leaf hash supplied by the caller (identity or hybrid domain).
+        let lhash = leaf
 
         // 3. Reconstruct root from inclusion proof
         let reconstructed = reconstructRoot(

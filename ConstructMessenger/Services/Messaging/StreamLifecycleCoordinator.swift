@@ -202,7 +202,7 @@ final class StreamLifecycleCoordinator {
                 )
                 guard settled != lastState else { continue }
                 lastState = settled
-                Log.debug("Stream state: token=\(settled.hasToken ? "present" : "nil"), status=\(settled.status.displayText), push=\(settled.pushEnabled)", category: "StreamLifecycle")
+                Log.debug("Stream state: token=\(settled.hasToken ? "present" : "nil"), status=\(settled.status.text()), push=\(settled.pushEnabled)", category: "StreamLifecycle")
                 self.handlePollingState(settled)
             }
         }
@@ -245,7 +245,7 @@ final class StreamLifecycleCoordinator {
             if !state.hasToken {
                 Log.info("No session — stream stopped", category: "StreamLifecycle")
             } else {
-                Log.info("Disconnected (\(state.status.displayText)) — stream stopped", category: "StreamLifecycle")
+                Log.info("Disconnected (\(state.status.text())) — stream stopped", category: "StreamLifecycle")
             }
             stopMessageStream()
         }

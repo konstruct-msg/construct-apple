@@ -336,7 +336,14 @@ class CryptoManager {
         guard let core = orchestratorCore else { return }
         do {
             let blob = try core.exportOrchestratorState()
-            let ok = KeychainManager.shared.saveData(Data(blob), forKey: Self.orchestratorStateCFEKey)
+            // AfterFirstUnlock (not WhenUnlocked): the Double Ratchet state advances during
+            // background push-driven decrypt while the device is locked. A WhenUnlocked save
+            // fails there → the advanced ratchet is never persisted → desync on next launch.
+            let ok = KeychainManager.shared.saveData(
+                Data(blob),
+                forKey: Self.orchestratorStateCFEKey,
+                accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            )
             if ok {
                 Log.debug("Orchestrator state saved (CFE, \(blob.count)B)", category: "CryptoManager")
             } else {
@@ -350,6 +357,21 @@ class CryptoManager {
     /// Restore the orchestrator coordination state into `core` from Keychain.
     /// Called during `reloadCoreFromKeychain` and `setLocalUserId`.
     private func loadOrchestratorStateCFE(into core: OrchestratorCore) {
+        // One-time migration: older builds stored this under WhenUnlockedThisDeviceOnly, which
+        // fails to save during background/locked push decrypt → the advanced ratchet is lost →
+        // session desync on next launch. SecItemUpdate can't change accessibility, so re-add the
+        // item once. Runs here (foreground restore, device unlocked); the flag is set only after
+        // a confirmed re-add so a locked/absent read retries on the next launch.
+        let migrationFlag = "construct.orchestrator_state.afu_migrated.v1"
+        if !UserDefaults.standard.bool(forKey: migrationFlag) {
+            if KeychainManager.shared.migrateAccessibility(
+                forKey: Self.orchestratorStateCFEKey,
+                to: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            ) {
+                UserDefaults.standard.set(true, forKey: migrationFlag)
+                Log.info("Migrated orchestrator state Keychain accessibility → AfterFirstUnlock", category: "CryptoManager")
+            }
+        }
         guard let data = KeychainManager.shared.loadData(forKey: Self.orchestratorStateCFEKey) else {
             Log.debug("No orchestrator state CFE found in Keychain (first launch or cleared)", category: "CryptoManager")
             // Fresh orchestrator: next_otpk_id resets to 1,000,000. Any OTPKs on the server
@@ -422,6 +444,64 @@ class CryptoManager {
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
         let sigBytes = try core.signBundleData(bundleDataJson: bundleData)
         return Data(sigBytes)
+    }
+
+    // MARK: - Hybrid PQ Identity Signatures (Ed25519 + ML-DSA-65)
+    //
+    // These wrap the stateless `hybrid*` free functions from construct-core. They do
+    // NOT touch orchestratorCore, so no coreLock is needed. The 2016-byte hybrid
+    // private key lives in Keychain (WhenUnlockedThisDeviceOnly) and is wiped by
+    // deleteAllCryptoKeys()/deleteAllKeys() (account deletion, duress, local reset).
+    //
+    // Client and server share the SAME implementation (RustCrypto ml-dsa, seed-based),
+    // so every format is byte-identical and signatures cross-verify:
+    //   private key 2016 = [ed25519_seed (32)] [mldsa65_seed (32)] [mldsa65_pk (1952)]
+    //   public key  1984 = [ed25519_pk (32)] [mldsa65_pk (1952)]
+    //   signature   3373 = [ed25519_sig (64)] [mldsa65_sig (3309)]
+
+    /// Returns the device hybrid identity public key (1984 bytes), generating and
+    /// persisting a fresh hybrid keypair on first use.
+    @discardableResult
+    func ensureHybridIdentityPublicKey() throws -> Data {
+        if let stored = KeychainManager.shared.loadHybridSigPrivateKey() {
+            return Data(try hybridPublicKeyFromPrivate(privateKey: [UInt8](stored)))
+        }
+        let pair = try hybridSignatureKeygen()
+        guard KeychainManager.shared.saveHybridSigPrivateKey(Data(pair.privateKey)) else {
+            throw CryptoManagerError.invalidKeyData
+        }
+        Log.info("Generated hybrid PQ identity signing keypair (Ed25519 + ML-DSA-65)", category: "CryptoManager")
+        return Data(pair.publicKey)
+    }
+
+    /// The device hybrid identity public key if a keypair already exists, else nil
+    /// (does not generate one).
+    func hybridIdentityPublicKey() -> Data? {
+        guard let stored = KeychainManager.shared.loadHybridSigPrivateKey() else { return nil }
+        return (try? hybridPublicKeyFromPrivate(privateKey: [UInt8](stored))).map { Data($0) }
+    }
+
+    /// Signs a message with the device hybrid identity key, generating the keypair on
+    /// first use. Returns a 3373-byte hybrid signature.
+    func signHybrid(_ message: [UInt8]) throws -> Data {
+        let priv: [UInt8]
+        if let stored = KeychainManager.shared.loadHybridSigPrivateKey() {
+            priv = [UInt8](stored)
+        } else {
+            let pair = try hybridSignatureKeygen()
+            guard KeychainManager.shared.saveHybridSigPrivateKey(Data(pair.privateKey)) else {
+                throw CryptoManagerError.invalidKeyData
+            }
+            Log.info("Generated hybrid PQ identity signing keypair (Ed25519 + ML-DSA-65)", category: "CryptoManager")
+            priv = pair.privateKey
+        }
+        return Data(try hybridSign(privateKey: priv, message: message))
+    }
+
+    /// Verifies a hybrid signature against a peer's hybrid public key. Both the
+    /// Ed25519 and ML-DSA-65 components must validate. Stateless.
+    func verifyHybrid(publicKey: [UInt8], message: [UInt8], signature: [UInt8]) throws -> Bool {
+        return try hybridVerify(publicKey: publicKey, message: message, signature: signature)
     }
 
     /// Apply a Kyber KEM shared secret to the named DR session.

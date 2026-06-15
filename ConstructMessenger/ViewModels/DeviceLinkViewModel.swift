@@ -133,7 +133,7 @@ final class DeviceLinkViewModel {
             KeychainManager.shared.saveUserID(result.userId)
             KeychainManager.shared.saveSessionToken(result.accessToken)
             KeychainManager.shared.saveRefreshToken(result.refreshToken)
-            if let cert = result.iceBridgeCert, !cert.isEmpty {
+            if let cert = result.veilBridgeCert, !cert.isEmpty {
                 KeychainManager.shared.saveVEILBridgeCert(cert)
             }
 
@@ -200,7 +200,7 @@ final class DeviceLinkViewModel {
                         KeychainManager.shared.saveUserID(result.userId)
                         KeychainManager.shared.saveSessionToken(result.accessToken)
                         KeychainManager.shared.saveRefreshToken(result.refreshToken)
-                        if let cert = result.iceBridgeCert, !cert.isEmpty {
+                        if let cert = result.veilBridgeCert, !cert.isEmpty {
                             KeychainManager.shared.saveVEILBridgeCert(cert)
                         }
                         await uploadPreKeysAfterLink(deviceId: deviceId)

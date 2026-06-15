@@ -29,7 +29,7 @@ struct ExportBackupView: View {
             CTNavBar(
                 title: NSLocalizedString("backup_export_title", comment: ""),
                 showBack: step > 0,
-                trailingSymbol: CTSymbol.close,
+                trailingSystemImage: "xmark",
                 backAction: { step -= 1 },
                 trailingAction: { dismiss() }
             )

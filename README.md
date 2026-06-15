@@ -1,264 +1,236 @@
-# 🔐 Construct Messenger
+# Konstruct
 
-**Secure end-to-end encrypted messenger with crypto-agility and post-quantum readiness**
+**Privacy-first, end-to-end encrypted messenger with crypto-agility and post-quantum hybrid cryptography.**
 
-[![Rust](https://img.shields.io/badge/Rust-1.75+-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Rust-1.92+-orange.svg)](https://www.rust-lang.org/)
 [![Swift](https://img.shields.io/badge/Swift-5.9+-red.svg)](https://swift.org/)
-[![UniFFI](https://img.shields.io/badge/UniFFI-0.28-blue.svg)](https://mozilla.github.io/uniffi-rs/)
+[![UniFFI](https://img.shields.io/badge/UniFFI-0.30-blue.svg)](https://mozilla.github.io/uniffi-rs/)
+[![iOS](https://img.shields.io/badge/iOS-18.5+-black.svg)](https://developer.apple.com/ios/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
----
-
-## 🎯 About the Project
-
-Construct Messenger is a modern **end-to-end encrypted** messenger built on:
-
-- **Double Ratchet Protocol** (Signal Protocol) for forward secrecy
-- **X3DH** for asynchronous key agreement
-- **Rust Core** for 90% of the cryptographic logic
-- **Crypto-Agility** to support various cryptographic algorithms
-- **Post-Quantum Ready** architecture for hybrid schemes (Kyber + Dilithium)
-
-### Key Features
-
-- ✅ **100% E2EE** - The server never sees plaintext
-- ✅ **Forward Secrecy** - Compromised keys do not reveal history
-- ✅ **Crypto-Agility** - Support for multiple cryptographic suites
-- ✅ **Zero unsafe** - All Rust code is safe (0 `unsafe` blocks)
-- ✅ **Multi-Platform** - Single Rust core for iOS, Android, Web
-- 🚧 **Post-Quantum** - Hybrid schemes (in development)
+> This repository (`construct-messenger`) is the SwiftUI iOS/macOS client. The cryptographic
+> core, transport engine, and obfuscation proxy live in separate Rust repositories
+> (see [Repository Layout](#-repository-layout)).
 
 ---
 
-## 🏗️ Architecture
+## About
+
+Konstruct is an E2EE messenger with a terminal / ASCII aesthetic. The cryptographic core
+is written in Rust and shared verbatim across platforms via UniFFI, so iOS, macOS, and the
+in-progress Android client run the *same* audited crypto rather than reimplementing it.
+
+### Principles
+
+- ✅ **100% E2EE** — the server never sees plaintext, contact graphs in the clear, or keys.
+- ✅ **Forward secrecy & post-compromise security** — Double Ratchet; compromised keys don't reveal history.
+- ✅ **Crypto-agility** — pluggable cipher suites negotiated per session (`suite_id`).
+- ✅ **Post-quantum hybrid** — classical ⊕ PQ, so an attacker must break *both* to win.
+- ✅ **One Rust core, many platforms** — iOS, macOS, Android share `construct-core` via UniFFI.
+- ✅ **Binary data pipeline** — no base64/JSON in the crypto path; `Data`/`[u8]` end to end.
+
+---
+
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                 Swift UI Layer (iOS)                │
-│  - Thin wrapper over Rust                           │
-│  - Core Data persistence                            │
-│  - WebSocket client                                 │
-└───────────────────────┬─────────────────────────────┘
-                        │ UniFFI
-┌───────────────────────▼─────────────────────────────┐
-│              Rust Core (construct-core)             │
-│  ✅ Double Ratchet Protocol                         │
-│  ✅ X3DH key agreement                              │
-│  ✅ Classic Suite (X25519 + Ed25519 + ChaCha20)     │
-│  ✅ Crypto-Agility (pluggable crypto providers)     │
-│  ✅ MessagePack serialization                       │
-│  ✅ Session management                              │
-└───────────────────────┬─────────────────────────────┘
-                        │ WebSocket + MessagePack
-┌───────────────────────▼─────────────────────────────┐
-│            Rust Server (Actix + PostgreSQL)         │
-│  - Message routing                                  │
-│  - Key bundle storage                               │
-│  - User authentication                              │
-│  - NO access to message content (E2EE)              │
-└─────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|                  SwiftUI client (iOS / macOS)               |
+|   - @Observable view models    - Core Data persistence      |
+|   - CryptoManager: thin UniFFI wrapper over construct-core  |
++--------------+------------------------------+---------------+
+               | UniFFI (iOS)                 | EngineAdapter (macOS)
++--------------v------------+   +-------------v---------------+
+|   construct-core (Rust)   |   |   construct-engine (Rust)   |
+|   - X3DH + PQXDH          |   |   - QUIC / HTTP-3 / gRPC    |
+|   - Double Ratchet        |   |   - token & session mgmt    |
+|   - ML-KEM-768 (FIPS 203) |   |   - internal OrchestratorCore
+|   - Ed25519 + ML-DSA-65   |   +-------------+---------------+
+|   - crypto-agile suites   |                 | gRPC (H2 / H3-QUIC)
++---------------------------+                 |  (optional VEIL tunnel)
+                                 +------------v----------------+
+                                 |   construct-veil (Rust)     |
+                                 |   obfs4 + WebTunnel PT      |
+                                 |   DPI evasion (opt-in)      |
+                                 +------------+----------------+
+                                 +------------v----------------+
+                                 |   Konstruct server (Rust)   |
+                                 |   behind Traefik            |
+                                 |   routing - key bundles     |
+                                 |   Redpanda bus - Redis      |
+                                 |     Streams offline mailbox |
+                                 |   NO access to plaintext    |
+                                 +-----------------------------+
 ```
+
+iOS uses the direct UniFFI crypto path. macOS Desktop is migrating all crypto behind
+`EngineAdapter` → `construct-engine` (see `AGENTS.md` → *EngineAdapter*).
 
 ---
 
-## 🚀 Quick Start
+## Cryptography
 
-### Requirements
+Verified against `construct-core` source — names follow NIST FIPS, informal names in parens.
 
-- **Rust** 1.75+ ([rustup](https://rustup.rs/))
-- **Xcode** 15+ (for iOS)
-- **UniFFI** 0.28
+### Classic suite (`suite_id = 1`) — production
 
-### Building the iOS App
+| Component     | Algorithm             | Purpose                      |
+|---------------|-----------------------|------------------------------|
+| Key agreement | **X25519** (ECDH)     | Ephemeral DH for ratcheting  |
+| Signatures    | **Ed25519**           | Prekey / identity signatures |
+| AEAD          | **ChaCha20-Poly1305** | Message encryption           |
+| KDF           | **HKDF-SHA256**       | Key derivation               |
 
-**Note:** Ядро `construct-core` теперь находится в отдельном репозитории `~/Code/construct-core/`.
+### Post-quantum (`suite_id = 2`) — hybrid
+
+| Component     | Algorithm                         | Status |
+|---------------|-----------------------------------|--------|
+| Key agreement | **X25519 ⊕ ML-KEM-768** (FIPS 203, Kyber-768) | Implemented — PQXDH mixes a Kyber OTPK into the root key |
+| Signatures    | **Ed25519 + ML-DSA-65** (FIPS 204, Dilithium-3) | Implemented in core (client + server, byte-identical), **not yet activated on the wire** — identity signatures are still Ed25519 |
+| AEAD / KDF    | ChaCha20-Poly1305 / HKDF-SHA256   | unchanged |
+
+> **Note:** "Hybrid" means classical **and** PQ — both must verify / both must be broken.
+> The ML-DSA-65 signature path uses RustCrypto `ml-dsa` (seed-based) on **both** client and
+> server, so hybrid signatures cross-verify byte-for-byte; a cross-impl interop test pins this.
+> Earlier docs that said "Kyber-1024" or "Dilithium deployed" are wrong — see
+> `construct-docs` for the authoritative protocol spec.
+
+### Suite binding (anti key-substitution)
+
+Prekey signatures are **domain-separated** by a prologue that binds the signature to the
+suite, preventing key-substitution attacks across cipher suites
+(`"KonstruktX3DH-v1" ‖ suite_id ‖ public_key`). Byte-exact format lives in the protocol
+spec in `construct-docs`, not here.
+
+---
+
+## Offline delivery & privacy
+
+Konstruct delivers to offline recipients, but deliberately as an **ephemeral, time-bounded**
+mailbox — not a permanent inbox. This is a privacy choice, not a limitation to be "fixed".
+
+- **Online recipient** → pushed straight to the live gRPC stream; nothing is stored.
+- **Offline recipient** → the (already E2E-encrypted) message is queued in a per-user and
+  per-device **Redis Stream**, and an **APNs silent push** wakes the app to reconnect.
+- **On reconnect** → the app drains its stream; messages are **deleted immediately** after
+  delivery.
+- **Durable send** → the send path uses a 2-phase commit over the Redpanda/Kafka bus
+  (idempotent by `temp_id`), so a network failure mid-send never duplicates or loses a message.
+
+**The TTL nuance — read this:** queued messages are held in Redis **only**. They are
+**never written to a database** (no server-side history, no social-graph metadata at rest),
+and they **expire after a TTL** (tied to the session TTL; streams are also trimmed by age).
+If a recipient stays offline **longer than the TTL**, undelivered messages are
+**auto-deleted** and will not arrive. The offline window is finite by design — Konstruct is
+not a store-and-forward archive.
+
+---
+
+## Building
+
+All three Rust crates must be cloned alongside this repo:
+
+```
+~/Code/
+├── construct-core/        # crypto core  → ConstructCore.xcframework
+├── construct-engine/      # QUIC/H3/gRPC → ConstructEngine.xcframework
+├── construct-veil/        # obfs4/WebTunnel obfuscation (VEIL)
+└── construct-messenger/         # this repo (SwiftUI app)
+```
+
+The `*.xcframework` binaries are **not** tracked in git — build them after cloning:
 
 ```bash
-# 1. Generate Swift bindings (автоматически находит ~/Code/construct-core)
+# 1. Build the crypto core (iOS device + simulator)
+cd ~/Code/construct-messenger
+./build_crypto_lib.sh --ios --sim        # or --all for + macOS
+
+# 2. Build the transport engine
+cd ~/Code/construct-engine && ./build_engine.sh
+
+# 3. Regenerate UniFFI Swift bindings (after any core API change)
+cd ~/Code/construct-messenger
 ./generate_swift_bindings.sh
 
-# 2. Open Xcode and run
-open ConstructMessenger.xcodeproj
+# 4. Build & run
+xcodebuild -scheme ConstructMessenger \
+  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' build
+# …or open ConstructMessenger.xcodeproj in Xcode and ⌘R
 ```
 
-Скрипт `generate_swift_bindings.sh` автоматически:
-- Находит ядро в `~/Code/construct-core/`
-- Собирает библиотеку для нужных архитектур
-- Генерирует Swift биндинги в `ConstructMessenger/`
-
-### Running the Server
-
-**Note:** Сервер находится в отдельном репозитории. См. документацию сервера для инструкций по запуску.
+**Requirements:** Rust 1.92+ · Xcode 16+ · iOS 18.5+ deployment target · UniFFI 0.30.
 
 ---
 
-## 🔐 Cryptography
-
-### Classic Suite (v1) - Production
-
-| Component     | Algorithm             | Purpose                         |
-|---------------|-----------------------|---------------------------------|
-| Key Agreement | **X25519** (ECDH)     | Ephemeral DH for ratcheting     |
-| Signatures    | **Ed25519**           | Prekey signatures               |
-| AEAD          | **ChaCha20-Poly1305** | Message encryption              |
-| KDF           | **HKDF-SHA256**       | Key derivation                  |
-
-### Post-Quantum Hybrid Suite (v2) - In Development
-
-| Component     | Algorithm                | Purpose                         |
-|---------------|--------------------------|---------------------------------|
-| Key Agreement | **X25519 ⊕ Kyber768**      | Hybrid KEM                      |
-| Signatures    | **Ed25519 + Dilithium3**   | Hybrid signatures               |
-| AEAD          | **ChaCha20-Poly1305**    | Encryption (unchanged)          |
-
-**Philosophy:** Hybrid = protection against quantum computers + protection against vulnerabilities in new algorithms
-
-### X3DH Prologue Format
-
-Для защиты от **key substitution attacks** (атак подмены ключей между разными криптографическими наборами), подпись `signed_prekey` включает **prologue** по аналогии с Noise Protocol.
-
-**Формат prologue:**
-```
-Prologue = "X3DH" (4 bytes) || suite_id (2 bytes, little-endian)
-```
-
-**Примеры:**
-- Suite ID 1 (CLASSIC): `[0x58, 0x33, 0x44, 0x48, 0x01, 0x00]` = `"X3DH" || 0x0001`
-- Suite ID 2 (PQ_HYBRID): `[0x58, 0x33, 0x44, 0x48, 0x02, 0x00]` = `"X3DH" || 0x0002`
-
-**Процесс подписания:**
-1. Клиент генерирует `signed_prekey_public`
-2. Создаёт prologue: `"X3DH" || suite_id`
-3. Подписывает: `sign(prologue || signed_prekey_public)`
-4. Отправляет bundle на сервер
-
-**Процесс проверки:**
-1. Клиент получает bundle с `suite_id`
-2. Строит prologue из `suite_id` из bundle
-3. Проверяет подпись: `verify(prologue || signed_prekey_public, signature)`
-4. **Backward compatibility:** Если новый формат не проходит, пробует старый (без prologue)
-
-**Важно для сервера:**
-- Сервер **НЕ** должен знать о prologue
-- Сервер работает только с непрозрачными данными (opaque blobs)
-- Сервер **НЕ** проверяет подпись (это делает клиент)
-- Сервер должен хранить `suite_id` для логирования/статистики
-
----
-
-## 🛠️ Project Structure
-
-**Note:** Ядро `construct-core` находится в отдельном репозитории `~/Code/construct-core/`.
+## Repository Layout
 
 ```
 construct-messenger/
-│
-├── ConstructMessenger/     # 📱 iOS Swift application
-│   ├── ViewModels/        # MVVM view models
-│   ├── Views/             # SwiftUI views
+├── ConstructMessenger/
+│   ├── Views/                  # SwiftUI views (terminal/ASCII design system)
+│   ├── ViewModels/             # @Observable view models
+│   ├── Services/               # session, messaging, healing, crypto orchestration
 │   ├── Security/
-│   │   └── CryptoManager.swift  # UniFFI wrapper around construct-core
-│   ├── Networking/
-│   │   └── WebSocketManager.swift
-│   ├── Models/            # Core Data models
-│   ├── construct_core.swift      # Generated Swift bindings
-│   └── construct_coreFFI.h       # Generated C header
-│
-├── generate_swift_bindings.sh    # Script to generate Swift bindings
-└── README.md                     # 📖 This file
+│   │   └── CryptoManager.swift # UniFFI wrapper around construct-core
+│   ├── Networking/gRPC/        # gRPC channel + generated protobuf + VEIL
+│   ├── Utilities/              # CT design tokens (ConstructTheme.swift)
+│   ├── en.lproj / ru.lproj/    # localization (Japanese planned)
+│   └── construct_core.swift    # generated UniFFI bindings (do not edit)
+├── build_crypto_lib.sh         # rebuild construct-core → ConstructCore.xcframework
+├── generate_swift_bindings.sh  # regenerate UniFFI bindings
+└── AGENTS.md                   # conventions & deep architecture notes
 ```
+
+See **`AGENTS.md`** for design-system rules, the session lifecycle, the binary-data
+pipeline, identity-space invariants, and the EngineAdapter migration plan.
 
 ---
 
-## 🧪 Testing
-
-### Rust Core
-
-Ядро тестируется в репозитории `~/Code/construct-core/`:
+## Testing
 
 ```bash
-cd ~/Code/construct-core
-cargo test --all-features
+# Rust core
+cd ~/Code/construct-core && cargo test --features post-quantum
+
+# iOS app (unit + crypto-wire integration)
+cd ~/Code/construct-messenger
+xcodebuild test -scheme ConstructMessenger \
+  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6'
 ```
 
-### iOS App
+---
 
-```bash
-# In Xcode: ⌘U (Run Tests)
-```
+## Status
+
+**App:** v0.13.x (Alpha) · **Core:** construct-core v0.9.4
+
+### Working
+- [x] Rust crypto core — X3DH + Double Ratchet, crypto-agile suites
+- [x] PQXDH — ML-KEM-768 hybrid key agreement
+- [x] Hybrid Ed25519 + ML-DSA-65 signatures in core (client + server parity, cross-verified)
+- [x] UniFFI iOS integration; binary (CFE) session persistence
+- [x] QUIC / HTTP-3 / gRPC transport engine (H2 fallback on iOS)
+- [x] VEIL obfuscation (obfs4 + WebTunnel pluggable transports, opt-in)
+- [x] 1:1 messaging, session healing, multi-device linking, account recovery (BIP39)
+- [x] Offline delivery — ephemeral per-device Redis-Streams mailbox (no DB persistence, TTL-bounded), drained on reconnect; Redpanda/Kafka bus with 2-phase-commit send; APNs silent-push wake-up
+- [x] Voice/video calls (WebRTC + CallKit)
+- [x] App-lock (PIN + biometrics, duress PIN)
+
+### In progress / planned
+- [ ] Activate hybrid ML-DSA-65 identity signatures on the wire (with smooth migration for existing accounts)
+- [ ] Cluster (group) messaging
+- [ ] macOS Desktop: route all crypto through EngineAdapter (remove dual crypto path)
+- [ ] Android client
+- [ ] Japanese localization (共創)
 
 ---
 
-## 🤝 Contributing
+## License
 
-We welcome contributions! Please familiarize yourself with:
+MIT — see [LICENSE](LICENSE).
 
-1. Create an Issue to discuss new features
-2. Submit a Pull Request
+## Acknowledgments
 
-### Priority Areas
-
-- 🔴 **Critical:** Fix message decryption
-- 🟠 **Important:** Unit/integration tests
-- 🟡 **Useful:** UI/UX improvements
-- 🟢 **Future:** Post-quantum crypto implementation
-
----
-
-## 📊 Current Status
-
-**Version:** v0.2.8 (Early Alpha)
-**Date:** December 26, 2025
-
-### ✅ Done
-- [x] Rust cryptographic core (Double Ratchet + X3DH)
-- [x] UniFFI integration with iOS
-- [x] WebSocket server with PostgreSQL
-- [x] Basic UI (SwiftUI)
-- [x] Core Data persistence
-- [x] Reactive architecture with Combine (Phase 2)
-
-
-### 📅 Planned
-**Q1 2026:**
-- [ ] **Offline Message Queue** - Retry failed messages with exponential backoff
-- [ ] **APNs Push Notifications** - 98% reduction in network requests, massive battery savings
-- [ ] **State Machine Architecture** (Phase 3) - See [docs/architecture/state-machine-migration.md](docs/architecture/state-machine-migration.md)
-  - Explicit state modeling for auth and polling
-  - Offline mode support
-  - Reconnection with exponential backoff
-  - Better error handling and debugging
-
-**Q2 2026:**
-- [ ] **Privacy & Traffic Obfuscation** - See [docs/architecture/improvement-roadmap.md](docs/architecture/improvement-roadmap.md)
-  - Message size padding
-  - Timing obfuscation
-  - Dummy traffic (opt-in)
-- [ ] Post-quantum hybrid cryptography (Kyber768 + Dilithium3)
-- [ ] Web PWA
-- [ ] Group messaging (Sender Keys)
-- [ ] Voice/Video calls (WebRTC)
-
-**Q3 2026:**
-- [ ] **Server Federation** (Email 2.0 with E2E encryption)
-- [ ] Decentralized architecture (alice@server1.com ↔ bob@server2.com)
-- [ ] DNS-based server discovery
-- [ ] Sealed sender for metadata privacy
-
-**Future Considerations:**
-- [ ] WebSocket support (opt-in, beta) - See roadmap for scaling strategy
-
----
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details
-
----
-
-## 🙏 Acknowledgments
-
-- **Signal Foundation** for the Double Ratchet Protocol
-- **Mozilla** for UniFFI
-- **Rust Community** for excellent crypto libraries
-- **NIST** for standardizing post-quantum cryptography
+- **Signal Foundation** — Double Ratchet & X3DH
+- **RustCrypto** & **Mozilla (UniFFI)** — crypto crates and FFI tooling
+- **NIST** — FIPS 203 (ML-KEM) & FIPS 204 (ML-DSA) standardization

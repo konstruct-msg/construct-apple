@@ -2,14 +2,13 @@
 //  VeilCertFetcher.swift
 //  Construct Messenger
 //
-//  Fetches the VEIL bridge cert and relay config from .well-known endpoints.
-//  Cert fallback chain (level 3):
-//    1. AuthTokensResponse (after login) → saved to Keychain by VeilProxyManager
-//    2. Keychain cache                   → VeilProxyManager.getVEILBridgeCert()
-//    3. https://konstruct.cc/.well-known/veil-cert   ← this file
-//    4. Hardcoded in binary              → VEILConfig.hardcodedBridgeCert
+//  Fetches the legacy relay config from `.well-known/construct-server`.
+//  (The obfs4 bridge-cert fetch — `.well-known/ice-cert` / `veil-cert` — was
+//  removed when iOS went veil-front-only; veil-front uses an in-binary SPKI pin
+//  + out-of-band ticket, no bridge cert.)
 //
-//  Relay config (with SPKI pins) fallback chain:
+//  Relay config (with SPKI pins) fallback chain — being retired, see
+//  decisions/legacy-cert-distribution-cleanup.md:
 //    1. https://konstruct.cc/.well-known/construct-server (Ed25519 signed)
 //    2. UserDefaults cache (last valid fetch)
 //    3. Hardcoded in VEILConfig
@@ -94,16 +93,6 @@ struct RelayInfo: Codable {
 }
 
 // MARK: - Private wire types
-
-private struct VeilCertWellKnown: Decodable {
-    let cert: String
-    let iatMode: Int
-
-    enum CodingKeys: String, CodingKey {
-        case cert
-        case iatMode = "iat_mode"
-    }
-}
 
 private struct ConstructServerWellKnown: Decodable {
     struct VEILSection: Decodable {
@@ -190,49 +179,23 @@ actor VeilCertFetcher {
         return Set(ids)
     }
 
-    // MARK: - Bridge cert
-
-    /// Fetch the ICE bridge cert from `https://konstruct.cc/.well-known/ice-cert`.
-    /// Returns nil on any network or parse error.
-    func fetchFromHTTPS() async -> String? {
-        let urlString = "https://\(ServerConfig.inviteHost)/.well-known/ice-cert"
-        guard let url = URL(string: urlString) else { return nil }
-
-        var request = URLRequest(url: url, timeoutInterval: timeout)
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-
-        do {
-            let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                Log.debug("ICE .well-known returned non-200", category: "ICE")
-                return nil
-            }
-            let parsed = try JSONDecoder().decode(VeilCertWellKnown.self, from: data)
-            guard !parsed.cert.isEmpty else { return nil }
-            Log.info("ICE cert fetched via .well-known", category: "ICE")
-            return parsed.cert
-        } catch {
-            Log.debug("ICE .well-known fetch error: \(error)", category: "ICE")
-            return nil
-        }
-    }
-
     // MARK: - Relay config (signed)
 
     /// Fetch, verify, and cache the relay config from `.well-known/construct-server`.
     ///
-    /// Tries multiple mirror URLs in parallel. The first response that
+    /// Tries the mirror URL(s) in parallel. The first response that
     /// - returns HTTP 200, AND
     /// - passes Ed25519 signature verification
-    /// wins and is persisted to UserDefaults. All URLs carry the same signed payload so
-    /// no additional trust assumption is introduced by the GitHub mirror.
+    /// wins and is persisted to UserDefaults.
     ///
-    /// Mirror list order: primary (konstruct.cc) → GitHub raw (construct-relay repo).
+    /// Source: konstruct.cc primary. The `construct-relay` GitHub-raw mirror was
+    /// removed when obfs4/WebTunnel were retired in favour of veil-front
+    /// (2026-06-12); the veil-front relay is hardcoded and per-user tickets are
+    /// delivered out-of-band, so this legacy manifest no longer needs a RU mirror.
     @discardableResult
     func fetchAndCacheRelayConfig() async -> [RelayInfo]? {
         let mirrorURLs: [String] = [
             "https://\(ServerConfig.inviteHost)/.well-known/construct-server",
-            "https://raw.githubusercontent.com/konstruct-msg/construct-relay/main/.well-known/construct-server",
         ]
 
         if let relays = await fetchVerifiedRelayConfig(from: mirrorURLs) {

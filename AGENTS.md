@@ -300,13 +300,14 @@ name for VEIL bridge cert (will be renamed when proto regenerates).
 
 ## Architecture Notes
 
-> **Before making any architectural decision**, search the wiki first:
-> `ls ~/Code/construct-docs/wiki/ | grep <topic>`
-> The wiki has 500+ curated articles covering every component. AGENTS.md is operational rules;
-> the wiki is the authoritative architecture documentation.
+> **Before making any architectural decision**, search the docs vault first:
+> `grep -ril <topic> ~/Code/construct-docs/{architecture,backend,client,cryptocore,security,decisions}`
+> The vault is the authoritative architecture documentation; AGENTS.md is operational rules.
+> The corpus is organised by domain folder (`architecture/`, `backend/`, `client/`, `cryptocore/`,
+> `security/`, `deployment/`, …) — see `~/Code/construct-docs/AGENTS.md` for the full map.
 >
 > **Before touching any file in `Networking/gRPC/ICE/`**, check pending decisions:
-> `ls ~/Code/construct-docs/wiki/decisions/ | grep ice`
+> `ls ~/Code/construct-docs/decisions/ | grep ice`
 > In particular: `decisions/ice-connection-loop-complexity.md` — deferred refactor with trigger.
 
 ### Session lifecycle
@@ -335,7 +336,8 @@ On failure: falls through to END_SESSION → full re-init.
 **Keychain accessibility of session keys:**
 - `deviceSigningKey` / `deviceIdentityKey`: `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
 - `deviceId`: `kSecAttrAccessibleAfterFirstUnlock`
-- Session JSON: `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+- Per-contact session data (`saveSessionData`): `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (needed for push-driven background decrypt)
+- **Double Ratchet orchestrator state** (`construct.orchestrator_state`): `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (changed 2026-06-09). It advances during background/locked push decrypt; the old `WhenUnlockedThisDeviceOnly` made the locked-device save fail → the advanced ratchet was lost → silent session desync on next launch. Any crypto state that must survive a background decrypt MUST use `AfterFirstUnlock*`, never `WhenUnlocked*`. (Session archives, PQC OTPK/SPK still use the generic `saveData` default `WhenUnlockedThisDeviceOnly` — same latent issue, not yet migrated.)
 - Auth token: `kSecAttrAccessibleAfterFirstUnlock`
 
 **Auth guard**: if `isAuthenticated == true` in memory, skip Keychain re-read.
@@ -358,8 +360,7 @@ invisible tabs during layout. Tab 0 (ChatsListView) is always in the set at init
 
 ### construct-engine and EngineAdapter (CRITICAL for macOS/Desktop work)
 
-**Full spec**: `construct-docs/raw/04_Client_Applications/specs/DESKTOP_ENGINE_REFACTORING_SPEC.md`
-**Wiki article**: `construct-docs/wiki/EngineAdapter.md`
+**Full spec**: `construct-docs/client/specs/DESKTOP_ENGINE_REFACTORING_SPEC.md`
 
 #### Two crypto paths — never confuse them
 
@@ -558,92 +559,92 @@ Key test files:
 
 ## Documentation
 
-All project documentation: `~/Code/construct-docs` (Obsidian vault)
-Rules for writing documentation: `~/Code/construct-docs/README.md`
+All project documentation: `~/Code/construct-docs` (Obsidian vault).
+**Authoritative map + writing rules: `~/Code/construct-docs/AGENTS.md`** (read it before contributing
+docs). The vault is a flat domain-folder structure — there is no `raw/` or `wiki/` anymore.
+
+### Vault layout (top-level domain folders)
+
+| Folder | Holds |
+|--------|-------|
+| `overview/` | Vision, philosophy, high-level project overview |
+| `architecture/` | Service map, data flows, server infrastructure, design principles |
+| `backend/` | Server service-specific docs (auth, messaging, federation) |
+| `client/` | Client docs (iOS, Android, desktop, shared); specs in `client/specs/` |
+| `cryptocore/` | Crypto protocol specs and key management |
+| `security/` | Security model, threat model, VEIL anti-censorship |
+| `deployment/` · `testing/` · `compliance/` · `whitepaper/` | as named |
+| `sessions/` | Session logs (this is where your session notes go) |
+| `decisions/` | Architectural decision records (ADRs) |
+| `_archive/` | Superseded docs — read-only |
 
 ### Key documents for new developers
 
 | Topic | File |
 |-------|------|
-| Cross-platform protocol spec | `04_Client_Applications/specs/construct-protocol-v2-spec.md` |
-| iOS client integration guide | `04_Client_Applications/CLIENT_SDK_SPEC.md` |
-| **Android onboarding** | `04_Client_Applications/android/ANDROID_ONBOARDING.md` |
-| Session flow (X3DH + DR) | `04_Client_Applications/session-flow.md` |
-| Session persistence | `04_Client_Applications/session-persistence.md` |
-| Account recovery (BIP39) | `04_Client_Applications/ACCOUNT_RECOVERY_CLIENT_SPEC.md` |
-| Calls / WebRTC signaling | `04_Client_Applications/specs/CALLS_CLIENT_SPEC.md` |
-| ICE relay fallback (RU) | `04_Client_Applications/specs/ICE_RELAY_FALLBACK_CLIENT_SPEC.md` |
-| Multi-device support | `04_Client_Applications/specs/MULTI_DEVICE_CLIENT_SPEC.md` |
-| FFI binary format (CFE) | `04_Client_Applications/construct-ffi-binary-format.md` |
-| Security architecture | `06_Security/` |
+| Cross-platform protocol spec | `client/specs/construct-protocol-v2-spec.md` |
+| **Android onboarding** | `client/android/ANDROID_ONBOARDING.md` |
+| Account recovery (BIP39) | `client/ACCOUNT_RECOVERY_CLIENT_SPEC.md` |
+| Calls / WebRTC signaling | `client/specs/CALLS_CLIENT_SPEC.md` |
+| VEIL relay fallback (RU) | `client/specs/VEIL_RELAY_FALLBACK_CLIENT_SPEC.md` |
+| Multi-device support | `client/specs/MULTI_DEVICE_CLIENT_SPEC.md` |
+| FFI binary format (CFE) | `client/construct-ffi-binary-format.md` |
+| construct-engine / EngineAdapter | `client/specs/DESKTOP_ENGINE_REFACTORING_SPEC.md` |
+| Security architecture | `security/` |
+
+> Paths move as docs are reorganised — if one is missing, search the domain folder
+> (`grep -ril <topic> ~/Code/construct-docs/client`) rather than trusting this table blindly.
 
 ### Documentation conventions
-- Session implementation notes go in `08_Testing_and_Process/SESSION_YYYY-MM-DD.md`
-- iOS bug fixes go in `04_Client_Applications/ios/fixes/`
-- New specs go in `04_Client_Applications/specs/`
-- All spec documents must have a **Version**, **Status**, and **Platform** header
+- Session notes go in `sessions/YYYY-MM-DD-<topic>.md` (see workflow below).
+- Patch the affected spec in its domain folder in the same session — do not leave it stale.
+- New client specs go in `client/specs/`.
 
 ---
 
 ## Shared Construct Docs Workflow
 
-These instructions apply to GitHub Copilot, Codex, OpenCode, and similar coding agents.
+The vault's own `~/Code/construct-docs/AGENTS.md` is **authoritative** for how to contribute docs —
+read it. The summary below is the operational subset for coding agents.
 
-### Division of labour — read this first
+> **There is no pipeline anymore.** The old `raw/` → olw → `wiki/` three-way synthesis workflow is
+> gone. Agents patch docs **directly** and write session/decision notes by hand. No olw, no
+> `wiki/.drafts/`, no "let the pipeline cross-link it". `raw/` and `wiki/` no longer exist — the
+> corpus is the flat domain folders (`architecture/`, `backend/`, `client/`, `cryptocore/`,
+> `security/`, …) listed under *Documentation* above.
 
-The wiki is maintained by a three-way workflow. **Do not overstep your role.**
+### Where durable reasoning goes
 
-| Role | Tool | Responsibility |
-|------|------|----------------|
-| **Coding agent** (you) | Copilot / Codex / OpenCode | Write code + drop raw session notes into `wiki/sessions/` and `wiki/decisions/`. That is all. |
-| **Wiki pipeline** | `obsidian-llm-wiki-local` (olw) | Reads `raw/`, synthesizes concepts, creates/updates wiki articles, generates cross-links. Runs separately. |
-| **Developer** | Human + Obsidian | Reviews wiki draft articles, approves or rejects with feedback. Curates `raw/`. |
+Any reasoning that informed a code change must survive beyond the chat session — conclusions,
+trade-offs, and "why we didn't do X". After any session involving architectural changes, design
+decisions, API/data-format changes, bug root-cause analysis, or non-obvious implementation choices:
 
-**Your job is code.** olw handles article synthesis, concept extraction, and cross-referencing.
-You do not need to write wiki articles, create `[[wikilinks]]`, or add YAML frontmatter.
-Just write clear, factual session notes and let the pipeline do the rest.
+1. **Always** write a session note at `~/Code/construct-docs/sessions/YYYY-MM-DD-<topic>.md`.
+2. **Always** fill in `## Why` — the reasoning, considered alternatives, and why they were rejected.
+   This is the most important section.
+3. If the decision will constrain future work or the same question is likely to recur, also create
+   or update `~/Code/construct-docs/decisions/<slug>.md`.
+4. Patch the affected spec in its domain folder in the **same** session — keep specs current.
+5. Before creating a new note, search for an existing one and extend it rather than duplicating.
 
-### Shared knowledge base
-
-- Vault: `~/Code/construct-docs`
-- `raw/` — source corpus. Do **not** rewrite, normalize, or reorganize unless explicitly asked.
-- `wiki/` — canonical curated knowledge base. **Read** from here before architectural work.
-- `wiki/.drafts/` — **reserved for olw**. Never write here manually.
-- `wiki/sessions/` — where coding agents write session notes.
-- `wiki/decisions/` — where coding agents write long-lived decision records.
-
-### Where to save durable reasoning
-
-**The goal**: any reasoning that informed a code change must survive beyond the chat session.
-Conclusions, trade-offs, and "why we didn't do X" must be written down — not left in chat history.
-
-**After any session involving architectural changes, design decisions, API changes, data format
-changes, bug root-cause analysis, or non-obvious implementation choices:**
-
-1. **Always** create or update a session note at `wiki/sessions/YYYY-MM-DD-<topic>.md`.
-2. **Always** fill in `# Why` — the reasoning that drove the decision, including considered
-   alternatives and why they were rejected. This is the most important section.
-3. If the decision will constrain future work across sessions or the same question is likely
-   to recur, also create a `wiki/decisions/<topic>.md` entry.
-4. Before creating a new note, search for an existing one and extend it instead of duplicating.
-
-Do not skip session notes for "small" changes — if non-trivial reasoning was involved, it
-belongs in the wiki. Future agents and the developer should never need to re-derive it.
+Do not skip session notes for "small" changes — if non-trivial reasoning was involved, write it down.
 
 ### Session note format
 
-Write plain markdown. No YAML frontmatter, no `[[wikilinks]]` — olw will add those.
-Required sections (fill all of them):
+Plain markdown, no YAML frontmatter. `[[wikilinks]]` to other sessions/decisions/specs are welcome
+(Obsidian graph). Sections:
 
-1. `# Context` — what problem prompted this work
-2. `# What Changed` — concrete file/API/behaviour changes
-3. `# Why` — **the reasoning**: why this approach, what alternatives were considered, why rejected
-4. `# Intended Outcome` — what success looks like after this change
-5. `# Decisions` — discrete decisions, each as a one-liner fact
-6. `# Open Questions` — known unknowns, deferred work
+1. `## Context` — what problem prompted this work
+2. `## What Changed` — concrete file/API/behaviour changes
+3. `## Why` — the reasoning: alternatives considered and why rejected
+4. `## Decisions` — discrete decisions, each as a one-liner
+5. `## Open Questions` — known unknowns, deferred work
+
+Decision records (`decisions/<slug>.md`) use: `## Context`, `## Decision`, `## Rationale`,
+`## Consequences`, plus a **Status** (accepted | superseded | deferred) and **Date** header.
 
 ### Operational logging
 
-- Append a one-line entry to `wiki/log.md` after creating/updating a session or decision note.
-  Format: `[YYYY-MM-DD HH:MM] note | <topic>`
+- Append a one-line entry to `~/Code/construct-docs/log.md` after creating/updating a session or
+  decision note. Format: `[YYYY-MM-DD HH:MM] note | <topic>`
 - Keep detailed rationale out of `log.md` — it belongs in the session/decision note.

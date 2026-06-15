@@ -3235,6 +3235,78 @@ public func FfiConverterTypeHealingAttemptResult_lower(_ value: HealingAttemptRe
 }
 
 
+/**
+ * Hybrid signature keypair (Ed25519 + ML-DSA-65).
+ * Used for post-quantum identity key bundles.
+ */
+public struct HybridSignatureKeyPair: Equatable, Hashable {
+    /**
+     * Hybrid private key: 2016 bytes
+     * [ed25519_seed (32)] [mldsa65_seed (32)] [mldsa65_pk (1952)]
+     */
+    public var privateKey: [UInt8]
+    /**
+     * Hybrid public key: 1984 bytes
+     * [ed25519_pk (32)] [mldsa65_pk (1952)]
+     */
+    public var publicKey: [UInt8]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Hybrid private key: 2016 bytes
+         * [ed25519_seed (32)] [mldsa65_seed (32)] [mldsa65_pk (1952)]
+         */privateKey: [UInt8], 
+        /**
+         * Hybrid public key: 1984 bytes
+         * [ed25519_pk (32)] [mldsa65_pk (1952)]
+         */publicKey: [UInt8]) {
+        self.privateKey = privateKey
+        self.publicKey = publicKey
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HybridSignatureKeyPair: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHybridSignatureKeyPair: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HybridSignatureKeyPair {
+        return
+            try HybridSignatureKeyPair(
+                privateKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                publicKey: FfiConverterSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HybridSignatureKeyPair, into buf: inout [UInt8]) {
+        FfiConverterSequenceUInt8.write(value.privateKey, into: &buf)
+        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHybridSignatureKeyPair_lift(_ buf: RustBuffer) throws -> HybridSignatureKeyPair {
+    return try FfiConverterTypeHybridSignatureKeyPair.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHybridSignatureKeyPair_lower(_ value: HybridSignatureKeyPair) -> RustBuffer {
+    return FfiConverterTypeHybridSignatureKeyPair.lower(value)
+}
+
+
 public struct InviteSignature: Equatable, Hashable {
     public var signature: [UInt8]
 
@@ -3280,6 +3352,73 @@ public func FfiConverterTypeInviteSignature_lift(_ buf: RustBuffer) throws -> In
 #endif
 public func FfiConverterTypeInviteSignature_lower(_ value: InviteSignature) -> RustBuffer {
     return FfiConverterTypeInviteSignature.lower(value)
+}
+
+
+/**
+ * Generated ML-DSA-65 keypair for post-quantum identity signatures.
+ */
+public struct MldsaKeyPair: Equatable, Hashable {
+    /**
+     * Secret key: 32-byte signing seed (RustCrypto ml-dsa; expanded key re-derived on sign)
+     */
+    public var secretKey: [UInt8]
+    /**
+     * Public key: 1952 bytes
+     */
+    public var publicKey: [UInt8]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Secret key: 32-byte signing seed (RustCrypto ml-dsa; expanded key re-derived on sign)
+         */secretKey: [UInt8], 
+        /**
+         * Public key: 1952 bytes
+         */publicKey: [UInt8]) {
+        self.secretKey = secretKey
+        self.publicKey = publicKey
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension MldsaKeyPair: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMLDSAKeyPair: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MldsaKeyPair {
+        return
+            try MldsaKeyPair(
+                secretKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                publicKey: FfiConverterSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MldsaKeyPair, into buf: inout [UInt8]) {
+        FfiConverterSequenceUInt8.write(value.secretKey, into: &buf)
+        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMLDSAKeyPair_lift(_ buf: RustBuffer) throws -> MldsaKeyPair {
+    return try FfiConverterTypeMLDSAKeyPair.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMLDSAKeyPair_lower(_ value: MldsaKeyPair) -> RustBuffer {
+    return FfiConverterTypeMLDSAKeyPair.lower(value)
 }
 
 
@@ -6034,6 +6173,50 @@ public func heartbeatIntervalMs(baseIntervalSec: UInt64) -> UInt64  {
     )
 })
 }
+/**
+ * Derive the hybrid public key from a hybrid private key.
+ */
+public func hybridPublicKeyFromPrivate(privateKey: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_hybrid_public_key_from_private(
+        FfiConverterSequenceUInt8.lower(privateKey),$0
+    )
+})
+}
+/**
+ * Sign a message with a hybrid private key (Ed25519 + ML-DSA-65).
+ * Returns a hybrid signature: [ed25519_sig (64)] [mldsa65_sig (3309)] = 3373 bytes.
+ */
+public func hybridSign(privateKey: [UInt8], message: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_hybrid_sign(
+        FfiConverterSequenceUInt8.lower(privateKey),
+        FfiConverterSequenceUInt8.lower(message),$0
+    )
+})
+}
+/**
+ * Generate a hybrid signature keypair (Ed25519 + ML-DSA-65).
+ * Both signatures must verify for the hybrid signature to be valid.
+ */
+public func hybridSignatureKeygen()throws  -> HybridSignatureKeyPair  {
+    return try  FfiConverterTypeHybridSignatureKeyPair_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_hybrid_signature_keygen($0
+    )
+})
+}
+/**
+ * Verify a hybrid signature. Both Ed25519 and ML-DSA-65 signatures must be valid.
+ */
+public func hybridVerify(publicKey: [UInt8], message: [UInt8], signature: [UInt8])throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_hybrid_verify(
+        FfiConverterSequenceUInt8.lower(publicKey),
+        FfiConverterSequenceUInt8.lower(message),
+        FfiConverterSequenceUInt8.lower(signature),$0
+    )
+})
+}
 public func isDummyMessage(data: [UInt8]) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_construct_core_fn_func_is_dummy_message(
@@ -6046,6 +6229,38 @@ public func jitteredIntervalMs(baseMs: UInt64, jitterMs: UInt64) -> UInt64  {
     uniffi_construct_core_fn_func_jittered_interval_ms(
         FfiConverterUInt64.lower(baseMs),
         FfiConverterUInt64.lower(jitterMs),$0
+    )
+})
+}
+/**
+ * Generate an ML-DSA-65 keypair (post-quantum signature scheme, NIST FIPS 204).
+ */
+public func mldsa65Keygen()throws  -> MldsaKeyPair  {
+    return try  FfiConverterTypeMLDSAKeyPair_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_mldsa65_keygen($0
+    )
+})
+}
+/**
+ * Sign a message with an ML-DSA-65 secret key. Returns a detached signature (3309 bytes).
+ */
+public func mldsa65Sign(secretKey: [UInt8], message: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_mldsa65_sign(
+        FfiConverterSequenceUInt8.lower(secretKey),
+        FfiConverterSequenceUInt8.lower(message),$0
+    )
+})
+}
+/**
+ * Verify an ML-DSA-65 detached signature. Returns true if valid.
+ */
+public func mldsa65Verify(publicKey: [UInt8], message: [UInt8], signature: [UInt8])throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_mldsa65_verify(
+        FfiConverterSequenceUInt8.lower(publicKey),
+        FfiConverterSequenceUInt8.lower(message),
+        FfiConverterSequenceUInt8.lower(signature),$0
     )
 })
 }
@@ -6326,10 +6541,31 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_heartbeat_interval_ms() != 51594) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_hybrid_public_key_from_private() != 18985) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_hybrid_sign() != 61982) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_hybrid_signature_keygen() != 46423) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_hybrid_verify() != 56378) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_is_dummy_message() != 41979) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_jittered_interval_ms() != 6840) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_mldsa65_keygen() != 58411) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_mldsa65_sign() != 44353) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_mldsa65_verify() != 57408) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_mlkem768_decapsulate() != 25978) {

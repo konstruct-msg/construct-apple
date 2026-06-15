@@ -224,9 +224,24 @@ class KeychainManager {
     func saveSigningKey(_ data: Data) -> Bool {
         return save(data, forKey: "signing_key", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
     }
-    
+
     func loadSigningKey() -> Data? {
         return load(forKey: "signing_key")
+    }
+
+    // Hybrid PQ identity signing private key (Ed25519 + ML-DSA-65), 2016 bytes.
+    // Local-only and never transmitted; the 1984-byte public key is derived on demand.
+    @discardableResult
+    func saveHybridSigPrivateKey(_ data: Data) -> Bool {
+        return save(data, forKey: "hybrid_sig_private_key", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+    }
+
+    func loadHybridSigPrivateKey() -> Data? {
+        return load(forKey: "hybrid_sig_private_key")
+    }
+
+    func deleteHybridSigPrivateKey() {
+        delete(forKey: "hybrid_sig_private_key")
     }
 
     // MARK: - Private Keys JSON (for Rust persistence)
@@ -310,6 +325,7 @@ class KeychainManager {
         delete(forKey: "signed_prekey")
         delete(forKey: "signing_key")
         delete(forKey: "userId")
+        deleteHybridSigPrivateKey()
         deletePrivateKeys()
         deleteAllSessions()
         Log.info("All cryptographic keys and sessions deleted", category: "Keychain")
@@ -385,9 +401,31 @@ class KeychainManager {
     
     // MARK: - Generic Data Storage (for archived sessions, etc.)
     
-    /// Save generic data to Keychain
-    func saveData(_ data: Data, forKey key: String) -> Bool {
-        return save(data, forKey: key, accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+    /// Save generic data to Keychain.
+    ///
+    /// `accessible` defaults to `WhenUnlockedThisDeviceOnly`. Crypto state that must be
+    /// persisted/loaded during background push-driven decrypt (the Double Ratchet
+    /// orchestrator state) MUST pass `AfterFirstUnlockThisDeviceOnly` — otherwise a
+    /// locked-device save fails ("Keychain write error"), the just-advanced ratchet is
+    /// lost, and the session desyncs on the next launch.
+    func saveData(_ data: Data, forKey key: String,
+                  accessible: CFString = kSecAttrAccessibleWhenUnlockedThisDeviceOnly) -> Bool {
+        return save(data, forKey: key, accessible: accessible)
+    }
+
+    /// Re-store an existing item under a new accessibility class.
+    ///
+    /// `SecItemUpdate` does NOT reliably change `kSecAttrAccessible` on an existing item,
+    /// so an item created by an older build under a stricter class (e.g. the Double Ratchet
+    /// orchestrator state under `WhenUnlockedThisDeviceOnly`) cannot be migrated by simply
+    /// saving over it — it must be removed and re-added. Call this ONLY while the device is
+    /// unlocked (foreground): a locked read returns nil and the item would be left as-is.
+    /// Returns true only when an item was actually re-added under `accessible`.
+    @discardableResult
+    func migrateAccessibility(forKey key: String, to accessible: CFString) -> Bool {
+        guard let data = loadData(forKey: key) else { return false }
+        delete(forKey: key)
+        return save(data, forKey: key, accessible: accessible)
     }
     
     /// Load generic data from Keychain

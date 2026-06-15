@@ -24,7 +24,7 @@ final class CallHistoryService {
     // MARK: - Save
 
     func record(
-        session: CallManager.CallSession,
+        session: CallSession,
         status: CTCallRecord.Status,
         startedAt: Date,
         durationSeconds: Int32

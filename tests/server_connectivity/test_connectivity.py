@@ -274,7 +274,7 @@ def test_tls_h2(host: str, port: int, timeout: float = 15.0) -> bool:
 # Layer 4: HTTP/1.1 GET (sanity check the web server)
 # ─────────────────────────────────────────────────────────────────────────────
 def test_http1(
-    host: str, port: int, path: str = "/.well-known/ice-cert", timeout: float = 10.0
+    host: str, port: int, path: str = "/.well-known/construct-server", timeout: float = 10.0
 ) -> bool:
     print(f"\n{BOLD}[4] HTTPS/1.1 GET{RESET} {path}")
     t0 = time.time()
@@ -637,7 +637,7 @@ def main():
         results["TCP connect"] = test_tcp(host, port)
         results["TLS (no ALPN)"] = test_tls_plain(host, port)
         results["TLS (h2 ALPN)"] = test_tls_h2(host, port)
-        results["HTTPS GET /.well-known/ice-cert"] = test_http1(web_host, 443)
+        results["HTTPS GET /.well-known/construct-server"] = test_http1(web_host, 443)
         results["gRPC channel ready"] = test_grpc_channel(host, port)
         results["gRPC GetPowChallenge"] = test_grpc_pow(host, port)
         results["gRPC CheckUsername"] = test_grpc_username(host, port)

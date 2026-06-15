@@ -102,6 +102,11 @@
 "pin_code_length" = "ПИН-код должен содержать 6-12 цифр";
 "pin_codes_dont_match" = "ПИН-коды не совпадают";
 "wrong_pin_code" = "Неверный ПИН-код";
+"cant_unlock" = "Не можете войти?";
+"pin_reset_title" = "Сбросить это устройство?";
+"pin_reset_explain" = "Все локальные данные будут стёрты с этого устройства. Identity можно восстановить позже по seed-фразе — только если восстановление было настроено.";
+"pin_reset_action" = "Сбросить";
+"pin_reset_countdown" = "Сброс через %d… введите ПИН, чтобы отменить";
 "lock_delay" = "Блокировать через";
 "lock_now" = "Заблокировать";
 "lock_delay_immediate" = "Немедленно";
@@ -415,6 +420,18 @@
 "veil_footer" = "VEIL защищает трафик, делая его неотличимым от обычного HTTPS. Конфигурация предоставляется сервером автоматически.";
 "veil_retry" = "Повторить подключение";
 "veil_unavailable" = "Недоступно на этом сервере";
+"veil_establishing" = "Устанавливаем veil-front туннель…";
+"veil_import_err_malformed" = "Неверный код конфигурации";
+"veil_import_err_signature" = "Недействительная подпись конфигурации";
+"veil_import_err_expired" = "Конфигурация истекла — запросите новую";
+"veil_import_err_unknown_relay" = "Конфигурация для неизвестного реле";
+"veil_config_import_ok" = "Доступ VEIL настроен";
+"veil_config_scan" = "Сканировать QR конфигурации";
+"veil_config_paste" = "Вставить код конфигурации";
+"veil_config_import" = "Импорт";
+"veil_config_section" = "ДОСТУП VEIL";
+"veil_config_active" = "Доступ настроен для %@";
+"veil_config_none" = "Доступ не настроен";
 "traffic_protection" = "Защита трафика";
 "veil_footer_short" = "VEIL маскирует трафик под обычный HTTPS. Конфигурация предоставляется автоматически.";
 
@@ -876,6 +893,7 @@
 "history_sync_offer_skip" = "Пропустить";
 "history_sync_user_mismatch" = "Ошибка переноса истории: история принадлежит другому аккаунту.";
 "call_error_not_contacts" = "Нельзя позвонить этому ноду. Убедитесь, что вы являетесь взаимными контактами.";
+"call_error_busy" = "Вы уже в звонке.";
 "call_error_peer_offline" = "Нод не в сети. Попробуйте позже.";
 
 /* Tab bar labels */

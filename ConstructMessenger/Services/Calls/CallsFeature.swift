@@ -2,7 +2,9 @@ import Foundation
 
 enum CallsFeature {
     /// Audio calls — fully implemented.
-    static var isEnabled: Bool { true }
+    static var isEnabled: Bool {
+        !PreviewDetector.isRunningInPreview
+    }
 
     /// Video calls — wiring is in place across the call-entrypoint UI and
     /// `startOutgoingCall(hasVideo:)`, but the media layer (camera capture,
@@ -11,4 +13,3 @@ enum CallsFeature {
     /// UI restructuring is needed.
     static var isVideoEnabled: Bool { false }
 }
-

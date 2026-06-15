@@ -52,7 +52,7 @@ struct DebugMetricsOverlay: View {
                 Text("CLEAR").foregroundColor(.orange.opacity(0.6))
             }
             Button(action: { isPresented = false }) {
-                Text("[x]").foregroundColor(.orange)
+                Image(systemName: "xmark.circle.fill").foregroundColor(.orange)
             }
         }
         .padding(10)

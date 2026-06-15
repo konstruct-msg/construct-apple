@@ -22,8 +22,8 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
 }
 
 /// MLSContentType - Type of application content
-enum Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf.Enum, Swift.CaseIterable {
-  typealias RawValue = Int
+public enum Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
 
   /// Unspecified content (must be 0)
   case unspecified // = 0
@@ -41,11 +41,11 @@ enum Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf.Enum, Swift.CaseIte
   case custom // = 10
   case UNRECOGNIZED(Int)
 
-  init() {
+  public init() {
     self = .unspecified
   }
 
-  init?(rawValue: Int) {
+  public init?(rawValue: Int) {
     switch rawValue {
     case 0: self = .unspecified
     case 1: self = .message
@@ -56,7 +56,7 @@ enum Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf.Enum, Swift.CaseIte
     }
   }
 
-  var rawValue: Int {
+  public var rawValue: Int {
     switch self {
     case .unspecified: return 0
     case .message: return 1
@@ -68,7 +68,7 @@ enum Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf.Enum, Swift.CaseIte
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  static let allCases: [Shared_Proto_Messaging_V1_MLSContentType] = [
+  public static let allCases: [Shared_Proto_Messaging_V1_MLSContentType] = [
     .unspecified,
     .message,
     .receipt,
@@ -79,8 +79,8 @@ enum Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf.Enum, Swift.CaseIte
 }
 
 /// MLSProposalType - Type of group change proposal
-enum Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf.Enum, Swift.CaseIterable {
-  typealias RawValue = Int
+public enum Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
 
   /// Unspecified proposal (must be 0)
   case unspecified // = 0
@@ -107,11 +107,11 @@ enum Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf.Enum, Swift.CaseIt
   case extensions // = 7
   case UNRECOGNIZED(Int)
 
-  init() {
+  public init() {
     self = .unspecified
   }
 
-  init?(rawValue: Int) {
+  public init?(rawValue: Int) {
     switch rawValue {
     case 0: self = .unspecified
     case 1: self = .add
@@ -125,7 +125,7 @@ enum Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf.Enum, Swift.CaseIt
     }
   }
 
-  var rawValue: Int {
+  public var rawValue: Int {
     switch self {
     case .unspecified: return 0
     case .add: return 1
@@ -140,7 +140,7 @@ enum Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf.Enum, Swift.CaseIt
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  static let allCases: [Shared_Proto_Messaging_V1_MLSProposalType] = [
+  public static let allCases: [Shared_Proto_Messaging_V1_MLSProposalType] = [
     .unspecified,
     .add,
     .remove,
@@ -154,8 +154,8 @@ enum Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf.Enum, Swift.CaseIt
 }
 
 /// MLSCipherSuite - Supported MLS cipher suites
-enum Shared_Proto_Messaging_V1_MLSCipherSuite: SwiftProtobuf.Enum, Swift.CaseIterable {
-  typealias RawValue = Int
+public enum Shared_Proto_Messaging_V1_MLSCipherSuite: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
 
   /// Unspecified cipher suite (must be 0)
   case unspecified // = 0
@@ -171,11 +171,11 @@ enum Shared_Proto_Messaging_V1_MLSCipherSuite: SwiftProtobuf.Enum, Swift.CaseIte
   case mlsCipherSuite256X448Aes256 // = 10
   case UNRECOGNIZED(Int)
 
-  init() {
+  public init() {
     self = .unspecified
   }
 
-  init?(rawValue: Int) {
+  public init?(rawValue: Int) {
     switch rawValue {
     case 0: self = .unspecified
     case 1: self = .mlsCipherSuite128X25519Aes128
@@ -185,7 +185,7 @@ enum Shared_Proto_Messaging_V1_MLSCipherSuite: SwiftProtobuf.Enum, Swift.CaseIte
     }
   }
 
-  var rawValue: Int {
+  public var rawValue: Int {
     switch self {
     case .unspecified: return 0
     case .mlsCipherSuite128X25519Aes128: return 1
@@ -196,7 +196,7 @@ enum Shared_Proto_Messaging_V1_MLSCipherSuite: SwiftProtobuf.Enum, Swift.CaseIte
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  static let allCases: [Shared_Proto_Messaging_V1_MLSCipherSuite] = [
+  public static let allCases: [Shared_Proto_Messaging_V1_MLSCipherSuite] = [
     .unspecified,
     .mlsCipherSuite128X25519Aes128,
     .mlsCipherSuite128X25519Chacha20,
@@ -206,16 +206,16 @@ enum Shared_Proto_Messaging_V1_MLSCipherSuite: SwiftProtobuf.Enum, Swift.CaseIte
 }
 
 /// MLSMessage - Top-level MLS message wrapper
-struct Shared_Proto_Messaging_V1_MLSMessage: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Message type (determines which field is populated)
-  var message: Shared_Proto_Messaging_V1_MLSMessage.OneOf_Message? = nil
+  public var message: Shared_Proto_Messaging_V1_MLSMessage.OneOf_Message? = nil
 
   /// Application message (encrypted group message)
-  var application: Shared_Proto_Messaging_V1_MLSApplicationMessage {
+  public var application: Shared_Proto_Messaging_V1_MLSApplicationMessage {
     get {
       if case .application(let v)? = message {return v}
       return Shared_Proto_Messaging_V1_MLSApplicationMessage()
@@ -224,7 +224,7 @@ struct Shared_Proto_Messaging_V1_MLSMessage: Sendable {
   }
 
   /// Proposal message (suggest group change)
-  var proposal: Shared_Proto_Messaging_V1_MLSProposal {
+  public var proposal: Shared_Proto_Messaging_V1_MLSProposal {
     get {
       if case .proposal(let v)? = message {return v}
       return Shared_Proto_Messaging_V1_MLSProposal()
@@ -233,7 +233,7 @@ struct Shared_Proto_Messaging_V1_MLSMessage: Sendable {
   }
 
   /// Commit message (apply group changes)
-  var commit: Shared_Proto_Messaging_V1_MLSCommit {
+  public var commit: Shared_Proto_Messaging_V1_MLSCommit {
     get {
       if case .commit(let v)? = message {return v}
       return Shared_Proto_Messaging_V1_MLSCommit()
@@ -242,7 +242,7 @@ struct Shared_Proto_Messaging_V1_MLSMessage: Sendable {
   }
 
   /// Welcome message (invite new member)
-  var welcome: Shared_Proto_Messaging_V1_MLSWelcome {
+  public var welcome: Shared_Proto_Messaging_V1_MLSWelcome {
     get {
       if case .welcome(let v)? = message {return v}
       return Shared_Proto_Messaging_V1_MLSWelcome()
@@ -251,7 +251,7 @@ struct Shared_Proto_Messaging_V1_MLSMessage: Sendable {
   }
 
   /// Key package (member's public keys)
-  var keyPackage: Shared_Proto_Messaging_V1_MLSKeyPackage {
+  public var keyPackage: Shared_Proto_Messaging_V1_MLSKeyPackage {
     get {
       if case .keyPackage(let v)? = message {return v}
       return Shared_Proto_Messaging_V1_MLSKeyPackage()
@@ -260,7 +260,7 @@ struct Shared_Proto_Messaging_V1_MLSMessage: Sendable {
   }
 
   /// Group info (public group metadata)
-  var groupInfo: Shared_Proto_Messaging_V1_MLSGroupInfo {
+  public var groupInfo: Shared_Proto_Messaging_V1_MLSGroupInfo {
     get {
       if case .groupInfo(let v)? = message {return v}
       return Shared_Proto_Messaging_V1_MLSGroupInfo()
@@ -268,10 +268,10 @@ struct Shared_Proto_Messaging_V1_MLSMessage: Sendable {
     set {message = .groupInfo(newValue)}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Message type (determines which field is populated)
-  enum OneOf_Message: Equatable, Sendable {
+  public enum OneOf_Message: Equatable, Sendable {
     /// Application message (encrypted group message)
     case application(Shared_Proto_Messaging_V1_MLSApplicationMessage)
     /// Proposal message (suggest group change)
@@ -287,63 +287,63 @@ struct Shared_Proto_Messaging_V1_MLSMessage: Sendable {
 
   }
 
-  init() {}
+  public init() {}
 }
 
 /// MLSApplicationMessage - Encrypted group message
-struct Shared_Proto_Messaging_V1_MLSApplicationMessage: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSApplicationMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Group ID (unique group identifier)
-  var groupID: Data = Data()
+  public var groupID: Data = Data()
 
   /// Epoch (increments on membership changes)
-  var epoch: UInt64 = 0
+  public var epoch: UInt64 = 0
 
   /// Content type (what's inside encrypted_content)
-  var contentType: Shared_Proto_Messaging_V1_MLSContentType = .unspecified
+  public var contentType: Shared_Proto_Messaging_V1_MLSContentType = .unspecified
 
   /// Encrypted application data
   /// Decrypts to MessageContent proto
-  var encryptedContent: Data = Data()
+  public var encryptedContent: Data = Data()
 
   /// Authenticated data (not encrypted, but authenticated)
   /// Can contain: message_id, timestamp, etc.
-  var authenticatedData: Data {
+  public var authenticatedData: Data {
     get {_authenticatedData ?? Data()}
     set {_authenticatedData = newValue}
   }
   /// Returns true if `authenticatedData` has been explicitly set.
-  var hasAuthenticatedData: Bool {self._authenticatedData != nil}
+  public var hasAuthenticatedData: Bool {self._authenticatedData != nil}
   /// Clears the value of `authenticatedData`. Subsequent reads from it will return its default value.
-  mutating func clearAuthenticatedData() {self._authenticatedData = nil}
+  public mutating func clearAuthenticatedData() {self._authenticatedData = nil}
 
   /// Sender (leaf index in group tree)
-  var sender: UInt32 = 0
+  public var sender: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _authenticatedData: Data? = nil
 }
 
 /// MLSProposal - Propose group membership change
-struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Proposal type (determines which field is populated)
-  var type: Shared_Proto_Messaging_V1_MLSProposalType = .unspecified
+  public var type: Shared_Proto_Messaging_V1_MLSProposalType = .unspecified
 
   /// Specific proposal data
-  var proposal: Shared_Proto_Messaging_V1_MLSProposal.OneOf_Proposal? = nil
+  public var proposal: Shared_Proto_Messaging_V1_MLSProposal.OneOf_Proposal? = nil
 
   /// Add new member to group
-  var add: Shared_Proto_Messaging_V1_MLSAddProposal {
+  public var add: Shared_Proto_Messaging_V1_MLSAddProposal {
     get {
       if case .add(let v)? = proposal {return v}
       return Shared_Proto_Messaging_V1_MLSAddProposal()
@@ -352,7 +352,7 @@ struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
   }
 
   /// Remove member from group
-  var remove: Shared_Proto_Messaging_V1_MLSRemoveProposal {
+  public var remove: Shared_Proto_Messaging_V1_MLSRemoveProposal {
     get {
       if case .remove(let v)? = proposal {return v}
       return Shared_Proto_Messaging_V1_MLSRemoveProposal()
@@ -361,7 +361,7 @@ struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
   }
 
   /// Update own leaf key package
-  var update: Shared_Proto_Messaging_V1_MLSUpdateProposal {
+  public var update: Shared_Proto_Messaging_V1_MLSUpdateProposal {
     get {
       if case .update(let v)? = proposal {return v}
       return Shared_Proto_Messaging_V1_MLSUpdateProposal()
@@ -370,7 +370,7 @@ struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
   }
 
   /// Pre-shared key (PSK) proposal
-  var psk: Shared_Proto_Messaging_V1_MLSPSKProposal {
+  public var psk: Shared_Proto_Messaging_V1_MLSPSKProposal {
     get {
       if case .psk(let v)? = proposal {return v}
       return Shared_Proto_Messaging_V1_MLSPSKProposal()
@@ -379,7 +379,7 @@ struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
   }
 
   /// Re-initialize group (change cipher suite)
-  var reinit: Shared_Proto_Messaging_V1_MLSReinitProposal {
+  public var reinit: Shared_Proto_Messaging_V1_MLSReinitProposal {
     get {
       if case .reinit(let v)? = proposal {return v}
       return Shared_Proto_Messaging_V1_MLSReinitProposal()
@@ -388,7 +388,7 @@ struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
   }
 
   /// External init (join via external commit)
-  var externalInit: Shared_Proto_Messaging_V1_MLSExternalInitProposal {
+  public var externalInit: Shared_Proto_Messaging_V1_MLSExternalInitProposal {
     get {
       if case .externalInit(let v)? = proposal {return v}
       return Shared_Proto_Messaging_V1_MLSExternalInitProposal()
@@ -397,7 +397,7 @@ struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
   }
 
   /// Group context extensions
-  var extensions: Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal {
+  public var extensions: Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal {
     get {
       if case .extensions(let v)? = proposal {return v}
       return Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal()
@@ -405,10 +405,10 @@ struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
     set {proposal = .extensions(newValue)}
   }
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Specific proposal data
-  enum OneOf_Proposal: Equatable, Sendable {
+  public enum OneOf_Proposal: Equatable, Sendable {
     /// Add new member to group
     case add(Shared_Proto_Messaging_V1_MLSAddProposal)
     /// Remove member from group
@@ -426,280 +426,280 @@ struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
 
   }
 
-  init() {}
+  public init() {}
 }
 
 /// MLSAddProposal - Add new member to group
-struct Shared_Proto_Messaging_V1_MLSAddProposal: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSAddProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// New member's key package
-  var keyPackage: Data = Data()
+  public var keyPackage: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 /// MLSRemoveProposal - Remove member from group
-struct Shared_Proto_Messaging_V1_MLSRemoveProposal: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSRemoveProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Removed member's leaf index
-  var removed: UInt32 = 0
+  public var removed: UInt32 = 0
 
   /// Reason for removal (optional)
-  var reason: String {
+  public var reason: String {
     get {_reason ?? String()}
     set {_reason = newValue}
   }
   /// Returns true if `reason` has been explicitly set.
-  var hasReason: Bool {self._reason != nil}
+  public var hasReason: Bool {self._reason != nil}
   /// Clears the value of `reason`. Subsequent reads from it will return its default value.
-  mutating func clearReason() {self._reason = nil}
+  public mutating func clearReason() {self._reason = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _reason: String? = nil
 }
 
 /// MLSUpdateProposal - Update own key package
-struct Shared_Proto_Messaging_V1_MLSUpdateProposal: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSUpdateProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// New leaf key package
-  var keyPackage: Data = Data()
+  public var keyPackage: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 /// MLSPSKProposal - Pre-shared key proposal
-struct Shared_Proto_Messaging_V1_MLSPSKProposal: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSPSKProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// PSK ID
-  var pskID: Data = Data()
+  public var pskID: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 /// MLSReinitProposal - Re-initialize group with new parameters
-struct Shared_Proto_Messaging_V1_MLSReinitProposal: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSReinitProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// New group ID
-  var groupID: Data = Data()
+  public var groupID: Data = Data()
 
   /// New protocol version
-  var version: UInt32 = 0
+  public var version: UInt32 = 0
 
   /// New cipher suite
-  var cipherSuite: UInt32 = 0
+  public var cipherSuite: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 /// MLSExternalInitProposal - External join proposal
-struct Shared_Proto_Messaging_V1_MLSExternalInitProposal: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSExternalInitProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// KEM output (key encapsulation)
-  var kemOutput: Data = Data()
+  public var kemOutput: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 /// MLSGroupContextExtensionsProposal - Update group extensions
-struct Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// New extensions (opaque MLS extension data)
-  var extensions: Data = Data()
+  public var extensions: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 /// MLSCommit - Apply proposals to group state
-struct Shared_Proto_Messaging_V1_MLSCommit: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSCommit: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// MLS Commit message (binary MLS format)
   /// Contains: proposals, path secrets, confirmation tag
-  var commit: Data = Data()
+  public var commit: Data = Data()
 
   /// Group ID
-  var groupID: Data = Data()
+  public var groupID: Data = Data()
 
   /// Old epoch (before commit)
-  var oldEpoch: UInt64 = 0
+  public var oldEpoch: UInt64 = 0
 
   /// New epoch (after commit)
-  var newEpoch: UInt64 = 0
+  public var newEpoch: UInt64 = 0
 
   /// Proposals included in this commit
   /// References to proposal messages by hash
-  var proposals: [Shared_Proto_Messaging_V1_MLSProposal] = []
+  public var proposals: [Shared_Proto_Messaging_V1_MLSProposal] = []
 
   /// CRITICAL: Requires immediate processing?
   /// Set to true for critical updates (member removal, re-init)
   /// Clients should process these before queued messages
-  var requiresImmediateProcessing: Bool = false
+  public var requiresImmediateProcessing: Bool = false
 
   /// Reason for critical flag (if set)
   /// Examples: "member_removed", "group_reinit", "security_update"
-  var criticalReason: String {
+  public var criticalReason: String {
     get {_criticalReason ?? String()}
     set {_criticalReason = newValue}
   }
   /// Returns true if `criticalReason` has been explicitly set.
-  var hasCriticalReason: Bool {self._criticalReason != nil}
+  public var hasCriticalReason: Bool {self._criticalReason != nil}
   /// Clears the value of `criticalReason`. Subsequent reads from it will return its default value.
-  mutating func clearCriticalReason() {self._criticalReason = nil}
+  public mutating func clearCriticalReason() {self._criticalReason = nil}
 
   /// Confirmation tag (MAC of group state)
   /// Proves all members have same group state
-  var confirmationTag: Data = Data()
+  public var confirmationTag: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _criticalReason: String? = nil
 }
 
 /// MLSWelcome - Invite new member to group
-struct Shared_Proto_Messaging_V1_MLSWelcome: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSWelcome: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// MLS Welcome message (binary MLS format)
   /// Contains: encrypted group secrets, ratchet tree
-  var welcome: Data = Data()
+  public var welcome: Data = Data()
 
   /// Group ID
-  var groupID: Data = Data()
+  public var groupID: Data = Data()
 
   /// Current epoch
-  var epoch: UInt64 = 0
+  public var epoch: UInt64 = 0
 
   /// Encrypted group info
   /// Decrypts to group metadata (members, capabilities, etc.)
-  var encryptedGroupInfo: Data = Data()
+  public var encryptedGroupInfo: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 /// MLSKeyPackage - Member's public key package
-struct Shared_Proto_Messaging_V1_MLSKeyPackage: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSKeyPackage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// MLS KeyPackage (binary MLS format)
   /// Contains: identity, credentials, init key, signature
-  var keyPackage: Data = Data()
+  public var keyPackage: Data = Data()
 
   /// User ID
-  var userID: String = String()
+  public var userID: String = String()
 
   /// Device ID
-  var deviceID: String = String()
+  public var deviceID: String = String()
 
   /// Cipher suite
-  var cipherSuite: UInt32 = 0
+  public var cipherSuite: UInt32 = 0
 
   /// Creation timestamp
-  var createdAt: Int64 = 0
+  public var createdAt: Int64 = 0
 
   /// Expiration timestamp
-  var expiresAt: Int64 = 0
+  public var expiresAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 /// MLSGroupInfo - Public group metadata
-struct Shared_Proto_Messaging_V1_MLSGroupInfo: Sendable {
+public struct Shared_Proto_Messaging_V1_MLSGroupInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// MLS GroupInfo (binary MLS format)
   /// Contains: group ID, epoch, ratchet tree, extensions
-  var groupInfo: Data = Data()
+  public var groupInfo: Data = Data()
 
   /// Group ID
-  var groupID: Data = Data()
+  public var groupID: Data = Data()
 
   /// Current epoch
-  var epoch: UInt64 = 0
+  public var epoch: UInt64 = 0
 
   /// Group size (member count)
-  var size: UInt32 = 0
+  public var size: UInt32 = 0
 
   /// Cipher suite
-  var cipherSuite: UInt32 = 0
+  public var cipherSuite: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 /// GroupMessageId - Unique message ID for group messages
 /// Prevents ID conflicts in multi-sender groups
-struct Shared_Proto_Messaging_V1_GroupMessageId: Sendable {
+public struct Shared_Proto_Messaging_V1_GroupMessageId: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Group ID
-  var groupID: Data = Data()
+  public var groupID: Data = Data()
 
   /// MLS epoch (increments on membership changes)
-  var epoch: UInt64 = 0
+  public var epoch: UInt64 = 0
 
   /// Sender index in group roster (leaf index)
-  var senderIndex: UInt32 = 0
+  public var senderIndex: UInt32 = 0
 
   /// Generation number (sequential per sender in epoch)
   /// Sender's message counter within current epoch
-  var generation: UInt64 = 0
+  public var generation: UInt64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -707,22 +707,22 @@ struct Shared_Proto_Messaging_V1_GroupMessageId: Sendable {
 fileprivate let _protobuf_package = "shared.proto.messaging.v1"
 
 extension Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MLS_CONTENT_TYPE_UNSPECIFIED\0\u{1}MLS_CONTENT_TYPE_MESSAGE\0\u{1}MLS_CONTENT_TYPE_RECEIPT\0\u{1}MLS_CONTENT_TYPE_REACTION\0\u{2}\u{7}MLS_CONTENT_TYPE_CUSTOM\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MLS_CONTENT_TYPE_UNSPECIFIED\0\u{1}MLS_CONTENT_TYPE_MESSAGE\0\u{1}MLS_CONTENT_TYPE_RECEIPT\0\u{1}MLS_CONTENT_TYPE_REACTION\0\u{2}\u{7}MLS_CONTENT_TYPE_CUSTOM\0")
 }
 
 extension Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MLS_PROPOSAL_TYPE_UNSPECIFIED\0\u{1}MLS_PROPOSAL_TYPE_ADD\0\u{1}MLS_PROPOSAL_TYPE_REMOVE\0\u{1}MLS_PROPOSAL_TYPE_UPDATE\0\u{1}MLS_PROPOSAL_TYPE_PSK\0\u{1}MLS_PROPOSAL_TYPE_REINIT\0\u{1}MLS_PROPOSAL_TYPE_EXTERNAL_INIT\0\u{1}MLS_PROPOSAL_TYPE_EXTENSIONS\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MLS_PROPOSAL_TYPE_UNSPECIFIED\0\u{1}MLS_PROPOSAL_TYPE_ADD\0\u{1}MLS_PROPOSAL_TYPE_REMOVE\0\u{1}MLS_PROPOSAL_TYPE_UPDATE\0\u{1}MLS_PROPOSAL_TYPE_PSK\0\u{1}MLS_PROPOSAL_TYPE_REINIT\0\u{1}MLS_PROPOSAL_TYPE_EXTERNAL_INIT\0\u{1}MLS_PROPOSAL_TYPE_EXTENSIONS\0")
 }
 
 extension Shared_Proto_Messaging_V1_MLSCipherSuite: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MLS_CIPHER_SUITE_UNSPECIFIED\0\u{1}MLS_CIPHER_SUITE_128_X25519_AES128\0\u{1}MLS_CIPHER_SUITE_128_X25519_CHACHA20\0\u{2}\u{8}MLS_CIPHER_SUITE_256_X448_AES256\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MLS_CIPHER_SUITE_UNSPECIFIED\0\u{1}MLS_CIPHER_SUITE_128_X25519_AES128\0\u{1}MLS_CIPHER_SUITE_128_X25519_CHACHA20\0\u{2}\u{8}MLS_CIPHER_SUITE_256_X448_AES256\0")
 }
 
 extension Shared_Proto_Messaging_V1_MLSMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSMessage"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}application\0\u{1}proposal\0\u{1}commit\0\u{1}welcome\0\u{3}key_package\0\u{3}group_info\0\u{c}\u{7}\u{e}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSMessage"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}application\0\u{1}proposal\0\u{1}commit\0\u{1}welcome\0\u{3}key_package\0\u{3}group_info\0\u{c}\u{7}\u{e}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -811,7 +811,7 @@ extension Shared_Proto_Messaging_V1_MLSMessage: SwiftProtobuf.Message, SwiftProt
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -846,7 +846,7 @@ extension Shared_Proto_Messaging_V1_MLSMessage: SwiftProtobuf.Message, SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSMessage, rhs: Shared_Proto_Messaging_V1_MLSMessage) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSMessage, rhs: Shared_Proto_Messaging_V1_MLSMessage) -> Bool {
     if lhs.message != rhs.message {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -854,10 +854,10 @@ extension Shared_Proto_Messaging_V1_MLSMessage: SwiftProtobuf.Message, SwiftProt
 }
 
 extension Shared_Proto_Messaging_V1_MLSApplicationMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSApplicationMessage"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}content_type\0\u{3}encrypted_content\0\u{3}authenticated_data\0\u{1}sender\0\u{c}\u{7}\u{9}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSApplicationMessage"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}content_type\0\u{3}encrypted_content\0\u{3}authenticated_data\0\u{1}sender\0\u{c}\u{7}\u{9}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -874,7 +874,7 @@ extension Shared_Proto_Messaging_V1_MLSApplicationMessage: SwiftProtobuf.Message
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -900,7 +900,7 @@ extension Shared_Proto_Messaging_V1_MLSApplicationMessage: SwiftProtobuf.Message
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSApplicationMessage, rhs: Shared_Proto_Messaging_V1_MLSApplicationMessage) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSApplicationMessage, rhs: Shared_Proto_Messaging_V1_MLSApplicationMessage) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.epoch != rhs.epoch {return false}
     if lhs.contentType != rhs.contentType {return false}
@@ -913,10 +913,10 @@ extension Shared_Proto_Messaging_V1_MLSApplicationMessage: SwiftProtobuf.Message
 }
 
 extension Shared_Proto_Messaging_V1_MLSProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSProposal"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}add\0\u{1}remove\0\u{1}update\0\u{1}psk\0\u{1}reinit\0\u{3}external_init\0\u{1}extensions\0\u{c}\u{9}\u{c}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSProposal"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}add\0\u{1}remove\0\u{1}update\0\u{1}psk\0\u{1}reinit\0\u{3}external_init\0\u{1}extensions\0\u{c}\u{9}\u{c}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1019,7 +1019,7 @@ extension Shared_Proto_Messaging_V1_MLSProposal: SwiftProtobuf.Message, SwiftPro
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -1061,7 +1061,7 @@ extension Shared_Proto_Messaging_V1_MLSProposal: SwiftProtobuf.Message, SwiftPro
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSProposal, rhs: Shared_Proto_Messaging_V1_MLSProposal) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSProposal, rhs: Shared_Proto_Messaging_V1_MLSProposal) -> Bool {
     if lhs.type != rhs.type {return false}
     if lhs.proposal != rhs.proposal {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1070,10 +1070,10 @@ extension Shared_Proto_Messaging_V1_MLSProposal: SwiftProtobuf.Message, SwiftPro
 }
 
 extension Shared_Proto_Messaging_V1_MLSAddProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSAddProposal"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_package\0\u{c}\u{2}\u{9}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSAddProposal"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_package\0\u{c}\u{2}\u{9}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1085,14 +1085,14 @@ extension Shared_Proto_Messaging_V1_MLSAddProposal: SwiftProtobuf.Message, Swift
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.keyPackage.isEmpty {
       try visitor.visitSingularBytesField(value: self.keyPackage, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSAddProposal, rhs: Shared_Proto_Messaging_V1_MLSAddProposal) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSAddProposal, rhs: Shared_Proto_Messaging_V1_MLSAddProposal) -> Bool {
     if lhs.keyPackage != rhs.keyPackage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1100,10 +1100,10 @@ extension Shared_Proto_Messaging_V1_MLSAddProposal: SwiftProtobuf.Message, Swift
 }
 
 extension Shared_Proto_Messaging_V1_MLSRemoveProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSRemoveProposal"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}removed\0\u{1}reason\0\u{c}\u{3}\u{8}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSRemoveProposal"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}removed\0\u{1}reason\0\u{c}\u{3}\u{8}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1116,7 +1116,7 @@ extension Shared_Proto_Messaging_V1_MLSRemoveProposal: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -1130,7 +1130,7 @@ extension Shared_Proto_Messaging_V1_MLSRemoveProposal: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSRemoveProposal, rhs: Shared_Proto_Messaging_V1_MLSRemoveProposal) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSRemoveProposal, rhs: Shared_Proto_Messaging_V1_MLSRemoveProposal) -> Bool {
     if lhs.removed != rhs.removed {return false}
     if lhs._reason != rhs._reason {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1139,10 +1139,10 @@ extension Shared_Proto_Messaging_V1_MLSRemoveProposal: SwiftProtobuf.Message, Sw
 }
 
 extension Shared_Proto_Messaging_V1_MLSUpdateProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSUpdateProposal"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_package\0\u{c}\u{2}\u{9}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSUpdateProposal"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_package\0\u{c}\u{2}\u{9}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1154,14 +1154,14 @@ extension Shared_Proto_Messaging_V1_MLSUpdateProposal: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.keyPackage.isEmpty {
       try visitor.visitSingularBytesField(value: self.keyPackage, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSUpdateProposal, rhs: Shared_Proto_Messaging_V1_MLSUpdateProposal) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSUpdateProposal, rhs: Shared_Proto_Messaging_V1_MLSUpdateProposal) -> Bool {
     if lhs.keyPackage != rhs.keyPackage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1169,10 +1169,10 @@ extension Shared_Proto_Messaging_V1_MLSUpdateProposal: SwiftProtobuf.Message, Sw
 }
 
 extension Shared_Proto_Messaging_V1_MLSPSKProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSPSKProposal"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}psk_id\0\u{c}\u{2}\u{9}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSPSKProposal"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}psk_id\0\u{c}\u{2}\u{9}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1184,14 +1184,14 @@ extension Shared_Proto_Messaging_V1_MLSPSKProposal: SwiftProtobuf.Message, Swift
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.pskID.isEmpty {
       try visitor.visitSingularBytesField(value: self.pskID, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSPSKProposal, rhs: Shared_Proto_Messaging_V1_MLSPSKProposal) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSPSKProposal, rhs: Shared_Proto_Messaging_V1_MLSPSKProposal) -> Bool {
     if lhs.pskID != rhs.pskID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1199,10 +1199,10 @@ extension Shared_Proto_Messaging_V1_MLSPSKProposal: SwiftProtobuf.Message, Swift
 }
 
 extension Shared_Proto_Messaging_V1_MLSReinitProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSReinitProposal"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}version\0\u{3}cipher_suite\0\u{c}\u{4}\u{7}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSReinitProposal"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}version\0\u{3}cipher_suite\0\u{c}\u{4}\u{7}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1216,7 +1216,7 @@ extension Shared_Proto_Messaging_V1_MLSReinitProposal: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularBytesField(value: self.groupID, fieldNumber: 1)
     }
@@ -1229,7 +1229,7 @@ extension Shared_Proto_Messaging_V1_MLSReinitProposal: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSReinitProposal, rhs: Shared_Proto_Messaging_V1_MLSReinitProposal) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSReinitProposal, rhs: Shared_Proto_Messaging_V1_MLSReinitProposal) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.version != rhs.version {return false}
     if lhs.cipherSuite != rhs.cipherSuite {return false}
@@ -1239,10 +1239,10 @@ extension Shared_Proto_Messaging_V1_MLSReinitProposal: SwiftProtobuf.Message, Sw
 }
 
 extension Shared_Proto_Messaging_V1_MLSExternalInitProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSExternalInitProposal"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}kem_output\0\u{c}\u{2}\u{9}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSExternalInitProposal"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}kem_output\0\u{c}\u{2}\u{9}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1254,14 +1254,14 @@ extension Shared_Proto_Messaging_V1_MLSExternalInitProposal: SwiftProtobuf.Messa
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.kemOutput.isEmpty {
       try visitor.visitSingularBytesField(value: self.kemOutput, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSExternalInitProposal, rhs: Shared_Proto_Messaging_V1_MLSExternalInitProposal) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSExternalInitProposal, rhs: Shared_Proto_Messaging_V1_MLSExternalInitProposal) -> Bool {
     if lhs.kemOutput != rhs.kemOutput {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1269,10 +1269,10 @@ extension Shared_Proto_Messaging_V1_MLSExternalInitProposal: SwiftProtobuf.Messa
 }
 
 extension Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSGroupContextExtensionsProposal"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}extensions\0\u{c}\u{2}\u{9}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSGroupContextExtensionsProposal"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}extensions\0\u{c}\u{2}\u{9}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1284,14 +1284,14 @@ extension Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal: SwiftProt
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.extensions.isEmpty {
       try visitor.visitSingularBytesField(value: self.extensions, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal, rhs: Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal, rhs: Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal) -> Bool {
     if lhs.extensions != rhs.extensions {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1299,10 +1299,10 @@ extension Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal: SwiftProt
 }
 
 extension Shared_Proto_Messaging_V1_MLSCommit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSCommit"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}commit\0\u{3}group_id\0\u{3}old_epoch\0\u{3}new_epoch\0\u{1}proposals\0\u{3}requires_immediate_processing\0\u{3}critical_reason\0\u{3}confirmation_tag\0\u{c}\u{9}\u{c}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSCommit"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}commit\0\u{3}group_id\0\u{3}old_epoch\0\u{3}new_epoch\0\u{1}proposals\0\u{3}requires_immediate_processing\0\u{3}critical_reason\0\u{3}confirmation_tag\0\u{c}\u{9}\u{c}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1321,7 +1321,7 @@ extension Shared_Proto_Messaging_V1_MLSCommit: SwiftProtobuf.Message, SwiftProto
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -1353,7 +1353,7 @@ extension Shared_Proto_Messaging_V1_MLSCommit: SwiftProtobuf.Message, SwiftProto
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSCommit, rhs: Shared_Proto_Messaging_V1_MLSCommit) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSCommit, rhs: Shared_Proto_Messaging_V1_MLSCommit) -> Bool {
     if lhs.commit != rhs.commit {return false}
     if lhs.groupID != rhs.groupID {return false}
     if lhs.oldEpoch != rhs.oldEpoch {return false}
@@ -1368,10 +1368,10 @@ extension Shared_Proto_Messaging_V1_MLSCommit: SwiftProtobuf.Message, SwiftProto
 }
 
 extension Shared_Proto_Messaging_V1_MLSWelcome: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSWelcome"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}welcome\0\u{3}group_id\0\u{1}epoch\0\u{3}encrypted_group_info\0\u{c}\u{5}\u{b}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSWelcome"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}welcome\0\u{3}group_id\0\u{1}epoch\0\u{3}encrypted_group_info\0\u{c}\u{5}\u{b}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1386,7 +1386,7 @@ extension Shared_Proto_Messaging_V1_MLSWelcome: SwiftProtobuf.Message, SwiftProt
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.welcome.isEmpty {
       try visitor.visitSingularBytesField(value: self.welcome, fieldNumber: 1)
     }
@@ -1402,7 +1402,7 @@ extension Shared_Proto_Messaging_V1_MLSWelcome: SwiftProtobuf.Message, SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSWelcome, rhs: Shared_Proto_Messaging_V1_MLSWelcome) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSWelcome, rhs: Shared_Proto_Messaging_V1_MLSWelcome) -> Bool {
     if lhs.welcome != rhs.welcome {return false}
     if lhs.groupID != rhs.groupID {return false}
     if lhs.epoch != rhs.epoch {return false}
@@ -1413,10 +1413,10 @@ extension Shared_Proto_Messaging_V1_MLSWelcome: SwiftProtobuf.Message, SwiftProt
 }
 
 extension Shared_Proto_Messaging_V1_MLSKeyPackage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSKeyPackage"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_package\0\u{3}user_id\0\u{3}device_id\0\u{3}cipher_suite\0\u{3}created_at\0\u{3}expires_at\0\u{c}\u{7}\u{9}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSKeyPackage"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_package\0\u{3}user_id\0\u{3}device_id\0\u{3}cipher_suite\0\u{3}created_at\0\u{3}expires_at\0\u{c}\u{7}\u{9}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1433,7 +1433,7 @@ extension Shared_Proto_Messaging_V1_MLSKeyPackage: SwiftProtobuf.Message, SwiftP
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.keyPackage.isEmpty {
       try visitor.visitSingularBytesField(value: self.keyPackage, fieldNumber: 1)
     }
@@ -1455,7 +1455,7 @@ extension Shared_Proto_Messaging_V1_MLSKeyPackage: SwiftProtobuf.Message, SwiftP
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSKeyPackage, rhs: Shared_Proto_Messaging_V1_MLSKeyPackage) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSKeyPackage, rhs: Shared_Proto_Messaging_V1_MLSKeyPackage) -> Bool {
     if lhs.keyPackage != rhs.keyPackage {return false}
     if lhs.userID != rhs.userID {return false}
     if lhs.deviceID != rhs.deviceID {return false}
@@ -1468,10 +1468,10 @@ extension Shared_Proto_Messaging_V1_MLSKeyPackage: SwiftProtobuf.Message, SwiftP
 }
 
 extension Shared_Proto_Messaging_V1_MLSGroupInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".MLSGroupInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_info\0\u{3}group_id\0\u{1}epoch\0\u{1}size\0\u{3}cipher_suite\0\u{c}\u{6}\u{a}")
+  public static let protoMessageName: String = _protobuf_package + ".MLSGroupInfo"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_info\0\u{3}group_id\0\u{1}epoch\0\u{1}size\0\u{3}cipher_suite\0\u{c}\u{6}\u{a}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1487,7 +1487,7 @@ extension Shared_Proto_Messaging_V1_MLSGroupInfo: SwiftProtobuf.Message, SwiftPr
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupInfo.isEmpty {
       try visitor.visitSingularBytesField(value: self.groupInfo, fieldNumber: 1)
     }
@@ -1506,7 +1506,7 @@ extension Shared_Proto_Messaging_V1_MLSGroupInfo: SwiftProtobuf.Message, SwiftPr
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_MLSGroupInfo, rhs: Shared_Proto_Messaging_V1_MLSGroupInfo) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MLSGroupInfo, rhs: Shared_Proto_Messaging_V1_MLSGroupInfo) -> Bool {
     if lhs.groupInfo != rhs.groupInfo {return false}
     if lhs.groupID != rhs.groupID {return false}
     if lhs.epoch != rhs.epoch {return false}
@@ -1518,10 +1518,10 @@ extension Shared_Proto_Messaging_V1_MLSGroupInfo: SwiftProtobuf.Message, SwiftPr
 }
 
 extension Shared_Proto_Messaging_V1_GroupMessageId: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GroupMessageId"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}sender_index\0\u{1}generation\0\u{c}\u{5}\u{6}")
+  public static let protoMessageName: String = _protobuf_package + ".GroupMessageId"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}sender_index\0\u{1}generation\0\u{c}\u{5}\u{6}")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1536,7 +1536,7 @@ extension Shared_Proto_Messaging_V1_GroupMessageId: SwiftProtobuf.Message, Swift
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularBytesField(value: self.groupID, fieldNumber: 1)
     }
@@ -1552,7 +1552,7 @@ extension Shared_Proto_Messaging_V1_GroupMessageId: SwiftProtobuf.Message, Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Messaging_V1_GroupMessageId, rhs: Shared_Proto_Messaging_V1_GroupMessageId) -> Bool {
+  public static func ==(lhs: Shared_Proto_Messaging_V1_GroupMessageId, rhs: Shared_Proto_Messaging_V1_GroupMessageId) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.epoch != rhs.epoch {return false}
     if lhs.senderIndex != rhs.senderIndex {return false}

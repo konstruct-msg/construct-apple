@@ -97,4 +97,9 @@ int32_t  veil_stop(void);
 int32_t  veil_is_alive(void);
 uint16_t veil_port(void);
 
+// Copy the most recent veil_start failure reason into buf (NUL-terminated,
+// truncated to cap). Returns the full reason length excluding NUL. Call after
+// veil_start returns -1 to log the exact failing method + stage.
+size_t   veil_last_error(char *buf, size_t cap);
+
 #endif /* ConstructMessenger_Bridging_Header_h */

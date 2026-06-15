@@ -15,253 +15,253 @@ import GRPCProtobuf
 
 /// Namespace containing generated types for the "shared.proto.services.v1.ChannelService" service.
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-internal enum Shared_Proto_Services_V1_ChannelService: Sendable {
+public enum Shared_Proto_Services_V1_ChannelService: Sendable {
     /// Service descriptor for the "shared.proto.services.v1.ChannelService" service.
-    internal static let descriptor = GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService")
+    public static let descriptor = GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService")
     /// Namespace for method metadata.
-    internal enum Method: Sendable {
+    public enum Method: Sendable {
         /// Namespace for "CreateChannel" metadata.
-        internal enum CreateChannel: Sendable {
+        public enum CreateChannel: Sendable {
             /// Request type for "CreateChannel".
-            internal typealias Input = Shared_Proto_Services_V1_CreateChannelRequest
+            public typealias Input = Shared_Proto_Services_V1_CreateChannelRequest
             /// Response type for "CreateChannel".
-            internal typealias Output = Shared_Proto_Services_V1_CreateChannelResponse
+            public typealias Output = Shared_Proto_Services_V1_CreateChannelResponse
             /// Descriptor for "CreateChannel".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "CreateChannel"
             )
         }
         /// Namespace for "GetChannel" metadata.
-        internal enum GetChannel: Sendable {
+        public enum GetChannel: Sendable {
             /// Request type for "GetChannel".
-            internal typealias Input = Shared_Proto_Services_V1_GetChannelRequest
+            public typealias Input = Shared_Proto_Services_V1_GetChannelRequest
             /// Response type for "GetChannel".
-            internal typealias Output = Shared_Proto_Services_V1_GetChannelResponse
+            public typealias Output = Shared_Proto_Services_V1_GetChannelResponse
             /// Descriptor for "GetChannel".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "GetChannel"
             )
         }
         /// Namespace for "UpdateChannel" metadata.
-        internal enum UpdateChannel: Sendable {
+        public enum UpdateChannel: Sendable {
             /// Request type for "UpdateChannel".
-            internal typealias Input = Shared_Proto_Services_V1_UpdateChannelRequest
+            public typealias Input = Shared_Proto_Services_V1_UpdateChannelRequest
             /// Response type for "UpdateChannel".
-            internal typealias Output = Shared_Proto_Services_V1_UpdateChannelResponse
+            public typealias Output = Shared_Proto_Services_V1_UpdateChannelResponse
             /// Descriptor for "UpdateChannel".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "UpdateChannel"
             )
         }
         /// Namespace for "SetChannelVisibility" metadata.
-        internal enum SetChannelVisibility: Sendable {
+        public enum SetChannelVisibility: Sendable {
             /// Request type for "SetChannelVisibility".
-            internal typealias Input = Shared_Proto_Services_V1_SetChannelVisibilityRequest
+            public typealias Input = Shared_Proto_Services_V1_SetChannelVisibilityRequest
             /// Response type for "SetChannelVisibility".
-            internal typealias Output = Shared_Proto_Services_V1_SetChannelVisibilityResponse
+            public typealias Output = Shared_Proto_Services_V1_SetChannelVisibilityResponse
             /// Descriptor for "SetChannelVisibility".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "SetChannelVisibility"
             )
         }
         /// Namespace for "DeleteChannel" metadata.
-        internal enum DeleteChannel: Sendable {
+        public enum DeleteChannel: Sendable {
             /// Request type for "DeleteChannel".
-            internal typealias Input = Shared_Proto_Services_V1_DeleteChannelRequest
+            public typealias Input = Shared_Proto_Services_V1_DeleteChannelRequest
             /// Response type for "DeleteChannel".
-            internal typealias Output = Shared_Proto_Services_V1_DeleteChannelResponse
+            public typealias Output = Shared_Proto_Services_V1_DeleteChannelResponse
             /// Descriptor for "DeleteChannel".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "DeleteChannel"
             )
         }
         /// Namespace for "SubscribeChannel" metadata.
-        internal enum SubscribeChannel: Sendable {
+        public enum SubscribeChannel: Sendable {
             /// Request type for "SubscribeChannel".
-            internal typealias Input = Shared_Proto_Services_V1_SubscribeChannelRequest
+            public typealias Input = Shared_Proto_Services_V1_SubscribeChannelRequest
             /// Response type for "SubscribeChannel".
-            internal typealias Output = Shared_Proto_Services_V1_SubscribeChannelResponse
+            public typealias Output = Shared_Proto_Services_V1_SubscribeChannelResponse
             /// Descriptor for "SubscribeChannel".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "SubscribeChannel"
             )
         }
         /// Namespace for "UnsubscribeChannel" metadata.
-        internal enum UnsubscribeChannel: Sendable {
+        public enum UnsubscribeChannel: Sendable {
             /// Request type for "UnsubscribeChannel".
-            internal typealias Input = Shared_Proto_Services_V1_UnsubscribeChannelRequest
+            public typealias Input = Shared_Proto_Services_V1_UnsubscribeChannelRequest
             /// Response type for "UnsubscribeChannel".
-            internal typealias Output = Shared_Proto_Services_V1_UnsubscribeChannelResponse
+            public typealias Output = Shared_Proto_Services_V1_UnsubscribeChannelResponse
             /// Descriptor for "UnsubscribeChannel".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "UnsubscribeChannel"
             )
         }
         /// Namespace for "ListSubscriptions" metadata.
-        internal enum ListSubscriptions: Sendable {
+        public enum ListSubscriptions: Sendable {
             /// Request type for "ListSubscriptions".
-            internal typealias Input = Shared_Proto_Services_V1_ListSubscriptionsRequest
+            public typealias Input = Shared_Proto_Services_V1_ListSubscriptionsRequest
             /// Response type for "ListSubscriptions".
-            internal typealias Output = Shared_Proto_Services_V1_ListSubscriptionsResponse
+            public typealias Output = Shared_Proto_Services_V1_ListSubscriptionsResponse
             /// Descriptor for "ListSubscriptions".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "ListSubscriptions"
             )
         }
         /// Namespace for "GetSubscriberCount" metadata.
-        internal enum GetSubscriberCount: Sendable {
+        public enum GetSubscriberCount: Sendable {
             /// Request type for "GetSubscriberCount".
-            internal typealias Input = Shared_Proto_Services_V1_GetSubscriberCountRequest
+            public typealias Input = Shared_Proto_Services_V1_GetSubscriberCountRequest
             /// Response type for "GetSubscriberCount".
-            internal typealias Output = Shared_Proto_Services_V1_GetSubscriberCountResponse
+            public typealias Output = Shared_Proto_Services_V1_GetSubscriberCountResponse
             /// Descriptor for "GetSubscriberCount".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "GetSubscriberCount"
             )
         }
         /// Namespace for "PublishPost" metadata.
-        internal enum PublishPost: Sendable {
+        public enum PublishPost: Sendable {
             /// Request type for "PublishPost".
-            internal typealias Input = Shared_Proto_Services_V1_PublishPostRequest
+            public typealias Input = Shared_Proto_Services_V1_PublishPostRequest
             /// Response type for "PublishPost".
-            internal typealias Output = Shared_Proto_Services_V1_PublishPostResponse
+            public typealias Output = Shared_Proto_Services_V1_PublishPostResponse
             /// Descriptor for "PublishPost".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "PublishPost"
             )
         }
         /// Namespace for "ListPosts" metadata.
-        internal enum ListPosts: Sendable {
+        public enum ListPosts: Sendable {
             /// Request type for "ListPosts".
-            internal typealias Input = Shared_Proto_Services_V1_ListPostsRequest
+            public typealias Input = Shared_Proto_Services_V1_ListPostsRequest
             /// Response type for "ListPosts".
-            internal typealias Output = Shared_Proto_Services_V1_ListPostsResponse
+            public typealias Output = Shared_Proto_Services_V1_ListPostsResponse
             /// Descriptor for "ListPosts".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "ListPosts"
             )
         }
         /// Namespace for "GetPost" metadata.
-        internal enum GetPost: Sendable {
+        public enum GetPost: Sendable {
             /// Request type for "GetPost".
-            internal typealias Input = Shared_Proto_Services_V1_GetPostRequest
+            public typealias Input = Shared_Proto_Services_V1_GetPostRequest
             /// Response type for "GetPost".
-            internal typealias Output = Shared_Proto_Services_V1_GetPostResponse
+            public typealias Output = Shared_Proto_Services_V1_GetPostResponse
             /// Descriptor for "GetPost".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "GetPost"
             )
         }
         /// Namespace for "DeletePost" metadata.
-        internal enum DeletePost: Sendable {
+        public enum DeletePost: Sendable {
             /// Request type for "DeletePost".
-            internal typealias Input = Shared_Proto_Services_V1_DeletePostRequest
+            public typealias Input = Shared_Proto_Services_V1_DeletePostRequest
             /// Response type for "DeletePost".
-            internal typealias Output = Shared_Proto_Services_V1_DeletePostResponse
+            public typealias Output = Shared_Proto_Services_V1_DeletePostResponse
             /// Descriptor for "DeletePost".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "DeletePost"
             )
         }
         /// Namespace for "GetCommentGroup" metadata.
-        internal enum GetCommentGroup: Sendable {
+        public enum GetCommentGroup: Sendable {
             /// Request type for "GetCommentGroup".
-            internal typealias Input = Shared_Proto_Services_V1_GetCommentGroupRequest
+            public typealias Input = Shared_Proto_Services_V1_GetCommentGroupRequest
             /// Response type for "GetCommentGroup".
-            internal typealias Output = Shared_Proto_Services_V1_GetCommentGroupResponse
+            public typealias Output = Shared_Proto_Services_V1_GetCommentGroupResponse
             /// Descriptor for "GetCommentGroup".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "GetCommentGroup"
             )
         }
         /// Namespace for "AddAdmin" metadata.
-        internal enum AddAdmin: Sendable {
+        public enum AddAdmin: Sendable {
             /// Request type for "AddAdmin".
-            internal typealias Input = Shared_Proto_Services_V1_AddAdminRequest
+            public typealias Input = Shared_Proto_Services_V1_AddAdminRequest
             /// Response type for "AddAdmin".
-            internal typealias Output = Shared_Proto_Services_V1_AddAdminResponse
+            public typealias Output = Shared_Proto_Services_V1_AddAdminResponse
             /// Descriptor for "AddAdmin".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "AddAdmin"
             )
         }
         /// Namespace for "RemoveAdmin" metadata.
-        internal enum RemoveAdmin: Sendable {
+        public enum RemoveAdmin: Sendable {
             /// Request type for "RemoveAdmin".
-            internal typealias Input = Shared_Proto_Services_V1_RemoveAdminRequest
+            public typealias Input = Shared_Proto_Services_V1_RemoveAdminRequest
             /// Response type for "RemoveAdmin".
-            internal typealias Output = Shared_Proto_Services_V1_RemoveAdminResponse
+            public typealias Output = Shared_Proto_Services_V1_RemoveAdminResponse
             /// Descriptor for "RemoveAdmin".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "RemoveAdmin"
             )
         }
         /// Namespace for "ListAdmins" metadata.
-        internal enum ListAdmins: Sendable {
+        public enum ListAdmins: Sendable {
             /// Request type for "ListAdmins".
-            internal typealias Input = Shared_Proto_Services_V1_ListAdminsRequest
+            public typealias Input = Shared_Proto_Services_V1_ListAdminsRequest
             /// Response type for "ListAdmins".
-            internal typealias Output = Shared_Proto_Services_V1_ListAdminsResponse
+            public typealias Output = Shared_Proto_Services_V1_ListAdminsResponse
             /// Descriptor for "ListAdmins".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "ListAdmins"
             )
         }
         /// Namespace for "CreateInviteLink" metadata.
-        internal enum CreateInviteLink: Sendable {
+        public enum CreateInviteLink: Sendable {
             /// Request type for "CreateInviteLink".
-            internal typealias Input = Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest
+            public typealias Input = Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest
             /// Response type for "CreateInviteLink".
-            internal typealias Output = Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse
+            public typealias Output = Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse
             /// Descriptor for "CreateInviteLink".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "CreateInviteLink"
             )
         }
         /// Namespace for "RevokeInviteLink" metadata.
-        internal enum RevokeInviteLink: Sendable {
+        public enum RevokeInviteLink: Sendable {
             /// Request type for "RevokeInviteLink".
-            internal typealias Input = Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest
+            public typealias Input = Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest
             /// Response type for "RevokeInviteLink".
-            internal typealias Output = Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse
+            public typealias Output = Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse
             /// Descriptor for "RevokeInviteLink".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "RevokeInviteLink"
             )
         }
         /// Namespace for "ResolveInviteLink" metadata.
-        internal enum ResolveInviteLink: Sendable {
+        public enum ResolveInviteLink: Sendable {
             /// Request type for "ResolveInviteLink".
-            internal typealias Input = Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest
+            public typealias Input = Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest
             /// Response type for "ResolveInviteLink".
-            internal typealias Output = Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse
+            public typealias Output = Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse
             /// Descriptor for "ResolveInviteLink".
-            internal static let descriptor = GRPCCore.MethodDescriptor(
+            public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
                 method: "ResolveInviteLink"
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.ChannelService" service.
-        internal static let descriptors: [GRPCCore.MethodDescriptor] = [
+        public static let descriptors: [GRPCCore.MethodDescriptor] = [
             CreateChannel.descriptor,
             GetChannel.descriptor,
             UpdateChannel.descriptor,
@@ -289,1883 +289,7 @@ internal enum Shared_Proto_Services_V1_ChannelService: Sendable {
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 extension GRPCCore.ServiceDescriptor {
     /// Service descriptor for the "shared.proto.services.v1.ChannelService" service.
-    internal static let shared_proto_services_v1_ChannelService = GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService")
-}
-
-// MARK: shared.proto.services.v1.ChannelService (server)
-
-@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-extension Shared_Proto_Services_V1_ChannelService {
-    /// Streaming variant of the service protocol for the "shared.proto.services.v1.ChannelService" service.
-    ///
-    /// This protocol is the lowest-level of the service protocols generated for this service
-    /// giving you the most flexibility over the implementation of your service. This comes at
-    /// the cost of more verbose and less strict APIs. Each RPC requires you to implement it in
-    /// terms of a request stream and response stream. Where only a single request or response
-    /// message is expected, you are responsible for enforcing this invariant is maintained.
-    ///
-    /// Where possible, prefer using the stricter, less-verbose ``ServiceProtocol``
-    /// or ``SimpleServiceProtocol`` instead.
-    ///
-    /// > Source IDL Documentation:
-    /// >
-    /// > =========================================================================
-    /// > Channel Lifecycle
-    /// > =========================================================================
-    internal protocol StreamingServiceProtocol: GRPCCore.RegistrableRPCService {
-        /// Handle the "CreateChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > CreateChannel - Create new channel (PUBLIC or PRIVATE)
-        /// > Creator becomes owner. Metadata is encrypted (opaque to server).
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_CreateChannelRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_CreateChannelResponse` messages.
-        func createChannel(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_CreateChannelRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_CreateChannelResponse>
-
-        /// Handle the "GetChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > GetChannel - Fetch channel public metadata
-        /// > PUBLIC: no auth required. PRIVATE: requires subscription.
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_GetChannelRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_GetChannelResponse` messages.
-        func getChannel(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetChannelRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetChannelResponse>
-
-        /// Handle the "UpdateChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > UpdateChannel - Update channel metadata (owner only)
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_UpdateChannelRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_UpdateChannelResponse` messages.
-        func updateChannel(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_UpdateChannelRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_UpdateChannelResponse>
-
-        /// Handle the "SetChannelVisibility" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > SetChannelVisibility - Toggle PUBLIC/PRIVATE (owner only)
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_SetChannelVisibilityRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_SetChannelVisibilityResponse` messages.
-        func setChannelVisibility(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_SetChannelVisibilityRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_SetChannelVisibilityResponse>
-
-        /// Handle the "DeleteChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > DeleteChannel - Permanently delete channel (owner only)
-        /// > Deletes all posts, subscriber list, comment groups.
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_DeleteChannelRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_DeleteChannelResponse` messages.
-        func deleteChannel(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_DeleteChannelRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_DeleteChannelResponse>
-
-        /// Handle the "SubscribeChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > Subscribe - Subscribe to channel
-        /// > PUBLIC: instant. PRIVATE: requires invite link or approval.
-        /// > Returns encrypted Sender Key for post decryption.
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_SubscribeChannelRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_SubscribeChannelResponse` messages.
-        func subscribeChannel(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_SubscribeChannelRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_SubscribeChannelResponse>
-
-        /// Handle the "UnsubscribeChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > Unsubscribe - Unsubscribe from channel
-        /// > Removes from subscriber list. Optionally rotates Sender Key.
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_UnsubscribeChannelRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_UnsubscribeChannelResponse` messages.
-        func unsubscribeChannel(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_UnsubscribeChannelRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_UnsubscribeChannelResponse>
-
-        /// Handle the "ListSubscriptions" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > ListSubscriptions - List channels user is subscribed to
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_ListSubscriptionsRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_ListSubscriptionsResponse` messages.
-        func listSubscriptions(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ListSubscriptionsRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ListSubscriptionsResponse>
-
-        /// Handle the "GetSubscriberCount" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > GetSubscriberCount - Get total subscriber count (public info)
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_GetSubscriberCountRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_GetSubscriberCountResponse` messages.
-        func getSubscriberCount(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetSubscriberCountRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetSubscriberCountResponse>
-
-        /// Handle the "PublishPost" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > PublishPost - Publish encrypted post to channel (admin only)
-        /// > Encrypted with Sender Key. Fan-out to Redis stream.
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_PublishPostRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_PublishPostResponse` messages.
-        func publishPost(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_PublishPostRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_PublishPostResponse>
-
-        /// Handle the "ListPosts" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > ListPosts - List posts in channel (subscribers only)
-        /// > Paginated, cursor-based. Filter by date range optional.
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_ListPostsRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_ListPostsResponse` messages.
-        func listPosts(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ListPostsRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ListPostsResponse>
-
-        /// Handle the "GetPost" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > GetPost - Fetch single post by ID (subscribers only)
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_GetPostRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_GetPostResponse` messages.
-        func getPost(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetPostRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetPostResponse>
-
-        /// Handle the "DeletePost" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > DeletePost - Delete post (admin only)
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_DeletePostRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_DeletePostResponse` messages.
-        func deletePost(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_DeletePostRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_DeletePostResponse>
-
-        /// Handle the "GetCommentGroup" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > GetCommentGroup - Get or create MLS group for post comments
-        /// > First commenter triggers group creation. Returns group_id.
-        /// > Client then uses standard MLS join flow.
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_GetCommentGroupRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_GetCommentGroupResponse` messages.
-        func getCommentGroup(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetCommentGroupRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetCommentGroupResponse>
-
-        /// Handle the "AddAdmin" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > AddAdmin - Grant admin rights to subscriber (owner only)
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_AddAdminRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_AddAdminResponse` messages.
-        func addAdmin(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_AddAdminRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_AddAdminResponse>
-
-        /// Handle the "RemoveAdmin" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > RemoveAdmin - Revoke admin rights (owner only)
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_RemoveAdminRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_RemoveAdminResponse` messages.
-        func removeAdmin(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_RemoveAdminRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_RemoveAdminResponse>
-
-        /// Handle the "ListAdmins" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > ListAdmins - List channel admins
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_ListAdminsRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_ListAdminsResponse` messages.
-        func listAdmins(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ListAdminsRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ListAdminsResponse>
-
-        /// Handle the "CreateInviteLink" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > CreateInviteLink - Generate invite link for PRIVATE channel
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse` messages.
-        func createInviteLink(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse>
-
-        /// Handle the "RevokeInviteLink" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > RevokeInviteLink - Revoke invite link
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse` messages.
-        func revokeInviteLink(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse>
-
-        /// Handle the "ResolveInviteLink" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > ResolveInviteLink - Public resolution (returns channel info + validity)
-        ///
-        /// - Parameters:
-        ///   - request: A streaming request of `Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest` messages.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A streaming response of `Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse` messages.
-        func resolveInviteLink(
-            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse>
-    }
-
-    /// Service protocol for the "shared.proto.services.v1.ChannelService" service.
-    ///
-    /// This protocol is higher level than ``StreamingServiceProtocol`` but lower level than
-    /// the ``SimpleServiceProtocol``, it provides access to request and response metadata and
-    /// trailing response metadata. If you don't need these then consider using
-    /// the ``SimpleServiceProtocol``. If you need fine grained control over your RPCs then
-    /// use ``StreamingServiceProtocol``.
-    ///
-    /// > Source IDL Documentation:
-    /// >
-    /// > =========================================================================
-    /// > Channel Lifecycle
-    /// > =========================================================================
-    internal protocol ServiceProtocol: Shared_Proto_Services_V1_ChannelService.StreamingServiceProtocol {
-        /// Handle the "CreateChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > CreateChannel - Create new channel (PUBLIC or PRIVATE)
-        /// > Creator becomes owner. Metadata is encrypted (opaque to server).
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_CreateChannelRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_CreateChannelResponse` message.
-        func createChannel(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_CreateChannelRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_CreateChannelResponse>
-
-        /// Handle the "GetChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > GetChannel - Fetch channel public metadata
-        /// > PUBLIC: no auth required. PRIVATE: requires subscription.
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetChannelRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_GetChannelResponse` message.
-        func getChannel(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetChannelRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetChannelResponse>
-
-        /// Handle the "UpdateChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > UpdateChannel - Update channel metadata (owner only)
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_UpdateChannelRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_UpdateChannelResponse` message.
-        func updateChannel(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_UpdateChannelRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_UpdateChannelResponse>
-
-        /// Handle the "SetChannelVisibility" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > SetChannelVisibility - Toggle PUBLIC/PRIVATE (owner only)
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_SetChannelVisibilityRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_SetChannelVisibilityResponse` message.
-        func setChannelVisibility(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_SetChannelVisibilityRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_SetChannelVisibilityResponse>
-
-        /// Handle the "DeleteChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > DeleteChannel - Permanently delete channel (owner only)
-        /// > Deletes all posts, subscriber list, comment groups.
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_DeleteChannelRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_DeleteChannelResponse` message.
-        func deleteChannel(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_DeleteChannelRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_DeleteChannelResponse>
-
-        /// Handle the "SubscribeChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > Subscribe - Subscribe to channel
-        /// > PUBLIC: instant. PRIVATE: requires invite link or approval.
-        /// > Returns encrypted Sender Key for post decryption.
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_SubscribeChannelRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_SubscribeChannelResponse` message.
-        func subscribeChannel(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_SubscribeChannelRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_SubscribeChannelResponse>
-
-        /// Handle the "UnsubscribeChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > Unsubscribe - Unsubscribe from channel
-        /// > Removes from subscriber list. Optionally rotates Sender Key.
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_UnsubscribeChannelRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_UnsubscribeChannelResponse` message.
-        func unsubscribeChannel(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_UnsubscribeChannelRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_UnsubscribeChannelResponse>
-
-        /// Handle the "ListSubscriptions" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > ListSubscriptions - List channels user is subscribed to
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_ListSubscriptionsRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_ListSubscriptionsResponse` message.
-        func listSubscriptions(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ListSubscriptionsRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ListSubscriptionsResponse>
-
-        /// Handle the "GetSubscriberCount" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > GetSubscriberCount - Get total subscriber count (public info)
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetSubscriberCountRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_GetSubscriberCountResponse` message.
-        func getSubscriberCount(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetSubscriberCountRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetSubscriberCountResponse>
-
-        /// Handle the "PublishPost" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > PublishPost - Publish encrypted post to channel (admin only)
-        /// > Encrypted with Sender Key. Fan-out to Redis stream.
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_PublishPostRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_PublishPostResponse` message.
-        func publishPost(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_PublishPostRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_PublishPostResponse>
-
-        /// Handle the "ListPosts" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > ListPosts - List posts in channel (subscribers only)
-        /// > Paginated, cursor-based. Filter by date range optional.
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_ListPostsRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_ListPostsResponse` message.
-        func listPosts(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ListPostsRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ListPostsResponse>
-
-        /// Handle the "GetPost" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > GetPost - Fetch single post by ID (subscribers only)
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetPostRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_GetPostResponse` message.
-        func getPost(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetPostRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetPostResponse>
-
-        /// Handle the "DeletePost" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > DeletePost - Delete post (admin only)
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_DeletePostRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_DeletePostResponse` message.
-        func deletePost(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_DeletePostRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_DeletePostResponse>
-
-        /// Handle the "GetCommentGroup" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > GetCommentGroup - Get or create MLS group for post comments
-        /// > First commenter triggers group creation. Returns group_id.
-        /// > Client then uses standard MLS join flow.
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetCommentGroupRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_GetCommentGroupResponse` message.
-        func getCommentGroup(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetCommentGroupRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetCommentGroupResponse>
-
-        /// Handle the "AddAdmin" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > AddAdmin - Grant admin rights to subscriber (owner only)
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_AddAdminRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_AddAdminResponse` message.
-        func addAdmin(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_AddAdminRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_AddAdminResponse>
-
-        /// Handle the "RemoveAdmin" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > RemoveAdmin - Revoke admin rights (owner only)
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_RemoveAdminRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_RemoveAdminResponse` message.
-        func removeAdmin(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_RemoveAdminRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_RemoveAdminResponse>
-
-        /// Handle the "ListAdmins" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > ListAdmins - List channel admins
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_ListAdminsRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_ListAdminsResponse` message.
-        func listAdmins(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ListAdminsRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ListAdminsResponse>
-
-        /// Handle the "CreateInviteLink" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > CreateInviteLink - Generate invite link for PRIVATE channel
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse` message.
-        func createInviteLink(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse>
-
-        /// Handle the "RevokeInviteLink" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > RevokeInviteLink - Revoke invite link
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse` message.
-        func revokeInviteLink(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse>
-
-        /// Handle the "ResolveInviteLink" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > ResolveInviteLink - Public resolution (returns channel info + validity)
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A response containing a single `Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse` message.
-        func resolveInviteLink(
-            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest>,
-            context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse>
-    }
-
-    /// Simple service protocol for the "shared.proto.services.v1.ChannelService" service.
-    ///
-    /// This is the highest level protocol for the service. The API is the easiest to use but
-    /// doesn't provide access to request or response metadata. If you need access to these
-    /// then use ``ServiceProtocol`` instead.
-    ///
-    /// > Source IDL Documentation:
-    /// >
-    /// > =========================================================================
-    /// > Channel Lifecycle
-    /// > =========================================================================
-    internal protocol SimpleServiceProtocol: Shared_Proto_Services_V1_ChannelService.ServiceProtocol {
-        /// Handle the "CreateChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > CreateChannel - Create new channel (PUBLIC or PRIVATE)
-        /// > Creator becomes owner. Metadata is encrypted (opaque to server).
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_CreateChannelRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_CreateChannelResponse` to respond with.
-        func createChannel(
-            request: Shared_Proto_Services_V1_CreateChannelRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_CreateChannelResponse
-
-        /// Handle the "GetChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > GetChannel - Fetch channel public metadata
-        /// > PUBLIC: no auth required. PRIVATE: requires subscription.
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_GetChannelRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_GetChannelResponse` to respond with.
-        func getChannel(
-            request: Shared_Proto_Services_V1_GetChannelRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_GetChannelResponse
-
-        /// Handle the "UpdateChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > UpdateChannel - Update channel metadata (owner only)
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_UpdateChannelRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_UpdateChannelResponse` to respond with.
-        func updateChannel(
-            request: Shared_Proto_Services_V1_UpdateChannelRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_UpdateChannelResponse
-
-        /// Handle the "SetChannelVisibility" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > SetChannelVisibility - Toggle PUBLIC/PRIVATE (owner only)
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_SetChannelVisibilityRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_SetChannelVisibilityResponse` to respond with.
-        func setChannelVisibility(
-            request: Shared_Proto_Services_V1_SetChannelVisibilityRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_SetChannelVisibilityResponse
-
-        /// Handle the "DeleteChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > DeleteChannel - Permanently delete channel (owner only)
-        /// > Deletes all posts, subscriber list, comment groups.
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_DeleteChannelRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_DeleteChannelResponse` to respond with.
-        func deleteChannel(
-            request: Shared_Proto_Services_V1_DeleteChannelRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_DeleteChannelResponse
-
-        /// Handle the "SubscribeChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > Subscribe - Subscribe to channel
-        /// > PUBLIC: instant. PRIVATE: requires invite link or approval.
-        /// > Returns encrypted Sender Key for post decryption.
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_SubscribeChannelRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_SubscribeChannelResponse` to respond with.
-        func subscribeChannel(
-            request: Shared_Proto_Services_V1_SubscribeChannelRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_SubscribeChannelResponse
-
-        /// Handle the "UnsubscribeChannel" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > Unsubscribe - Unsubscribe from channel
-        /// > Removes from subscriber list. Optionally rotates Sender Key.
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_UnsubscribeChannelRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_UnsubscribeChannelResponse` to respond with.
-        func unsubscribeChannel(
-            request: Shared_Proto_Services_V1_UnsubscribeChannelRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_UnsubscribeChannelResponse
-
-        /// Handle the "ListSubscriptions" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > ListSubscriptions - List channels user is subscribed to
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_ListSubscriptionsRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_ListSubscriptionsResponse` to respond with.
-        func listSubscriptions(
-            request: Shared_Proto_Services_V1_ListSubscriptionsRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_ListSubscriptionsResponse
-
-        /// Handle the "GetSubscriberCount" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > GetSubscriberCount - Get total subscriber count (public info)
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_GetSubscriberCountRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_GetSubscriberCountResponse` to respond with.
-        func getSubscriberCount(
-            request: Shared_Proto_Services_V1_GetSubscriberCountRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_GetSubscriberCountResponse
-
-        /// Handle the "PublishPost" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > PublishPost - Publish encrypted post to channel (admin only)
-        /// > Encrypted with Sender Key. Fan-out to Redis stream.
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_PublishPostRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_PublishPostResponse` to respond with.
-        func publishPost(
-            request: Shared_Proto_Services_V1_PublishPostRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_PublishPostResponse
-
-        /// Handle the "ListPosts" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > ListPosts - List posts in channel (subscribers only)
-        /// > Paginated, cursor-based. Filter by date range optional.
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_ListPostsRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_ListPostsResponse` to respond with.
-        func listPosts(
-            request: Shared_Proto_Services_V1_ListPostsRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_ListPostsResponse
-
-        /// Handle the "GetPost" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > GetPost - Fetch single post by ID (subscribers only)
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_GetPostRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_GetPostResponse` to respond with.
-        func getPost(
-            request: Shared_Proto_Services_V1_GetPostRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_GetPostResponse
-
-        /// Handle the "DeletePost" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > DeletePost - Delete post (admin only)
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_DeletePostRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_DeletePostResponse` to respond with.
-        func deletePost(
-            request: Shared_Proto_Services_V1_DeletePostRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_DeletePostResponse
-
-        /// Handle the "GetCommentGroup" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > GetCommentGroup - Get or create MLS group for post comments
-        /// > First commenter triggers group creation. Returns group_id.
-        /// > Client then uses standard MLS join flow.
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_GetCommentGroupRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_GetCommentGroupResponse` to respond with.
-        func getCommentGroup(
-            request: Shared_Proto_Services_V1_GetCommentGroupRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_GetCommentGroupResponse
-
-        /// Handle the "AddAdmin" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > AddAdmin - Grant admin rights to subscriber (owner only)
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_AddAdminRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_AddAdminResponse` to respond with.
-        func addAdmin(
-            request: Shared_Proto_Services_V1_AddAdminRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_AddAdminResponse
-
-        /// Handle the "RemoveAdmin" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > RemoveAdmin - Revoke admin rights (owner only)
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_RemoveAdminRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_RemoveAdminResponse` to respond with.
-        func removeAdmin(
-            request: Shared_Proto_Services_V1_RemoveAdminRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_RemoveAdminResponse
-
-        /// Handle the "ListAdmins" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > ListAdmins - List channel admins
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_ListAdminsRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_ListAdminsResponse` to respond with.
-        func listAdmins(
-            request: Shared_Proto_Services_V1_ListAdminsRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_ListAdminsResponse
-
-        /// Handle the "CreateInviteLink" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > CreateInviteLink - Generate invite link for PRIVATE channel
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse` to respond with.
-        func createInviteLink(
-            request: Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse
-
-        /// Handle the "RevokeInviteLink" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > RevokeInviteLink - Revoke invite link
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse` to respond with.
-        func revokeInviteLink(
-            request: Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse
-
-        /// Handle the "ResolveInviteLink" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > ResolveInviteLink - Public resolution (returns channel info + validity)
-        ///
-        /// - Parameters:
-        ///   - request: A `Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest` message.
-        ///   - context: Context providing information about the RPC.
-        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
-        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
-        ///     to an internal error.
-        /// - Returns: A `Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse` to respond with.
-        func resolveInviteLink(
-            request: Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest,
-            context: GRPCCore.ServerContext
-        ) async throws -> Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse
-    }
-}
-
-// Default implementation of 'registerMethods(with:)'.
-@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-extension Shared_Proto_Services_V1_ChannelService.StreamingServiceProtocol {
-    internal func registerMethods<Transport>(with router: inout GRPCCore.RPCRouter<Transport>) where Transport: GRPCCore.ServerTransport {
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.CreateChannel.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_CreateChannelRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_CreateChannelResponse>(),
-            handler: { request, context in
-                try await self.createChannel(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.GetChannel.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetChannelRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetChannelResponse>(),
-            handler: { request, context in
-                try await self.getChannel(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.UpdateChannel.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_UpdateChannelRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_UpdateChannelResponse>(),
-            handler: { request, context in
-                try await self.updateChannel(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.SetChannelVisibility.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_SetChannelVisibilityRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_SetChannelVisibilityResponse>(),
-            handler: { request, context in
-                try await self.setChannelVisibility(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.DeleteChannel.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_DeleteChannelRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_DeleteChannelResponse>(),
-            handler: { request, context in
-                try await self.deleteChannel(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.SubscribeChannel.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_SubscribeChannelRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_SubscribeChannelResponse>(),
-            handler: { request, context in
-                try await self.subscribeChannel(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.UnsubscribeChannel.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_UnsubscribeChannelRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_UnsubscribeChannelResponse>(),
-            handler: { request, context in
-                try await self.unsubscribeChannel(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.ListSubscriptions.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_ListSubscriptionsRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ListSubscriptionsResponse>(),
-            handler: { request, context in
-                try await self.listSubscriptions(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.GetSubscriberCount.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetSubscriberCountRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetSubscriberCountResponse>(),
-            handler: { request, context in
-                try await self.getSubscriberCount(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.PublishPost.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_PublishPostRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_PublishPostResponse>(),
-            handler: { request, context in
-                try await self.publishPost(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.ListPosts.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_ListPostsRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ListPostsResponse>(),
-            handler: { request, context in
-                try await self.listPosts(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.GetPost.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetPostRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetPostResponse>(),
-            handler: { request, context in
-                try await self.getPost(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.DeletePost.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_DeletePostRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_DeletePostResponse>(),
-            handler: { request, context in
-                try await self.deletePost(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.GetCommentGroup.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetCommentGroupRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetCommentGroupResponse>(),
-            handler: { request, context in
-                try await self.getCommentGroup(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.AddAdmin.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_AddAdminRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_AddAdminResponse>(),
-            handler: { request, context in
-                try await self.addAdmin(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.RemoveAdmin.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_RemoveAdminRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_RemoveAdminResponse>(),
-            handler: { request, context in
-                try await self.removeAdmin(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.ListAdmins.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_ListAdminsRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ListAdminsResponse>(),
-            handler: { request, context in
-                try await self.listAdmins(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.CreateInviteLink.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse>(),
-            handler: { request, context in
-                try await self.createInviteLink(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.RevokeInviteLink.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse>(),
-            handler: { request, context in
-                try await self.revokeInviteLink(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-        router.registerHandler(
-            forMethod: Shared_Proto_Services_V1_ChannelService.Method.ResolveInviteLink.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse>(),
-            handler: { request, context in
-                try await self.resolveInviteLink(
-                    request: request,
-                    context: context
-                )
-            }
-        )
-    }
-}
-
-// Default implementation of streaming methods from 'StreamingServiceProtocol'.
-@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-extension Shared_Proto_Services_V1_ChannelService.ServiceProtocol {
-    internal func createChannel(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_CreateChannelRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_CreateChannelResponse> {
-        let response = try await self.createChannel(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func getChannel(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetChannelRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetChannelResponse> {
-        let response = try await self.getChannel(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func updateChannel(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_UpdateChannelRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_UpdateChannelResponse> {
-        let response = try await self.updateChannel(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func setChannelVisibility(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_SetChannelVisibilityRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_SetChannelVisibilityResponse> {
-        let response = try await self.setChannelVisibility(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func deleteChannel(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_DeleteChannelRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_DeleteChannelResponse> {
-        let response = try await self.deleteChannel(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func subscribeChannel(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_SubscribeChannelRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_SubscribeChannelResponse> {
-        let response = try await self.subscribeChannel(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func unsubscribeChannel(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_UnsubscribeChannelRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_UnsubscribeChannelResponse> {
-        let response = try await self.unsubscribeChannel(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func listSubscriptions(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ListSubscriptionsRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ListSubscriptionsResponse> {
-        let response = try await self.listSubscriptions(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func getSubscriberCount(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetSubscriberCountRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetSubscriberCountResponse> {
-        let response = try await self.getSubscriberCount(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func publishPost(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_PublishPostRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_PublishPostResponse> {
-        let response = try await self.publishPost(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func listPosts(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ListPostsRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ListPostsResponse> {
-        let response = try await self.listPosts(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func getPost(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetPostRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetPostResponse> {
-        let response = try await self.getPost(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func deletePost(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_DeletePostRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_DeletePostResponse> {
-        let response = try await self.deletePost(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func getCommentGroup(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetCommentGroupRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetCommentGroupResponse> {
-        let response = try await self.getCommentGroup(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func addAdmin(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_AddAdminRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_AddAdminResponse> {
-        let response = try await self.addAdmin(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func removeAdmin(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_RemoveAdminRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_RemoveAdminResponse> {
-        let response = try await self.removeAdmin(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func listAdmins(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ListAdminsRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ListAdminsResponse> {
-        let response = try await self.listAdmins(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func createInviteLink(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse> {
-        let response = try await self.createInviteLink(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func revokeInviteLink(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse> {
-        let response = try await self.revokeInviteLink(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-
-    internal func resolveInviteLink(
-        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse> {
-        let response = try await self.resolveInviteLink(
-            request: GRPCCore.ServerRequest(stream: request),
-            context: context
-        )
-        return GRPCCore.StreamingServerResponse(single: response)
-    }
-}
-
-// Default implementation of methods from 'ServiceProtocol'.
-@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-extension Shared_Proto_Services_V1_ChannelService.SimpleServiceProtocol {
-    internal func createChannel(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_CreateChannelRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_CreateChannelResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_CreateChannelResponse>(
-            message: try await self.createChannel(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func getChannel(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetChannelRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetChannelResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetChannelResponse>(
-            message: try await self.getChannel(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func updateChannel(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_UpdateChannelRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_UpdateChannelResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_UpdateChannelResponse>(
-            message: try await self.updateChannel(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func setChannelVisibility(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_SetChannelVisibilityRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_SetChannelVisibilityResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_SetChannelVisibilityResponse>(
-            message: try await self.setChannelVisibility(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func deleteChannel(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_DeleteChannelRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_DeleteChannelResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_DeleteChannelResponse>(
-            message: try await self.deleteChannel(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func subscribeChannel(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_SubscribeChannelRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_SubscribeChannelResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_SubscribeChannelResponse>(
-            message: try await self.subscribeChannel(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func unsubscribeChannel(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_UnsubscribeChannelRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_UnsubscribeChannelResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_UnsubscribeChannelResponse>(
-            message: try await self.unsubscribeChannel(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func listSubscriptions(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ListSubscriptionsRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ListSubscriptionsResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_ListSubscriptionsResponse>(
-            message: try await self.listSubscriptions(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func getSubscriberCount(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetSubscriberCountRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetSubscriberCountResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetSubscriberCountResponse>(
-            message: try await self.getSubscriberCount(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func publishPost(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_PublishPostRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_PublishPostResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_PublishPostResponse>(
-            message: try await self.publishPost(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func listPosts(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ListPostsRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ListPostsResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_ListPostsResponse>(
-            message: try await self.listPosts(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func getPost(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetPostRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetPostResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetPostResponse>(
-            message: try await self.getPost(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func deletePost(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_DeletePostRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_DeletePostResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_DeletePostResponse>(
-            message: try await self.deletePost(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func getCommentGroup(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetCommentGroupRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetCommentGroupResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetCommentGroupResponse>(
-            message: try await self.getCommentGroup(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func addAdmin(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_AddAdminRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_AddAdminResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_AddAdminResponse>(
-            message: try await self.addAdmin(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func removeAdmin(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_RemoveAdminRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_RemoveAdminResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_RemoveAdminResponse>(
-            message: try await self.removeAdmin(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func listAdmins(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ListAdminsRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ListAdminsResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_ListAdminsResponse>(
-            message: try await self.listAdmins(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func createInviteLink(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse>(
-            message: try await self.createInviteLink(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func revokeInviteLink(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse>(
-            message: try await self.revokeInviteLink(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
-
-    internal func resolveInviteLink(
-        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest>,
-        context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse> {
-        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse>(
-            message: try await self.resolveInviteLink(
-                request: request.message,
-                context: context
-            ),
-            metadata: [:]
-        )
-    }
+    public static let shared_proto_services_v1_ChannelService = GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService")
 }
 
 // MARK: shared.proto.services.v1.ChannelService (client)
@@ -2182,7 +306,7 @@ extension Shared_Proto_Services_V1_ChannelService {
     /// > =========================================================================
     /// > Channel Lifecycle
     /// > =========================================================================
-    internal protocol ClientProtocol: Sendable {
+    public protocol ClientProtocol: Sendable {
         /// Call the "CreateChannel" method.
         ///
         /// > Source IDL Documentation:
@@ -2665,14 +789,14 @@ extension Shared_Proto_Services_V1_ChannelService {
     /// > =========================================================================
     /// > Channel Lifecycle
     /// > =========================================================================
-    internal struct Client<Transport>: ClientProtocol where Transport: GRPCCore.ClientTransport {
+    public struct Client<Transport>: ClientProtocol where Transport: GRPCCore.ClientTransport {
         private let client: GRPCCore.GRPCClient<Transport>
 
         /// Creates a new client wrapping the provided `GRPCCore.GRPCClient`.
         ///
         /// - Parameters:
         ///   - client: A `GRPCCore.GRPCClient` providing a communication channel to the service.
-        internal init(wrapping client: GRPCCore.GRPCClient<Transport>) {
+        public init(wrapping client: GRPCCore.GRPCClient<Transport>) {
             self.client = client
         }
 
@@ -2692,7 +816,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func createChannel<Result>(
+        public func createChannel<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_CreateChannelRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_CreateChannelRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_CreateChannelResponse>,
@@ -2727,7 +851,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func getChannel<Result>(
+        public func getChannel<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetChannelRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetChannelRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetChannelResponse>,
@@ -2761,7 +885,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func updateChannel<Result>(
+        public func updateChannel<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UpdateChannelRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_UpdateChannelRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UpdateChannelResponse>,
@@ -2795,7 +919,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func setChannelVisibility<Result>(
+        public func setChannelVisibility<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetChannelVisibilityRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SetChannelVisibilityRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SetChannelVisibilityResponse>,
@@ -2830,7 +954,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func deleteChannel<Result>(
+        public func deleteChannel<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_DeleteChannelRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_DeleteChannelRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_DeleteChannelResponse>,
@@ -2866,7 +990,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func subscribeChannel<Result>(
+        public func subscribeChannel<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SubscribeChannelRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SubscribeChannelRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SubscribeChannelResponse>,
@@ -2901,7 +1025,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func unsubscribeChannel<Result>(
+        public func unsubscribeChannel<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UnsubscribeChannelRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_UnsubscribeChannelRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UnsubscribeChannelResponse>,
@@ -2935,7 +1059,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func listSubscriptions<Result>(
+        public func listSubscriptions<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListSubscriptionsRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ListSubscriptionsRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ListSubscriptionsResponse>,
@@ -2969,7 +1093,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func getSubscriberCount<Result>(
+        public func getSubscriberCount<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetSubscriberCountRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetSubscriberCountRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetSubscriberCountResponse>,
@@ -3004,7 +1128,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func publishPost<Result>(
+        public func publishPost<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishPostRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_PublishPostRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_PublishPostResponse>,
@@ -3039,7 +1163,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func listPosts<Result>(
+        public func listPosts<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListPostsRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ListPostsRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ListPostsResponse>,
@@ -3073,7 +1197,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func getPost<Result>(
+        public func getPost<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPostRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetPostRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetPostResponse>,
@@ -3107,7 +1231,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func deletePost<Result>(
+        public func deletePost<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_DeletePostRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_DeletePostRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_DeletePostResponse>,
@@ -3143,7 +1267,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func getCommentGroup<Result>(
+        public func getCommentGroup<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetCommentGroupRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetCommentGroupRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetCommentGroupResponse>,
@@ -3177,7 +1301,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func addAdmin<Result>(
+        public func addAdmin<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_AddAdminRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_AddAdminRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AddAdminResponse>,
@@ -3211,7 +1335,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func removeAdmin<Result>(
+        public func removeAdmin<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RemoveAdminRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_RemoveAdminRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_RemoveAdminResponse>,
@@ -3245,7 +1369,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func listAdmins<Result>(
+        public func listAdmins<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListAdminsRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ListAdminsRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ListAdminsResponse>,
@@ -3279,7 +1403,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func createInviteLink<Result>(
+        public func createInviteLink<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse>,
@@ -3313,7 +1437,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func revokeInviteLink<Result>(
+        public func revokeInviteLink<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse>,
@@ -3347,7 +1471,7 @@ extension Shared_Proto_Services_V1_ChannelService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        internal func resolveInviteLink<Result>(
+        public func resolveInviteLink<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse>,
@@ -3385,7 +1509,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func createChannel<Result>(
+    public func createChannel<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_CreateChannelRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_CreateChannelResponse>) async throws -> Result = { response in
@@ -3415,7 +1539,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func getChannel<Result>(
+    public func getChannel<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetChannelRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetChannelResponse>) async throws -> Result = { response in
@@ -3444,7 +1568,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func updateChannel<Result>(
+    public func updateChannel<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UpdateChannelRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UpdateChannelResponse>) async throws -> Result = { response in
@@ -3473,7 +1597,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func setChannelVisibility<Result>(
+    public func setChannelVisibility<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetChannelVisibilityRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SetChannelVisibilityResponse>) async throws -> Result = { response in
@@ -3503,7 +1627,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func deleteChannel<Result>(
+    public func deleteChannel<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_DeleteChannelRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_DeleteChannelResponse>) async throws -> Result = { response in
@@ -3534,7 +1658,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func subscribeChannel<Result>(
+    public func subscribeChannel<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SubscribeChannelRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SubscribeChannelResponse>) async throws -> Result = { response in
@@ -3564,7 +1688,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func unsubscribeChannel<Result>(
+    public func unsubscribeChannel<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UnsubscribeChannelRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UnsubscribeChannelResponse>) async throws -> Result = { response in
@@ -3593,7 +1717,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func listSubscriptions<Result>(
+    public func listSubscriptions<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListSubscriptionsRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ListSubscriptionsResponse>) async throws -> Result = { response in
@@ -3622,7 +1746,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func getSubscriberCount<Result>(
+    public func getSubscriberCount<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetSubscriberCountRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetSubscriberCountResponse>) async throws -> Result = { response in
@@ -3652,7 +1776,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func publishPost<Result>(
+    public func publishPost<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishPostRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_PublishPostResponse>) async throws -> Result = { response in
@@ -3682,7 +1806,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func listPosts<Result>(
+    public func listPosts<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListPostsRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ListPostsResponse>) async throws -> Result = { response in
@@ -3711,7 +1835,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func getPost<Result>(
+    public func getPost<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPostRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetPostResponse>) async throws -> Result = { response in
@@ -3740,7 +1864,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func deletePost<Result>(
+    public func deletePost<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_DeletePostRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_DeletePostResponse>) async throws -> Result = { response in
@@ -3771,7 +1895,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func getCommentGroup<Result>(
+    public func getCommentGroup<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetCommentGroupRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetCommentGroupResponse>) async throws -> Result = { response in
@@ -3800,7 +1924,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func addAdmin<Result>(
+    public func addAdmin<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_AddAdminRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AddAdminResponse>) async throws -> Result = { response in
@@ -3829,7 +1953,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func removeAdmin<Result>(
+    public func removeAdmin<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RemoveAdminRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RemoveAdminResponse>) async throws -> Result = { response in
@@ -3858,7 +1982,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func listAdmins<Result>(
+    public func listAdmins<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListAdminsRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ListAdminsResponse>) async throws -> Result = { response in
@@ -3887,7 +2011,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func createInviteLink<Result>(
+    public func createInviteLink<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse>) async throws -> Result = { response in
@@ -3916,7 +2040,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func revokeInviteLink<Result>(
+    public func revokeInviteLink<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse>) async throws -> Result = { response in
@@ -3945,7 +2069,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func resolveInviteLink<Result>(
+    public func resolveInviteLink<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse>) async throws -> Result = { response in
@@ -3980,7 +2104,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func createChannel<Result>(
+    public func createChannel<Result>(
         _ message: Shared_Proto_Services_V1_CreateChannelRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4014,7 +2138,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func getChannel<Result>(
+    public func getChannel<Result>(
         _ message: Shared_Proto_Services_V1_GetChannelRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4047,7 +2171,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func updateChannel<Result>(
+    public func updateChannel<Result>(
         _ message: Shared_Proto_Services_V1_UpdateChannelRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4080,7 +2204,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func setChannelVisibility<Result>(
+    public func setChannelVisibility<Result>(
         _ message: Shared_Proto_Services_V1_SetChannelVisibilityRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4114,7 +2238,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func deleteChannel<Result>(
+    public func deleteChannel<Result>(
         _ message: Shared_Proto_Services_V1_DeleteChannelRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4149,7 +2273,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func subscribeChannel<Result>(
+    public func subscribeChannel<Result>(
         _ message: Shared_Proto_Services_V1_SubscribeChannelRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4183,7 +2307,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func unsubscribeChannel<Result>(
+    public func unsubscribeChannel<Result>(
         _ message: Shared_Proto_Services_V1_UnsubscribeChannelRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4216,7 +2340,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func listSubscriptions<Result>(
+    public func listSubscriptions<Result>(
         _ message: Shared_Proto_Services_V1_ListSubscriptionsRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4249,7 +2373,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func getSubscriberCount<Result>(
+    public func getSubscriberCount<Result>(
         _ message: Shared_Proto_Services_V1_GetSubscriberCountRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4283,7 +2407,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func publishPost<Result>(
+    public func publishPost<Result>(
         _ message: Shared_Proto_Services_V1_PublishPostRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4317,7 +2441,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func listPosts<Result>(
+    public func listPosts<Result>(
         _ message: Shared_Proto_Services_V1_ListPostsRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4350,7 +2474,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func getPost<Result>(
+    public func getPost<Result>(
         _ message: Shared_Proto_Services_V1_GetPostRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4383,7 +2507,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func deletePost<Result>(
+    public func deletePost<Result>(
         _ message: Shared_Proto_Services_V1_DeletePostRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4418,7 +2542,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func getCommentGroup<Result>(
+    public func getCommentGroup<Result>(
         _ message: Shared_Proto_Services_V1_GetCommentGroupRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4451,7 +2575,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func addAdmin<Result>(
+    public func addAdmin<Result>(
         _ message: Shared_Proto_Services_V1_AddAdminRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4484,7 +2608,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func removeAdmin<Result>(
+    public func removeAdmin<Result>(
         _ message: Shared_Proto_Services_V1_RemoveAdminRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4517,7 +2641,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func listAdmins<Result>(
+    public func listAdmins<Result>(
         _ message: Shared_Proto_Services_V1_ListAdminsRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4550,7 +2674,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func createInviteLink<Result>(
+    public func createInviteLink<Result>(
         _ message: Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4583,7 +2707,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func revokeInviteLink<Result>(
+    public func revokeInviteLink<Result>(
         _ message: Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -4616,7 +2740,7 @@ extension Shared_Proto_Services_V1_ChannelService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    internal func resolveInviteLink<Result>(
+    public func resolveInviteLink<Result>(
         _ message: Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,

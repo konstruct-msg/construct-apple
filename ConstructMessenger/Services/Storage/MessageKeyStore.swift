@@ -84,7 +84,7 @@ final class MessageKeyStore {
     /// VACUUM the database. Call periodically (e.g. on app backgrounding) after large deletions.
     func vacuum() {
         queue.async { [weak self] in
-            guard let db = self?.db else { return }
+            guard let db = self?.database() else { return }
             sqlite3_exec(db, "VACUUM;", nil, nil, nil)
         }
     }
@@ -109,6 +109,16 @@ final class MessageKeyStore {
         applyFileProtection(at: url)
         configurePragmas()
         createSchema()
+    }
+
+    /// Returns the open DB handle, retrying `openDatabase()` if a previous open
+    /// failed. The first open can fail when the process launches before the first
+    /// unlock following boot (the protected file is not yet accessible). Without
+    /// this, `db` would stay nil for the whole process lifetime and every key
+    /// read/write would silently fail. Must be called on `queue`.
+    private func database() -> OpaquePointer? {
+        if db == nil { openDatabase() }
+        return db
     }
 
     private func configurePragmas() {
@@ -139,7 +149,7 @@ final class MessageKeyStore {
     // MARK: - CRUD
 
     private func executeStore(messageId: String, key: Data, contactId: String) {
-        guard let db else { return }
+        guard let db = database() else { return }
         let sql = """
             INSERT OR REPLACE INTO message_keys (message_id, storage_key, contact_id, created_at)
             VALUES (?, ?, ?, ?);
@@ -164,7 +174,7 @@ final class MessageKeyStore {
     }
 
     private func executeFetch(messageId: String) -> Data? {
-        guard let db else { return nil }
+        guard let db = database() else { return nil }
         let sql = "SELECT storage_key FROM message_keys WHERE message_id = ? LIMIT 1;"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
@@ -179,7 +189,7 @@ final class MessageKeyStore {
     }
 
     private func executeDelete(messageId: String) {
-        guard let db else { return }
+        guard let db = database() else { return }
         let sql = "DELETE FROM message_keys WHERE message_id = ?;"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
@@ -189,7 +199,7 @@ final class MessageKeyStore {
     }
 
     private func executeDeleteAll(contactId: String) {
-        guard let db else { return }
+        guard let db = database() else { return }
         let sql = "DELETE FROM message_keys WHERE contact_id = ?;"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
@@ -218,8 +228,16 @@ final class MessageKeyStore {
 
     private func applyFileProtection(at url: URL) {
         do {
+            // Must match the Core Data store protection level
+            // (PersistenceController uses .completeUntilFirstUserAuthentication).
+            // The encrypted message *content* lives in Core Data and is readable after
+            // first unlock; the *key* lives here. Using the stricter .complete made the
+            // key inaccessible whenever the device is locked, so any locked/background
+            // launch opened this DB with a "disk I/O error" (db stayed nil for the whole
+            // process) → every at-rest message rendered "Message not available", and keys
+            // for messages received while locked were never written at all.
             try FileManager.default.setAttributes(
-                [.protectionKey: FileProtectionType.complete],
+                [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
                 ofItemAtPath: url.path
             )
         } catch {

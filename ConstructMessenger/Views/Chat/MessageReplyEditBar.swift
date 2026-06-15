@@ -36,8 +36,8 @@ struct MessageReplyBar: View {
             Spacer()
 
             Button(action: onCancel) {
-                Text("[×]")
-                    .font(CTFont.bold(13))
+                Image(systemName: "xmark.circle")
+                    .font(CTFont.regular(13))
                     .foregroundColor(Color.CT.textDim)
             }
             .buttonStyle(.plain)
@@ -79,8 +79,8 @@ struct MessageEditBar: View {
             Spacer()
 
             Button(action: onCancel) {
-                Text("[×]")
-                    .font(CTFont.bold(13))
+                Image(systemName: "xmark.circle")
+                    .font(CTFont.regular(13))
                     .foregroundColor(Color.CT.textDim)
             }
             .buttonStyle(.plain)

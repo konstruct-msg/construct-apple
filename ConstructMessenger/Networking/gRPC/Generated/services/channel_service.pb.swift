@@ -21,18 +21,18 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
-enum Shared_Proto_Services_V1_ChannelVisibility: SwiftProtobuf.Enum, Swift.CaseIterable {
-  typealias RawValue = Int
+public enum Shared_Proto_Services_V1_ChannelVisibility: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
   case unspecified // = 0
   case `public` // = 1
   case `private` // = 2
   case UNRECOGNIZED(Int)
 
-  init() {
+  public init() {
     self = .unspecified
   }
 
-  init?(rawValue: Int) {
+  public init?(rawValue: Int) {
     switch rawValue {
     case 0: self = .unspecified
     case 1: self = .public
@@ -41,7 +41,7 @@ enum Shared_Proto_Services_V1_ChannelVisibility: SwiftProtobuf.Enum, Swift.CaseI
     }
   }
 
-  var rawValue: Int {
+  public var rawValue: Int {
     switch self {
     case .unspecified: return 0
     case .public: return 1
@@ -51,7 +51,7 @@ enum Shared_Proto_Services_V1_ChannelVisibility: SwiftProtobuf.Enum, Swift.CaseI
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  static let allCases: [Shared_Proto_Services_V1_ChannelVisibility] = [
+  public static let allCases: [Shared_Proto_Services_V1_ChannelVisibility] = [
     .unspecified,
     .public,
     .private,
@@ -59,655 +59,655 @@ enum Shared_Proto_Services_V1_ChannelVisibility: SwiftProtobuf.Enum, Swift.CaseI
 
 }
 
-struct Shared_Proto_Services_V1_CreateChannelRequest: Sendable {
+public struct Shared_Proto_Services_V1_CreateChannelRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// PUBLIC or PRIVATE
-  var visibility: Shared_Proto_Services_V1_ChannelVisibility = .unspecified
+  public var visibility: Shared_Proto_Services_V1_ChannelVisibility = .unspecified
 
   /// Encrypted channel metadata (name, description, etc.)
-  var encryptedMetadata: Data = Data()
+  public var encryptedMetadata: Data = Data()
 
   /// Optional: max subscribers (0 = unlimited, max 100000)
-  var maxSubscribers: UInt32 = 0
+  public var maxSubscribers: UInt32 = 0
 
   /// Optional: post retention days (0 = default 90)
-  var retentionDays: UInt32 = 0
+  public var retentionDays: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_CreateChannelResponse: Sendable {
+public struct Shared_Proto_Services_V1_CreateChannelResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var createdAt: Int64 = 0
+  public var createdAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GetChannelRequest: Sendable {
+public struct Shared_Proto_Services_V1_GetChannelRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GetChannelResponse: Sendable {
+public struct Shared_Proto_Services_V1_GetChannelResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var visibility: Shared_Proto_Services_V1_ChannelVisibility = .unspecified
+  public var visibility: Shared_Proto_Services_V1_ChannelVisibility = .unspecified
 
-  var encryptedMetadata: Data = Data()
+  public var encryptedMetadata: Data = Data()
 
-  var subscriberCount: UInt32 = 0
+  public var subscriberCount: UInt32 = 0
 
-  var createdAt: Int64 = 0
+  public var createdAt: Int64 = 0
 
-  var updatedAt: Int64 = 0
+  public var updatedAt: Int64 = 0
 
-  var isSubscribed: Bool = false
+  public var isSubscribed: Bool = false
 
-  var isAdmin: Bool = false
+  public var isAdmin: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_UpdateChannelRequest: Sendable {
+public struct Shared_Proto_Services_V1_UpdateChannelRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var encryptedMetadata: Data = Data()
+  public var encryptedMetadata: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_UpdateChannelResponse: Sendable {
+public struct Shared_Proto_Services_V1_UpdateChannelResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var updatedAt: Int64 = 0
+  public var updatedAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_SetChannelVisibilityRequest: Sendable {
+public struct Shared_Proto_Services_V1_SetChannelVisibilityRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var visibility: Shared_Proto_Services_V1_ChannelVisibility = .unspecified
+  public var visibility: Shared_Proto_Services_V1_ChannelVisibility = .unspecified
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_SetChannelVisibilityResponse: Sendable {
+public struct Shared_Proto_Services_V1_SetChannelVisibilityResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_DeleteChannelRequest: Sendable {
+public struct Shared_Proto_Services_V1_DeleteChannelRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_DeleteChannelResponse: Sendable {
+public struct Shared_Proto_Services_V1_DeleteChannelResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_SubscribeChannelRequest: Sendable {
+public struct Shared_Proto_Services_V1_SubscribeChannelRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
   /// For PRIVATE channels: optional invite token
-  var inviteToken: String = String()
+  public var inviteToken: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_SubscribeChannelResponse: Sendable {
+public struct Shared_Proto_Services_V1_SubscribeChannelResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
   /// Encrypted Sender Key (encrypted with device's identity key)
-  var encryptedSenderKey: Data = Data()
+  public var encryptedSenderKey: Data = Data()
 
-  var subscribedAt: Int64 = 0
+  public var subscribedAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_UnsubscribeChannelRequest: Sendable {
+public struct Shared_Proto_Services_V1_UnsubscribeChannelRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
   /// Optional: rotate Sender Key after unsubscribe (admin-only feature)
-  var rotateSenderKey: Bool = false
+  public var rotateSenderKey: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_UnsubscribeChannelResponse: Sendable {
+public struct Shared_Proto_Services_V1_UnsubscribeChannelResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ListSubscriptionsRequest: Sendable {
+public struct Shared_Proto_Services_V1_ListSubscriptionsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Pagination cursor
-  var cursor: String = String()
+  public var cursor: String = String()
 
-  var limit: UInt32 = 0
+  public var limit: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ListSubscriptionsResponse: Sendable {
+public struct Shared_Proto_Services_V1_ListSubscriptionsResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channels: [Shared_Proto_Services_V1_ChannelInfo] = []
+  public var channels: [Shared_Proto_Services_V1_ChannelInfo] = []
 
-  var nextCursor: String = String()
+  public var nextCursor: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GetSubscriberCountRequest: Sendable {
+public struct Shared_Proto_Services_V1_GetSubscriberCountRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GetSubscriberCountResponse: Sendable {
+public struct Shared_Proto_Services_V1_GetSubscriberCountResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var count: UInt32 = 0
+  public var count: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_PublishPostRequest: Sendable {
+public struct Shared_Proto_Services_V1_PublishPostRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
   /// Encrypted post content (Sender Key encrypted)
-  var ciphertext: Data = Data()
+  public var ciphertext: Data = Data()
 
   /// Optional: thread_id for replies
-  var threadID: String = String()
+  public var threadID: String = String()
 
   /// Optional: client-generated message ID for dedup
-  var clientMessageID: String = String()
+  public var clientMessageID: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_PublishPostResponse: Sendable {
+public struct Shared_Proto_Services_V1_PublishPostResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var postID: String = String()
+  public var postID: String = String()
 
-  var sentAt: Int64 = 0
+  public var sentAt: Int64 = 0
 
-  var sequenceNumber: UInt64 = 0
+  public var sequenceNumber: UInt64 = 0
 
-  var expiresAt: Int64 = 0
+  public var expiresAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ListPostsRequest: Sendable {
+public struct Shared_Proto_Services_V1_ListPostsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
   /// Pagination cursor (sequence_number)
-  var afterSequence: UInt64 = 0
+  public var afterSequence: UInt64 = 0
 
-  var limit: UInt32 = 0
+  public var limit: UInt32 = 0
 
   /// Optional: filter by thread_id
-  var threadID: String = String()
+  public var threadID: String = String()
 
   /// Optional: time range
-  var sinceTimestamp: Int64 = 0
+  public var sinceTimestamp: Int64 = 0
 
-  var untilTimestamp: Int64 = 0
+  public var untilTimestamp: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ListPostsResponse: Sendable {
+public struct Shared_Proto_Services_V1_ListPostsResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var posts: [Shared_Proto_Services_V1_PostInfo] = []
+  public var posts: [Shared_Proto_Services_V1_PostInfo] = []
 
-  var nextSequence: UInt64 = 0
+  public var nextSequence: UInt64 = 0
 
-  var hasMore_p: Bool = false
+  public var hasMore_p: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GetPostRequest: Sendable {
+public struct Shared_Proto_Services_V1_GetPostRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var postID: String = String()
+  public var postID: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GetPostResponse: Sendable {
+public struct Shared_Proto_Services_V1_GetPostResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var post: Shared_Proto_Services_V1_PostInfo {
+  public var post: Shared_Proto_Services_V1_PostInfo {
     get {_post ?? Shared_Proto_Services_V1_PostInfo()}
     set {_post = newValue}
   }
   /// Returns true if `post` has been explicitly set.
-  var hasPost: Bool {self._post != nil}
+  public var hasPost: Bool {self._post != nil}
   /// Clears the value of `post`. Subsequent reads from it will return its default value.
-  mutating func clearPost() {self._post = nil}
+  public mutating func clearPost() {self._post = nil}
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 
   fileprivate var _post: Shared_Proto_Services_V1_PostInfo? = nil
 }
 
-struct Shared_Proto_Services_V1_DeletePostRequest: Sendable {
+public struct Shared_Proto_Services_V1_DeletePostRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var postID: String = String()
+  public var postID: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_DeletePostResponse: Sendable {
+public struct Shared_Proto_Services_V1_DeletePostResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GetCommentGroupRequest: Sendable {
+public struct Shared_Proto_Services_V1_GetCommentGroupRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var postID: String = String()
+  public var postID: String = String()
 
   /// Required when creating: initial ratchet tree for the new MLS group
-  var initialRatchetTree: Data = Data()
+  public var initialRatchetTree: Data = Data()
 
   /// Required when creating: encrypted group context
-  var encryptedGroupContext: Data = Data()
+  public var encryptedGroupContext: Data = Data()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_GetCommentGroupResponse: Sendable {
+public struct Shared_Proto_Services_V1_GetCommentGroupResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// MLS group_id for comments on this post
-  var groupID: String = String()
+  public var groupID: String = String()
 
   /// true if group was just created, false if already exists
-  var created: Bool = false
+  public var created: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_AddAdminRequest: Sendable {
+public struct Shared_Proto_Services_V1_AddAdminRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var subscriberDeviceID: String = String()
+  public var subscriberDeviceID: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_AddAdminResponse: Sendable {
+public struct Shared_Proto_Services_V1_AddAdminResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_RemoveAdminRequest: Sendable {
+public struct Shared_Proto_Services_V1_RemoveAdminRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var subscriberDeviceID: String = String()
+  public var subscriberDeviceID: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_RemoveAdminResponse: Sendable {
+public struct Shared_Proto_Services_V1_RemoveAdminResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ListAdminsRequest: Sendable {
+public struct Shared_Proto_Services_V1_ListAdminsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ListAdminsResponse: Sendable {
+public struct Shared_Proto_Services_V1_ListAdminsResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var adminDeviceIds: [String] = []
+  public var adminDeviceIds: [String] = []
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest: Sendable {
+public struct Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
   /// Max uses (0 = unlimited)
-  var maxUses: UInt32 = 0
+  public var maxUses: UInt32 = 0
 
   /// Expiry in seconds (0 = no expiry)
-  var expiresInSeconds: UInt32 = 0
+  public var expiresInSeconds: UInt32 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse: Sendable {
+public struct Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var token: String = String()
+  public var token: String = String()
 
-  var createdAt: Int64 = 0
+  public var createdAt: Int64 = 0
 
-  var expiresAt: Int64 = 0
+  public var expiresAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest: Sendable {
+public struct Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var token: String = String()
+  public var token: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse: Sendable {
+public struct Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var success: Bool = false
+  public var success: Bool = false
 
-  var revokedAt: Int64 = 0
+  public var revokedAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest: Sendable {
+public struct Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var token: String = String()
+  public var token: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse: Sendable {
+public struct Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var encryptedMetadata: Data = Data()
+  public var encryptedMetadata: Data = Data()
 
-  var subscriberCount: UInt32 = 0
+  public var subscriberCount: UInt32 = 0
 
-  var valid: Bool = false
+  public var valid: Bool = false
 
-  var expiresAt: Int64 = 0
+  public var expiresAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_ChannelInfo: Sendable {
+public struct Shared_Proto_Services_V1_ChannelInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var visibility: Shared_Proto_Services_V1_ChannelVisibility = .unspecified
+  public var visibility: Shared_Proto_Services_V1_ChannelVisibility = .unspecified
 
-  var encryptedMetadata: Data = Data()
+  public var encryptedMetadata: Data = Data()
 
-  var subscriberCount: UInt32 = 0
+  public var subscriberCount: UInt32 = 0
 
-  var subscribedAt: Int64 = 0
+  public var subscribedAt: Int64 = 0
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
-struct Shared_Proto_Services_V1_PostInfo: Sendable {
+public struct Shared_Proto_Services_V1_PostInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var postID: String = String()
+  public var postID: String = String()
 
-  var channelID: String = String()
+  public var channelID: String = String()
 
-  var ciphertext: Data = Data()
+  public var ciphertext: Data = Data()
 
-  var sequenceNumber: UInt64 = 0
+  public var sequenceNumber: UInt64 = 0
 
-  var sentAt: Int64 = 0
+  public var sentAt: Int64 = 0
 
-  var expiresAt: Int64 = 0
+  public var expiresAt: Int64 = 0
 
-  var threadID: String = String()
+  public var threadID: String = String()
 
-  var senderDeviceID: String = String()
+  public var senderDeviceID: String = String()
 
-  var unknownFields = SwiftProtobuf.UnknownStorage()
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  init() {}
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -715,14 +715,14 @@ struct Shared_Proto_Services_V1_PostInfo: Sendable {
 fileprivate let _protobuf_package = "shared.proto.services.v1"
 
 extension Shared_Proto_Services_V1_ChannelVisibility: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CHANNEL_VISIBILITY_UNSPECIFIED\0\u{1}CHANNEL_VISIBILITY_PUBLIC\0\u{1}CHANNEL_VISIBILITY_PRIVATE\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CHANNEL_VISIBILITY_UNSPECIFIED\0\u{1}CHANNEL_VISIBILITY_PUBLIC\0\u{1}CHANNEL_VISIBILITY_PRIVATE\0")
 }
 
 extension Shared_Proto_Services_V1_CreateChannelRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".CreateChannelRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}visibility\0\u{3}encrypted_metadata\0\u{3}max_subscribers\0\u{3}retention_days\0")
+  public static let protoMessageName: String = _protobuf_package + ".CreateChannelRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}visibility\0\u{3}encrypted_metadata\0\u{3}max_subscribers\0\u{3}retention_days\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -737,7 +737,7 @@ extension Shared_Proto_Services_V1_CreateChannelRequest: SwiftProtobuf.Message, 
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.visibility != .unspecified {
       try visitor.visitSingularEnumField(value: self.visibility, fieldNumber: 1)
     }
@@ -753,7 +753,7 @@ extension Shared_Proto_Services_V1_CreateChannelRequest: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_CreateChannelRequest, rhs: Shared_Proto_Services_V1_CreateChannelRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_CreateChannelRequest, rhs: Shared_Proto_Services_V1_CreateChannelRequest) -> Bool {
     if lhs.visibility != rhs.visibility {return false}
     if lhs.encryptedMetadata != rhs.encryptedMetadata {return false}
     if lhs.maxSubscribers != rhs.maxSubscribers {return false}
@@ -764,10 +764,10 @@ extension Shared_Proto_Services_V1_CreateChannelRequest: SwiftProtobuf.Message, 
 }
 
 extension Shared_Proto_Services_V1_CreateChannelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".CreateChannelResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}created_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".CreateChannelResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}created_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -780,7 +780,7 @@ extension Shared_Proto_Services_V1_CreateChannelResponse: SwiftProtobuf.Message,
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -790,7 +790,7 @@ extension Shared_Proto_Services_V1_CreateChannelResponse: SwiftProtobuf.Message,
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_CreateChannelResponse, rhs: Shared_Proto_Services_V1_CreateChannelResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_CreateChannelResponse, rhs: Shared_Proto_Services_V1_CreateChannelResponse) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.createdAt != rhs.createdAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -799,10 +799,10 @@ extension Shared_Proto_Services_V1_CreateChannelResponse: SwiftProtobuf.Message,
 }
 
 extension Shared_Proto_Services_V1_GetChannelRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetChannelRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetChannelRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -814,14 +814,14 @@ extension Shared_Proto_Services_V1_GetChannelRequest: SwiftProtobuf.Message, Swi
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetChannelRequest, rhs: Shared_Proto_Services_V1_GetChannelRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetChannelRequest, rhs: Shared_Proto_Services_V1_GetChannelRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -829,10 +829,10 @@ extension Shared_Proto_Services_V1_GetChannelRequest: SwiftProtobuf.Message, Swi
 }
 
 extension Shared_Proto_Services_V1_GetChannelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetChannelResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{1}visibility\0\u{3}encrypted_metadata\0\u{3}subscriber_count\0\u{3}created_at\0\u{3}updated_at\0\u{3}is_subscribed\0\u{3}is_admin\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetChannelResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{1}visibility\0\u{3}encrypted_metadata\0\u{3}subscriber_count\0\u{3}created_at\0\u{3}updated_at\0\u{3}is_subscribed\0\u{3}is_admin\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -851,7 +851,7 @@ extension Shared_Proto_Services_V1_GetChannelResponse: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -879,7 +879,7 @@ extension Shared_Proto_Services_V1_GetChannelResponse: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetChannelResponse, rhs: Shared_Proto_Services_V1_GetChannelResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetChannelResponse, rhs: Shared_Proto_Services_V1_GetChannelResponse) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.visibility != rhs.visibility {return false}
     if lhs.encryptedMetadata != rhs.encryptedMetadata {return false}
@@ -894,10 +894,10 @@ extension Shared_Proto_Services_V1_GetChannelResponse: SwiftProtobuf.Message, Sw
 }
 
 extension Shared_Proto_Services_V1_UpdateChannelRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".UpdateChannelRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}encrypted_metadata\0")
+  public static let protoMessageName: String = _protobuf_package + ".UpdateChannelRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}encrypted_metadata\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -910,7 +910,7 @@ extension Shared_Proto_Services_V1_UpdateChannelRequest: SwiftProtobuf.Message, 
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -920,7 +920,7 @@ extension Shared_Proto_Services_V1_UpdateChannelRequest: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_UpdateChannelRequest, rhs: Shared_Proto_Services_V1_UpdateChannelRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_UpdateChannelRequest, rhs: Shared_Proto_Services_V1_UpdateChannelRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.encryptedMetadata != rhs.encryptedMetadata {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -929,10 +929,10 @@ extension Shared_Proto_Services_V1_UpdateChannelRequest: SwiftProtobuf.Message, 
 }
 
 extension Shared_Proto_Services_V1_UpdateChannelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".UpdateChannelResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}updated_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".UpdateChannelResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}updated_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -945,7 +945,7 @@ extension Shared_Proto_Services_V1_UpdateChannelResponse: SwiftProtobuf.Message,
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
@@ -955,7 +955,7 @@ extension Shared_Proto_Services_V1_UpdateChannelResponse: SwiftProtobuf.Message,
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_UpdateChannelResponse, rhs: Shared_Proto_Services_V1_UpdateChannelResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_UpdateChannelResponse, rhs: Shared_Proto_Services_V1_UpdateChannelResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.updatedAt != rhs.updatedAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -964,10 +964,10 @@ extension Shared_Proto_Services_V1_UpdateChannelResponse: SwiftProtobuf.Message,
 }
 
 extension Shared_Proto_Services_V1_SetChannelVisibilityRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SetChannelVisibilityRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{1}visibility\0")
+  public static let protoMessageName: String = _protobuf_package + ".SetChannelVisibilityRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{1}visibility\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -980,7 +980,7 @@ extension Shared_Proto_Services_V1_SetChannelVisibilityRequest: SwiftProtobuf.Me
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -990,7 +990,7 @@ extension Shared_Proto_Services_V1_SetChannelVisibilityRequest: SwiftProtobuf.Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_SetChannelVisibilityRequest, rhs: Shared_Proto_Services_V1_SetChannelVisibilityRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_SetChannelVisibilityRequest, rhs: Shared_Proto_Services_V1_SetChannelVisibilityRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.visibility != rhs.visibility {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -999,10 +999,10 @@ extension Shared_Proto_Services_V1_SetChannelVisibilityRequest: SwiftProtobuf.Me
 }
 
 extension Shared_Proto_Services_V1_SetChannelVisibilityResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SetChannelVisibilityResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
+  public static let protoMessageName: String = _protobuf_package + ".SetChannelVisibilityResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1014,14 +1014,14 @@ extension Shared_Proto_Services_V1_SetChannelVisibilityResponse: SwiftProtobuf.M
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_SetChannelVisibilityResponse, rhs: Shared_Proto_Services_V1_SetChannelVisibilityResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_SetChannelVisibilityResponse, rhs: Shared_Proto_Services_V1_SetChannelVisibilityResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1029,10 +1029,10 @@ extension Shared_Proto_Services_V1_SetChannelVisibilityResponse: SwiftProtobuf.M
 }
 
 extension Shared_Proto_Services_V1_DeleteChannelRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DeleteChannelRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".DeleteChannelRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1044,14 +1044,14 @@ extension Shared_Proto_Services_V1_DeleteChannelRequest: SwiftProtobuf.Message, 
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_DeleteChannelRequest, rhs: Shared_Proto_Services_V1_DeleteChannelRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_DeleteChannelRequest, rhs: Shared_Proto_Services_V1_DeleteChannelRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1059,10 +1059,10 @@ extension Shared_Proto_Services_V1_DeleteChannelRequest: SwiftProtobuf.Message, 
 }
 
 extension Shared_Proto_Services_V1_DeleteChannelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DeleteChannelResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
+  public static let protoMessageName: String = _protobuf_package + ".DeleteChannelResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1074,14 +1074,14 @@ extension Shared_Proto_Services_V1_DeleteChannelResponse: SwiftProtobuf.Message,
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_DeleteChannelResponse, rhs: Shared_Proto_Services_V1_DeleteChannelResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_DeleteChannelResponse, rhs: Shared_Proto_Services_V1_DeleteChannelResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1089,10 +1089,10 @@ extension Shared_Proto_Services_V1_DeleteChannelResponse: SwiftProtobuf.Message,
 }
 
 extension Shared_Proto_Services_V1_SubscribeChannelRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SubscribeChannelRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}invite_token\0")
+  public static let protoMessageName: String = _protobuf_package + ".SubscribeChannelRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}invite_token\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1105,7 +1105,7 @@ extension Shared_Proto_Services_V1_SubscribeChannelRequest: SwiftProtobuf.Messag
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -1115,7 +1115,7 @@ extension Shared_Proto_Services_V1_SubscribeChannelRequest: SwiftProtobuf.Messag
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_SubscribeChannelRequest, rhs: Shared_Proto_Services_V1_SubscribeChannelRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_SubscribeChannelRequest, rhs: Shared_Proto_Services_V1_SubscribeChannelRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.inviteToken != rhs.inviteToken {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1124,10 +1124,10 @@ extension Shared_Proto_Services_V1_SubscribeChannelRequest: SwiftProtobuf.Messag
 }
 
 extension Shared_Proto_Services_V1_SubscribeChannelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".SubscribeChannelResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}encrypted_sender_key\0\u{3}subscribed_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".SubscribeChannelResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}encrypted_sender_key\0\u{3}subscribed_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1141,7 +1141,7 @@ extension Shared_Proto_Services_V1_SubscribeChannelResponse: SwiftProtobuf.Messa
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
@@ -1154,7 +1154,7 @@ extension Shared_Proto_Services_V1_SubscribeChannelResponse: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_SubscribeChannelResponse, rhs: Shared_Proto_Services_V1_SubscribeChannelResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_SubscribeChannelResponse, rhs: Shared_Proto_Services_V1_SubscribeChannelResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.encryptedSenderKey != rhs.encryptedSenderKey {return false}
     if lhs.subscribedAt != rhs.subscribedAt {return false}
@@ -1164,10 +1164,10 @@ extension Shared_Proto_Services_V1_SubscribeChannelResponse: SwiftProtobuf.Messa
 }
 
 extension Shared_Proto_Services_V1_UnsubscribeChannelRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".UnsubscribeChannelRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}rotate_sender_key\0")
+  public static let protoMessageName: String = _protobuf_package + ".UnsubscribeChannelRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}rotate_sender_key\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1180,7 +1180,7 @@ extension Shared_Proto_Services_V1_UnsubscribeChannelRequest: SwiftProtobuf.Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -1190,7 +1190,7 @@ extension Shared_Proto_Services_V1_UnsubscribeChannelRequest: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_UnsubscribeChannelRequest, rhs: Shared_Proto_Services_V1_UnsubscribeChannelRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_UnsubscribeChannelRequest, rhs: Shared_Proto_Services_V1_UnsubscribeChannelRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.rotateSenderKey != rhs.rotateSenderKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1199,10 +1199,10 @@ extension Shared_Proto_Services_V1_UnsubscribeChannelRequest: SwiftProtobuf.Mess
 }
 
 extension Shared_Proto_Services_V1_UnsubscribeChannelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".UnsubscribeChannelResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
+  public static let protoMessageName: String = _protobuf_package + ".UnsubscribeChannelResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1214,14 +1214,14 @@ extension Shared_Proto_Services_V1_UnsubscribeChannelResponse: SwiftProtobuf.Mes
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_UnsubscribeChannelResponse, rhs: Shared_Proto_Services_V1_UnsubscribeChannelResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_UnsubscribeChannelResponse, rhs: Shared_Proto_Services_V1_UnsubscribeChannelResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1229,10 +1229,10 @@ extension Shared_Proto_Services_V1_UnsubscribeChannelResponse: SwiftProtobuf.Mes
 }
 
 extension Shared_Proto_Services_V1_ListSubscriptionsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ListSubscriptionsRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}cursor\0\u{1}limit\0")
+  public static let protoMessageName: String = _protobuf_package + ".ListSubscriptionsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}cursor\0\u{1}limit\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1245,7 +1245,7 @@ extension Shared_Proto_Services_V1_ListSubscriptionsRequest: SwiftProtobuf.Messa
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.cursor.isEmpty {
       try visitor.visitSingularStringField(value: self.cursor, fieldNumber: 1)
     }
@@ -1255,7 +1255,7 @@ extension Shared_Proto_Services_V1_ListSubscriptionsRequest: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ListSubscriptionsRequest, rhs: Shared_Proto_Services_V1_ListSubscriptionsRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ListSubscriptionsRequest, rhs: Shared_Proto_Services_V1_ListSubscriptionsRequest) -> Bool {
     if lhs.cursor != rhs.cursor {return false}
     if lhs.limit != rhs.limit {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1264,10 +1264,10 @@ extension Shared_Proto_Services_V1_ListSubscriptionsRequest: SwiftProtobuf.Messa
 }
 
 extension Shared_Proto_Services_V1_ListSubscriptionsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ListSubscriptionsResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}channels\0\u{3}next_cursor\0")
+  public static let protoMessageName: String = _protobuf_package + ".ListSubscriptionsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}channels\0\u{3}next_cursor\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1280,7 +1280,7 @@ extension Shared_Proto_Services_V1_ListSubscriptionsResponse: SwiftProtobuf.Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channels.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.channels, fieldNumber: 1)
     }
@@ -1290,7 +1290,7 @@ extension Shared_Proto_Services_V1_ListSubscriptionsResponse: SwiftProtobuf.Mess
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ListSubscriptionsResponse, rhs: Shared_Proto_Services_V1_ListSubscriptionsResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ListSubscriptionsResponse, rhs: Shared_Proto_Services_V1_ListSubscriptionsResponse) -> Bool {
     if lhs.channels != rhs.channels {return false}
     if lhs.nextCursor != rhs.nextCursor {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1299,10 +1299,10 @@ extension Shared_Proto_Services_V1_ListSubscriptionsResponse: SwiftProtobuf.Mess
 }
 
 extension Shared_Proto_Services_V1_GetSubscriberCountRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetSubscriberCountRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetSubscriberCountRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1314,14 +1314,14 @@ extension Shared_Proto_Services_V1_GetSubscriberCountRequest: SwiftProtobuf.Mess
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetSubscriberCountRequest, rhs: Shared_Proto_Services_V1_GetSubscriberCountRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetSubscriberCountRequest, rhs: Shared_Proto_Services_V1_GetSubscriberCountRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1329,10 +1329,10 @@ extension Shared_Proto_Services_V1_GetSubscriberCountRequest: SwiftProtobuf.Mess
 }
 
 extension Shared_Proto_Services_V1_GetSubscriberCountResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetSubscriberCountResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}count\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetSubscriberCountResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}count\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1344,14 +1344,14 @@ extension Shared_Proto_Services_V1_GetSubscriberCountResponse: SwiftProtobuf.Mes
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.count != 0 {
       try visitor.visitSingularUInt32Field(value: self.count, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetSubscriberCountResponse, rhs: Shared_Proto_Services_V1_GetSubscriberCountResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetSubscriberCountResponse, rhs: Shared_Proto_Services_V1_GetSubscriberCountResponse) -> Bool {
     if lhs.count != rhs.count {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1359,10 +1359,10 @@ extension Shared_Proto_Services_V1_GetSubscriberCountResponse: SwiftProtobuf.Mes
 }
 
 extension Shared_Proto_Services_V1_PublishPostRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PublishPostRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{1}ciphertext\0\u{3}thread_id\0\u{3}client_message_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".PublishPostRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{1}ciphertext\0\u{3}thread_id\0\u{3}client_message_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1377,7 +1377,7 @@ extension Shared_Proto_Services_V1_PublishPostRequest: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -1393,7 +1393,7 @@ extension Shared_Proto_Services_V1_PublishPostRequest: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_PublishPostRequest, rhs: Shared_Proto_Services_V1_PublishPostRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_PublishPostRequest, rhs: Shared_Proto_Services_V1_PublishPostRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.ciphertext != rhs.ciphertext {return false}
     if lhs.threadID != rhs.threadID {return false}
@@ -1404,10 +1404,10 @@ extension Shared_Proto_Services_V1_PublishPostRequest: SwiftProtobuf.Message, Sw
 }
 
 extension Shared_Proto_Services_V1_PublishPostResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PublishPostResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_id\0\u{3}sent_at\0\u{3}sequence_number\0\u{3}expires_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".PublishPostResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_id\0\u{3}sent_at\0\u{3}sequence_number\0\u{3}expires_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1422,7 +1422,7 @@ extension Shared_Proto_Services_V1_PublishPostResponse: SwiftProtobuf.Message, S
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.postID.isEmpty {
       try visitor.visitSingularStringField(value: self.postID, fieldNumber: 1)
     }
@@ -1438,7 +1438,7 @@ extension Shared_Proto_Services_V1_PublishPostResponse: SwiftProtobuf.Message, S
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_PublishPostResponse, rhs: Shared_Proto_Services_V1_PublishPostResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_PublishPostResponse, rhs: Shared_Proto_Services_V1_PublishPostResponse) -> Bool {
     if lhs.postID != rhs.postID {return false}
     if lhs.sentAt != rhs.sentAt {return false}
     if lhs.sequenceNumber != rhs.sequenceNumber {return false}
@@ -1449,10 +1449,10 @@ extension Shared_Proto_Services_V1_PublishPostResponse: SwiftProtobuf.Message, S
 }
 
 extension Shared_Proto_Services_V1_ListPostsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ListPostsRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}after_sequence\0\u{1}limit\0\u{3}thread_id\0\u{3}since_timestamp\0\u{3}until_timestamp\0")
+  public static let protoMessageName: String = _protobuf_package + ".ListPostsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}after_sequence\0\u{1}limit\0\u{3}thread_id\0\u{3}since_timestamp\0\u{3}until_timestamp\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1469,7 +1469,7 @@ extension Shared_Proto_Services_V1_ListPostsRequest: SwiftProtobuf.Message, Swif
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -1491,7 +1491,7 @@ extension Shared_Proto_Services_V1_ListPostsRequest: SwiftProtobuf.Message, Swif
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ListPostsRequest, rhs: Shared_Proto_Services_V1_ListPostsRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ListPostsRequest, rhs: Shared_Proto_Services_V1_ListPostsRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.afterSequence != rhs.afterSequence {return false}
     if lhs.limit != rhs.limit {return false}
@@ -1504,10 +1504,10 @@ extension Shared_Proto_Services_V1_ListPostsRequest: SwiftProtobuf.Message, Swif
 }
 
 extension Shared_Proto_Services_V1_ListPostsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ListPostsResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}posts\0\u{3}next_sequence\0\u{3}has_more\0")
+  public static let protoMessageName: String = _protobuf_package + ".ListPostsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}posts\0\u{3}next_sequence\0\u{3}has_more\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1521,7 +1521,7 @@ extension Shared_Proto_Services_V1_ListPostsResponse: SwiftProtobuf.Message, Swi
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.posts.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.posts, fieldNumber: 1)
     }
@@ -1534,7 +1534,7 @@ extension Shared_Proto_Services_V1_ListPostsResponse: SwiftProtobuf.Message, Swi
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ListPostsResponse, rhs: Shared_Proto_Services_V1_ListPostsResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ListPostsResponse, rhs: Shared_Proto_Services_V1_ListPostsResponse) -> Bool {
     if lhs.posts != rhs.posts {return false}
     if lhs.nextSequence != rhs.nextSequence {return false}
     if lhs.hasMore_p != rhs.hasMore_p {return false}
@@ -1544,10 +1544,10 @@ extension Shared_Proto_Services_V1_ListPostsResponse: SwiftProtobuf.Message, Swi
 }
 
 extension Shared_Proto_Services_V1_GetPostRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetPostRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetPostRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1559,14 +1559,14 @@ extension Shared_Proto_Services_V1_GetPostRequest: SwiftProtobuf.Message, SwiftP
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.postID.isEmpty {
       try visitor.visitSingularStringField(value: self.postID, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetPostRequest, rhs: Shared_Proto_Services_V1_GetPostRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetPostRequest, rhs: Shared_Proto_Services_V1_GetPostRequest) -> Bool {
     if lhs.postID != rhs.postID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1574,10 +1574,10 @@ extension Shared_Proto_Services_V1_GetPostRequest: SwiftProtobuf.Message, SwiftP
 }
 
 extension Shared_Proto_Services_V1_GetPostResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetPostResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}post\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetPostResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}post\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1589,7 +1589,7 @@ extension Shared_Proto_Services_V1_GetPostResponse: SwiftProtobuf.Message, Swift
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -1600,7 +1600,7 @@ extension Shared_Proto_Services_V1_GetPostResponse: SwiftProtobuf.Message, Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetPostResponse, rhs: Shared_Proto_Services_V1_GetPostResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetPostResponse, rhs: Shared_Proto_Services_V1_GetPostResponse) -> Bool {
     if lhs._post != rhs._post {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1608,10 +1608,10 @@ extension Shared_Proto_Services_V1_GetPostResponse: SwiftProtobuf.Message, Swift
 }
 
 extension Shared_Proto_Services_V1_DeletePostRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DeletePostRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".DeletePostRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1623,14 +1623,14 @@ extension Shared_Proto_Services_V1_DeletePostRequest: SwiftProtobuf.Message, Swi
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.postID.isEmpty {
       try visitor.visitSingularStringField(value: self.postID, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_DeletePostRequest, rhs: Shared_Proto_Services_V1_DeletePostRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_DeletePostRequest, rhs: Shared_Proto_Services_V1_DeletePostRequest) -> Bool {
     if lhs.postID != rhs.postID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1638,10 +1638,10 @@ extension Shared_Proto_Services_V1_DeletePostRequest: SwiftProtobuf.Message, Swi
 }
 
 extension Shared_Proto_Services_V1_DeletePostResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".DeletePostResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
+  public static let protoMessageName: String = _protobuf_package + ".DeletePostResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1653,14 +1653,14 @@ extension Shared_Proto_Services_V1_DeletePostResponse: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_DeletePostResponse, rhs: Shared_Proto_Services_V1_DeletePostResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_DeletePostResponse, rhs: Shared_Proto_Services_V1_DeletePostResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1668,10 +1668,10 @@ extension Shared_Proto_Services_V1_DeletePostResponse: SwiftProtobuf.Message, Sw
 }
 
 extension Shared_Proto_Services_V1_GetCommentGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetCommentGroupRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_id\0\u{3}initial_ratchet_tree\0\u{3}encrypted_group_context\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetCommentGroupRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_id\0\u{3}initial_ratchet_tree\0\u{3}encrypted_group_context\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1685,7 +1685,7 @@ extension Shared_Proto_Services_V1_GetCommentGroupRequest: SwiftProtobuf.Message
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.postID.isEmpty {
       try visitor.visitSingularStringField(value: self.postID, fieldNumber: 1)
     }
@@ -1698,7 +1698,7 @@ extension Shared_Proto_Services_V1_GetCommentGroupRequest: SwiftProtobuf.Message
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetCommentGroupRequest, rhs: Shared_Proto_Services_V1_GetCommentGroupRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetCommentGroupRequest, rhs: Shared_Proto_Services_V1_GetCommentGroupRequest) -> Bool {
     if lhs.postID != rhs.postID {return false}
     if lhs.initialRatchetTree != rhs.initialRatchetTree {return false}
     if lhs.encryptedGroupContext != rhs.encryptedGroupContext {return false}
@@ -1708,10 +1708,10 @@ extension Shared_Proto_Services_V1_GetCommentGroupRequest: SwiftProtobuf.Message
 }
 
 extension Shared_Proto_Services_V1_GetCommentGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".GetCommentGroupResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}created\0")
+  public static let protoMessageName: String = _protobuf_package + ".GetCommentGroupResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}created\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1724,7 +1724,7 @@ extension Shared_Proto_Services_V1_GetCommentGroupResponse: SwiftProtobuf.Messag
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.groupID.isEmpty {
       try visitor.visitSingularStringField(value: self.groupID, fieldNumber: 1)
     }
@@ -1734,7 +1734,7 @@ extension Shared_Proto_Services_V1_GetCommentGroupResponse: SwiftProtobuf.Messag
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_GetCommentGroupResponse, rhs: Shared_Proto_Services_V1_GetCommentGroupResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetCommentGroupResponse, rhs: Shared_Proto_Services_V1_GetCommentGroupResponse) -> Bool {
     if lhs.groupID != rhs.groupID {return false}
     if lhs.created != rhs.created {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1743,10 +1743,10 @@ extension Shared_Proto_Services_V1_GetCommentGroupResponse: SwiftProtobuf.Messag
 }
 
 extension Shared_Proto_Services_V1_AddAdminRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".AddAdminRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}subscriber_device_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".AddAdminRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}subscriber_device_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1759,7 +1759,7 @@ extension Shared_Proto_Services_V1_AddAdminRequest: SwiftProtobuf.Message, Swift
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -1769,7 +1769,7 @@ extension Shared_Proto_Services_V1_AddAdminRequest: SwiftProtobuf.Message, Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_AddAdminRequest, rhs: Shared_Proto_Services_V1_AddAdminRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_AddAdminRequest, rhs: Shared_Proto_Services_V1_AddAdminRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.subscriberDeviceID != rhs.subscriberDeviceID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1778,10 +1778,10 @@ extension Shared_Proto_Services_V1_AddAdminRequest: SwiftProtobuf.Message, Swift
 }
 
 extension Shared_Proto_Services_V1_AddAdminResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".AddAdminResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
+  public static let protoMessageName: String = _protobuf_package + ".AddAdminResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1793,14 +1793,14 @@ extension Shared_Proto_Services_V1_AddAdminResponse: SwiftProtobuf.Message, Swif
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_AddAdminResponse, rhs: Shared_Proto_Services_V1_AddAdminResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_AddAdminResponse, rhs: Shared_Proto_Services_V1_AddAdminResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1808,10 +1808,10 @@ extension Shared_Proto_Services_V1_AddAdminResponse: SwiftProtobuf.Message, Swif
 }
 
 extension Shared_Proto_Services_V1_RemoveAdminRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".RemoveAdminRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}subscriber_device_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".RemoveAdminRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}subscriber_device_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1824,7 +1824,7 @@ extension Shared_Proto_Services_V1_RemoveAdminRequest: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -1834,7 +1834,7 @@ extension Shared_Proto_Services_V1_RemoveAdminRequest: SwiftProtobuf.Message, Sw
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_RemoveAdminRequest, rhs: Shared_Proto_Services_V1_RemoveAdminRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_RemoveAdminRequest, rhs: Shared_Proto_Services_V1_RemoveAdminRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.subscriberDeviceID != rhs.subscriberDeviceID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1843,10 +1843,10 @@ extension Shared_Proto_Services_V1_RemoveAdminRequest: SwiftProtobuf.Message, Sw
 }
 
 extension Shared_Proto_Services_V1_RemoveAdminResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".RemoveAdminResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
+  public static let protoMessageName: String = _protobuf_package + ".RemoveAdminResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1858,14 +1858,14 @@ extension Shared_Proto_Services_V1_RemoveAdminResponse: SwiftProtobuf.Message, S
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_RemoveAdminResponse, rhs: Shared_Proto_Services_V1_RemoveAdminResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_RemoveAdminResponse, rhs: Shared_Proto_Services_V1_RemoveAdminResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1873,10 +1873,10 @@ extension Shared_Proto_Services_V1_RemoveAdminResponse: SwiftProtobuf.Message, S
 }
 
 extension Shared_Proto_Services_V1_ListAdminsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ListAdminsRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".ListAdminsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1888,14 +1888,14 @@ extension Shared_Proto_Services_V1_ListAdminsRequest: SwiftProtobuf.Message, Swi
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ListAdminsRequest, rhs: Shared_Proto_Services_V1_ListAdminsRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ListAdminsRequest, rhs: Shared_Proto_Services_V1_ListAdminsRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1903,10 +1903,10 @@ extension Shared_Proto_Services_V1_ListAdminsRequest: SwiftProtobuf.Message, Swi
 }
 
 extension Shared_Proto_Services_V1_ListAdminsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ListAdminsResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}admin_device_ids\0")
+  public static let protoMessageName: String = _protobuf_package + ".ListAdminsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}admin_device_ids\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1918,14 +1918,14 @@ extension Shared_Proto_Services_V1_ListAdminsResponse: SwiftProtobuf.Message, Sw
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.adminDeviceIds.isEmpty {
       try visitor.visitRepeatedStringField(value: self.adminDeviceIds, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ListAdminsResponse, rhs: Shared_Proto_Services_V1_ListAdminsResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ListAdminsResponse, rhs: Shared_Proto_Services_V1_ListAdminsResponse) -> Bool {
     if lhs.adminDeviceIds != rhs.adminDeviceIds {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1933,10 +1933,10 @@ extension Shared_Proto_Services_V1_ListAdminsResponse: SwiftProtobuf.Message, Sw
 }
 
 extension Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ChannelServiceCreateInviteLinkRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}max_uses\0\u{3}expires_in_seconds\0")
+  public static let protoMessageName: String = _protobuf_package + ".ChannelServiceCreateInviteLinkRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}max_uses\0\u{3}expires_in_seconds\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1950,7 +1950,7 @@ extension Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest: SwiftP
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -1963,7 +1963,7 @@ extension Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest: SwiftP
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest, rhs: Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest, rhs: Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.maxUses != rhs.maxUses {return false}
     if lhs.expiresInSeconds != rhs.expiresInSeconds {return false}
@@ -1973,10 +1973,10 @@ extension Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkRequest: SwiftP
 }
 
 extension Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ChannelServiceCreateInviteLinkResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0\u{3}created_at\0\u{3}expires_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".ChannelServiceCreateInviteLinkResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0\u{3}created_at\0\u{3}expires_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -1990,7 +1990,7 @@ extension Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse: Swift
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.token.isEmpty {
       try visitor.visitSingularStringField(value: self.token, fieldNumber: 1)
     }
@@ -2003,7 +2003,7 @@ extension Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse: Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse, rhs: Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse, rhs: Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse) -> Bool {
     if lhs.token != rhs.token {return false}
     if lhs.createdAt != rhs.createdAt {return false}
     if lhs.expiresAt != rhs.expiresAt {return false}
@@ -2013,10 +2013,10 @@ extension Shared_Proto_Services_V1_ChannelServiceCreateInviteLinkResponse: Swift
 }
 
 extension Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ChannelServiceRevokeInviteLinkRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{1}token\0")
+  public static let protoMessageName: String = _protobuf_package + ".ChannelServiceRevokeInviteLinkRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{1}token\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2029,7 +2029,7 @@ extension Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest: SwiftP
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -2039,7 +2039,7 @@ extension Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest: SwiftP
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest, rhs: Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest, rhs: Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.token != rhs.token {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -2048,10 +2048,10 @@ extension Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkRequest: SwiftP
 }
 
 extension Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ChannelServiceRevokeInviteLinkResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}revoked_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".ChannelServiceRevokeInviteLinkResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}revoked_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2064,7 +2064,7 @@ extension Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse: Swift
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
@@ -2074,7 +2074,7 @@ extension Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse: Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse, rhs: Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse, rhs: Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.revokedAt != rhs.revokedAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -2083,10 +2083,10 @@ extension Shared_Proto_Services_V1_ChannelServiceRevokeInviteLinkResponse: Swift
 }
 
 extension Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ChannelServiceResolveInviteLinkRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0")
+  public static let protoMessageName: String = _protobuf_package + ".ChannelServiceResolveInviteLinkRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2098,14 +2098,14 @@ extension Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest: Swift
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.token.isEmpty {
       try visitor.visitSingularStringField(value: self.token, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest, rhs: Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest, rhs: Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest) -> Bool {
     if lhs.token != rhs.token {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -2113,10 +2113,10 @@ extension Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkRequest: Swift
 }
 
 extension Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ChannelServiceResolveInviteLinkResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}encrypted_metadata\0\u{3}subscriber_count\0\u{1}valid\0\u{3}expires_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".ChannelServiceResolveInviteLinkResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{3}encrypted_metadata\0\u{3}subscriber_count\0\u{1}valid\0\u{3}expires_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2132,7 +2132,7 @@ extension Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse: Swif
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -2151,7 +2151,7 @@ extension Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse: Swif
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse, rhs: Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse, rhs: Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.encryptedMetadata != rhs.encryptedMetadata {return false}
     if lhs.subscriberCount != rhs.subscriberCount {return false}
@@ -2163,10 +2163,10 @@ extension Shared_Proto_Services_V1_ChannelServiceResolveInviteLinkResponse: Swif
 }
 
 extension Shared_Proto_Services_V1_ChannelInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ChannelInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{1}visibility\0\u{3}encrypted_metadata\0\u{3}subscriber_count\0\u{3}subscribed_at\0")
+  public static let protoMessageName: String = _protobuf_package + ".ChannelInfo"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}channel_id\0\u{1}visibility\0\u{3}encrypted_metadata\0\u{3}subscriber_count\0\u{3}subscribed_at\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2182,7 +2182,7 @@ extension Shared_Proto_Services_V1_ChannelInfo: SwiftProtobuf.Message, SwiftProt
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.channelID.isEmpty {
       try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 1)
     }
@@ -2201,7 +2201,7 @@ extension Shared_Proto_Services_V1_ChannelInfo: SwiftProtobuf.Message, SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_ChannelInfo, rhs: Shared_Proto_Services_V1_ChannelInfo) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_ChannelInfo, rhs: Shared_Proto_Services_V1_ChannelInfo) -> Bool {
     if lhs.channelID != rhs.channelID {return false}
     if lhs.visibility != rhs.visibility {return false}
     if lhs.encryptedMetadata != rhs.encryptedMetadata {return false}
@@ -2213,10 +2213,10 @@ extension Shared_Proto_Services_V1_ChannelInfo: SwiftProtobuf.Message, SwiftProt
 }
 
 extension Shared_Proto_Services_V1_PostInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".PostInfo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_id\0\u{3}channel_id\0\u{1}ciphertext\0\u{3}sequence_number\0\u{3}sent_at\0\u{3}expires_at\0\u{3}thread_id\0\u{3}sender_device_id\0")
+  public static let protoMessageName: String = _protobuf_package + ".PostInfo"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}post_id\0\u{3}channel_id\0\u{1}ciphertext\0\u{3}sequence_number\0\u{3}sent_at\0\u{3}expires_at\0\u{3}thread_id\0\u{3}sender_device_id\0")
 
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -2235,7 +2235,7 @@ extension Shared_Proto_Services_V1_PostInfo: SwiftProtobuf.Message, SwiftProtobu
     }
   }
 
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.postID.isEmpty {
       try visitor.visitSingularStringField(value: self.postID, fieldNumber: 1)
     }
@@ -2263,7 +2263,7 @@ extension Shared_Proto_Services_V1_PostInfo: SwiftProtobuf.Message, SwiftProtobu
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Shared_Proto_Services_V1_PostInfo, rhs: Shared_Proto_Services_V1_PostInfo) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_PostInfo, rhs: Shared_Proto_Services_V1_PostInfo) -> Bool {
     if lhs.postID != rhs.postID {return false}
     if lhs.channelID != rhs.channelID {return false}
     if lhs.ciphertext != rhs.ciphertext {return false}

@@ -85,7 +85,7 @@ final class MessagingServiceClient: Sendable {
             request.attemptID = attemptId
 
             Log.debug("""
-                📤 sendMessage RPC →
+                   sendMessage RPC →
                    messageId      = \(messageId)
                    attemptId      = \(attemptId)
                    senderId       = \(sealedInnerBytes != nil ? "[STEALTH]" : senderId)

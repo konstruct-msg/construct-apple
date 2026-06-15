@@ -48,7 +48,7 @@ struct SecurityView: View {
                             .font(CTFont.regular(13))
                             .foregroundStyle(Color.CT.text)
                         Spacer()
-                        Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+                        Image(systemName: "chevron.right").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
                     }
                     .securityRowInsets()
                     .contentShape(Rectangle())
@@ -78,7 +78,8 @@ struct SecurityView: View {
                     CTSep(style: .thin)
                     Button { showingDisablePinSheet = true } label: {
                         HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                            CTRowIcon("[x]", color: Color.CT.danger)
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(Color.CT.danger)
                             Text(LocalizedStringKey("disable_pin_code"))
                                 .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.danger)
@@ -112,7 +113,7 @@ struct SecurityView: View {
                             }
                         }
                         Spacer()
-                        Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+                        Image(systemName: "chevron.right").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
                     }
                     .securityRowInsets()
                     .contentShape(Rectangle())
@@ -135,7 +136,7 @@ struct SecurityView: View {
                                 .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.text)
                             Spacer()
-                            Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+                            Image(systemName: "chevron.right").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
                         }
                         .securityRowInsets()
                         .contentShape(Rectangle())
@@ -145,7 +146,8 @@ struct SecurityView: View {
                     CTSep(style: .thin)
                     Button { showingDisableDuressAlert = true } label: {
                         HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                            CTRowIcon("[x]", color: Color.CT.danger)
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(Color.CT.danger)
                             Text(LocalizedStringKey("disable_duress_pin"))
                                 .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.danger)
@@ -165,7 +167,7 @@ struct SecurityView: View {
                                 .foregroundStyle(securityViewModel.isPinEnabled
                                                  ? Color.CT.text : Color.CT.text.opacity(0.4))
                             Spacer()
-                            Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+                            Image(systemName: "chevron.right").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
                         }
                         .securityRowInsets()
                         .contentShape(Rectangle())
@@ -431,7 +433,7 @@ struct SecurityView: View {
                 Text(securityViewModel.lockDelay.localizedTitle)
                     .font(CTFont.regular(12))
                     .foregroundStyle(Color.CT.textDim)
-                Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+                Image(systemName: "chevron.right").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
             }
             .securityRowInsets()
             .contentShape(Rectangle())

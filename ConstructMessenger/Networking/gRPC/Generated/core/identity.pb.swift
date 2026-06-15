@@ -110,6 +110,15 @@ public enum Shared_Proto_Core_V1_DeviceCapabilities: SwiftProtobuf.Enum, Swift.C
 
   /// Supports background sync - bit 5
   case backgroundSync // = 32
+
+  /// Supports direct P2P message transport (QUIC/ICE) - bit 6
+  /// Set by desktop clients and mobile clients that support foreground P2P burst mode.
+  /// When both peers have this bit, the server MAY send a P2PHandoffRequest.
+  case p2PMessaging // = 64
+
+  /// Can act as a Tier-2 relay node for other peers - bit 7
+  /// Reserved for future community relay node support.
+  case relayNode // = 128
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -125,6 +134,8 @@ public enum Shared_Proto_Core_V1_DeviceCapabilities: SwiftProtobuf.Enum, Swift.C
     case 8: self = .sealedSender
     case 16: self = .push
     case 32: self = .backgroundSync
+    case 64: self = .p2PMessaging
+    case 128: self = .relayNode
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -138,6 +149,8 @@ public enum Shared_Proto_Core_V1_DeviceCapabilities: SwiftProtobuf.Enum, Swift.C
     case .sealedSender: return 8
     case .push: return 16
     case .backgroundSync: return 32
+    case .p2PMessaging: return 64
+    case .relayNode: return 128
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -151,6 +164,8 @@ public enum Shared_Proto_Core_V1_DeviceCapabilities: SwiftProtobuf.Enum, Swift.C
     .sealedSender,
     .push,
     .backgroundSync,
+    .p2PMessaging,
+    .relayNode,
   ]
 
 }
@@ -260,7 +275,7 @@ extension Shared_Proto_Core_V1_DevicePlatform: SwiftProtobuf._ProtoNameProviding
 }
 
 extension Shared_Proto_Core_V1_DeviceCapabilities: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DEVICE_CAPABILITIES_UNSPECIFIED\0\u{1}DEVICE_CAPABILITIES_WEBRTC\0\u{1}DEVICE_CAPABILITIES_MLS\0\u{2}\u{2}DEVICE_CAPABILITIES_PQ_CRYPTO\0\u{2}\u{4}DEVICE_CAPABILITIES_SEALED_SENDER\0\u{2}\u{8}DEVICE_CAPABILITIES_PUSH\0\u{2}\u{10}DEVICE_CAPABILITIES_BACKGROUND_SYNC\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DEVICE_CAPABILITIES_UNSPECIFIED\0\u{1}DEVICE_CAPABILITIES_WEBRTC\0\u{1}DEVICE_CAPABILITIES_MLS\0\u{2}\u{2}DEVICE_CAPABILITIES_PQ_CRYPTO\0\u{2}\u{4}DEVICE_CAPABILITIES_SEALED_SENDER\0\u{2}\u{8}DEVICE_CAPABILITIES_PUSH\0\u{2}\u{10}DEVICE_CAPABILITIES_BACKGROUND_SYNC\0\u{2} DEVICE_CAPABILITIES_P2P_MESSAGING\0\u{2}@\u{1}DEVICE_CAPABILITIES_RELAY_NODE\0")
 }
 
 extension Shared_Proto_Core_V1_UserId: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

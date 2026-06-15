@@ -63,21 +63,20 @@ class ConnectionStatusManager {
         case connecting
         case unknown
 
-        var displayText: String {
+        func text(localized: Bool = false, phase: String? = nil) -> String {
             switch self {
-            case .connected: return "Connected"
-            case .disconnected: return "Disconnected"
-            case .connecting: return "Connecting..."
-            case .unknown: return "Unknown"
-            }
-        }
-
-        var localizedKey: String {
-            switch self {
-            case .connected: return "connected"
-            case .disconnected: return "disconnected"
-            case .connecting: return "connecting"
-            case .unknown: return "unknown"
+            case .connected:
+                return localized
+                    ? NSLocalizedString("connected", comment: "")
+                    : "Connected"
+            case .disconnected:
+                return localized
+                    ? NSLocalizedString("disconnected", comment: "")
+                    : "Disconnected"
+            case .connecting, .unknown:
+                return phase ?? (localized
+                    ? NSLocalizedString("status_connecting", comment: "")
+                    : "Connecting...")
             }
         }
     }
@@ -85,6 +84,24 @@ class ConnectionStatusManager {
     private init() {
         recompute()
         startRecomputeLoop()
+    }
+
+    var statusIndicatorText: String {
+        if isStreamPaused {
+            return NSLocalizedString("status_paused", comment: "")
+        }
+        return connectionStatus.text(localized: true, phase: connectingPhase)
+    }
+
+    func navigationStatusSubtitle(isInitializingSession: Bool) -> String? {
+        if isInitializingSession {
+            return NSLocalizedString("status_encrypting", comment: "")
+        } else if connectionStatus == .connecting {
+            return NSLocalizedString("status_connecting", comment: "")
+        } else if !isConnected {
+            return NSLocalizedString("status_no_connection", comment: "")
+        }
+        return nil
     }
 
     // MARK: - Recompute loop (single writer)
@@ -136,7 +153,7 @@ class ConnectionStatusManager {
                 }
             case .veilActive:
                 newStatus = hasRecentRpc ? .connected : .connecting
-            case .veilProbing, .veilDegraded, .veilCooldown:
+            case .veilProbing, .veilCooldown:
                 newStatus = .connecting
             }
         }
@@ -145,7 +162,7 @@ class ConnectionStatusManager {
 
         if newStatus != oldStatus {
             connectionStatus = newStatus
-            Log.info("Status: \(oldStatus.displayText) → \(newStatus.displayText) (state=\(mirrorState.shortLabel), recentRpc=\(hasRecentRpc))", category: "ConnectionStatus")
+            Log.info("Status: \(oldStatus.text()) → \(newStatus.text()) (state=\(mirrorState.shortLabel), recentRpc=\(hasRecentRpc))", category: "ConnectionStatus")
         }
         if newPhase != oldPhase {
             connectingPhase = newPhase
@@ -161,12 +178,10 @@ class ConnectionStatusManager {
             return "retry direct (\(fails))"
         case .direct:
             return nil
-        case .veilProbing(let attempt):
-            return "VEIL probe \(attempt)"
+        case .veilProbing:
+            return "VEIL probe"
         case .veilActive(let relay, _, _):
             return "VEIL \(relay)"
-        case .veilDegraded(let relay, _, let fails):
-            return "VEIL degraded \(relay) (\(fails))"
         case .veilCooldown(let until):
             let secs = max(0, Int(until.timeIntervalSinceNow))
             return "VEIL cooldown (\(secs)s)"

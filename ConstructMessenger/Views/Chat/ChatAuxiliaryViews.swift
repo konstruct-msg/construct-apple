@@ -77,7 +77,7 @@ struct ChatSearchOverlayView: View {
                             searchText = ""
                         }
                     } label: {
-                        Text("[x]")
+                        Image(systemName: "xmark.circle.fill")
                             .font(CTFont.regular(14))
                             .foregroundStyle(Color.CT.accentDim)
                     }

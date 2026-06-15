@@ -23,16 +23,6 @@ enum WebRTCSessionError: Error {
     case invalidState(String)
 }
 
-/// Coarse health signal derived from `iceConnectionState`. The UI uses this to
-/// decide whether to show the reconnecting pulse + status text.
-/// `.checking` (initial setup) is *not* surfaced here — InCallView already
-/// renders the "connecting" pulse during that phase via its own
-/// `isConnecting` parameter.
-enum CallQuality: Sendable, Equatable {
-    case good          // .connected or .completed
-    case reconnecting  // .disconnected — transient, may recover
-}
-
 @MainActor
 protocol WebRTCSessionProtocol: AnyObject {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)? { get set }
@@ -114,6 +104,15 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     private var localAudioTrack: RTCAudioTrack?
 
+    /// WebRTC rejects `addIceCandidate` before the remote description is set, and a
+    /// rejected candidate is lost permanently (no retry) — a frequent cause of a call
+    /// stuck at `iceConnectionState=checking` when the peer's candidates arrive before
+    /// its SDP. We buffer remote candidates until the remote description is applied,
+    /// then drain them. Single owner of ICE-candidate ordering (was fragmented across
+    /// CallManager's ad-hoc `pendingIceCandidates` which covered only one path).
+    private var remoteDescriptionSet = false
+    private var pendingRemoteCandidates: [WebRTCIceCandidate] = []
+
     init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?) throws {
         self.role = role
 
@@ -140,7 +139,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
         self.peerConnection.delegate = self
 
-        try Self.configureAudioSession()
+        Self.configureAudioSession()
         self.localAudioTrack = Self.makeLocalAudioTrack(factory: factory)
         if let track = localAudioTrack {
             let sender = peerConnection.add(track, streamIds: ["audio"])
@@ -156,9 +155,13 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     func close() {
         peerConnection.close()
-        #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
-        #endif
+        // Do NOT deactivate the audio session here. A raw
+        // `AVAudioSession.setActive(false)` bypasses RTCAudioSession and desyncs its
+        // internal active-state from the real session. With `useManualAudio`, that
+        // leaves the shared voice-processing audio unit wedged, so the NEXT call in
+        // the same app session is silent until a full relaunch re-runs
+        // WebRTCRuntime.bootstrap(). Deactivation is owned by CallAudioController,
+        // driven by CallKit's didDeactivate (RTCAudioSession.audioSessionDidDeactivate).
     }
 
     func setMuted(_ muted: Bool) {
@@ -192,14 +195,40 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     func setRemoteOffer(sdp: String) async throws {
         let desc = RTCSessionDescription(type: .offer, sdp: sdp)
         try await setRemoteDescription(desc)
+        await onRemoteDescriptionSet()
     }
 
     func setRemoteAnswer(sdp: String) async throws {
         let desc = RTCSessionDescription(type: .answer, sdp: sdp)
         try await setRemoteDescription(desc)
+        await onRemoteDescriptionSet()
     }
 
     func addRemoteIceCandidate(_ candidate: WebRTCIceCandidate) async throws {
+        // Buffer until the remote description is set — adding earlier makes WebRTC
+        // drop the candidate permanently, stranding ICE at `checking`.
+        guard remoteDescriptionSet else {
+            pendingRemoteCandidates.append(candidate)
+            Log.info("ICE: buffered remote candidate (\(pendingRemoteCandidates.count) pending, no remote SDP yet) \(Self.candidateSummary(candidate))", category: "Calls")
+            return
+        }
+        try await addCandidateNow(candidate)
+    }
+
+    /// Drain any candidates that arrived before the remote description was applied.
+    private func onRemoteDescriptionSet() async {
+        remoteDescriptionSet = true
+        guard !pendingRemoteCandidates.isEmpty else { return }
+        let buffered = pendingRemoteCandidates
+        pendingRemoteCandidates.removeAll()
+        Log.info("ICE: remote SDP applied — draining \(buffered.count) buffered candidate(s)", category: "Calls")
+        for candidate in buffered {
+            do { try await addCandidateNow(candidate) }
+            catch { Log.error("ICE: failed to add buffered candidate: \(error)", category: "Calls") }
+        }
+    }
+
+    private func addCandidateNow(_ candidate: WebRTCIceCandidate) async throws {
         let rtc = RTCIceCandidate(
             sdp: candidate.sdp,
             sdpMLineIndex: candidate.sdpMLineIndex,
@@ -210,6 +239,17 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
                 if let error { cont.resume(throwing: error) } else { cont.resume() }
             }
         }
+        Log.info("ICE: added remote candidate \(Self.candidateSummary(candidate))", category: "Calls")
+    }
+
+    /// Compact one-line candidate descriptor (type + protocol) for diagnostics, e.g.
+    /// `typ relay udp`. Avoids dumping the full SDP (IPs/ports) at info level.
+    nonisolated private static func candidateSummary(_ candidate: WebRTCIceCandidate) -> String {
+        let parts = candidate.sdp.split(separator: " ").map(String.init)
+        var typ = "?"
+        if let i = parts.firstIndex(of: "typ"), i + 1 < parts.count { typ = parts[i + 1] }
+        let proto = parts.count > 2 ? parts[2].lowercased() : "?"
+        return "typ \(typ) \(proto)"
     }
 
     // MARK: - Helpers
@@ -271,16 +311,13 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         return factory.audioTrack(with: source, trackId: "audio0")
     }
 
-    private static func configureAudioSession() throws {
+    private static func configureAudioSession() {
         #if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
-        try? session.setPreferredSampleRate(NetworkTiming.Calls.audioPreferredSampleRateHz)
-        try? session.setPreferredIOBufferDuration(NetworkTiming.Calls.audioPreferredIOBufferDuration)
-        // Do NOT call setActive(true) here — CallKit manages the audio session lifecycle.
-        // Activation happens via CXProviderDelegate.provider(_:didActivate:audioSession:).
-        // Calling setActive() here races with CallKit's own activation and throws
-        // NSOSStatusErrorDomain 561017449 when a previous call's session is still tearing down.
+        // Single owner: CallAudioController sets the category (and never activates —
+        // CallKit owns activation). This is idempotent with the pre-fulfill call in
+        // the CallKit start/answer handlers; doing it here too covers the in-app
+        // answer path that bypasses the CXAnswerCallAction transaction.
+        CallAudioController.prepareCategory()
         #endif
         // macOS: WebRTC handles audio device selection natively; no session configuration needed.
     }
@@ -293,6 +330,7 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
             sdpMid: candidate.sdpMid ?? "",
             sdpMLineIndex: candidate.sdpMLineIndex
         )
+        Log.debug("ICE: local candidate generated \(Self.candidateSummary(c))", category: "Calls")
         Task { @MainActor in
             self.onLocalIceCandidate?(c)
         }
