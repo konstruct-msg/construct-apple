@@ -48,6 +48,7 @@ struct UserProfileView: View {
     @State private var showingShareAlert = false
     @State private var shareAlertMessage = ""
     @State private var isSharingInProgress = false
+    @State private var showAvatarViewer = false
     @State private var showingSafetyNumbers = false
     @State private var hasSession = false
     @State private var sessionSuiteLabel = NSLocalizedString("session_crypto_no_session", comment: "")
@@ -141,6 +142,9 @@ struct UserProfileView: View {
                 size: 96,
                 isActive: false
             )
+            // Tap to view the avatar full-screen (only when there is an image).
+            .contentShape(Rectangle())
+            .onTapGesture { if avatarImage != nil { showAvatarViewer = true } }
 
             if user.isBlocked {
                 Text("[ BLOCKED ]")
@@ -151,6 +155,11 @@ struct UserProfileView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
+        .fullScreenCover(isPresented: $showAvatarViewer) {
+            if let avatarImage {
+                FullScreenImageView(image: avatarImage, isPresented: $showAvatarViewer)
+            }
+        }
     }
 
     // MARK: - Identity section
