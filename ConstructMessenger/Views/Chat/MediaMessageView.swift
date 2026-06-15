@@ -185,15 +185,24 @@ private struct SingleMediaCell: View {
             return
         }
         isLoading = true
-        downloadProgress = 0.1
+        downloadProgress = 0.02
+        // Real byte-level progress: encrypted total comes from the descriptor `size`.
+        let total = Double((itemDict["size"] as? Int) ?? 0)
+        let onProgress: @Sendable (Int64) -> Void = { received in
+            guard total > 0 else { return }
+            // Reserve the top 10% for the decrypt + thumbnail step below.
+            let frac = min(0.9, Double(received) / total)
+            Task { @MainActor in downloadProgress = frac }
+        }
         Task {
             do {
                 let imageData = try await MediaManager.shared.downloadAndDecryptMedia(
                     mediaId: mediaId,
                     mediaUrl: mediaUrl,
-                    mediaKey: mediaKey
+                    mediaKey: mediaKey,
+                    onProgress: onProgress
                 )
-                await MainActor.run { downloadProgress = 0.9 }
+                await MainActor.run { downloadProgress = 0.95 }
                 guard let image = PlatformImage(data: imageData) else {
                     await MainActor.run {
                         isLoading = false

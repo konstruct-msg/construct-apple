@@ -209,7 +209,7 @@ class MediaManager {
     }
 
     /// Downloads encrypted media data with up to 3 automatic retries on transient VEIL/stream failures.
-    private static func downloadWithRetry(mediaId: String) async throws -> Data {
+    private static func downloadWithRetry(mediaId: String, onProgress: (@Sendable (Int64) -> Void)? = nil) async throws -> Data {
         let retryableCodes: Set<RPCError.Code> = [.cancelled, .unavailable, .deadlineExceeded, .unknown]
         // Generous delays: media downloads take 40 s to fail under DPI; VEIL needs ~1–2 s to come up.
         let delays: [UInt64] = [3_000_000_000, 8_000_000_000, 15_000_000_000]
@@ -225,7 +225,7 @@ class MediaManager {
                 if let ns = delay {
                     try await Task.sleep(nanoseconds: ns)
                 }
-                return try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId)
+                return try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId, onProgress: onProgress)
             } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
                 lastError = error
                 Log.info("Download dropped (code=\(error.code)) — will retry", category: "MediaManager")
@@ -381,7 +381,7 @@ class MediaManager {
     ///   - mediaUrl: URL to download encrypted media from
     ///   - mediaKey: Raw 32-byte AES-256-GCM key (already decrypted as part of message)
     /// - Returns: Decrypted media data
-    func downloadAndDecryptMedia(mediaId: String, mediaUrl: String, mediaKey: Data) async throws -> Data {
+    func downloadAndDecryptMedia(mediaId: String, mediaUrl: String, mediaKey: Data, onProgress: (@Sendable (Int64) -> Void)? = nil) async throws -> Data {
         // 1. In-memory cache
         let cacheKey = mediaId
         if let cachedData = mediaCache[cacheKey] {
@@ -406,7 +406,7 @@ class MediaManager {
 
         Log.info("Downloading media from: \(mediaUrl)", category: "MediaManager")
 
-        let encryptedData = try await Self.downloadWithRetry(mediaId: mediaId)
+        let encryptedData = try await Self.downloadWithRetry(mediaId: mediaId, onProgress: onProgress)
         Log.debug("   Downloaded encrypted data: \(encryptedData.count) bytes", category: "MediaManager")
 
         let decryptedData = try CryptoManager.shared.decryptMediaData(encryptedData, with: mediaKey)
