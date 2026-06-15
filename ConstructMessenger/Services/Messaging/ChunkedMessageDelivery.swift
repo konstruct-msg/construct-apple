@@ -187,6 +187,9 @@ final class ChunkedMessageReassembler {
         switch content.content {
         case .text(let msg):
             return (msg.text, msg.hasQuoted ? msg.quoted : nil)
+        case .mediaAlbum(let album):
+            // Binary media → re-serialize to the local media JSON the views parse.
+            return (MediaWireCodec.mediaJSON(from: album) ?? "", album.hasQuoted ? album.quoted : nil)
         default:
             return ("", nil)
         }

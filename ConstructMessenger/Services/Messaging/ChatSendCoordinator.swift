@@ -267,11 +267,25 @@ final class ChatSendCoordinator {
 
     // MARK: - Text message
 
+    /// Build a QuotedMessage for a reply, or nil. Shared by text and media sends.
+    func buildQuoted(replyTo: Message?, replyToContentOverride: String?) -> Shared_Proto_Messaging_V1_QuotedMessage? {
+        guard let reply = replyTo else { return nil }
+        var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
+        quoted.messageID = reply.id
+        quoted.textPreview = replyToContentOverride ?? reply.displayText
+        return quoted
+    }
+
+    /// - Parameter wirePlaintext: pre-serialized `MessageContent` for the wire (used by
+    ///   media to send the binary `.mediaAlbum` proto). When nil, a `.text` MessageContent
+    ///   is built from `text`. `text` is always what's stored locally (`decryptedContent`)
+    ///   and synced to own devices — for media that's the local JSON.
     func sendTextMessage(
         text: String,
         replyTo: Message?,
         replyToContentOverride: String? = nil,
-        localThumbnails: [Data] = []
+        localThumbnails: [Data] = [],
+        wirePlaintext: Data? = nil
     ) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = AuthSessionManager.shared.currentUserId else {
@@ -281,18 +295,26 @@ final class ChatSendCoordinator {
         viewModel?.isSending = true
         do {
             let messageId = UUID().uuidString.lowercased()
-            var textMsg = Shared_Proto_Messaging_V1_TextMessage()
-            textMsg.text = text
-            if let reply = replyTo {
-                var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
-                quoted.messageID = reply.id
-                quoted.textPreview = replyToContentOverride ?? reply.displayText
-                textMsg.quoted = quoted
+            let plaintextData: Data
+            if let wirePlaintext {
+                plaintextData = wirePlaintext
+            } else {
+                var textMsg = Shared_Proto_Messaging_V1_TextMessage()
+                textMsg.text = text
+                if let quoted = buildQuoted(replyTo: replyTo, replyToContentOverride: replyToContentOverride) {
+                    textMsg.quoted = quoted
+                }
+                var content = Shared_Proto_Messaging_V1_MessageContent()
+                content.text = textMsg
+                guard let d = try? content.serializedData(), !d.isEmpty else {
+                    Log.error("Failed to serialize MessageContent proto", category: "ChatViewModel")
+                    viewModel?.isSending = false
+                    return
+                }
+                plaintextData = d
             }
-            var content = Shared_Proto_Messaging_V1_MessageContent()
-            content.text = textMsg
-            guard let plaintextData = try? content.serializedData(), !plaintextData.isEmpty else {
-                Log.error("Failed to serialize MessageContent proto", category: "ChatViewModel")
+            guard !plaintextData.isEmpty else {
+                Log.error("Empty wire plaintext", category: "ChatViewModel")
                 viewModel?.isSending = false
                 return
             }
@@ -522,7 +544,22 @@ final class ChatSendCoordinator {
                 )
                 pendingMediaUploads.removeValue(forKey: placeholderId)
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
-                sendTextMessage(text: result.messageContent, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: result.thumbnails)
+                // Binary wire: send the album as a protobuf `.mediaAlbum` MessageContent.
+                // Local display stays the JSON (`result.messageContent`) so the view layer
+                // and multi-device sync are unchanged.
+                let wireContent = MediaWireCodec.albumContent(
+                    mediaList: result.mediaList,
+                    caption: caption,
+                    quoted: buildQuoted(replyTo: replyTo, replyToContentOverride: replyToContentOverride)
+                )
+                let wirePlaintext = try? wireContent.serializedData()
+                sendTextMessage(
+                    text: result.messageContent,
+                    replyTo: replyTo,
+                    replyToContentOverride: replyToContentOverride,
+                    localThumbnails: result.thumbnails,
+                    wirePlaintext: wirePlaintext
+                )
             } catch {
                 Log.error("Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
                 updateMessageStatus(messageId: placeholderId, status: .failed)

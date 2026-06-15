@@ -11,7 +11,8 @@ class MediaUploadManager {
     // MARK: - Media Upload Result
     
     struct MediaUploadResult {
-        let messageContent: String
+        let messageContent: String          // local JSON (for display + multi-device sync)
+        let mediaList: [MediaMessageData]    // for building the binary wire proto (.mediaAlbum)
         let thumbnails: [Data]
     }
     
@@ -70,7 +71,7 @@ class MediaUploadManager {
             mediaList: mediaDataList
         )
         
-        return MediaUploadResult(messageContent: messageContent, thumbnails: thumbnails)
+        return MediaUploadResult(messageContent: messageContent, mediaList: mediaDataList, thumbnails: thumbnails)
     }
     
     // MARK: - Media Content Builder
