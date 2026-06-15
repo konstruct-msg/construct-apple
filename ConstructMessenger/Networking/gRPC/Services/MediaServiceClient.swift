@@ -23,7 +23,7 @@ final class MediaServiceClient: Sendable {
 
     // MARK: - Models
 
-    struct UploadedMedia {
+    struct UploadedMedia: Codable, Sendable {
         let mediaId: String
         let mediaUrl: String
         let encryptionKey: Data
