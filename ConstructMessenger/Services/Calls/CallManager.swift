@@ -271,8 +271,14 @@ final class CallManager: CallUIManaging {
             }
         }
 
-        let callId  = (payload["call_id"]  as? String) ?? reportedUUID.uuidString
-        let callerId = (payload["caller_id"] as? String) ?? "Unknown"
+        // Call metadata is nested under "construct_call" by the server
+        // (ApnsPayload::voip_incoming_call) — read it from there, not the flat payload,
+        // or call_id/caller_id are missing and we fall back to the random reportedUUID /
+        // "Unknown" (the bug that made the callee's signaling use a call_id the server
+        // never created). Keep the flat payload as a defensive fallback.
+        let callData = (payload["construct_call"] as? [AnyHashable: Any]) ?? payload
+        let callId  = (callData["call_id"]  as? String) ?? reportedUUID.uuidString
+        let callerId = (callData["caller_id"] as? String) ?? "Unknown"
         // Privacy: do NOT use caller_name from push payload (exposed to APNs infrastructure).
         // Resolve from local CoreData via `resolvedDisplayName` (profile-shared name →
         // server username → deterministic generated fallback). Never shows raw UUID.
