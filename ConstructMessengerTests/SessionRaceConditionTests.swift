@@ -315,4 +315,31 @@ final class SessionRaceConditionTests: XCTestCase {
         XCTAssertTrue(SessionReducer.shouldSendEndSession(
             lastSentAt: now.addingTimeInterval(-120), now: now, cooldown: cooldown))
     }
+
+    // MARK: 12. END_SESSION staleness — the post-launch reset hypothesis
+
+    /// Pins the stale-END_SESSION decision the device logs are instrumented around.
+    /// The `establishedAt == nil` case (no in-memory establishment, e.g. right after launch)
+    /// currently returns false — i.e. CANNOT filter — which is the suspected cause of healthy
+    /// sessions being reset by a re-delivered old END_SESSION. Phase 3 (persisted establishment)
+    /// will change this; this test documents the present behaviour.
+    @MainActor
+    func testIsEndSessionStale_Decision() {
+        let fudge: UInt64 = 5
+
+        // No in-memory establishment → cannot filter (the post-launch blind spot).
+        XCTAssertFalse(SessionReducer.isEndSessionStale(establishedAt: nil, timestamp: 100, fudgeSeconds: fudge))
+
+        // END_SESSION clearly pre-dates establishment (beyond fudge) → stale, filtered.
+        XCTAssertTrue(SessionReducer.isEndSessionStale(establishedAt: 1_000, timestamp: 900, fudgeSeconds: fudge))
+
+        // END_SESSION at/after establishment → fresh, acted on.
+        XCTAssertFalse(SessionReducer.isEndSessionStale(establishedAt: 1_000, timestamp: 1_000, fudgeSeconds: fudge))
+        XCTAssertFalse(SessionReducer.isEndSessionStale(establishedAt: 1_000, timestamp: 1_100, fudgeSeconds: fudge))
+
+        // Within the fudge window before establishment → treated as fresh (clock-skew tolerance).
+        XCTAssertFalse(SessionReducer.isEndSessionStale(establishedAt: 1_000, timestamp: 996, fudgeSeconds: fudge))
+        // Just outside the fudge window → stale.
+        XCTAssertTrue(SessionReducer.isEndSessionStale(establishedAt: 1_000, timestamp: 994, fudgeSeconds: fudge))
+    }
 }

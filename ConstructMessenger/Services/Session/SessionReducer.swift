@@ -145,4 +145,15 @@ enum SessionReducer {
         guard let lastSentAt else { return true }
         return now.timeIntervalSince(lastSentAt) >= cooldown
     }
+
+    /// Whether a received END_SESSION pre-dates our established session and should be discarded.
+    ///
+    /// Known limitation (Phase 3 target): `establishedAt` is in-memory only today, so it is `nil`
+    /// right after launch — and this returns `false` (cannot filter), which lets a re-delivered
+    /// old END_SESSION reset a healthy session. Persisting establishment time fixes that; until
+    /// then this is the decision device logs are instrumented around.
+    static func isEndSessionStale(establishedAt: UInt64?, timestamp: UInt64, fudgeSeconds: UInt64) -> Bool {
+        guard let establishedAt else { return false }
+        return timestamp + fudgeSeconds < establishedAt
+    }
 }

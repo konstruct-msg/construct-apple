@@ -395,9 +395,24 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
     }
 
+    /// Seconds of clock-skew tolerance when deciding whether an END_SESSION pre-dates our session.
+    private static let endSessionStaleFudge: UInt64 = 5
+
     func messageRouter(_ router: MessageRouter, isEndSessionStale userId: String, timestamp: UInt64) -> Bool {
-        guard let established = establishedAt(for: userId) else { return false }
-        return timestamp + 5 < established
+        let established = establishedAt(for: userId)
+        let stale = SessionReducer.isEndSessionStale(
+            establishedAt: established, timestamp: timestamp, fudgeSeconds: Self.endSessionStaleFudge
+        )
+        // Diagnostic for the post-launch reset hypothesis: `established == nil` means we have no
+        // in-memory establishment record, so we CANNOT filter a possibly-stale END_SESSION — and
+        // if a live Rust session exists, it is about to be torn down. Surface this in device logs.
+        if established == nil {
+            let hasLive = CryptoManager.shared.hasSession(for: userId)
+            Log.info("SESSION_STATE[end_session_stale_check]: \(userId.prefix(8))… ts=\(timestamp) established=nil hasLiveSession=\(hasLive) → not filtered\(hasLive ? " ⚠️ live session will be reset by a possibly-stale END_SESSION (no in-memory establishedAt)" : "")", category: "SessionInit")
+        } else {
+            Log.info("SESSION_STATE[end_session_stale_check]: \(userId.prefix(8))… ts=\(timestamp) established=\(established!) → \(stale ? "STALE (filtered)" : "fresh (acted on)")", category: "SessionInit")
+        }
+        return stale
     }
 
     func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64) {
