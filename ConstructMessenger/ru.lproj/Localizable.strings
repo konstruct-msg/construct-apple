@@ -88,6 +88,11 @@
 
 // MARK: - Settings -> Account
 "display_name" = "Отображаемое имя";
+"local_name" = "Внутреннее имя";
+"local_name_unset" = "Не задано";
+"local_name_placeholder" = "Введите имя";
+"local_name_clear" = "Очистить";
+"local_name_footer" = "Видно только вам. Контакт об этом не узнает.";
 "show_my_qr_code" = "Показать мой QR-код";
 "share_contact" = "Поделиться контактом";
 "share_contact_footer" = "Поделитесь своим QR-кодом или ссылкой, чтобы другие могли добавить вас в контакты";

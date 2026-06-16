@@ -14,10 +14,15 @@ extension User {
     /// The best available display name for this contact.
     ///
     /// Priority:
-    /// 1. `displayName` if non-empty (profile-shared real name or server username)
-    /// 2. `username` if non-empty (server-assigned handle, shown without @)
-    /// 3. Generated deterministic name from `id` (always non-nil fallback)
+    /// 1. `localAlias` if non-empty (local-only override the user assigned; never leaves
+    ///    the device) — wins over everything so the user always sees the name they chose
+    /// 2. `displayName` if non-empty (profile-shared real name or server username)
+    /// 3. `username` if non-empty (server-assigned handle, shown without @)
+    /// 4. Generated deterministic name from `id` (always non-nil fallback)
     var resolvedDisplayName: String {
+        if let alias = localAlias?.trimmingCharacters(in: .whitespacesAndNewlines), !alias.isEmpty {
+            return alias
+        }
         if !displayName.isEmpty { return displayName }
         if !username.isEmpty { return username }
         return DisplayNameGenerator.generate(from: id)

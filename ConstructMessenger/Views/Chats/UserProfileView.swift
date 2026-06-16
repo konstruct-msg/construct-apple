@@ -52,6 +52,8 @@ struct UserProfileView: View {
     @State private var showingSafetyNumbers = false
     @State private var hasSession = false
     @State private var sessionSuiteLabel = NSLocalizedString("session_crypto_no_session", comment: "")
+    @State private var showingLocalNameEditor = false
+    @State private var draftLocalName = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -128,6 +130,16 @@ struct UserProfileView: View {
                 theirDisplayName: user.resolvedDisplayName
             )
         }
+        .alert(LocalizedStringKey("local_name"), isPresented: $showingLocalNameEditor) {
+            TextField(NSLocalizedString("local_name_placeholder", comment: ""), text: $draftLocalName)
+            Button(LocalizedStringKey("save")) { saveLocalName() }
+            if !(user.localAlias ?? "").isEmpty {
+                Button(LocalizedStringKey("local_name_clear"), role: .destructive) { clearLocalName() }
+            }
+            Button(LocalizedStringKey("cancel"), role: .cancel) {}
+        } message: {
+            Text(LocalizedStringKey("local_name_footer"))
+        }
     }
 
     // MARK: - Avatar header
@@ -181,6 +193,27 @@ struct UserProfileView: View {
                     .font(CTFont.regular(14))
                     .foregroundStyle(Color.CT.text)
             }
+            flatRowDivider()
+
+            // Local-only alias the user assigns. Never leaves the device; overrides the
+            // resolved display name everywhere (chat list, header, call screens).
+            Button {
+                draftLocalName = user.localAlias ?? ""
+                showingLocalNameEditor = true
+            } label: {
+                profileRow(label: NSLocalizedString("local_name", comment: "")) {
+                    HStack(spacing: 8) {
+                        let hasAlias = !(user.localAlias ?? "").isEmpty
+                        Text(hasAlias ? (user.localAlias ?? "") : NSLocalizedString("local_name_unset", comment: ""))
+                            .font(CTFont.regular(14))
+                            .foregroundStyle(hasAlias ? Color.CT.text : Color.CT.textDim)
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.CT.accent.opacity(0.7))
+                    }
+                }
+            }
+            .buttonStyle(.plain)
             flatRowDivider()
 
             profileRow(label: NSLocalizedString("user_id", comment: "")) {
@@ -451,6 +484,18 @@ struct UserProfileView: View {
 
     private func handleBlockToggle() {
         user.isBlocked.toggle()
+        viewContext.saveAndLog(category: "UserProfileView")
+    }
+
+    /// Persist the local alias. Empty/whitespace clears it (falls back to the resolved name).
+    private func saveLocalName() {
+        let trimmed = draftLocalName.trimmingCharacters(in: .whitespacesAndNewlines)
+        user.localAlias = trimmed.isEmpty ? nil : trimmed
+        viewContext.saveAndLog(category: "UserProfileView")
+    }
+
+    private func clearLocalName() {
+        user.localAlias = nil
         viewContext.saveAndLog(category: "UserProfileView")
     }
 }

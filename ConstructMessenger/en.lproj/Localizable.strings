@@ -89,6 +89,11 @@
 
 // MARK: - Settings -> Account
 "display_name" = "Display Name";
+"local_name" = "Local name";
+"local_name_unset" = "Not set";
+"local_name_placeholder" = "Enter a name";
+"local_name_clear" = "Clear";
+"local_name_footer" = "Visible only to you. The contact never sees it.";
 "show_my_qr_code" = "Show My QR Code";
 "share_contact" = "Share Contact";
 "share_contact_footer" = "Share your QR code or link to let others add you as a contact";
