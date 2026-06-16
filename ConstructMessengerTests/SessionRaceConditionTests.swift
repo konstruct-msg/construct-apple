@@ -5,285 +5,286 @@
 //  Tests for the Swift session state machine — the concurrency guards that prevent
 //  double-init, message loss during init, and orphaned state after END_SESSION.
 //
-//  These tests use a lightweight `MockSessionStateMachine` that reimplements the
-//  same locking pattern as SessionCoordinator (ContactSessionState + pendingFirstMessages)
-//  so we can drive edge cases without needing CoreData, Rust, or a live gRPC stream.
+//  Phase 1 / 1.5 of SESSION_COORDINATOR_REFACTOR_SPEC: these tests drive the REAL
+//  production `SessionReducer` — both `incomingDisposition` (the queue decision now used
+//  by MessageRouter) and `reduce` (the phase lifecycle used by SessionCoordinator) — not a
+//  parallel reimplementation. The only test-side code is a trivial effector (`SessionDriver`)
+//  that applies the emitted effects to an in-memory queue, mirroring ConnectionLoopTests.
 //
 
 import XCTest
 @testable import Construct_Messenger
 
-// MARK: - Mock session state machine
+// MARK: - In-test effector over the real SessionReducer
 
-/// Minimal reimplementation of SessionCoordinator's concurrency guards.
-/// Mirrors: contactSessionState, pendingFirstMessages, beginInit, markActive.
+/// Applies the effects emitted by the production `SessionReducer` to simple in-memory
+/// bookkeeping (the message queue + processed log + init counter that MessageRouter and
+/// SessionCoordinator own in production). All decision logic lives in `SessionReducer`.
 @MainActor
-private final class MockSessionStateMachine {
+private final class SessionDriver {
 
-    enum State: Equatable {
-        case idle
-        case initializing
-        case active
-    }
+    /// Real reducer phase, keyed by peer id (`nil` == absent / idle).
+    private(set) var phases: [String: SessionReducer.Phase] = [:]
 
-    // Per-contact state
-    private var states: [String: State] = [:]
-
-    // Pending message queue (mirrors pendingFirstMessages)
-    private var pendingQueue: [String: [String]] = [:]
-
-    // Tracks how many times initSession was actually invoked per contact
+    // Effector-owned bookkeeping.
+    private(set) var pending: [String: [String]] = [:]
+    private(set) var processed: [String] = []
     private(set) var initInvokedCount: [String: Int] = [:]
 
-    // Tracks how many times a message was processed
-    private(set) var processedMessages: [String] = []
-
-    // MARK: - State accessors
-
-    func state(for userId: String) -> State {
-        states[userId] ?? .idle
+    /// Drive a phase-lifecycle event through the real reducer and perform its effects.
+    func send(_ event: SessionReducer.Event, for userId: String) {
+        let (newPhase, effects) = SessionReducer.reduce(phases[userId], on: event)
+        phases[userId] = newPhase
+        for effect in effects { perform(effect, id: nil, for: userId) }
     }
 
-    func isInitializing(_ userId: String) -> Bool {
-        states[userId] == .initializing
+    /// Drive an incoming message through the real `incomingDisposition`, then — if it starts
+    /// init — mark the phase `.initializing`, exactly as the init executor does in production.
+    func handleIncoming(_ id: String, from userId: String, hasActiveSession: Bool = false) {
+        let effects = SessionReducer.incomingDisposition(
+            hasActiveSession: hasActiveSession,
+            isInitInFlight: isInitializing(userId)
+        )
+        for effect in effects { perform(effect, id: id, for: userId) }
+        if effects.contains(.startInit) { send(.initStarted, for: userId) }
     }
 
-    // MARK: - Simulate incoming message
-
-    /// Route an incoming message from `senderId`.
-    /// - If already initializing: enqueue the message.
-    /// - If active session exists: process immediately.
-    /// - Otherwise: start init, enqueue message, mark as initializing.
-    func handleIncomingMessage(_ messageId: String, from senderId: String) {
-        switch states[senderId] ?? .idle {
-        case .initializing:
-            // Init already in flight — queue the message
-            pendingQueue[senderId, default: []].append(messageId)
-
-        case .active:
-            processedMessages.append(messageId)
-
-        case .idle:
-            // Kick off init and queue the message
-            states[senderId] = .initializing
-            initInvokedCount[senderId, default: 0] += 1
-            pendingQueue[senderId, default: []].append(messageId)
+    private func perform(_ effect: SessionReducer.Effect, id: String?, for userId: String) {
+        switch effect {
+        case .startInit:
+            initInvokedCount[userId, default: 0] += 1
+        case .queueMessage:
+            if let id { pending[userId, default: []].append(id) }
+        case .processMessage:
+            if let id { processed.append(id) }
+        case .drainQueuedMessages:
+            let queued = pending.removeValue(forKey: userId) ?? []
+            processed.append(contentsOf: queued)
+        case .clearQueuedMessages:
+            pending.removeValue(forKey: userId)
         }
     }
 
-    /// Called when session init completes successfully.
-    func onInitSuccess(for userId: String) {
-        states[userId] = .active
-        // Drain the pending queue
-        let queued = pendingQueue.removeValue(forKey: userId) ?? []
-        processedMessages.append(contentsOf: queued)
+    // MARK: Convenience accessors
+
+    func isIdle(_ userId: String) -> Bool { phases[userId] == nil }
+
+    func isInitializing(_ userId: String) -> Bool {
+        if case .initializing = phases[userId] { return true }
+        return false
     }
 
-    /// Called when session init fails (or END_SESSION received during init).
-    func onInitFailure(for userId: String) {
-        states[userId] = .idle
-        pendingQueue.removeValue(forKey: userId)
+    func isActive(_ userId: String) -> Bool {
+        if case .active = phases[userId] { return true }
+        return false
     }
 
-    /// Called when END_SESSION received from peer — wipe state.
-    func onEndSession(from userId: String) {
-        states[userId] = .idle
-        pendingQueue.removeValue(forKey: userId)
-    }
+    func pendingCount(for userId: String) -> Int { pending[userId]?.count ?? 0 }
 
-    func pendingCount(for userId: String) -> Int {
-        pendingQueue[userId]?.count ?? 0
-    }
-
-    func resetProcessed() {
-        processedMessages.removeAll()
-    }
+    func resetProcessed() { processed.removeAll() }
 }
 
 // MARK: - Tests
 
 final class SessionRaceConditionTests: XCTestCase {
 
-    // MARK: 1. Double-init guard: second call while init in-flight is rejected
+    /// Fixed timestamp for `markActive`/`initSucceeded` — the reducer never reads the clock,
+    /// so any stable value works and keeps tests deterministic.
+    private let ts: UInt64 = 1_000
 
-    /// When two messages from the same sender arrive before session init completes,
-    /// only ONE init attempt must be made. The second message is queued, not dropped.
+    // MARK: 1. Double-init guard: second message while init in-flight is queued, not re-inited
+
     @MainActor
-    func testDoubleInitGuard_SecondMessageQueued_InitCalledOnce() async {
-        let machine = MockSessionStateMachine()
+    func testDoubleInitGuard_SecondMessageQueued_InitCalledOnce() {
+        let d = SessionDriver()
         let sender = "alice-\(UUID().uuidString)"
 
-        // First message: triggers init
-        machine.handleIncomingMessage("msg-1", from: sender)
-        XCTAssertEqual(machine.state(for: sender), .initializing)
-        XCTAssertEqual(machine.initInvokedCount[sender], 1, "Init must be started exactly once")
-        XCTAssertEqual(machine.pendingCount(for: sender), 1, "First message must be queued")
+        d.handleIncoming("msg-1", from: sender)
+        XCTAssertTrue(d.isInitializing(sender))
+        XCTAssertEqual(d.initInvokedCount[sender], 1, "Init must be started exactly once")
+        XCTAssertEqual(d.pendingCount(for: sender), 1, "First message must be queued")
 
-        // Second message arrives while init is in-flight
-        machine.handleIncomingMessage("msg-2", from: sender)
-        XCTAssertEqual(machine.initInvokedCount[sender], 1, "Init must NOT be started a second time")
-        XCTAssertEqual(machine.pendingCount(for: sender), 2, "Second message must also be queued")
-        XCTAssertEqual(machine.state(for: sender), .initializing, "State must remain .initializing")
+        d.handleIncoming("msg-2", from: sender)
+        XCTAssertEqual(d.initInvokedCount[sender], 1, "Init must NOT be started a second time")
+        XCTAssertEqual(d.pendingCount(for: sender), 2, "Second message must also be queued")
+        XCTAssertTrue(d.isInitializing(sender), "State must remain .initializing")
     }
 
     // MARK: 2. Pending queue is drained after init success — messages not lost
 
-    /// Messages queued during init must all be processed after init succeeds.
-    /// This is the core invariant preventing the "first message lost" bug.
     @MainActor
-    func testMessageQueuedDuringInit_DrainedAfterSuccess_NoMessageLost() async {
-        let machine = MockSessionStateMachine()
+    func testMessageQueuedDuringInit_DrainedAfterSuccess_NoMessageLost() {
+        let d = SessionDriver()
         let sender = "bob-\(UUID().uuidString)"
 
-        // 5 messages arrive while init is in-flight
+        for i in 1...5 { d.handleIncoming("msg-\(i)", from: sender) }
+        XCTAssertEqual(d.pendingCount(for: sender), 5)
+        XCTAssertTrue(d.processed.isEmpty, "No messages processed yet — init not done")
+
+        d.send(.initSucceeded(at: ts), for: sender)
+
+        XCTAssertTrue(d.isActive(sender))
+        XCTAssertEqual(d.pendingCount(for: sender), 0, "Queue must be empty after drain")
+        XCTAssertEqual(d.processed.count, 5, "All 5 messages must be processed")
         for i in 1...5 {
-            machine.handleIncomingMessage("msg-\(i)", from: sender)
-        }
-        XCTAssertEqual(machine.pendingCount(for: sender), 5)
-        XCTAssertTrue(machine.processedMessages.isEmpty, "No messages processed yet — init not done")
-
-        // Init completes
-        machine.onInitSuccess(for: sender)
-
-        XCTAssertEqual(machine.state(for: sender), .active)
-        XCTAssertEqual(machine.pendingCount(for: sender), 0, "Queue must be empty after drain")
-        XCTAssertEqual(machine.processedMessages.count, 5, "All 5 messages must be processed")
-
-        for i in 1...5 {
-            XCTAssertTrue(machine.processedMessages.contains("msg-\(i)"),
-                          "msg-\(i) must be in processed set")
+            XCTAssertTrue(d.processed.contains("msg-\(i)"), "msg-\(i) must be in processed set")
         }
     }
 
     // MARK: 3. END_SESSION during init — queue cleared, no orphan
 
-    /// If END_SESSION arrives while session init is in-flight, the queue must be cleared
-    /// and state reset to idle. No orphaned pending messages.
     @MainActor
-    func testEndSessionDuringInit_QueueClearedAndStateReset() async {
-        let machine = MockSessionStateMachine()
+    func testEndSessionDuringInit_QueueClearedAndStateReset() {
+        let d = SessionDriver()
         let sender = "charlie-\(UUID().uuidString)"
 
-        machine.handleIncomingMessage("msg-A", from: sender)
-        machine.handleIncomingMessage("msg-B", from: sender)
-        XCTAssertEqual(machine.pendingCount(for: sender), 2)
+        d.handleIncoming("msg-A", from: sender)
+        d.handleIncoming("msg-B", from: sender)
+        XCTAssertEqual(d.pendingCount(for: sender), 2)
 
-        // END_SESSION arrives before init completes
-        machine.onEndSession(from: sender)
+        d.send(.endSessionReceived, for: sender)
 
-        XCTAssertEqual(machine.state(for: sender), .idle, "State must reset to idle")
-        XCTAssertEqual(machine.pendingCount(for: sender), 0, "Queue must be empty — no orphan")
-        XCTAssertTrue(machine.processedMessages.isEmpty, "No messages must be processed")
+        XCTAssertTrue(d.isIdle(sender), "State must reset to idle")
+        XCTAssertEqual(d.pendingCount(for: sender), 0, "Queue must be empty — no orphan")
+        XCTAssertTrue(d.processed.isEmpty, "No messages must be processed")
     }
 
     // MARK: 4. Init failure — state resets, queue cleared
 
     @MainActor
-    func testInitFailure_StateResetsToIdle_QueueCleared() async {
-        let machine = MockSessionStateMachine()
+    func testInitFailure_StateResetsToIdle_QueueCleared() {
+        let d = SessionDriver()
         let sender = "dave-\(UUID().uuidString)"
 
-        machine.handleIncomingMessage("msg-X", from: sender)
-        XCTAssertEqual(machine.state(for: sender), .initializing)
+        d.handleIncoming("msg-X", from: sender)
+        XCTAssertTrue(d.isInitializing(sender))
 
-        machine.onInitFailure(for: sender)
+        d.send(.initFailed, for: sender)
 
-        XCTAssertEqual(machine.state(for: sender), .idle)
-        XCTAssertEqual(machine.pendingCount(for: sender), 0)
+        XCTAssertTrue(d.isIdle(sender))
+        XCTAssertEqual(d.pendingCount(for: sender), 0)
     }
 
     // MARK: 5. Active session — message processed immediately, no queuing
 
     @MainActor
-    func testActiveSession_MessageProcessedImmediately() async {
-        let machine = MockSessionStateMachine()
+    func testActiveSession_MessageProcessedImmediately() {
+        let d = SessionDriver()
         let sender = "eve-\(UUID().uuidString)"
 
-        // Establish session
-        machine.handleIncomingMessage("ping", from: sender)
-        machine.onInitSuccess(for: sender)
-        machine.resetProcessed()  // reset counter after drain
+        d.handleIncoming("ping", from: sender)
+        d.send(.initSucceeded(at: ts), for: sender)
+        d.resetProcessed()
 
-        // Next message with active session
-        machine.handleIncomingMessage("user-msg", from: sender)
+        d.handleIncoming("user-msg", from: sender, hasActiveSession: true)
 
-        XCTAssertEqual(machine.state(for: sender), .active)
-        XCTAssertEqual(machine.processedMessages, ["user-msg"],
+        XCTAssertTrue(d.isActive(sender))
+        XCTAssertEqual(d.processed, ["user-msg"],
                        "Message must be processed immediately when session is active")
-        XCTAssertEqual(machine.pendingCount(for: sender), 0, "No queuing for active session")
+        XCTAssertEqual(d.pendingCount(for: sender), 0, "No queuing for active session")
     }
 
     // MARK: 6. Multi-contact isolation — init for one contact doesn't affect others
 
     @MainActor
-    func testMultiContactIsolation_InitForOneContactDoesNotAffectOthers() async {
-        let machine = MockSessionStateMachine()
+    func testMultiContactIsolation_InitForOneContactDoesNotAffectOthers() {
+        let d = SessionDriver()
         let alice = "alice-\(UUID().uuidString)"
         let bob   = "bob-\(UUID().uuidString)"
 
-        // Alice's init in-flight
-        machine.handleIncomingMessage("alice-msg-1", from: alice)
-        XCTAssertEqual(machine.state(for: alice), .initializing)
+        d.handleIncoming("alice-msg-1", from: alice)
+        XCTAssertTrue(d.isInitializing(alice))
 
-        // Bob's message arrives independently — should start its own init
-        machine.handleIncomingMessage("bob-msg-1", from: bob)
-        XCTAssertEqual(machine.state(for: bob), .initializing)
-        XCTAssertEqual(machine.initInvokedCount[alice], 1)
-        XCTAssertEqual(machine.initInvokedCount[bob], 1)
+        d.handleIncoming("bob-msg-1", from: bob)
+        XCTAssertTrue(d.isInitializing(bob))
+        XCTAssertEqual(d.initInvokedCount[alice], 1)
+        XCTAssertEqual(d.initInvokedCount[bob], 1)
 
-        // Alice's init succeeds
-        machine.onInitSuccess(for: alice)
-        XCTAssertEqual(machine.state(for: alice), .active)
-        XCTAssertEqual(machine.state(for: bob), .initializing,
-                       "Bob's init must be unaffected by Alice's success")
+        d.send(.initSucceeded(at: ts), for: alice)
+        XCTAssertTrue(d.isActive(alice))
+        XCTAssertTrue(d.isInitializing(bob), "Bob's init must be unaffected by Alice's success")
 
-        // Bob's init fails
-        machine.onInitFailure(for: bob)
-        XCTAssertEqual(machine.state(for: bob), .idle)
-        XCTAssertEqual(machine.state(for: alice), .active,
-                       "Alice's state must be unaffected by Bob's failure")
+        d.send(.initFailed, for: bob)
+        XCTAssertTrue(d.isIdle(bob))
+        XCTAssertTrue(d.isActive(alice), "Alice's state must be unaffected by Bob's failure")
     }
 
     // MARK: 7. Re-init after END_SESSION — new message triggers fresh init
 
     @MainActor
-    func testReInitAfterEndSession_NewMessageStartsFreshInit() async {
-        let machine = MockSessionStateMachine()
+    func testReInitAfterEndSession_NewMessageStartsFreshInit() {
+        let d = SessionDriver()
         let sender = "frank-\(UUID().uuidString)"
 
-        // First init cycle
-        machine.handleIncomingMessage("msg-1", from: sender)
-        machine.onInitSuccess(for: sender)
-        XCTAssertEqual(machine.state(for: sender), .active)
+        d.handleIncoming("msg-1", from: sender)
+        d.send(.initSucceeded(at: ts), for: sender)
+        XCTAssertTrue(d.isActive(sender))
 
-        // END_SESSION received
-        machine.onEndSession(from: sender)
-        XCTAssertEqual(machine.state(for: sender), .idle)
+        d.send(.endSessionReceived, for: sender)
+        XCTAssertTrue(d.isIdle(sender))
 
-        // New message arrives — must trigger a fresh init
-        machine.handleIncomingMessage("msg-2", from: sender)
-        XCTAssertEqual(machine.state(for: sender), .initializing)
-        XCTAssertEqual(machine.initInvokedCount[sender], 2,
+        d.handleIncoming("msg-2", from: sender)
+        XCTAssertTrue(d.isInitializing(sender))
+        XCTAssertEqual(d.initInvokedCount[sender], 2,
                        "Second init cycle must be started after END_SESSION reset")
     }
 
-    // MARK: 8. Rapid END_SESSION storm — state stabilises after last wipe
+    // MARK: 8. Rapid END_SESSION storm — state stabilises after every wipe
 
-    /// Simulates the production bug: multiple END_SESSION signals from the same peer
-    /// arriving in rapid succession. Each wipe should leave state as .idle.
     @MainActor
-    func testEndSessionStorm_StateAlwaysIdle_NoOrphan() async {
-        let machine = MockSessionStateMachine()
+    func testEndSessionStorm_StateAlwaysIdle_NoOrphan() {
+        let d = SessionDriver()
         let sender = "gary-\(UUID().uuidString)"
 
-        machine.handleIncomingMessage("msg-1", from: sender)
-        machine.onInitSuccess(for: sender)
+        d.handleIncoming("msg-1", from: sender)
+        d.send(.initSucceeded(at: ts), for: sender)
 
-        // 5 END_SESSION signals (e.g. from stream dedup misfire)
         for _ in 1...5 {
-            machine.onEndSession(from: sender)
-            XCTAssertEqual(machine.state(for: sender), .idle)
-            XCTAssertEqual(machine.pendingCount(for: sender), 0)
+            d.send(.endSessionReceived, for: sender)
+            XCTAssertTrue(d.isIdle(sender))
+            XCTAssertEqual(d.pendingCount(for: sender), 0)
         }
+    }
+
+    // MARK: 9. initEnded never clobbers an .active set inside the same init scope
+
+    /// Mirrors `beginInit`'s returned closure: when a success path marks the session active
+    /// *during* an init scope, the trailing `initEnded` must not wipe it back to idle.
+    @MainActor
+    func testInitEnded_DoesNotClobberActive() {
+        let d = SessionDriver()
+        let sender = "heidi-\(UUID().uuidString)"
+
+        d.send(.initStarted, for: sender)
+        XCTAssertTrue(d.isInitializing(sender))
+
+        d.send(.markActive(at: ts), for: sender)
+        XCTAssertTrue(d.isActive(sender))
+
+        d.send(.initEnded, for: sender)
+        XCTAssertTrue(d.isActive(sender), "initEnded must not clobber an .active set during init")
+    }
+
+    // MARK: 10. incomingDisposition — the pure decision MessageRouter now uses
+
+    /// Pins the disposition contract directly (independent of the queue effector).
+    @MainActor
+    func testIncomingDisposition_DecisionTable() {
+        // Active session → process immediately.
+        XCTAssertEqual(
+            SessionReducer.incomingDisposition(hasActiveSession: true, isInitInFlight: false),
+            [.processMessage])
+        // Active wins even if a (stale) init marker is set.
+        XCTAssertEqual(
+            SessionReducer.incomingDisposition(hasActiveSession: true, isInitInFlight: true),
+            [.processMessage])
+        // No session, none in flight → first message: start init + queue.
+        XCTAssertEqual(
+            SessionReducer.incomingDisposition(hasActiveSession: false, isInitInFlight: false),
+            [.startInit, .queueMessage])
+        // No session, init already underway → queue only, no second init.
+        XCTAssertEqual(
+            SessionReducer.incomingDisposition(hasActiveSession: false, isInitInFlight: true),
+            [.queueMessage])
     }
 }

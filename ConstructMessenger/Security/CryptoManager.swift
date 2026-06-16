@@ -736,6 +736,26 @@ class CryptoManager {
         return orchestratorCore?.hasSession(contactId: userId) ?? false
     }
 
+    /// True once the OrchestratorCore exists. Before this, `hasSession(for:)` returns
+    /// false for *every* contact, so any "session missing → END_SESSION / re-init"
+    /// decision (e.g. prewarm) MUST be gated on this. Otherwise, during the startup
+    /// window — especially when auth is delayed by a token refresh — a healthy session
+    /// that simply hasn't been restored yet looks missing and gets destroyed.
+    var isCoreReady: Bool {
+        return orchestratorCore != nil
+    }
+
+    /// Restore-aware variant of `hasSession`. If the core currently has no session for
+    /// `userId`, it attempts a lazy import from Keychain before answering. This closes a
+    /// startup race where prewarm runs after the core is created but before
+    /// `restoreRecentSessions` has imported the on-disk session — which otherwise looks
+    /// like a missing session and triggers a destructive END_SESSION + fresh re-init,
+    /// discarding the ratchet and breaking decryption of the peer's in-flight messages.
+    func hasOrRestoreSession(for userId: String) -> Bool {
+        guard isCoreReady else { return false }
+        return restoreSession(for: userId)
+    }
+
     /// Return a read-only health snapshot for the session with `userId`.
     /// Returns `nil` if no session exists or the core is not initialized.
     func getSessionHealth(for userId: String) -> SessionHealthReport? {

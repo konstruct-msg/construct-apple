@@ -703,7 +703,15 @@ final class MessageRouter {
         isNewChat: Bool,
         in context: NSManagedObjectContext
     ) {
-        let isFirstForUser = pendingQueue.count(for: userId) == 0
+        // Queue disposition comes from the pure SessionReducer, fed by the authoritative facts
+        // we hold here: no Rust session exists (this method is only reached when !hasSession),
+        // and whether init is already underway (something already queued for this peer).
+        // `.startInit` ⇒ this is the first message → fetch the bundle; otherwise just queue.
+        let disposition = SessionReducer.incomingDisposition(
+            hasActiveSession: false,
+            isInitInFlight: pendingQueue.count(for: userId) > 0
+        )
+        let isFirstForUser = disposition.contains(.startInit)
 
         // Deduplicate: skip if same message ID is already in the queue
         if pendingQueue.contains(messageId: message.id, for: userId) {
