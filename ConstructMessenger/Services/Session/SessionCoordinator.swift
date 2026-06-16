@@ -216,13 +216,18 @@ final class SessionCoordinator: MessageRouterDelegate {
         // destructive END_SESSION + fresh re-init over a perfectly healthy session that
         // simply hasn't been imported yet (startup race, esp. with delayed auth refresh).
         // A later forceReconnect/network event re-triggers prewarm once the core is ready.
-        guard CryptoManager.shared.isCoreReady else {
+        let coreReady = CryptoManager.shared.isCoreReady
+        guard coreReady else {
             Log.info("Session prewarm deferred — crypto core not ready yet", category: "SessionInit")
             return
         }
 
-        let toPrewarm = contactIds.filter {
-            DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: $0) && !CryptoManager.shared.hasOrRestoreSession(for: $0)
+        let toPrewarm = contactIds.filter { peer in
+            SessionReducer.shouldPrewarm(
+                coreReady: coreReady,
+                isNaturalInitiator: DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: peer),
+                sessionExistsOrRestorable: CryptoManager.shared.hasOrRestoreSession(for: peer)
+            )
         }
         guard !toPrewarm.isEmpty else { return }
 

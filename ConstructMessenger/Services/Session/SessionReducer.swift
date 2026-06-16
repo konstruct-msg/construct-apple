@@ -119,4 +119,18 @@ enum SessionReducer {
         if isInitInFlight  { return [.queueMessage] }
         return [.startInit, .queueMessage]
     }
+
+    /// Decide whether to proactively prewarm a session with a peer.
+    ///
+    /// Regression guard for the prewarm-vs-restore race (see
+    /// `2026-06-16-prewarm-restore-race`): while the crypto core is **not ready**, every
+    /// peer reads as "no session" — prewarming in that window sends a destructive
+    /// END_SESSION + fresh re-init over a healthy, not-yet-restored session, discarding the
+    /// ratchet and breaking the peer's in-flight messages. So: never prewarm unless the core
+    /// is ready; then only where we are the natural INITIATOR and no session exists or can be
+    /// restored from Keychain.
+    static func shouldPrewarm(coreReady: Bool, isNaturalInitiator: Bool, sessionExistsOrRestorable: Bool) -> Bool {
+        guard coreReady else { return false }
+        return isNaturalInitiator && !sessionExistsOrRestorable
+    }
 }
