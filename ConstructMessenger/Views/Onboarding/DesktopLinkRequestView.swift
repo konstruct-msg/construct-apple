@@ -93,8 +93,8 @@ struct DesktopLinkRequestView: View {
         } else {
             // Error shown via alert — show a retry button as fallback
             VStack(spacing: 16) {
-                Text("[!]")
-                    .font(CTFont.bold(48))
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(CTFont.regular(48))
                     .foregroundStyle(.orange)
                     .lineLimit(1).fixedSize()
                 Button {

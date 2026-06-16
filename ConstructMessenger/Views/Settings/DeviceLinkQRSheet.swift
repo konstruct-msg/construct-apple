@@ -132,8 +132,8 @@ struct DeviceLinkQRSheet: View {
 
     private var expiredView: some View {
         VStack(spacing: DeviceLinkQRLayout.expiredStateSpacing) {
-            Text("[!]")
-                .font(CTFont.bold(DeviceLinkQRLayout.statusIconSize))
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(CTFont.regular(DeviceLinkQRLayout.statusIconSize))
                 .foregroundColor(Color.CT.danger)
             Text(NSLocalizedString("device_link_expired", comment: ""))
                 .font(CTFont.regular(13))
@@ -158,8 +158,8 @@ struct DeviceLinkQRSheet: View {
 
     private func errorView(message: String) -> some View {
         VStack(spacing: DeviceLinkQRLayout.expiredStateSpacing) {
-            Text("[!]")
-                .font(CTFont.bold(DeviceLinkQRLayout.statusIconSize))
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(CTFont.regular(DeviceLinkQRLayout.statusIconSize))
                 .foregroundColor(.orange)
             Text(message)
                 .font(CTFont.regular(13))

@@ -125,8 +125,8 @@ struct ContactQRCodeView: View {
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.CT.noise, lineWidth: ContactQRCodeLayout.qrCodeBorderWidth))
                 .overlay {
                     VStack(spacing: ContactQRCodeLayout.qrCodeErrorSpacing) {
-                        Text("[!]")
-                            .font(CTFont.bold(20))
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(CTFont.regular(20))
                             .foregroundStyle(Color.CT.danger)
                         Text(error)
                             .font(CTFont.regular(11))

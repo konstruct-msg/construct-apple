@@ -164,8 +164,8 @@ private struct SingleMediaCell: View {
             .fill(Color.CT.bgMsg).frame(width: 200, height: 200)
             .overlay {
                 VStack(spacing: 12) {
-                    Text("[!]")
-                        .font(CTFont.bold(36)).foregroundColor(.orange)
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(CTFont.regular(36)).foregroundColor(.orange)
                         .lineLimit(1).fixedSize()
                     Text(LocalizedStringKey("failed_to_load")).font(CTFont.regular(11)).foregroundColor(Color.CT.textDim)
                     Button { loadThumbnail() } label: {

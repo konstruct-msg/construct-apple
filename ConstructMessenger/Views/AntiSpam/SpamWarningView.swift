@@ -59,8 +59,8 @@ struct SpamWarningBanner: View {
     var body: some View {
         if state.isActive && state.level >= 8 && state.level < 12 {
             HStack(spacing: 10) {
-                Text("[!]")
-                    .font(CTFont.bold(14))
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(CTFont.regular(14))
                     .foregroundStyle(.orange)
                     .lineLimit(1).fixedSize()
 
@@ -101,8 +101,8 @@ struct SpamStrongWarningSheet: View {
         VStack(spacing: 24) {
             Spacer()
 
-            Text("[!]")
-                .font(CTFont.bold(48))
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(CTFont.regular(48))
                 .foregroundStyle(.orange)
 
             VStack(spacing: 8) {

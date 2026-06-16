@@ -85,6 +85,9 @@ struct FileAttachmentBubbleView: View {
                     if downloading.contains(file.mediaId) {
                         ProgressView().tint(Color.CT.accent).scaleEffect(1.2)
                     } else {
+                        // TODO: rewrite with system symbols
+                        // play.circle.fill
+                        // arrow.down.circle.fill
                         Text(downloadedURLs[file.mediaId] != nil ? "[▶]" : "[↓]")
                             .font(CTFont.bold(20))
                             .foregroundColor(.white)
@@ -140,11 +143,11 @@ struct FileAttachmentBubbleView: View {
                         .tint(isSentByMe ? Color.CT.bg : Color.CT.accent)
                         .scaleEffect(0.8)
                 } else if downloadedURLs[file.mediaId] != nil {
-                    Text("[✓]")
+                    Image(systemName: "checkmark.circle.fill")
                         .font(CTFont.regular(13))
                         .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.8) : Color.CT.accent)
                 } else {
-                    Text("[↓]")
+                    Image(systemName: "arrow.down.circle.fill")
                         .font(CTFont.regular(13))
                         .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.8) : Color.CT.accent)
                 }
@@ -241,7 +244,8 @@ struct FileAttachmentBubbleView: View {
         let ext = (filename as NSString).pathExtension.lowercased()
         return ["mp4", "mov", "m4v", "avi", "mkv"].contains(ext)
     }
-
+    
+    // TODO: need to replace with system image icons
     private func asciiIcon(for filename: String) -> String {
         let ext = (filename as NSString).pathExtension.lowercased()
         switch ext {

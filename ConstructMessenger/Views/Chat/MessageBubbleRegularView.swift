@@ -134,7 +134,7 @@ struct MessageBubbleRegularView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             let text = message.displayText
                             if text.isEmpty {
-                                Text("[!] \(NSLocalizedString("message_unavailable", comment: ""))")
+                                Text((NSLocalizedString("message_unavailable", comment: "")))
                                     .font(CTFont.regular(ChatUIConstants.Typography.messageTextSize))
                                     .foregroundColor(Color.CT.textDim)
                                     .italic()

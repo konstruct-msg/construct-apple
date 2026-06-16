@@ -418,7 +418,8 @@ struct NetworkSettingsView: View {
         case .unknown:      return "questionmark.circle.fill"
         }
     }
-
+    
+    // TODO: replace with standart SF Symbols
     private func pathASCII(_ path: TrafficPath) -> String {
         switch path {
         case .direct:          return "[→]"

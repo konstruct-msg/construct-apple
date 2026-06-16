@@ -184,8 +184,8 @@ struct MediaGalleryViewer: View {
             switch saveStatus {
             case .idle:    return "arrow.down.circle.fill"
             case .saving:  return "arrow.down.circle.fill"
-            case .saved:   return "checkmark.circle"
-            case .failed:  return "exclamationmark.circle"
+            case .saved:   return "checkmark.circle.fill"
+            case .failed:  return "exclamationmark.circle.fill"
             }
         }
 

@@ -580,13 +580,13 @@ struct AccountSettingsView: View {
             }
 
             if let err = errorMessage, !err.isEmpty {
-                Text("> [!] \(err)")
+                Text("\(err)")
                     .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.danger)
                     .padding(.horizontal, AccountSettingsLayout.sectionHintHorizontalPadding)
                     .padding(.bottom, AccountSettingsLayout.sectionHintBottomPadding)
             } else if !isEditing, let hint {
-                Text("> \(hint)")
+                Text("\(hint)")
                     .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, AccountSettingsLayout.sectionHintHorizontalPadding)

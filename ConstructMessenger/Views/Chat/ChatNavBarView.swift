@@ -46,8 +46,8 @@ struct ChatNavBarView: View {
 
             if isEditMode {
                 Button(action: onDoneEdit) {
-                    Text("[done]")
-                        .font(CTFont.bold(13))
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(CTFont.regular(13))
                         .foregroundColor(Color.CT.accent)
                 }
             } else {
@@ -80,11 +80,11 @@ struct ChatNavBarView: View {
     @ViewBuilder private var ktBadge: some View {
         switch contactKTStatus {
         case .verified:
-            Text("[✓]")
+            Image(systemName: "checkmark.circle.fill")
                 .font(CTFont.regular(11))
                 .foregroundColor(Color.CT.accent)
         case .keyChanged, .failed:
-            Text("[!]")
+            Image(systemName: "exclamationmark.circle.fill")
                 .font(CTFont.bold(11))
                 .foregroundColor(Color.CT.danger)
         case .unverified:

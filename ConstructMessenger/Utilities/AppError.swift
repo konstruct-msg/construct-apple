@@ -208,7 +208,7 @@ extension AppError {
         case .decryptionFailed:
             return false   // session self-heals; no user noise
         case .sessionInitFailed:
-            // Message bubble already shows [!] retry — banner is redundant and misleading
+            // Message bubble already shows retry — banner is redundant and misleading
             // (often caused by stale contact keys, not a fixable network issue).
             return false
         case .unknown(let detail):

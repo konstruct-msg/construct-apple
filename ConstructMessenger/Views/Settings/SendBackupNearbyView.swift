@@ -178,8 +178,8 @@ struct SendBackupNearbyView: View {
 
     private func failedView(_ message: String) -> some View {
         VStack(spacing: 16) {
-            Text("[!]")
-                .font(CTFont.bold(28))
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(CTFont.regular(28))
                 .foregroundColor(Color.CT.danger)
             Text(message)
                 .font(CTFont.regular(13))

@@ -250,8 +250,8 @@ struct RecoverySetupView: View {
     private func failedView(message: String) -> some View {
         VStack(spacing: 20) {
             Spacer()
-            Text("[!]")
-                .font(CTFont.bold(48))
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(CTFont.regular(48))
                 .foregroundColor(.orange)
                 .lineLimit(1).fixedSize()
             Text(NSLocalizedString("recovery_error_title", comment: ""))
