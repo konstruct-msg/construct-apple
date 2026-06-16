@@ -120,4 +120,30 @@ enum HybridIdentityService {
         message.append(publicKey)
         return [UInt8](message)
     }
+
+    /// True once the hybrid identity key + cross-signature have been published to the server.
+    /// Atomic SPK-rotation hybrid signatures are only meaningful (server-verifiable) after this;
+    /// before it, the server has no hybrid identity key to verify the SPK signature against.
+    static var isHybridIdentityPublished: Bool {
+        UserDefaults.standard.bool(forKey: publishedFlagKey)
+    }
+
+    /// Record that the hybrid SPK signature for `spkPublic` is now live server-side (e.g. it was
+    /// stored atomically by SPK rotation), so `publishIfNeeded` won't redundantly re-publish on
+    /// the next launch.
+    static func recordHybridPublished(spkPublic: Data) {
+        UserDefaults.standard.set(true, forKey: publishedFlagKey)
+        UserDefaults.standard.set(fingerprint(spkPublic), forKey: spkFingerprintKey)
+    }
+
+    /// Hybrid (ML-DSA) signature over a classic SPK public key (suite 0x01). Used by SPK
+    /// rotation to send the hybrid signature atomically with the rotated key.
+    static func hybridSPKSignature(spkPublic: Data) throws -> Data {
+        try CryptoManager.shared.signHybrid(x3dhSignMessage(suiteId: 0x01, publicKey: spkPublic))
+    }
+
+    /// Hybrid (ML-DSA) signature over a Kyber SPK public key (suite 0x10).
+    static func hybridKyberSPKSignature(kyberPublic: Data) throws -> Data {
+        try CryptoManager.shared.signHybrid(x3dhSignMessage(suiteId: 0x10, publicKey: kyberPublic))
+    }
 }

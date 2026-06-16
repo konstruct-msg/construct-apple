@@ -160,6 +160,17 @@ final class PreKeyRotationService {
 
         Log.info("SPK rotation: classic keyId=\(classicKey.keyId) kyber keyId=\(kyberKey.keyId)", category: "SPKRotation")
 
+        // Hybrid (ML-DSA) signatures over the NEW keys, sent with the rotation so the server
+        // stores them ATOMICALLY — closing the window where a rotated-but-unsigned SPK makes peers
+        // reject the bundle ("SPK hybrid signature missing"). Only when the hybrid identity is
+        // already published (else the server has no hybrid identity key to verify against, and the
+        // rotation would fail): in that case fall back to the post-rotation publish below. `try?`
+        // so a signing hiccup degrades to the old publish path rather than failing rotation.
+        let canSignHybrid = await HybridIdentityService.isHybridIdentityPublished
+        let spkHybridSig = canSignHybrid ? (try? await HybridIdentityService.hybridSPKSignature(spkPublic: classicPubData)) : nil
+        let kyberHybridSig = canSignHybrid ? (try? await HybridIdentityService.hybridKyberSPKSignature(kyberPublic: kyberInMemory.publicKey)) : nil
+        let atomicHybridSent = spkHybridSig != nil && kyberHybridSig != nil
+
         // ── Phase 2: single atomic RPC ───────────────────────────────────────
 
         let response: Shared_Proto_Services_V1_RotateSignedPreKeyResponse
@@ -168,7 +179,9 @@ final class PreKeyRotationService {
                 deviceId: deviceId,
                 newClassicKey: classicKey,
                 newKyberKey: kyberKey,
-                reason: reason
+                reason: reason,
+                signedPreKeyHybridSignature: spkHybridSig,
+                kyberSignedPreKeyHybridSignature: kyberHybridSig
             )
         } catch {
             // RPC failed — roll back the in-memory Rust core to Keychain state.
@@ -204,19 +217,25 @@ final class PreKeyRotationService {
         let serverKyberKeyId = response.hasNewKyberKeyID ? response.newKyberKeyID : kyberKey.keyId
         Log.info("SPK rotation complete: classic keyId=\(classicKey.keyId) (server: \(response.newKeyID)), kyber keyId=\(serverKyberKeyId)", category: "SPKRotation")
 
-        // Rotation clears the hybrid prekey signatures server-side; re-attach them over
-        // the freshly-rotated SPK / Kyber SPK. Bounded retry to ride out a transient RPC
-        // failure (which previously left the bundle with a hybrid identity but no SPK
-        // hybrid signature → peers reject it with "SPK hybrid signature missing"). If it
-        // still fails, HybridIdentityService.publishIfNeeded() repairs it on the next
-        // launch: it detects the now-stale SPK fingerprint and re-publishes.
-        for attempt in 1...3 {
-            do {
-                try await HybridIdentityService.publish(deviceId: deviceId)
-                break
-            } catch {
-                Log.error("SPK rotation: hybrid signature re-attach failed (attempt \(attempt)/3, non-fatal): \(error.localizedDescription)", category: "SPKRotation")
-                if attempt < 3 { try? await Task.sleep(nanoseconds: 2_000_000_000) }
+        if atomicHybridSent {
+            // Hybrid signatures were stored atomically with the rotation — no separate publish
+            // needed and no window. Record the new SPK fingerprint so launch publishIfNeeded
+            // doesn't redundantly re-publish.
+            await HybridIdentityService.recordHybridPublished(spkPublic: classicPubData)
+            Log.info("SPK rotation: hybrid signatures stored atomically with rotation", category: "SPKRotation")
+        } else {
+            // Fallback (hybrid identity not yet published, or signing failed): re-attach the hybrid
+            // signatures over the freshly-rotated keys via a separate publish. Bounded retry; if it
+            // still fails, HybridIdentityService.publishIfNeeded() repairs it on the next launch
+            // (it detects the now-stale SPK fingerprint and re-publishes).
+            for attempt in 1...3 {
+                do {
+                    try await HybridIdentityService.publish(deviceId: deviceId)
+                    break
+                } catch {
+                    Log.error("SPK rotation: hybrid signature re-attach failed (attempt \(attempt)/3, non-fatal): \(error.localizedDescription)", category: "SPKRotation")
+                    if attempt < 3 { try? await Task.sleep(nanoseconds: 2_000_000_000) }
+                }
             }
         }
     }

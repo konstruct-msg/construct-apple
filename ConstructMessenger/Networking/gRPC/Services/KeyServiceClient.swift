@@ -448,7 +448,12 @@ final class KeyServiceClient: Sendable {
         deviceId: String,
         newClassicKey: (keyId: UInt32, publicKey: Data, signature: Data),
         newKyberKey: (keyId: UInt32, publicKey: Data, signature: Data)? = nil,
-        reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason = .scheduled
+        reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason = .scheduled,
+        // Hybrid (ML-DSA) signatures over the new SPK / Kyber SPK. When provided the server stores
+        // them atomically with the rotation, so the published bundle never has a hybrid identity
+        // with an unsigned fresh SPK (the breakage that hard-rejects initiators).
+        signedPreKeyHybridSignature: Data? = nil,
+        kyberSignedPreKeyHybridSignature: Data? = nil
     ) async throws -> Shared_Proto_Services_V1_RotateSignedPreKeyResponse {
         try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.rotateSignedPreKey) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
@@ -462,6 +467,9 @@ final class KeyServiceClient: Sendable {
             request.deviceID = deviceId
             request.newSignedPreKey = signed
             request.reason = reason
+            if let spkHybrid = signedPreKeyHybridSignature, !spkHybrid.isEmpty {
+                request.signedPreKeyHybridSignature = spkHybrid
+            }
 
             if let kyberSpk = newKyberKey {
                 var kSigned = Shared_Proto_Services_V1_KyberSignedPreKeyUpload()
@@ -469,6 +477,9 @@ final class KeyServiceClient: Sendable {
                 kSigned.publicKey = kyberSpk.publicKey
                 kSigned.signature = kyberSpk.signature
                 request.newKyberSignedPreKey = kSigned
+                if let kyberHybrid = kyberSignedPreKeyHybridSignature, !kyberHybrid.isEmpty {
+                    request.kyberSignedPreKeyHybridSignature = kyberHybrid
+                }
             }
 
             return try await keyClient.rotateSignedPreKey(
