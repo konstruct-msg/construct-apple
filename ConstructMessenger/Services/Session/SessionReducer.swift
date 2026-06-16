@@ -133,4 +133,16 @@ enum SessionReducer {
         guard coreReady else { return false }
         return isNaturalInitiator && !sessionExistsOrRestorable
     }
+
+    /// Per-peer END_SESSION rate limit. Returns true iff enough time has elapsed since the
+    /// last send (or none was ever sent) to send again.
+    ///
+    /// Cooldown is intentionally NOT a `Phase` variant: it coexists with `.active` /
+    /// `.initializing` (a peer can have a live session AND be in END_SESSION cooldown), so it
+    /// is a separate decision rather than a mutually-exclusive state. This is the single
+    /// authority storm-prone END_SESSION paths consult so repeats can't ping-pong.
+    static func shouldSendEndSession(lastSentAt: Date?, now: Date, cooldown: TimeInterval) -> Bool {
+        guard let lastSentAt else { return true }
+        return now.timeIntervalSince(lastSentAt) >= cooldown
+    }
 }

@@ -287,4 +287,32 @@ final class SessionRaceConditionTests: XCTestCase {
             SessionReducer.incomingDisposition(hasActiveSession: false, isInitInFlight: true),
             [.queueMessage])
     }
+
+    // MARK: 11. END_SESSION cooldown — the single rate-limit decision
+
+    /// Pins the storm-prevention rate limit used by the unified END_SESSION choke point.
+    @MainActor
+    func testShouldSendEndSession_RateLimit() {
+        let now = Date()
+        let cooldown: TimeInterval = 30
+
+        // Never sent before → allowed.
+        XCTAssertTrue(SessionReducer.shouldSendEndSession(lastSentAt: nil, now: now, cooldown: cooldown))
+
+        // Sent just now → suppressed.
+        XCTAssertFalse(SessionReducer.shouldSendEndSession(
+            lastSentAt: now.addingTimeInterval(-1), now: now, cooldown: cooldown))
+
+        // Within the window → suppressed.
+        XCTAssertFalse(SessionReducer.shouldSendEndSession(
+            lastSentAt: now.addingTimeInterval(-29), now: now, cooldown: cooldown))
+
+        // Exactly at the boundary → allowed (>= cooldown).
+        XCTAssertTrue(SessionReducer.shouldSendEndSession(
+            lastSentAt: now.addingTimeInterval(-30), now: now, cooldown: cooldown))
+
+        // Well past the window → allowed.
+        XCTAssertTrue(SessionReducer.shouldSendEndSession(
+            lastSentAt: now.addingTimeInterval(-120), now: now, cooldown: cooldown))
+    }
 }

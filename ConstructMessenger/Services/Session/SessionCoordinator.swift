@@ -203,6 +203,32 @@ final class SessionCoordinator: MessageRouterDelegate {
         #endif
     }
 
+    /// Single rate-limited END_SESSION entry point for storm-prone recovery paths
+    /// (DR-diverge). Suppresses repeats within `endSessionCooldown` per peer via the pure
+    /// `SessionReducer.shouldSendEndSession` decision, and records the attempt time.
+    /// Returns `true` iff a send was attempted (records + proceeds even if the network send
+    /// throws, matching the prior inline behaviour). Must-send paths — logout broadcast,
+    /// manual reset, terminal init/heal failures — call `sendEndSession` directly and are
+    /// intentionally not rate-limited.
+    @discardableResult
+    private func sendEndSessionRateLimited(to userId: String, reason: String) async -> Bool {
+        let now = Date()
+        guard SessionReducer.shouldSendEndSession(
+            lastSentAt: endSessionSentAt[userId], now: now, cooldown: endSessionCooldown
+        ) else {
+            Log.info("END_SESSION cooldown active for \(userId.prefix(8))…, skipping (\(reason))", category: "SessionCoordinator")
+            return false
+        }
+        endSessionSentAt[userId] = now
+        Log.info("Sending END_SESSION to \(userId.prefix(8))… (\(reason))", category: "SessionCoordinator")
+        do {
+            try await sendEndSession(to: userId, reason: reason)
+        } catch {
+            Log.error("Failed to send END_SESSION to \(userId.prefix(8))…: \(error)", category: "SessionCoordinator")
+        }
+        return true
+    }
+
     /// Broadcast END_SESSION to all peers that have an active session (e.g., on logout).
     /// Pre-warm sessions for contacts where we are the natural INITIATOR (higher deviceId).
     /// Called once per app launch after stream connects. Ensures first messages are instant.
@@ -321,18 +347,10 @@ final class SessionCoordinator: MessageRouterDelegate {
     func messageRouter(_ router: MessageRouter, needsEndSession userId: String) {
         Task { [weak self] in
             guard let self else { return }
-            let now = Date()
-            if let lastSent = self.endSessionSentAt[userId],
-               now.timeIntervalSince(lastSent) < self.endSessionCooldown {
-                Log.info("END_SESSION cooldown active for \(userId.prefix(8))..., skipping", category: "SessionCoordinator")
+            // Cooldown gates the whole recovery sequence: if a recent END_SESSION is still in
+            // its window, skip both the send AND the reinit/fallback below (avoids storms).
+            guard await self.sendEndSessionRateLimited(to: userId, reason: "session_out_of_sync") else {
                 return
-            }
-            self.endSessionSentAt[userId] = now
-            Log.info("Sending END_SESSION to \(userId.prefix(8))... (session out of sync)", category: "SessionCoordinator")
-            do {
-                try await self.sendEndSession(to: userId, reason: "session_out_of_sync")
-            } catch {
-                Log.error("Failed to send END_SESSION to \(userId.prefix(8))...: \(error)", category: "SessionCoordinator")
             }
             let myId = AuthSessionManager.shared.currentUserId ?? ""
             guard !myId.isEmpty else { return }
