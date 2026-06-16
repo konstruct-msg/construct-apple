@@ -44,9 +44,14 @@ final class MessageRouter {
         pendingQueue.drain(for: userId)
     }
 
-    /// Clear pending messages for `userId` without returning them (e.g. after heal failure).
+    /// Clear pending messages for `userId` (e.g. after heal failure). This is a give-up:
+    /// resolve each discarded message in the cursor tracker so its held watermark is released
+    /// (we will never persist it; matches the pre-existing drop-and-advance behaviour).
     func removePendingMessages(for userId: String) {
-        pendingQueue.remove(for: userId)
+        let discarded = pendingQueue.drain(for: userId)
+        for msg in discarded {
+            StreamCursorTracker.shared.resolve(messageId: msg.id)
+        }
     }
 
     private func beginProcessing(_ messageId: String) -> Bool {
@@ -60,7 +65,18 @@ final class MessageRouter {
     // MARK: - Message Routing
     
     func routeIncomingMessage(_ message: ChatMessage, in context: NSManagedObjectContext) {
-        guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
+        // Stream-cursor disposition. Default `.durable` (message persisted / control handled /
+        // given up → safe to advance the resume cursor). A queued-for-session-init or transient
+        // terminal sets `.deferred` (hold the watermark); a duplicate/not-ready exit sets `.skip`
+        // (let the owning path resolve it). The defer reports exactly once on every exit path.
+        // Untracked ids (backfill, which carries no stream cursor) are no-ops in the tracker.
+        var streamOutcome: StreamCursorTracker.Outcome = .durable
+        defer { StreamCursorTracker.shared.report(messageId: message.id, streamOutcome) }
+
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
+            streamOutcome = .skip
+            return
+        }
 
         // STEALTH: resolve sender from sealed inner before any routing.
         // `from` is empty for ConstructSEALED messages — decrypt to recover sender ID.
@@ -99,6 +115,8 @@ final class MessageRouter {
 
         guard beginProcessing(message.id) else {
             Log.debug("Skipping in-flight duplicate \(message.id.prefix(8))…", category: "MessageRouter")
+            // The concurrent in-flight processing owns this message's cursor outcome.
+            streamOutcome = .skip
             return
         }
         defer { endProcessing(message.id) }
@@ -239,8 +257,10 @@ final class MessageRouter {
         Log.info("SESSION_STATE[incoming_message]: userId=\(otherUserId.prefix(8))..., hasSession=\(hasSession), messageId=\(message.id.prefix(8))...", category: "SessionInit")
         
         if !hasSession {
-            // First message from this user - need to initialize receiving session
-            handleFirstMessage(
+            // First message from this user - need to initialize receiving session.
+            // handleFirstMessage decides whether the message was queued (.deferred → hold the
+            // cursor until drained) or is a give-up (.durable → may advance).
+            streamOutcome = handleFirstMessage(
                 message,
                 from: otherUserId,
                 chat: chat,
@@ -276,6 +296,9 @@ final class MessageRouter {
             Log.error("OrchestratorCore still nil after reload — requesting END_SESSION from \(otherUserId.prefix(8))…", category: "MessageRouter")
             delegate?.messageRouter(self, needsEndSession: otherUserId)
             if isNewChat { context.delete(chat) }
+            // Transient (Keychain locked / core not loaded): don't advance — let the server
+            // re-deliver after the core recovers rather than acking an unprocessed message.
+            streamOutcome = .deferred
             return
         }
         guard let event = buildIncomingEvent(message: message, otherUserId: otherUserId) else {
@@ -333,6 +356,8 @@ final class MessageRouter {
             case .sessionHealNeeded(let contactId, let role):
                 handleRustHealDecision(role: role, contactId: contactId, message: message, in: context)
                 if isNewChat { context.delete(chat) }
+                // Queued for heal — hold the cursor until heal drains (success) or clears (give-up).
+                streamOutcome = .deferred
                 return
             case .sendEndSession(let contactId):
                 Log.info("SESSION_STATE[rust_end_session]: DR diverged for \(contactId.prefix(8))… — sending END_SESSION", category: "SessionInit")
@@ -347,6 +372,8 @@ final class MessageRouter {
                 Log.info("SESSION_STATE[rust_session_lost]: re-queuing \(message.id.prefix(8))… for \(userId.prefix(8))…", category: "SessionInit")
                 pendingQueue.enqueue(message, for: userId)
                 delegate?.messageRouter(self, needsPublicKeyBundle: userId, for: message)
+                // Re-queued for session re-establishment — hold the cursor until drained/cleared.
+                streamOutcome = .deferred
                 return
             default:
                 break
@@ -696,13 +723,17 @@ final class MessageRouter {
     // MARK: - First Message Handling
     
     /// Handle first message from user (no session yet)
+    /// Returns the stream-cursor disposition for the message: `.deferred` when it is queued
+    /// (or already queued / dropped at the cap) and must hold the resume cursor until drained,
+    /// `.durable` when it is a give-up that the cursor may advance past.
+    @discardableResult
     private func handleFirstMessage(
         _ message: ChatMessage,
         from userId: String,
         chat: Chat,
         isNewChat: Bool,
         in context: NSManagedObjectContext
-    ) {
+    ) -> StreamCursorTracker.Outcome {
         // Queue disposition comes from the pure SessionReducer, fed by the authoritative facts
         // we hold here: no Rust session exists (this method is only reached when !hasSession),
         // and whether init is already underway (something already queued for this peer).
@@ -718,7 +749,7 @@ final class MessageRouter {
             Log.debug("Skipping duplicate queued message \(message.id.prefix(8))...", category: "MessageRouter")
             // Do NOT ACK as delivered yet: session init may still fail, and acknowledging would
             // cause the server to drop the pending message even though we haven't decrypted it.
-            return
+            return .deferred
         }
 
         // Guard: initReceivingSession requires messageNumber=0 (X3DH handshake).
@@ -736,12 +767,17 @@ final class MessageRouter {
             )
             if isNewChat { context.delete(chat) }
             delegate?.messageRouter(self, needsEndSession: userId)
-            return
+            // Give-up: message is marked processed + sender asked to restart; nothing to drain,
+            // so the cursor may advance past it.
+            return .durable
         }
 
         guard pendingQueue.enqueue(message, for: userId) else {
             Log.info("Pending queue saturated for \(userId.prefix(8))… — not queueing until session init completes", category: "MessageRouter")
-            return
+            // Not enqueued, but DON'T advance: the server keeps re-delivering it; once the queue
+            // drains (init completes) a later re-delivery is enqueued and processed. Holding the
+            // cursor (rather than dropping) trades a bounded stall for no message loss.
+            return .deferred
         }
 
         Log.info("Message queued for session init from \(userId) — queue size: \(pendingQueue.count(for: userId))", category: "MessageRouter")
@@ -759,8 +795,12 @@ final class MessageRouter {
         if isFirstForUser {
             delegate?.messageRouter(self, needsPublicKeyBundle: userId, for: message)
         }
+
+        // Queued for session init — hold the resume cursor until this message is drained
+        // (re-routed → durable) or the queue is cleared (give-up).
+        return .deferred
     }
-    
+
     // MARK: - Session Message Handling
     
     // MARK: - Rust Heal Decision

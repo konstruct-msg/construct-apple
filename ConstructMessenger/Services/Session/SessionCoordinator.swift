@@ -669,6 +669,12 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Drain the pending queue for a peer after session init / heal succeeds.
     private func drainPendingQueue(for userId: String, skippingFirst: Bool) {
         let queued = messageRouter.drainPendingMessages(for: userId)
+        // The init carrier (first queued message) was already decrypted during session init and
+        // is not re-routed below — resolve it explicitly so its deferred entry releases the
+        // stream-cursor watermark. Re-routed messages resolve themselves via routeIncomingMessage.
+        if skippingFirst, let first = queued.first {
+            StreamCursorTracker.shared.resolve(messageId: first.id)
+        }
         let toProcess = skippingFirst ? queued.dropFirst() : queued[...]
         guard !toProcess.isEmpty, let context = viewContext else { return }
         Log.info("Decrypting \(toProcess.count) queued message(s) for \(userId.prefix(8))...", category: "SessionInit")
