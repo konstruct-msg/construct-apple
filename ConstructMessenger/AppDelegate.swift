@@ -122,6 +122,34 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
+        if activityType == "republish_hybrid_prekeys" {
+            // Server detected our published bundle has a hybrid identity key but no SPK hybrid
+            // signature (a rotation whose separate hybrid publish failed). Re-publish now so peers
+            // stop hard-rejecting it ("SPK hybrid signature missing"). Force publish (not
+            // publishIfNeeded) since the server explicitly flagged the bundle as broken.
+            Task {
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        guard let deviceId = KeychainManager.shared.loadDeviceID() else {
+                            Log.error("Hybrid republish push: no deviceId in Keychain", category: "Push")
+                            return
+                        }
+                        do {
+                            try await HybridIdentityService.publish(deviceId: deviceId)
+                            Log.info("Hybrid republish push: re-published hybrid SPK signatures", category: "Push")
+                        } catch {
+                            Log.error("Hybrid republish push failed: \(error)", category: "Push")
+                        }
+                    }
+                    group.addTask { try? await Task.sleep(nanoseconds: 27_000_000_000) }
+                    await group.next()
+                    group.cancelAll()
+                }
+                completionHandler(.newData)
+            }
+            return
+        }
+
         if activityType == "contact_request_accepted" {
             let requestId = construct?["conversation_id"] as? String
             Log.info("contact_request_accepted push — requestId: \(requestId ?? "nil")", category: "Push")
