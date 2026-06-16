@@ -35,6 +35,11 @@ final class SessionCoordinator: MessageRouterDelegate {
     private var endSessionSentAt: [String: Date] = [:]
     private let endSessionCooldown: TimeInterval = 30.0
 
+    /// Shadow-only mirror of *every* END_SESSION send (rate-limited AND must-send), used solely
+    /// to evaluate the Phase-2b cut-over question — "how often would the rate limiter suppress a
+    /// currently must-send END_SESSION?" — without touching live behaviour. Never gates a send.
+    private var shadowEndSessionSentAt: [String: Date] = [:]
+
     /// Tracks when we last attempted an automatic resend after receiving END_SESSION from a peer.
     /// Prevents resend loops when both sides reset simultaneously.
     private var resendAttemptedAt: [String: Date] = [:]
@@ -183,7 +188,21 @@ final class SessionCoordinator: MessageRouterDelegate {
     }
 
     /// Send END_SESSION to a peer and archive + clear the local session.
-    func sendEndSession(to userId: String, reason: String = "manual_reset") async throws {
+    ///
+    /// `rateLimited` marks calls that already passed the cooldown decision (the DR-diverge
+    /// path). For every *other* caller (a "must-send" path) we run a shadow comparison: what
+    /// would the rate limiter have decided here? This measures Phase-2b risk without changing
+    /// behaviour — the send always proceeds.
+    func sendEndSession(to userId: String, reason: String = "manual_reset", rateLimited: Bool = false) async throws {
+        if !rateLimited {
+            let candidate = SessionReducer.shouldSendEndSession(
+                lastSentAt: shadowEndSessionSentAt[userId], now: Date(), cooldown: endSessionCooldown
+            )
+            // live = true (must-send paths always send today); candidate = the rate limiter's verdict.
+            ShadowCompare.decide("end_session_must_send", key: userId, live: true, candidate: candidate, context: reason)
+        }
+        shadowEndSessionSentAt[userId] = Date()
+
         Log.info("Sending END_SESSION to \(userId): \(reason)", category: "ChatsViewModel")
         #if os(macOS)
         // On Desktop the engine owns the session state — dispatch via engine.
@@ -222,7 +241,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         endSessionSentAt[userId] = now
         Log.info("Sending END_SESSION to \(userId.prefix(8))… (\(reason))", category: "SessionCoordinator")
         do {
-            try await sendEndSession(to: userId, reason: reason)
+            try await sendEndSession(to: userId, reason: reason, rateLimited: true)
         } catch {
             Log.error("Failed to send END_SESSION to \(userId.prefix(8))…: \(error)", category: "SessionCoordinator")
         }
