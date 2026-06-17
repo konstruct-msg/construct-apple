@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import GRPCCore
 
 struct MediaMessageView: View {
     let mediaContent: MediaMessageContent
@@ -65,6 +66,7 @@ private struct SingleMediaCell: View {
     @State private var isLoading = false
     @State private var loadError: String?
     @State private var downloadProgress: Double = 0
+    @State private var hasReceivedBytes = false
     @State private var blurPreview: PlatformImage?
 
     private var itemDict: [String: Any] {
@@ -131,7 +133,7 @@ private struct SingleMediaCell: View {
 
             // Liquid Glass progress chip over the preview.
             Group {
-                if downloadProgress > 0 && downloadProgress < 1 {
+                if hasReceivedBytes && downloadProgress > 0 && downloadProgress < 1 {
                     Text("\(Int(downloadProgress * 100))%")
                         .font(CTFont.regular(12))
                         .foregroundColor(.white)
@@ -168,7 +170,7 @@ private struct SingleMediaCell: View {
                         .font(CTFont.regular(36)).foregroundColor(.orange)
                         .lineLimit(1).fixedSize()
                     Text(LocalizedStringKey("failed_to_load")).font(CTFont.regular(11)).foregroundColor(Color.CT.textDim)
-                    Button { loadThumbnail() } label: {
+                    Button { loadThumbnail(forceRetry: true) } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .regular))
                             Text(LocalizedStringKey("retry"))
@@ -196,9 +198,12 @@ private struct SingleMediaCell: View {
 
     // MARK: Load logic
 
-    private func loadThumbnail() {
+    private func loadThumbnail(forceRetry: Bool = false) {
         if thumbnailImage != nil || isLoading { return }
+        if loadError != nil && !forceRetry { return }
         loadError = nil
+        hasReceivedBytes = false
+        downloadProgress = 0
 
         // Decode the transmitted BlurHash into a blurred preview shown while downloading.
         if blurPreview == nil, let bh = itemDict["blurhash"] as? String, !bh.isEmpty {
@@ -222,14 +227,19 @@ private struct SingleMediaCell: View {
             if thumbnailImage == nil { loadError = "Missing media info" }
             return
         }
-        if thumbnailImage == nil { isLoading = true; downloadProgress = 0.02 }
+        if thumbnailImage == nil { isLoading = true }
         // Real byte-level progress: encrypted total comes from the descriptor `size`.
         let total = Double((itemDict["size"] as? Int) ?? 0)
         let onProgress: @Sendable (Int64) -> Void = { received in
-            guard total > 0 else { return }
-            // Reserve the top 10% for the decrypt + thumbnail step below.
-            let frac = min(0.9, Double(received) / total)
-            Task { @MainActor in if isLoading { downloadProgress = frac } }
+            let frac = total > 0 ? min(0.9, Double(received) / total) : 0
+            Task { @MainActor in
+                if isLoading {
+                    hasReceivedBytes = true
+                    if total > 0 {
+                        downloadProgress = frac
+                    }
+                }
+            }
         }
         Task {
             do {
@@ -244,6 +254,7 @@ private struct SingleMediaCell: View {
                     await MainActor.run {
                         isLoading = false
                         if thumbnailImage == nil { loadError = "Invalid image data" }
+                        hasReceivedBytes = false
                         downloadProgress = 0
                     }
                     return
@@ -254,12 +265,15 @@ private struct SingleMediaCell: View {
                     MediaImageCache.shared.store(image, for: message.id, at: itemIndex)
                     thumbnailImage = thumbnail
                     isLoading = false
+                    hasReceivedBytes = true
                     downloadProgress = 1.0
                 }
             } catch {
+                Log.error("Single media load failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
                 await MainActor.run {
                     isLoading = false
                     if thumbnailImage == nil { loadError = error.localizedDescription }
+                    hasReceivedBytes = false
                     downloadProgress = 0
                 }
             }
@@ -278,20 +292,19 @@ private struct MediaGridView: View {
 
     private let albumWidth: CGFloat = 244
     private let spacing: CGFloat = 2
-    private let maxVisible = 4
 
     private var itemCount: Int { mediaContent.mediaItems.count }
-    private var visibleCount: Int { min(itemCount, maxVisible) }
 
     var body: some View {
         // Square-crop mosaic: 2 = two squares, 3 = big-left + 2 stacked right,
-        // 4 = 2×2, 5+ = 2×2 with a "+N" overlay on the last tile. Outer corners are
+        // 4 = balanced 2×2, 5+ = editorial hero + expanded 2-column tail. Outer corners are
         // rounded by clipping the whole album; inner tiles are square with 2px gaps.
         Group {
-            switch visibleCount {
+            switch itemCount {
             case 2:  twoLayout
             case 3:  threeLayout
-            default: fourLayout
+            case 4:  fourLayout
+            default: editorialExpandedLayout
             }
         }
         .frame(width: albumWidth)
@@ -336,7 +349,6 @@ private struct MediaGridView: View {
 
     private var fourLayout: some View {
         let t = (albumWidth - spacing) / 2
-        let extra = itemCount > maxVisible ? itemCount - maxVisible : 0
         return VStack(spacing: spacing) {
             HStack(spacing: spacing) {
                 tile(0, t, t)
@@ -344,7 +356,33 @@ private struct MediaGridView: View {
             }
             HStack(spacing: spacing) {
                 tile(2, t, t)
-                tile(3, t, t, extra: extra)
+                tile(3, t, t)
+            }
+        }
+    }
+
+    private var editorialExpandedLayout: some View {
+        let heroHeight = albumWidth * 0.72
+        return VStack(spacing: spacing) {
+            tile(0, albumWidth, heroHeight)
+            editorialTailLayout(startingAt: 1)
+        }
+    }
+
+    @ViewBuilder
+    private func editorialTailLayout(startingAt startIndex: Int) -> some View {
+        let t = (albumWidth - spacing) / 2
+        VStack(spacing: spacing) {
+            ForEach(Array(stride(from: startIndex, to: itemCount, by: 2)), id: \.self) { rowStart in
+                HStack(spacing: spacing) {
+                    tile(rowStart, t, t)
+                    if rowStart + 1 < itemCount {
+                        tile(rowStart + 1, t, t)
+                    } else {
+                        Color.clear
+                            .frame(width: t, height: t)
+                    }
+                }
             }
         }
     }
@@ -359,6 +397,12 @@ private struct GridCell: View {
     let onTap: () -> Void
 
     @State private var thumbnailImage: PlatformImage?
+    @State private var isLoading = false
+    @State private var loadFailed = false
+    @State private var downloadProgress: Double = 0
+    @State private var hasReceivedBytes = false
+    @State private var isMissingMedia = false
+    @State private var blurPreview: PlatformImage?
 
     private var itemDict: [String: Any] {
         mediaContent.mediaItems.indices.contains(itemIndex) ? mediaContent.mediaItems[itemIndex] : [:]
@@ -369,10 +413,11 @@ private struct GridCell: View {
             if let img = thumbnailImage {
                 Image(platformImage: img).resizable().scaledToFill()
             } else {
-                Color.CT.bgMsg
-                Image(systemName: "photo")
-                    .font(.system(size: 22))
-                    .foregroundColor(Color.CT.textDim)
+                if isLoading {
+                    loadingPlaceholder
+                } else {
+                    idlePlaceholder
+                }
             }
 
             if extraCount > 0 {
@@ -387,39 +432,149 @@ private struct GridCell: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { if !isPlaceholder { onTap() } }
+        .onTapGesture {
+            if loadFailed {
+                loadThumbnail(forceRetry: true)
+            } else if !isPlaceholder, thumbnailImage != nil {
+                onTap()
+            }
+        }
         .onAppear { loadThumbnail() }
     }
 
-    private func loadThumbnail() {
-        if thumbnailImage != nil { return }
+    @ViewBuilder
+    private var idlePlaceholder: some View {
+        Color.CT.bgMsg
+        Image(systemName: placeholderSymbolName)
+            .font(.system(size: 22, weight: loadFailed ? .semibold : .regular))
+            .foregroundColor(loadFailed ? .orange : Color.CT.textDim)
+    }
+
+    @ViewBuilder
+    private var loadingPlaceholder: some View {
+        ZStack {
+            if let preview = blurPreview {
+                Image(platformImage: preview)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color.CT.bgMsg
+            }
+            Group {
+                if hasReceivedBytes && downloadProgress > 0 && downloadProgress < 1 {
+                    Text("\(Int(downloadProgress * 100))%")
+                        .font(CTFont.regular(11))
+                        .foregroundColor(.white)
+                        .monospacedDigit()
+                } else {
+                    ProgressView().tint(.white)
+                }
+            }
+            .padding(12)
+            .ctGlassCircle()
+        }
+    }
+
+    private var placeholderSymbolName: String {
+        if isMissingMedia {
+            return "exclamationmark.triangle.fill"
+        }
+        return loadFailed ? "arrow.clockwise" : "photo"
+    }
+
+    private func loadThumbnail(forceRetry: Bool = false) {
+        if thumbnailImage != nil || isLoading { return }
+        if loadFailed && !forceRetry { return }
+        if forceRetry {
+            loadFailed = false
+            isMissingMedia = false
+            hasReceivedBytes = false
+            downloadProgress = 0
+        }
+        loadFailed = false
+        isMissingMedia = false
+        hasReceivedBytes = false
+        downloadProgress = 0
+        if let cached = MediaImageCache.shared.image(for: message.id, at: itemIndex) {
+            thumbnailImage = cached
+            return
+        }
         // Fast paint from a local thumbnail (sent), then upgrade to full via the cache.
         if message.isSentByMe,
            let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
            let img = PlatformImage(data: data) {
             thumbnailImage = img
+            MediaImageCache.shared.store(img, for: message.id, at: itemIndex)
+        }
+        if blurPreview == nil, let bh = itemDict["blurhash"] as? String, !bh.isEmpty {
+            blurPreview = BlurHash.decode(bh, size: CGSize(width: 32, height: 32))
         }
         guard let mediaId = itemDict["mediaId"] as? String,
               let mediaUrl = itemDict["mediaUrl"] as? String,
               let mediaKeyStr = itemDict["mediaKey"] as? String,
               let mediaKey = Data(base64Encoded: mediaKeyStr)
         else { return }
+        isLoading = true
+        let total = Double((itemDict["size"] as? Int) ?? 0)
+        let onProgress: @Sendable (Int64) -> Void = { received in
+            let frac = total > 0 ? min(0.9, Double(received) / total) : 0
+            Task { @MainActor in
+                if isLoading {
+                    hasReceivedBytes = true
+                    if total > 0 {
+                        downloadProgress = frac
+                    }
+                }
+            }
+        }
         Task {
-            guard let imageData = try? await MediaManager.shared.downloadAndDecryptMedia(
-                mediaId: mediaId,
-                mediaUrl: mediaUrl,
-                mediaKey: mediaKey
-            ),
-                let image = PlatformImage(data: imageData)
-            else { return }
-            // Full image → gallery cache; a 200px thumb keeps the tile light.
-            let thumb = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 200)
-            await MainActor.run {
-                MediaImageCache.shared.store(image, for: message.id, at: itemIndex)
-                thumbnailImage = thumb
+            do {
+                let imageData = try await MediaManager.shared.downloadAndDecryptMedia(
+                    mediaId: mediaId,
+                    mediaUrl: mediaUrl,
+                    mediaKey: mediaKey,
+                    onProgress: onProgress
+                )
+                await MainActor.run {
+                    if isLoading {
+                        downloadProgress = 0.95
+                    }
+                }
+                guard let image = PlatformImage(data: imageData) else {
+                    await MainActor.run {
+                        isLoading = false
+                        loadFailed = true
+                        hasReceivedBytes = false
+                        downloadProgress = 0
+                    }
+                    return
+                }
+                // Full image → gallery cache; a 200px thumb keeps the tile light.
+                let thumb = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 200)
+                await MainActor.run {
+                    MediaImageCache.shared.store(image, for: message.id, at: itemIndex)
+                    thumbnailImage = thumb
+                    isLoading = false
+                    hasReceivedBytes = true
+                    downloadProgress = 1.0
+                }
+            } catch {
+                Log.error("Grid media load failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                await MainActor.run {
+                    isLoading = false
+                    loadFailed = true
+                    isMissingMedia = isMediaMissingError(error)
+                    hasReceivedBytes = false
+                    downloadProgress = 0
+                }
             }
         }
     }
+}
+
+private func isMediaMissingError(_ error: Error) -> Bool {
+    guard let rpcError = error as? RPCError else { return false }
+    return rpcError.code == .notFound
 }
 
 // MARK: - Liquid Glass helper
@@ -434,4 +589,3 @@ private extension View {
         }
     }
 }
-

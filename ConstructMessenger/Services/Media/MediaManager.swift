@@ -37,6 +37,8 @@ class MediaManager {
     
     /// Cache for downloaded/decrypted media to avoid re-downloading
     private var mediaCache: [String: Data] = [:]
+    /// Deduplicates concurrent fetches for the same media ID while the first request is in flight.
+    private var inFlightDownloads: [String: Task<Data, Error>] = [:]
     private let maxCacheSize = 50 * 1024 * 1024  // 50 MB
     private var currentCacheSize = 0
 
@@ -472,15 +474,22 @@ class MediaManager {
             Log.error("Invalid media key size: \(mediaKey.count) (expected 32)", category: "MediaManager")
             throw MediaManagerError.invalidMediaKey
         }
+        if let task = inFlightDownloads[cacheKey] {
+            Log.debug("Joining in-flight download for: \(mediaId.prefix(8))...", category: "MediaManager")
+            return try await task.value
+        }
 
         Log.info("Downloading media from: \(mediaUrl)", category: "MediaManager")
-
-        let encryptedData = try await Self.downloadWithRetry(mediaId: mediaId, onProgress: onProgress)
-        Log.debug("   Downloaded encrypted data: \(encryptedData.count) bytes", category: "MediaManager")
-
-        let decryptedData = try CryptoManager.shared.decryptMediaData(encryptedData, with: mediaKey)
-        
-        Log.info("Media decrypted: \(decryptedData.count) bytes", category: "MediaManager")
+        let task = Task<Data, Error> {
+            let encryptedData = try await Self.downloadWithRetry(mediaId: mediaId, onProgress: onProgress)
+            Log.debug("   Downloaded encrypted data: \(encryptedData.count) bytes", category: "MediaManager")
+            let decryptedData = try CryptoManager.shared.decryptMediaData(encryptedData, with: mediaKey)
+            Log.info("Media decrypted: \(decryptedData.count) bytes", category: "MediaManager")
+            return decryptedData
+        }
+        inFlightDownloads[cacheKey] = task
+        defer { inFlightDownloads.removeValue(forKey: cacheKey) }
+        let decryptedData = try await task.value
         
         // Persist to disk cache so media survives app restarts and updates
         saveToDiskcache(decryptedData, mediaId: mediaId)

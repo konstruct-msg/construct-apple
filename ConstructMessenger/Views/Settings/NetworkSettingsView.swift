@@ -38,6 +38,10 @@ struct NetworkSettingsView: View {
         return VeilTicketStore.ticket(for: addr) != nil ? addr : nil
     }
 
+    private var hasVeilAccessConfigured: Bool {
+        veilConfiguredRelay != nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if showNavBar {
@@ -134,7 +138,7 @@ struct NetworkSettingsView: View {
                         Text(LocalizedStringKey("veil_title"))
                             .font(CTFont.regular(13))
                             .foregroundColor(
-                                veilManager.hasCert
+                                hasVeilAccessConfigured
                                 ? Color.CT.textDim
                                 : Color.CT.textDim.opacity(NetworkSettingsLayout.statusDisabledOpacity)
                             )
@@ -163,12 +167,12 @@ struct NetworkSettingsView: View {
                                 .on:   NSLocalizedString("veil_mode_on", comment: "")
                             ]
                         )
-                        .disabled(!veilManager.hasCert)
+                        .disabled(!hasVeilAccessConfigured)
                     }
                     .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                     .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
 
-                    if (veilManager.mode != .off || veilManager.isRunning) && veilManager.hasCert {
+                    if (veilManager.mode != .off || veilManager.isRunning) && hasVeilAccessConfigured {
                         if veilManager.isOnCooldown {
                             CTSep(style: .thin)
                             HStack {
@@ -245,8 +249,8 @@ struct NetworkSettingsView: View {
                 #endif
 
                 // Footer — mode-specific
-                if !veilManager.hasCert {
-                    Text(LocalizedStringKey("veil_unavailable"))
+                if !hasVeilAccessConfigured {
+                    Text(LocalizedStringKey("veil_config_none"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
