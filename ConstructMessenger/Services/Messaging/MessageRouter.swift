@@ -879,12 +879,12 @@ final class MessageRouter {
 
     /// Parse and dispatch an incoming E2E delivery receipt (content_type=14).
     ///
-    /// Payload format (sniff first byte):
-    /// - `0x7B` (`{`) → legacy JSON: `{"type":"delivery_receipt","message_ids":["<uuid>",...]}`
-    /// - else → binary proto: `Shared_Proto_Signaling_V1_DeliveryReceipt` with `.direct(DirectReceipt{ messageIds, ... })`
-    ///
-    /// Backward compat: JSON `type` field is checked so old clients that fall through to
-    /// `handleSpecialMessage` also silently discard the payload instead of saving it.
+    /// Payload is binary proto `Shared_Proto_Signaling_V1_DeliveryReceipt` with
+    /// `.direct(DirectReceipt{ messageIds, ... })`. The legacy JSON payload
+    /// (`{"type":"delivery_receipt",…}`) was retired once all clients emitted proto
+    /// (producer flipped 2026-06-11); a stale JSON payload now fails proto parse and is
+    /// discarded — never rendered, since ct=14 is intercepted before the chunk reassembler
+    /// and `Message.isServiceArtifact` guards any leak.
     private func handleIncomingE2EDeliveryReceipt(
         _ payload: Data,
         messageId: String,
@@ -901,15 +901,7 @@ final class MessageRouter {
             return
         }
 
-        let ids: [String]
-
-        if payload.first == 0x7B {
-            // Legacy JSON path: {"type":"delivery_receipt","message_ids":[...]}
-            ids = parseLegacyJsonReceipt(payload, from: otherUserId) ?? []
-        } else {
-            // Binary proto path: Shared_Proto_Signaling_V1_DeliveryReceipt
-            ids = parseBinaryReceipt(payload, from: otherUserId) ?? []
-        }
+        let ids = parseBinaryReceipt(payload, from: otherUserId) ?? []
 
         guard !ids.isEmpty else {
             Log.error("E2E receipt: failed to parse payload from \(otherUserId.prefix(8))…", category: "MessageRouter")
@@ -918,27 +910,6 @@ final class MessageRouter {
 
         Log.info("E2E receipt: \(ids.count) message(s) confirmed by \(otherUserId.prefix(8))…", category: "MessageRouter")
         delegate?.messageRouter(self, didDecryptDeliveryReceipt: ids)
-    }
-
-    /// Parse legacy JSON delivery receipt: `{"type":"delivery_receipt","message_ids":[...]}`
-    private func parseLegacyJsonReceipt(_ payload: Data, from otherUserId: String) -> [String]? {
-        let json: [String: Any]
-        do {
-            guard let parsed = try JSONSerialization.jsonObject(with: payload) as? [String: Any] else {
-                Log.error("E2E receipt: payload is not a JSON object from \(otherUserId.prefix(8))…", category: "MessageRouter")
-                return nil
-            }
-            json = parsed
-        } catch {
-            Log.error("E2E receipt: JSON parse failed from \(otherUserId.prefix(8))…: \(error)", category: "MessageRouter")
-            return nil
-        }
-        guard let type_ = json["type"] as? String, type_ == "delivery_receipt",
-              let ids = json["message_ids"] as? [String], !ids.isEmpty else {
-            Log.error("E2E receipt: failed to parse JSON payload from \(otherUserId.prefix(8))…", category: "MessageRouter")
-            return nil
-        }
-        return ids
     }
 
     /// Parse binary proto delivery receipt: `Shared_Proto_Signaling_V1_DeliveryReceipt`
@@ -986,16 +957,6 @@ final class MessageRouter {
             }
             guard let type = jsonDict["type"] as? String else {
                 return false
-            }
-
-            if type == "delivery_receipt" {
-                // Backward-compat guard: content_type=14 is handled in handleResolvedMessage.
-                // This branch catches any fallthrough from older code paths / future regressions.
-                if let ids = jsonDict["message_ids"] as? [String], !ids.isEmpty {
-                    Log.info("E2E receipt (special-msg path): \(ids.count) msg(s)", category: "MessageRouter")
-                    delegate?.messageRouter(self, didDecryptDeliveryReceipt: ids)
-                }
-                return true
             }
 
             if type == "profile" {
