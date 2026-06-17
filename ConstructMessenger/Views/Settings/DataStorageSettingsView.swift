@@ -27,6 +27,9 @@ struct DataStorageSettingsView: View {
     @AppStorage(MediaManager.evictAfterDaysKey)
     private var evictAfterDays: Int = 0
 
+    @AppStorage(ChatViewModel.continuousVoicePlaybackKey)
+    private var continuousVoicePlayback: Bool = false
+
     // MARK: - View state
 
     @State private var cacheSize: Int64 = 0
@@ -237,6 +240,23 @@ struct DataStorageSettingsView: View {
                         }
                     }
                     sectionFooter("storage_auto_clear_footer")
+
+                    // MARK: Voice messages (playback behaviour)
+                    CTSettingsSectionHeader(title: NSLocalizedString("voice_section_title", comment: ""))
+                    CTSectionGroup {
+                        HStack {
+                            Text(NSLocalizedString("voice_continuous_playback", comment: ""))
+                                .font(CTFont.regular(13))
+                                .foregroundColor(Color.CT.textDim)
+                            Spacer()
+                            Toggle("", isOn: $continuousVoicePlayback)
+                                .labelsHidden()
+                                .tint(Color.CT.accent)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                    }
+                    sectionFooter("voice_continuous_playback_footer")
 
                     // MARK: Voice transcription (on-device Whisper)
                     // Models are downloadable storage assets (75 MB – 3 GB),

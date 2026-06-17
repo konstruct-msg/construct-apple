@@ -183,6 +183,13 @@ struct ChatView: View {
                         }
                     }
                 }
+                .onChange(of: viewModel.voicePlaybackScrollTarget) { _, target in
+                    // Continuous voice playback advanced — bring the now-playing message
+                    // into view (centered), then clear the target so a later replay re-scrolls.
+                    guard let target else { return }
+                    scrollManager.scrollTo(messageId: target, anchor: .center)
+                    viewModel.voicePlaybackScrollTarget = nil
+                }
                 .onChange(of: searchText) { _, newValue in
                     // ✅ Scroll to first search result
                     if !newValue.isEmpty, !filteredMessages.isEmpty, let firstMatch = filteredMessages.first {
@@ -534,6 +541,11 @@ struct ChatView: View {
         viewModel.onViewAppear()
         loadContactKTStatus()
         setActiveChatState(isActive: true)
+        // Active chat owns continuous voice playback: advance to the next voice message
+        // (older → newer) when one finishes, if the setting is on.
+        AudioPlayerService.shared.onTrackFinished = { [weak viewModel] finishedMediaId in
+            viewModel?.playNextVoiceIfContinuous(after: finishedMediaId)
+        }
     }
 
     private func handleViewDisappear() {
@@ -544,6 +556,7 @@ struct ChatView: View {
             DraftStore.shared.save(messageText, for: viewModel.chat.id)
         }
         setActiveChatState(isActive: false)
+        AudioPlayerService.shared.onTrackFinished = nil
     }
 
     private func handleContactKeyChanged(_ note: Notification) {

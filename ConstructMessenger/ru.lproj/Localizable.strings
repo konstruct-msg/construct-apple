@@ -935,6 +935,11 @@
 /* Desktop general settings */
 "message_section" = "Сообщения";
 
+/* Voice messages */
+"voice_section_title" = "Голосовые сообщения";
+"voice_continuous_playback" = "Непрерывное воспроизведение";
+"voice_continuous_playback_footer" = "Когда подряд приходит несколько голосовых, они воспроизводятся друг за другом автоматически, пока не закончится последнее.";
+
 /* STT / Transcription */
 "stt_section_title" = "Транскрипция";
 "stt_auto_transcribe" = "Автотранскрипция голосовых";

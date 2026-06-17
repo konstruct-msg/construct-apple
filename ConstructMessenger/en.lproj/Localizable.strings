@@ -925,6 +925,11 @@
 /* Desktop general settings */
 "message_section" = "Messages";
 
+/* Voice messages */
+"voice_section_title" = "Voice messages";
+"voice_continuous_playback" = "Play continuously";
+"voice_continuous_playback_footer" = "When several voice messages arrive in a row, play them one after another automatically until the last one finishes.";
+
 /* STT / Transcription */
 "stt_section_title" = "Transcription";
 "stt_auto_transcribe" = "Auto-transcribe voice messages";

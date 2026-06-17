@@ -20,6 +20,9 @@ class ChatViewModel {
     var isLoadingMore = false
     var hasMoreMessages = true
     var editingMessage: Message?
+    /// Set by continuous voice playback to ask the view to scroll the now-playing
+    /// message into view. The view scrolls on change, then resets it to nil.
+    var voicePlaybackScrollTarget: String?
     var blockedByRecipient = false
     var isSessionReady = false
     var isInitializingSession = false
@@ -156,6 +159,50 @@ class ChatViewModel {
 
     func retryMessage(_ message: Message) {
         sendCoordinator.retryMessage(message)
+    }
+
+    // MARK: - Continuous voice playback
+
+    /// AppStorage key for the "play voice messages continuously" toggle (default off).
+    static let continuousVoicePlaybackKey = "continuousVoicePlayback"
+
+    /// Called when a voice message finishes playing. When continuous playback is enabled,
+    /// auto-advances to the **next** voice message in chronological order (older → newer).
+    /// `messages` is sorted ascending (oldest first), so we scan forward from the finished
+    /// message; if there is no later voice message, playback simply stops — it never loops
+    /// back to the start of the chat.
+    func playNextVoiceIfContinuous(after finishedMediaId: String) {
+        guard UserDefaults.standard.bool(forKey: Self.continuousVoicePlaybackKey) else { return }
+        guard let idx = messages.firstIndex(where: {
+            parseVoiceContent(from: $0.displayText)?.mediaId == finishedMediaId
+        }) else { return }
+
+        // First voice message strictly after the one that just finished.
+        var nextMessage: Message?
+        for message in messages[messages.index(after: idx)...] {
+            if parseVoiceContent(from: message.displayText) != nil {
+                nextMessage = message
+                break
+            }
+        }
+        guard let nextMessage,
+              let next = parseVoiceContent(from: nextMessage.displayText) else { return }  // last voice → stop.
+
+        // Follow playback: ask the view to scroll the now-playing message into view.
+        voicePlaybackScrollTarget = nextMessage.id
+
+        Task {
+            do {
+                let data = try await MediaManager.shared.downloadAndDecryptMedia(
+                    mediaId: next.mediaId,
+                    mediaUrl: next.mediaUrl,
+                    mediaKey: next.mediaKey
+                )
+                AudioPlayerService.shared.togglePlay(mediaId: next.mediaId, data: data)
+            } catch {
+                Log.error("Continuous voice playback failed: \(error.localizedDescription)", category: "ChatViewModel")
+            }
+        }
     }
 
     // MARK: - Messages

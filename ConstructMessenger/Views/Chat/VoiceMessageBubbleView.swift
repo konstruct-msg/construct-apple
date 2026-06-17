@@ -66,7 +66,12 @@ struct VoiceMessageBubbleView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Button {
-                    if let data = audioData {
+                    if isPlaying {
+                        // Active track — may have been started by continuous playback, so this
+                        // view's `audioData` can be nil. togglePlay ignores `data` for the
+                        // active track, so pause/resume works without re-downloading.
+                        player.togglePlay(mediaId: voiceContent.mediaId, data: audioData ?? Data())
+                    } else if let data = audioData {
                         player.togglePlay(mediaId: voiceContent.mediaId, data: data)
                     } else if !isLoading {
                         loadAndPlay()
