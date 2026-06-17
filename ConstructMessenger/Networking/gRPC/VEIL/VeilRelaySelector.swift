@@ -68,13 +68,9 @@ enum VeilRelaySelector {
     // Reorders candidates based on GeoIP region: ruLike countries prefer the RU relay
     // (WebTunnel/obfs4-capable), all others prefer the AMS relay (lower latency for EU/global).
     private static func applyGeoIPPreference(to candidates: [String], region: GeoIPRegion) -> [String] {
-        let preferred: [String]
-        switch region {
-        case .ruLike:
-            preferred = [VEILConfig.ruRelayAddress, VEILConfig.amsRelayAddress]
-        case .other, .unknown:
-            preferred = [VEILConfig.amsRelayAddress, VEILConfig.ruRelayAddress]
-        }
+        // Only the veil-front relay remains, so every region prefers it.
+        let preferred = [VEILConfig.ruRelayAddress]
+        _ = region
         let front = preferred.filter { candidates.contains($0) }
         let back = candidates.filter { !preferred.contains($0) }
         return front + back

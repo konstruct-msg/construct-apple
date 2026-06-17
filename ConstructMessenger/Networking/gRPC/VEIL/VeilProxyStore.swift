@@ -124,7 +124,12 @@ enum VeilProxyStore {
     }
 
     static func cachedRelayList() -> [String] {
-        UserDefaults.standard.stringArray(forKey: VEILConfig.cachedRelayListKey) ?? []
+        // Drop permanently-retired relays even if a stale cached manifest still lists them —
+        // a censored device can't refresh the manifest, so without this it keeps probing dead
+        // relays (e.g. the RU-DPI-blocked MSK IP) forever. Single chokepoint: every relay
+        // consumer reads through here.
+        let raw = UserDefaults.standard.stringArray(forKey: VEILConfig.cachedRelayListKey) ?? []
+        return raw.filter { !VEILConfig.isRetiredRelay($0) }
     }
 
     static func cachedRelayAddresses(fallback: [String]) -> [String] {

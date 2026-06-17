@@ -215,7 +215,8 @@ actor TransportRouter {
 enum ConnectionLoopRelayBridge {
     static func snapshotRelays() -> [VeilRelay] {
         let addresses = VeilRelaySelector.cachedRelayAddresses()
-        return addresses.map { buildRelay(address: $0, bridgeCert: VEILConfig.hardcodedBridgeCert) }
+        // obfs4 is retired (excluded from the probe race), so no bridge cert is needed.
+        return addresses.map { buildRelay(address: $0, bridgeCert: "") }
     }
 
     /// Copy of `ConnectionLoop.buildRelay` — kept here so the router boot path is

@@ -15,6 +15,13 @@ import Foundation
 /// Production implementation of `VeilProxyRuntime` via `libconstruct_core` C FFI.
 final class NativeVeilRuntime: VeilProxyRuntime {
 
+    /// Methods allowed into the Rust happy-eyeballs probe race. **veil-front only** — all
+    /// obfs4 relays are retired, no relay serves WebTunnel anymore, and Masque is not
+    /// implemented. Bit N = `MethodId(N)` (matches the Rust `allowed_methods` bitmask; 0 = all).
+    /// If WebTunnel is ever served again, OR a bit back in here.
+    private static let allowedMethodsBitmask: UInt32 =
+        UInt32(1) << UInt32(VeilMethod.veilFront.rawValue)
+
     // MARK: - Unified coordinator path
 
     func startUnified(
@@ -65,7 +72,7 @@ final class NativeVeilRuntime: VeilProxyRuntime {
                                                 wt_base_path: wtPathPtr,
                                                 network_fingerprint: fpBase,
                                                 network_fingerprint_len: fingerprint.count,
-                                                allowed_methods: 0,         // 0 = all methods
+                                                allowed_methods: Self.allowedMethodsBitmask,
                                                 scores_path: scoresPtr,
                                                 veil_front_ticket_b64: ticketPtr
                                             )

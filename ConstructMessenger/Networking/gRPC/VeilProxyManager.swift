@@ -200,7 +200,9 @@ final class VeilProxyManager: ObservableObject {
         if let stored = KeychainManager.shared.loadVEILBridgeCert(), !stored.isEmpty {
             return stored
         }
-        return VEILConfig.hardcodedBridgeCert
+        // obfs4 is retired — no hardcoded bridge cert. Empty bridge line is harmless
+        // since obfs4 is excluded from the probe race.
+        return ""
     }
 
     /// Rotates to the next available relay without re-fetching the certificate.
