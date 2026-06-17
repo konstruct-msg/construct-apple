@@ -15,7 +15,13 @@ struct ChatRowView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
                     if let user = chat.otherUser {
-                        if !user.displayName.isEmpty {
+                        let alias = user.localAlias?.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if let alias, !alias.isEmpty {
+                            // Local name override always wins (matches resolvedDisplayName priority).
+                            Text(alias)
+                                .font(CTFont.bold(13))
+                                .foregroundColor(Color.CT.text)
+                        } else if !user.displayName.isEmpty {
                             Text(user.displayName)
                                 .font(CTFont.bold(13))
                                 .foregroundColor(Color.CT.text)
