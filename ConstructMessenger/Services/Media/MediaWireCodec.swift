@@ -55,6 +55,55 @@ enum MediaWireCodec {
         return content
     }
 
+    // MARK: - Edit: rebuild an album from stored local JSON with a new caption
+
+    /// Rebuild a media message for a **caption edit**. Given the message's stored local media
+    /// JSON (`{"type":"media",…}`) and a new caption, returns:
+    /// - `localJSON`: the same payload with only the caption replaced (media items untouched,
+    ///   lossless) — for display + local persistence;
+    /// - `wire`: the binary `MessageContent.mediaAlbum` to encrypt as the edit payload.
+    ///
+    /// Editing must NOT replace the content with plain text (that destroys the attachment).
+    /// Returns nil if `localJSON` is not a media payload (caller falls back to a text edit).
+    static func editedCaption(localJSON: String?, newCaption: String)
+        -> (localJSON: String, wire: Shared_Proto_Messaging_V1_MessageContent)?
+    {
+        guard let localJSON,
+              let data = localJSON.data(using: .utf8),
+              var obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (obj["type"] as? String) == "media",
+              let items = obj["media"] as? [[String: Any]], !items.isEmpty
+        else { return nil }
+
+        // New local JSON: replace only the caption, keep every media item field as-is.
+        obj["caption"] = newCaption
+        guard let newData = try? JSONSerialization.data(withJSONObject: obj),
+              let newLocalJSON = String(data: newData, encoding: .utf8)
+        else { return nil }
+
+        // Reconstruct the wire album from the stored items. Only wire-relevant fields are
+        // needed; thumbnail/filename/compressed are not carried on the album wire today.
+        let mediaList: [MediaMessageData] = items.map { d in
+            MediaMessageData(
+                mediaId: d["mediaId"] as? String ?? "",
+                mediaUrl: d["mediaUrl"] as? String ?? "",
+                mediaKey: (d["mediaKey"] as? String).flatMap { Data(base64Encoded: $0) } ?? Data(),
+                mediaType: d["mediaType"] as? String ?? "application/octet-stream",
+                size: d["size"] as? Int ?? 0,
+                width: d["width"] as? Int,
+                height: d["height"] as? Int,
+                duration: d["duration"] as? Double,
+                thumbnail: nil,
+                hash: d["hash"] as? String ?? "",
+                filename: d["filename"] as? String,
+                compressed: nil,
+                blurhash: d["blurhash"] as? String
+            )
+        }
+        let wire = albumContent(mediaList: mediaList, caption: newCaption, quoted: nil)
+        return (newLocalJSON, wire)
+    }
+
     // MARK: - Receive: MediaAlbumMessage → media JSON (parseMediaContent shape)
 
     static func mediaJSON(from album: Shared_Proto_Messaging_V1_MediaAlbumMessage) -> String? {

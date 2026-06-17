@@ -213,10 +213,15 @@ struct MessageBubbleRegularView: View {
                         }
                     }
 
+                    // Editable: plain text (edit the text) and media/photo/video (edit the
+                    // caption — the edit pipeline rebuilds the album, see ChatSendCoordinator).
+                    // NOT editable: voice, files, profile shares — their payload has no text the
+                    // user should edit, and a text edit would destroy/garble it.
                     if message.isSentByMe,
                        message.hasDecryptedContent,
-                       !message.displayText.hasPrefix("[MEDIA]"),
-                       !message.displayText.hasPrefix("[FILE]"),
+                       fileContent == nil,
+                       voiceContent == nil,
+                       profileData == nil,
                        let onEdit
                     {
                         Button { onEdit(message) } label: {

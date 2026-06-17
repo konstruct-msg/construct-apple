@@ -664,11 +664,24 @@ final class ChatSendCoordinator {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId)
+        // For a media message, editing the caption must rebuild the album (binary wire +
+        // local JSON) — sending plain text would replace the descriptor and destroy the media.
+        // Read displayText here (current actor) before hopping onto the Task.
+        let mediaEdit = MediaWireCodec.editedCaption(localJSON: message.displayText, newCaption: newText)
         Task { [weak self] in
             guard let self else { return }
             do {
+                let plaintext: Data
+                let localContent: String
+                if let mediaEdit, let wireData = try? mediaEdit.wire.serializedData() {
+                    plaintext = wireData
+                    localContent = mediaEdit.localJSON
+                } else {
+                    plaintext = Data(newText.utf8)
+                    localContent = newText
+                }
                 let wirePayload = try OutboundSessionService.shared.encryptOutgoing(
-                    plaintext: Data(newText.utf8),
+                    plaintext: plaintext,
                     messageId: message.id,
                     recipientId: recipientId
                 )
@@ -682,7 +695,7 @@ final class ChatSendCoordinator {
                 let editedDate = Date(timeIntervalSince1970: TimeInterval(response.editedAt))
                 persistenceService.updateMessageContent(
                     messageId: message.id,
-                    newContent: newText,
+                    newContent: localContent,
                     isEdited: true,
                     editedAt: editedDate,
                     in: viewContext
