@@ -63,14 +63,14 @@ final class SessionActivityTracker {
 
         if skippedKeysDanger {
             Log.error(
-                "⚠️ Pre-flight: \(contactId.prefix(8))… skipped_keys=\(health.skippedKeysCount) ≥ \(skippedKeysDangerThreshold) — proactive reinit",
+                "Pre-flight: \(contactId.prefix(8))… skipped_keys=\(health.skippedKeysCount) ≥ \(skippedKeysDangerThreshold) — proactive reinit",
                 category: "SessionActivityTracker"
             )
             return false
         }
 
         Log.debug(
-            "✅ Pre-flight OK: \(contactId.prefix(8))… sent=\(health.messagesSent) recv=\(health.messagesReceived) skipped=\(health.skippedKeysCount) ratchet_age=\(Int(ratchetAge))s pq=\(health.isPqStrengthened)",
+            "Pre-flight OK: \(contactId.prefix(8))… sent=\(health.messagesSent) recv=\(health.messagesReceived) skipped=\(health.skippedKeysCount) ratchet_age=\(Int(ratchetAge))s pq=\(health.isPqStrengthened)",
             category: "SessionActivityTracker"
         )
         return true
