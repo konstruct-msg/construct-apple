@@ -582,10 +582,14 @@ private func isMediaMissingError(_ error: Error) -> Bool {
 private extension View {
     /// Liquid Glass background on iOS 26+, `.ultraThinMaterial` fallback otherwise.
     @ViewBuilder func ctGlassCircle() -> some View {
+        #if os(iOS)
         if #available(iOS 26.0, *) {
             self.glassEffect(.regular, in: Circle())
         } else {
             self.background(.ultraThinMaterial, in: Circle())
         }
+        #else
+        self.background(.ultraThinMaterial, in: Circle())
+        #endif
     }
 }

@@ -89,7 +89,7 @@ struct DesktopRootView: View {
     // MARK: - Main split view (authenticated)
 
     private var mainContent: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        let splitView = NavigationSplitView(columnVisibility: $columnVisibility) {
             // Sidebar: mode toggle + chats list (synaps takes detail pane instead)
             VStack(spacing: 0) {
                 sidebarModeBar
@@ -114,7 +114,7 @@ struct DesktopRootView: View {
                 .environment(\.managedObjectContext, viewContext)
             } else if let chatId = chatsViewModel.chatToOpen,
                let chat = fetchChat(id: chatId) {
-                DesktopChatView(chat: chat, context: viewContext, sessionCoordinator: chatsViewModel.sessionCoordinator)
+                DesktopChatView(chat: chat, context: viewContext)
                     .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
                         handleDrop(providers: providers, into: chat)
                     }
@@ -123,49 +123,51 @@ struct DesktopRootView: View {
                     .onDrop(of: [.fileURL], isTargeted: nil) { _ in false }
             }
         }
-        .frame(minWidth: 700, minHeight: 480)
-        .onChange(of: sidebarMode) { _, mode in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                columnVisibility = mode == .synaps ? .detailOnly : .all
+
+        let decorated = splitView
+            .frame(minWidth: 700, minHeight: 480)
+            .onChange(of: sidebarMode) { _, mode in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    columnVisibility = mode == .synaps ? .detailOnly : .all
+                }
             }
-        }
-        // Incoming call banner — bottom-center
-        .overlay(alignment: .bottom) {
-            if CallsFeature.isEnabled, case .incoming(let session) = callManager.state {
-                DesktopIncomingCallView(session: session)
+            // Incoming call banner — bottom-center
+            .overlay(alignment: .bottom) {
+                if CallsFeature.isEnabled, case .incoming(let session) = callManager.state {
+                    DesktopIncomingCallView(session: session)
+                        .zIndex(100)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isIncomingState)
+                }
+            }
+            // In-call controls strip — bottom-right
+            .overlay(alignment: .bottomTrailing) {
+                if CallsFeature.isEnabled, isActiveOrConnecting, let session = activeCallSession {
+                    DesktopInCallView(
+                        session: session,
+                        isConnecting: isConnectingState,
+                        endReason: callEndReason
+                    )
                     .zIndex(100)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isIncomingState)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isActiveOrConnecting)
+                }
             }
-        }
-        // In-call controls strip — bottom-right
-        .overlay(alignment: .bottomTrailing) {
-            if CallsFeature.isEnabled, isActiveOrConnecting, let session = activeCallSession {
-                DesktopInCallView(
-                    session: session,
-                    isConnecting: isConnectingState,
-                    endReason: callEndReason
-                )
-                .zIndex(100)
-                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isActiveOrConnecting)
+            // Add Contact sheet (⌘⌥N)
+            .sheet(isPresented: $showAddContact) {
+                DesktopAddContactView()
+                    .environment(authViewModel)
+                    .environment(deepLinkHandler)
             }
-        }
-        // Add Contact sheet (⌘⌥N)
-        .sheet(isPresented: $showAddContact) {
-            DesktopAddContactView()
-                .environment(authViewModel)
-                .environment(deepLinkHandler)
-        }
-        // New Chat sheet (⌘N)
-        .sheet(isPresented: Binding(
-            get: { chatsViewModel.showNewChat },
-            set: { chatsViewModel.showNewChat = $0 }
-        )) {
-            NewChatView(chatsViewModel: chatsViewModel)
-                .environment(\.managedObjectContext, viewContext)
-                .frame(minWidth: 400, minHeight: 300)
-        }
-        // No custom toolbar items — window title bar is hidden via .windowStyle(.hiddenTitleBar)
-        // [QR] button lives in the sidebar mode bar below.
+            // New Chat sheet (⌘N)
+            .sheet(isPresented: Binding(
+                get: { chatsViewModel.showNewChat },
+                set: { chatsViewModel.showNewChat = $0 }
+            )) {
+                NewChatView(chatsViewModel: chatsViewModel)
+                    .environment(\.managedObjectContext, viewContext)
+                    .frame(minWidth: 400, minHeight: 300)
+            }
+
+        return decorated
     }
 
     // MARK: - Call state helpers
@@ -189,7 +191,7 @@ struct DesktopRootView: View {
         }
     }
 
-    private var activeCallSession: CallManager.CallSession? {
+    private var activeCallSession: CallSession? {
         switch callManager.state {
         case .dialing(let s), .active(let s), .connecting(let s), .ringing(let s): return s
         case .ended(let s, _): return s
@@ -197,7 +199,7 @@ struct DesktopRootView: View {
         }
     }
 
-    private var callEndReason: CallManager.EndReason? {
+    private var callEndReason: CallEndReason? {
         if case .ended(_, let reason) = callManager.state { return reason }
         return nil
     }

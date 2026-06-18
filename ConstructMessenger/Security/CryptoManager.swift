@@ -24,18 +24,13 @@ class CryptoManager {
 
     // Two-phase init: _bootstrapCore holds ClassicCryptoCore before userId is known;
     // orchestratorCore is created in setLocalUserId() once userId is available.
+    // Works for both iOS and macOS Desktop (Strategy B: direct core path).
     // Internal access for InviteGenerator (needs to export keys)
     internal var orchestratorCore: OrchestratorCore?
 
     /// True once OrchestratorCore has been successfully created from Keychain keys.
-    /// On macOS the engine owns the OrchestratorCore; always reports initialized so auth
-    /// flows don't fall into the "keys missing" branch.
     var isInitialized: Bool {
-        #if os(macOS)
-        return true
-        #else
         return orchestratorCore != nil
-        #endif
     }
     private var _bootstrapCore: ClassicCryptoCore?
     private var _cachedUserId: String?
@@ -655,7 +650,6 @@ class CryptoManager {
     /// the remote party uses for the local device — see `cryptoLocalUserId`.
     func setLocalUserId(_ userId: String) {
         _cachedUserId = userId
-        #if !os(macOS)
         let cryptoId = cryptoLocalUserId
 
         if let existing = orchestratorCore {
@@ -711,7 +705,6 @@ class CryptoManager {
         } catch {
             Log.error("setLocalUserId: OrchestratorCore init failed: \(error)", category: "CryptoManager")
         }
-        #endif
     }
 
     /// One-time migration: sessions saved before the AD fix (build < 350) stored

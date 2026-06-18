@@ -11,6 +11,7 @@
 
 import Foundation
 import CoreData
+import SwiftProtobuf
 #if canImport(UIKit)
 import UIKit
 #endif

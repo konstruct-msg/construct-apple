@@ -13,11 +13,11 @@ import SwiftUI
 /// Compact banner shown at the bottom-center of the window when a call arrives.
 /// macOS convention: no full-screen interruption; uses close (×) affordances, not swipe.
 struct DesktopIncomingCallView: View {
-    let session: CallManager.CallSession
+    let session: CallSession
 
     var body: some View {
         HStack(spacing: 16) {
-            CallAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 40)
+            MainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 40)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.peerName.uppercased())
@@ -74,9 +74,9 @@ struct DesktopIncomingCallView: View {
 /// Compact floating strip shown while a call is active, connecting, or ended.
 /// Positioned at the bottom-right of the window to stay out of the way.
 struct DesktopInCallView: View {
-    let session: CallManager.CallSession
+    let session: CallSession
     let isConnecting: Bool
-    var endReason: CallManager.EndReason? = nil
+    var endReason: CallEndReason? = nil
 
     @State private var isMuted = false
     @State private var elapsed: Int = 0
@@ -86,7 +86,7 @@ struct DesktopInCallView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            CallAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 32)
+            MainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 32)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.peerName.uppercased())

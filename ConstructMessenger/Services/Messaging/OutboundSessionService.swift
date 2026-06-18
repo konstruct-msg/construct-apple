@@ -11,6 +11,7 @@
 //
 
 import Foundation
+import SwiftProtobuf
 
 @MainActor
 final class OutboundSessionService {

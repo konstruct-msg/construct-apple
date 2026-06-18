@@ -88,6 +88,7 @@
 				Info.plist,
 				Services/BackgroundFetch/BackgroundFetchManager.swift,
 				Services/BackgroundFetch/EnergyMonitor.swift,
+				"Views/Chat/MessageInputView+iOS.swift",
 				Views/Security/DuressPinSetupView.swift,
 				Views/Security/PinDisableView.swift,
 				Views/Security/PinSetupView.swift,
@@ -263,6 +264,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = BF3DE84E2F62C1C40058C1AA /* Build configuration list for PBXNativeTarget "Construct Desktop" */;
 			buildPhases = (
+				3DC94F01F4194CEE8F58B712 /* ShellScript */,
 				BF3DE82C2F62C1C30058C1AA /* Sources */,
 				BF3DE82D2F62C1C30058C1AA /* Frameworks */,
 				BF3DE82E2F62C1C30058C1AA /* Resources */,
@@ -281,7 +283,6 @@
 				BF3DE8732F62C2000058C1AA /* GRPCProtobuf */,
 				BF3DE8752F62C2000058C1AA /* GRPCNIOTransportHTTP2 */,
 				BF3DE8772F62C2000058C1AA /* SwiftProtobuf */,
-				27E01FB194D24BD696982B92 /* WebRTC */,
 			);
 			productName = "Construct Desktop";
 			productReference = BF3DE8302F62C1C30058C1AA /* Construct Desktop.app */;
@@ -460,6 +461,24 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		3DC94F01F4194CEE8F58B712 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/zsh;
+			shellScript = "\"${SRCROOT}/scripts/patch_webrtc_macos_desktop.sh\"\n";
+		};
 		BFE8E6FE2FC72176000C9150 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -583,7 +602,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 450;
+				CURRENT_PROJECT_VERSION = 451;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -614,7 +633,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.15.5;
+				MARKETING_VERSION = 0.15.6;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -768,7 +787,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 450;
+				CURRENT_PROJECT_VERSION = 451;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -799,7 +818,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.15.5;
+				MARKETING_VERSION = 0.15.6;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -824,7 +843,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 450;
+				CURRENT_PROJECT_VERSION = 451;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -855,7 +874,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.15.5;
+				MARKETING_VERSION = 0.15.6;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -896,6 +915,10 @@
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(TARGET_TEMP_DIR)/WebRTC-Desktop-Patched",
+					"$(inherited)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -945,6 +968,10 @@
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(TARGET_TEMP_DIR)/WebRTC-Desktop-Patched",
+					"$(inherited)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -994,6 +1021,10 @@
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(TARGET_TEMP_DIR)/WebRTC-Desktop-Patched",
+					"$(inherited)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";

@@ -109,14 +109,9 @@ final class StreamLifecycleCoordinator {
             Log.debug("startMessageStream — skipping empty ids (would clear \(streamManager.subscriptionUserIds.count) active subscriptions)", category: "StreamLifecycle")
             return
         }
-        if EngineAdapter.isSupported {
-            // On Desktop the engine owns the stream — iOS gRPC stack is inactive.
-            EngineAdapter.shared.dispatch(.openMessageStream(conversationIds: ids, sinceCursor: nil))
-        } else {
-            wireStreamCallbacks()
-            streamManager.connect(contactUserIds: ids) { [weak self] message in
-                self?.handleIncomingMessage(message)
-            }
+        wireStreamCallbacks()
+        streamManager.connect(contactUserIds: ids) { [weak self] message in
+            self?.handleIncomingMessage(message)
         }
         #if !os(macOS)
         if !hasPerformedStartupOtpkCheck {
@@ -157,16 +152,11 @@ final class StreamLifecycleCoordinator {
         reconnectDebounceTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled, let self else { return }
-            if EngineAdapter.isSupported {
-                let conversationIds = self.currentConversationIds()
-                EngineAdapter.shared.dispatch(.openMessageStream(conversationIds: conversationIds, sinceCursor: nil))
-            } else {
-                self.wireStreamCallbacks()
-                self.streamManager.forceReconnect(contactUserIds: self.currentConversationIds()) { [weak self] message in
-                    self?.handleIncomingMessage(message)
-                }
-                self.sessionCoordinator.prewarmSessions(for: self.prewarmEligibleContactIds())
+            self.wireStreamCallbacks()
+            self.streamManager.forceReconnect(contactUserIds: self.currentConversationIds()) { [weak self] message in
+                self?.handleIncomingMessage(message)
             }
+            self.sessionCoordinator.prewarmSessions(for: self.prewarmEligibleContactIds())
         }
     }
 

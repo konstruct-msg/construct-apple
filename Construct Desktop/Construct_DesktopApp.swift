@@ -42,16 +42,22 @@ struct Construct_DesktopApp: App {
                 .task {
                     NSApp.appearance = NSAppearance(named: .darkAqua)
                     chatsViewModel.setContext(PersistenceController.shared.container.viewContext)
-                    // Start QUIC engine — macOS has no UDP 443 OS restriction (unlike iOS).
-                    do { try EngineAdapter.shared.start() } catch {
-                        Log.error("Engine start failed: \(error)", category: "Engine")
-                    }
+
+                    // Direct iOS path (Strategy B): use construct-core + gRPC + VEIL from core.
+                    // No EngineAdapter on Desktop — engine is paused for non-Apple surfaces.
                     await VeilProxyManager.shared.startIfEnabled()
+                    await TransportRouter.shared.bootstrap()
+
                     if authViewModel.isAuthenticated,
                        let deviceId = KeychainManager.shared.loadDeviceID() {
                         await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
                     }
                     _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+
+                    // WebRTC warming is guarded; calls remain iOS-only for now.
+                    #if canImport(WebRTC)
+                    WebRTCRuntime.bootstrap()
+                    #endif
                 }
         }
         .windowStyle(.hiddenTitleBar)

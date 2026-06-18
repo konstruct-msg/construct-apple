@@ -167,7 +167,7 @@ struct UserProfileView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
-        .fullScreenCover(isPresented: $showAvatarViewer) {
+        .sheet(isPresented: $showAvatarViewer) {
             if let avatarImage {
                 FullScreenImageView(image: avatarImage, isPresented: $showAvatarViewer)
             }

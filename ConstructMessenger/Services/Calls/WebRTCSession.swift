@@ -39,7 +39,7 @@ protocol WebRTCSessionProtocol: AnyObject {
     func close()
 }
 
-#if canImport(WebRTC)
+#if os(iOS) && canImport(WebRTC)
 import AVFoundation
 import WebRTC
 
@@ -72,14 +72,18 @@ private final class WebRTCFactory {
 enum WebRTCRuntime {
     static func bootstrap() {
         #if canImport(WebRTC)
+        #if os(iOS)
         let rtc = RTCAudioSession.sharedInstance()
         rtc.useManualAudio = true
         rtc.isAudioEnabled = false
-        _ = WebRTCFactory.shared
         Log.info(
             "WebRTC bootstrap: useManualAudio=\(rtc.useManualAudio) isAudioEnabled=\(rtc.isAudioEnabled)",
             category: "Calls"
         )
+        #endif
+        // Always warm the factory (RTCInitializeSSL + peer connection factory).
+        // On macOS this is sufficient; WebRTC uses native audio devices.
+        _ = WebRTCFactory.shared
         #endif
     }
 }
@@ -474,6 +478,13 @@ private extension RTCPeerConnectionState {
 }
 
 #else
+
+#if !os(iOS)
+@MainActor
+enum WebRTCRuntime {
+    static func bootstrap() {}
+}
+#endif
 
 final class WebRTCSession: WebRTCSessionProtocol {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)?

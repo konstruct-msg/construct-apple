@@ -120,10 +120,13 @@ struct DesktopLinkRequestView: View {
         VStack(spacing: 28) {
             // Header
             VStack(spacing: 10) {
-                Text("[iOS]")
-                    .font(CTFont.bold(32))
+                Image(systemName: "iphone")
+                    .font(.system(size: 48, weight: .light))
                     .foregroundStyle(Color.CT.textDim)
-                    .lineLimit(1).fixedSize()
+                Text("SCAN ON YOUR PHONE")
+                    .font(CTFont.bold(14))
+                    .foregroundStyle(Color.CT.textDim)
+                    .tracking(1)
 
                 Text(LocalizedStringKey("device_link_request_instruction"))
                     .font(.title3.weight(.semibold))

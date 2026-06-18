@@ -9,7 +9,9 @@
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
+#if os(iOS)
 import UIKit
+#endif
 
 struct IOSMessageInputView: View {
     @Binding var text: String

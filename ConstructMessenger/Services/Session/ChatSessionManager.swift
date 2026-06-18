@@ -43,11 +43,7 @@ final class ChatSessionManager {
 
     func checkExistingSession() {
         guard let userId = chat.otherUser?.id else { return }
-        #if os(macOS)
-        let ready = EngineAdapter.shared.hasSession(for: userId)
-        #else
         let ready = CryptoManager.shared.hasSession(for: userId)
-        #endif
         viewModel?.isSessionReady = ready
         if ready {
             Log.info("Session already exists for user: \(userId)", category: "ChatViewModel")
@@ -122,55 +118,6 @@ final class ChatSessionManager {
 
     func initializeSessionProactively(userId: String) async {
         viewModel?.isInitializingSession = true
-
-        #if os(macOS)
-        EngineAdapter.shared.dispatch(.initSessionInitiator(contactId: userId))
-        let success = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
-            let lock = NSLock()
-            var hasResumed = false
-            func resume(_ value: Bool) {
-                lock.lock(); defer { lock.unlock() }
-                guard !hasResumed else { return }
-                hasResumed = true
-                cont.resume(returning: value)
-            }
-            final class Tokens: @unchecked Sendable {
-                var success: NSObjectProtocol?
-                var error: NSObjectProtocol?
-            }
-            let tokens = Tokens()
-            tokens.success = NotificationCenter.default.addObserver(
-                forName: .engineSessionEstablished, object: nil, queue: nil
-            ) { n in
-                guard let peerId = n.userInfo?["contactId"] as? String, peerId == userId else { return }
-                if let t = tokens.error { NotificationCenter.default.removeObserver(t) }
-                resume(true)
-            }
-            tokens.error = NotificationCenter.default.addObserver(
-                forName: .engineSessionError, object: nil, queue: nil
-            ) { n in
-                guard let peerId = n.userInfo?["contactId"] as? String, peerId == userId else { return }
-                if let t = tokens.success { NotificationCenter.default.removeObserver(t) }
-                resume(false)
-            }
-            Task {
-                try? await Task.sleep(for: .seconds(30))
-                if let t = tokens.success { NotificationCenter.default.removeObserver(t) }
-                if let t = tokens.error   { NotificationCenter.default.removeObserver(t) }
-                resume(false)
-            }
-        }
-        viewModel?.isSessionReady = success
-        viewModel?.isInitializingSession = false
-        if success {
-            onSessionReady?(userId)
-        } else {
-            ErrorRouter.shared.report(.sessionInitFailed(contactId: userId), recovery: { [weak self] in
-                self?.fetchRecipientPublicKey()
-            })
-            onSessionFailed?(userId, "Engine session init failed")
-        }
-        #else
         await sessionInitService.initializeSessionProactively(
             userId: userId,
             onSuccess: { [weak self] in
@@ -198,7 +145,6 @@ final class ChatSessionManager {
                 self.onSessionFailed?(userId, error.userFacingMessage)
             }
         )
-        #endif
     }
 
     func sendSessionInitPing(to userId: String) async {

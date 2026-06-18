@@ -249,15 +249,9 @@ struct FeatureFlags {
     static let enablePushNotifications = false // Пока не реализовано
     static let maxMessageRetryAttempts = 3
 
-    // Parallel-run flag: when true, outgoing messages are routed through ConstructEngine
-    // instead of (and not in addition to) the legacy OutboundMessagePipeline path.
-    // iOS: always false — UDP 443 blocked by OS until MASQUE is implemented.
-    // macOS Desktop: true — QUIC works, use engine as primary send path.
-    #if os(iOS)
+    // For Desktop we now use the direct iOS path (CryptoManager + gRPC-Swift) per Strategy B.
+    // Engine send path is disabled for Desktop (engine paused for this surface).
     static let useEngineForSend = false
-    #else
-    static let useEngineForSend = true
-    #endif
 
     /// HTTP/3 (QUIC) for gRPC streams on the direct path.
     ///

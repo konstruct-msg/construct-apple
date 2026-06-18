@@ -113,11 +113,7 @@ final class ChatSendCoordinator {
             return
         }
 
-        #if os(macOS)
-        let hasSession = EngineAdapter.shared.hasSession(for: recipientId)
-        #else
         let hasSession = CryptoManager.shared.hasSession(for: recipientId)
-        #endif
 
         if !hasSession {
             let queued = QueuedMessage(text: text, attachments: attachments, replyTo: replyTo)
@@ -345,24 +341,7 @@ final class ChatSendCoordinator {
                         replyTo: replyTo, replyToContentOverride: replyToContentOverride,
                         localThumbnails: localThumbnails, suiteId: 0)
 
-            if FeatureFlags.useEngineForSend && EngineAdapter.shared.isConnected {
-                Log.info("Sending message via ConstructEngine: \(messageId)", category: "ChatViewModel")
-                let anonymityLevel: AnonymityLevel = UserDefaults.standard.bool(forKey: "stealth_mode_enabled") ? .ghost : .normal
-                EngineAdapter.shared.dispatch(.sendMessage(
-                    contactId: recipientId,
-                    plaintext: plaintextData,
-                    localId: messageId,
-                    conversationId: recipientId,
-                    anonymityLevel: anonymityLevel
-                ))
-                MessageQueueManager.shared.markMessageAsSending(messageId)
-                viewModel?.isSending = false
-                return
-            }
-            if FeatureFlags.useEngineForSend && !EngineAdapter.shared.isConnected {
-                Log.error("Engine transport down — falling back to Swift gRPC for \(messageId.prefix(8))…", category: "ChatViewModel")
-            }
-            Log.info("Sending message via gRPC: \(messageId)", category: "ChatViewModel")
+            Log.info("Sending message via gRPC (direct core path): \(messageId)", category: "ChatViewModel")
             Task { [weak self] in
                 guard let self else { return }
                 let jitterMs = TrafficProtectionService.shared.recommendedSendDelay(isHighPriority: true)

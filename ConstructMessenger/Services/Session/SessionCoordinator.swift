@@ -204,11 +204,6 @@ final class SessionCoordinator: MessageRouterDelegate {
         shadowEndSessionSentAt[userId] = Date()
 
         Log.info("Sending END_SESSION to \(userId): \(reason)", category: "ChatsViewModel")
-        #if os(macOS)
-        // On Desktop the engine owns the session state — dispatch via engine.
-        EngineAdapter.shared.dispatch(.sendEndSession(contactId: userId))
-        Log.info("END_SESSION dispatched to engine for \(userId.prefix(8))…", category: "ChatsViewModel")
-        #else
         do {
             let response = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: reason)
             Log.info("END_SESSION sent successfully: \(response.messageId)", category: "ChatsViewModel")
@@ -219,7 +214,6 @@ final class SessionCoordinator: MessageRouterDelegate {
         CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
         CryptoManager.shared.clearArchivedSessions(for: userId)
         Log.info("END_SESSION complete: session archived and cleared", category: "ChatsViewModel")
-        #endif
     }
 
     /// Single rate-limited END_SESSION entry point for storm-prone recovery paths
@@ -770,10 +764,6 @@ final class SessionCoordinator: MessageRouterDelegate {
     ///
     /// Falls back to the legacy two-step sequence if all attempts fail (backward compat).
     private func sendSessionResetInit(to userId: String) async {
-        #if os(macOS)
-        Log.info("SESSION_STATE[sri_engine]: dispatching InitSessionInitiator for \(userId.prefix(8))…", category: "SessionInit")
-        EngineAdapter.shared.dispatch(.initSessionInitiator(contactId: userId))
-        #else
         guard CryptoManager.shared.hasSession(for: userId) else {
             Log.info("SESSION_STATE[sri_skip]: no INITIATOR session for \(userId.prefix(8))…", category: "SessionInit")
             return
@@ -823,15 +813,9 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
             }
         }
-        #endif
     }
 
     private func sendSessionPing(to userId: String) async {
-        #if os(macOS)
-        // InitSessionInitiator (dispatched by sendSessionResetInit) already sent the first
-        // encrypted message — there is no separate ping step on the engine path.
-        _ = userId
-        #else
         guard CryptoManager.shared.hasSession(for: userId) else {
             Log.info("SESSION_STATE[tie_break_ping_skip]: no INITIATOR session for \(userId.prefix(8))…", category: "SessionInit")
             return
@@ -871,7 +855,6 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
             }
         }
-        #endif
     }
 
     // MARK: - Session ready signal (RESPONDER → INITIATOR, phase 2 of two-phase handshake)
