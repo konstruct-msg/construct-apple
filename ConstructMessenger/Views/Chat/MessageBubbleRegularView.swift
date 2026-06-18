@@ -68,7 +68,7 @@ struct MessageBubbleRegularView: View {
                 if let profileData {
                     ProfileShareBubbleView(profileData: profileData)
                         .overlay(
-                            Rectangle()
+                            RoundedRectangle(cornerRadius: 8)
                                 .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                         )
                 } else if let mediaContent {
@@ -86,7 +86,7 @@ struct MessageBubbleRegularView: View {
                         replyIndicatorView
                         FileAttachmentBubbleView(fileContent: fileContent, isSentByMe: message.isSentByMe)
                             .overlay(
-                                Rectangle()
+                                RoundedRectangle(cornerRadius: 8)
                                     .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                             )
                     }
@@ -144,6 +144,7 @@ struct MessageBubbleRegularView: View {
                                     color: message.isSentByMe ? Color.CT.outMsgText : Color.CT.text
                                 )
                                 .font(CTFont.regular(ChatUIConstants.Typography.messageTextSize))
+                                .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                         .padding(.horizontal, 12)
