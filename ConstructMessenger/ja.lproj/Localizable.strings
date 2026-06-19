@@ -734,6 +734,10 @@
 "stealth_scope_stream_hint" = "アクティブなストリームごとに1日1つのトークン";
 "stealth_scope_message" = "メッセージごと";
 "stealth_scope_message_hint" = "メッセージごとに1つのトークン — 最大限の非連結性";
+
+// Short labels for CTModeSelector
+"stealth_scope_stream_short" = "ストリーム";
+"stealth_scope_message_short" = "メッセージ";
 "stealth_token_wallet" = "トークンウォレット";
 "stealth_token_wallet_pending" = "[まだアクティブではありません]";
 "stealth_token_count" = "%d個のトークン";

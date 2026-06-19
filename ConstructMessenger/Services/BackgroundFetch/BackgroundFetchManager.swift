@@ -432,13 +432,18 @@ class BackgroundFetchManager: NSObject {
                 // Chunk messages: feed KNST-prefixed payloads to ChunkedMessageReassembler.
                 let legacyPrefixBytes = Data(ChunkedMessageCodec.legacyPrefix.utf8)
                 let binaryMagic = Data([0x4B, 0x4E, 0x53, 0x54]) // "KNST"
+                var assembled: String? = nil
+                var modernEditTarget: String? = nil
+                var modernEditText: String? = nil
                 if let dc = decryptedContent,
                    dc.starts(with: binaryMagic) || dc.starts(with: legacyPrefixBytes) {
-                    var assembled: String? = nil
                     DispatchQueue.main.sync {
                         switch ChunkedMessageReassembler.shared.process(data: dc) {
                         case .assembled(let text, _): assembled = text
                         case .legacy(let text):        assembled = text
+                        case .edit(let target, let nt, _):
+                            modernEditTarget = target
+                            modernEditText = nt.text
                         case .incomplete, .invalid:    break
                         }
                     }
@@ -446,6 +451,8 @@ class BackgroundFetchManager: NSObject {
                     if let text = assembled {
                         Log.debug("Chunk assembled in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
                         decryptedContent = Data(text.utf8)
+                    } else if modernEditTarget != nil {
+                        // Modern edit will be applied below; already ACK'd the chunk delivery.
                     } else {
                         Log.debug("Chunk fragment \(item.messageData.id.prefix(8)) ACK'd; waiting for remaining chunks", category: "BackgroundFetch")
                         continue
@@ -453,6 +460,31 @@ class BackgroundFetchManager: NSObject {
                 }
 
                 let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+
+                // Modern edit via MessageContent.edit (stealth/sealed path, and any direct chunked edit).
+                // Target lives inside the content (not the top-level editsMessageId envelope field used by legacy edit).
+                if let targetID = modernEditTarget, let newT = modernEditText, !newT.isEmpty {
+                    let fr = Message.fetchRequest()
+                    fr.predicate = NSPredicate(format: "id == %@", targetID)
+                    fr.fetchLimit = 1
+                    if let original = try? backgroundContext.fetch(fr).first {
+                        let contentToStore: String
+                        if let rebuilt = MediaWireCodec.editedCaption(localJSON: original.decryptedContent, newCaption: newT)?.localJSON {
+                            contentToStore = rebuilt
+                        } else {
+                            contentToStore = newT
+                        }
+                        original.decryptedContent = contentToStore
+                        original.isEdited = true
+                        original.editedAt = Date(timeIntervalSince1970: TimeInterval(item.messageData.timestamp))
+                        Log.info("BG fetch: applied modern edit to \(targetID.prefix(8))…", category: "BackgroundFetch")
+                    } else {
+                        Log.error("BG fetch: original message to modern-edit not found: \(targetID.prefix(8))…", category: "BackgroundFetch")
+                    }
+                    // ACK already performed for chunked deliveries; safe to re-mark (idempotent).
+                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
+                    continue
+                }
 
                 // Edit: update the original message in place instead of saving a new row.
                 // editsMessageId is a wire-envelope field, so this is independent of content.

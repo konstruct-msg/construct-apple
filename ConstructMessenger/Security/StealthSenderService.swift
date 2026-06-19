@@ -122,34 +122,63 @@ final class StealthSenderService {
     // MARK: - Verify
 
     /// Verifies the server Ed25519 signature on a SenderCertificate.
-    /// Uses the `bundle_signing_key` cached from /.well-known/construct-server.
+    /// Uses the `bundle_*_key` (signing or verification) cached from /.well-known/construct-server.
+    /// Tries canonical formats (direct concat + BE i64 preferred per proto comment; fallbacks for rollout).
     func verifyCert(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> Bool {
         guard
             let serverPubKeyData = UserDefaults.standard.data(forKey: VeilCertFetcher.cachedBundleSigningKeyKey),
             !cert.serverSignature.isEmpty
         else { return false }
 
-        // Reconstruct the signed payload (must match auth-service signing format)
-        var payload = Data()
-        payload.append(contentsOf: cert.senderUserID.utf8)
-        payload.append(UInt8(ascii: ":"))
-        payload.append(contentsOf: cert.senderDomain.utf8)
-        payload.append(UInt8(ascii: ":"))
-        payload.append(cert.senderIdentityKey)
-        payload.append(UInt8(ascii: ":"))
-        payload.append(contentsOf: cert.senderDeviceID.utf8)
-        payload.append(UInt8(ascii: ":"))
-        payload.append(contentsOf: String(cert.issuedAt).utf8)
-        payload.append(UInt8(ascii: ":"))
-        payload.append(contentsOf: String(cert.expiresAt).utf8)
-
+        let pubKey: Curve25519.Signing.PublicKey
         do {
-            let pubKey = try Curve25519.Signing.PublicKey(rawRepresentation: serverPubKeyData)
-            return pubKey.isValidSignature(cert.serverSignature, for: payload)
+            pubKey = try Curve25519.Signing.PublicKey(rawRepresentation: serverPubKeyData)
         } catch {
             Log.error("StealthSenderService: failed to create server pub key: \(error)", category: "Stealth")
             return false
         }
+
+        let variants: [Data] = [
+            // 0: direct concat, times as big-endian i64 bytes (preferred)
+            Self.buildCertPayload(userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey, deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt, asciiTimes: false, withColons: false),
+            // 1: direct + decimal ascii times (no colons)
+            Self.buildCertPayload(userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey, deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt, asciiTimes: true, withColons: false),
+            // 2: legacy with colons + ascii (previous client attempt)
+            Self.buildCertPayload(userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey, deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt, asciiTimes: true, withColons: true),
+        ]
+
+        for p in variants {
+            if pubKey.isValidSignature(cert.serverSignature, for: p) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func buildCertPayload(userID: String, domain: String, ik: Data, deviceID: String, issued: Int64, expires: Int64, asciiTimes: Bool, withColons: Bool) -> Data {
+        var p = Data()
+        p.append(contentsOf: userID.utf8)
+        if withColons { p.append(UInt8(ascii: ":")) }
+        p.append(contentsOf: domain.utf8)
+        if withColons { p.append(UInt8(ascii: ":")) }
+        p.append(ik)
+        if withColons { p.append(UInt8(ascii: ":")) }
+        p.append(contentsOf: deviceID.utf8)
+        if withColons { p.append(UInt8(ascii: ":")) }
+        if asciiTimes {
+            p.append(contentsOf: String(issued).utf8)
+            if withColons { p.append(UInt8(ascii: ":")) }
+            p.append(contentsOf: String(expires).utf8)
+        } else {
+            p.append(bigEndian64(issued))
+            p.append(bigEndian64(expires))
+        }
+        return p
+    }
+
+    private static func bigEndian64(_ value: Int64) -> Data {
+        var v = value.bigEndian
+        return Data(bytes: &v, count: 8)
     }
 
     // MARK: - Resolve sender (receive path, full pipeline)

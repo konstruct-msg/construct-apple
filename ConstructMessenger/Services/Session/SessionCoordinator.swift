@@ -984,6 +984,8 @@ final class SessionCoordinator: MessageRouterDelegate {
             plaintext = text
         case .legacy(let text):
             plaintext = text
+        case .edit:
+            plaintext = ""
         case .incomplete:
             Log.debug("Session-init message is a partial chunk — will be reassembled later", category: "SessionCoordinator")
             return

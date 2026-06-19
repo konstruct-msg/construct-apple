@@ -778,10 +778,14 @@
 "stealth_scope_stream_hint" = "один токен на активный поток в день";
 "stealth_scope_message" = "на сообщение";
 "stealth_scope_message_hint" = "один токен на сообщение — максимальная анонимность";
+
+// Короткие метки для CTModeSelector (переключатель режимов) в настройках stealth.
+"stealth_scope_stream_short" = "поток";
+"stealth_scope_message_short" = "сообщение";
 "stealth_token_wallet" = "кошелёк токенов";
 "stealth_token_wallet_pending" = "[ещё не активно]";
 "stealth_token_count" = "%d токенов";
-"stealth_token_wallet_hint" = "токены добываются в фоне на зарядке. требует поддержки privacy pass на сервере.";
+"stealth_token_wallet_hint" = "первая пачка создаётся при регистрации или при включении стелс. пополнение — в фоне (лучше на зарядке). требует поддержки privacy pass на сервере.";
 
 // Key Transparency
 "kt_section" = "прозрачность ключей";

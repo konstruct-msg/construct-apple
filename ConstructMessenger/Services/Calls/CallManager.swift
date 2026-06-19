@@ -710,6 +710,7 @@ final class CallManager: CallUIManaging {
 
         active.close()
         self.active = nil
+        clearIdentityKeyCache()
         // Return the signal-send chain to idle. sendHangup() above already chained this
         // call's hangup, whose Task keeps running after this nil (it still delivers); we
         // only drop the reference so the next call never awaits a stalled send from this one.
@@ -910,6 +911,9 @@ final class CallManager: CallUIManaging {
     /// Feeds raw proto bytes into the Rust orchestrator via `OutgoingCallSignal` event.
     /// Rust encrypts + packs WirePayload and returns `SendEncryptedMessage` action,
     /// which is handled by `MessageRouter.executeRustActions`.
+    ///
+    /// Stealth/sealed sender (hiding caller from server) is applied **after** Rust encryption,
+    /// by wrapping the encrypted payload in SealedInner when StealthPolicy allows it.
     private func sendCallSignalProto(_ signal: Shared_Proto_Signaling_V1_WebRTCSignal, to peerUserId: String) {
         guard let protoData = try? signal.serializedData() else {
             Log.error("Failed to serialize WebRTCSignal proto", category: "Calls")
@@ -920,11 +924,9 @@ final class CallManager: CallUIManaging {
             return
         }
         let messageId = UUID().uuidString
-        // Call signaling should respect stealth policy for privacy (who calls whom).
-        // However, call signals currently go through the Rust core event path
-        // (not the Swift SealedInner path). Full integration with StealthPolicy
-        // is pending (see engine AnonymityLevel support and overall stealth scope).
-        // For now we send the signal; decision documented in stealth decisions.
+
+        // Call signaling is in-scope for stealth (hides caller identity from the construct).
+        // We apply SealedInner here at the transport layer (after Rust E2EE encryption of the signal).
         let event = CfeIncomingEvent.outgoingCallSignal(
             contactId: peerUserId,
             messageId: messageId,
@@ -939,6 +941,7 @@ final class CallManager: CallUIManaging {
                 case .sendEncryptedMessage(let to, let payload, let msgId, _):
                     let currentUserId = AuthSessionManager.shared.currentUserId ?? ""
                     let callId = signal.callID
+
                     // Chain onto the previous send so the RPCs reach the server in the
                     // order the orchestrator encrypted them. The Task hops to @MainActor,
                     // so reads/writes of `callSignalSendChain` are serialized; `await
@@ -946,6 +949,11 @@ final class CallManager: CallUIManaging {
                     let previous = self.callSignalSendChain
                     self.callSignalSendChain = Task { @MainActor in
                         await previous?.value
+
+                        // Apply stealth/sealed sender for call signals when policy allows.
+                        // Uses dedicated helper with cache + proper logging.
+                        let sealedInnerBytes = await buildSealedForCallSignalIfNeeded(recipient: to, payload: payload)
+
                         do {
                             _ = try await MessagingServiceClient.shared.sendMessage(
                                 messageId: msgId,
@@ -955,9 +963,11 @@ final class CallManager: CallUIManaging {
                                 encryptedPayload: payload,
                                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                                 senderDeviceId: Self.currentDeviceId(),
-                                contentType: .callSignal
+                                contentType: .callSignal,
+                                sealedInnerBytes: sealedInnerBytes
                             )
-                            Log.info("WebRTCSignal sent via Rust E2EE to=\(to.prefix(8))… callId=\(callId.prefix(8))…", category: "Calls")
+                            let sealedNote = sealedInnerBytes != nil ? " [STEALTH]" : ""
+                            Log.info("WebRTCSignal sent via Rust E2EE\(sealedNote) to=\(to.prefix(8))… callId=\(callId.prefix(8))…", category: "Calls")
                         } catch {
                             Log.error("Failed to send WebRTCSignal: \(error)", category: "Calls")
                         }
@@ -985,9 +995,64 @@ final class CallManager: CallUIManaging {
         try? Shared_Proto_Signaling_V1_WebRTCSignal(serializedBytes: data)
     }
 
+    // MARK: - Stealth helpers for calls
+
+    /// Short-lived cache of recipient identity keys during active calls.
+    /// Avoids repeated bundle fetches for multiple signals (offer, ICE candidates, etc.).
+    private var identityKeyCache: [String: Data] = [:]
+
+    private func fetchRecipientIdentityKey(for userId: String) async -> Data? {
+        if let cached = identityKeyCache[userId] {
+            return cached
+        }
+        do {
+            // Same pattern as profile shares / edits.
+            let bundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId)
+            let key = bundle.identityPublic
+            identityKeyCache[userId] = key
+            return key
+        } catch {
+            Log.error("Calls: failed to fetch identity key for stealth to \(userId.prefix(8))… : \(error)", category: "Calls")
+            return nil
+        }
+    }
+
+    private func buildSealedForCallSignalIfNeeded(recipient: String, payload: Data) async -> Data? {
+        guard StealthPolicy.shared.shouldUseSealedSender() else {
+            return nil
+        }
+
+        guard let ik = await fetchRecipientIdentityKey(for: recipient) else {
+            Log.info("STEALTH: no identity key for call signal to \(recipient.prefix(8))… — sending in clear", category: "Calls")
+            return nil
+        }
+
+        do {
+            let sealed = try await StealthSenderService.buildSealedInner(
+                recipientUserId: recipient,
+                recipientIdentityKey: ik,
+                encryptedPayload: payload
+            )
+            Log.debug("STEALTH: built SealedInner for call signal (payload \(payload.count)b)", category: "Calls")
+            return sealed
+        } catch {
+            Log.error("STEALTH: buildSealedInner failed for call signal to \(recipient.prefix(8))…: \(error)", category: "Calls")
+            return nil
+        }
+    }
+
+    /// Call at end of a call to drop cached keys (privacy + memory).
+    private func clearIdentityKeyCache() {
+        identityKeyCache.removeAll()
+    }
+
+
     /// Handle a decrypted `WebRTCSignal` proto received via MessagingService.
     func handleCallSignalProto(from senderUserId: String, signal: Shared_Proto_Signaling_V1_WebRTCSignal) {
         Log.info("handleCallSignalProto type=\(signal.signal.map { "\($0)" } ?? "none") from=\(senderUserId.prefix(8))… callId=\(signal.callID.prefix(8))…", category: "Calls")
+        // Note: if the original wire message was sealed, the real sender was already resolved
+        // in MessageRouter before the Rust decrypt action produced this .callSignalDecrypted.
+        Log.debug("STEALTH: call signal received (sender resolution happened upstream if sealed)", category: "Calls")
 
         switch signal.signal {
         case .offer(let offer):

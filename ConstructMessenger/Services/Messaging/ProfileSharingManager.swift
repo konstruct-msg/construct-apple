@@ -42,7 +42,7 @@ class ProfileSharingManager {
         }
 
         // Legacy JSON fallback
-        guard let str = String(data: data, encoding: .utf8) else { return nil }
+        guard let _ = String(data: data, encoding: .utf8) else { return nil }
         guard let jsonDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let type = jsonDict["type"] as? String,
               type == "profile" else {

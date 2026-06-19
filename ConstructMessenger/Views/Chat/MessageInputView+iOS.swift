@@ -167,7 +167,7 @@ struct IOSMessageInputView: View {
             Image(systemName: "plus.circle")
                 .font(.system(size: 20))
                 .foregroundColor(Color.CT.textDim)
-                .frame(width: 44, height: 44)
+                .frame(width: 42, height: 42)
                 .glassCapsule(cornerRadius: 999)
         }
         .buttonStyle(.plain)

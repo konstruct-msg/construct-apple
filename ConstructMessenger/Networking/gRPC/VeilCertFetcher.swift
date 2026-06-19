@@ -115,11 +115,14 @@ private struct ConstructServerWellKnown: Decodable {
     let signature: String?
     /// Ed25519 public key (base64) used to sign pre-key bundles and KT Signed Tree Heads.
     let bundleSigningKey: String?
+    /// Alternative name in newer well-known responses.
+    let bundleVerificationKey: String?
 
     enum CodingKeys: String, CodingKey {
         case version, ice, signature
         case signedAt = "signed_at"
         case bundleSigningKey = "bundle_signing_key"
+        case bundleVerificationKey = "bundle_verification_key"
     }
 
     init(from decoder: Decoder) throws {
@@ -139,9 +142,10 @@ private struct ConstructServerWellKnown: Decodable {
         } else {
             signedAt = nil
         }
-        veil              = try c.decodeIfPresent(VEILSection.self, forKey: .ice)
-        signature        = try c.decodeIfPresent(String.self,     forKey: .signature)
-        bundleSigningKey = try c.decodeIfPresent(String.self,     forKey: .bundleSigningKey)
+        veil                 = try c.decodeIfPresent(VEILSection.self, forKey: .ice)
+        signature            = try c.decodeIfPresent(String.self,     forKey: .signature)
+        bundleSigningKey     = try c.decodeIfPresent(String.self,     forKey: .bundleSigningKey)
+        bundleVerificationKey = try c.decodeIfPresent(String.self,    forKey: .bundleVerificationKey)
     }
 }
 
@@ -230,7 +234,8 @@ actor VeilCertFetcher {
                         if let encoded = try? JSONEncoder().encode(relays) {
                             UserDefaults.standard.set(encoded, forKey: Self.cachedRelayInfosKey)
                         }
-                        if let keyB64 = parsed.bundleSigningKey,
+                        let keyB64 = parsed.bundleSigningKey ?? parsed.bundleVerificationKey
+                        if let keyB64 = keyB64,
                            let keyData = Data(base64Encoded: keyB64) {
                             UserDefaults.standard.set(keyData, forKey: Self.cachedBundleSigningKeyKey)
                         }

@@ -333,6 +333,8 @@ struct CTModeSelector<T: Hashable>: View {
     @Binding var selection: T
     let options: [T]
     let labels: [T: String]
+    /// Total width of the control. Pass nil to size to content (parent should constrain).
+    var width: CGFloat? = 180
 
     var body: some View {
         HStack(spacing: 0) {
@@ -347,12 +349,15 @@ struct CTModeSelector<T: Hashable>: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
                         .background(isSelected ? Color.CT.accent : Color.clear)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
-        .frame(width: 180)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .frame(width: width)
     }
 }
 
@@ -519,7 +524,7 @@ struct CTNavBar<Leading: View, Trailing: View>: View {
                         #endif
                     }
                     .buttonStyle(.plain)
-                } else if let leadingView = leadingView as? EmptyView.Type {  // no leading content
+                } else if let _ = leadingView as? EmptyView.Type {  // no leading content
                     EmptyView()
                 } else {
                     leadingView

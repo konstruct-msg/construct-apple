@@ -768,10 +768,14 @@
 "stealth_scope_stream_hint" = "one token per active stream per day";
 "stealth_scope_message" = "per message";
 "stealth_scope_message_hint" = "one token per message — maximum unlinkability";
+
+// Short labels for the CTModeSelector (segmented) next to the stealth toggle.
+"stealth_scope_stream_short" = "stream";
+"stealth_scope_message_short" = "message";
 "stealth_token_wallet" = "token wallet";
 "stealth_token_wallet_pending" = "[not yet active]";
 "stealth_token_count" = "%d tokens";
-"stealth_token_wallet_hint" = "tokens are minted in the background while charging. requires privacy pass support on the construct.";
+"stealth_token_wallet_hint" = "first batch is minted on registration or when you enable Stealth. top-ups happen in background (best while charging). requires privacy pass support on the construct.";
 
 // Key Transparency
 "kt_section" = "key transparency";

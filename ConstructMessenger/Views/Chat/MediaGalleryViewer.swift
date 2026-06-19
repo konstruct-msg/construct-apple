@@ -137,16 +137,14 @@ struct MediaGalleryViewer: View {
 
                 Spacer()
 
-                Button { saveCurrentImage() } label: {
-                    Image(systemName: saveStatusIcon)
-                        .font(CTFont.regular(16))
-                        .foregroundColor(saveStatusColor)
+                Button { shareCurrentImage() } label: {
+                    Image(systemName: "ellipsis.circle.fill")
+                        .font(CTFont.regular(20))
+                        .foregroundColor(.white.opacity(0.9))
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                         .lineLimit(1).fixedSize()
-                        .animation(.easeInOut(duration: 0.2), value: saveStatus)
                 }
-                .disabled(saveStatus == .saving)
             }
             .padding(.horizontal, 16)
             .padding(.top, 56)
@@ -240,6 +238,23 @@ struct MediaGalleryViewer: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             saveStatus = .idle
         }
+    }
+
+    private func shareCurrentImage() {
+        guard let entry = entries.first(where: { $0.id == currentEntryId }),
+              let img = MediaImageCache.shared.image(for: entry.message.id, at: entry.itemIndex) else { return }
+
+#if canImport(UIKit)
+        let av = UIActivityViewController(activityItems: [img], applicationActivities: nil)
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+            var top = root
+            while let presented = top.presentedViewController {
+                top = presented
+            }
+            top.present(av, animated: true)
+        }
+#endif
     }
 }
 

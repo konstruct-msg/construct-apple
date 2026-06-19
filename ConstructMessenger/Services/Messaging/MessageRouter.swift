@@ -106,6 +106,9 @@ final class MessageRouter {
                     // sealedInnerData intentionally omitted — sender resolved
                 )
                 Log.debug("STEALTH: resolved sender → \(senderId.prefix(8))…", category: "MessageRouter")
+                if message.contentType == 12 {
+                    Log.debug("STEALTH: this was a sealed call signal", category: "MessageRouter")
+                }
             } else {
                 Log.error("STEALTH: could not resolve sender for message \(message.id.prefix(8))… — dropping", category: "MessageRouter")
                 return
@@ -516,16 +519,22 @@ final class MessageRouter {
                     handleResolvedMessage(text, quotedMessage: quoted, for: message, from: otherUserId, chat: chat, in: context)
                 case .legacy(let text):
                     handleResolvedMessage(text, quotedMessage: nil, for: message, from: otherUserId, chat: chat, in: context)
-                case .edit(let targetMessageID, let newText, let newMedia):
-                    // Modern edit from MessageContent.edit
-                    if let newText = newText {
-                        let fetch = Message.fetchRequest()
-                        fetch.predicate = NSPredicate(format: "id == %@", targetMessageID)
-                        if let original = try? context.fetch(fetch).first {
-                            original.decryptedContent = newText
-                            original.isEdited = true
-                            original.editedAt = Date()
+                case .edit(let targetMessageID, let newText, _):
+                    // Modern edit from MessageContent.edit (newText carries caption for media too)
+                    let fetch = Message.fetchRequest()
+                    fetch.predicate = NSPredicate(format: "id == %@", targetMessageID)
+                    if let original = try? context.fetch(fetch).first {
+                        let captionOrText = newText.text
+                        if !captionOrText.isEmpty {
+                            if let rebuilt = MediaWireCodec.editedCaption(localJSON: original.decryptedContent, newCaption: captionOrText)?.localJSON {
+                                original.decryptedContent = rebuilt
+                            } else {
+                                original.decryptedContent = captionOrText
+                            }
                         }
+                        // Future: if newMedia populated, convert via MediaWireCodec + album wrapper here.
+                        original.isEdited = true
+                        original.editedAt = Date()
                     }
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                     delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
@@ -1464,6 +1473,10 @@ final class MessageRouter {
             decrypted = text
         case .legacy(let text):
             decrypted = text
+        case .edit:
+            // edits shouldn't appear in SENDER_SYNC init carrier
+            Log.info("SENDER_SYNC: edit in init-carrier, ignoring", category: "MessageRouter")
+            return
         case .incomplete, .invalid:
             Log.info("SENDER_SYNC: could not decode init-carrier payload for \(partnerUserId.prefix(8))… — session established, no user content", category: "MessageRouter")
             return

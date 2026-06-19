@@ -28,6 +28,14 @@ struct SecurityView: View {
     @AppStorage("stealth_mode_enabled") private var stealthEnabled = false
     @AppStorage("stealth_per_message") private var stealthPerMessage = false
 
+    /// Binding adapter so we can drive CTModeSelector (like the VEIL tri-state) from the existing Bool storage.
+    private var stealthScope: Binding<StealthScope> {
+        Binding(
+            get: { StealthScope.from(isPerMessage: stealthPerMessage) },
+            set: { newScope in stealthPerMessage = newScope.isPerMessage }
+        )
+    }
+
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
         VStack(spacing: 0) {
@@ -245,6 +253,16 @@ struct SecurityView: View {
                         .tint(Color.CT.accent)
                 }
                 .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
+                .onChange(of: stealthEnabled) { _, isNowOn in
+                    if isNowOn {
+                        Task {
+                            await ServerKeyManager.shared.prefetch()
+                            // Ensure bundle/verification signing key for SenderCertificate validation is warm.
+                            _ = await VeilCertFetcher.shared.fetchAndCacheRelayConfig()
+                            await BlindTokenService.shared.bootstrapInitialBatch()
+                        }
+                    }
+                }
 
                 securityHintText(
                     LocalizedStringKey("stealth_hint"),
@@ -258,49 +276,27 @@ struct SecurityView: View {
                         .frame(height: 1)
                         .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
 
-                    // Per-stream (default) vs per-message
-                    Button {
-                        stealthPerMessage = false
-                    } label: {
-                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                            CTRowIcon(stealthPerMessage ? "[ ]" : "[•]", color: stealthPerMessage ? Color.CT.textDim : Color.CT.accent)
-                            VStack(alignment: .leading, spacing: SecuritySettingsLayout.lockStatusSpacing) {
-                                Text(LocalizedStringKey("stealth_scope_stream"))
-                                    .font(CTFont.regular(13))
-                                    .foregroundStyle(Color.CT.text)
-                                Text(LocalizedStringKey("stealth_scope_stream_hint"))
-                                    .font(CTFont.regular(11))
-                                    .foregroundStyle(Color.CT.textDim)
-                            }
-                            Spacer()
-                        }
-                        .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
-                    }
-                    .buttonStyle(.plain)
+                    // Scope selector — normal CTModeSelector (same as VEIL off/auto/on).
+                    // Replaces the old checkbox-style rows.
+                    CTModeSelector(
+                        selection: stealthScope,
+                        options: StealthScope.allCases,
+                        labels: [
+                            .perStream: NSLocalizedString("stealth_scope_stream_short", comment: ""),
+                            .perMessage: NSLocalizedString("stealth_scope_message_short", comment: "")
+                        ],
+                        width: .infinity
+                    )
+                    .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
+                    .padding(.vertical, SecuritySettingsLayout.compactRowVerticalPadding)
 
-                    Rectangle()
-                        .fill(Color.CT.noise.opacity(SecuritySettingsLayout.separatorOpacity))
-                        .frame(height: 1)
-                        .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
-
-                    Button {
-                        stealthPerMessage = true
-                    } label: {
-                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                            CTRowIcon(stealthPerMessage ? "[•]" : "[ ]", color: stealthPerMessage ? Color.CT.accent : Color.CT.textDim)
-                            VStack(alignment: .leading, spacing: SecuritySettingsLayout.lockStatusSpacing) {
-                                Text(LocalizedStringKey("stealth_scope_message"))
-                                    .font(CTFont.regular(13))
-                                    .foregroundStyle(Color.CT.text)
-                                Text(LocalizedStringKey("stealth_scope_message_hint"))
-                                    .font(CTFont.regular(11))
-                                    .foregroundStyle(Color.CT.textDim)
-                            }
-                            Spacer()
-                        }
-                        .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
-                    }
-                    .buttonStyle(.plain)
+                    // Dynamic one-line hint for the chosen scope (matches the previous per-choice hints).
+                    let scopeHintKey = stealthPerMessage ? "stealth_scope_message_hint" : "stealth_scope_stream_hint"
+                    securityHintText(
+                        LocalizedStringKey(scopeHintKey),
+                        color: Color.CT.textDim,
+                        top: SecuritySettingsLayout.hintCompactTopPadding
+                    )
 
                     Rectangle()
                         .fill(Color.CT.noise.opacity(SecuritySettingsLayout.separatorOpacity))

@@ -295,10 +295,16 @@ final class MessagingServiceClient: Sendable {
             // For STEALTH messages, `sealedInnerData` is populated and `senderID` is empty.
             let sealedInner = msg.sealedInnerData
             let isSealed = !sealedInner.isEmpty
-            guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
+            var wirePayload = msg.encryptedPayload
+            if isSealed && wirePayload.isEmpty {
+                if let sealedProto = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInner),
+                   !sealedProto.encryptedPayload.isEmpty {
+                    wirePayload = sealedProto.encryptedPayload
+                }
+            }
+            guard let decoded = try? WirePayloadCoder.decode(wirePayload) else {
                 if isSealed {
-                    // Sealed message payload is inside SealedInner — carry sealedInnerData
-                    // for MessageRouter to decrypt and route.
+                    // Fallback for sealed when outer payload not usable.
                     return ChatMessage(
                         id: msg.messageID,
                         from: "",
@@ -333,7 +339,7 @@ final class MessagingServiceClient: Sendable {
                 kyberOtpkId: decoded.kyberOtpkId,
                 senderDeviceId: "",
                 conversationId: "",
-                rawPayload: msg.encryptedPayload,
+                rawPayload: wirePayload,
                 sealedInnerData: sealedInner
             )
         }

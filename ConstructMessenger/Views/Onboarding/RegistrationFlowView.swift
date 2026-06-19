@@ -424,6 +424,14 @@ struct RegistrationFlowView: View {
                 Log.error("   OTPK upload failed (non-fatal): \(error)", category: "Registration")
             }
 
+            // 6.1 Bootstrap initial Stealth / Privacy Pass tokens (first batch).
+            // Runs detached after registration (right after PoW + keys).
+            // Uses special bootstrap path that bypasses cooldown.
+            Log.info("Bootstrapping initial stealth tokens (Privacy Pass)...", category: "Registration")
+            Task.detached(priority: .utility) {
+                await BlindTokenService.shared.bootstrapInitialBatch()
+            }
+
             // 6.5 Upload Kyber SPK + OTPKs in a single request (detached — survives view dismissal)
             Log.info("Uploading Kyber SPK + OTPKs (PQC)...", category: "Registration")
             do {

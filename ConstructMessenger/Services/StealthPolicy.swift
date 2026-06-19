@@ -19,6 +19,20 @@
 import Foundation
 import Observation
 
+/// Scope for when to apply sealed-sender + consume Privacy Pass tokens.
+enum StealthScope: String, CaseIterable, Identifiable {
+    case perStream
+    case perMessage
+
+    var id: String { rawValue }
+
+    var isPerMessage: Bool { self == .perMessage }
+
+    static func from(isPerMessage: Bool) -> StealthScope {
+        isPerMessage ? .perMessage : .perStream
+    }
+}
+
 @Observable
 @MainActor
 final class StealthPolicy {

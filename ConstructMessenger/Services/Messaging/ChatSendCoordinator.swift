@@ -349,6 +349,11 @@ final class ChatSendCoordinator {
                     try? await Task.sleep(for: .milliseconds(Int(jitterMs)))
                 }
                 do {
+                    let recipientIdentityKey: Data? = await {
+                        guard StealthPolicy.shared.shouldUseSealedSender() else { return nil }
+                        if let k = self.sessionManager.cachedIdentityKey { return k }
+                        return await self.fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: self.viewContext)
+                    }()
                     let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
                         plan: plan,
                         baseMessageId: messageId,
@@ -356,9 +361,7 @@ final class ChatSendCoordinator {
                         recipientId: recipientId,
                         conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: message.timestamp,
-                        recipientIdentityKey: StealthPolicy.shared.shouldUseSealedSender()
-                            ? self.sessionManager.cachedIdentityKey
-                            : nil
+                        recipientIdentityKey: recipientIdentityKey
                     )
                     TrafficProtectionService.shared.recordRealMessageSent()
                     if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
@@ -650,24 +653,19 @@ final class ChatSendCoordinator {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let plaintext: Data
                 let localContent: String
-                if let mediaEdit, let wireData = try? mediaEdit.wire.serializedData() {
-                    plaintext = wireData
+                if let mediaEdit {
                     localContent = mediaEdit.localJSON
                 } else {
-                    plaintext = Data(newText.utf8)
                     localContent = newText
                 }
                 // Use modern edit (MessageContent.edit) so it goes through the normal send path
                 // and can use stealth when enabled.
                 var editMsg = Shared_Proto_Messaging_V1_EditMessage()
                 editMsg.targetMessageID = message.id
-                if let mediaEdit {
-                    editMsg.newText = newText
-                } else {
-                    editMsg.newText = newText
-                }
+                var textMsg = Shared_Proto_Messaging_V1_TextMessage()
+                textMsg.text = newText
+                editMsg.newText = textMsg
                 var content = Shared_Proto_Messaging_V1_MessageContent()
                 content.edit = editMsg
                 guard let editPayload = try? content.serializedData() else {
@@ -682,7 +680,7 @@ final class ChatSendCoordinator {
                     ? await fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: viewContext)
                     : nil
 
-                let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
+                _ = try await OutboundMessagePipeline.shared.sendChunks(
                     plan: plan,
                     baseMessageId: editActionId,
                     senderId: currentUserId,

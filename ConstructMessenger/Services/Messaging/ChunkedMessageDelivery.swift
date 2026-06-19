@@ -43,7 +43,7 @@ final class ChunkedMessageSender {
 
             // Build sealed inner bytes if policy says we should use stealth and we have the key.
             var sealedInner: Data? = nil
-            if let recipientIK = recipientIdentityKey, StealthPolicy.shared.shouldUseSealedSender() {
+            if let recipientIK = recipientIdentityKey, await StealthPolicy.shared.shouldUseSealedSender() {
                 do {
                     sealedInner = try await StealthSenderService.buildSealedInner(
                         recipientUserId: recipientId,
@@ -158,7 +158,7 @@ final class ChunkedMessageReassembler {
            content.content != nil
         {
             if case .edit(let editMsg) = content.content {
-                return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: try? editMsg.newMedia?.serializedData())
+                return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: editMsg.newMedia)
             }
             let (text, quoted) = extract(content)
             return .assembled(text: text, quoted: quoted)
@@ -178,7 +178,7 @@ final class ChunkedMessageReassembler {
            content.content != nil
         {
             if case .edit(let editMsg) = content.content {
-                return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: try? editMsg.newMedia?.serializedData())
+                return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: editMsg.newMedia)
             }
             let (text, quoted) = extract(content)
             return .assembled(text: text, quoted: quoted)
@@ -293,7 +293,7 @@ enum ChunkedMessageResult {
     case incomplete
     case invalid(String)
     /// Modern edit inside MessageContent.
-    case edit(targetMessageID: String, newText: String?, newMedia: Data?)
+    case edit(targetMessageID: String, newText: Shared_Proto_Messaging_V1_TextMessage, newMedia: Shared_Proto_Messaging_V1_MediaMessage)
 }
 
 enum ChunkedMessageCodec {
