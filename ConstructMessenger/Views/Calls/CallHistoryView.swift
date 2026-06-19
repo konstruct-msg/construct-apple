@@ -21,17 +21,33 @@ struct CallHistoryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("calls_recents", comment: ""),
-                trailingSymbol: records.isEmpty ? nil : "[\(NSLocalizedString("calls_clear", comment: ""))]",
-                trailingColor: Color.CT.danger,
-                trailingAction: { showClearConfirm = true }
-            )
+            // Section title as plain left-aligned label (not a capsule)
+            HStack {
+                Text(NSLocalizedString("calls_recents", comment: "").uppercased())
+                    .font(CTFont.bold(14))
+                    .foregroundColor(Color.CT.text)
+                    .tracking(4)
+                Spacer()
+                if !records.isEmpty {
+                    Button(action: { showClearConfirm = true }) {
+                        Text("[\(NSLocalizedString("calls_clear", comment: ""))]")
+                            .font(CTFont.bold(13))
+                            .foregroundColor(Color.CT.danger)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, CTLayout.edgePad)
+            .frame(height: CTLayout.navBarHeight)
 
-            if records.isEmpty {
-                emptyState
-            } else {
-                callList
+            ZStack {
+                CTMatrixBackground().ignoresSafeArea()
+
+                if records.isEmpty {
+                    emptyState
+                } else {
+                    callList
+                }
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
@@ -84,6 +100,8 @@ struct CallHistoryView: View {
                         .frame(height: 1)
                         .padding(.leading, 72)
                 }
+                // Spacer for floating tab capsule
+                Color.clear.frame(height: 72)
             }
         }
     }
@@ -92,9 +110,6 @@ struct CallHistoryView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Text("[ no calls ]")
-                .font(CTFont.regular(20))
-                .foregroundStyle(Color.CT.textDim)
             Text(NSLocalizedString("calls_empty", comment: ""))
                 .font(CTFont.regular(13))
                 .foregroundStyle(Color.CT.textDim)

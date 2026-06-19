@@ -344,6 +344,15 @@ public struct Shared_Proto_Messaging_V1_MessageContent: @unchecked Sendable {
     set {_uniqueStorage()._content = .poll(newValue)}
   }
 
+  /// Album of one or more media items (images/videos) sent as a single message.
+  public var mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage {
+    get {
+      if case .mediaAlbum(let v)? = _storage._content {return v}
+      return Shared_Proto_Messaging_V1_MediaAlbumMessage()
+    }
+    set {_uniqueStorage()._content = .mediaAlbum(newValue)}
+  }
+
   /// Formatting metadata (applies to all types)
   public var formatting: Shared_Proto_Messaging_V1_FormattingMetadata {
     get {_storage._formatting ?? Shared_Proto_Messaging_V1_FormattingMetadata()}
@@ -386,6 +395,8 @@ public struct Shared_Proto_Messaging_V1_MessageContent: @unchecked Sendable {
     case contact(Shared_Proto_Messaging_V1_ContactMessage)
     /// Poll/Survey
     case poll(Shared_Proto_Messaging_V1_PollMessage)
+    /// Album of one or more media items (images/videos) sent as a single message.
+    case mediaAlbum(Shared_Proto_Messaging_V1_MediaAlbumMessage)
 
   }
 
@@ -500,6 +511,21 @@ public struct Shared_Proto_Messaging_V1_MediaMessage: Sendable {
   /// Clears the value of `caption`. Subsequent reads from it will return its default value.
   public mutating func clearCaption() {self._caption = nil}
 
+  /// BlurHash placeholder string — compact blurred preview shown before the full
+  /// media downloads (a few dozen bytes). Optional.
+  public var blurhash: String {
+    get {_blurhash ?? String()}
+    set {_blurhash = newValue}
+  }
+  /// Returns true if `blurhash` has been explicitly set.
+  public var hasBlurhash: Bool {self._blurhash != nil}
+  /// Clears the value of `blurhash`. Subsequent reads from it will return its default value.
+  public mutating func clearBlurhash() {self._blurhash = nil}
+
+  /// Server media object id (used to fetch the encrypted blob; may differ from the
+  /// host part of file_url). Carried explicitly so it survives the wire round-trip.
+  public var mediaID: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -509,6 +535,44 @@ public struct Shared_Proto_Messaging_V1_MediaMessage: Sendable {
   fileprivate var _dimensions: Shared_Proto_Messaging_V1_MediaDimensions? = nil
   fileprivate var _durationMs: UInt32? = nil
   fileprivate var _caption: String? = nil
+  fileprivate var _blurhash: String? = nil
+}
+
+/// MediaAlbumMessage - one or more media items sent as a single message (album/grid).
+public struct Shared_Proto_Messaging_V1_MediaAlbumMessage: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Media items, in display order (1..N).
+  public var items: [Shared_Proto_Messaging_V1_MediaMessage] = []
+
+  /// Caption for the album as a whole (applies once, not per item).
+  public var caption: String {
+    get {_caption ?? String()}
+    set {_caption = newValue}
+  }
+  /// Returns true if `caption` has been explicitly set.
+  public var hasCaption: Bool {self._caption != nil}
+  /// Clears the value of `caption`. Subsequent reads from it will return its default value.
+  public mutating func clearCaption() {self._caption = nil}
+
+  /// Quoted message (when the album is sent as a reply).
+  public var quoted: Shared_Proto_Messaging_V1_QuotedMessage {
+    get {_quoted ?? Shared_Proto_Messaging_V1_QuotedMessage()}
+    set {_quoted = newValue}
+  }
+  /// Returns true if `quoted` has been explicitly set.
+  public var hasQuoted: Bool {self._quoted != nil}
+  /// Clears the value of `quoted`. Subsequent reads from it will return its default value.
+  public mutating func clearQuoted() {self._quoted = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _caption: String? = nil
+  fileprivate var _quoted: Shared_Proto_Messaging_V1_QuotedMessage? = nil
 }
 
 /// MediaDimensions - Image/video dimensions
@@ -580,38 +644,50 @@ public struct Shared_Proto_Messaging_V1_ReactionMessage: Sendable {
 }
 
 /// EditMessage - Edit existing message
-public struct Shared_Proto_Messaging_V1_EditMessage: Sendable {
+public struct Shared_Proto_Messaging_V1_EditMessage: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Message ID being edited
-  public var targetMessageID: String = String()
+  public var targetMessageID: String {
+    get {_storage._targetMessageID}
+    set {_uniqueStorage()._targetMessageID = newValue}
+  }
 
   /// New content (replaces original)
-  public var newContent: Shared_Proto_Messaging_V1_EditMessage.OneOf_NewContent? = nil
+  public var newContent: OneOf_NewContent? {
+    get {return _storage._newContent}
+    set {_uniqueStorage()._newContent = newValue}
+  }
 
   public var newText: Shared_Proto_Messaging_V1_TextMessage {
     get {
-      if case .newText(let v)? = newContent {return v}
+      if case .newText(let v)? = _storage._newContent {return v}
       return Shared_Proto_Messaging_V1_TextMessage()
     }
-    set {newContent = .newText(newValue)}
+    set {_uniqueStorage()._newContent = .newText(newValue)}
   }
 
   public var newMedia: Shared_Proto_Messaging_V1_MediaMessage {
     get {
-      if case .newMedia(let v)? = newContent {return v}
+      if case .newMedia(let v)? = _storage._newContent {return v}
       return Shared_Proto_Messaging_V1_MediaMessage()
     }
-    set {newContent = .newMedia(newValue)}
+    set {_uniqueStorage()._newContent = .newMedia(newValue)}
   }
 
   /// Edit timestamp
-  public var editedAt: Int64 = 0
+  public var editedAt: Int64 {
+    get {_storage._editedAt}
+    set {_uniqueStorage()._editedAt = newValue}
+  }
 
   /// Edit count (increments with each edit)
-  public var editCount: UInt32 = 0
+  public var editCount: UInt32 {
+    get {_storage._editCount}
+    set {_uniqueStorage()._editCount = newValue}
+  }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -623,6 +699,8 @@ public struct Shared_Proto_Messaging_V1_EditMessage: Sendable {
   }
 
   public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// DeleteMessage - Delete/tombstone a message
@@ -986,7 +1064,7 @@ extension Shared_Proto_Messaging_V1_FormatType: SwiftProtobuf._ProtoNameProvidin
 
 extension Shared_Proto_Messaging_V1_MessageContent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageContent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{1}media\0\u{1}reaction\0\u{1}edit\0\u{1}delete\0\u{1}voice\0\u{1}location\0\u{1}contact\0\u{1}poll\0\u{2}\u{c}formatting\0\u{1}preview\0\u{c}\u{17}\u{1c}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{1}media\0\u{1}reaction\0\u{1}edit\0\u{1}delete\0\u{1}voice\0\u{1}location\0\u{1}contact\0\u{1}poll\0\u{3}media_album\0\u{2}\u{b}formatting\0\u{1}preview\0\u{c}\u{17}\u{1c}")
 
   fileprivate class _StorageClass {
     var _content: Shared_Proto_Messaging_V1_MessageContent.OneOf_Content?
@@ -1140,6 +1218,19 @@ extension Shared_Proto_Messaging_V1_MessageContent: SwiftProtobuf.Message, Swift
             _storage._content = .poll(v)
           }
         }()
+        case 10: try {
+          var v: Shared_Proto_Messaging_V1_MediaAlbumMessage?
+          var hadOneofValue = false
+          if let current = _storage._content {
+            hadOneofValue = true
+            if case .mediaAlbum(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._content = .mediaAlbum(v)
+          }
+        }()
         case 21: try { try decoder.decodeSingularMessageField(value: &_storage._formatting) }()
         case 22: try { try decoder.decodeSingularMessageField(value: &_storage._preview) }()
         default: break
@@ -1190,6 +1281,10 @@ extension Shared_Proto_Messaging_V1_MessageContent: SwiftProtobuf.Message, Swift
       case .poll?: try {
         guard case .poll(let v)? = _storage._content else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+      }()
+      case .mediaAlbum?: try {
+        guard case .mediaAlbum(let v)? = _storage._content else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
       }()
       case nil: break
       }
@@ -1266,7 +1361,7 @@ extension Shared_Proto_Messaging_V1_TextMessage: SwiftProtobuf.Message, SwiftPro
 
 extension Shared_Proto_Messaging_V1_MediaMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MediaMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}media_type\0\u{3}file_url\0\u{3}encryption_key\0\u{3}file_hash\0\u{3}file_size\0\u{3}mime_type\0\u{1}filename\0\u{1}thumbnail\0\u{1}dimensions\0\u{3}duration_ms\0\u{1}caption\0\u{c}\u{c}\u{9}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}media_type\0\u{3}file_url\0\u{3}encryption_key\0\u{3}file_hash\0\u{3}file_size\0\u{3}mime_type\0\u{1}filename\0\u{1}thumbnail\0\u{1}dimensions\0\u{3}duration_ms\0\u{1}caption\0\u{1}blurhash\0\u{3}media_id\0\u{c}\u{e}\u{7}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1285,6 +1380,8 @@ extension Shared_Proto_Messaging_V1_MediaMessage: SwiftProtobuf.Message, SwiftPr
       case 9: try { try decoder.decodeSingularMessageField(value: &self._dimensions) }()
       case 10: try { try decoder.decodeSingularUInt32Field(value: &self._durationMs) }()
       case 11: try { try decoder.decodeSingularStringField(value: &self._caption) }()
+      case 12: try { try decoder.decodeSingularStringField(value: &self._blurhash) }()
+      case 13: try { try decoder.decodeSingularStringField(value: &self.mediaID) }()
       default: break
       }
     }
@@ -1328,6 +1425,12 @@ extension Shared_Proto_Messaging_V1_MediaMessage: SwiftProtobuf.Message, SwiftPr
     try { if let v = self._caption {
       try visitor.visitSingularStringField(value: v, fieldNumber: 11)
     } }()
+    try { if let v = self._blurhash {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 12)
+    } }()
+    if !self.mediaID.isEmpty {
+      try visitor.visitSingularStringField(value: self.mediaID, fieldNumber: 13)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1343,6 +1446,52 @@ extension Shared_Proto_Messaging_V1_MediaMessage: SwiftProtobuf.Message, SwiftPr
     if lhs._dimensions != rhs._dimensions {return false}
     if lhs._durationMs != rhs._durationMs {return false}
     if lhs._caption != rhs._caption {return false}
+    if lhs._blurhash != rhs._blurhash {return false}
+    if lhs.mediaID != rhs.mediaID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Messaging_V1_MediaAlbumMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MediaAlbumMessage"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}items\0\u{1}caption\0\u{1}quoted\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.items) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._caption) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._quoted) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.items.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.items, fieldNumber: 1)
+    }
+    try { if let v = self._caption {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._quoted {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Messaging_V1_MediaAlbumMessage, rhs: Shared_Proto_Messaging_V1_MediaAlbumMessage) -> Bool {
+    if lhs.items != rhs.items {return false}
+    if lhs._caption != rhs._caption {return false}
+    if lhs._quoted != rhs._quoted {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1482,79 +1631,121 @@ extension Shared_Proto_Messaging_V1_EditMessage: SwiftProtobuf.Message, SwiftPro
   public static let protoMessageName: String = _protobuf_package + ".EditMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}target_message_id\0\u{3}new_text\0\u{3}new_media\0\u{3}edited_at\0\u{3}edit_count\0\u{c}\u{6}\u{5}")
 
+  fileprivate class _StorageClass {
+    var _targetMessageID: String = String()
+    var _newContent: Shared_Proto_Messaging_V1_EditMessage.OneOf_NewContent?
+    var _editedAt: Int64 = 0
+    var _editCount: UInt32 = 0
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _targetMessageID = source._targetMessageID
+      _newContent = source._newContent
+      _editedAt = source._editedAt
+      _editCount = source._editCount
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.targetMessageID) }()
-      case 2: try {
-        var v: Shared_Proto_Messaging_V1_TextMessage?
-        var hadOneofValue = false
-        if let current = self.newContent {
-          hadOneofValue = true
-          if case .newText(let m) = current {v = m}
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._targetMessageID) }()
+        case 2: try {
+          var v: Shared_Proto_Messaging_V1_TextMessage?
+          var hadOneofValue = false
+          if let current = _storage._newContent {
+            hadOneofValue = true
+            if case .newText(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._newContent = .newText(v)
+          }
+        }()
+        case 3: try {
+          var v: Shared_Proto_Messaging_V1_MediaMessage?
+          var hadOneofValue = false
+          if let current = _storage._newContent {
+            hadOneofValue = true
+            if case .newMedia(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._newContent = .newMedia(v)
+          }
+        }()
+        case 4: try { try decoder.decodeSingularInt64Field(value: &_storage._editedAt) }()
+        case 5: try { try decoder.decodeSingularUInt32Field(value: &_storage._editCount) }()
+        default: break
         }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.newContent = .newText(v)
-        }
-      }()
-      case 3: try {
-        var v: Shared_Proto_Messaging_V1_MediaMessage?
-        var hadOneofValue = false
-        if let current = self.newContent {
-          hadOneofValue = true
-          if case .newMedia(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.newContent = .newMedia(v)
-        }
-      }()
-      case 4: try { try decoder.decodeSingularInt64Field(value: &self.editedAt) }()
-      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.editCount) }()
-      default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.targetMessageID.isEmpty {
-      try visitor.visitSingularStringField(value: self.targetMessageID, fieldNumber: 1)
-    }
-    switch self.newContent {
-    case .newText?: try {
-      guard case .newText(let v)? = self.newContent else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    }()
-    case .newMedia?: try {
-      guard case .newMedia(let v)? = self.newContent else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    }()
-    case nil: break
-    }
-    if self.editedAt != 0 {
-      try visitor.visitSingularInt64Field(value: self.editedAt, fieldNumber: 4)
-    }
-    if self.editCount != 0 {
-      try visitor.visitSingularUInt32Field(value: self.editCount, fieldNumber: 5)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._targetMessageID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._targetMessageID, fieldNumber: 1)
+      }
+      switch _storage._newContent {
+      case .newText?: try {
+        guard case .newText(let v)? = _storage._newContent else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      }()
+      case .newMedia?: try {
+        guard case .newMedia(let v)? = _storage._newContent else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+      }()
+      case nil: break
+      }
+      if _storage._editedAt != 0 {
+        try visitor.visitSingularInt64Field(value: _storage._editedAt, fieldNumber: 4)
+      }
+      if _storage._editCount != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._editCount, fieldNumber: 5)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Messaging_V1_EditMessage, rhs: Shared_Proto_Messaging_V1_EditMessage) -> Bool {
-    if lhs.targetMessageID != rhs.targetMessageID {return false}
-    if lhs.newContent != rhs.newContent {return false}
-    if lhs.editedAt != rhs.editedAt {return false}
-    if lhs.editCount != rhs.editCount {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._targetMessageID != rhs_storage._targetMessageID {return false}
+        if _storage._newContent != rhs_storage._newContent {return false}
+        if _storage._editedAt != rhs_storage._editedAt {return false}
+        if _storage._editCount != rhs_storage._editCount {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

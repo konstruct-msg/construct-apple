@@ -34,7 +34,11 @@ struct NotificationsSettingsView: View {
                     title: NSLocalizedString("notifications", comment: ""),
                     showBack: true,
                     backAction: { dismiss() }
-                )
+                ) {
+                    EmptyView()
+                } trailing: {
+                    EmptyView()
+                }
             }
             ScrollView {
             LazyVStack(spacing: NotificationsSettingsLayout.compactSectionSpacing) {

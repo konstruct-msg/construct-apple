@@ -89,6 +89,11 @@
 
 // MARK: - Settings -> Account
 "display_name" = "Display Name";
+"local_name" = "Local name";
+"local_name_unset" = "Not set";
+"local_name_placeholder" = "Enter a name";
+"local_name_clear" = "Clear";
+"local_name_footer" = "Visible only to you. The contact never sees it.";
 "show_my_qr_code" = "Show My QR Code";
 "share_contact" = "Share Contact";
 "share_contact_footer" = "Share your QR code or link to let others add you as a contact";
@@ -496,6 +501,7 @@
 // MARK: - Message States
 "uploading" = "Uploading…";
 "loading" = "Loading...";
+"send_original_quality" = "Original quality";
 "failed_to_load" = "Failed to load";
 "shared_profile" = "Shared profile";
 
@@ -919,6 +925,11 @@
 /* Desktop general settings */
 "message_section" = "Messages";
 
+/* Voice messages */
+"voice_section_title" = "Voice messages";
+"voice_continuous_playback" = "Play continuously";
+"voice_continuous_playback_footer" = "When several voice messages arrive in a row, play them one after another automatically until the last one finishes.";
+
 /* STT / Transcription */
 "stt_section_title" = "Transcription";
 "stt_auto_transcribe" = "Auto-transcribe voice messages";
@@ -939,6 +950,10 @@
 "stt_section_header" = "transcription";
 "stt_section_footer" = "Voice messages can be transcribed on-device. Models are downloaded once and never leave the phone.";
 "stt_retry_download" = "retry";
+"stt_engine_label" = "Engine";
+"stt_engine_auto" = "Auto";
+"stt_engine_whisper" = "Whisper";
+"stt_engine_apple" = "Apple Speech";
 "account_discard_changes_title" = "Discard changes?";
 "account_discard_changes_message" = "You have unsaved profile changes. Leave without saving?";
 "account_discard_changes_discard" = "Discard";

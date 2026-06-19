@@ -89,6 +89,13 @@ actor GeoIPManager {
         UserDefaults.standard.set(publicIP, forKey: Self.cacheIPKey)
         Log.info("GeoIP: public IP = \(publicIP)", category: "GeoIP")
 
+        #if os(macOS)
+        // GeoIP / mmdb lookup is skipped on macOS Desktop.
+        // Desktop uses direct gRPC + TransportRouter. VEIL (when enabled) is
+        // controlled by user toggle; region-based auto-probing is not required.
+        Log.debug("GeoIP: skipping mmdb lookup on macOS", category: "GeoIP")
+        return .unknown
+        #else
         if let code = lookupCountry(ip: publicIP) {
             let region: GeoIPRegion = Self.censoredCountries.contains(code.uppercased()) ? .ruLike : .other
             Log.info("GeoIP: country=\(code) → region=\(region.rawValue)", category: "GeoIP")
@@ -97,11 +104,17 @@ actor GeoIPManager {
 
         Log.info("GeoIP: country lookup failed for \(publicIP) — returning unknown", category: "GeoIP")
         return .unknown
+        #endif
     }
 
     private func lookupCountry(ip: String) -> String? {
         guard let url = Bundle.main.url(forResource: "GeoLite2-Country", withExtension: "mmdb") else {
+            #if os(macOS)
+            // mmdb not required on Desktop; VEIL is ticket-driven and mode=off skips it anyway.
+            Log.debug("GeoIP mmdb not bundled/available (macOS Desktop)", category: "GeoIP")
+            #else
             Log.info("GeoIP: GeoLite2-Country.mmdb not found in bundle", category: "GeoIP")
+            #endif
             return nil
         }
         do {

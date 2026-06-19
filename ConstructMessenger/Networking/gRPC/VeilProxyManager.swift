@@ -105,6 +105,9 @@ final class VeilProxyManager: ObservableObject {
                 .rpcSucceeded(via: .veil(port: 0, relay: address), latencyMs: Int(latency * 1000))
             )
         }
+        // VEIL is confirmed working — a good moment to renew the capability in-band
+        // before it expires (no-ops unless near expiry; rate-limited internally).
+        VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: address)
     }
 
 
@@ -197,7 +200,9 @@ final class VeilProxyManager: ObservableObject {
         if let stored = KeychainManager.shared.loadVEILBridgeCert(), !stored.isEmpty {
             return stored
         }
-        return VEILConfig.hardcodedBridgeCert
+        // obfs4 is retired — no hardcoded bridge cert. Empty bridge line is harmless
+        // since obfs4 is excluded from the probe race.
+        return ""
     }
 
     /// Rotates to the next available relay without re-fetching the certificate.
@@ -234,6 +239,10 @@ final class VeilProxyManager: ObservableObject {
         // here — that fetch only added two 8s .well-known/ice-cert timeouts on censored
         // networks. The relay manifest is still refreshed for AMS relay retirement.
         await fetchConfigAndEvictIfRemoved()
+
+        // Renew the capability if it's near expiry. Works over whatever transport is
+        // up (in-band over VEIL when active); no-ops unless within the renewal window.
+        VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
     }
 
     /// Called on app foreground to verify the VEIL proxy process is actually alive.

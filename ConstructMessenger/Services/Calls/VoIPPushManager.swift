@@ -173,8 +173,15 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         guard type == .voIP else { completion(); return }
 
         let dict = payload.dictionaryPayload
-        let callId  = (dict["call_id"]  as? String) ?? UUID().uuidString
-        let callerId = (dict["caller_id"] as? String) ?? ""
+        // Call metadata is nested under "construct_call" by the server
+        // (ApnsPayload::voip_incoming_call). Reading it flat always missed and fell back
+        // to a fresh UUID(), so the callee built its CallKit + signaling session around a
+        // call_id the server never created → "Call … not found", and the caller's hangup
+        // (sent under the real call_id) could never cancel the ring. Read the nested
+        // object; keep the flat dict as a defensive fallback.
+        let callData = (dict["construct_call"] as? [AnyHashable: Any]) ?? dict
+        let callId  = (callData["call_id"]  as? String) ?? UUID().uuidString
+        let callerId = (callData["caller_id"] as? String) ?? ""
 
         // CRITICAL: iOS 13+ terminates the app if reportNewIncomingCall is not called
         // synchronously within this delegate method. Task { @MainActor } is an async

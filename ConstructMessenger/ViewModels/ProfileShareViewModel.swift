@@ -105,27 +105,23 @@ class ProfileShareViewModel {
                 timestamp: Int64(Date().timeIntervalSince1970)
             )
             
-            // Serialize to JSON
-            guard let jsonData = try? JSONEncoder().encode(profileData),
-                  let jsonString = String(data: jsonData, encoding: .utf8) else {
-                await MainActor.run {
-                    completion(false, NSLocalizedString("failed_to_encode_profile", comment: ""))
-                }
-                return
-            }
-            
-            // Check final JSON size (before encryption)
-            let jsonSize = jsonString.utf8.count
-            Log.debug("Profile data JSON size: \(jsonSize) bytes (before encryption)", category: "ProfileShare")
+            // Serialize to binary (closes legacy JSON in wire payload).
+            // Still E2EE via DR. Supports stealth when enabled.
+            let binaryPayload = profileData.toBinaryData()
+            Log.debug("Profile data binary size: \(binaryPayload.count) bytes (before encryption)", category: "ProfileShare")
             Log.debug("   displayName: \(profileData.displayName)", category: "ProfileShare")
             Log.debug("   avatarMediaId: \(avatarMediaId ?? "nil")", category: "ProfileShare")
-            Log.debug("   type: \(profileData.type)", category: "ProfileShare")
-            
-            // Encrypt and send via E2E message
+
+            // Stealth support: pass recipient identity key so SealedInner is built when enabled.
+            let recipientIdentityKey: Data? = StealthPolicy.shared.shouldUseSealedSender()
+                ? await fetchRecipientIdentityKey(userId: userId)
+                : nil
+
+            // Encrypt and send via E2E message (binary payload)
             do {
-                Log.debug("Sending profile message for user \(userId), JSON size: \(jsonSize) bytes", category: "ProfileShare")
+                Log.debug("Sending profile message for user \(userId), binary size: \(binaryPayload.count) bytes", category: "ProfileShare")
                 let messageId = UUID().uuidString
-                let plan = ChunkedMessageSender.shared.buildPlan(plaintext: Data(jsonString.utf8), messageId: UUID(uuidString: messageId) ?? UUID())
+                let plan = ChunkedMessageSender.shared.buildPlan(plaintext: binaryPayload, messageId: UUID(uuidString: messageId) ?? UUID())
 
                 // Send via gRPC
                 do {
@@ -135,7 +131,8 @@ class ProfileShareViewModel {
                         senderId: currentUserId,
                         recipientId: userId,
                         conversationId: conversationId,
-                        timestamp: UInt64(Date().timeIntervalSince1970)
+                        timestamp: UInt64(Date().timeIntervalSince1970),
+                        recipientIdentityKey: recipientIdentityKey
                     )
                     let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
                     if response.status.lowercased() == "blocked" {
@@ -158,6 +155,16 @@ class ProfileShareViewModel {
         }
     }
     
+    private func fetchRecipientIdentityKey(userId: String) async -> Data? {
+        do {
+            let bundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId)
+            return bundle.identityPublic
+        } catch {
+            Log.error("Profile share: failed to fetch bundle for stealth: \(error)", category: "ProfileShare")
+            return nil
+        }
+    }
+
     /// Handle received profile data from another user
     func handleReceivedProfile(_ profileData: ProfileShareData, from userId: String) {
         guard let context = viewContext else { return }

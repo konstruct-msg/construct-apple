@@ -13,13 +13,13 @@ import UIKit
 
 struct QueuedMessage {
     let text: String
-    let images: [PlatformImage]
+    let attachments: [MediaAttachment]
     let replyTo: Message?
     let timestamp: Date
 
-    init(text: String, images: [PlatformImage] = [], replyTo: Message? = nil) {
+    init(text: String, attachments: [MediaAttachment] = [], replyTo: Message? = nil) {
         self.text = text
-        self.images = images
+        self.attachments = attachments
         self.replyTo = replyTo
         self.timestamp = Date()
     }
@@ -44,7 +44,7 @@ final class ChatSendCoordinator {
     private var queuedMessages: [QueuedMessage] = []
 
     private struct MediaUploadPayload {
-        let images: [PlatformImage]
+        let attachments: [MediaAttachment]
         let fileURLs: [URL]
         let caption: String
         let replyTo: Message?
@@ -80,14 +80,14 @@ final class ChatSendCoordinator {
 
     func sendMessage(
         text: String,
-        images: [PlatformImage] = [],
+        attachments: [MediaAttachment] = [],
         fileURLs: [URL] = [],
         replyTo: Message? = nil,
         replyToContentOverride: String? = nil
     ) {
-        Log.info("sendMessage called with \(images.count) images, \(fileURLs.count) files", category: "ChatViewModel")
+        Log.info("sendMessage called with \(attachments.count) images, \(fileURLs.count) files", category: "ChatViewModel")
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if images.isEmpty && fileURLs.isEmpty && text.count > MessageSizeLimits.maxTextCharacters {
+        if attachments.isEmpty && fileURLs.isEmpty && text.count > MessageSizeLimits.maxTextCharacters {
             let chunks = MessageValidator.splitIntoChunks(text)
             Log.info("Long paste split into \(chunks.count) messages", category: "ChatViewModel")
             for (index, chunk) in chunks.enumerated() {
@@ -113,14 +113,10 @@ final class ChatSendCoordinator {
             return
         }
 
-        #if os(macOS)
-        let hasSession = EngineAdapter.shared.hasSession(for: recipientId)
-        #else
         let hasSession = CryptoManager.shared.hasSession(for: recipientId)
-        #endif
 
         if !hasSession {
-            let queued = QueuedMessage(text: text, images: images, replyTo: replyTo)
+            let queued = QueuedMessage(text: text, attachments: attachments, replyTo: replyTo)
             queuedMessages.append(queued)
             viewModel?.isInitializingSession = true
             Log.info("SESSION_STATE[queue_message]: userId=\(recipientId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
@@ -154,7 +150,7 @@ final class ChatSendCoordinator {
             guard let self else { return }
             let ok = await SessionActivityTracker.shared.preflight(for: recipientId)
             guard ok else {
-                let queued = QueuedMessage(text: text, images: images, replyTo: replyTo)
+                let queued = QueuedMessage(text: text, attachments: attachments, replyTo: replyTo)
                 self.queuedMessages.append(queued)
                 self.viewModel?.isInitializingSession = true
                 Log.info("Pre-flight failed — message queued, triggering proactive reinit for \(recipientId.prefix(8))…", category: "ChatViewModel")
@@ -163,7 +159,7 @@ final class ChatSendCoordinator {
             }
             self.dispatchSend(
                 text: text,
-                images: images,
+                attachments: attachments,
                 fileURLs: fileURLs,
                 replyTo: replyTo,
                 replyToContentOverride: replyToContentOverride
@@ -175,7 +171,7 @@ final class ChatSendCoordinator {
 
     private func dispatchSend(
         text: String,
-        images: [PlatformImage],
+        attachments: [MediaAttachment],
         fileURLs: [URL],
         replyTo: Message?,
         replyToContentOverride: String?
@@ -193,7 +189,7 @@ final class ChatSendCoordinator {
             sendFileMessage(fileURLs: fileURLs, caption: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
             return
         }
-        if !images.isEmpty {
+        if !attachments.isEmpty {
             do {
                 try MessageValidator.validateCaption(text)
             } catch let error as MessageValidationError {
@@ -203,7 +199,7 @@ final class ChatSendCoordinator {
                 ErrorRouter.shared.report(.unknown(error.userFacingMessage))
                 return
             }
-            sendMediaMessage(images: images, caption: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
+            sendMediaMessage(attachments: attachments, caption: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
             return
         }
         do {
@@ -237,7 +233,7 @@ final class ChatSendCoordinator {
         queuedMessages.removeAll()
         for queued in messagesToSend {
             Log.info("Sending queued message: \"\(queued.text.prefix(30))\"", category: "ChatViewModel")
-            sendMessage(text: queued.text, images: queued.images, replyTo: queued.replyTo)
+            sendMessage(text: queued.text, attachments: queued.attachments, replyTo: queued.replyTo)
         }
     }
 
@@ -267,11 +263,25 @@ final class ChatSendCoordinator {
 
     // MARK: - Text message
 
+    /// Build a QuotedMessage for a reply, or nil. Shared by text and media sends.
+    func buildQuoted(replyTo: Message?, replyToContentOverride: String?) -> Shared_Proto_Messaging_V1_QuotedMessage? {
+        guard let reply = replyTo else { return nil }
+        var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
+        quoted.messageID = reply.id
+        quoted.textPreview = replyToContentOverride ?? reply.displayText
+        return quoted
+    }
+
+    /// - Parameter wirePlaintext: pre-serialized `MessageContent` for the wire (used by
+    ///   media to send the binary `.mediaAlbum` proto). When nil, a `.text` MessageContent
+    ///   is built from `text`. `text` is always what's stored locally (`decryptedContent`)
+    ///   and synced to own devices — for media that's the local JSON.
     func sendTextMessage(
         text: String,
         replyTo: Message?,
         replyToContentOverride: String? = nil,
-        localThumbnails: [Data] = []
+        localThumbnails: [Data] = [],
+        wirePlaintext: Data? = nil
     ) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = AuthSessionManager.shared.currentUserId else {
@@ -281,18 +291,26 @@ final class ChatSendCoordinator {
         viewModel?.isSending = true
         do {
             let messageId = UUID().uuidString.lowercased()
-            var textMsg = Shared_Proto_Messaging_V1_TextMessage()
-            textMsg.text = text
-            if let reply = replyTo {
-                var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
-                quoted.messageID = reply.id
-                quoted.textPreview = replyToContentOverride ?? reply.displayText
-                textMsg.quoted = quoted
+            let plaintextData: Data
+            if let wirePlaintext {
+                plaintextData = wirePlaintext
+            } else {
+                var textMsg = Shared_Proto_Messaging_V1_TextMessage()
+                textMsg.text = text
+                if let quoted = buildQuoted(replyTo: replyTo, replyToContentOverride: replyToContentOverride) {
+                    textMsg.quoted = quoted
+                }
+                var content = Shared_Proto_Messaging_V1_MessageContent()
+                content.text = textMsg
+                guard let d = try? content.serializedData(), !d.isEmpty else {
+                    Log.error("Failed to serialize MessageContent proto", category: "ChatViewModel")
+                    viewModel?.isSending = false
+                    return
+                }
+                plaintextData = d
             }
-            var content = Shared_Proto_Messaging_V1_MessageContent()
-            content.text = textMsg
-            guard let plaintextData = try? content.serializedData(), !plaintextData.isEmpty else {
-                Log.error("Failed to serialize MessageContent proto", category: "ChatViewModel")
+            guard !plaintextData.isEmpty else {
+                Log.error("Empty wire plaintext", category: "ChatViewModel")
                 viewModel?.isSending = false
                 return
             }
@@ -323,24 +341,7 @@ final class ChatSendCoordinator {
                         replyTo: replyTo, replyToContentOverride: replyToContentOverride,
                         localThumbnails: localThumbnails, suiteId: 0)
 
-            if FeatureFlags.useEngineForSend && EngineAdapter.shared.isConnected {
-                Log.info("Sending message via ConstructEngine: \(messageId)", category: "ChatViewModel")
-                let anonymityLevel: AnonymityLevel = UserDefaults.standard.bool(forKey: "stealth_mode_enabled") ? .ghost : .normal
-                EngineAdapter.shared.dispatch(.sendMessage(
-                    contactId: recipientId,
-                    plaintext: plaintextData,
-                    localId: messageId,
-                    conversationId: recipientId,
-                    anonymityLevel: anonymityLevel
-                ))
-                MessageQueueManager.shared.markMessageAsSending(messageId)
-                viewModel?.isSending = false
-                return
-            }
-            if FeatureFlags.useEngineForSend && !EngineAdapter.shared.isConnected {
-                Log.error("Engine transport down — falling back to Swift gRPC for \(messageId.prefix(8))…", category: "ChatViewModel")
-            }
-            Log.info("Sending message via gRPC: \(messageId)", category: "ChatViewModel")
+            Log.info("Sending message via gRPC (direct core path): \(messageId)", category: "ChatViewModel")
             Task { [weak self] in
                 guard let self else { return }
                 let jitterMs = TrafficProtectionService.shared.recommendedSendDelay(isHighPriority: true)
@@ -355,7 +356,7 @@ final class ChatSendCoordinator {
                         recipientId: recipientId,
                         conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: message.timestamp,
-                        recipientIdentityKey: UserDefaults.standard.bool(forKey: "stealth_mode_enabled")
+                        recipientIdentityKey: StealthPolicy.shared.shouldUseSealedSender()
                             ? self.sessionManager.cachedIdentityKey
                             : nil
                     )
@@ -472,7 +473,7 @@ final class ChatSendCoordinator {
                 return
             }
             viewModel?.isSessionReady = false
-            let queued = QueuedMessage(text: text, images: [], replyTo: replyTo)
+            let queued = QueuedMessage(text: text, attachments: [], replyTo: replyTo)
             queuedMessages.append(queued)
             viewModel?.isInitializingSession = true
             viewModel?.isSending = false
@@ -484,7 +485,7 @@ final class ChatSendCoordinator {
     // MARK: - Media messages
 
     func sendMediaMessage(
-        images: [PlatformImage],
+        attachments: [MediaAttachment],
         caption: String,
         replyTo: Message?,
         replyToContentOverride: String? = nil
@@ -496,7 +497,7 @@ final class ChatSendCoordinator {
             return
         }
         let placeholderId = UUID().uuidString
-        let thumbnail: Data? = images.first.flatMap { MediaManager.shared.generateThumbnail(from: $0) }
+        let thumbnail: Data? = attachments.first?.displayImage.flatMap { MediaManager.shared.generateThumbnail(from: $0) }
         persistenceService.savePlaceholderMessage(
             id: placeholderId,
             fromUserId: currentUserId,
@@ -509,20 +510,35 @@ final class ChatSendCoordinator {
             in: viewContext
         )
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
-            images: images, fileURLs: [], caption: caption, replyTo: replyTo)
+            attachments: attachments, fileURLs: [], caption: caption, replyTo: replyTo)
         viewModel?.isSending = true
-        Log.info("Uploading \(images.count) image(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
+        Log.info("Uploading \(attachments.count) image(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
         Task { [weak self] in
             guard let self else { return }
             do {
                 let result = try await mediaUploadManager.uploadMediaAndBuildContent(
-                    images: images,
+                    attachments: attachments,
                     caption: caption,
                     recipientId: recipientId
                 )
                 pendingMediaUploads.removeValue(forKey: placeholderId)
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
-                sendTextMessage(text: result.messageContent, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: result.thumbnails)
+                // Binary wire: send the album as a protobuf `.mediaAlbum` MessageContent.
+                // Local display stays the JSON (`result.messageContent`) so the view layer
+                // and multi-device sync are unchanged.
+                let wireContent = MediaWireCodec.albumContent(
+                    mediaList: result.mediaList,
+                    caption: caption,
+                    quoted: buildQuoted(replyTo: replyTo, replyToContentOverride: replyToContentOverride)
+                )
+                let wirePlaintext = try? wireContent.serializedData()
+                sendTextMessage(
+                    text: result.messageContent,
+                    replyTo: replyTo,
+                    replyToContentOverride: replyToContentOverride,
+                    localThumbnails: result.thumbnails,
+                    wirePlaintext: wirePlaintext
+                )
             } catch {
                 Log.error("Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
                 updateMessageStatus(messageId: placeholderId, status: .failed)
@@ -596,7 +612,7 @@ final class ChatSendCoordinator {
             in: viewContext
         )
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
-            images: [], fileURLs: fileURLs, caption: caption, replyTo: replyTo)
+            attachments: [], fileURLs: fileURLs, caption: caption, replyTo: replyTo)
         viewModel?.isSending = true
         Log.info("Uploading \(fileURLs.count) file(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
         Task { [weak self] in
@@ -627,25 +643,59 @@ final class ChatSendCoordinator {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId)
+        // For a media message, editing the caption must rebuild the album (binary wire +
+        // local JSON) — sending plain text would replace the descriptor and destroy the media.
+        // Read displayText here (current actor) before hopping onto the Task.
+        let mediaEdit = MediaWireCodec.editedCaption(localJSON: message.displayText, newCaption: newText)
         Task { [weak self] in
             guard let self else { return }
             do {
-                let wirePayload = try OutboundSessionService.shared.encryptOutgoing(
-                    plaintext: Data(newText.utf8),
-                    messageId: message.id,
-                    recipientId: recipientId
-                )
-                let response = try await MessagingServiceClient.shared.editMessage(
-                    messageId: message.id,
+                let plaintext: Data
+                let localContent: String
+                if let mediaEdit, let wireData = try? mediaEdit.wire.serializedData() {
+                    plaintext = wireData
+                    localContent = mediaEdit.localJSON
+                } else {
+                    plaintext = Data(newText.utf8)
+                    localContent = newText
+                }
+                // Use modern edit (MessageContent.edit) so it goes through the normal send path
+                // and can use stealth when enabled.
+                var editMsg = Shared_Proto_Messaging_V1_EditMessage()
+                editMsg.targetMessageID = message.id
+                if let mediaEdit {
+                    editMsg.newText = newText
+                } else {
+                    editMsg.newText = newText
+                }
+                var content = Shared_Proto_Messaging_V1_MessageContent()
+                content.edit = editMsg
+                guard let editPayload = try? content.serializedData() else {
+                    ErrorRouter.shared.report(.unknown("Failed to serialize edit"))
+                    return
+                }
+
+                let editActionId = UUID().uuidString.lowercased()
+                let plan = ChunkedMessageSender.shared.buildPlan(plaintext: editPayload, messageId: UUID(uuidString: editActionId) ?? UUID())
+
+                let recipientIdentityKey: Data? = StealthPolicy.shared.shouldUseSealedSender()
+                    ? await fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: viewContext)
+                    : nil
+
+                let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
+                    plan: plan,
+                    baseMessageId: editActionId,
+                    senderId: currentUserId,
+                    recipientId: recipientId,
                     conversationId: conversationId,
-                    newEncryptedContent: wirePayload,
-                    recipientUserId: recipientId
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    recipientIdentityKey: recipientIdentityKey
                 )
-                guard response.success else { return }
-                let editedDate = Date(timeIntervalSince1970: TimeInterval(response.editedAt))
+
+                let editedDate = Date()
                 persistenceService.updateMessageContent(
                     messageId: message.id,
-                    newContent: newText,
+                    newContent: localContent,
                     isEdited: true,
                     editedAt: editedDate,
                     in: viewContext
@@ -657,14 +707,26 @@ final class ChatSendCoordinator {
         }
     }
 
+    private func fetchRecipientIdentityKeyForEdit(recipientId: String, context: NSManagedObjectContext) async -> Data? {
+        let req = User.fetchRequest()
+        req.predicate = NSPredicate(format: "id == %@", recipientId)
+        req.fetchLimit = 1
+        do {
+            return try context.fetch(req).first?.knownIdentityKey
+        } catch {
+            Log.error("Failed to load identity key for stealth edit to \(recipientId.prefix(8))…: \(error)", category: "ChatSendCoordinator")
+            return nil
+        }
+    }
+
     // MARK: - Retry
 
     func retryMessage(_ message: Message) {
         if let payload = pendingMediaUploads[message.id] {
             pendingMediaUploads.removeValue(forKey: message.id)
             persistenceService.deleteMessage(id: message.id, in: viewContext)
-            if !payload.images.isEmpty {
-                sendMediaMessage(images: payload.images, caption: payload.caption, replyTo: payload.replyTo)
+            if !payload.attachments.isEmpty {
+                sendMediaMessage(attachments: payload.attachments, caption: payload.caption, replyTo: payload.replyTo)
             } else {
                 sendFileMessage(fileURLs: payload.fileURLs, caption: payload.caption, replyTo: payload.replyTo)
             }

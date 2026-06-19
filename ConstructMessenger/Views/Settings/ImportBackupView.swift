@@ -31,7 +31,11 @@ struct ImportBackupView: View {
                 title: NSLocalizedString("backup_import_title", comment: ""),
                 showBack: true,
                 backAction: { dismiss() }
-            )
+            ) {
+                EmptyView()
+            } trailing: {
+                EmptyView()
+            }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

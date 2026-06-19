@@ -8,6 +8,7 @@
 import SwiftUI
 import CoreData
 import UniformTypeIdentifiers
+import Combine
 
 struct ChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -40,9 +41,7 @@ struct ChatView: View {
 
     // Key Transparency status for the contact in this chat
     @State private var contactKTStatus: KTStatus = .unverified
-    
-    // ✅ Swipe-to-dismiss gesture state (not scroll-related)
-    @GestureState private var dragState: CGFloat = 0
+
     @State private var containerWidth: CGFloat = 390
     
     // ❌ REMOVED: Scroll-related @State variables (moved to ChatScrollManager)
@@ -59,12 +58,10 @@ struct ChatView: View {
     var body: some View {
         // Compute once per body pass to avoid repeated full-array filtering in render path.
         let renderedMessages = filteredMessages
-        VStack(spacing: 0) {
-            chatNavBar
 
-            // Flood-burst banner — shown when this chat's sender is burst-suppressed
-            floodBurstBanner
-            
+        // Floating capsule glass panels (top nav + bottom input) over scroll, following Apple's capsulization
+        ZStack {
+            // Message list — base layer, scrolls underneath the floating capsules
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -144,8 +141,12 @@ struct ChatView: View {
                             }
                         }
                     }
-                    .padding()
+                    // Space for floating capsules above and below
+                    .padding(.top, 70)
+                    .padding(.bottom, 110)
+                    .padding(.horizontal)
                 }
+                .background(Color.CT.bg) // base under glass
                 .defaultScrollAnchor(.bottom)
                 .scrollDismissesKeyboard(.interactively)
                 .environment(\.containerWidth, containerWidth)
@@ -184,6 +185,13 @@ struct ChatView: View {
                             }
                         }
                     }
+                }
+                .onChange(of: viewModel.voicePlaybackScrollTarget) { _, target in
+                    // Continuous voice playback advanced — bring the now-playing message
+                    // into view (centered), then clear the target so a later replay re-scrolls.
+                    guard let target else { return }
+                    scrollManager.scrollTo(messageId: target, anchor: .center)
+                    viewModel.voicePlaybackScrollTarget = nil
                 }
                 .onChange(of: searchText) { _, newValue in
                     // ✅ Scroll to first search result
@@ -237,40 +245,38 @@ struct ChatView: View {
                     }
                 }
             }
-            
-            deleteButtonBar
-            
-            messageInputView
+
+            // === Floating capsule glass panels (Apple capsulization) ===
+            // Top: nav + banners (capsule style)
+            VStack(spacing: 8) {
+                chatNavBar
+                    .padding(.horizontal, 8)
+                    .padding(.top, 4)
+
+                floodBurstBanner
+
+                deleteButtonBar
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+
+            // Bottom: separate floating glass capsules for attachment + text input
+            VStack {
+                Spacer(minLength: 0)
+
+                messageInputView
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
+            }
+            .frame(maxHeight: .infinity, alignment: .bottom)
         }
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         #endif
-        .gesture(
-            DragGesture(minimumDistance: 10)
-                .updating($dragState) { value, state, _ in
-                    // Only allow swipe from left edge (right swipe)
-                    if value.startLocation.x < 20 && value.translation.width > 0 {
-                        state = min(value.translation.width, containerWidth * ChatViewConstants.Gesture.maxDragRatio)
-                    }
-                }
-                .onEnded { value in
-                    // If swiped more than threshold, dismiss
-                    let threshold = max(
-                        ChatViewConstants.Gesture.dismissThreshold,
-                        containerWidth * ChatViewConstants.Gesture.dismissThresholdRatio
-                    )
-                    if value.translation.width > threshold && value.startLocation.x < 20 {
-                        withAnimation(.spring(
-                            response: ChatViewConstants.Gesture.dismissSpringResponse,
-                            dampingFraction: ChatViewConstants.Gesture.dismissSpringDamping
-                        )) {
-                            dismiss()
-                        }
-                    }
-                }
-        )
-        .offset(x: dragState)
+        // Edge-swipe-back is handled natively by interactivePopGestureRecognizer
+        // (see InteractiveSwipeBack.swift) — no manual DragGesture needed.
         .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
             handleChatDrop(providers: providers)
         }
@@ -371,21 +377,21 @@ struct ChatView: View {
     }
     
     private var messageInputView: some View {
-        MessageInputView(
+        IOSMessageInputView(
             text: $messageText,
             droppedImages: $chatDropImages,
             isSending: viewModel.isSending,
             replyingTo: replyingTo,
             quoteOverride: replyQuoteText,
             editingMessage: viewModel.editingMessage,
-            onSend: { images, fileURLs in
+            onSend: { attachments, fileURLs in
                 if let editMsg = viewModel.editingMessage {
                     viewModel.editMessage(editMsg, newText: messageText)
                     messageText = ""
                 } else {
                     viewModel.sendMessage(
                         text: messageText,
-                        images: images,
+                        attachments: attachments,
                         fileURLs: fileURLs,
                         replyTo: replyingTo,
                         replyToContentOverride: replyQuoteText
@@ -438,7 +444,7 @@ struct ChatView: View {
                         .foregroundColor(Color.CT.accent)
                 }
                 .padding(.trailing, 16)
-                .padding(.bottom, 160) // Above message input
+                .padding(.bottom, 100) // Above floating capsule input
                 .transition(.move(edge: .trailing).combined(with: .opacity))
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: scrollManager.shouldShowScrollToBottomButton)
             }
@@ -559,6 +565,11 @@ struct ChatView: View {
         viewModel.onViewAppear()
         loadContactKTStatus()
         setActiveChatState(isActive: true)
+        // Active chat owns continuous voice playback: advance to the next voice message
+        // (older → newer) when one finishes, if the setting is on.
+        AudioPlayerService.shared.onTrackFinished = { [weak viewModel] finishedMediaId in
+            viewModel?.playNextVoiceIfContinuous(after: finishedMediaId)
+        }
     }
 
     private func handleViewDisappear() {
@@ -569,6 +580,7 @@ struct ChatView: View {
             DraftStore.shared.save(messageText, for: viewModel.chat.id)
         }
         setActiveChatState(isActive: false)
+        AudioPlayerService.shared.onTrackFinished = nil
     }
 
     private func handleContactKeyChanged(_ note: Notification) {

@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct VoiceWaveformView: View {
     enum Style {
@@ -15,8 +16,8 @@ struct VoiceWaveformView: View {
     /// minimum bar width, preventing the HStack from overflowing past the
     /// view's frame (which used to make the rightmost bars sit on top of
     /// neighbouring controls in the message bubble).
-    private let preferredBarCount = 52
-    private let barSpacing: CGFloat = 2.5
+    private let preferredBarCount = 64
+    private let barSpacing: CGFloat = 2.0
 
     var body: some View {
         GeometryReader { geo in
@@ -26,7 +27,7 @@ struct VoiceWaveformView: View {
 
             HStack(alignment: .center, spacing: barSpacing) {
                 ForEach(0..<barCount, id: \.self) { i in
-                    Rectangle()
+                    Capsule()
                         .fill(color(for: i, total: barCount))
                         .frame(width: barWidth, height: height(for: i, total: geo.size.height, count: barCount))
                 }

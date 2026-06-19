@@ -18,13 +18,11 @@
 		BF3DE8782F62C2000058C1AA /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8772F62C2000058C1AA /* SwiftProtobuf */; };
 		BF7098D12F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
 		BF7098D22F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
-		BF9C79220C774589B73B6121 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 27E01FB194D24BD696982B92 /* WebRTC */; };
 		BFCB6D932F7C4C4800C59B83 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = BFCB6D922F7C4C4800C59B83 /* WebRTC */; };
 		BFF6FC9D2F4C3E1F00A31F36 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */; };
 		BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */; };
 		BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */; };
 		BFF6FD002F4C4E5300A31F36 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */; };
-		BFFC4EA2519D4225A3E4836D /* ConstructEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */; };
 		D5E79C3D4B5A42FA99FF5106 /* ConstructEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */; };
 /* End PBXBuildFile section */
 
@@ -83,11 +81,16 @@
 				Config/Beta.xcconfig,
 				Config/Debug.xcconfig,
 				Config/Release.xcconfig,
+				construct_engine.swift,
 				ConstructMessengerApp.swift,
 				ContentView.swift,
 				Info.plist,
 				Services/BackgroundFetch/BackgroundFetchManager.swift,
 				Services/BackgroundFetch/EnergyMonitor.swift,
+				Services/EngineAdapter.swift,
+				Views/Chat/ChatView.swift,
+				"Views/Chat/MessageInputView+iOS.swift",
+				Views/ChatsSplitView.swift,
 				Views/Security/DuressPinSetupView.swift,
 				Views/Security/PinDisableView.swift,
 				Views/Security/PinSetupView.swift,
@@ -99,6 +102,13 @@
 				Views/Settings/SettingsView.swift,
 			);
 			target = BF3DE82F2F62C1C30058C1AA /* Construct Desktop */;
+		};
+		BFC092FD2FE40C97009B1BAE /* Exceptions for "Construct Desktop" folder in "Construct Messenger" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Views/MessageInputView+macOS.swift",
+			);
+			target = BF103A6E2EED889800324CEA /* Construct Messenger */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -114,6 +124,9 @@
 		};
 		BF3DE8312F62C1C30058C1AA /* Construct Desktop */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BFC092FD2FE40C97009B1BAE /* Exceptions for "Construct Desktop" folder in "Construct Messenger" target */,
+			);
 			path = "Construct Desktop";
 			sourceTree = "<group>";
 		};
@@ -155,12 +168,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				BF3DE8702F62C2000058C1AA /* ConstructCore.xcframework in Frameworks */,
-				BFFC4EA2519D4225A3E4836D /* ConstructEngine.xcframework in Frameworks */,
 				BF3DE8722F62C2000058C1AA /* GRPCCore in Frameworks */,
 				BF3DE8742F62C2000058C1AA /* GRPCProtobuf in Frameworks */,
 				BF3DE8762F62C2000058C1AA /* GRPCNIOTransportHTTP2 in Frameworks */,
 				BF3DE8782F62C2000058C1AA /* SwiftProtobuf in Frameworks */,
-				BF9C79220C774589B73B6121 /* WebRTC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -281,7 +292,6 @@
 				BF3DE8732F62C2000058C1AA /* GRPCProtobuf */,
 				BF3DE8752F62C2000058C1AA /* GRPCNIOTransportHTTP2 */,
 				BF3DE8772F62C2000058C1AA /* SwiftProtobuf */,
-				27E01FB194D24BD696982B92 /* WebRTC */,
 			);
 			productName = "Construct Desktop";
 			productReference = BF3DE8302F62C1C30058C1AA /* Construct Desktop.app */;
@@ -583,7 +593,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 455;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -607,14 +617,14 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.3;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.14.3;
+				MARKETING_VERSION = 0.15.8;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -768,7 +778,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 455;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -792,14 +802,14 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.3;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.14.3;
+				MARKETING_VERSION = 0.15.8;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -824,7 +834,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 455;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -848,14 +858,14 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.3;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.14.3;
+				MARKETING_VERSION = 0.15.8;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -879,7 +889,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 2;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
@@ -906,7 +916,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -928,7 +938,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 2;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
@@ -955,7 +965,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -977,7 +987,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 2;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
@@ -1004,7 +1014,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -1405,11 +1415,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		27E01FB194D24BD696982B92 /* WebRTC */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BFCB6D912F7C4C4800C59B83 /* XCRemoteSwiftPackageReference "WebRTC" */;
-			productName = WebRTC;
-		};
 		BF0A1D222FCF418600D0597C /* WhisperKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BF0A1D212FCF418600D0597C /* XCRemoteSwiftPackageReference "argmax-oss-swift" */;

@@ -8,7 +8,7 @@ struct ChatFloodBannerView: View {
     var body: some View {
         if isVisible {
             HStack(spacing: 10) {
-                Text("[!]")
+                Image(systemName: "exclamationmark.triangle.fill")
                     .font(CTFont.regular(16))
                     .foregroundStyle(.orange)
 
@@ -23,13 +23,13 @@ struct ChatFloodBannerView: View {
                 Spacer()
 
                 Button(action: onAllow) {
-                    Text("[allow →]")
+                    Image(systemName: "chevron.right")
                         .font(CTFont.regular(12))
                         .foregroundStyle(.orange)
                 }
 
                 Button(action: onBlock) {
-                    Text("[block]")
+                    Image(systemName: "nosign")
                         .font(CTFont.regular(12))
                         .foregroundStyle(Color.CT.danger)
                 }

@@ -41,9 +41,9 @@ final class ChunkedMessageSender {
             )
             onWirePayloadEncoded?(chunkMessageId, encryptedPayload)
 
-            // Build sealed inner bytes if STEALTH is active and recipient identity key is known
+            // Build sealed inner bytes if policy says we should use stealth and we have the key.
             var sealedInner: Data? = nil
-            if let recipientIK = recipientIdentityKey {
+            if let recipientIK = recipientIdentityKey, StealthPolicy.shared.shouldUseSealedSender() {
                 do {
                     sealedInner = try await StealthSenderService.buildSealedInner(
                         recipientUserId: recipientId,
@@ -157,11 +157,17 @@ final class ChunkedMessageReassembler {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
+            if case .edit(let editMsg) = content.content {
+                return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: try? editMsg.newMedia?.serializedData())
+            }
             let (text, quoted) = extract(content)
             return .assembled(text: text, quoted: quoted)
         }
         if let text = String(data: data, encoding: .utf8) {
             return text.isEmpty ? .invalid("empty plaintext") : .assembled(text: text, quoted: nil)
+        }
+        if let profile = ProfileShareData.fromBinaryData(data) {
+            return .legacy("__PROFILE_BINARY__")
         }
         return .invalid("non-decodable binary (\(data.count) bytes)")
     }
@@ -171,12 +177,19 @@ final class ChunkedMessageReassembler {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
+            if case .edit(let editMsg) = content.content {
+                return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: try? editMsg.newMedia?.serializedData())
+            }
             let (text, quoted) = extract(content)
             return .assembled(text: text, quoted: quoted)
         }
         // Session control strings, legacy plain-text messages
         if let text = String(data: data, encoding: .utf8) {
             return text.isEmpty ? .invalid("empty plaintext") : .legacy(text)
+        }
+        // Support binary profile share (new format, no JSON in payload)
+        if let profile = ProfileShareData.fromBinaryData(data) {
+            return .legacy("__PROFILE_BINARY__")
         }
         return .invalid("non-decodable binary (\(data.count) bytes)")
     }
@@ -187,6 +200,9 @@ final class ChunkedMessageReassembler {
         switch content.content {
         case .text(let msg):
             return (msg.text, msg.hasQuoted ? msg.quoted : nil)
+        case .mediaAlbum(let album):
+            // Binary media → re-serialize to the local media JSON the views parse.
+            return (MediaWireCodec.mediaJSON(from: album) ?? "", album.hasQuoted ? album.quoted : nil)
         default:
             return ("", nil)
         }
@@ -276,6 +292,8 @@ enum ChunkedMessageResult {
     case legacy(String)
     case incomplete
     case invalid(String)
+    /// Modern edit inside MessageContent.
+    case edit(targetMessageID: String, newText: String?, newMedia: Data?)
 }
 
 enum ChunkedMessageCodec {

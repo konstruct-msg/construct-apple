@@ -35,7 +35,11 @@ struct DevicesView: View {
                 title: NSLocalizedString("linked_devices", comment: ""),
                 showBack: true,
                 backAction: { dismiss() }
-            )
+            ) {
+                EmptyView()
+            } trailing: {
+                EmptyView()
+            }
 
             ScrollView {
             LazyVStack(spacing: DevicesSettingsLayout.listSpacing) {

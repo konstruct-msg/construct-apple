@@ -86,8 +86,8 @@ struct DuressPinSetupView: View {
         switch step {
         case .enter:
             VStack(spacing: 20) {
-                Text("[!]")
-                    .font(CTFont.bold(44))
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(CTFont.regular(44))
                     .foregroundColor(Color.CT.danger)
                     .lineLimit(1).fixedSize()
 

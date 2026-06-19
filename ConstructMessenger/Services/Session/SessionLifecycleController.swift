@@ -79,10 +79,6 @@ final class SessionLifecycleController {
     /// Whether an active E2E session exists for the contact.
     /// Do NOT use this to make protocol decisions; it is for UI state only.
     func hasActiveSession(for userId: String) -> Bool {
-        #if os(macOS)
-        return EngineAdapter.shared.hasSession(for: userId)
-        #else
         return CryptoManager.shared.hasSession(for: userId)
-        #endif
     }
 }

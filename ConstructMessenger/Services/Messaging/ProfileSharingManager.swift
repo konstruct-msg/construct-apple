@@ -22,38 +22,42 @@ class ProfileSharingManager {
     
     // MARK: - Profile Message Parsing
     
-    /// Parse profile message from decrypted content
-    /// - Parameter content: Decrypted message content (JSON string)
+    /// Parse profile message from decrypted content (supports binary wire format + legacy JSON)
+    /// - Parameter content: Decrypted message content (JSON string or binary)
     /// - Returns: ProfileShareData if valid profile message, nil otherwise
     func parseProfileMessage(_ content: String) -> ProfileShareData? {
         guard let data = content.data(using: .utf8) else {
             Log.debug("parseProfileMessage: Failed to convert content to data", category: "ProfileSharingManager")
             return nil
         }
-        
-        // Debug: Log the content being parsed
-        Log.debug("Attempting to parse profile message, content length: \(content.count)", category: "ProfileSharingManager")
-        Log.debug("   Content preview: \(content.prefix(200))", category: "ProfileSharingManager")
-        
-        // First, try to parse as generic JSON to check if it looks like a profile message
-        if let jsonDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let type = jsonDict["type"] as? String,
-           type == "profile" {
-            // It's a profile message, try to decode it properly
-            do {
-                let json = try JSONDecoder().decode(ProfileShareData.self, from: data)
-                Log.info("Successfully parsed profile message: displayName=\(json.displayName), avatarMediaId=\(json.avatarMediaId ?? "nil"), avatarData=\(json.avatarData != nil ? "present" : "nil")", category: "ProfileSharingManager")
-                return json
-            } catch {
-                Log.error("parseProfileMessage: Failed to decode ProfileShareData: \(error)", category: "ProfileSharingManager")
-                // Even if decoding fails, we know it's a profile message, so return nil to prevent it from being saved as regular message
-                return nil
-            }
+        return parseProfileMessage(from: data)
+    }
+
+    /// Parse from binary Data (preferred for new sends) with legacy JSON fallback.
+    func parseProfileMessage(from data: Data) -> ProfileShareData? {
+        // Try binary first (new format, no JSON)
+        if let profile = ProfileShareData.fromBinaryData(data) {
+            Log.info("Successfully parsed profile message (binary): displayName=\(profile.displayName), avatarMediaId=\(profile.avatarMediaId ?? "nil")", category: "ProfileSharingManager")
+            return profile
         }
-        
-        // Not a profile message
-        Log.debug("parseProfileMessage: Content is not a profile message", category: "ProfileSharingManager")
-        return nil
+
+        // Legacy JSON fallback
+        guard let str = String(data: data, encoding: .utf8) else { return nil }
+        guard let jsonDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = jsonDict["type"] as? String,
+              type == "profile" else {
+            Log.debug("parseProfileMessage: Content is not a profile message", category: "ProfileSharingManager")
+            return nil
+        }
+
+        do {
+            let json = try JSONDecoder().decode(ProfileShareData.self, from: data)
+            Log.info("Successfully parsed profile message (legacy JSON): displayName=\(json.displayName), avatarMediaId=\(json.avatarMediaId ?? "nil")", category: "ProfileSharingManager")
+            return json
+        } catch {
+            Log.error("parseProfileMessage: Failed to decode ProfileShareData: \(error)", category: "ProfileSharingManager")
+            return nil
+        }
     }
     
     // MARK: - Profile Handling

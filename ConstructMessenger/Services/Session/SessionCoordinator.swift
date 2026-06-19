@@ -16,16 +16,6 @@
 import Foundation
 import CoreData
 
-/// Formal session lifecycle state for a single peer contact.
-/// Used by `SessionCoordinator.sessionStates` to replace the ad-hoc
-/// `usersInitializingSession: Set<String>` + `sessionEstablishedAt: [String: UInt64]` pair.
-private enum ContactSessionState: Equatable {
-    /// Session init (X3DH, heal, key-sync, fallback) is in flight.
-    case initializing
-    /// Session is established. `establishedAt` is Unix seconds.
-    case active(establishedAt: UInt64)
-}
-
 @MainActor
 final class SessionCoordinator: MessageRouterDelegate {
 
@@ -44,6 +34,11 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Tracks when we last sent END_SESSION to each peer to prevent loop storms.
     private var endSessionSentAt: [String: Date] = [:]
     private let endSessionCooldown: TimeInterval = 30.0
+
+    /// Shadow-only mirror of *every* END_SESSION send (rate-limited AND must-send), used solely
+    /// to evaluate the Phase-2b cut-over question — "how often would the rate limiter suppress a
+    /// currently must-send END_SESSION?" — without touching live behaviour. Never gates a send.
+    private var shadowEndSessionSentAt: [String: Date] = [:]
 
     /// Tracks when we last attempted an automatic resend after receiving END_SESSION from a peer.
     /// Prevents resend loops when both sides reset simultaneously.
@@ -75,9 +70,39 @@ final class SessionCoordinator: MessageRouterDelegate {
     private var cooldownPurgeTimer: Timer?
     private let cooldownPurgeInterval: TimeInterval = 5 * 60 // every 5 minutes
 
-    /// Formal session state machine for each peer contact.
-    /// Replaces both `usersInitializingSession: Set<String>` and `sessionEstablishedAt: [String: UInt64]`.
-    private var sessionStates: [String: ContactSessionState] = [:]
+    /// Formal session state machine for each peer contact, backed by the pure `SessionReducer`.
+    /// Phase entries: `.initializing` / `.active(establishedAt:)`; absence (`nil`) == no session.
+    private var sessionPhases: [String: SessionReducer.Phase] = [:]
+
+    /// Run one reducer transition for `userId`, commit the new phase, and return its effects.
+    /// Phase 1 consumes only the phase result here (initializing/active markers); the queue
+    /// effects are exercised by tests and adopted by MessageRouter in a later phase.
+    @discardableResult
+    private func apply(_ event: SessionReducer.Event, for userId: String) -> [SessionReducer.Effect] {
+        assertMainThread()
+        let (newPhase, effects) = SessionReducer.reduce(sessionPhases[userId], on: event)
+        sessionPhases[userId] = newPhase
+        return effects
+    }
+
+    /// Effector: perform the pending-queue effects the reducer emitted. The reducer decides
+    /// WHAT happens to the queue on each lifecycle transition; this carries out exactly the
+    /// existing drain (skipping the already-decrypted init carrier) / clear semantics.
+    /// `startInit`/`queueMessage`/`processMessage` are the incoming-message disposition and
+    /// are performed in MessageRouter, not here.
+    private func perform(_ effects: [SessionReducer.Effect], for userId: String, skippingFirst: Bool = false) {
+        assertMainThread()
+        for effect in effects {
+            switch effect {
+            case .drainQueuedMessages:
+                drainPendingQueue(for: userId, skippingFirst: skippingFirst)
+            case .clearQueuedMessages:
+                messageRouter.removePendingMessages(for: userId)
+            case .startInit, .queueMessage, .processMessage:
+                break
+            }
+        }
+    }
 
     private func assertMainThread(file: StaticString = #fileID, line: UInt = #line) {
         precondition(Thread.isMainThread, "SessionCoordinator state must be accessed on the main thread", file: file, line: line)
@@ -86,35 +111,31 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Returns true if a session init (or heal) is currently in progress for `userId`.
     private func isInitializing(_ userId: String) -> Bool {
         assertMainThread()
-        if case .initializing = sessionStates[userId] { return true }
+        if case .initializing = sessionPhases[userId] { return true }
         return false
     }
 
     /// Mark `userId` as initializing and return a `defer` block that clears the state.
     @discardableResult
     private func beginInit(_ userId: String) -> () -> Void {
-        assertMainThread()
-        sessionStates[userId] = .initializing
+        apply(.initStarted, for: userId)
         return { [weak self] in
-            self?.assertMainThread()
-            // Only clear if still in .initializing — don't clobber .active set by a success path.
-            if case .initializing = self?.sessionStates[userId] {
-                self?.sessionStates[userId] = nil
-            }
+            // `.initEnded` only clears the marker if still .initializing — it never clobbers
+            // an .active set by a success path that ran inside the same init scope.
+            self?.apply(.initEnded, for: userId)
         }
     }
 
     /// Mark `userId` as having an active session established right now.
     private func markActive(_ userId: String) {
-        assertMainThread()
-        sessionStates[userId] = .active(establishedAt: UInt64(Date().timeIntervalSince1970))
+        apply(.markActive(at: UInt64(Date().timeIntervalSince1970)), for: userId)
     }
 
     /// Return the timestamp (Unix seconds) when the active session for `userId` was established,
     /// or nil if there is no active session record.
     private func establishedAt(for userId: String) -> UInt64? {
         assertMainThread()
-        if case .active(let t) = sessionStates[userId] { return t }
+        if case .active(let t) = sessionPhases[userId] { return t }
         return nil
     }
 
@@ -167,13 +188,22 @@ final class SessionCoordinator: MessageRouterDelegate {
     }
 
     /// Send END_SESSION to a peer and archive + clear the local session.
-    func sendEndSession(to userId: String, reason: String = "manual_reset") async throws {
+    ///
+    /// `rateLimited` marks calls that already passed the cooldown decision (the DR-diverge
+    /// path). For every *other* caller (a "must-send" path) we run a shadow comparison: what
+    /// would the rate limiter have decided here? This measures Phase-2b risk without changing
+    /// behaviour — the send always proceeds.
+    func sendEndSession(to userId: String, reason: String = "manual_reset", rateLimited: Bool = false) async throws {
+        if !rateLimited {
+            let candidate = SessionReducer.shouldSendEndSession(
+                lastSentAt: shadowEndSessionSentAt[userId], now: Date(), cooldown: endSessionCooldown
+            )
+            // live = true (must-send paths always send today); candidate = the rate limiter's verdict.
+            ShadowCompare.decide("end_session_must_send", key: userId, live: true, candidate: candidate, context: reason)
+        }
+        shadowEndSessionSentAt[userId] = Date()
+
         Log.info("Sending END_SESSION to \(userId): \(reason)", category: "ChatsViewModel")
-        #if os(macOS)
-        // On Desktop the engine owns the session state — dispatch via engine.
-        EngineAdapter.shared.dispatch(.sendEndSession(contactId: userId))
-        Log.info("END_SESSION dispatched to engine for \(userId.prefix(8))…", category: "ChatsViewModel")
-        #else
         do {
             let response = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: reason)
             Log.info("END_SESSION sent successfully: \(response.messageId)", category: "ChatsViewModel")
@@ -184,7 +214,32 @@ final class SessionCoordinator: MessageRouterDelegate {
         CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
         CryptoManager.shared.clearArchivedSessions(for: userId)
         Log.info("END_SESSION complete: session archived and cleared", category: "ChatsViewModel")
-        #endif
+    }
+
+    /// Single rate-limited END_SESSION entry point for storm-prone recovery paths
+    /// (DR-diverge). Suppresses repeats within `endSessionCooldown` per peer via the pure
+    /// `SessionReducer.shouldSendEndSession` decision, and records the attempt time.
+    /// Returns `true` iff a send was attempted (records + proceeds even if the network send
+    /// throws, matching the prior inline behaviour). Must-send paths — logout broadcast,
+    /// manual reset, terminal init/heal failures — call `sendEndSession` directly and are
+    /// intentionally not rate-limited.
+    @discardableResult
+    private func sendEndSessionRateLimited(to userId: String, reason: String) async -> Bool {
+        let now = Date()
+        guard SessionReducer.shouldSendEndSession(
+            lastSentAt: endSessionSentAt[userId], now: now, cooldown: endSessionCooldown
+        ) else {
+            Log.info("END_SESSION cooldown active for \(userId.prefix(8))…, skipping (\(reason))", category: "SessionCoordinator")
+            return false
+        }
+        endSessionSentAt[userId] = now
+        Log.info("Sending END_SESSION to \(userId.prefix(8))… (\(reason))", category: "SessionCoordinator")
+        do {
+            try await sendEndSession(to: userId, reason: reason, rateLimited: true)
+        } catch {
+            Log.error("Failed to send END_SESSION to \(userId.prefix(8))…: \(error)", category: "SessionCoordinator")
+        }
+        return true
     }
 
     /// Broadcast END_SESSION to all peers that have an active session (e.g., on logout).
@@ -194,8 +249,24 @@ final class SessionCoordinator: MessageRouterDelegate {
         let myId = AuthSessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return }
 
-        let toPrewarm = contactIds.filter {
-            DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: $0) && !CryptoManager.shared.hasSession(for: $0)
+        // Do not make any session-missing decisions before the crypto core is built and
+        // sessions have had a chance to restore from Keychain. While the core is nil,
+        // hasSession returns false for every contact — prewarming here would send a
+        // destructive END_SESSION + fresh re-init over a perfectly healthy session that
+        // simply hasn't been imported yet (startup race, esp. with delayed auth refresh).
+        // A later forceReconnect/network event re-triggers prewarm once the core is ready.
+        let coreReady = CryptoManager.shared.isCoreReady
+        guard coreReady else {
+            Log.info("Session prewarm deferred — crypto core not ready yet", category: "SessionInit")
+            return
+        }
+
+        let toPrewarm = contactIds.filter { peer in
+            SessionReducer.shouldPrewarm(
+                coreReady: coreReady,
+                isNaturalInitiator: DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: peer),
+                sessionExistsOrRestorable: CryptoManager.shared.hasOrRestoreSession(for: peer)
+            )
         }
         guard !toPrewarm.isEmpty else { return }
 
@@ -210,7 +281,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // also reaches this point sees the flag and skips — otherwise both tasks
                 // would slip past the guard, race through fetchBundle, and the second
                 // would delete the session just created by the first.
-                guard !CryptoManager.shared.hasSession(for: contactId),
+                guard !CryptoManager.shared.hasOrRestoreSession(for: contactId),
                       !self.isInitializing(contactId) else {
                     Log.info("Prewarm skipped — session exists or init in progress for \(contactId.prefix(8))…", category: "SessionInit")
                     continue
@@ -236,17 +307,17 @@ final class SessionCoordinator: MessageRouterDelegate {
 
                 await self.sessionInitService.initializeSessionProactively(
                     userId: contactId,
-                    onSuccess: { Log.info("Prewarm ✅ \(contactId.prefix(8))…", category: "SessionInit") },
-                    onFailure: { err in Log.info("Prewarm ❌ \(contactId.prefix(8))…: \(err.localizedDescription)", category: "SessionInit") }
+                    onSuccess: { Log.info("Prewarm \(contactId.prefix(8))…", category: "SessionInit") },
+                    onFailure: { err in Log.info("Prewarm \(contactId.prefix(8))…: \(err.localizedDescription)", category: "SessionInit") }
                 )
             }
         }
     }
 
     func sendEndSessionToAllContacts(reason: String = "logout") async {
-        Log.info("🔄 Sending END_SESSION to all contacts: \(reason)", category: "ChatsViewModel")
+        Log.info("Sending END_SESSION to all contacts: \(reason)", category: "ChatsViewModel")
         let sessionUserIds = CryptoManager.shared.getAllSessionUserIds()
-        Log.info("📋 Found \(sessionUserIds.count) active sessions", category: "ChatsViewModel")
+        Log.info("Found \(sessionUserIds.count) active sessions", category: "ChatsViewModel")
         var successCount = 0
         var failCount = 0
         for userId in sessionUserIds {
@@ -289,18 +360,10 @@ final class SessionCoordinator: MessageRouterDelegate {
     func messageRouter(_ router: MessageRouter, needsEndSession userId: String) {
         Task { [weak self] in
             guard let self else { return }
-            let now = Date()
-            if let lastSent = self.endSessionSentAt[userId],
-               now.timeIntervalSince(lastSent) < self.endSessionCooldown {
-                Log.info("END_SESSION cooldown active for \(userId.prefix(8))..., skipping", category: "SessionCoordinator")
+            // Cooldown gates the whole recovery sequence: if a recent END_SESSION is still in
+            // its window, skip both the send AND the reinit/fallback below (avoids storms).
+            guard await self.sendEndSessionRateLimited(to: userId, reason: "session_out_of_sync") else {
                 return
-            }
-            self.endSessionSentAt[userId] = now
-            Log.info("Sending END_SESSION to \(userId.prefix(8))... (session out of sync)", category: "SessionCoordinator")
-            do {
-                try await self.sendEndSession(to: userId, reason: "session_out_of_sync")
-            } catch {
-                Log.error("Failed to send END_SESSION to \(userId.prefix(8))...: \(error)", category: "SessionCoordinator")
             }
             let myId = AuthSessionManager.shared.currentUserId ?? ""
             guard !myId.isEmpty else { return }
@@ -326,16 +389,31 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
     }
 
+    /// Seconds of clock-skew tolerance when deciding whether an END_SESSION pre-dates our session.
+    private static let endSessionStaleFudge: UInt64 = 5
+
     func messageRouter(_ router: MessageRouter, isEndSessionStale userId: String, timestamp: UInt64) -> Bool {
-        guard let established = establishedAt(for: userId) else { return false }
-        return timestamp + 5 < established
+        let established = establishedAt(for: userId)
+        let stale = SessionReducer.isEndSessionStale(
+            establishedAt: established, timestamp: timestamp, fudgeSeconds: Self.endSessionStaleFudge
+        )
+        // Diagnostic for the post-launch reset hypothesis: `established == nil` means we have no
+        // in-memory establishment record, so we CANNOT filter a possibly-stale END_SESSION — and
+        // if a live Rust session exists, it is about to be torn down. Surface this in device logs.
+        if established == nil {
+            let hasLive = CryptoManager.shared.hasSession(for: userId)
+            Log.info("SESSION_STATE[end_session_stale_check]: \(userId.prefix(8))… ts=\(timestamp) established=nil hasLiveSession=\(hasLive) → not filtered\(hasLive ? " ⚠️ live session will be reset by a possibly-stale END_SESSION (no in-memory establishedAt)" : "")", category: "SessionInit")
+        } else {
+            Log.info("SESSION_STATE[end_session_stale_check]: \(userId.prefix(8))… ts=\(timestamp) established=\(established!) → \(stale ? "STALE (filtered)" : "fresh (acted on)")", category: "SessionInit")
+        }
+        return stale
     }
 
     func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64) {
         let myId = AuthSessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return }
         guard DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) else {
-            Log.info("🔇 END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER", category: "SessionInit")
+            Log.info("END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER", category: "SessionInit")
             startResponderFallback(for: userId)
             onEphemeralSubscriptionNeeded?(userId)
             return
@@ -453,9 +531,11 @@ final class SessionCoordinator: MessageRouterDelegate {
                     let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                     await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
                 }
-                // Transition to .active — records establishment time for stale END_SESSION filtering.
-                markActive(userId)
-                drainPendingQueue(for: userId, skippingFirst: true)
+                // Transition to .active (records establishment time for stale END_SESSION
+                // filtering) and drain the pending queue — both via the reducer: .initSucceeded
+                // yields .active + a .drainQueuedMessages effect performed below.
+                perform(apply(.initSucceeded(at: UInt64(Date().timeIntervalSince1970)), for: userId),
+                        for: userId, skippingFirst: true)
                 // Re-send messages that were re-queued on prior END_SESSION receipt.
                 sendSessionQueuedMessages(for: userId)
                 // Phase 2 of two-phase handshake: notify INITIATOR that RESPONDER
@@ -482,7 +562,8 @@ final class SessionCoordinator: MessageRouterDelegate {
                 if let context = viewContext {
                     PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
                 }
-                messageRouter.removePendingMessages(for: userId)
+                // init failed → reset phase to absent + clear the pending queue, via the reducer.
+                perform(apply(.initFailed, for: userId), for: userId)
                 Task { [weak self] in
                     guard let self else { return }
                     do {
@@ -540,7 +621,8 @@ final class SessionCoordinator: MessageRouterDelegate {
                 streamManager?.sendReceipt([failedMessage.id], to: userId, status: .delivered)
                 PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
 
-                drainPendingQueue(for: userId, skippingFirst: true)
+                // Heal does not reset establishment time (no markActive) — drain only.
+                perform([.drainQueuedMessages], for: userId, skippingFirst: true)
             } else {
                 Log.error("SESSION_STATE[heal_failed]: initReceivingSession still failing for \(userId.prefix(8))…", category: "SessionInit")
                 if !canContinue {
@@ -551,7 +633,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     // Permanently block re-processing of this message ID.
                     FailedInitMessageStore.shared.add(failedMessage.id)
                     PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
-                    messageRouter.removePendingMessages(for: userId)
+                    perform([.clearQueuedMessages], for: userId)
                     SessionHealingService.shared.clearQueue(for: userId, in: context)
                     do {
                         try await sendEndSession(to: userId, reason: "heal_exhausted")
@@ -565,7 +647,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         } catch {
             Log.error("SESSION_STATE[heal_bundle_error]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
             if !canContinue {
-                messageRouter.removePendingMessages(for: userId)
+                perform([.clearQueuedMessages], for: userId)
                 SessionHealingService.shared.clearQueue(for: userId, in: context)
                 do {
                     try await sendEndSession(to: userId, reason: "heal_bundle_unreachable")
@@ -581,6 +663,12 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Drain the pending queue for a peer after session init / heal succeeds.
     private func drainPendingQueue(for userId: String, skippingFirst: Bool) {
         let queued = messageRouter.drainPendingMessages(for: userId)
+        // The init carrier (first queued message) was already decrypted during session init and
+        // is not re-routed below — resolve it explicitly so its deferred entry releases the
+        // stream-cursor watermark. Re-routed messages resolve themselves via routeIncomingMessage.
+        if skippingFirst, let first = queued.first {
+            StreamCursorTracker.shared.resolve(messageId: first.id)
+        }
         let toProcess = skippingFirst ? queued.dropFirst() : queued[...]
         guard !toProcess.isEmpty, let context = viewContext else { return }
         Log.info("Decrypting \(toProcess.count) queued message(s) for \(userId.prefix(8))...", category: "SessionInit")
@@ -676,10 +764,6 @@ final class SessionCoordinator: MessageRouterDelegate {
     ///
     /// Falls back to the legacy two-step sequence if all attempts fail (backward compat).
     private func sendSessionResetInit(to userId: String) async {
-        #if os(macOS)
-        Log.info("SESSION_STATE[sri_engine]: dispatching InitSessionInitiator for \(userId.prefix(8))…", category: "SessionInit")
-        EngineAdapter.shared.dispatch(.initSessionInitiator(contactId: userId))
-        #else
         guard CryptoManager.shared.hasSession(for: userId) else {
             Log.info("SESSION_STATE[sri_skip]: no INITIATOR session for \(userId.prefix(8))…", category: "SessionInit")
             return
@@ -729,15 +813,9 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
             }
         }
-        #endif
     }
 
     private func sendSessionPing(to userId: String) async {
-        #if os(macOS)
-        // InitSessionInitiator (dispatched by sendSessionResetInit) already sent the first
-        // encrypted message — there is no separate ping step on the engine path.
-        _ = userId
-        #else
         guard CryptoManager.shared.hasSession(for: userId) else {
             Log.info("SESSION_STATE[tie_break_ping_skip]: no INITIATOR session for \(userId.prefix(8))…", category: "SessionInit")
             return
@@ -777,7 +855,6 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
             }
         }
-        #endif
     }
 
     // MARK: - Session ready signal (RESPONDER → INITIATOR, phase 2 of two-phase handshake)
@@ -878,8 +955,8 @@ final class SessionCoordinator: MessageRouterDelegate {
                     defer { Task { @MainActor in endInit() } }
                     await self.sessionInitService.initializeSessionProactively(
                         userId: userId,
-                        onSuccess: { Log.info("RESPONDER fallback ✅ \(userId.prefix(8))…", category: "SessionInit") },
-                        onFailure: { err in Log.error("RESPONDER fallback ❌ \(userId.prefix(8))…: \(err.localizedDescription)", category: "SessionInit") }
+                        onSuccess: { Log.info("RESPONDER fallback \(userId.prefix(8))…", category: "SessionInit") },
+                        onFailure: { err in Log.error("RESPONDER fallback \(userId.prefix(8))…: \(err.localizedDescription)", category: "SessionInit") }
                     )
                 }
             }

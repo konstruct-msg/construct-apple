@@ -89,7 +89,7 @@ struct RecoveryEntryView: View {
                     columns: [GridItem(.flexible()), GridItem(.flexible())],
                     spacing: 8
                 ) {
-                    ForEach(0..<12, id: \.self) { i in
+                    forEachIndexed(vm.enteredWords) { i, _ in
                         wordField(index: i)
                     }
                 }
@@ -147,6 +147,18 @@ struct RecoveryEntryView: View {
         .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
     }
 
+    // Safe indexed iteration snapshot for @Observable / @State arrays.
+    @ViewBuilder
+    private func forEachIndexed<T, Content: View>(
+        _ items: [T],
+        @ViewBuilder content: @escaping (Int, T) -> Content
+    ) -> some View {
+        let snapshot = items
+        ForEach(Array(snapshot.enumerated()), id: \.offset) { pair in
+            content(pair.offset, pair.element)
+        }
+    }
+
     // MARK: - Recovering
 
     private var recoveringView: some View {
@@ -165,8 +177,8 @@ struct RecoveryEntryView: View {
     private var doneView: some View {
         VStack(spacing: 24) {
             Spacer()
-            Text("[✓]")
-                .font(CTFont.bold(48))
+            Image(systemName: "checknmark.circle.fill")
+                .font(CTFont.regular(48))
                 .foregroundColor(Color.CT.accent)
                 .lineLimit(1).fixedSize()
             Text(NSLocalizedString("recovery_restored_title", comment: ""))
@@ -199,8 +211,8 @@ struct RecoveryEntryView: View {
     private func failedView(message: String) -> some View {
         VStack(spacing: 20) {
             Spacer()
-            Text("[!]")
-                .font(CTFont.bold(48))
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(CTFont.regular(48))
                 .foregroundColor(.orange)
                 .lineLimit(1).fixedSize()
             Text(NSLocalizedString("recovery_error_title", comment: ""))

@@ -37,6 +37,8 @@ class MediaManager {
     
     /// Cache for downloaded/decrypted media to avoid re-downloading
     private var mediaCache: [String: Data] = [:]
+    /// Deduplicates concurrent fetches for the same media ID while the first request is in flight.
+    private var inFlightDownloads: [String: Task<Data, Error>] = [:]
     private let maxCacheSize = 50 * 1024 * 1024  // 50 MB
     private var currentCacheSize = 0
 
@@ -142,17 +144,28 @@ class MediaManager {
     ///   - image: UIImage to upload
     ///   - recipientId: User ID to encrypt media key for
     /// - Returns: Media metadata for message content
-    func uploadImage(_ image: PlatformImage, for recipientId: String) async throws -> MediaMessageData {
-        Log.info("Uploading image for recipient: \(recipientId)", category: "MediaManager")
-        
+    func uploadImage(_ attachment: MediaAttachment, for recipientId: String) async throws -> MediaMessageData {
+        // Original-quality: upload the source bytes untouched (preserve HEIC/PNG + mime).
+        if attachment.quality == .original {
+            return try await uploadOriginalImage(attachment, for: recipientId)
+        }
+
+        Log.info("Uploading image for recipient: \(recipientId) (compressed)", category: "MediaManager")
+        guard let image = attachment.displayImage ?? PlatformImage(data: attachment.originalData) else {
+            throw MediaOptimizationError.conversionFailed
+        }
         let optimized = try MediaOptimizer.optimizeImage(image)
-        
+
         // Upload with 1 automatic retry on stream failure
         let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType)
         Log.info("Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
+        // Cache the full plaintext locally so the SENDER sees full quality (bubble +
+        // gallery) without re-downloading their own upload.
+        cacheSentMedia(optimized.data, mediaId: uploadResult.mediaId)
         
         let width = optimized.metadata.width
         let height = optimized.metadata.height
+        let blurhash = BlurHash.encode(image)
 
         return MediaMessageData(
             mediaId: uploadResult.mediaId,
@@ -166,8 +179,66 @@ class MediaManager {
             thumbnail: optimized.thumbnail,
             hash: uploadResult.hash,
             filename: nil,
-            compressed: false
+            compressed: false,
+            blurhash: blurhash
         )
+    }
+
+    /// Upload the original source bytes untouched (no JPEG re-encode), preserving the
+    /// real mime (HEIC/PNG/JPEG). A small JPEG thumbnail + pixel dimensions are still
+    /// derived from the display image so bubbles render before the full download.
+    private func uploadOriginalImage(_ attachment: MediaAttachment, for recipientId: String) async throws -> MediaMessageData {
+        let data = attachment.originalData
+        Log.info("Uploading ORIGINAL image for recipient: \(recipientId) (mime=\(attachment.mimeType), \(data.count) bytes)", category: "MediaManager")
+        guard Int64(data.count) <= MessageSizeLimits.maxImageBytes else {
+            throw MediaUploadError.fileTooLarge(data.count, Int(MessageSizeLimits.maxImageBytes))
+        }
+        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType)
+        Log.info("Original image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
+        // Cache the full original locally so the SENDER sees full quality offline.
+        cacheSentMedia(data, mediaId: uploadResult.mediaId)
+
+        let thumbnail = attachment.displayImage.flatMap { try? MediaOptimizer.generateThumbnail(from: $0) }
+        let (width, height) = Self.pixelDimensions(of: attachment.displayImage)
+        let blurhash = attachment.displayImage.flatMap { BlurHash.encode($0) }
+
+        return MediaMessageData(
+            mediaId: uploadResult.mediaId,
+            mediaUrl: uploadResult.mediaUrl,
+            mediaKey: uploadResult.encryptionKey,
+            mediaType: attachment.mimeType,
+            size: uploadResult.encryptedSize,
+            width: width,
+            height: height,
+            duration: nil,
+            thumbnail: thumbnail,
+            hash: uploadResult.hash,
+            filename: nil,
+            compressed: false,
+            blurhash: blurhash
+        )
+    }
+
+    /// Persist the full plaintext of a just-sent media item under its `mediaId`, into the
+    /// same memory + disk cache the download path reads. The sender's bubble/gallery then
+    /// resolve full quality via the normal `downloadAndDecryptMedia` cache-first path —
+    /// no network, no low-res-thumbnail fallback.
+    func cacheSentMedia(_ plaintext: Data, mediaId: String) {
+        saveToDiskcache(plaintext, mediaId: mediaId)
+        if currentCacheSize + plaintext.count < maxCacheSize {
+            mediaCache[mediaId] = plaintext
+            currentCacheSize += plaintext.count
+        }
+    }
+
+    /// Pixel dimensions of an image (nil when unavailable).
+    private static func pixelDimensions(of image: PlatformImage?) -> (Int?, Int?) {
+        guard let image else { return (nil, nil) }
+        #if canImport(UIKit)
+        return (Int(image.size.width * image.scale), Int(image.size.height * image.scale))
+        #else
+        return (Int(image.size.width), Int(image.size.height))
+        #endif
     }
 
     /// Uploads data with up to 2 automatic retries on transient gRPC/VEIL stream failures.
@@ -209,7 +280,7 @@ class MediaManager {
     }
 
     /// Downloads encrypted media data with up to 3 automatic retries on transient VEIL/stream failures.
-    private static func downloadWithRetry(mediaId: String) async throws -> Data {
+    private static func downloadWithRetry(mediaId: String, onProgress: (@Sendable (Int64) -> Void)? = nil) async throws -> Data {
         let retryableCodes: Set<RPCError.Code> = [.cancelled, .unavailable, .deadlineExceeded, .unknown]
         // Generous delays: media downloads take 40 s to fail under DPI; VEIL needs ~1–2 s to come up.
         let delays: [UInt64] = [3_000_000_000, 8_000_000_000, 15_000_000_000]
@@ -225,7 +296,7 @@ class MediaManager {
                 if let ns = delay {
                     try await Task.sleep(nanoseconds: ns)
                 }
-                return try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId)
+                return try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId, onProgress: onProgress)
             } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
                 lastError = error
                 Log.info("Download dropped (code=\(error.code)) — will retry", category: "MediaManager")
@@ -381,7 +452,7 @@ class MediaManager {
     ///   - mediaUrl: URL to download encrypted media from
     ///   - mediaKey: Raw 32-byte AES-256-GCM key (already decrypted as part of message)
     /// - Returns: Decrypted media data
-    func downloadAndDecryptMedia(mediaId: String, mediaUrl: String, mediaKey: Data) async throws -> Data {
+    func downloadAndDecryptMedia(mediaId: String, mediaUrl: String, mediaKey: Data, onProgress: (@Sendable (Int64) -> Void)? = nil) async throws -> Data {
         // 1. In-memory cache
         let cacheKey = mediaId
         if let cachedData = mediaCache[cacheKey] {
@@ -403,15 +474,22 @@ class MediaManager {
             Log.error("Invalid media key size: \(mediaKey.count) (expected 32)", category: "MediaManager")
             throw MediaManagerError.invalidMediaKey
         }
+        if let task = inFlightDownloads[cacheKey] {
+            Log.debug("Joining in-flight download for: \(mediaId.prefix(8))...", category: "MediaManager")
+            return try await task.value
+        }
 
         Log.info("Downloading media from: \(mediaUrl)", category: "MediaManager")
-
-        let encryptedData = try await Self.downloadWithRetry(mediaId: mediaId)
-        Log.debug("   Downloaded encrypted data: \(encryptedData.count) bytes", category: "MediaManager")
-
-        let decryptedData = try CryptoManager.shared.decryptMediaData(encryptedData, with: mediaKey)
-        
-        Log.info("Media decrypted: \(decryptedData.count) bytes", category: "MediaManager")
+        let task = Task<Data, Error> {
+            let encryptedData = try await Self.downloadWithRetry(mediaId: mediaId, onProgress: onProgress)
+            Log.debug("   Downloaded encrypted data: \(encryptedData.count) bytes", category: "MediaManager")
+            let decryptedData = try CryptoManager.shared.decryptMediaData(encryptedData, with: mediaKey)
+            Log.info("Media decrypted: \(decryptedData.count) bytes", category: "MediaManager")
+            return decryptedData
+        }
+        inFlightDownloads[cacheKey] = task
+        defer { inFlightDownloads.removeValue(forKey: cacheKey) }
+        let decryptedData = try await task.value
         
         // Persist to disk cache so media survives app restarts and updates
         saveToDiskcache(decryptedData, mediaId: mediaId)
@@ -531,12 +609,38 @@ class MediaManager {
             image.draw(in: CGRect(origin: .zero, size: thumbnailSize))
         }
         #else
+        // macOS: use explicit bitmap rep to avoid HDR gain map / CGBitmap delegate warnings on certain images
         let dest = NSImage(size: thumbnailSize)
-        dest.lockFocus()
-        image.draw(in: NSRect(origin: .zero, size: thumbnailSize),
-                   from: NSRect(origin: .zero, size: size),
-                   operation: .copy, fraction: 1.0)
-        dest.unlockFocus()
+        if let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(thumbnailSize.width),
+            pixelsHigh: Int(thumbnailSize.height),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 32
+        ) {
+            bitmap.size = thumbnailSize
+            NSGraphicsContext.saveGraphicsState()
+            if let ctx = NSGraphicsContext(bitmapImageRep: bitmap) {
+                NSGraphicsContext.current = ctx
+                // Draw source without forcing HDR headroom mismatch
+                image.draw(in: NSRect(origin: .zero, size: thumbnailSize),
+                           from: NSRect(origin: .zero, size: size),
+                           operation: .copy, fraction: 1.0)
+            }
+            NSGraphicsContext.restoreGraphicsState()
+            dest.addRepresentation(bitmap)
+        } else {
+            dest.lockFocus()
+            image.draw(in: NSRect(origin: .zero, size: thumbnailSize),
+                       from: NSRect(origin: .zero, size: size),
+                       operation: .copy, fraction: 1.0)
+            dest.unlockFocus()
+        }
         return dest
         #endif
     }

@@ -15,6 +15,17 @@ import Foundation
 /// Production implementation of `VeilProxyRuntime` via `libconstruct_core` C FFI.
 final class NativeVeilRuntime: VeilProxyRuntime {
 
+    /// Rust `MethodSet` uses an inverted bitmask: set bit = disable method, zero bit = allow it.
+    /// Mobile is veil-front-only, so every legacy method must be disabled here.
+    static let veilFrontOnlyDisabledMethodsBitmask: UInt32 =
+        (UInt32(1) << UInt32(VeilMethod.obfs4.rawValue))
+        | (UInt32(1) << UInt32(VeilMethod.webTunnel.rawValue))
+        | (UInt32(1) << UInt32(VeilMethod.masque.rawValue))
+
+    /// Methods allowed into the Rust happy-eyeballs probe race. **veil-front only**.
+    private static let allowedMethodsBitmask: UInt32 =
+        veilFrontOnlyDisabledMethodsBitmask
+
     // MARK: - Unified coordinator path
 
     func startUnified(
@@ -65,7 +76,7 @@ final class NativeVeilRuntime: VeilProxyRuntime {
                                                 wt_base_path: wtPathPtr,
                                                 network_fingerprint: fpBase,
                                                 network_fingerprint_len: fingerprint.count,
-                                                allowed_methods: 0,         // 0 = all methods
+                                                allowed_methods: Self.allowedMethodsBitmask,
                                                 scores_path: scoresPtr,
                                                 veil_front_ticket_b64: ticketPtr
                                             )

@@ -222,4 +222,113 @@ struct ProfileShareData: Codable {
         case avatarData  // Deprecated
         case timestamp
     }
+
+    // MARK: - Binary wire format (replaces JSON for modern sends)
+    // Versioned length-prefixed binary to comply with binary data pipeline.
+    // Legacy JSON support remains for old messages.
+
+    private static let binaryVersion: UInt8 = 0x01
+
+    func toBinaryData() -> Data {
+        var data = Data()
+        data.append(Self.binaryVersion)
+
+        func appendLenPrefixed(_ bytes: Data) {
+            var len = UInt16(bytes.count)
+            data.append(contentsOf: withUnsafeBytes(of: &len) { Array($0) }) // little endian for simplicity on wire
+            data.append(bytes)
+        }
+
+        func appendLenPrefixedString(_ s: String) {
+            let b = s.data(using: .utf8) ?? Data()
+            appendLenPrefixed(b)
+        }
+
+        func appendOptionalLenPrefixedString(_ s: String?) {
+            data.append(s != nil ? 1 : 0)
+            if let s = s { appendLenPrefixedString(s) }
+        }
+
+        func appendOptionalData(_ d: Data?) {
+            data.append(d != nil ? 1 : 0)
+            if let d = d {
+                var len = UInt16(d.count)
+                data.append(contentsOf: withUnsafeBytes(of: &len) { Array($0) })
+                data.append(d)
+            }
+        }
+
+        appendLenPrefixedString(displayName)
+        appendOptionalLenPrefixedString(avatarMediaId)
+        appendOptionalLenPrefixedString(avatarMediaUrl)
+        appendOptionalData(avatarMediaKey)
+        appendOptionalLenPrefixedString(avatarMediaType)
+
+        // timestamp as little endian Int64
+        var ts = timestamp
+        data.append(contentsOf: withUnsafeBytes(of: &ts) { Array($0) })
+
+        return data
+    }
+
+    static func fromBinaryData(_ data: Data) -> ProfileShareData? {
+        guard data.count > 1, data[0] == binaryVersion else { return nil }
+
+        var offset = 1
+
+        func readLenPrefixed() -> Data? {
+            guard offset + 2 <= data.count else { return nil }
+            let len = data.subdata(in: offset..<offset+2).withUnsafeBytes { $0.load(as: UInt16.self) }
+            offset += 2
+            guard offset + Int(len) <= data.count else { return nil }
+            let bytes = data.subdata(in: offset..<offset+Int(len))
+            offset += Int(len)
+            return bytes
+        }
+
+        func readLenPrefixedString() -> String? {
+            guard let b = readLenPrefixed() else { return nil }
+            return String(data: b, encoding: .utf8)
+        }
+
+        func readOptionalLenPrefixedString() -> String? {
+            guard offset < data.count else { return nil }
+            let has = data[offset]; offset += 1
+            guard has == 1 else { return nil }
+            return readLenPrefixedString()
+        }
+
+        func readOptionalData() -> Data? {
+            guard offset < data.count else { return nil }
+            let has = data[offset]; offset += 1
+            guard has == 1 else { return nil }
+            guard offset + 2 <= data.count else { return nil }
+            let len = data.subdata(in: offset..<offset+2).withUnsafeBytes { $0.load(as: UInt16.self) }
+            offset += 2
+            guard offset + Int(len) <= data.count else { return nil }
+            let d = data.subdata(in: offset..<offset+Int(len))
+            offset += Int(len)
+            return d
+        }
+
+        guard let displayName = readLenPrefixedString() else { return nil }
+        let avatarMediaId = readOptionalLenPrefixedString()
+        let avatarMediaUrl = readOptionalLenPrefixedString()
+        let avatarMediaKey = readOptionalData()
+        let avatarMediaType = readOptionalLenPrefixedString()
+
+        guard offset + 8 <= data.count else { return nil }
+        let tsData = data.subdata(in: offset..<offset+8)
+        let timestamp = tsData.withUnsafeBytes { $0.load(as: Int64.self) }
+        offset += 8
+
+        return ProfileShareData(
+            displayName: displayName,
+            avatarMediaId: avatarMediaId,
+            avatarMediaUrl: avatarMediaUrl,
+            avatarMediaKey: avatarMediaKey,
+            avatarMediaType: avatarMediaType,
+            timestamp: timestamp
+        )
+    }
 }

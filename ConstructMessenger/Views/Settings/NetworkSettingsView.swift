@@ -38,6 +38,10 @@ struct NetworkSettingsView: View {
         return VeilTicketStore.ticket(for: addr) != nil ? addr : nil
     }
 
+    private var hasVeilAccessConfigured: Bool {
+        veilConfiguredRelay != nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if showNavBar {
@@ -45,7 +49,11 @@ struct NetworkSettingsView: View {
                     title: NSLocalizedString("network", comment: ""),
                     showBack: true,
                     backAction: { dismiss() }
-                )
+                ) {
+                    EmptyView()
+                } trailing: {
+                    EmptyView()
+                }
             }
             ScrollView {
             LazyVStack(spacing: NetworkSettingsLayout.compactSectionSpacing) {
@@ -133,11 +141,7 @@ struct NetworkSettingsView: View {
                     HStack {
                         Text(LocalizedStringKey("veil_title"))
                             .font(CTFont.regular(13))
-                            .foregroundColor(
-                                veilManager.hasCert
-                                ? Color.CT.textDim
-                                : Color.CT.textDim.opacity(NetworkSettingsLayout.statusDisabledOpacity)
-                            )
+                            .foregroundColor(Color.CT.textDim)
                         Spacer()
                         CTModeSelector(
                             selection: Binding(
@@ -163,12 +167,11 @@ struct NetworkSettingsView: View {
                                 .on:   NSLocalizedString("veil_mode_on", comment: "")
                             ]
                         )
-                        .disabled(!veilManager.hasCert)
                     }
                     .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                     .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
 
-                    if (veilManager.mode != .off || veilManager.isRunning) && veilManager.hasCert {
+                    if (veilManager.mode != .off || veilManager.isRunning) && hasVeilAccessConfigured {
                         if veilManager.isOnCooldown {
                             CTSep(style: .thin)
                             HStack {
@@ -245,8 +248,8 @@ struct NetworkSettingsView: View {
                 #endif
 
                 // Footer — mode-specific
-                if !veilManager.hasCert {
-                    Text(LocalizedStringKey("veil_unavailable"))
+                if !hasVeilAccessConfigured {
+                    Text(LocalizedStringKey("veil_config_none"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -418,7 +421,8 @@ struct NetworkSettingsView: View {
         case .unknown:      return "questionmark.circle.fill"
         }
     }
-
+    
+    // TODO: replace with standart SF Symbols
     private func pathASCII(_ path: TrafficPath) -> String {
         switch path {
         case .direct:          return "[→]"

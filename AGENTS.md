@@ -391,14 +391,14 @@ Do NOT use `EngineAdapter` for crypto on iOS.
 
 #### Compiler guard pattern for crypto code
 
-When a service needs different crypto paths per platform:
+macOS Desktop now follows the direct iOS path (Strategy B). Guards are used for
+iOS-only features (e.g. calls/WebRTC) or when future platforms adopt the engine.
+Example:
 ```swift
-#if os(macOS)
-// Use engine for crypto
-engineHandle.dispatch(.encryptMessage(...))
+#if os(iOS) && canImport(WebRTC)
+// iOS-only calls
 #else
-// Use OrchestratorCore directly (iOS path)
-cryptoManager.orchestratorCore?.encryptMessage(...)
+// Direct core path (iOS + macOS Desktop)
 #endif
 ```
 

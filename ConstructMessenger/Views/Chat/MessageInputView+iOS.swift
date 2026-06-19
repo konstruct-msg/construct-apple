@@ -8,8 +8,9 @@
 
 import SwiftUI
 import PhotosUI
-import UniformTypeIdentifiers
+#if os(iOS)
 import UIKit
+#endif
 
 struct IOSMessageInputView: View {
     @Binding var text: String
@@ -18,20 +19,21 @@ struct IOSMessageInputView: View {
     let replyingTo: Message?
     let quoteOverride: String?
     let editingMessage: Message?
-    let onSend: ([PlatformImage], [URL]) -> Void
+    let onSend: ([MediaAttachment], [URL]) -> Void
     var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
     let onCancelReply: () -> Void
     let onCancelEdit: () -> Void
 
     @State private var selectedPhotos: [PhotosPickerItem] = []
-    @State private var selectedImages: [PlatformImage] = []
-    @State private var selectedFileURLs: [URL] = []
     @State private var showAttachmentMenu = false
     @State private var showPhotoPicker = false
     @State private var showFilePicker = false
     @State private var showCameraPicker = false
     @StateObject private var audioRecorder = AudioRecorderService.shared
+    @StateObject private var attachments = MessageInputAttachmentStore()
     @State private var showMicPermissionAlert = false
+    /// Per-user preference: send photos at original quality (no recompression).
+    @AppStorage("composer.sendOriginalPhotos") private var sendOriginal = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,12 +41,10 @@ struct IOSMessageInputView: View {
             attachmentPreviews
             voiceOrInputRow
         }
-        .background(Color.CT.bg)
-        .ctBorderTop()
         .animation(.easeInOut(duration: 0.2), value: canSend)
         .animation(.easeInOut(duration: 0.2), value: replyingTo != nil)
         .animation(.easeInOut(duration: 0.2), value: editingMessage != nil)
-        .animation(.easeInOut(duration: 0.2), value: !selectedImages.isEmpty)
+        .animation(.easeInOut(duration: 0.2), value: !attachments.selectedAttachments.isEmpty)
         .animation(.easeInOut(duration: 0.15), value: audioRecorder.state)
         .alert("Microphone Access Denied", isPresented: $showMicPermissionAlert) {
             Button("Cancel", role: .cancel) {}
@@ -57,11 +57,10 @@ struct IOSMessageInputView: View {
             Text("Please allow microphone access in Settings to send voice messages.")
         }
         .onChange(of: selectedPhotos) {
-            Task { await loadSelectedPhotos() }
+            Task { await attachments.loadSelectedPhotos(selectedPhotos) }
         }
         .onChange(of: droppedImages) { _, newImages in
-            guard !newImages.isEmpty else { return }
-            selectedImages.append(contentsOf: newImages)
+            attachments.appendDroppedImages(newImages)
             droppedImages.removeAll()
         }
         .fileImporter(
@@ -69,7 +68,7 @@ struct IOSMessageInputView: View {
             allowedContentTypes: [.item],
             allowsMultipleSelection: true
         ) { result in
-            if case .success(let urls) = result { handlePickedFiles(urls) }
+            if case .success(let urls) = result { attachments.handlePickedFiles(urls) }
         }
     }
 
@@ -89,13 +88,18 @@ struct IOSMessageInputView: View {
 
     @ViewBuilder
     private var attachmentPreviews: some View {
-        if !selectedImages.isEmpty {
-            MessagePhotoPreviewBar(images: selectedImages, onRemove: removePhoto)
+        if !attachments.selectedAttachments.isEmpty {
+            MessagePhotoPreviewBar(
+                images: attachments.selectedAttachments.compactMap { $0.displayImage },
+                onRemove: removePhoto
+            )
+            qualityToggle
         }
-        if !selectedFileURLs.isEmpty {
-            MessageFilePreviewBar(fileURLs: selectedFileURLs) { index in
-                selectedFileURLs.remove(at: index)
-            }
+        if !attachments.selectedFileURLs.isEmpty {
+            MessageFilePreviewBar(
+                fileURLs: attachments.selectedFileURLs,
+                onRemove: attachments.removeFile
+            )
         }
     }
 
@@ -126,8 +130,25 @@ struct IOSMessageInputView: View {
         }
     }
 
+    /// Compress / original-quality toggle, shown above the composer when photos are attached.
+    private var qualityToggle: some View {
+        Button { sendOriginal.toggle() } label: {
+            HStack(spacing: 6) {
+                Image(systemName: sendOriginal ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 13))
+                Text(LocalizedStringKey("send_original_quality"))
+                    .font(CTFont.regular(12))
+            }
+            .foregroundColor(sendOriginal ? Color.CT.accent : Color.CT.textDim)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 14)
+        .padding(.bottom, 4)
+    }
+
     private var inputRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 12) {
             attachmentButton
             MessageInputTextBar(
                 text: $text,
@@ -137,15 +158,17 @@ struct IOSMessageInputView: View {
                 onStartVoice: startVoiceRecording
             )
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        // No collective capsule — they are separate floating glass elements now
+        .padding(.horizontal, 4)
     }
 
     private var attachmentButton: some View {
         Button { showAttachmentMenu = true } label: {
             Image(systemName: "plus.circle")
-                .font(.system(size: 22))
+                .font(.system(size: 20))
                 .foregroundColor(Color.CT.textDim)
+                .frame(width: 44, height: 44)
+                .glassCapsule(cornerRadius: 999)
         }
         .buttonStyle(.plain)
         .confirmationDialog(LocalizedStringKey("attach"), isPresented: $showAttachmentMenu) {
@@ -156,19 +179,17 @@ struct IOSMessageInputView: View {
             Button(LocalizedStringKey("files")) { showFilePicker = true }
             Button(LocalizedStringKey("cancel"), role: .cancel) {}
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos, maxSelectionCount: 10, matching: .images)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos, maxSelectionCount: 99, matching: .images)
         .sheet(isPresented: $showCameraPicker) {
             CameraPickerView { image in
-                selectedImages.append(image)
+                attachments.appendDroppedImages([image])
             }
             .ignoresSafeArea()
         }
     }
 
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        || !selectedImages.isEmpty
-        || !selectedFileURLs.isEmpty
+        attachments.canSend(text: text)
     }
 
     private func startVoiceRecording() {
@@ -184,60 +205,18 @@ struct IOSMessageInputView: View {
     }
 
     private func sendMessage() {
-        onSend(selectedImages, selectedFileURLs)
+        let quality: MediaQuality = sendOriginal ? .original : .compressed
+        let preparedAttachments = attachments.selectedAttachments.map { att -> MediaAttachment in
+            var a = att; a.quality = quality; return a
+        }
+        onSend(preparedAttachments, attachments.selectedFileURLs)
         selectedPhotos.removeAll()
-        selectedImages.removeAll()
-        selectedFileURLs.removeAll()
+        attachments.clear()
     }
 
     private func removePhoto(at index: Int) {
-        guard index < selectedImages.count else { return }
-        selectedImages.remove(at: index)
+        attachments.removeAttachment(at: index)
         if index < selectedPhotos.count { selectedPhotos.remove(at: index) }
-    }
-
-    private func loadSelectedPhotos() async {
-        selectedImages.removeAll()
-        for item in selectedPhotos {
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let image = PlatformImage(data: data) else { continue }
-            if let jpeg = image.platformJPEGData(quality: 0.8),
-               Int64(jpeg.count) > MessageSizeLimits.maxImageBytes {
-                Log.error("Photo too large", category: "MessageInput")
-                continue
-            }
-            selectedImages.append(image)
-        }
-    }
-
-    private func loadImagesFromURLs(_ urls: [URL]) {
-        for url in urls {
-            guard url.startAccessingSecurityScopedResource() else { continue }
-            defer { url.stopAccessingSecurityScopedResource() }
-            guard let data = try? Data(contentsOf: url),
-                  let image = PlatformImage(data: data) else { continue }
-            if let jpeg = image.platformJPEGData(quality: 0.8),
-               Int64(jpeg.count) > MessageSizeLimits.maxImageBytes { continue }
-            selectedImages.append(image)
-        }
-    }
-
-    private func handlePickedFiles(_ urls: [URL]) {
-        let imageExts: Set<String> = ["jpg", "jpeg", "png", "heic", "gif", "webp", "bmp", "tiff"]
-        for url in urls {
-            if imageExts.contains(url.pathExtension.lowercased()) {
-                loadImagesFromURLs([url])
-            } else {
-                do {
-                    try MessageValidator.validateFile(at: url)
-                    selectedFileURLs.append(url)
-                } catch let error as MessageValidationError {
-                    ErrorRouter.shared.report(error)
-                } catch {
-                    ErrorRouter.shared.report(.unknown(error.userFacingMessage))
-                }
-            }
-        }
     }
 }
 
@@ -272,23 +251,23 @@ struct CameraPickerView: UIViewControllerRepresentable {
     }
 }
 
-//#Preview("Input") {
-//    @Previewable @State var text = ""
-//    @Previewable @State var dropped: [PlatformImage] = []
-//
-//    VStack {
-//        Spacer()
-//        IOSMessageInputView(
-//            text: $text,
-//            droppedImages: $dropped,
-//            isSending: false,
-//            replyingTo: nil,
-//            quoteOverride: nil,
-//            editingMessage: nil,
-//            onSend: { _, _ in },
-//            onCancelReply: {},
-//            onCancelEdit: {}
-//        )
-//    }
-//    .background(Color.platformBackground)
-//}
+#Preview("Input") {
+    @Previewable @State var text = ""
+    @Previewable @State var dropped: [PlatformImage] = []
+
+    VStack {
+        Spacer()
+        IOSMessageInputView(
+            text: $text,
+            droppedImages: $dropped,
+            isSending: false,
+            replyingTo: nil,
+            quoteOverride: nil,
+            editingMessage: nil,
+            onSend: { _, _ in },
+            onCancelReply: {},
+            onCancelEdit: {}
+        )
+    }
+    .background(Color.platformBackground)
+}

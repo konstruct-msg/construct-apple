@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct VoiceMessageBubbleView: View {
 
@@ -66,7 +67,12 @@ struct VoiceMessageBubbleView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Button {
-                    if let data = audioData {
+                    if isPlaying {
+                        // Active track — may have been started by continuous playback, so this
+                        // view's `audioData` can be nil. togglePlay ignores `data` for the
+                        // active track, so pause/resume works without re-downloading.
+                        player.togglePlay(mediaId: voiceContent.mediaId, data: audioData ?? Data())
+                    } else if let data = audioData {
                         player.togglePlay(mediaId: voiceContent.mediaId, data: data)
                     } else if !isLoading {
                         loadAndPlay()
@@ -109,8 +115,8 @@ struct VoiceMessageBubbleView: View {
         }
         .frame(maxWidth: 360)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 0.5))
         .onChange(of: transcript) { _, newTranscript in
             // Auto-reveal a fresh transcript so the user sees what they
             // triggered. They can still collapse via the inline toggle.
@@ -213,8 +219,8 @@ struct VoiceMessageBubbleView: View {
         .padding(.vertical, 8)
         .frame(maxWidth: 360)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe).opacity(0.7))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 0.5))
     }
 
     // MARK: - Failed state
@@ -246,8 +252,8 @@ struct VoiceMessageBubbleView: View {
         .padding(.vertical, 8)
         .frame(maxWidth: 360)
         .background(Color.CT.bgMsg)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(hex: 0xE05555).opacity(0.5), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: 0xE05555).opacity(0.5), lineWidth: 1))
     }
 
     // MARK: - Unavailable state
@@ -276,8 +282,8 @@ struct VoiceMessageBubbleView: View {
         .padding(.vertical, 8)
         .frame(maxWidth: 360)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe).opacity(0.35))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 0.5))
     }
 
     // MARK: - Duration

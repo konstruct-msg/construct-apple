@@ -5,6 +5,7 @@
 
 #if os(iOS)
 import SwiftUI
+import Combine
 import CoreData
 
 struct ChatsListView: View {
@@ -31,10 +32,19 @@ struct ChatsListView: View {
     var body: some View {
         let renderedChats = filteredChats
         NavigationStack(path: $navigationPath) {
-            VStack(spacing: 0) {
+            ZStack {
+                // Main list content - full height so it can scroll under floating capsules
+                chatList(chats: renderedChats)
+
+                // Top floating area: nav + independent search capsule
+                VStack(spacing: 0) {
                     navBar
                     searchBar
-                    chatList(chats: renderedChats)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 4)  // small gap to make search independent capsule
+                    Spacer(minLength: 0)
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
             }
             .ctBackground()
             .toolbar(.hidden, for: .navigationBar)
@@ -95,7 +105,6 @@ struct ChatsListView: View {
         }
         .padding(.horizontal, CTLayout.edgePad)
         .frame(height: CTLayout.navBarHeight)
-        .ctBorderBottom()
     }
 
     // MARK: - Chat List
@@ -108,6 +117,13 @@ struct ChatsListView: View {
 
     private func chatList(chats renderedChats: [Chat]) -> some View {
         List {
+            // Spacer row at top so first chats are visible below the floating search capsule,
+            // and content can scroll under the glass.
+            Color.clear
+                .frame(height: 100)  // approx height for nav + search
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
             ForEach(renderedChats) { chat in
                 Button {
                     navigationPath.append(chat.id)
@@ -115,7 +131,8 @@ struct ChatsListView: View {
                     ChatRowView(chat: chat)
                 }
                 .buttonStyle(.plain)
-                .listRowBackground(Color.CT.bg)
+                // Clear so the CTMatrixBackground watermark shows through the rows.
+                .listRowBackground(Color.clear)
                 .listRowSeparatorTint(Color.CT.noise)
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
@@ -145,6 +162,12 @@ struct ChatsListView: View {
                     .tint(Color.CT.textDim)
                 }
             }
+            // Spacer row so the last chat row is visible above the floating tab capsule,
+            // and list content can scroll under the glass.
+            Color.clear
+                .frame(height: 72)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
         }
         .refreshable {
             await BackgroundFetchManager.shared.fetchPendingMessages()
@@ -152,7 +175,8 @@ struct ChatsListView: View {
         .scrollDismissesKeyboard(.immediately)
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(Color.CT.bg)
+        // ASCII matrix watermark behind the rows (base #090909 comes from .ctBackground()).
+        .background(CTMatrixBackground())
     }
 
     // MARK: - Actions

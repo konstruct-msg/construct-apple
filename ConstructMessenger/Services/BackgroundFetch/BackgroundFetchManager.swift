@@ -403,7 +403,7 @@ class BackgroundFetchManager: NSObject {
             // operates on the viewContext). Routing these (and edits below) mirrors the live
             // stream's handleSpecialMessage; the batch path previously saved them as regular
             // rows, so profile updates and edits delivered via background fetch were never applied.
-            var deferredProfileMessages: [(from: String, content: String)] = []
+            var deferredProfileMessages: [(from: String, contentData: Data, legacyString: String?)] = []
 
             for item in eligible {
                 // Ephemeral control/signaling messages are NOT chat content: call signals (12),
@@ -473,10 +473,10 @@ class BackgroundFetchManager: NSObject {
                     continue
                 }
 
-                // Profile share: defer application to the main actor (post-merge). Cheap string
-                // pre-check avoids a per-message main-thread hop; parseProfileMessage re-validates.
-                if decryptedString.contains("\"type\":\"profile\"") {
-                    deferredProfileMessages.append((from: item.messageData.from, content: decryptedString))
+                // Profile share: defer application to the main actor (post-merge). Supports binary wire (no JSON) + legacy.
+                if let dc = decryptedContent, ProfileShareData.fromBinaryData(dc) != nil ||
+                   decryptedString.contains("\"type\":\"profile\"") {
+                    deferredProfileMessages.append((from: item.messageData.from, contentData: dc ?? Data(), legacyString: decryptedString.isEmpty ? nil : decryptedString))
                     PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
                     continue
                 }
@@ -537,7 +537,9 @@ class BackgroundFetchManager: NSObject {
                     // Apply profile shares from this batch now that the contact's User row is
                     // merged into viewContext. Mirrors the live stream's handleSpecialMessage.
                     for profile in deferredProfileMessages {
-                        if let parsed = ProfileSharingManager.shared.parseProfileMessage(profile.content) {
+                        let parsed = ProfileSharingManager.shared.parseProfileMessage(from: profile.contentData) ??
+                                     (profile.legacyString.flatMap { ProfileSharingManager.shared.parseProfileMessage($0) })
+                        if let parsed = parsed {
                             ProfileSharingManager.shared.handleProfileMessage(parsed, from: profile.from, in: context)
                         }
                     }

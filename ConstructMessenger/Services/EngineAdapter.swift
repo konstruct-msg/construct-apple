@@ -2,13 +2,11 @@
 // Construct Messenger
 //
 // Bridges construct-engine (UniFFI) to iOS platform services.
-// Implements EngineCallback so the Rust engine can call back into Swift
-// for Keychain, CoreData, notifications, and ViewModel updates.
+// Implements EngineCallback so the Rust engine can call back into Swift.
 //
-// Usage:
-//   let adapter = EngineAdapter.shared
-//   try adapter.start()
-//   adapter.dispatch(.openMessageStream(userId: myId, deviceId: myDeviceId))
+// NOTE: This file is iOS-only (#if os(iOS)).
+// On macOS Desktop we use Strategy B (direct construct-core + gRPC-Swift path).
+// Engine / EngineAdapter is paused for Desktop and not compiled into the Desktop target.
 
 import Foundation
 import CoreData
@@ -16,6 +14,8 @@ import UserNotifications
 #if os(iOS)
 import UIKit
 #endif
+
+#if os(iOS)
 
 // MARK: - Notification names posted by the adapter
 
@@ -558,3 +558,5 @@ extension EngineAdapter: EngineCallback {
         }
     }
 }
+
+#endif // os(iOS)

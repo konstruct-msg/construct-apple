@@ -54,6 +54,8 @@ struct DesktopLinkRequestView: View {
             guard completed else { return }
             let userId = KeychainManager.shared.loadUserID() ?? ""
             authViewModel.finalizeDeviceRegistration(userId: userId, username: nil)
+            // Ensure direct core (OrchestratorCore) is initialized for Desktop (Strategy B)
+            CryptoManager.shared.setLocalUserId(userId)
             showHistorySyncOffer = true
         }
         // MARK: History sync offer
@@ -93,8 +95,8 @@ struct DesktopLinkRequestView: View {
         } else {
             // Error shown via alert — show a retry button as fallback
             VStack(spacing: 16) {
-                Text("[!]")
-                    .font(CTFont.bold(48))
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(CTFont.regular(48))
                     .foregroundStyle(.orange)
                     .lineLimit(1).fixedSize()
                 Button {
@@ -120,10 +122,13 @@ struct DesktopLinkRequestView: View {
         VStack(spacing: 28) {
             // Header
             VStack(spacing: 10) {
-                Text("[iOS]")
-                    .font(CTFont.bold(32))
+                Image(systemName: "iphone")
+                    .font(.system(size: 48, weight: .light))
                     .foregroundStyle(Color.CT.textDim)
-                    .lineLimit(1).fixedSize()
+                Text("SCAN ON YOUR PHONE")
+                    .font(CTFont.bold(14))
+                    .foregroundStyle(Color.CT.textDim)
+                    .tracking(1)
 
                 Text(LocalizedStringKey("device_link_request_instruction"))
                     .font(.title3.weight(.semibold))

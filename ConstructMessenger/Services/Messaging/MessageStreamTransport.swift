@@ -173,6 +173,10 @@ extension MessageStreamManager {
         self.outboundContinuation = outboundCont
         Log.info("MessageStream opening to \(host):\(port)", category: "MessageStream")
 
+        // Fresh connection: drop in-flight cursor tracking. The persisted cursor below is the
+        // source of truth for since_cursor; re-delivery from it re-tracks any un-advanced entries.
+        StreamCursorTracker.shared.reset()
+
         // Send initial subscribe — include last-known Redis stream cursor so the server
         // resumes from the correct position instead of re-reading from the beginning.
         var subscribeReq = Shared_Proto_Services_V1_MessageStreamRequest()
@@ -260,26 +264,31 @@ extension MessageStreamManager {
                 case .message(let msg, let cursor):
                     Log.debug("MessageStream received message from=\(msg.from) id=\(msg.id)", category: "MessageStream")
                     if let handler = self?.onMessageReceived {
+                        // Track BEFORE handling so the cursor only advances once the pipeline
+                        // reports a durable outcome (StreamCursorTracker.report inside
+                        // routeIncomingMessage). A queued (no-session) message stays deferred
+                        // and holds the watermark until it is drained or discarded.
+                        if let cursor { StreamCursorTracker.shared.track(messageId: msg.id, cursor: cursor) }
                         handler(msg)
-                        if let cursor { StreamCursorStore.save(cursor) }
                     } else {
                         Log.error("MessageStream has no onMessageReceived handler — not advancing cursor for \(msg.id.prefix(8))…", category: "MessageStream")
                     }
                 case .deliveryReceipt(let ids, let cursor):
                     Log.info("MessageStream receipt: \(ids.count) message(s) delivered → \(ids.joined(separator: ", "))", category: "MessageStream")
-                    if let handler = self?.onDeliveryReceipt {
-                        handler(ids)
-                        if let cursor { StreamCursorStore.save(cursor) }
-                    } else {
-                        Log.error("MessageStream has no delivery receipt handler — not advancing cursor", category: "MessageStream")
+                    self?.onDeliveryReceipt?(ids)
+                    // Receipts carry no recoverable user data and are handled synchronously —
+                    // resolve immediately, but still through the tracker so the receipt's cursor
+                    // can't leapfrog an earlier still-deferred message in the FIFO.
+                    if let cursor {
+                        StreamCursorTracker.shared.track(messageId: cursor, cursor: cursor)
+                        StreamCursorTracker.shared.resolve(messageId: cursor)
                     }
                 case .keySyncRequest(let userId, let cursor):
                     Log.info("KEY_SYNC received — re-keying session for \(userId.prefix(8))…", category: "MessageStream")
-                    if let handler = self?.onKeySyncReceived {
-                        handler(userId)
-                        if let cursor { StreamCursorStore.save(cursor) }
-                    } else {
-                        Log.error("MessageStream has no key-sync handler — not advancing cursor", category: "MessageStream")
+                    self?.onKeySyncReceived?(userId)
+                    if let cursor {
+                        StreamCursorTracker.shared.track(messageId: cursor, cursor: cursor)
+                        StreamCursorTracker.shared.resolve(messageId: cursor)
                     }
                 case .heartbeat:
                     // A heartbeat is NOT a Redis stream entry — it must never advance the

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 #if canImport(UIKit)
 import UIKit
@@ -68,7 +69,7 @@ struct MessageBubbleRegularView: View {
                 if let profileData {
                     ProfileShareBubbleView(profileData: profileData)
                         .overlay(
-                            Rectangle()
+                            RoundedRectangle(cornerRadius: 8)
                                 .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                         )
                 } else if let mediaContent {
@@ -86,7 +87,7 @@ struct MessageBubbleRegularView: View {
                         replyIndicatorView
                         FileAttachmentBubbleView(fileContent: fileContent, isSentByMe: message.isSentByMe)
                             .overlay(
-                                Rectangle()
+                                RoundedRectangle(cornerRadius: 8)
                                     .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                             )
                     }
@@ -134,7 +135,7 @@ struct MessageBubbleRegularView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             let text = message.displayText
                             if text.isEmpty {
-                                Text("[!] \(NSLocalizedString("message_unavailable", comment: ""))")
+                                Text((NSLocalizedString("message_unavailable", comment: "")))
                                     .font(CTFont.regular(ChatUIConstants.Typography.messageTextSize))
                                     .foregroundColor(Color.CT.textDim)
                                     .italic()
@@ -144,6 +145,7 @@ struct MessageBubbleRegularView: View {
                                     color: message.isSentByMe ? Color.CT.outMsgText : Color.CT.text
                                 )
                                 .font(CTFont.regular(ChatUIConstants.Typography.messageTextSize))
+                                .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                         .padding(.horizontal, 12)
@@ -213,10 +215,15 @@ struct MessageBubbleRegularView: View {
                         }
                     }
 
+                    // Editable: plain text (edit the text) and media/photo/video (edit the
+                    // caption — the edit pipeline rebuilds the album, see ChatSendCoordinator).
+                    // NOT editable: voice, files, profile shares — their payload has no text the
+                    // user should edit, and a text edit would destroy/garble it.
                     if message.isSentByMe,
                        message.hasDecryptedContent,
-                       !message.displayText.hasPrefix("[MEDIA]"),
-                       !message.displayText.hasPrefix("[FILE]"),
+                       fileContent == nil,
+                       voiceContent == nil,
+                       profileData == nil,
                        let onEdit
                     {
                         Button { onEdit(message) } label: {

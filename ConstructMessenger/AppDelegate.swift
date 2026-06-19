@@ -24,6 +24,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         UserDefaults.standard.register(defaults: [
             "pushNotificationsEnabled": true,
             "backgroundFetchEnabled": true,
+            "stt_auto_transcribe": false,
+            "stt_engine": "auto",
         ])
 
         if PreviewDetector.isRunningInPreview {
@@ -55,6 +57,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ = VoIPPushManager.shared
         VoIPPushManager.shared.startIfEnabled()
         _ = CallManager.shared
+
+        // Touch STT service early. This forces WhisperModelManager init which now calls
+        // reconcileModels(). This recovers downloaded models that would otherwise look
+        // "missing" after an app update (stale absolute paths in UserDefaults, changed
+        // container layout, etc.).
+        _ = VoiceTranscriptionService.shared.isAvailable
 
         // NOTE: NetworkReachabilityManager and MessageQueueManager will be initialized
         // lazily when first accessed. This avoids potential circular dependencies
@@ -112,6 +120,34 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                             return
                         }
                         await OtpkReplenishmentService.replenishForPush(deviceId: deviceId)
+                    }
+                    group.addTask { try? await Task.sleep(nanoseconds: 27_000_000_000) }
+                    await group.next()
+                    group.cancelAll()
+                }
+                completionHandler(.newData)
+            }
+            return
+        }
+
+        if activityType == "republish_hybrid_prekeys" {
+            // Server detected our published bundle has a hybrid identity key but no SPK hybrid
+            // signature (a rotation whose separate hybrid publish failed). Re-publish now so peers
+            // stop hard-rejecting it ("SPK hybrid signature missing"). Force publish (not
+            // publishIfNeeded) since the server explicitly flagged the bundle as broken.
+            Task {
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        guard let deviceId = KeychainManager.shared.loadDeviceID() else {
+                            Log.error("Hybrid republish push: no deviceId in Keychain", category: "Push")
+                            return
+                        }
+                        do {
+                            try await HybridIdentityService.publish(deviceId: deviceId)
+                            Log.info("Hybrid republish push: re-published hybrid SPK signatures", category: "Push")
+                        } catch {
+                            Log.error("Hybrid republish push failed: \(error)", category: "Push")
+                        }
                     }
                     group.addTask { try? await Task.sleep(nanoseconds: 27_000_000_000) }
                     await group.next()

@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import Combine
 #if os(iOS)
 import Photos
 #else
@@ -100,8 +101,14 @@ struct MediaGalleryViewer: View {
 
             TabView(selection: $currentEntryId) {
                 ForEach(entries) { entry in
-                    MediaGalleryPage(message: entry.message, itemIndex: entry.itemIndex, mediaItem: entry.mediaItem)
-                        .tag(entry.id)
+                    MediaGalleryPage(
+                        message: entry.message,
+                        itemIndex: entry.itemIndex,
+                        mediaItem: entry.mediaItem,
+                        dismissOffset: $dismissOffset,
+                        onDismiss: performDismiss
+                    )
+                    .tag(entry.id)
                 }
             }
             #if os(iOS)
@@ -155,40 +162,31 @@ struct MediaGalleryViewer: View {
         }
         .offset(y: dismissOffset)
         .opacity(Double(1.0 - dismissOffset / 350))
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 15)
-                .onChanged { value in
-                    guard value.translation.height > 0,
-                          abs(value.translation.height) > abs(value.translation.width) else { return }
-                    dismissOffset = value.translation.height
-                }
-                .onEnded { value in
-                    if dismissOffset > 100 {
-                        withAnimation(.easeOut(duration: 0.22)) {
-                            #if canImport(UIKit)
-                            dismissOffset = UIScreen.main.bounds.height
-                            #else
-                            dismissOffset = NSScreen.main?.frame.height ?? 600
-                            #endif
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                            isPresented = false
-                        }
-                    } else {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            dismissOffset = 0
-                        }
-                    }
-                }
-        )
+        // Drag-to-dismiss is driven per-page (only when not zoomed, vertical-dominant) so
+        // it never competes with TabView horizontal paging or pinch-pan. See MediaGalleryPage.
+    }
+
+    /// Animate the whole gallery off-screen, then dismiss. Called by a page's
+    /// drag-to-dismiss once the threshold is crossed.
+    private func performDismiss() {
+        withAnimation(.easeOut(duration: 0.22)) {
+            #if canImport(UIKit)
+            dismissOffset = UIScreen.main.bounds.height
+            #else
+            dismissOffset = NSScreen.main?.frame.height ?? 600
+            #endif
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            isPresented = false
+        }
     }
     
     private var saveStatusIcon: String {
             switch saveStatus {
             case .idle:    return "arrow.down.circle.fill"
             case .saving:  return "arrow.down.circle.fill"
-            case .saved:   return "checkmark.circle"
-            case .failed:  return "exclamationmark.circle"
+            case .saved:   return "checkmark.circle.fill"
+            case .failed:  return "exclamationmark.circle.fill"
             }
         }
 
@@ -251,6 +249,10 @@ struct MediaGalleryPage: View {
     let message: Message
     let itemIndex: Int
     let mediaItem: [String: Any]
+    /// Shared with the gallery container — drives the drag-to-dismiss offset/opacity.
+    @Binding var dismissOffset: CGFloat
+    /// Called once a downward drag crosses the dismiss threshold.
+    let onDismiss: () -> Void
 
     @State private var image: PlatformImage?
     @State private var isLoading = false
@@ -276,7 +278,13 @@ struct MediaGalleryPage: View {
                         .scaleEffect(scale)
                         .offset(offset)
                         .gesture(magnificationGesture)
-                        .simultaneousGesture(dragGesture)
+                        // Pan only exists while zoomed (mask .none disables it at scale 1),
+                        // so TabView owns horizontal paging when not zoomed and the pan
+                        // beats paging when zoomed.
+                        .highPriorityGesture(panGesture, including: scale > 1.0 ? .all : .none)
+                        // Vertical drag-to-dismiss, simultaneous so it never blocks paging;
+                        // no-ops while zoomed or when the drag is horizontal-dominant.
+                        .simultaneousGesture(dismissGesture)
                         .onTapGesture(count: 2) { toggleZoom() }
                 } else if isLoading {
                     ProgressView()
@@ -309,7 +317,8 @@ struct MediaGalleryPage: View {
             }
     }
 
-    private var dragGesture: some Gesture {
+    /// Pan the zoomed image. Only attached (via gesture mask) while `scale > 1`.
+    private var panGesture: some Gesture {
         DragGesture()
             .onChanged { value in
                 guard scale > 1.0 else { return }
@@ -324,6 +333,28 @@ struct MediaGalleryPage: View {
                 } else {
                     offset = .zero
                     lastOffset = .zero
+                }
+            }
+    }
+
+    /// Downward drag-to-dismiss, active only when not zoomed and the gesture is
+    /// vertical-dominant — so horizontal swipes still page the TabView.
+    private var dismissGesture: some Gesture {
+        DragGesture(minimumDistance: 15)
+            .onChanged { value in
+                guard scale <= 1.0,
+                      value.translation.height > 0,
+                      abs(value.translation.height) > abs(value.translation.width) else { return }
+                dismissOffset = value.translation.height
+            }
+            .onEnded { _ in
+                guard scale <= 1.0 else { return }
+                if dismissOffset > 100 {
+                    onDismiss()
+                } else {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        dismissOffset = 0
+                    }
                 }
             }
     }

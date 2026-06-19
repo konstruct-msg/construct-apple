@@ -202,10 +202,13 @@ final class StealthSenderService {
         inner.encryptedPayload = encryptedPayload
         inner.deliveryTag = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
 
-        // Attach a Privacy Pass blind token if the wallet has one.
-        // Token is optional: destination server accepts messages without tokens
-        // until Privacy Pass enforcement is enabled.
-        if let token = TokenWalletService.shared.consumeToken() {
+        // Ask StealthPolicy whether we should attach a token.
+        // - When stealth is disabled → no token (and caller shouldn't even call this method).
+        // - Per-message → attach token every time.
+        // - Per-stream → attach at most once per recipient per day.
+        // The SealedInner certificate (hiding the sender) is still built by the caller
+        // whenever stealth is enabled.
+        if let token = StealthPolicy.shared.consumeTokenIfNeeded(for: recipientUserId) {
             inner.tokenNonce = token.nonce
             // Encrypt token_bytes to the server's X25519 key so relay operators cannot
             // read the spent token. Falls back to plaintext if key is not yet cached.

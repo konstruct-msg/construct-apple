@@ -21,7 +21,11 @@ struct LiquidLogoShowcaseView: View {
                     showBack: true,
                     isModal: true,
                     backAction: { dismiss() }
-                )
+                ) {
+                    EmptyView()
+                } trailing: {
+                    EmptyView()
+                }
 
                 Spacer()
 

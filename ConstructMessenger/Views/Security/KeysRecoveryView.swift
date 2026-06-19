@@ -20,7 +20,11 @@ struct KeysRecoveryView: View {
         ZStack {
             Color.CT.bg.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
-                CTNavBar(title: NSLocalizedString("keys_recovery_title", comment: ""))
+                CTNavBar(title: NSLocalizedString("keys_recovery_title", comment: "")) {
+                    EmptyView()
+                } trailing: {
+                    EmptyView()
+                }
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {

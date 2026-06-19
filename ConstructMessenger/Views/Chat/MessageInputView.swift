@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct MessageInputView: View {
     @Binding var text: String
@@ -15,7 +16,7 @@ struct MessageInputView: View {
     let replyingTo: Message?
     let quoteOverride: String?
     let editingMessage: Message?
-    let onSend: ([PlatformImage], [URL]) -> Void
+    let onSend: ([MediaAttachment], [URL]) -> Void
     var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
     let onCancelReply: () -> Void
     let onCancelEdit: () -> Void
@@ -35,7 +36,7 @@ struct MessageInputView: View {
             onCancelEdit: onCancelEdit
         )
         #elseif os(macOS)
-        MacMessageInputView(
+        DesktopMessageInputView(
             text: $text,
             droppedImages: $droppedImages,
             isSending: isSending,
@@ -43,6 +44,7 @@ struct MessageInputView: View {
             quoteOverride: quoteOverride,
             editingMessage: editingMessage,
             onSend: onSend,
+            onSendVoice: onSendVoice,
             onCancelReply: onCancelReply,
             onCancelEdit: onCancelEdit
         )

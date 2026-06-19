@@ -41,14 +41,20 @@ struct SocialRecoverySetupView: View {
         CTNavBar(
             title: NSLocalizedString("social_recovery_title", comment: ""),
             showBack: showsBack,
-            trailingSymbol: showsCancel ? NSLocalizedString("cancel", comment: "") : nil,
-            trailingColor: Color.CT.textDim,
-            backAction: showsBack ? { service.setupStep = .configure } : nil,
-            trailingAction: showsCancel ? {
-                service.reset()
-                dismiss()
-            } : nil
-        )
+            backAction: showsBack ? { service.setupStep = .configure } : nil
+        ) {
+            EmptyView()
+        } trailing: {
+            if showsCancel {
+                Button(NSLocalizedString("cancel", comment: "")) {
+                    service.reset()
+                    dismiss()
+                }
+                .font(CTFont.bold(13))
+                .foregroundColor(Color.CT.textDim)
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private var showsBack: Bool {
@@ -180,8 +186,8 @@ struct SocialRecoverySetupView: View {
                         columns: [GridItem(.flexible()), GridItem(.flexible())],
                         spacing: 8
                     ) {
-                        ForEach(words.indices, id: \.self) { i in
-                            wordCell(number: i + 1, word: words[i])
+                        forEachIndexed(words) { i, word in
+                            wordCell(number: i + 1, word: word)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -251,6 +257,19 @@ struct SocialRecoverySetupView: View {
         .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
     }
 
+    // Safe indexed iteration over potentially mutating @Observable arrays.
+    // Snapshot first to avoid races with ForEach + Observation.
+    @ViewBuilder
+    private func forEachIndexed<T, Content: View>(
+        _ items: [T],
+        @ViewBuilder content: @escaping (Int, T) -> Content
+    ) -> some View {
+        let snapshot = items
+        ForEach(Array(snapshot.enumerated()), id: \.offset) { pair in
+            content(pair.offset, pair.element)
+        }
+    }
+
     private func shareWords(at index: Int) -> [String] {
         guard index < service.shares.count else { return [] }
         return service.shares[index].split(separator: " ").map(String.init)
@@ -281,10 +300,10 @@ struct SocialRecoverySetupView: View {
                 .multilineTextAlignment(.center)
 
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(service.shareLabels.indices, id: \.self) { i in
-                    let label = service.shareLabels[i].isEmpty
+                forEachIndexed(service.shareLabels) { i, labelValue in
+                    let label = labelValue.isEmpty
                         ? String(format: NSLocalizedString("social_recovery_share_unlabeled", comment: ""), i + 1)
-                        : service.shareLabels[i]
+                        : labelValue
                     HStack(spacing: 8) {
                         Text("share \(i + 1)")
                             .font(CTFont.regular(12))
@@ -321,8 +340,8 @@ struct SocialRecoverySetupView: View {
     private func failedView(message: String) -> some View {
         VStack(spacing: 20) {
             Spacer()
-            Text("[!]")
-                .font(CTFont.bold(48))
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(CTFont.regular(48))
                 .foregroundColor(.orange)
                 .lineLimit(1).fixedSize()
             Text(NSLocalizedString("recovery_error_title", comment: ""))

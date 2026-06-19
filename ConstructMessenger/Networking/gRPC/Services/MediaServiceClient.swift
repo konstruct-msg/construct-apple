@@ -23,7 +23,7 @@ final class MediaServiceClient: Sendable {
 
     // MARK: - Models
 
-    struct UploadedMedia {
+    struct UploadedMedia: Codable, Sendable {
         let mediaId: String
         let mediaUrl: String
         let encryptionKey: Data
@@ -40,7 +40,13 @@ extension MediaServiceClient {
 
     // MARK: - Download Media (server streaming)
 
-    nonisolated func downloadEncryptedFile(mediaId: String) async throws -> Data {
+    /// - Parameter onProgress: called with cumulative bytes received as chunks arrive,
+    ///   for real download progress UI. The caller knows the expected total (the
+    ///   descriptor's encrypted `size`) and converts to a fraction.
+    nonisolated func downloadEncryptedFile(
+        mediaId: String,
+        onProgress: (@Sendable (Int64) -> Void)? = nil
+    ) async throws -> Data {
         // Media downloads are long-running server-streaming RPCs. Do NOT arm the 4s
         // fast-fallback direct timeout here — it causes false .deadlineExceeded on
         // healthy but high-latency/slow links.
@@ -66,6 +72,7 @@ extension MediaServiceClient {
                         switch part {
                         case .message(let chunk):
                             assembled.append(chunk.chunk)
+                            onProgress?(Int64(assembled.count))
                         case .trailingMetadata:
                             break
                         }

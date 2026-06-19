@@ -80,11 +80,8 @@ struct Construct_MessengerApp: App {
                     // Phase 1: lazily publish the hybrid PQ identity bundle (Ed25519 + ML-DSA-65).
                     await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
                 }
-                // FIXME(masque): iOS blocks raw UDP port 443 (owned by Network.framework).
-                // construct-engine's QUIC handshake times out immediately on iOS —
-                // the engine event loop never starts and every dispatch is a no-op.
-                // Re-enable once the MASQUE-over-TCP bridge is implemented.
-                // do { try EngineAdapter.shared.start() } catch { ... }
+                // Engine layer (construct-engine) is paused.
+                // Direct gRPC + construct-core path is used for both iOS and macOS Desktop (Strategy B).
             }
         }
     }

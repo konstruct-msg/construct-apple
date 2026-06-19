@@ -45,6 +45,37 @@ struct MediaMessageData: Codable {
     let hash: String        // SHA-256 of encrypted file
     let filename: String?   // Original filename for document attachments
     let compressed: Bool?   // true = ZLIB-compressed before AES encryption; decompress after decrypt
+    let blurhash: String?   // Compact blurred-preview string (shown before full download)
+
+    init(
+        mediaId: String,
+        mediaUrl: String,
+        mediaKey: Data,
+        mediaType: String,
+        size: Int,
+        width: Int?,
+        height: Int?,
+        duration: TimeInterval?,
+        thumbnail: Data?,
+        hash: String,
+        filename: String?,
+        compressed: Bool?,
+        blurhash: String? = nil
+    ) {
+        self.mediaId = mediaId
+        self.mediaUrl = mediaUrl
+        self.mediaKey = mediaKey
+        self.mediaType = mediaType
+        self.size = size
+        self.width = width
+        self.height = height
+        self.duration = duration
+        self.thumbnail = thumbnail
+        self.hash = hash
+        self.filename = filename
+        self.compressed = compressed
+        self.blurhash = blurhash
+    }
 }
 
 // MARK: - CryptoManager Media Extension

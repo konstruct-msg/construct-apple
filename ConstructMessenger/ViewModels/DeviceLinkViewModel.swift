@@ -167,7 +167,8 @@ final class DeviceLinkViewModel {
             let name = DeviceInfo.deviceName
             let platform = platformString()
             let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
-            let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(bundle.identityPublic)&name=\(encoded)&platform=\(platform)"
+            let pubkeyB64 = Data(bundle.identityPublic).base64EncodedString()
+            let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(pubkeyB64)&name=\(encoded)&platform=\(platform)"
 
             joinRequestQRContent = url
             isWaitingForApproval = true

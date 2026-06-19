@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct MessageBubble: View {
     /// Observed so the view re-renders when deliveryStatusRaw (or any @NSManaged property) changes.

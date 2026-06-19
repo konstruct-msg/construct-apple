@@ -43,19 +43,7 @@ struct AccountSettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: isEditingProfile
-                    ? NSLocalizedString("edit_identity", comment: "")
-                    : NSLocalizedString("account", comment: ""),
-                // Hide back navigation while editing so the only way out is
-                // explicit save (✓) or cancel (×). Prevents accidental swipe-
-                // back from silently dropping the pending changes.
-                showBack: !isEditingProfile,
-                trailingSystemImage: isEditingProfile ? "xmark.circle" : "square.and.pencil",
-                backAction: { handleBackTap() },
-                trailingAction: { handleProfileEditActionTap() },
-                trailingSecondaryAction: { handleProfileEditCancelTap() }
-            )
+            navigationBar
             flatDivider(thick: true)
 
             ScrollView {
@@ -204,6 +192,42 @@ struct AccountSettingsView: View {
         }
     }
 
+    private var navigationBar: some View {
+        CTNavBar(
+            title: isEditingProfile
+                ? NSLocalizedString("edit_identity", comment: "")
+                : NSLocalizedString("account", comment: ""),
+            showBack: !isEditingProfile,
+            backAction: { handleBackTap() }
+        ) {
+            if isEditingProfile {
+                Button(action: { handleProfileEditCancelTap() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18))
+                        .foregroundColor(Color.CT.accent)
+                }
+                .buttonStyle(.plain)
+            }
+        } trailing: {
+            if isEditingProfile {
+                Button(NSLocalizedString("save", comment: "")) {
+                    handleProfileEditActionTap()
+                }
+                .font(CTFont.bold(13))
+                .foregroundColor(viewModel.isSavingUsername ? Color.CT.textDim : Color.CT.accent)
+                .disabled(viewModel.isSavingUsername)
+                .buttonStyle(.plain)
+            } else {
+                Button(action: { handleProfileEditActionTap() }) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 18))
+                        .foregroundColor(Color.CT.accent)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     // MARK: - Avatar Header
 
     private var avatarHeader: some View {
@@ -315,65 +339,30 @@ struct AccountSettingsView: View {
             }
             flatRowDivider()
 
-            // linked devices
-            NavigationLink(destination: DevicesView()) {
-                HStack {
-                    Text(NSLocalizedString("linked_devices", comment: "").lowercased())
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.textDim)
-                    Spacer()
-                    
-                    Text("[\(NSLocalizedString("manage_action", comment: ""))]")
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.accent)
-                }
-                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
-                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
+            navigationRow(
+                label: NSLocalizedString("linked_devices", comment: ""),
+                labelColor: Color.CT.textDim,
+                trailingText: "[\(NSLocalizedString("manage_action", comment: ""))]"
+            ) {
+                DevicesView()
             }
-            .buttonStyle(.plain)
             flatRowDivider()
 
             // social recovery
-            Button {
+            actionRow(
+                label: socialRecoveryService.isConfigured
+                    ? NSLocalizedString("social_recovery_row_active", comment: "")
+                    : NSLocalizedString("social_recovery_row_inactive", comment: ""),
+                labelColor: socialRecoveryService.isConfigured ? Color.CT.accent : Color.CT.textDim
+            ) {
                 showingSocialRecoverySetup = true
-            } label: {
-                HStack {
-                    Text(socialRecoveryService.isConfigured
-                         ? NSLocalizedString("social_recovery_row_active", comment: "")
-                         : NSLocalizedString("social_recovery_row_inactive", comment: ""))
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(socialRecoveryService.isConfigured ? Color.CT.accent : Color.CT.textDim)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.accent)
-                }
-                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
-                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
-            .buttonStyle(.plain)
             flatRowDivider()
 
             // sign out this device
-            Button {
+            actionRow(label: NSLocalizedString("logout_row", comment: "")) {
                 handleLogoutTap(allDevices: false)
-            } label: {
-                HStack {
-                    Text(NSLocalizedString("logout_row", comment: "").lowercased())
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.text)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.accent)
-                }
-                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
-                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -384,72 +373,16 @@ struct AccountSettingsView: View {
             sectionHeader(NSLocalizedString("backup_section", comment: ""))
             flatRowDivider()
 
-            Button { showingExportBackup = true } label: {
-                HStack {
-                    Text(NSLocalizedString("export_backup", comment: "").lowercased())
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.text)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.accent)
-                }
-                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
-                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .buttonStyle(.plain)
+            actionRow(label: NSLocalizedString("export_backup", comment: "")) { showingExportBackup = true }
             flatRowDivider()
 
-            Button { showingImportBackup = true } label: {
-                HStack {
-                    Text(NSLocalizedString("import_backup", comment: "").lowercased())
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.text)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.accent)
-                }
-                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
-                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .buttonStyle(.plain)
+            actionRow(label: NSLocalizedString("import_backup", comment: "")) { showingImportBackup = true }
             flatRowDivider()
 
-            Button { showingSendNearby = true } label: {
-                HStack {
-                    Text(NSLocalizedString("transfer_send_nearby", comment: "").lowercased())
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.text)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.accent)
-                }
-                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
-                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .buttonStyle(.plain)
+            actionRow(label: NSLocalizedString("transfer_send_nearby", comment: "")) { showingSendNearby = true }
             flatRowDivider()
 
-            Button { showingReceiveNearby = true } label: {
-                HStack {
-                    Text(NSLocalizedString("transfer_receive_nearby", comment: "").lowercased())
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.text)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.accent)
-                }
-                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
-                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .buttonStyle(.plain)
+            actionRow(label: NSLocalizedString("transfer_receive_nearby", comment: "")) { showingReceiveNearby = true }
         }
     }
 
@@ -461,43 +394,24 @@ struct AccountSettingsView: View {
             flatRowDivider()
 
             // sign out ALL devices
-            Button {
+            actionRow(
+                label: NSLocalizedString("logout_all_row", comment: ""),
+                labelColor: Color.CT.danger.opacity(AccountSettingsLayout.dangerPrimaryOpacity),
+                accessoryColor: Color.CT.danger.opacity(AccountSettingsLayout.dangerSecondaryOpacity)
+            ) {
                 handleLogoutTap(allDevices: true)
-            } label: {
-                HStack {
-                    Text(NSLocalizedString("logout_all_row", comment: "").lowercased())
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.danger.opacity(AccountSettingsLayout.dangerPrimaryOpacity))
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.danger.opacity(AccountSettingsLayout.dangerSecondaryOpacity))
-                }
-                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
-                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
-            .buttonStyle(.plain)
             flatRowDivider()
 
             // delete account
-            Button {
+            actionRow(
+                label: NSLocalizedString("delete_account_row", comment: ""),
+                labelColor: Color.CT.danger,
+                accessory: .text("[\(NSLocalizedString("delete_action", comment: ""))]"),
+                accessoryColor: Color.CT.danger.opacity(AccountSettingsLayout.dangerSecondaryOpacity)
+            ) {
                 showingDeleteConfirmation = true
-            } label: {
-                HStack {
-                    Text(NSLocalizedString("delete_account_row", comment: "").lowercased())
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.danger)
-                    Spacer()
-                    Text("[\(NSLocalizedString("delete_action", comment: ""))]")
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.danger.opacity(AccountSettingsLayout.dangerSecondaryOpacity))
-                }
-                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
-                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -554,6 +468,74 @@ struct AccountSettingsView: View {
         }
         .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
         .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
+    }
+
+    private enum RowAccessory {
+        case chevron
+        case text(String)
+    }
+
+    private func actionRow(
+        label: String,
+        labelColor: Color = Color.CT.text,
+        accessory: RowAccessory = .chevron,
+        accessoryColor: Color = Color.CT.accent,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(label.lowercased())
+                    .font(CTFont.regular(14))
+                    .foregroundStyle(labelColor)
+                Spacer()
+                rowAccessoryView(accessory, color: accessoryColor)
+            }
+            .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+            .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func navigationRow<Destination: View>(
+        label: String,
+        labelColor: Color = Color.CT.text,
+        trailingText: String? = nil,
+        @ViewBuilder destination: @escaping () -> Destination
+    ) -> some View {
+        NavigationLink(destination: destination()) {
+            HStack {
+                Text(label.lowercased())
+                    .font(CTFont.regular(14))
+                    .foregroundStyle(labelColor)
+                Spacer()
+                if let trailingText {
+                    Text(trailingText)
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent)
+                } else {
+                    rowAccessoryView(.chevron, color: Color.CT.accent)
+                }
+            }
+            .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+            .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func rowAccessoryView(_ accessory: RowAccessory, color: Color) -> some View {
+        switch accessory {
+        case .chevron:
+            Image(systemName: "chevron.right")
+                .font(CTFont.regular(13))
+                .foregroundStyle(color)
+        case .text(let value):
+            Text(value)
+                .font(CTFont.regular(13))
+                .foregroundStyle(color)
+        }
     }
 
     private func profileEditableRow(
@@ -618,13 +600,13 @@ struct AccountSettingsView: View {
             }
 
             if let err = errorMessage, !err.isEmpty {
-                Text("> [!] \(err)")
+                Text("\(err)")
                     .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.danger)
                     .padding(.horizontal, AccountSettingsLayout.sectionHintHorizontalPadding)
                     .padding(.bottom, AccountSettingsLayout.sectionHintBottomPadding)
             } else if !isEditing, let hint {
-                Text("> \(hint)")
+                Text("\(hint)")
                     .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, AccountSettingsLayout.sectionHintHorizontalPadding)
@@ -665,6 +647,7 @@ struct AccountSettingsView: View {
     }
 
     private func handleProfileEditActionTap() {
+        guard !viewModel.isSavingUsername else { return }
         if isEditingProfile {
             Task { await saveProfileEdits() }
         } else {

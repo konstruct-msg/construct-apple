@@ -26,6 +26,11 @@ struct Construct_DesktopApp: App {
         // Set UNUserNotificationCenterDelegate for macOS so foreground notifications
         // show as banners. On iOS this is handled by PushNotificationManager.
         UNUserNotificationCenter.current().delegate = LocalNotificationManager.shared
+
+        // Default to more compact text on macOS Desktop (user can change in Settings/Appearance)
+        if UserDefaults.standard.string(forKey: "textSize") == nil {
+            UserDefaults.standard.set("compact", forKey: "textSize")
+        }
     }
 
     var body: some Scene {
@@ -42,16 +47,28 @@ struct Construct_DesktopApp: App {
                 .task {
                     NSApp.appearance = NSAppearance(named: .darkAqua)
                     chatsViewModel.setContext(PersistenceController.shared.container.viewContext)
-                    // Start QUIC engine — macOS has no UDP 443 OS restriction (unlike iOS).
-                    do { try EngineAdapter.shared.start() } catch {
-                        Log.error("Engine start failed: \(error)", category: "Engine")
-                    }
+
+                    // Direct path (Strategy B): construct-core (UniFFI) + gRPC-Swift + VEIL from core.
+                    // Engine layer is paused for Desktop.
                     await VeilProxyManager.shared.startIfEnabled()
+                    await TransportRouter.shared.bootstrap()
+
                     if authViewModel.isAuthenticated,
                        let deviceId = KeychainManager.shared.loadDeviceID() {
                         await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
                     }
                     _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+
+                    // WebRTC warming is guarded; calls remain iOS-only for now.
+                    #if canImport(WebRTC)
+                    WebRTCRuntime.bootstrap()
+                    #endif
+
+                    // Touch STT early on Desktop too so WhisperModelManager runs reconcileModels()
+                    // (recovers models after app updates / reinstalls).
+                    #if canImport(WhisperKit)
+                    _ = VoiceTranscriptionService.shared.isAvailable
+                    #endif
                 }
         }
         .windowStyle(.hiddenTitleBar)

@@ -88,6 +88,11 @@
 
 // MARK: - Settings -> Account
 "display_name" = "Отображаемое имя";
+"local_name" = "Внутреннее имя";
+"local_name_unset" = "Не задано";
+"local_name_placeholder" = "Введите имя";
+"local_name_clear" = "Очистить";
+"local_name_footer" = "Видно только вам. Контакт об этом не узнает.";
 "show_my_qr_code" = "Показать мой QR-код";
 "share_contact" = "Поделиться контактом";
 "share_contact_footer" = "Поделитесь своим QR-кодом или ссылкой, чтобы другие могли добавить вас в контакты";
@@ -497,6 +502,7 @@
 // MARK: - Message States
 "uploading" = "Загрузка…";
 "loading" = "Загрузка...";
+"send_original_quality" = "Оригинал";
 "failed_to_load" = "Не удалось загрузить";
 "shared_profile" = "Профиль отправлен";
 
@@ -929,6 +935,11 @@
 /* Desktop general settings */
 "message_section" = "Сообщения";
 
+/* Voice messages */
+"voice_section_title" = "Голосовые сообщения";
+"voice_continuous_playback" = "Непрерывное воспроизведение";
+"voice_continuous_playback_footer" = "Когда подряд приходит несколько голосовых, они воспроизводятся друг за другом автоматически, пока не закончится последнее.";
+
 /* STT / Transcription */
 "stt_section_title" = "Транскрипция";
 "stt_auto_transcribe" = "Автотранскрипция голосовых";
@@ -949,6 +960,10 @@
 "stt_section_header" = "транскрипция";
 "stt_section_footer" = "Голосовые сообщения можно расшифровать локально. Модели качаются один раз и не покидают телефон.";
 "stt_retry_download" = "повторить";
+"stt_engine_label" = "Движок";
+"stt_engine_auto" = "Авто";
+"stt_engine_whisper" = "Whisper";
+"stt_engine_apple" = "Apple Speech";
 "account_discard_changes_title" = "Отменить изменения?";
 "account_discard_changes_message" = "Есть несохранённые изменения профиля. Выйти без сохранения?";
 "account_discard_changes_discard" = "Не сохранять";

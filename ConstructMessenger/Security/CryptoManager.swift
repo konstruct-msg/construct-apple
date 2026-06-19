@@ -24,18 +24,13 @@ class CryptoManager {
 
     // Two-phase init: _bootstrapCore holds ClassicCryptoCore before userId is known;
     // orchestratorCore is created in setLocalUserId() once userId is available.
+    // Works for both iOS and macOS Desktop (Strategy B: direct core path).
     // Internal access for InviteGenerator (needs to export keys)
     internal var orchestratorCore: OrchestratorCore?
 
     /// True once OrchestratorCore has been successfully created from Keychain keys.
-    /// On macOS the engine owns the OrchestratorCore; always reports initialized so auth
-    /// flows don't fall into the "keys missing" branch.
     var isInitialized: Bool {
-        #if os(macOS)
-        return true
-        #else
         return orchestratorCore != nil
-        #endif
     }
     private var _bootstrapCore: ClassicCryptoCore?
     private var _cachedUserId: String?
@@ -655,7 +650,6 @@ class CryptoManager {
     /// the remote party uses for the local device — see `cryptoLocalUserId`.
     func setLocalUserId(_ userId: String) {
         _cachedUserId = userId
-        #if !os(macOS)
         let cryptoId = cryptoLocalUserId
 
         if let existing = orchestratorCore {
@@ -711,7 +705,6 @@ class CryptoManager {
         } catch {
             Log.error("setLocalUserId: OrchestratorCore init failed: \(error)", category: "CryptoManager")
         }
-        #endif
     }
 
     /// One-time migration: sessions saved before the AD fix (build < 350) stored
@@ -734,6 +727,26 @@ class CryptoManager {
 
     func hasSession(for userId: String) -> Bool {
         return orchestratorCore?.hasSession(contactId: userId) ?? false
+    }
+
+    /// True once the OrchestratorCore exists. Before this, `hasSession(for:)` returns
+    /// false for *every* contact, so any "session missing → END_SESSION / re-init"
+    /// decision (e.g. prewarm) MUST be gated on this. Otherwise, during the startup
+    /// window — especially when auth is delayed by a token refresh — a healthy session
+    /// that simply hasn't been restored yet looks missing and gets destroyed.
+    var isCoreReady: Bool {
+        return orchestratorCore != nil
+    }
+
+    /// Restore-aware variant of `hasSession`. If the core currently has no session for
+    /// `userId`, it attempts a lazy import from Keychain before answering. This closes a
+    /// startup race where prewarm runs after the core is created but before
+    /// `restoreRecentSessions` has imported the on-disk session — which otherwise looks
+    /// like a missing session and triggers a destructive END_SESSION + fresh re-init,
+    /// discarding the ratchet and breaking decryption of the peer's in-flight messages.
+    func hasOrRestoreSession(for userId: String) -> Bool {
+        guard isCoreReady else { return false }
+        return restoreSession(for: userId)
     }
 
     /// Return a read-only health snapshot for the session with `userId`.

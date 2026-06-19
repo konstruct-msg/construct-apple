@@ -437,3 +437,93 @@ final class SessionInitFlowTests: XCTestCase {
                        "A different (fresh) message must not be blocked")
     }
 }
+
+// MARK: - Session epoch / "don't nuke a live session" oracle (Phase 0)
+
+/// Phase 0 (characterization) of SESSION_COORDINATOR_REFACTOR_SPEC.
+///
+/// Two things are pinned here against the REAL Rust orchestrator:
+///   1. What the orchestrator exposes that can serve as the per-contact "session epoch".
+///      Decision: epoch source is the Rust orchestrator. It has no monotonic 1:1 session
+///      counter (`epoch()` is MLS-only), but `SessionHealthReport.sessionId` is a stable
+///      per-session identity that CHANGES when a session is torn down and re-established.
+///      Phase 3 builds staleness detection on this token.
+///   2. The protocol reality that justifies the prewarm fix: once a live session is wiped
+///      and re-established, the peer's already-encrypted in-flight (old-ratchet) message can
+///      no longer be decrypted. Destroying a healthy session therefore loses data — which is
+///      exactly what the prewarm-vs-restore race did.
+final class SessionEpochCharacterizationTests: XCTestCase {
+
+    private func establish(_ initiator: SessionPeer, _ responder: SessionPeer) throws {
+        let initiatorBundle = try initiator.exportBundle()
+        let responderBundle = try responder.exportBundle()
+        try initiator.initSenderSession(to: responder.userId, bundle: responderBundle)
+        let ping = try initiator.encryptString("__session_ping_\(UUID().uuidString)__", to: responder.userId)
+        _ = try responder.initReceivingSession(
+            contactId: initiator.userId, senderBundle: initiatorBundle, firstMsg: ping
+        )
+    }
+
+    /// `sessionId` is stable for the lifetime of a session and changes on re-establishment.
+    /// This is the Rust-owned generation token Phase 3 will persist + compare.
+    func testSessionId_IsStableWithinSession_AndChangesAfterReinit() throws {
+        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
+        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+        let aliceBundle = try alice.exportBundle()
+
+        try establish(alice, bob)
+        let id1 = try XCTUnwrap(bob.core.getSessionHealth(contactId: alice.userId)?.sessionId,
+                                "health snapshot must exist right after establishment")
+        // Stable across repeated reads while the session is unchanged.
+        XCTAssertEqual(bob.core.getSessionHealth(contactId: alice.userId)?.sessionId, id1)
+
+        // Tear down + fresh re-establish (the END_SESSION recovery path).
+        _ = alice.core.removeSession(contactId: bob.userId)
+        _ = bob.core.removeSession(contactId: alice.userId)
+        try alice.initSenderSession(to: bob.userId, bundle: try bob.exportBundle())
+        let ping2 = try alice.encryptString("__session_ping_\(UUID().uuidString)__", to: bob.userId)
+        _ = try bob.initReceivingSession(contactId: alice.userId, senderBundle: aliceBundle, firstMsg: ping2)
+
+        let id2 = try XCTUnwrap(bob.core.getSessionHealth(contactId: alice.userId)?.sessionId)
+        XCTAssertNotEqual(id1, id2, "A re-established session must present a new sessionId (generation token)")
+    }
+
+    /// THE oracle for the prewarm fix: an in-flight message encrypted under the OLD session
+    /// cannot be decrypted after the session is wiped and re-established. Wiping a healthy
+    /// session therefore drops the peer's already-sent messages. If a future refactor ever
+    /// makes this decrypt succeed, the assumption underpinning the fix has changed — fail loud.
+    func testInFlightOldRatchetMessage_CannotDecryptUnderFreshSession() throws {
+        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
+        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+        let aliceBundle = try alice.exportBundle()
+
+        try establish(alice, bob)
+
+        // Alice sends a message under the LIVE session — captured, not yet delivered to Bob.
+        let inFlight = try alice.encryptString("in-flight under old ratchet", to: bob.userId)
+
+        // Bob's session is destroyed and rebuilt (mirrors the destructive prewarm/END_SESSION).
+        _ = alice.core.removeSession(contactId: bob.userId)
+        _ = bob.core.removeSession(contactId: alice.userId)
+        try alice.initSenderSession(to: bob.userId, bundle: try bob.exportBundle())
+        let ping2 = try alice.encryptString("__session_ping_\(UUID().uuidString)__", to: bob.userId)
+        _ = try bob.initReceivingSession(contactId: alice.userId, senderBundle: aliceBundle, firstMsg: ping2)
+
+        // The old-ratchet ciphertext is undecryptable under the fresh session.
+        XCTAssertThrowsError(try bob.decrypt(inFlight, from: alice.userId),
+                             "Fresh session must NOT be able to decrypt an old-session message")
+    }
+
+    /// Fresh session starts with zeroed message counters — pins current health semantics
+    /// (Phase 5 may surface these for adaptive timing; lock the baseline now).
+    func testFreshSession_HealthCountersStartLow() throws {
+        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
+        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+
+        try establish(alice, bob)
+        let health = try XCTUnwrap(bob.core.getSessionHealth(contactId: alice.userId))
+        // Bob received exactly the msgNum=0 ping to establish; it has sent nothing yet.
+        XCTAssertEqual(health.messagesSent, 0, "Responder has sent no messages on a fresh session")
+        XCTAssertEqual(health.skippedKeysCount, 0, "No skipped keys on a fresh session")
+    }
+}

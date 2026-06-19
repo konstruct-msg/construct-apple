@@ -7,6 +7,7 @@
 //  Detects media / file JSON and shows a thumbnail or icon instead of raw JSON.
 
 import SwiftUI
+import Combine
 
 struct ReplyPreviewContent: View {
     /// The content string — `replyToContent` stored on the replying message,
@@ -71,7 +72,7 @@ struct ReplyPreviewContent: View {
             } else {
                 Color.CT.bgMsg
                     .overlay(
-                        Text("[img]")
+                        Image(systemName: "photo")
                             .font(CTFont.regular(14))
                             .foregroundColor(Color.CT.textDim)
                             .lineLimit(1).fixedSize()
@@ -84,7 +85,7 @@ struct ReplyPreviewContent: View {
 
     private var mediaCaptionLabel: String {
         let caption = mediaContent?.caption ?? ""
-        if !caption.isEmpty { return "📷 \(caption)" }
+        if !caption.isEmpty { return caption }
         let mediaType = mediaContent?.media["mediaType"] as? String ?? ""
         if mediaType.hasPrefix("video/") {
             return NSLocalizedString("video", comment: "")
