@@ -98,6 +98,11 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                             CTSep(style: .thin)
+                            NavigationLink(destination: TranscriptionSettingsView()) {
+                                CTSettingsRow(label: NSLocalizedString("transcription", comment: "").uppercased(), icon: "mic", disclosure: true)
+                            }
+                            .buttonStyle(.plain)
+                            CTSep(style: .thin)
                             NavigationLink(destination: NotificationsSettingsView()) {
                                 CTSettingsRow(label: NSLocalizedString("notifications", comment: "").uppercased(), icon: "bell", disclosure: true)
                             }

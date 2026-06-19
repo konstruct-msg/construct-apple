@@ -163,6 +163,9 @@ final class ChunkedMessageReassembler {
         if let text = String(data: data, encoding: .utf8) {
             return text.isEmpty ? .invalid("empty plaintext") : .assembled(text: text, quoted: nil)
         }
+        if let profile = ProfileShareData.fromBinaryData(data) {
+            return .legacy("__PROFILE_BINARY__")
+        }
         return .invalid("non-decodable binary (\(data.count) bytes)")
     }
 
@@ -177,6 +180,10 @@ final class ChunkedMessageReassembler {
         // Session control strings, legacy plain-text messages
         if let text = String(data: data, encoding: .utf8) {
             return text.isEmpty ? .invalid("empty plaintext") : .legacy(text)
+        }
+        // Support binary profile share (new format, no JSON in payload)
+        if let profile = ProfileShareData.fromBinaryData(data) {
+            return .legacy("__PROFILE_BINARY__")
         }
         return .invalid("non-decodable binary (\(data.count) bytes)")
     }

@@ -960,6 +960,10 @@
 "stt_section_header" = "транскрипция";
 "stt_section_footer" = "Голосовые сообщения можно расшифровать локально. Модели качаются один раз и не покидают телефон.";
 "stt_retry_download" = "повторить";
+"stt_engine_label" = "Движок";
+"stt_engine_auto" = "Авто";
+"stt_engine_whisper" = "Whisper";
+"stt_engine_apple" = "Apple Speech";
 "account_discard_changes_title" = "Отменить изменения?";
 "account_discard_changes_message" = "Есть несохранённые изменения профиля. Выйти без сохранения?";
 "account_discard_changes_discard" = "Не сохранять";

@@ -13,19 +13,64 @@ public struct STTResult {
     public let duration: TimeInterval
 }
 
+/// User-selectable transcription engine.
+public enum TranscriptionEngine: String, CaseIterable {
+    case auto
+    case whisper
+    case apple
+
+    var displayName: String {
+        switch self {
+        case .auto: return NSLocalizedString("stt_engine_auto", comment: "")
+        case .whisper: return NSLocalizedString("stt_engine_whisper", comment: "")
+        case .apple: return NSLocalizedString("stt_engine_apple", comment: "")
+        }
+    }
+}
+
 // MARK: - VoiceTranscriptionService
 
-/// On-device voice message transcription via WhisperKit.
+/// On-device voice message transcription.
 /// Audio never leaves the device after E2EE decryption.
+/// Backed by WhisperKit (with fallback to system engines in future).
 @MainActor
 public final class VoiceTranscriptionService {
 
     public static let shared = VoiceTranscriptionService()
 
-    private let modelManager = WhisperModelManager.shared
+    fileprivate let modelManager = WhisperModelManager.shared
 
-    /// Preferred model for transcription. Falls back to any downloaded model.
+    /// Preferred model for transcription (used by Whisper backend). Falls back to any downloaded model.
     public var preferredModel: WhisperModel = .tiny
+
+    // MARK: - Engine selection
+
+    private var selectedEngine: TranscriptionEngine {
+        let raw = UserDefaults.standard.string(forKey: "stt_engine") ?? "auto"
+        return TranscriptionEngine(rawValue: raw) ?? .auto
+    }
+
+    /// Current active provider based on user preference + availability.
+    private var provider: TranscriptionProvider {
+        let engine = selectedEngine
+
+        #if canImport(Speech) && canImport(AVFoundation)
+        if #available(iOS 26, macOS 15, *) {
+            let apple = AppleSpeechProvider()
+            if apple.isAvailable && (engine == .apple || engine == .auto) {
+                return apple
+            }
+        }
+        #endif
+
+        // Whisper or fallback
+        if engine == .whisper || engine == .auto {
+            return WhisperProvider(service: self)
+        }
+
+        // If Apple explicitly chosen but unavailable, fall back to Whisper
+        return WhisperProvider(service: self)
+    }
 
     private init() {}
 
@@ -41,7 +86,7 @@ public final class VoiceTranscriptionService {
         message: Message,
         context: NSManagedObjectContext
     ) async throws {
-        let result = try await transcribeData(audioData)
+        let result = try await provider.transcribe(audioData: audioData)
         await MainActor.run {
             message.transcriptText = result.text
             message.transcriptLanguage = result.language
@@ -50,14 +95,49 @@ public final class VoiceTranscriptionService {
         }
     }
 
-    /// Returns true if a model is available to run transcription.
+    /// Returns true if a model/provider is available to run transcription.
     public var isAvailable: Bool {
-        WhisperModel.allCases.contains { modelManager.isDownloaded($0) }
+        provider.isAvailable
     }
 
-    // MARK: - Private transcription logic
+    // MARK: - Private helpers (Whisper-specific for now)
 
-    private func transcribeData(_ audioData: Data) async throws -> STTResult {
+    private func resolveModel() -> WhisperModel? {
+        // Respect user's choice from settings if that model is available.
+        let preferredRaw = UserDefaults.standard.string(forKey: "stt_preferred_model") ?? WhisperModel.tiny.rawValue
+        let chosen = WhisperModel(rawValue: preferredRaw) ?? .tiny
+        if modelManager.isDownloaded(chosen) { return chosen }
+        return WhisperModel.allCases.first { modelManager.isDownloaded($0) }
+    }
+}
+
+// MARK: - Current (WhisperKit) implementation of the provider protocol
+
+/// Thin adapter so the rest of the code talks to TranscriptionProvider instead of
+/// concrete WhisperKit details. This is the starting point for multi-backend support.
+private struct WhisperProvider: TranscriptionProvider {
+    private weak var service: VoiceTranscriptionService?
+
+    init(service: VoiceTranscriptionService) {
+        self.service = service
+    }
+
+    var isAvailable: Bool {
+        service?.modelManager.isAvailable ?? false
+    }
+
+    func transcribe(audioData: Data) async throws -> STTResult {
+        guard let service else {
+            throw TranscriptionError.engineUnavailable
+        }
+        return try await service.performWhisperTranscription(audioData: audioData)
+    }
+}
+
+extension VoiceTranscriptionService {
+    /// Extracted old transcribeData logic so the provider adapter can call it.
+    /// (Temporary during the abstraction rollout — will be cleaned when Apple provider lands.)
+    fileprivate func performWhisperTranscription(audioData: Data) async throws -> STTResult {
         #if canImport(WhisperKit)
         let model = resolveModel()
         guard let model else {
@@ -73,12 +153,9 @@ public final class VoiceTranscriptionService {
         defer { try? FileManager.default.removeItem(at: tempURL) }
 
         let translateEnabled = UserDefaults.standard.bool(forKey: "stt_translate")
-        // Default: auto-detect (nil). User can pin a source language for better accuracy.
         let storedLanguage = UserDefaults.standard.string(forKey: "stt_language") ?? "auto"
         let language: String? = (storedLanguage.isEmpty || storedLanguage == "auto") ? nil : storedLanguage
-        // "Translate" mode always outputs English. Guard: if a non-English source language is
-        // explicitly pinned, force transcribe — translating from a known non-English source is
-        // only meaningful when the user really wants English output (toggle ON + language auto/en).
+
         let effectiveTranslate = translateEnabled && (language == nil || language == "en")
         let task: DecodingTask = effectiveTranslate ? .translate : .transcribe
         let options = DecodingOptions(task: task, language: language)
@@ -94,11 +171,6 @@ public final class VoiceTranscriptionService {
         #else
         throw TranscriptionError.engineUnavailable
         #endif
-    }
-
-    private func resolveModel() -> WhisperModel? {
-        if modelManager.isDownloaded(preferredModel) { return preferredModel }
-        return WhisperModel.allCases.first { modelManager.isDownloaded($0) }
     }
 }
 

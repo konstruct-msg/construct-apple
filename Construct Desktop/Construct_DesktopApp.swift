@@ -63,6 +63,12 @@ struct Construct_DesktopApp: App {
                     #if canImport(WebRTC)
                     WebRTCRuntime.bootstrap()
                     #endif
+
+                    // Touch STT early on Desktop too so WhisperModelManager runs reconcileModels()
+                    // (recovers models after app updates / reinstalls).
+                    #if canImport(WhisperKit)
+                    _ = VoiceTranscriptionService.shared.isAvailable
+                    #endif
                 }
         }
         .windowStyle(.hiddenTitleBar)

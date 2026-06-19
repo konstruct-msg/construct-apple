@@ -497,6 +497,20 @@ final class MessageRouter {
                     continue
                 }
 
+                // Profile share: support binary wire (no JSON) + legacy. Detect on raw Data here.
+                if let profile = ProfileShareData.fromBinaryData(plaintext) {
+                    ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+                    continue
+                } else if let str = String(data: plaintext, encoding: .utf8),
+                          let profile = ProfileSharingManager.shared.parseProfileMessage(str) {
+                    ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+                    continue
+                }
+
                 switch chunkReassembler.process(data: plaintext) {
                 case .assembled(let text, let quoted):
                     handleResolvedMessage(text, quotedMessage: quoted, for: message, from: otherUserId, chat: chat, in: context)
@@ -961,7 +975,8 @@ final class MessageRouter {
             }
 
             if type == "profile" {
-                if let profileData = ProfileSharingManager.shared.parseProfileMessage(decryptedContent) {
+                if let profileData = ProfileSharingManager.shared.parseProfileMessage(decryptedContent) ??
+                                     (decryptedContent.data(using: .utf8).flatMap { ProfileSharingManager.shared.parseProfileMessage(from: $0) }) {
                     Log.info("Received profile message from \(userId)", category: "MessageRouter")
                     ProfileSharingManager.shared.handleProfileMessage(profileData, from: userId, in: context)
                     return true

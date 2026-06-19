@@ -24,6 +24,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         UserDefaults.standard.register(defaults: [
             "pushNotificationsEnabled": true,
             "backgroundFetchEnabled": true,
+            "stt_auto_transcribe": false,
+            "stt_engine": "auto",
         ])
 
         if PreviewDetector.isRunningInPreview {
@@ -55,6 +57,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ = VoIPPushManager.shared
         VoIPPushManager.shared.startIfEnabled()
         _ = CallManager.shared
+
+        // Touch STT service early. This forces WhisperModelManager init which now calls
+        // reconcileModels(). This recovers downloaded models that would otherwise look
+        // "missing" after an app update (stale absolute paths in UserDefaults, changed
+        // container layout, etc.).
+        _ = VoiceTranscriptionService.shared.isAvailable
 
         // NOTE: NetworkReachabilityManager and MessageQueueManager will be initialized
         // lazily when first accessed. This avoids potential circular dependencies

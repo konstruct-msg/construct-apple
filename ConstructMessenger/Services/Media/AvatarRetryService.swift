@@ -72,7 +72,7 @@ final class AvatarRetryService {
         }
 
         guard let data = json.data(using: .utf8),
-              let profileData = try? JSONDecoder().decode(ProfileShareData.self, from: data),
+              let profileData = ProfileShareData.fromBinaryData(data) ?? (try? JSONDecoder().decode(ProfileShareData.self, from: data)),
               let mediaId  = profileData.avatarMediaId,
               let mediaUrl = profileData.avatarMediaUrl,
               let mediaKey = profileData.avatarMediaKey else {

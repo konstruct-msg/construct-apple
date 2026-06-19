@@ -950,6 +950,10 @@
 "stt_section_header" = "transcription";
 "stt_section_footer" = "Voice messages can be transcribed on-device. Models are downloaded once and never leave the phone.";
 "stt_retry_download" = "retry";
+"stt_engine_label" = "Engine";
+"stt_engine_auto" = "Auto";
+"stt_engine_whisper" = "Whisper";
+"stt_engine_apple" = "Apple Speech";
 "account_discard_changes_title" = "Discard changes?";
 "account_discard_changes_message" = "You have unsaved profile changes. Leave without saving?";
 "account_discard_changes_discard" = "Discard";

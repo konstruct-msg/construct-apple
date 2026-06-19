@@ -108,8 +108,8 @@ private extension View {
         self
             .frame(height: 52)
             .background(Color.CT.outMsgBg)
-            .clipShape(Capsule())
-            .overlay(Capsule().strokeBorder(Color.CT.accent.opacity(0.25), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.CT.accent.opacity(0.25), lineWidth: 1))
             .padding(.horizontal, 8)
     }
 }
