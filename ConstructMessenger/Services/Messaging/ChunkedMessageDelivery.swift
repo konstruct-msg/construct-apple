@@ -41,9 +41,9 @@ final class ChunkedMessageSender {
             )
             onWirePayloadEncoded?(chunkMessageId, encryptedPayload)
 
-            // Build sealed inner bytes if STEALTH is active and recipient identity key is known
+            // Build sealed inner bytes if policy says we should use stealth and we have the key.
             var sealedInner: Data? = nil
-            if let recipientIK = recipientIdentityKey {
+            if let recipientIK = recipientIdentityKey, StealthPolicy.shared.shouldUseSealedSender() {
                 do {
                     sealedInner = try await StealthSenderService.buildSealedInner(
                         recipientUserId: recipientId,
@@ -157,6 +157,9 @@ final class ChunkedMessageReassembler {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
+            if case .edit(let editMsg) = content.content {
+                return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: try? editMsg.newMedia?.serializedData())
+            }
             let (text, quoted) = extract(content)
             return .assembled(text: text, quoted: quoted)
         }
@@ -174,6 +177,9 @@ final class ChunkedMessageReassembler {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
+            if case .edit(let editMsg) = content.content {
+                return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: try? editMsg.newMedia?.serializedData())
+            }
             let (text, quoted) = extract(content)
             return .assembled(text: text, quoted: quoted)
         }
@@ -286,6 +292,8 @@ enum ChunkedMessageResult {
     case legacy(String)
     case incomplete
     case invalid(String)
+    /// Modern edit inside MessageContent.
+    case edit(targetMessageID: String, newText: String?, newMedia: Data?)
 }
 
 enum ChunkedMessageCodec {

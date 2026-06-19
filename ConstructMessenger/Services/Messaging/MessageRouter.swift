@@ -516,6 +516,20 @@ final class MessageRouter {
                     handleResolvedMessage(text, quotedMessage: quoted, for: message, from: otherUserId, chat: chat, in: context)
                 case .legacy(let text):
                     handleResolvedMessage(text, quotedMessage: nil, for: message, from: otherUserId, chat: chat, in: context)
+                case .edit(let targetMessageID, let newText, let newMedia):
+                    // Modern edit from MessageContent.edit
+                    if let newText = newText {
+                        let fetch = Message.fetchRequest()
+                        fetch.predicate = NSPredicate(format: "id == %@", targetMessageID)
+                        if let original = try? context.fetch(fetch).first {
+                            original.decryptedContent = newText
+                            original.isEdited = true
+                            original.editedAt = Date()
+                        }
+                    }
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+                    continue
                 case .incomplete:
                     Log.debug("Chunked message incomplete, waiting for more chunks", category: "MessageRouter")
                 case .invalid(let reason):
@@ -636,7 +650,7 @@ final class MessageRouter {
         // even when stealth mode is active. Fires fire-and-forget; non-fatal if it fails.
         let msgIdForReceipt = message.id
         let identityKeyForReceipt: Data? = {
-            guard UserDefaults.standard.bool(forKey: "stealth_mode_enabled") else { return nil }
+            guard StealthPolicy.shared.shouldUseSealedSender() else { return nil }
             let req = User.fetchRequest()
             req.predicate = NSPredicate(format: "id == %@", otherUserId)
             req.fetchLimit = 1

@@ -356,7 +356,7 @@ final class ChatSendCoordinator {
                         recipientId: recipientId,
                         conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: message.timestamp,
-                        recipientIdentityKey: UserDefaults.standard.bool(forKey: "stealth_mode_enabled")
+                        recipientIdentityKey: StealthPolicy.shared.shouldUseSealedSender()
                             ? self.sessionManager.cachedIdentityKey
                             : nil
                     )
@@ -659,19 +659,40 @@ final class ChatSendCoordinator {
                     plaintext = Data(newText.utf8)
                     localContent = newText
                 }
-                let wirePayload = try OutboundSessionService.shared.encryptOutgoing(
-                    plaintext: plaintext,
-                    messageId: message.id,
-                    recipientId: recipientId
-                )
-                let response = try await MessagingServiceClient.shared.editMessage(
-                    messageId: message.id,
+                // Use modern edit (MessageContent.edit) so it goes through the normal send path
+                // and can use stealth when enabled.
+                var editMsg = Shared_Proto_Messaging_V1_EditMessage()
+                editMsg.targetMessageID = message.id
+                if let mediaEdit {
+                    editMsg.newText = newText
+                } else {
+                    editMsg.newText = newText
+                }
+                var content = Shared_Proto_Messaging_V1_MessageContent()
+                content.edit = editMsg
+                guard let editPayload = try? content.serializedData() else {
+                    ErrorRouter.shared.report(.unknown("Failed to serialize edit"))
+                    return
+                }
+
+                let editActionId = UUID().uuidString.lowercased()
+                let plan = ChunkedMessageSender.shared.buildPlan(plaintext: editPayload, messageId: UUID(uuidString: editActionId) ?? UUID())
+
+                let recipientIdentityKey: Data? = StealthPolicy.shared.shouldUseSealedSender()
+                    ? await fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: viewContext)
+                    : nil
+
+                let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
+                    plan: plan,
+                    baseMessageId: editActionId,
+                    senderId: currentUserId,
+                    recipientId: recipientId,
                     conversationId: conversationId,
-                    newEncryptedContent: wirePayload,
-                    recipientUserId: recipientId
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    recipientIdentityKey: recipientIdentityKey
                 )
-                guard response.success else { return }
-                let editedDate = Date(timeIntervalSince1970: TimeInterval(response.editedAt))
+
+                let editedDate = Date()
                 persistenceService.updateMessageContent(
                     messageId: message.id,
                     newContent: localContent,
@@ -683,6 +704,18 @@ final class ChatSendCoordinator {
             } catch {
                 ErrorRouter.shared.report(.unknown(String(format: NSLocalizedString("edit_message_failed", comment: ""), error.localizedDescription)))
             }
+        }
+    }
+
+    private func fetchRecipientIdentityKeyForEdit(recipientId: String, context: NSManagedObjectContext) async -> Data? {
+        let req = User.fetchRequest()
+        req.predicate = NSPredicate(format: "id == %@", recipientId)
+        req.fetchLimit = 1
+        do {
+            return try context.fetch(req).first?.knownIdentityKey
+        } catch {
+            Log.error("Failed to load identity key for stealth edit to \(recipientId.prefix(8))…: \(error)", category: "ChatSendCoordinator")
+            return nil
         }
     }
 

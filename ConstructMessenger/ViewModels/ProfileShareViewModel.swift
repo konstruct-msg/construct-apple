@@ -113,7 +113,9 @@ class ProfileShareViewModel {
             Log.debug("   avatarMediaId: \(avatarMediaId ?? "nil")", category: "ProfileShare")
 
             // Stealth support: pass recipient identity key so SealedInner is built when enabled.
-            let recipientIdentityKey: Data? = UserDefaults.standard.bool(forKey: "stealth_mode_enabled") ? await fetchRecipientIdentityKey(userId: userId) : nil
+            let recipientIdentityKey: Data? = StealthPolicy.shared.shouldUseSealedSender()
+                ? await fetchRecipientIdentityKey(userId: userId)
+                : nil
 
             // Encrypt and send via E2E message (binary payload)
             do {

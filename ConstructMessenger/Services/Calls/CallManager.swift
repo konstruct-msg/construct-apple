@@ -920,6 +920,11 @@ final class CallManager: CallUIManaging {
             return
         }
         let messageId = UUID().uuidString
+        // Call signaling should respect stealth policy for privacy (who calls whom).
+        // However, call signals currently go through the Rust core event path
+        // (not the Swift SealedInner path). Full integration with StealthPolicy
+        // is pending (see engine AnonymityLevel support and overall stealth scope).
+        // For now we send the signal; decision documented in stealth decisions.
         let event = CfeIncomingEvent.outgoingCallSignal(
             contactId: peerUserId,
             messageId: messageId,

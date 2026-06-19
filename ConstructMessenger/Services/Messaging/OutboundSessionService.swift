@@ -96,7 +96,10 @@ final class OutboundSessionService {
         )
     }
 
-    /// Encrypts a session control message (ping, END_SESSION, etc.) through the orchestrator.
+    /// Encrypts a session control message (ping, END_SESSION, sessionResetInit, etc.).
+    ///
+    /// These are deliberately sent WITHOUT stealth (even if global stealth is enabled).
+    /// They are protocol-level, not user content. See stealth scope decisions.
     func encryptSessionControl(
         plaintext: String,
         messageId: String,
@@ -114,6 +117,10 @@ final class OutboundSessionService {
 
     /// Sends an encrypted heartbeat to `contactId` (content_type=13).
     /// A decrypt failure on the peer side triggers proactive session healing.
+    ///
+    /// IMPORTANT: Heartbeats deliberately never use Stealth/Sealed Sender,
+    /// even when global stealth mode is enabled (including per-stream).
+    /// See decision: decisions/stealth-heartbeat-exclusion.md
     func sendSessionHeartbeat(to contactId: String) async {
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
         guard CryptoManager.shared.hasSession(for: contactId) else {
@@ -122,6 +129,8 @@ final class OutboundSessionService {
         }
         let heartbeatId = UUID().uuidString.lowercased()
         do {
+            // Heartbeats intentionally do **not** use sealed sender.
+            // We never pass recipientIdentityKey here.
             let payload = try encryptOutgoing(
                 plaintext: Data("__heartbeat__".utf8),
                 messageId: heartbeatId,
@@ -183,7 +192,7 @@ final class OutboundSessionService {
                 contentType: 14
             )
             var sealedInner: Data? = nil
-            if let identityKey = recipientIdentityKey {
+            if let identityKey = recipientIdentityKey, StealthPolicy.shared.shouldUseSealedSender() {
                 do {
                     sealedInner = try await StealthSenderService.buildSealedInner(
                         recipientUserId: contactId,

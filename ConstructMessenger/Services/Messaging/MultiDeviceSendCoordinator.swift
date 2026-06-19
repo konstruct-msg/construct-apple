@@ -104,6 +104,10 @@ final class MultiDeviceSendCoordinator {
     /// Receiving devices show this as an outgoing bubble (sent by the local user)
     /// in the conversation with `originalRecipientUserId`.
     ///
+    /// IMPORTANT: Multi-device internal traffic (SenderSync, fan-out to own devices,
+    /// broadcast resets) deliberately does NOT use Stealth/Sealed Sender.
+    /// Server already knows this is the same user account. See stealth scope decisions.
+    ///
     /// Errors are logged and swallowed — SenderSync is best-effort.
     func sendSenderSync(
         plaintext: Data,
@@ -191,6 +195,7 @@ final class MultiDeviceSendCoordinator {
                 )
             }
 
+            // Explicitly never use stealth for multi-device traffic (see comment above).
             let encPayload = try OutboundSessionService.shared.encryptOutgoing(
                 plaintext: plaintext,
                 messageId: messageId,
@@ -248,6 +253,8 @@ final class MultiDeviceSendCoordinator {
             let syncContactId = "\(myId):\(device.deviceId)"
             do {
                 guard CryptoManager.shared.hasSession(for: syncContactId) else { continue }
+                // Explicitly no stealth for device-to-device session reset notifications
+                // (internal to the user, see multi-device exclusion in stealth scope).
                 let payload = try OutboundSessionService.shared.encryptSessionControl(
                     plaintext: resetPayload,
                     messageId: msgId,
