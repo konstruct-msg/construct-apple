@@ -9,6 +9,7 @@ import AVFoundation
 import AVKit
 import QuickLook
 import SwiftUI
+import Combine
 
 #if canImport(UIKit)
 import UIKit

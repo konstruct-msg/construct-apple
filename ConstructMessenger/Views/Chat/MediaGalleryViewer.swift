@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import Combine
 #if os(iOS)
 import Photos
 #else

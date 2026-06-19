@@ -29,10 +29,17 @@ struct ExportBackupView: View {
             CTNavBar(
                 title: NSLocalizedString("backup_export_title", comment: ""),
                 showBack: step > 0,
-                trailingSystemImage: "xmark",
-                backAction: { step -= 1 },
-                trailingAction: { dismiss() }
-            )
+                backAction: { step -= 1 }
+            ) {
+                EmptyView()
+            } trailing: {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18))
+                        .foregroundColor(Color.CT.accent)
+                }
+                .buttonStyle(.plain)
+            }
 
             switch step {
             case 0:  warningStep
@@ -109,29 +116,23 @@ struct ExportBackupView: View {
                     .padding(.top, 4)
                     .padding(.bottom, 16)
 
-                // 4×3 word grid
-                VStack(spacing: 2) {
-                    ForEach(0 ..< 4, id: \.self) { row in
-                        HStack(spacing: 2) {
-                            ForEach(0 ..< 3, id: \.self) { col in
-                                let idx = row * 3 + col
-                                if idx < mnemonicWords.count {
-                                    HStack(spacing: 4) {
-                                        Text("\(idx + 1).")
-                                            .font(CTFont.regular(11))
-                                            .foregroundStyle(Color.CT.textDim)
-                                            .frame(width: 20, alignment: .trailing)
-                                        Text(mnemonicWords[idx])
-                                            .font(CTFont.bold(13))
-                                            .foregroundStyle(Color.CT.text)
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.vertical, 10)
-                                    .padding(.horizontal, 10)
-                                    .background(Color.CT.noise.opacity(0.15))
-                                }
-                            }
+                // Safe 12-word grid using snapshot + private indexed helper
+                let words = mnemonicWords
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 3), spacing: 2) {
+                    forEachIndexed(words) { idx, word in
+                        HStack(spacing: 4) {
+                            Text("\(idx + 1).")
+                                .font(CTFont.regular(11))
+                                .foregroundStyle(Color.CT.textDim)
+                                .frame(width: 20, alignment: .trailing)
+                            Text(word)
+                                .font(CTFont.bold(13))
+                                .foregroundStyle(Color.CT.text)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 10)
+                        .background(Color.CT.noise.opacity(0.15))
                     }
                 }
                 .padding(.horizontal, 20)
@@ -282,6 +283,19 @@ struct ExportBackupView: View {
                 errorMessage = error.localizedDescription
             }
             isWorking = false
+        }
+    }
+
+    // Small private helper for safe ForEach over arrays that may be @State / @Observable.
+    // Captures a snapshot to protect against length changes during view updates.
+    @ViewBuilder
+    private func forEachIndexed<T, Content: View>(
+        _ items: [T],
+        @ViewBuilder content: @escaping (Int, T) -> Content
+    ) -> some View {
+        let snapshot = items
+        ForEach(Array(snapshot.enumerated()), id: \.offset) { pair in
+            content(pair.offset, pair.element)
         }
     }
 }

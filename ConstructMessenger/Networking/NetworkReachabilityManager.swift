@@ -68,10 +68,8 @@ class NetworkReachabilityManager {
             return
         }
         
-        // Check if Network framework is available (should always be on iOS, but safety check)
-        #if !os(iOS)
-        Log.info("Network framework may not be available on this platform", category: "NetworkReachability")
-        #endif
+        // Network framework (NWPathMonitor) is used on both iOS and macOS.
+        // On macOS Desktop this provides interface/reachability info for transport decisions.
         
         // Create monitor and queue only when needed (not in preview)
         // Wrap in do-catch for safety, though NWPathMonitor() shouldn't throw

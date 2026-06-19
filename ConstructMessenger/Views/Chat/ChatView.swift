@@ -8,6 +8,7 @@
 import SwiftUI
 import CoreData
 import UniformTypeIdentifiers
+import Combine
 
 struct ChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -57,12 +58,10 @@ struct ChatView: View {
     var body: some View {
         // Compute once per body pass to avoid repeated full-array filtering in render path.
         let renderedMessages = filteredMessages
-        VStack(spacing: 0) {
-            chatNavBar
 
-            // Flood-burst banner — shown when this chat's sender is burst-suppressed
-            floodBurstBanner
-            
+        // Floating capsule glass panels (top nav + bottom input) over scroll, following Apple's capsulization
+        ZStack {
+            // Message list — base layer, scrolls underneath the floating capsules
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -142,8 +141,12 @@ struct ChatView: View {
                             }
                         }
                     }
-                    .padding()
+                    // Space for floating capsules above and below
+                    .padding(.top, 70)
+                    .padding(.bottom, 110)
+                    .padding(.horizontal)
                 }
+                .background(Color.CT.bg) // base under glass
                 .defaultScrollAnchor(.bottom)
                 .scrollDismissesKeyboard(.interactively)
                 .environment(\.containerWidth, containerWidth)
@@ -242,10 +245,31 @@ struct ChatView: View {
                     }
                 }
             }
-            
-            deleteButtonBar
-            
-            messageInputView
+
+            // === Floating capsule glass panels (Apple capsulization) ===
+            // Top: nav + banners (capsule style)
+            VStack(spacing: 8) {
+                chatNavBar
+                    .padding(.horizontal, 8)
+                    .padding(.top, 4)
+
+                floodBurstBanner
+
+                deleteButtonBar
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+
+            // Bottom: separate floating glass capsules for attachment + text input
+            VStack {
+                Spacer(minLength: 0)
+
+                messageInputView
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
+            }
+            .frame(maxHeight: .infinity, alignment: .bottom)
         }
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
@@ -353,7 +377,7 @@ struct ChatView: View {
     }
     
     private var messageInputView: some View {
-        MessageInputView(
+        IOSMessageInputView(
             text: $messageText,
             droppedImages: $chatDropImages,
             isSending: viewModel.isSending,
@@ -420,7 +444,7 @@ struct ChatView: View {
                         .foregroundColor(Color.CT.accent)
                 }
                 .padding(.trailing, 16)
-                .padding(.bottom, 160) // Above message input
+                .padding(.bottom, 100) // Above floating capsule input
                 .transition(.move(edge: .trailing).combined(with: .opacity))
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: scrollManager.shouldShowScrollToBottomButton)
             }

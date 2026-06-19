@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 enum MessageBubbleContentParsing {
     static func parseProfileMessage(_ content: String) -> ProfileShareData? {

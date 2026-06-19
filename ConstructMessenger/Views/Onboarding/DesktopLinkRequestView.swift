@@ -54,6 +54,8 @@ struct DesktopLinkRequestView: View {
             guard completed else { return }
             let userId = KeychainManager.shared.loadUserID() ?? ""
             authViewModel.finalizeDeviceRegistration(userId: userId, username: nil)
+            // Ensure direct core (OrchestratorCore) is initialized for Desktop (Strategy B)
+            CryptoManager.shared.setLocalUserId(userId)
             showHistorySyncOffer = true
         }
         // MARK: History sync offer

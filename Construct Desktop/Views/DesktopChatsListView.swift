@@ -31,7 +31,7 @@ struct DesktopChatsListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            navBar
+//            navBar
             searchBar
             chatList
         }
@@ -66,11 +66,10 @@ struct DesktopChatsListView: View {
     // MARK: - Search Bar
 
     private var searchBar: some View {
-        TextField("", text: $searchQuery, prompt: Text(LocalizedStringKey("search_"))
-            .font(CTFont.regular(13))
+        TextField("", text: $searchQuery, prompt: Text(LocalizedStringKey("Search..."))
             .foregroundColor(Color.CT.textDim))
             .textFieldStyle(.plain)
-            .font(CTFont.regular(13))
+            .font(CTFont.regular(12))
             .foregroundColor(Color.CT.text)
             .autocorrectionDisabled()
             .tint(Color.CT.accent)
@@ -88,8 +87,8 @@ struct DesktopChatsListView: View {
                     .padding(.trailing, 8)
                 }
             }
-            .background(Color.CT.bgMsg, in: RoundedRectangle(cornerRadius: 8))
-            .overlay { RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 1) }
+            .background(Color.CT.bgMsg, in: Capsule())
+            .overlay { Capsule().stroke(Color.CT.noise, lineWidth: 1) }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(Color.CT.bg)

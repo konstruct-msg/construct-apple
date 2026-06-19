@@ -54,7 +54,11 @@ struct DiagnosticsView: View {
                         title: NSLocalizedString("diagnostics", comment: ""),
                         showBack: true,
                         backAction: { dismiss() }
-                    )
+                    ) {
+                        EmptyView()
+                    } trailing: {
+                        EmptyView()
+                    }
                 }
 
                 // MARK: - Push Notifications

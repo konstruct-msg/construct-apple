@@ -88,7 +88,7 @@ class ChatViewModel {
         sessionManager.fetchRecipientPublicKey()
     }
 
-    // MARK: - Connection + engine subscribers
+    // MARK: - Connection subscribers
 
     private func setupSubscribers() {
         let connTask = Task { [weak self] in
@@ -113,20 +113,6 @@ class ChatViewModel {
             }
         }
         observationTasks.append(connTask)
-
-        let contactId = chat.otherUser?.id ?? ""
-        guard !contactId.isEmpty else { return }
-        let engineSessionTask = Task { [weak self] in
-            let notifications = NotificationCenter.default.notifications(named: .engineSessionEstablished)
-            for await notification in notifications {
-                guard !Task.isCancelled, let self else { return }
-                guard let peerId = notification.userInfo?["contactId"] as? String,
-                      peerId == contactId else { continue }
-                self.isSessionReady = true
-                Log.info("Engine session established for \(peerId.prefix(8))…", category: "ChatViewModel")
-            }
-        }
-        observationTasks.append(engineSessionTask)
     }
 
     // MARK: - Send

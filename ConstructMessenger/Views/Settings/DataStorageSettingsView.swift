@@ -75,7 +75,11 @@ struct DataStorageSettingsView: View {
                         title: NSLocalizedString("data_and_storage", comment: ""),
                         showBack: true,
                         backAction: { dismiss() }
-                    )
+                    ) {
+                        EmptyView()
+                    } trailing: {
+                        EmptyView()
+                    }
                 }
 
                 VStack(spacing: 0) {
@@ -190,9 +194,11 @@ struct DataStorageSettingsView: View {
                             }
 
                             // Tick labels under the slider
+                            let quotas = quotaOptions
                             HStack(spacing: 0) {
-                                ForEach(quotaOptions.indices, id: \.self) { i in
-                                    Text(quotaOptions[i].label)
+                                ForEach(Array(quotas.enumerated()), id: \.offset) { pair in
+                                    let i = pair.offset
+                                    Text(pair.element.label)
                                         .font(CTFont.regular(DataStorageSettingsLayout.quotaTickFontSize))
                                         .foregroundStyle(
                                             selectedQuotaIndex == i
@@ -213,21 +219,23 @@ struct DataStorageSettingsView: View {
                     // MARK: Auto-eviction
                     CTSettingsSectionHeader(title: NSLocalizedString("storage_auto_clear", comment: ""))
                     CTSectionGroup {
-                        ForEach(evictOptions.indices, id: \.self) { i in
+                        let evicts = evictOptions
+                        ForEach(Array(evicts.enumerated()), id: \.offset) { pair in
+                            let i = pair.offset
                             if i > 0 { CTSep(style: .thin) }
                             Button {
-                                evictAfterDays = evictOptions[i].days
+                                evictAfterDays = pair.element.days
                             } label: {
                                 HStack(spacing: DataStorageSettingsLayout.rowContentSpacing) {
-                                    Image(systemName: evictAfterDays == evictOptions[i].days
+                                    Image(systemName: evictAfterDays == pair.element.days
                                           ? "checkmark.circle.fill" : "circle")
                                         .font(CTFont.regular(DataStorageSettingsLayout.autoEvictionCheckIconSize))
                                         .foregroundStyle(
-                                            evictAfterDays == evictOptions[i].days
+                                            evictAfterDays == pair.element.days
                                                 ? Color.CT.accent : Color.CT.textDim
                                         )
                                         .frame(width: SettingsLayout.rowIconMinWidth)
-                                    Text(evictOptions[i].label.uppercased())
+                                    Text(pair.element.label.uppercased())
                                         .font(CTFont.regular(13))
                                         .foregroundStyle(Color.CT.text)
                                         .tracking(DataStorageSettingsLayout.sectionTitleTracking)

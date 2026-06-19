@@ -29,7 +29,11 @@ struct BackgroundFetchSettingsView: View {
                 title: NSLocalizedString("background_fetch", comment: ""),
                 showBack: true,
                 backAction: { dismiss() }
-            )
+            ) {
+                EmptyView()
+            } trailing: {
+                EmptyView()
+            }
             ScrollView {
                 LazyVStack(spacing: 0) {
 

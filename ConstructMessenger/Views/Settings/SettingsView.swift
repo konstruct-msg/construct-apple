@@ -25,12 +25,19 @@ struct SettingsView: View {
         NavigationStack(path: $navigationPath) {
             VStack(spacing: SettingsRootLayout.rootSpacing) {
                 
-                CTNavBar(title: NSLocalizedString("settings", comment: ""))
-                
+                // Section title as plain left-aligned label (not a capsule)
+                HStack {
+                    Text(NSLocalizedString("settings", comment: "").uppercased())
+                        .font(CTFont.bold(14))
+                        .foregroundColor(Color.CT.text)
+                        .tracking(4)
+                    Spacer()
+                }
+                .padding(.horizontal, CTLayout.edgePad)
+                .frame(height: CTLayout.navBarHeight)
 
                 ScrollView {
                     LazyVStack(spacing: SettingsRootLayout.listSpacing) {
-
                         // MARK: Recovery warning
                         if recoveryVM.statusLoaded && !recoveryVM.isSetup && !recoveryBannerDismissed {
                             recoveryBanner
@@ -137,6 +144,10 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                         }
+
+                        // Spacer for floating tab capsule
+                        Color.clear
+                            .frame(height: 72)
                     }
                     .padding(.bottom, SettingsRootLayout.listBottomPadding)
                 }

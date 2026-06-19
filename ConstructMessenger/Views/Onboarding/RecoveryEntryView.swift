@@ -89,7 +89,7 @@ struct RecoveryEntryView: View {
                     columns: [GridItem(.flexible()), GridItem(.flexible())],
                     spacing: 8
                 ) {
-                    ForEach(0..<12, id: \.self) { i in
+                    forEachIndexed(vm.enteredWords) { i, _ in
                         wordField(index: i)
                     }
                 }
@@ -145,6 +145,18 @@ struct RecoveryEntryView: View {
         .padding(.horizontal, 8)
         .background(Color.CT.bgMsg)
         .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
+    }
+
+    // Safe indexed iteration snapshot for @Observable / @State arrays.
+    @ViewBuilder
+    private func forEachIndexed<T, Content: View>(
+        _ items: [T],
+        @ViewBuilder content: @escaping (Int, T) -> Content
+    ) -> some View {
+        let snapshot = items
+        ForEach(Array(snapshot.enumerated()), id: \.offset) { pair in
+            content(pair.offset, pair.element)
+        }
     }
 
     // MARK: - Recovering

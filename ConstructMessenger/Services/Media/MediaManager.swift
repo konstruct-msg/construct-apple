@@ -609,12 +609,38 @@ class MediaManager {
             image.draw(in: CGRect(origin: .zero, size: thumbnailSize))
         }
         #else
+        // macOS: use explicit bitmap rep to avoid HDR gain map / CGBitmap delegate warnings on certain images
         let dest = NSImage(size: thumbnailSize)
-        dest.lockFocus()
-        image.draw(in: NSRect(origin: .zero, size: thumbnailSize),
-                   from: NSRect(origin: .zero, size: size),
-                   operation: .copy, fraction: 1.0)
-        dest.unlockFocus()
+        if let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(thumbnailSize.width),
+            pixelsHigh: Int(thumbnailSize.height),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 32
+        ) {
+            bitmap.size = thumbnailSize
+            NSGraphicsContext.saveGraphicsState()
+            if let ctx = NSGraphicsContext(bitmapImageRep: bitmap) {
+                NSGraphicsContext.current = ctx
+                // Draw source without forcing HDR headroom mismatch
+                image.draw(in: NSRect(origin: .zero, size: thumbnailSize),
+                           from: NSRect(origin: .zero, size: size),
+                           operation: .copy, fraction: 1.0)
+            }
+            NSGraphicsContext.restoreGraphicsState()
+            dest.addRepresentation(bitmap)
+        } else {
+            dest.lockFocus()
+            image.draw(in: NSRect(origin: .zero, size: thumbnailSize),
+                       from: NSRect(origin: .zero, size: size),
+                       operation: .copy, fraction: 1.0)
+            dest.unlockFocus()
+        }
         return dest
         #endif
     }

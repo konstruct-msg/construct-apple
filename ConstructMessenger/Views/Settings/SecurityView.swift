@@ -35,7 +35,11 @@ struct SecurityView: View {
                 title: NSLocalizedString("security", comment: ""),
                 showBack: true,
                 backAction: { dismiss() }
-            )
+            ) {
+                EmptyView()
+            } trailing: {
+                EmptyView()
+            }
             ScrollView {
             LazyVStack(spacing: 0) {
 

@@ -434,10 +434,10 @@ struct CTSearchBar: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(Color.CT.bgMsg)
-        .ctBorderBottom()
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        // Independent floating glass capsule for search (consistent with nav/input/tab capsulization)
+        .glassCapsule(cornerRadius: 16)
     }
 }
 
@@ -461,147 +461,149 @@ struct CTSystemMessage: View {
 
 // MARK: - Navigation Bar
 
-struct CTNavBar: View {
+/// Lightweight navigation header designed for floating glass capsules.
+///
+/// Strongly recommended pattern now:
+///
+/// ```swift
+/// CTNavBar(title: "SECTION TITLE") {
+///     // leading (usually back button)
+/// } trailing: {
+///     // trailing actions
+/// }
+/// .glassCapsule()
+/// ```
+///
+/// For classic screens you can still rely on `.ctBorderBottom()`.
+/// The old 15-parameter monster API has been removed.
+struct CTNavBar<Leading: View, Trailing: View>: View {
     let title: String
-    var showBack: Bool      = false
-    /// On macOS sheet/modal contexts pass true — renders xmark.circle (close) instead of chevron (back).
-    var isModal: Bool       = false
-    var leadingSystemImage: String? = nil
-    var leadingSymbol: String? = nil
-    var trailingSymbol: String? = nil
-    var trailingSystemImage: String? = nil
-    var trailingSecondarySystemImage: String? = nil
-    var leadingColor: Color = Color.CT.accent
-    var trailingColor: Color    = Color.CT.accent
-    /// Colour for the secondary trailing icon (typically a cancel/dismiss
-    /// next to a primary confirm). Defaults to dim so confirm vs cancel are
-    /// visually distinct — same colour for both reads as "two identical
-    /// buttons" and confuses the user (FaceTime-style: primary = accent,
-    /// secondary = muted).
-    var trailingSecondaryColor: Color = Color.CT.textDim
-    var leadingAction: (() -> Void)? = nil
-    var backAction: (() -> Void)?     = nil
-    var trailingAction: (() -> Void)? = nil
-    var trailingSecondaryAction: (() -> Void)? = nil
+    var showBack: Bool = false
+    /// Affects only the icon on macOS sheets (xmark vs chevron).
+    var isModal: Bool = false
+    var backAction: (() -> Void)? = nil
+
+    private let leadingView: Leading
+    private let trailingView: Trailing
 
     init(
         title: String,
         showBack: Bool = false,
         isModal: Bool = false,
-        leadingSystemImage: String? = nil,
-        leadingSymbol: String? = nil,
-        trailingSymbol: String? = nil,
-        trailingSystemImage: String? = nil,
-        trailingSecondarySystemImage: String? = nil,
-        leadingColor: Color = Color.CT.accent,
-        trailingColor: Color = Color.CT.accent,
-        trailingSecondaryColor: Color = Color.CT.textDim,
-        leadingAction: (() -> Void)? = nil,
         backAction: (() -> Void)? = nil,
-        trailingAction: (() -> Void)? = nil,
-        trailingSecondaryAction: (() -> Void)? = nil
+        @ViewBuilder leading: () -> Leading,
+        @ViewBuilder trailing: () -> Trailing
     ) {
         self.title = title
         self.showBack = showBack
         self.isModal = isModal
-        self.leadingSystemImage = leadingSystemImage
-        self.leadingSymbol = leadingSymbol
-        self.trailingSymbol = trailingSymbol
-        self.trailingSystemImage = trailingSystemImage
-        self.trailingSecondarySystemImage = trailingSecondarySystemImage
-        self.leadingColor = leadingColor
-        self.trailingColor = trailingColor
-        self.trailingSecondaryColor = trailingSecondaryColor
-        self.leadingAction = leadingAction
         self.backAction = backAction
-        self.trailingAction = trailingAction
-        self.trailingSecondaryAction = trailingSecondaryAction
+        self.leadingView = leading()
+        self.trailingView = trailing()
     }
 
     var body: some View {
-        ZStack {
-            HStack(alignment: .center, spacing: 0) {
-                leadingContent
-                    .frame(width: CTLayout.navBarSideWidth, alignment: .leading)
-                Spacer(minLength: 0)
-                trailingContent
-                    .frame(width: CTLayout.navBarSideWidth, alignment: .trailing)
+        HStack(alignment: .center, spacing: 0) {
+            // Leading zone
+            Group {
+                if showBack {
+                    Button(action: { backAction?() }) {
+                        #if os(macOS)
+                        Image(systemName: isModal ? "xmark.circle" : "chevron.backward.circle")
+                            .font(.system(size: 18))
+                            .foregroundColor(Color.CT.accent)
+                        #else
+                        Image(systemName: "chevron.backward.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(Color.CT.accent)
+                        #endif
+                    }
+                    .buttonStyle(.plain)
+                } else if let leadingView = leadingView as? EmptyView.Type {  // no leading content
+                    EmptyView()
+                } else {
+                    leadingView
+                }
             }
+            .frame(minWidth: showBack ? 44 : 0, alignment: .leading)
+
+            // Title left-aligned
             Text(title.uppercased())
                 .font(CTFont.bold(14))
                 .foregroundColor(Color.CT.text)
                 .tracking(4)
                 .lineLimit(1)
-                .truncationMode(.tail)
-                .padding(.horizontal, CTLayout.navBarSideWidth)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, showBack ? 4 : 0)
+
+            Spacer(minLength: 8)
+
+            // Trailing zone
+            trailingView
+                .frame(minWidth: 44, alignment: .trailing)
         }
         .padding(.horizontal, CTLayout.edgePad)
         .frame(height: CTLayout.navBarHeight)
         .ctBorderBottom()
     }
+}
 
-    @ViewBuilder
-    private var leadingContent: some View {
-        if showBack {
-            Button(action: { backAction?() }) {
-                #if os(macOS)
-                Image(systemName: isModal ? "xmark.circle" : "chevron.backward.circle")
-                    .font(.system(size: 18))
-                    .foregroundColor(Color.CT.accent)
-                #else
-                Image(systemName: "chevron.backward.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundColor(Color.CT.accent)
-                #endif
-            }
-            .buttonStyle(.plain)
-        } else if let imageName = leadingSystemImage {
-            Button(action: { leadingAction?() }) {
-                Image(systemName: imageName)
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(leadingColor)
-            }
-            .buttonStyle(.plain)
-        } else if let sym = leadingSymbol {
-            Button(action: { leadingAction?() }) {
-                Text(sym)
-                    .font(CTFont.bold(13))
-                    .foregroundColor(leadingColor)
-            }
-            .buttonStyle(.plain)
-        }
+// Convenience for the common "title + back" case (no custom leading/trailing)
+extension CTNavBar where Leading == EmptyView, Trailing == EmptyView {
+    init(
+        title: String,
+        showBack: Bool = false,
+        isModal: Bool = false,
+        backAction: (() -> Void)? = nil
+    ) {
+        self.init(
+            title: title,
+            showBack: showBack,
+            isModal: isModal,
+            backAction: backAction,
+            leading: { EmptyView() },
+            trailing: { EmptyView() }
+        )
     }
+}
 
-    @ViewBuilder
-    private var trailingContent: some View {
-        if trailingSystemImage != nil || trailingSecondarySystemImage != nil {
-            HStack(spacing: 10) {
-                if let secondaryImageName = trailingSecondarySystemImage {
-                    Button(action: { trailingSecondaryAction?() }) {
-                        Image(systemName: secondaryImageName)
-                            .font(.system(size: 18))
-                            .foregroundColor(trailingSecondaryColor)
-                    }
-                    .buttonStyle(.plain)
-                }
-                if let imageName = trailingSystemImage {
-                    Button(action: { trailingAction?() }) {
-                        Image(systemName: imageName)
-                            .font(.system(size: 18))
-                            .foregroundColor(trailingColor)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        } else if let sym = trailingSymbol {
-            Button(action: { trailingAction?() }) {
-                Text(sym)
-                    .font(CTFont.bold(13))
-                    .foregroundColor(trailingColor)
-                    .lineLimit(1)
-            }
-            .buttonStyle(.plain)
-        }
+// Convenience when providing only trailing (leading is empty)
+extension CTNavBar where Leading == EmptyView {
+    init(
+        title: String,
+        showBack: Bool = false,
+        isModal: Bool = false,
+        backAction: (() -> Void)? = nil,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.init(
+            title: title,
+            showBack: showBack,
+            isModal: isModal,
+            backAction: backAction,
+            leading: { EmptyView() },
+            trailing: trailing
+        )
+    }
+}
+
+// Convenience when providing only leading (trailing is empty)
+extension CTNavBar where Trailing == EmptyView {
+    init(
+        title: String,
+        showBack: Bool = false,
+        isModal: Bool = false,
+        backAction: (() -> Void)? = nil,
+        @ViewBuilder leading: () -> Leading
+    ) {
+        self.init(
+            title: title,
+            showBack: showBack,
+            isModal: isModal,
+            backAction: backAction,
+            leading: leading,
+            trailing: { EmptyView() }
+        )
     }
 }
 
@@ -631,20 +633,19 @@ struct CTTabBar: View {
 
     var body: some View {
         HStack {
-            ForEach(items.indices, id: \.self) { i in
+            ForEach(Array(items.enumerated()), id: \.offset) { pair in
                 Spacer()
-                Button(action: { selected = i }) {
-                    let sf = items[i].sfName
-                    Image(systemName: selected == i && !sf.hasSuffix(".fill") ? sf + ".fill" : sf)
+                Button(action: { selected = pair.offset }) {
+                    let sf = pair.element.sfName
+                    Image(systemName: selected == pair.offset && !sf.hasSuffix(".fill") ? sf + ".fill" : sf)
                         .font(.system(size: 20))
-                        .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
+                        .foregroundColor(selected == pair.offset ? Color.CT.accent : Color.CT.textDim)
                     
                 }
                 Spacer()
             }
         }
-        .padding(.vertical, 10)
-        .ctBorderTop()
+        .padding(.vertical, 8) // internal padding inside the glass capsule
     }
 }
 
@@ -664,6 +665,7 @@ struct CTSettingsSectionHeader: View {
                 .foregroundColor(color)
             Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.top, 16)
         .padding(.bottom, 4)
@@ -852,7 +854,26 @@ extension View {
     /// Flat 0.5pt noise-coloured border with no padding. Use after setting your own background.
     func ctNoiseBorder() -> some View {
         self
-            .clipShape(Rectangle())
-            .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 0.5))
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(Color.CT.noise, lineWidth: 0.5))
+    }
+    
+    func ctNoiseCircleBorder() -> some View {
+        self
+            .clipShape(Circle())
+            .overlay(Circle().stroke(Color.CT.noise, lineWidth: 0.5))
+    }
+
+    /// Reusable floating glass capsule for bars, inputs, tab bars (Apple capsulization).
+    func glassCapsule(cornerRadius: CGFloat = 22) -> some View {
+        self
+            .background(.ultraThinMaterial)
+            .background(Color.CT.bg.opacity(0.35))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(Color.CT.noise.opacity(0.5), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
     }
 }

@@ -37,7 +37,7 @@ struct DesktopEmptyStateView: View {
                 connectorLine
                 protocolCard(
                     label: "KEY EXCHANGE",
-                    rows: [("ALGORITHM", "PQXDH"), ("CLASSICAL", "X25519"), ("PQ", "Kyber-1024")],
+                    rows: [("ALGORITHM", "PQXDH"), ("CLASSICAL", "X25519"), ("PQ", "Kyber-768")],
                     isAccent: true
                 )
                 connectorLine

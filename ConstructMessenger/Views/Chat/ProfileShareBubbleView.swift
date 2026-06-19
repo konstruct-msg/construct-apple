@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct ProfileShareBubbleView: View {
     let profileData: ProfileShareData

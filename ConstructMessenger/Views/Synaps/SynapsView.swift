@@ -63,43 +63,57 @@ struct SynapsView: View {
     var body: some View {
         let filteredContacts = filtered
         NavigationStack {
-            VStack(spacing: 0) {
-                synapsNavBar
-                synapsSearchBar
-                if !searchText.isEmpty, filteredContacts.isEmpty {
-                    remoteSearchCard
-                }
-                if let vm = contactRequestsVM, !vm.incomingRequests.isEmpty, searchText.isEmpty {
-                    requestsSection(vm: vm)
-                }
-                GeometryReader { geo in
-                    ZStack {
-                        CTMatrixBackground().ignoresSafeArea()
+            ZStack {
+                // Main content - full, padded top for floating search capsule
+                VStack(spacing: 0) {
+                    if !searchText.isEmpty, filteredContacts.isEmpty {
+                        remoteSearchCard
+                            .padding(.top, 8)
+                    }
+                    if let vm = contactRequestsVM, !vm.incomingRequests.isEmpty, searchText.isEmpty {
+                        requestsSection(vm: vm)
+                            .padding(.top, 8)
+                    }
+                    GeometryReader { geo in
+                        ZStack {
+                            CTMatrixBackground().ignoresSafeArea()
 
-                        if contacts.isEmpty {
-                            emptyState
-                        } else {
-                            ZoomableCloud(
-                                scale:    $canvasScale,
-                                offset:   $canvasOffset,
-                                minScale: 0.20,
-                                maxScale: 3.0
-                            ) {
-                                HoneycombCloud(
-                                    contacts:     filteredContacts,
-                                    metricsByUser: contactMetricsByUser,
-                                    selected:     $selectedContact,
-                                    canvasScale:  canvasScale,
-                                    canvasOffset: canvasOffset,
-                                    screenSize:   geo.size
-                                )
+                            if contacts.isEmpty {
+                                emptyState
+                            } else {
+                                ZoomableCloud(
+                                    scale:    $canvasScale,
+                                    offset:   $canvasOffset,
+                                    minScale: 0.20,
+                                    maxScale: 3.0
+                                ) {
+                                    HoneycombCloud(
+                                        contacts:     filteredContacts,
+                                        metricsByUser: contactMetricsByUser,
+                                        selected:     $selectedContact,
+                                        canvasScale:  canvasScale,
+                                        canvasOffset: canvasOffset,
+                                        screenSize:   geo.size
+                                    )
+                                }
                             }
                         }
-                    }
-                    .onAppear {
-                        canvasScale = fitScale(contacts: Array(contacts), screenSize: geo.size)
+                        .padding(.bottom, 72) // for floating tab capsule
+                        .onAppear {
+                            canvasScale = fitScale(contacts: Array(contacts), screenSize: geo.size)
+                        }
                     }
                 }
+
+                // Floating independent search capsule (and keep nav above)
+                VStack(spacing: 0) {
+                    synapsNavBar
+                    synapsSearchBar
+                        .padding(.horizontal, 12)
+                        .padding(.top, 4)
+                    Spacer(minLength: 0)
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
             }
             .ctBackground()
             .onAppear {
@@ -304,7 +318,7 @@ struct SynapsView: View {
     private var synapsNavBar: some View {
         HStack(spacing: 10) {
             Text(NSLocalizedString("synapses", comment: "").uppercased())
-                .font(CTFont.bold(13))
+                .font(CTFont.bold(14))
                 .foregroundColor(Color.CT.text)
                 .tracking(4)
             Spacer()

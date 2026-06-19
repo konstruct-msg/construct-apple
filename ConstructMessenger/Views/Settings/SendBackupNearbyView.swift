@@ -33,7 +33,11 @@ struct SendBackupNearbyView: View {
                     title: NSLocalizedString(mode == .historySync ? "history_sync_send_title" : "transfer_send_title", comment: ""),
                     showBack: true,
                     backAction: { dismiss() }
-                )
+                ) {
+                    EmptyView()
+                } trailing: {
+                    EmptyView()
+                }
                 content
             }
         }

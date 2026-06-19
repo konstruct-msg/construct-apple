@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 import GRPCCore
 
 struct MediaMessageView: View {

@@ -41,10 +41,7 @@ struct DesktopChatView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            chatNavBar
-            floodBurstBanner
-
+        ZStack() {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -110,8 +107,14 @@ struct DesktopChatView: View {
                             }
                         }
                     }
-                    .padding()
+                    // Padding so latest messages stay visible above the floating glass input,
+                    // and top messages are not hidden under the glass nav bar.
+                    // Reduced because nav is now flush (0 top padding) at the pane top.
+                    .padding(.top, 70)
+                    .padding(.bottom, 130)
+                    .padding(.horizontal)
                 }
+                .background(Color.CT.bg) // base dark for the area under glass panels
                 .defaultScrollAnchor(.bottom)
                 .scrollDismissesKeyboard(.interactively)
                 .environment(\.containerWidth, containerWidth)
@@ -178,94 +181,107 @@ struct DesktopChatView: View {
                     }
                 }
             }
+        
+        
+            VStack(spacing: 10) {
+                chatNavBar
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)   // flush or minimal top so the glass panel sits at the very top of the chat pane
+                floodBurstBanner
 
-            deleteButtonBar
-            messageInputView
-        }
-        // macOS: deterministic size for NSSplitView constraint stability
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.CT.bg)
-        .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
-            handleChatDrop(providers: providers)
-        }
-        .overlay {
-            if isChatDropTargeted {
-                Rectangle()
-                    .strokeBorder(Color.CT.accent, lineWidth: 2)
-                    .background(Color.CT.accent.opacity(0.05))
-                    .overlay(
-                        Text(LocalizedStringKey("drop_to_attach"))
-                            .font(CTFont.regular(16))
-                            .foregroundColor(Color.CT.accent)
-                            .padding(16)
-                            .background(Color.CT.bgMsg)
-                            .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 1))
+                deleteButtonBar
+                
+                Spacer(minLength: 0)
+                
+                messageInputView
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
+            }
+            // macOS: deterministic size for NSSplitView constraint stability
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
+                handleChatDrop(providers: providers)
+            }
+            .overlay {
+                if isChatDropTargeted {
+                    Rectangle()
+                        .strokeBorder(Color.CT.accent, lineWidth: 2)
+                        .background(Color.CT.accent.opacity(0.05))
+                        .overlay(
+                            Text(LocalizedStringKey("drop_to_attach"))
+                                .font(CTFont.regular(16))
+                                .foregroundColor(Color.CT.accent)
+                                .padding(16)
+                                .background(Color.CT.bgMsg)
+                                .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 1))
+                        )
+                        .allowsHitTesting(false)
+                        .padding(8)
+                }
+            }
+            .overlay(alignment: .top, content: searchOverlay)
+            .sheet(isPresented: $showingUserProfile) {
+                if let user = viewModel.chat.otherUser {
+                    UserProfileView(user: user, showMessageButton: false)
+                        .environment(\.managedObjectContext, viewContext)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                }
+            }
+            .sheet(item: $quotingMessage) { msg in
+                QuoteSelectionSheet(message: msg) { selectedQuote in
+                    replyingTo = msg
+                    replyQuoteText = selectedQuote
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $galleryStartItem) { item in
+                MediaGalleryViewer(
+                    messages: mediaMessages,
+                    initialMessageId: item.id,
+                    isPresented: Binding(
+                        get: { galleryStartItem != nil },
+                        set: { if !$0 { galleryStartItem = nil } }
                     )
-                    .allowsHitTesting(false)
-                    .padding(8)
-            }
-        }
-        .overlay(alignment: .top, content: searchOverlay)
-        .sheet(isPresented: $showingUserProfile) {
-            if let user = viewModel.chat.otherUser {
-                UserProfileView(user: user, showMessageButton: false)
-                    .environment(\.managedObjectContext, viewContext)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
-        }
-        .sheet(item: $quotingMessage) { msg in
-            QuoteSelectionSheet(message: msg) { selectedQuote in
-                replyingTo = msg
-                replyQuoteText = selectedQuote
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(item: $galleryStartItem) { item in
-            MediaGalleryViewer(
-                messages: mediaMessages,
-                initialMessageId: item.id,
-                isPresented: Binding(
-                    get: { galleryStartItem != nil },
-                    set: { if !$0 { galleryStartItem = nil } }
-                )
-            )
-        }
-        .onAppear {
-            guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
-            markChatAsRead()
-            viewModel.onViewAppear()
-            loadContactKTStatus()
-            if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-                _ = try? CryptoManager.shared.handleOrchestratorEvent(
-                    .activeChatChanged(contactId: contactId, isActive: true),
-                    tag: "chat_active_true"
                 )
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .contactKeyChanged)) { note in
-            guard let changedId = note.userInfo?["userId"] as? String,
-                  changedId == viewModel.chat.otherUser?.id else { return }
-            loadContactKTStatus()
-        }
-        .onDisappear {
-            guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
-            if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-                _ = try? CryptoManager.shared.handleOrchestratorEvent(
-                    .activeChatChanged(contactId: contactId, isActive: false),
-                    tag: "chat_active_false"
-                )
+            .onAppear {
+                guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
+                markChatAsRead()
+                viewModel.onViewAppear()
+                loadContactKTStatus()
+                if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
+                    _ = try? CryptoManager.shared.handleOrchestratorEvent(
+                        .activeChatChanged(contactId: contactId, isActive: true),
+                        tag: "chat_active_true"
+                    )
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .contactKeyChanged)) { note in
+                guard let changedId = note.userInfo?["userId"] as? String,
+                      changedId == viewModel.chat.otherUser?.id else { return }
+                loadContactKTStatus()
+            }
+            .onDisappear {
+                guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
+                if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
+                    _ = try? CryptoManager.shared.handleOrchestratorEvent(
+                        .activeChatChanged(contactId: contactId, isActive: false),
+                        tag: "chat_active_false"
+                    )
+                }
+            }
+            .alert(callManager.lastError ?? "", isPresented: Binding(
+                get: { callManager.lastError != nil },
+                set: { if !$0 { callManager.clearLastError() } }
+            )) {
+                Button(NSLocalizedString("ok", comment: ""), role: .cancel) {
+                    callManager.clearLastError()
+                }
             }
         }
-        .alert(callManager.lastError ?? "", isPresented: Binding(
-            get: { callManager.lastError != nil },
-            set: { if !$0 { callManager.clearLastError() } }
-        )) {
-            Button(NSLocalizedString("ok", comment: ""), role: .cancel) {
-                callManager.clearLastError()
-            }
-        }
+        .ignoresSafeArea(.container, edges: .top) // make glass nav flush to the very top edge of the NavigationSplitView detail
     }
 
     // MARK: - View Components
@@ -275,7 +291,7 @@ struct DesktopChatView: View {
         let senderId = viewModel.chat.otherUser?.id ?? ""
         if floodGuard.suppressedSenders.contains(senderId) {
             HStack(spacing: 10) {
-                Text("[!]")
+                Image(systemName: "exclamationmark.triangle.fill")
                     .font(CTFont.regular(16))
                     .foregroundStyle(.orange)
 
@@ -340,14 +356,14 @@ struct DesktopChatView: View {
     }
 
     private var messageInputView: some View {
-        DesktopMessageInputView(
+        MessageInputView(
             text: $messageText,
             droppedImages: $chatDropImages,
             isSending: viewModel.isSending,
             replyingTo: replyingTo,
             quoteOverride: replyQuoteText,
             editingMessage: viewModel.editingMessage,
-            onSend: { images, fileURLs in
+            onSend: { attachments, fileURLs in
                 if let editMsg = viewModel.editingMessage {
                     let safeToEdit = editMsg.deliveryStatus != .sending && editMsg.deliveryStatus != .queued
                     guard safeToEdit else {
@@ -358,7 +374,6 @@ struct DesktopChatView: View {
                     viewModel.editMessage(editMsg, newText: messageText)
                     messageText = ""
                 } else {
-                    let attachments = images.map { MediaAttachment(image: $0) }
                     viewModel.sendMessage(
                         text: messageText,
                         attachments: attachments,
@@ -485,10 +500,13 @@ struct DesktopChatView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 19)
         .padding(.vertical, 10)
-        .background(Color.CT.bg)
-        .ctBorderBottom()
+        .background(.ultraThinMaterial)
+        .background(Color.CT.bg.opacity(0.35)) // slight dark tint for terminal readability
+        .clipShape(Capsule())
+        .ctNoiseBorder() // thin noise border on top of glass
+        .shadow(color: Color.black.opacity(0.2), radius: 8, y: 2)
     }
 
     @ViewBuilder private var ktBadge: some View {
@@ -545,8 +563,8 @@ struct DesktopChatView: View {
                         .buttonStyle(.plain)
                         .padding(.trailing, 8)
                     }
-                    .background(Color.CT.bgMsg, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay { RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 1) }
+                    .background(Color.CT.bgMsg, in: Capsule())
+                    .overlay { Capsule().stroke(Color.CT.noise, lineWidth: 1) }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .background(Color.CT.bg)
@@ -666,6 +684,6 @@ struct DesktopChatView: View {
 
     DesktopChatView(chat: chat, context: context)
         .environment(\.managedObjectContext, context)
-        .frame(width: 700, height: 580)
+        .frame(width: 600, height: 500)
 }
 #endif

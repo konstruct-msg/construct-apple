@@ -90,13 +90,20 @@ struct MainTabView: View {
                 .environment(chatsViewModel)
         } else {
             @Bindable var vm = chatsViewModel
-            VStack(spacing: 0) {
+            ZStack {
                 tabContent(vm: vm)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+
                 if !vm.isInChat && !vm.isInSettings {
-                    CTTabBar(selected: $vm.selectedTab, items: tabItems)
-                        .background(Color.CT.bg)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    VStack {
+                        Spacer()
+                        CTTabBar(selected: $vm.selectedTab, items: tabItems)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .glassCapsule(cornerRadius: 999) // capsule shape for tab bar
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    .frame(maxHeight: .infinity, alignment: .bottom)
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: vm.isInChat || vm.isInSettings)

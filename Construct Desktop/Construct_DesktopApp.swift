@@ -26,6 +26,11 @@ struct Construct_DesktopApp: App {
         // Set UNUserNotificationCenterDelegate for macOS so foreground notifications
         // show as banners. On iOS this is handled by PushNotificationManager.
         UNUserNotificationCenter.current().delegate = LocalNotificationManager.shared
+
+        // Default to more compact text on macOS Desktop (user can change in Settings/Appearance)
+        if UserDefaults.standard.string(forKey: "textSize") == nil {
+            UserDefaults.standard.set("compact", forKey: "textSize")
+        }
     }
 
     var body: some Scene {
@@ -43,8 +48,8 @@ struct Construct_DesktopApp: App {
                     NSApp.appearance = NSAppearance(named: .darkAqua)
                     chatsViewModel.setContext(PersistenceController.shared.container.viewContext)
 
-                    // Direct iOS path (Strategy B): use construct-core + gRPC + VEIL from core.
-                    // No EngineAdapter on Desktop — engine is paused for non-Apple surfaces.
+                    // Direct path (Strategy B): construct-core (UniFFI) + gRPC-Swift + VEIL from core.
+                    // Engine layer is paused for Desktop.
                     await VeilProxyManager.shared.startIfEnabled()
                     await TransportRouter.shared.bootstrap()
 

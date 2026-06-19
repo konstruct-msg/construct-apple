@@ -198,14 +198,34 @@ struct AccountSettingsView: View {
                 ? NSLocalizedString("edit_identity", comment: "")
                 : NSLocalizedString("account", comment: ""),
             showBack: !isEditingProfile,
-            leadingSystemImage: isEditingProfile ? "xmark" : nil,
-            trailingSymbol: isEditingProfile ? NSLocalizedString("save", comment: "") : nil,
-            trailingSystemImage: isEditingProfile ? nil : "square.and.pencil",
-            trailingColor: viewModel.isSavingUsername ? Color.CT.textDim : Color.CT.accent,
-            leadingAction: { handleProfileEditCancelTap() },
-            backAction: { handleBackTap() },
-            trailingAction: { handleProfileEditActionTap() }
-        )
+            backAction: { handleBackTap() }
+        ) {
+            if isEditingProfile {
+                Button(action: { handleProfileEditCancelTap() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18))
+                        .foregroundColor(Color.CT.accent)
+                }
+                .buttonStyle(.plain)
+            }
+        } trailing: {
+            if isEditingProfile {
+                Button(NSLocalizedString("save", comment: "")) {
+                    handleProfileEditActionTap()
+                }
+                .font(CTFont.bold(13))
+                .foregroundColor(viewModel.isSavingUsername ? Color.CT.textDim : Color.CT.accent)
+                .disabled(viewModel.isSavingUsername)
+                .buttonStyle(.plain)
+            } else {
+                Button(action: { handleProfileEditActionTap() }) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 18))
+                        .foregroundColor(Color.CT.accent)
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     // MARK: - Avatar Header

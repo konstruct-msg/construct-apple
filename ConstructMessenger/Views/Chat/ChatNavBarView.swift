@@ -27,8 +27,9 @@ struct ChatNavBarView: View {
             Button(action: onOpenProfile) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title.uppercased())
-                        .font(CTFont.bold(13))
+                        .font(CTFont.bold(14))
                         .foregroundColor(Color.CT.text)
+                        .tracking(4)
                     if let subtitle {
                         Text(subtitle)
                             .font(CTFont.regular(10))
@@ -74,7 +75,7 @@ struct ChatNavBarView: View {
         }
         .padding(.horizontal, CTLayout.edgePad)
         .frame(height: CTLayout.navBarHeight)
-        .ctBorderBottom()
+        .glassCapsule(cornerRadius: 999) // full capsule for top nav bar
     }
 
     @ViewBuilder private var ktBadge: some View {

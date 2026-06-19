@@ -20,9 +20,21 @@ public typealias PlatformImage = NSImage
 #endif
 
 struct ConstructFont {
+    /// User-controlled text scale (from Settings/Appearance).
+    /// compact=0.9, standard=1.0, large=1.15
+    static var textScale: CGFloat {
+        let pref = UserDefaults.standard.string(forKey: "textSize") ?? "standard"
+        switch pref {
+        case "compact": return 0.9
+        case "large": return 1.15
+        default: return 1.0
+        }
+    }
+
     /// Monospace — timestamps, fingerprints, status labels, crypto badges.
     /// Target: JetBrains Mono (supports Cyrillic). Fallback: system monospaced.
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        let scaled = size * textScale
         if let _ = fontExists("JetBrainsMono-Regular") {
             let name: String
             switch weight {
@@ -30,13 +42,14 @@ struct ConstructFont {
             case .bold:    name = "JetBrainsMono-Bold"
             default:       name = "JetBrainsMono-Regular"
             }
-            return .custom(name, size: size)
+            return .custom(name, size: scaled)
         }
-        return .system(size: size, weight: weight, design: .monospaced)
+        return .system(size: scaled, weight: weight, design: .monospaced)
     }
 
     /// Display — contact names, headers, buttons.
     static func display(_ size: CGFloat, weight: Font.Weight = .medium) -> Font {
+        let scaled = size * textScale
         if let _ = fontExists("Exo2-Medium") {
             let name: String
             switch weight {
@@ -45,9 +58,9 @@ struct ConstructFont {
             case .light:    name = "Exo2-Light"
             default:        name = "Exo2-Medium"
             }
-            return .custom(name, size: size)
+            return .custom(name, size: scaled)
         }
-        return .system(size: size, weight: weight, design: .rounded)
+        return .system(size: scaled, weight: weight, design: .rounded)
     }
 
     private static func fontExists(_ name: String) -> String? {

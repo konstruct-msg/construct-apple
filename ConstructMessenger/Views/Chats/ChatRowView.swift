@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct ChatRowView: View {
     @ObservedObject var chat: Chat

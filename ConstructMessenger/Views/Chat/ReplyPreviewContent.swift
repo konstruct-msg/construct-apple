@@ -7,6 +7,7 @@
 //  Detects media / file JSON and shows a thumbnail or icon instead of raw JSON.
 
 import SwiftUI
+import Combine
 
 struct ReplyPreviewContent: View {
     /// The content string — `replyToContent` stored on the replying message,

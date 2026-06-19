@@ -49,7 +49,11 @@ struct NetworkSettingsView: View {
                     title: NSLocalizedString("network", comment: ""),
                     showBack: true,
                     backAction: { dismiss() }
-                )
+                ) {
+                    EmptyView()
+                } trailing: {
+                    EmptyView()
+                }
             }
             ScrollView {
             LazyVStack(spacing: NetworkSettingsLayout.compactSectionSpacing) {
@@ -137,11 +141,7 @@ struct NetworkSettingsView: View {
                     HStack {
                         Text(LocalizedStringKey("veil_title"))
                             .font(CTFont.regular(13))
-                            .foregroundColor(
-                                hasVeilAccessConfigured
-                                ? Color.CT.textDim
-                                : Color.CT.textDim.opacity(NetworkSettingsLayout.statusDisabledOpacity)
-                            )
+                            .foregroundColor(Color.CT.textDim)
                         Spacer()
                         CTModeSelector(
                             selection: Binding(
@@ -167,7 +167,6 @@ struct NetworkSettingsView: View {
                                 .on:   NSLocalizedString("veil_mode_on", comment: "")
                             ]
                         )
-                        .disabled(!hasVeilAccessConfigured)
                     }
                     .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                     .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)

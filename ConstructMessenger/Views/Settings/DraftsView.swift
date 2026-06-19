@@ -30,7 +30,11 @@ struct DraftsView: View {
                 title: NSLocalizedString("drafts", comment: ""),
                 showBack: true,
                 backAction: { dismiss() }
-            )
+            ) {
+                EmptyView()
+            } trailing: {
+                EmptyView()
+            }
             VStack(spacing: 16) {
                 VStack(spacing: 8) {
                     TextEditor(text: $draftText)

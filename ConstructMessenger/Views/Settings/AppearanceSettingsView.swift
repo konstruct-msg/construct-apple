@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AppearanceSettingsView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
+    @AppStorage("textSize") private var textSize: TextSize = .standard
     @Environment(\.dismiss) private var dismiss
     private let allThemes = AppTheme.allCases
 
@@ -19,14 +20,20 @@ struct AppearanceSettingsView: View {
                     title: NSLocalizedString("appearance", comment: ""),
                     showBack: true,
                     backAction: { dismiss() }
-                )
+                ) {
+                    EmptyView()
+                } trailing: {
+                    EmptyView()
+                }
                 
                 VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderSpacing) {
                     VStack(alignment: .leading, spacing: 0) {
                         CTSettingsSectionHeader(title: NSLocalizedString("theme", comment: ""))
                         CTSectionGroup {
-                            ForEach(allThemes.indices, id: \.self) { index in
-                                let theme = allThemes[index]
+                            let themes = allThemes
+                            ForEach(Array(themes.enumerated()), id: \.offset) { pair in
+                                let index = pair.offset
+                                let theme = pair.element
                                 if index > 0 { ConstructRowDivider(indent: SettingsLayout.rowDividerIndent) }
                                 Button {
                                     guard theme.isAvailable else { return }
@@ -67,6 +74,39 @@ struct AppearanceSettingsView: View {
                         }
                     }
                     Text(LocalizedStringKey("theme_footer"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
+                }
+
+                // MARK: - Text size (moved from hardcoded; applies to CTFont)
+                VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderSpacing) {
+                    CTSettingsSectionHeader(title: NSLocalizedString("text_size", comment: ""))
+                    CTSectionGroup {
+                        ForEach(TextSize.allCases, id: \.self) { size in
+                            if size != TextSize.allCases.first { ConstructRowDivider(indent: SettingsLayout.rowDividerIndent) }
+                            Button {
+                                textSize = size
+                            } label: {
+                                HStack(spacing: AppearanceSettingsLayout.themeRowContentSpacing) {
+                                    Text(size.displayName)
+                                        .font(CTFont.bold(16))
+                                        .foregroundStyle(Color.CT.text)
+                                    Spacer()
+                                    if textSize == size {
+                                        Text("[✓]")
+                                            .font(CTFont.bold(14))
+                                            .foregroundStyle(Color.CT.accent)
+                                    }
+                                }
+                                .padding(.horizontal, AppearanceSettingsLayout.themeRowHorizontalPadding)
+                                .padding(.vertical, AppearanceSettingsLayout.themeRowVerticalPadding)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    Text(LocalizedStringKey("text_size_footer"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
@@ -123,6 +163,21 @@ enum AppTheme: String, CaseIterable {
         case .automatic: return nil
         case .light: return .light
         case .dark: return .dark
+        }
+    }
+}
+
+// MARK: - Text size (for CTFont scaling in Appearance)
+enum TextSize: String, CaseIterable {
+    case compact = "compact"
+    case standard = "standard"
+    case large = "large"
+
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .compact: return "compact"
+        case .standard: return "standard"
+        case .large: return "large"
         }
     }
 }

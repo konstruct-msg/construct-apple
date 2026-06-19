@@ -115,6 +115,7 @@ struct DesktopRootView: View {
             } else if let chatId = chatsViewModel.chatToOpen,
                let chat = fetchChat(id: chatId) {
                 DesktopChatView(chat: chat, context: viewContext)
+                    .ignoresSafeArea(.container, edges: .top) // ensure custom glass nav is flush to the top of the split detail column
                     .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
                         handleDrop(providers: providers, into: chat)
                     }
@@ -210,7 +211,7 @@ struct DesktopRootView: View {
         HStack(spacing: 0) {
             sidebarTab(label: "CHATS", mode: .chats)
             Rectangle().fill(Color.CT.noise).frame(width: 1)
-            sidebarTab(label: "SYNAPS", mode: .synaps)
+            sidebarTab(label: "SYNAPSES", mode: .synaps)
 
             Spacer()
 
@@ -219,7 +220,7 @@ struct DesktopRootView: View {
                 showAddContact = true
             } label: {
                 Image(systemName: "qrcode.viewfinder")
-                    .font(.system(size: 13, weight: .regular))
+                    .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 10)
             }

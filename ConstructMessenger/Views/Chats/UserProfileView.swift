@@ -61,7 +61,11 @@ struct UserProfileView: View {
                 title: NSLocalizedString("profile", comment: ""),
                 showBack: true,
                 backAction: { dismiss() }
-            )
+            ) {
+                EmptyView()
+            } trailing: {
+                EmptyView()
+            }
             flatDivider(thick: true)
 
             ScrollView(showsIndicators: false) {

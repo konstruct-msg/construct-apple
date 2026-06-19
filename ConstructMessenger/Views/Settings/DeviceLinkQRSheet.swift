@@ -23,7 +23,11 @@ struct DeviceLinkQRSheet: View {
                 title: NSLocalizedString("device_link_qr_title", comment: ""),
                 showBack: true,
                 backAction: { dismiss() }
-            )
+            ) {
+                EmptyView()
+            } trailing: {
+                EmptyView()
+            }
             Rectangle().fill(Color.CT.noise).frame(height: 1)
 
             if vm.isGenerating {

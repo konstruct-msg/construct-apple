@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct VoiceMessageBubbleView: View {
 
@@ -114,8 +115,8 @@ struct VoiceMessageBubbleView: View {
         }
         .frame(maxWidth: 360)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.CT.noise, lineWidth: 0.5))
         .onChange(of: transcript) { _, newTranscript in
             // Auto-reveal a fresh transcript so the user sees what they
             // triggered. They can still collapse via the inline toggle.
@@ -218,8 +219,8 @@ struct VoiceMessageBubbleView: View {
         .padding(.vertical, 8)
         .frame(maxWidth: 360)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe).opacity(0.7))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.CT.noise, lineWidth: 0.5))
     }
 
     // MARK: - Failed state
@@ -251,8 +252,8 @@ struct VoiceMessageBubbleView: View {
         .padding(.vertical, 8)
         .frame(maxWidth: 360)
         .background(Color.CT.bgMsg)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(hex: 0xE05555).opacity(0.5), lineWidth: 1))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color(hex: 0xE05555).opacity(0.5), lineWidth: 1))
     }
 
     // MARK: - Unavailable state
@@ -281,8 +282,8 @@ struct VoiceMessageBubbleView: View {
         .padding(.vertical, 8)
         .frame(maxWidth: 360)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe).opacity(0.35))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.CT.noise, lineWidth: 0.5))
     }
 
     // MARK: - Duration

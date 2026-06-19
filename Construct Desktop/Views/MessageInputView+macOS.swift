@@ -1,15 +1,15 @@
 //
-//  DesktopMessageInputView.swift
-//  Construct Desktop
+//  MessageInputView+macOS.swift
+//  Construct Messenger
 //
-//  macOS-only message input bar.  Same interface as the iOS MessageInputView but
-//  without UIKit dependencies: popover for the attachment menu, inline voice rows,
-//  no camera picker, no confirmationDialog, no UIApplication.openSettingsURLString.
+//  Shared macOS chat composer used by both the standalone desktop app and
+//  any shared macOS chat surfaces in the main target.
 //
 
+#if os(macOS)
 import SwiftUI
 import PhotosUI
-import UniformTypeIdentifiers
+import Combine
 
 struct DesktopMessageInputView: View {
     @Binding var text: String
@@ -18,67 +18,30 @@ struct DesktopMessageInputView: View {
     let replyingTo: Message?
     let quoteOverride: String?
     let editingMessage: Message?
-    let onSend: ([PlatformImage], [URL]) -> Void
+    let onSend: ([MediaAttachment], [URL]) -> Void
     var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
     let onCancelReply: () -> Void
     let onCancelEdit: () -> Void
 
-    // MARK: - Attachment state
-
     @State private var selectedPhotos: [PhotosPickerItem] = []
-    @State private var selectedImages: [PlatformImage] = []
-    @State private var selectedFileURLs: [URL] = []
     @State private var showAttachmentMenu = false
     @State private var showPhotoPicker = false
     @State private var showFilePicker = false
-
-    // MARK: - Voice state
-
+    @StateObject private var attachments = MessageInputAttachmentStore()
     @StateObject private var audioRecorder = AudioRecorderService.shared
     @State private var showMicPermissionAlert = false
 
-    // MARK: - Body
-
     var body: some View {
         VStack(spacing: 0) {
-            if let msg = replyingTo {
-                MessageReplyBar(
-                    content: quoteOverride ?? (msg.displayText.isEmpty ? nil : msg.displayText),
-                    messageId: msg.id,
-                    onCancel: onCancelReply
-                )
-            }
-
-            if let msg = editingMessage {
-                MessageEditBar(content: msg.displayText, onCancel: onCancelEdit)
-            }
-
-            if !selectedImages.isEmpty {
-                MessagePhotoPreviewBar(images: selectedImages, onRemove: removePhoto)
-            }
-            if !selectedFileURLs.isEmpty {
-                MessageFilePreviewBar(fileURLs: selectedFileURLs) { i in
-                    selectedFileURLs.remove(at: i)
-                }
-            }
-
-            switch audioRecorder.state {
-            case .recording(let duration, _):
-                recordingRow(duration: duration)
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            case .recorded(let url, let duration, let waveform):
-                recordedRow(url: url, duration: duration, waveform: waveform)
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            case .idle:
-                inputRow
-            }
+            replyOrEditBars
+            attachmentPreviews
+            voiceOrInputRow
         }
         .animation(.easeInOut(duration: 0.2), value: canSend)
         .animation(.easeInOut(duration: 0.2), value: replyingTo != nil)
         .animation(.easeInOut(duration: 0.2), value: editingMessage != nil)
-        .animation(.easeInOut(duration: 0.2), value: !selectedImages.isEmpty)
+        .animation(.easeInOut(duration: 0.2), value: !attachments.selectedAttachments.isEmpty)
         .animation(.easeInOut(duration: 0.15), value: audioRecorder.state)
-        // macOS: direct link to System Settings, no UIApplication
         .alert(
             NSLocalizedString("mic_denied_title", comment: ""),
             isPresented: $showMicPermissionAlert
@@ -91,11 +54,10 @@ struct DesktopMessageInputView: View {
             Text(NSLocalizedString("mic_denied_message_macos", comment: ""))
         }
         .onChange(of: selectedPhotos) {
-            Task { await loadSelectedPhotos() }
+            Task { await attachments.loadSelectedPhotos(selectedPhotos) }
         }
         .onChange(of: droppedImages) { _, newImages in
-            guard !newImages.isEmpty else { return }
-            selectedImages.append(contentsOf: newImages)
+            attachments.appendDroppedImages(newImages)
             droppedImages.removeAll()
         }
         .fileImporter(
@@ -103,34 +65,84 @@ struct DesktopMessageInputView: View {
             allowedContentTypes: [.item],
             allowsMultipleSelection: true
         ) { result in
-            if case .success(let urls) = result { handlePickedFiles(urls) }
+            if case .success(let urls) = result {
+                attachments.handlePickedFiles(urls)
+            }
         }
     }
 
-    // MARK: - Input row (pill with +, text field, and send/mic inside)
+    @ViewBuilder
+    private var replyOrEditBars: some View {
+        if let msg = replyingTo {
+            MessageReplyBar(
+                content: quoteOverride ?? (msg.displayText.isEmpty ? nil : msg.displayText),
+                messageId: msg.id,
+                onCancel: onCancelReply
+            )
+        }
+        if let msg = editingMessage {
+            MessageEditBar(content: msg.displayText, onCancel: onCancelEdit)
+        }
+    }
+
+    @ViewBuilder
+    private var attachmentPreviews: some View {
+        if !attachments.selectedAttachments.isEmpty {
+            MessagePhotoPreviewBar(
+                images: attachments.selectedAttachments.compactMap { $0.displayImage },
+                onRemove: attachments.removeAttachment
+            )
+        }
+        if !attachments.selectedFileURLs.isEmpty {
+            MessageFilePreviewBar(
+                fileURLs: attachments.selectedFileURLs,
+                onRemove: attachments.removeFile
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var voiceOrInputRow: some View {
+        switch audioRecorder.state {
+        case .recording(let duration, _):
+            recordingRow(duration: duration)
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+        case .recorded(let url, let duration, let waveform):
+            recordedRow(url: url, duration: duration, waveform: waveform)
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+        case .idle:
+            inputRow
+        }
+    }
 
     private var inputRow: some View {
-        MessageInputTextBar(
-            text: $text,
-            canSend: canSend,
-            isSending: isSending,
-            onSend: sendMessage,
-            onStartVoice: {
-                Task {
-                    do {
-                        try await audioRecorder.startRecording()
-                    } catch AudioRecorderService.RecorderError.permissionDenied {
-                        showMicPermissionAlert = true
-                    } catch {
-                        Log.error("❌ Recording failed: \(error)", category: "MessageInput")
-                    }
-                }
-            }
-        )
+        HStack(spacing: 8) {
+            MessageInputTextBar(
+                text: $text,
+                canSend: canSend,
+                isSending: isSending,
+                onSend: sendMessage,
+                onStartVoice: startVoiceRecording
+            )
+        }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        // macOS uses a popover instead of confirmationDialog (which is blocked in ZStack hierarchy)
-        .popover(isPresented: $showAttachmentMenu, arrowEdge: .bottom) {
+    }
+
+    private var attachmentButton: some View {
+        Button { showAttachmentMenu = true } label: {
+            Image(systemName: "plus.circle")
+                .font(.system(size: 20))
+                .foregroundColor(Color.CT.textDim)
+        }
+        .buttonStyle(.automatic)
+        .controlSize(.extraLarge)
+        .background(.ultraThinMaterial)
+        .background(Color.CT.bg.opacity(0.7))
+        .clipShape(Circle())
+        .ctNoiseCircleBorder() // thin noise border on top of glass
+        .shadow(color: Color.black.opacity(0.2), radius: 8, y: 2)
+        .popover(isPresented: $showAttachmentMenu, arrowEdge: .top) {
             VStack(alignment: .leading, spacing: 0) {
                 popoverButton(label: "photos", icon: "photo.on.rectangle") {
                     showAttachmentMenu = false
@@ -147,12 +159,10 @@ struct DesktopMessageInputView: View {
         .photosPicker(
             isPresented: $showPhotoPicker,
             selection: $selectedPhotos,
-            maxSelectionCount: 10,
+            maxSelectionCount: 99,
             matching: .images
         )
     }
-
-    // MARK: - Voice rows (pill-styled to match the input pill)
 
     private func recordingRow(duration: TimeInterval) -> some View {
         HStack(spacing: 12) {
@@ -183,8 +193,8 @@ struct DesktopMessageInputView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(Color.CT.outMsgBg)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.CT.noise, lineWidth: 1))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.CT.noise, lineWidth: 1))
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
     }
@@ -221,13 +231,11 @@ struct DesktopMessageInputView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(Color.CT.outMsgBg)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.CT.noise, lineWidth: 1))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.CT.noise, lineWidth: 1))
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
     }
-
-    // MARK: - Popover helper
 
     private func popoverButton(label: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -239,82 +247,33 @@ struct DesktopMessageInputView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Computed helpers
-
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !selectedImages.isEmpty
-            || !selectedFileURLs.isEmpty
+        attachments.canSend(text: text)
     }
 
-    // MARK: - Actions
+    private func startVoiceRecording() {
+        Task {
+            do {
+                try await audioRecorder.startRecording()
+            } catch AudioRecorderService.RecorderError.permissionDenied {
+                showMicPermissionAlert = true
+            } catch {
+                Log.error("Recording failed: \(error)", category: "MessageInput")
+            }
+        }
+    }
 
     private func sendMessage() {
-        onSend(selectedImages, selectedFileURLs)
+        onSend(attachments.selectedAttachments, attachments.selectedFileURLs)
         selectedPhotos.removeAll()
-        selectedImages.removeAll()
-        selectedFileURLs.removeAll()
-    }
-
-    private func removePhoto(at index: Int) {
-        guard index < selectedImages.count else { return }
-        selectedImages.remove(at: index)
-        if index < selectedPhotos.count { selectedPhotos.remove(at: index) }
-    }
-
-    // MARK: - Photo loading
-
-    private func loadSelectedPhotos() async {
-        selectedImages.removeAll()
-        for item in selectedPhotos {
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let image = PlatformImage(data: data) else { continue }
-            if let jpeg = image.platformJPEGData(quality: 0.8),
-               Int64(jpeg.count) > MessageSizeLimits.maxImageBytes {
-                Log.error("Photo too large", category: "MessageInput")
-                continue
-            }
-            selectedImages.append(image)
-        }
-    }
-
-    private func loadImagesFromURLs(_ urls: [URL]) {
-        for url in urls {
-            guard url.startAccessingSecurityScopedResource() else { continue }
-            defer { url.stopAccessingSecurityScopedResource() }
-            guard let data = try? Data(contentsOf: url),
-                  let image = PlatformImage(data: data) else { continue }
-            if let jpeg = image.platformJPEGData(quality: 0.8),
-               Int64(jpeg.count) > MessageSizeLimits.maxImageBytes { continue }
-            selectedImages.append(image)
-        }
-    }
-
-    private func handlePickedFiles(_ urls: [URL]) {
-        let imageExts: Set<String> = ["jpg", "jpeg", "png", "heic", "gif", "webp", "bmp", "tiff"]
-        for url in urls {
-            if imageExts.contains(url.pathExtension.lowercased()) {
-                loadImagesFromURLs([url])
-            } else {
-                do {
-                    try MessageValidator.validateFile(at: url)
-                    selectedFileURLs.append(url)
-                } catch let error as MessageValidationError {
-                    ErrorRouter.shared.report(error)
-                } catch {
-                    ErrorRouter.shared.report(.unknown(error.userFacingMessage))
-                }
-            }
-        }
+        attachments.clear()
     }
 }
 
-// MARK: - Previews
-
-#if DEBUG
 #Preview("Desktop Input — idle") {
     @Previewable @State var text = ""
     @Previewable @State var dropped: [PlatformImage] = []
+
     VStack {
         Spacer()
         DesktopMessageInputView(
@@ -330,12 +289,13 @@ struct DesktopMessageInputView: View {
         )
     }
     .background(Color.CT.bg)
-    .frame(width: 700, height: 200)
+    .frame(width: 600, height: 200)
 }
 
 #Preview("Desktop Input — with text") {
     @Previewable @State var text = "Drafting a message..."
     @Previewable @State var dropped: [PlatformImage] = []
+
     VStack {
         Spacer()
         DesktopMessageInputView(
@@ -351,6 +311,6 @@ struct DesktopMessageInputView: View {
         )
     }
     .background(Color.CT.bg)
-    .frame(width: 700, height: 200)
+    .frame(width: 600, height: 200)
 }
 #endif

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 extension MessageBubble {
     var body: some View {

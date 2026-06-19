@@ -16,15 +16,20 @@ struct RecoverySetupView: View {
         VStack(spacing: 0) {
             CTNavBar(
                 title: NSLocalizedString("account_recovery_seed", comment: ""),
-                showBack: false,
-                trailingSymbol: showsCancelButton ? NSLocalizedString("cancel", comment: "") : nil,
-                trailingColor: Color.CT.textDim,
-                backAction: nil,
-                trailingAction: showsCancelButton ? {
-                    vm.resetSetup()
-                    dismiss()
-                } : nil
-            )
+                showBack: false
+            ) {
+                EmptyView()
+            } trailing: {
+                if showsCancelButton {
+                    Button(NSLocalizedString("cancel", comment: "")) {
+                        vm.resetSetup()
+                        dismiss()
+                    }
+                    .font(CTFont.bold(13))
+                    .foregroundColor(Color.CT.textDim)
+                    .buttonStyle(.plain)
+                }
+            }
             Group {
                 switch vm.setupStep {
                 case .idle:
@@ -98,8 +103,8 @@ struct RecoverySetupView: View {
                 .padding(.horizontal)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(vm.mnemonic.indices, id: \.self) { i in
-                    wordCell(index: i, word: vm.mnemonic[i])
+                forEachIndexed(vm.mnemonic) { i, word in
+                    wordCell(index: i, word: word)
                 }
             }
             .padding(.horizontal)
@@ -146,6 +151,19 @@ struct RecoverySetupView: View {
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 1))
     }
 
+    // Safe indexed iteration over potentially mutating @Observable arrays.
+    // Always snapshot first to prevent "Index out of range" during SwiftUI/Observation updates.
+    @ViewBuilder
+    private func forEachIndexed<T, Content: View>(
+        _ items: [T],
+        @ViewBuilder content: @escaping (Int, T) -> Content
+    ) -> some View {
+        let snapshot = items
+        ForEach(Array(snapshot.enumerated()), id: \.offset) { pair in
+            content(pair.offset, pair.element)
+        }
+    }
+
     // MARK: - Quiz
 
     private var quizView: some View {
@@ -157,7 +175,8 @@ struct RecoverySetupView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
-                ForEach(vm.quizIndices, id: \.self) { idx in
+                let quizIdxs = vm.quizIndices
+                ForEach(quizIdxs, id: \.self) { idx in
                     quizWordField(index: idx)
                 }
 

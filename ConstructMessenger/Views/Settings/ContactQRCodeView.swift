@@ -43,7 +43,11 @@ struct ContactQRCodeView: View {
                 title: NSLocalizedString("invite", comment: ""),
                 showBack: true,
                 backAction: { dismiss() }
-            )
+            ) {
+                EmptyView()
+            } trailing: {
+                EmptyView()
+            }
             Rectangle().fill(Color.CT.noise).frame(height: 1)
 
             ScrollView(showsIndicators: false) {

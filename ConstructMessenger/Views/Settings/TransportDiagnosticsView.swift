@@ -25,7 +25,11 @@ struct TransportDiagnosticsView: View {
                 title: "TRANSPORT DIAGNOSTICS",
                 showBack: true,
                 backAction: { dismiss() }
-            )
+            ) {
+                EmptyView()
+            } trailing: {
+                EmptyView()
+            }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     stateSection
