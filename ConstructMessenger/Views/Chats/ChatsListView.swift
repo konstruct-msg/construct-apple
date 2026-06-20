@@ -120,7 +120,7 @@ struct ChatsListView: View {
             // Spacer row at top so first chats are visible below the floating search capsule,
             // and content can scroll under the glass.
             Color.clear
-                .frame(height: 100)  // approx height for nav + search
+                .frame(height: 70)  // approx height for nav + search
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 

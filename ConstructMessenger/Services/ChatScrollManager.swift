@@ -109,14 +109,22 @@ class ChatScrollManager {
     /// Automatically maintains `shouldScrollToBottom` so auto-scroll on new
     /// messages doesn't fight the user when they deliberately scroll up.
     func updateScrollOffset(_ offset: CGFloat) {
+        // Ignore offset updates while keyboard is animating — container height
+        // changes during animation produce spurious offset values.
+        if isKeyboardVisible {
+            scrollOffset = offset
+            return
+        }
+
         scrollOffset = offset
 
         if offset >= -60 {
             // User is at (or very near) the bottom — re-enable auto-scroll.
             shouldScrollToBottom = true
-        } else if offset < -160 {
-            // User has scrolled far enough up that they're reading history —
-            // disable auto-scroll so new arrivals don't yank them back down.
+        } else if offset < -60 {
+            // User has scrolled up — disable auto-scroll so new arrivals
+            // don't yank them back down. Single threshold avoids the
+            // -160…-60 gap where state would stay stale.
             shouldScrollToBottom = false
         }
     }
@@ -149,9 +157,15 @@ class ChatScrollManager {
             }
             .sink { [weak self] height in
                 self?.keyboardHeight = height
+                // Scroll to bottom when keyboard appears, but only if user was already near bottom.
+                // The shouldScrollToBottom flag is managed by updateScrollOffset based on
+                // actual scroll position before keyboard animation started.
                 Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .milliseconds(100))
-                    self?.scrollToBottom()
+                    try? await Task.sleep(for: .milliseconds(150))
+                    guard let self else { return }
+                    if self.shouldScrollToBottom {
+                        self.scrollToBottom()
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -160,6 +174,13 @@ class ChatScrollManager {
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
             .sink { [weak self] _ in
                 self?.keyboardHeight = 0
+                // After keyboard dismisses, re-enable auto-scroll since user
+                // is likely back at the input area.
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(100))
+                    self?.shouldScrollToBottom = true
+                    self?.scrollToBottom()
+                }
             }
             .store(in: &cancellables)
         #endif

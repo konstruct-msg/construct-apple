@@ -106,6 +106,10 @@ struct DesktopChatView: View {
                                 }
                             }
                         }
+                        // Bottom anchor for scrollToBottom
+                        Color.clear
+                            .frame(height: 1)
+                            .id("bottom")
                     }
                     // Padding so latest messages stay visible above the floating glass input,
                     // and top messages are not hidden under the glass nav bar.

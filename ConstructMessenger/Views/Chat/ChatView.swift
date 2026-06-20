@@ -44,6 +44,10 @@ struct ChatView: View {
 
     @State private var containerWidth: CGFloat = 390
     
+    /// Dynamic bottom padding reserved so the last message is not hidden behind the floating input glass.
+    /// Updated by measuring the actual height of the input stack (reply + attachments + voice + main row).
+    @State private var bottomContentInset: CGFloat = 72
+    
     // ❌ REMOVED: Scroll-related @State variables (moved to ChatScrollManager)
     // - hasScrolledToBottom
     // - scrollProxy
@@ -140,10 +144,20 @@ struct ChatView: View {
                                 }
                             }
                         }
+                        // Inset that keeps the last message clear of the floating input glass.
+                        // It MUST live inside the scroll content and BEFORE the "bottom" anchor,
+                        // so scrollTo("bottom", anchor: .bottom) leaves this gap between the last
+                        // message and the viewport bottom (where the input overlay sits) instead
+                        // of pushing the last message behind the glass.
+                        Color.clear
+                            .frame(height: bottomContentInset)
+                        // Bottom anchor for scrollToBottom
+                        Color.clear
+                            .frame(height: 1)
+                            .id("bottom")
                     }
-                    // Space for floating capsules above and below
+                    // Top space for floating nav capsule.
                     .padding(.top, 70)
-                    .padding(.bottom, 110)
                     .padding(.horizontal)
                 }
                 .background(Color.CT.bg) // base under glass
@@ -180,9 +194,9 @@ struct ChatView: View {
                         let delay = ChatViewConstants.MessageDelay.mediaRender
                         Task { @MainActor in
                             try? await Task.sleep(for: .seconds(delay))
-                            if let lastMessage = filteredMessages.last {
-                                scrollManager.scrollToBottom(messageId: lastMessage.id)
-                            }
+                            // Use the virtual "bottom" anchor (which sits after the dynamic bottom padding)
+                            // so the last real message ends up visually above the input glass.
+                            scrollManager.scrollToBottom()
                         }
                     }
                 }
@@ -204,9 +218,7 @@ struct ChatView: View {
                     } else if newValue.isEmpty {
                         // When search is cleared, scroll back to bottom
                         scrollManager.shouldScrollToBottom = true
-                        if let lastMessage = filteredMessages.last {
-                            scrollManager.scrollToBottom(messageId: lastMessage.id)
-                        }
+                        scrollManager.scrollToBottom()
                     }
                 }
                 .onChange(of: isSearchActive) { _, active in
@@ -220,9 +232,7 @@ struct ChatView: View {
                         // When search is dismissed, scroll back to bottom
                         searchText = ""
                         scrollManager.shouldScrollToBottom = true
-                        if let lastMessage = filteredMessages.last {
-                            scrollManager.scrollToBottom(messageId: lastMessage.id)
-                        }
+                        scrollManager.scrollToBottom()
                     }
                 }
                 .onChange(of: isEditMode) { _, editMode in
@@ -268,8 +278,30 @@ struct ChatView: View {
                 messageInputView
                     .padding(.horizontal, 8)
                     .padding(.bottom, 8)
+                    .background {
+                        // Measure the real-time height of the entire input stack (can grow with reply/attachments/voice).
+                        GeometryReader { geo in
+                            Color.clear
+                                .preference(key: BottomInputHeightPreference.self, value: geo.size.height)
+                        }
+                    }
             }
             .frame(maxHeight: .infinity, alignment: .bottom)
+            .onPreferenceChange(BottomInputHeightPreference.self) { height in
+                // `height` already includes the input's 8pt bottom padding; add a small margin
+                // so the last bubble sits just clear of the glass (no large floor — the scroll
+                // now respects this inset exactly, so any padding here is directly visible).
+                bottomContentInset = height + 8
+
+                // If we were at the visual bottom, re-anchor after the input bar changed size
+                // (e.g. user added photo preview or reply).
+                if scrollManager.shouldScrollToBottom {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(80))
+                        scrollManager.scrollToBottom()
+                    }
+                }
+            }
         }
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
@@ -405,18 +437,22 @@ struct ChatView: View {
                     scrollManager.shouldScrollToBottom = true
 
                     // Scroll to bottom after sending (longer delay for media)
+                    // Use virtual bottom anchor so message is not placed under the input.
                     let sendDelay = ChatViewConstants.MessageDelay.scrollAfterSend
                     Task { @MainActor in
                         try? await Task.sleep(for: .seconds(sendDelay))
-                        if let lastMessage = filteredMessages.last {
-                            scrollManager.scrollToBottom(messageId: lastMessage.id)
-                        }
+                        scrollManager.scrollToBottom()
                     }
                 }
             },
             onSendVoice: { url, duration, waveform in
                 viewModel.sendVoiceMessage(url: url, duration: duration, waveform: waveform)
                 scrollManager.shouldScrollToBottom = true
+                // Scroll using virtual bottom to account for input height.
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(150))
+                    scrollManager.scrollToBottom()
+                }
             },
             onCancelReply: {
                 replyingTo = nil
@@ -433,18 +469,18 @@ struct ChatView: View {
             if scrollManager.shouldShowScrollToBottomButton && !isEditMode {
                 Button {
                     withAnimation(.easeOut(duration: 0.3)) {
-                        if let lastMessage = filteredMessages.last {
-                            scrollManager.scrollToBottom(messageId: lastMessage.id)
-                        }
+                        scrollManager.scrollToBottom() // virtual bottom respects dynamic input padding
                         scrollManager.shouldScrollToBottom = true
                     }
                 } label: {
-                    Image(systemName: "chevron.down.circle.fill")
-                        .font(.system(size: 25))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 24))
                         .foregroundColor(Color.CT.accent)
+                        .frame(width: 40, height: 40)
+                        .glassCapsule(cornerRadius: 999)
                 }
                 .padding(.trailing, 16)
-                .padding(.bottom, 100) // Above floating capsule input
+                .padding(.bottom, 100) // Lift well above the (variable height) input glass
                 .transition(.move(edge: .trailing).combined(with: .opacity))
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: scrollManager.shouldShowScrollToBottomButton)
             }
@@ -657,6 +693,15 @@ struct ChatView: View {
             }
         }
         return handled
+    }
+}
+
+// MARK: - Dynamic bottom inset measurement
+
+private struct BottomInputHeightPreference: PreferenceKey {
+    static var defaultValue: CGFloat = 130
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
