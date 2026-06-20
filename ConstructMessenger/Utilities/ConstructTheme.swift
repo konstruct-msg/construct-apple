@@ -257,11 +257,10 @@ struct CTHexAvatar: View {
             } else {
                 Circle()
                     .fill(accentColor.opacity(0.18))
+                IdenticonView(seed: colorSeed ?? initials)
+                    .clipShape(Circle())
                 Circle()
                     .stroke(accentColor, lineWidth: 1)
-                Text(String(initials.prefix(2)).uppercased())
-                    .font(CTFont.bold(size.rawValue * 0.28))
-                    .foregroundColor(accentColor)
             }
         }
         .frame(width: size.rawValue, height: size.rawValue)
