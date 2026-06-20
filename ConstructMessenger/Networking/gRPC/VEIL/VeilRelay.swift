@@ -47,6 +47,11 @@ struct VeilRelay: Codable, Identifiable {
     /// exclude it from the probe race. Distributed via the relay manifest
     /// alongside `bridgeCert` / `wtPath`.
     let veilFrontTicket: String?
+    /// Base64-encoded key-bound CapabilityV2 blob (ticket B1, AUTH v3). nil means no
+    /// v2 capability bootstrapped yet — Rust falls back to `veilFrontTicket` (AUTH v2).
+    let veilCapabilityV2: String?
+    /// Hex-encoded 32-byte Ed25519 `veil_sk` seed, paired with `veilCapabilityV2`.
+    let veilSkHex: String?
 
     /// Full bridge line passed to Rust: "cert=<cert> iat-mode=<n>".
     var bridgeLine: String {
@@ -70,7 +75,8 @@ struct VeilRelay: Codable, Identifiable {
          tlsServerName: String? = nil, pinnedSpki: String? = nil,
          wtPath: String? = nil, wtHostHeader: String? = nil,
          alternativeSNIs: [String] = [], manifestId: String? = nil,
-         veilFrontTicket: String? = nil) {
+         veilFrontTicket: String? = nil, veilCapabilityV2: String? = nil,
+         veilSkHex: String? = nil) {
         self.id = UUID()
         self.manifestId = manifestId
         self.address = address
@@ -82,6 +88,8 @@ struct VeilRelay: Codable, Identifiable {
         self.wtHostHeader = wtHostHeader
         self.alternativeSNIs = alternativeSNIs
         self.veilFrontTicket = veilFrontTicket
+        self.veilCapabilityV2 = veilCapabilityV2
+        self.veilSkHex = veilSkHex
     }
 
     enum CodingKeys: String, CodingKey {
@@ -89,6 +97,8 @@ struct VeilRelay: Codable, Identifiable {
         case alternativeSNIs = "alternativeSNIs"
         case manifestId
         case veilFrontTicket
+        case veilCapabilityV2
+        case veilSkHex
     }
 
     init(from decoder: Decoder) throws {
@@ -105,6 +115,8 @@ struct VeilRelay: Codable, Identifiable {
         wtHostHeader = try? c.decode(String.self, forKey: .wtHostHeader)
         alternativeSNIs = (try? c.decode([String].self, forKey: .alternativeSNIs)) ?? []
         veilFrontTicket = try? c.decode(String.self, forKey: .veilFrontTicket)
+        veilCapabilityV2 = try? c.decode(String.self, forKey: .veilCapabilityV2)
+        veilSkHex = try? c.decode(String.self, forKey: .veilSkHex)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -120,5 +132,7 @@ struct VeilRelay: Codable, Identifiable {
         try? c.encode(wtHostHeader, forKey: .wtHostHeader)
         if !alternativeSNIs.isEmpty { try? c.encode(alternativeSNIs, forKey: .alternativeSNIs) }
         try? c.encode(veilFrontTicket, forKey: .veilFrontTicket)
+        try? c.encode(veilCapabilityV2, forKey: .veilCapabilityV2)
+        try? c.encode(veilSkHex, forKey: .veilSkHex)
     }
 }

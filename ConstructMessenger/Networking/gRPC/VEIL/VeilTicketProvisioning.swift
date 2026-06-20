@@ -237,6 +237,58 @@ enum VeilConfigImporter {
         for (i, b) in slice.enumerated() { v |= UInt64(b) << (8 * i) }
         return v
     }
+
+    // MARK: - CapabilityV2 parsing (ticket B1, key-bound capability)
+
+    /// The fields we surface from a parsed `CapabilityV2`.
+    struct ParsedCapabilityV2 {
+        let veilPk: Data
+        let role: UInt8
+        let scope: String
+        let notBefore: UInt64
+        let notAfter: UInt64
+    }
+
+    /// CapabilityV2 blob layout (must match `construct-veil-protocol::CapabilityV2::encode`):
+    ///   ticket_id[16] ‖ veil_pk[32] ‖ role[1] ‖ not_before[8 LE] ‖ not_after[8 LE]
+    ///   ‖ suite_id[1] ‖ scope_len[u8] ‖ scope[scope_len] ‖ sig[64]
+    /// The issuer-signed message is `"veil-cap-v2" ‖ blob[0..<67] ‖ scope` (ticket_id ‖
+    /// veil_pk ‖ role ‖ not_before ‖ not_after ‖ suite_id, plus the scope bytes). We
+    /// verify that Ed25519 signature against `relayConfigSigningKey` — the same offline
+    /// check the relay does.
+    static func parseCapabilityV2(_ capabilityBase64: String) throws -> ParsedCapabilityV2 {
+        guard let blob = Data(base64Encoded: capabilityBase64) else { throw ImportError.malformed }
+        let bytes = [UInt8](blob)
+        let fixed = 16 + 32 + 1 + 8 + 8 + 1 + 1   // 67 — through scope_len
+        let sigLen = 64
+        guard bytes.count >= fixed else { throw ImportError.malformed }
+        let veilPk = Data(bytes[16..<48])
+        let role = bytes[48]
+        let scopeLen = Int(bytes[66])
+        guard bytes.count == fixed + scopeLen + sigLen else { throw ImportError.malformed }
+
+        let notBefore = readU64LE(bytes[49..<57])
+        let notAfter = readU64LE(bytes[57..<65])
+        let scopeBytes = bytes[67..<(67 + scopeLen)]
+        let scope = String(bytes: scopeBytes, encoding: .utf8) ?? ""
+        let sig = Data(bytes[(67 + scopeLen)...])
+
+        // Reconstruct the issuer-signed message and verify the Ed25519 signature.
+        var msg = Data("veil-cap-v2".utf8)
+        msg.append(Data(bytes[0..<66]))
+        msg.append(Data(scopeBytes))
+        guard let pubKeyData = Data(veilHexString: VEILConfig.relayConfigSigningKey),
+              let publicKey = try? Curve25519.Signing.PublicKey(rawRepresentation: pubKeyData),
+              publicKey.isValidSignature(sig, for: msg) else {
+            throw ImportError.badSignature
+        }
+
+        // Validity window (not_after == 0 means "no expiry encoded").
+        let now = UInt64(max(0, Date().timeIntervalSince1970))
+        if notAfter != 0 && now > notAfter { throw ImportError.expired }
+
+        return ParsedCapabilityV2(veilPk: veilPk, role: role, scope: scope, notBefore: notBefore, notAfter: notAfter)
+    }
 }
 
 private extension Data {

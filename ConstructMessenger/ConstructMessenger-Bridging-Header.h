@@ -82,8 +82,16 @@ typedef struct VeilStartRequest {
     const char *scores_path;           // SQLite path, NULL = in-memory
     // Base64-encoded veil-front ticket (65 raw bytes pre-encoding). Empty / NULL
     // excludes veil-front from the probe race (its ticket parse fails the probe
-    // fast). MUST be the last field — Rust struct layout depends on it.
+    // fast). Superseded (not replaced) by veil_capability_v2_b64 below (ticket B1).
     const char *veil_front_ticket_b64;
+    // Base64-encoded key-bound CapabilityV2 blob (ticket B1, AUTH v3). NULL/empty
+    // falls back to veil_front_ticket_b64 (AUTH v2). Must be paired with
+    // veil_sk_hex below.
+    const char *veil_capability_v2_b64;
+    // Hex-encoded 32-byte Ed25519 veil_sk seed — generated and stored locally
+    // (Keychain). Never derived from or sent to the relay. NULL/empty = AUTH v3
+    // not configured. MUST be the last field — Rust struct layout depends on it.
+    const char *veil_sk_hex;
 } VeilStartRequest;
 
 typedef struct VeilStartResult {

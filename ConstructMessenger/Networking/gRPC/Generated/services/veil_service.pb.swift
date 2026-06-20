@@ -33,6 +33,17 @@ public struct Shared_Proto_Services_V1_IssueVeilCapabilityRequest: Sendable {
   /// ticket_id заменяемой capability (для учёта ротации). Опционально.
   public var currentTicketID: Data = Data()
 
+  /// B1 (decisions/veil-ticket-provisioning-system.md): держателя публичный
+  /// Ed25519-ключ (32 байта). Если задан — backend выдаёт key-bound CapabilityV2
+  /// (AUTH v3), привязанную к этому ключу, вместо bearer-capability B2. Приватный
+  /// ключ никогда не передаётся backend'у. Обязателен при role = ROLE_RELAY.
+  public var veilPk: Data = Data()
+
+  /// B1: роль держателя — 0 = ROLE_USER (по умолчанию), 1 = ROLE_RELAY (цепочечный
+  /// релей, запрашивающий capability на upstream-релей, см.
+  /// decisions/veil-relay-topology.md §3/§4). Игнорируется, если veil_pk не задан.
+  public var role: UInt32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -44,9 +55,13 @@ public struct Shared_Proto_Services_V1_IssueVeilCapabilityResponse: Sendable {
   // methods supported on all messages.
 
   /// Каноничный подписанный capability blob, который клиент скармливает veil_start
-  /// напрямую (base64 → store). Layout — construct-veil-protocol::Capability::encode:
-  ///   ticket_id[16] || auth_key[32] || not_before[8 LE] || not_after[8 LE]
-  ///   || suite_id[1] || scope_len[u8] || scope || sig[64]
+  /// напрямую (base64 → store). Layout зависит от capability_version:
+  ///   v1 (B2, construct-veil-protocol::Capability::encode):
+  ///     ticket_id[16] || auth_key[32] || not_before[8 LE] || not_after[8 LE]
+  ///     || suite_id[1] || scope_len[u8] || scope || sig[64]
+  ///   v2 (B1, construct-veil-protocol::CapabilityV2::encode):
+  ///     ticket_id[16] || veil_pk[32] || role[1] || not_before[8 LE]
+  ///     || not_after[8 LE] || suite_id[1] || scope_len[u8] || scope || sig[64]
   public var capability: Data = Data()
 
   /// Подтверждённые сетевые параметры релея — клиент обновляет пин/SNI по этому же
@@ -61,6 +76,10 @@ public struct Shared_Proto_Services_V1_IssueVeilCapabilityResponse: Sendable {
   /// Unix-время истечения — клиент планирует следующее продление.
   public var notAfter: Int64 = 0
 
+  /// Формат выданной capability: 1 = B2 (bearer, AUTH v2), 2 = B1 (key-bound, AUTH
+  /// v3). Зависит от того, был ли в запросе задан veil_pk.
+  public var capabilityVersion: UInt32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -72,7 +91,7 @@ fileprivate let _protobuf_package = "shared.proto.services.v1"
 
 extension Shared_Proto_Services_V1_IssueVeilCapabilityRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IssueVeilCapabilityRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}relay_address\0\u{3}current_ticket_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}relay_address\0\u{3}current_ticket_id\0\u{3}veil_pk\0\u{1}role\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -82,6 +101,8 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityRequest: SwiftProtobuf.Mes
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.relayAddress) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.currentTicketID) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.veilPk) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.role) }()
       default: break
       }
     }
@@ -94,12 +115,20 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityRequest: SwiftProtobuf.Mes
     if !self.currentTicketID.isEmpty {
       try visitor.visitSingularBytesField(value: self.currentTicketID, fieldNumber: 2)
     }
+    if !self.veilPk.isEmpty {
+      try visitor.visitSingularBytesField(value: self.veilPk, fieldNumber: 3)
+    }
+    if self.role != 0 {
+      try visitor.visitSingularUInt32Field(value: self.role, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_IssueVeilCapabilityRequest, rhs: Shared_Proto_Services_V1_IssueVeilCapabilityRequest) -> Bool {
     if lhs.relayAddress != rhs.relayAddress {return false}
     if lhs.currentTicketID != rhs.currentTicketID {return false}
+    if lhs.veilPk != rhs.veilPk {return false}
+    if lhs.role != rhs.role {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -107,7 +136,7 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityRequest: SwiftProtobuf.Mes
 
 extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IssueVeilCapabilityResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}capability\0\u{3}relay_address\0\u{1}spki\0\u{1}sni\0\u{3}not_after\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}capability\0\u{3}relay_address\0\u{1}spki\0\u{1}sni\0\u{3}not_after\0\u{3}capability_version\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -120,6 +149,7 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Me
       case 3: try { try decoder.decodeSingularStringField(value: &self.spki) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.sni) }()
       case 5: try { try decoder.decodeSingularInt64Field(value: &self.notAfter) }()
+      case 6: try { try decoder.decodeSingularUInt32Field(value: &self.capabilityVersion) }()
       default: break
       }
     }
@@ -141,6 +171,9 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Me
     if self.notAfter != 0 {
       try visitor.visitSingularInt64Field(value: self.notAfter, fieldNumber: 5)
     }
+    if self.capabilityVersion != 0 {
+      try visitor.visitSingularUInt32Field(value: self.capabilityVersion, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -150,6 +183,7 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Me
     if lhs.spki != rhs.spki {return false}
     if lhs.sni != rhs.sni {return false}
     if lhs.notAfter != rhs.notAfter {return false}
+    if lhs.capabilityVersion != rhs.capabilityVersion {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

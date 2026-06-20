@@ -277,7 +277,12 @@ enum ConnectionLoopRelayBridge {
             manifestId: nil,
             // Per-user ticket imported out-of-band (signed config blob → Keychain);
             // never hardcoded in the binary. nil → coordinator excludes veil-front.
-            veilFrontTicket: VeilTicketStore.ticket(for: address)
+            veilFrontTicket: VeilTicketStore.ticket(for: address),
+            // Ticket B1: key-bound capability, bootstrapped in-band once a B2 tunnel is
+            // up (VeilCapabilityV2Bootstrapper). nil until bootstrap completes — Rust
+            // falls back to veilFrontTicket (AUTH v2) until then.
+            veilCapabilityV2: VeilCapabilityV2Store.capability(for: address),
+            veilSkHex: VeilAccessKeyStore.shared.veilSkHex
         )
     }
 }

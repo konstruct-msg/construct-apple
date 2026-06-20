@@ -108,6 +108,9 @@ final class VeilProxyManager: ObservableObject {
         // VEIL is confirmed working — a good moment to renew the capability in-band
         // before it expires (no-ops unless near expiry; rate-limited internally).
         VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: address)
+        // Ticket B1: bootstrap/renew the key-bound capability over the same live
+        // tunnel (no-ops unless needed; rate-limited internally).
+        VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: address)
     }
 
 
@@ -243,6 +246,8 @@ final class VeilProxyManager: ObservableObject {
         // Renew the capability if it's near expiry. Works over whatever transport is
         // up (in-band over VEIL when active); no-ops unless within the renewal window.
         VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
+        // Ticket B1: bootstrap/renew the key-bound capability over the same channel.
+        VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
     }
 
     /// Called on app foreground to verify the VEIL proxy process is actually alive.

@@ -29,12 +29,29 @@ final class VeilServiceClient: Sendable {
         let spki: String        // hex SHA-256 SPKI pin
         let sni: String
         let notAfter: Int64      // unix expiry of the new capability
+        /// 1 = B2 bearer (AUTH v2), 2 = B1 key-bound (AUTH v3) — depends on whether
+        /// `veilPk` was set on the request.
+        let capabilityVersion: UInt32
+    }
+
+    /// `CapabilityV2.role` values (ticket B1) — mirrors `construct-veil-protocol`'s
+    /// `ROLE_USER`/`ROLE_RELAY` constants.
+    enum Role: UInt32 {
+        case user = 0
+        case relay = 1
     }
 
     /// Request a fresh capability for `relayAddress`. `currentTicketId` optionally
-    /// references the capability being replaced (rotation accounting). Throws on RPC
-    /// failure; the caller validates the returned blob before storing it.
-    func issueCapability(relayAddress: String, currentTicketId: Data? = nil) async throws -> IssuedCapability {
+    /// references the capability being replaced (rotation accounting). When `veilPk`
+    /// is set, the backend issues a key-bound `CapabilityV2` (B1, AUTH v3) bound to
+    /// that public key instead of a bearer capability (B2). Throws on RPC failure;
+    /// the caller validates the returned blob before storing it.
+    func issueCapability(
+        relayAddress: String,
+        currentTicketId: Data? = nil,
+        veilPk: Data? = nil,
+        role: Role = .user
+    ) async throws -> IssuedCapability {
         try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.issueVeilCapability) { grpcClient in
             let client = Shared_Proto_Services_V1_VeilService.Client(wrapping: grpcClient)
 
@@ -43,6 +60,10 @@ final class VeilServiceClient: Sendable {
             if let currentTicketId, !currentTicketId.isEmpty {
                 request.currentTicketID = currentTicketId
             }
+            if let veilPk, !veilPk.isEmpty {
+                request.veilPk = veilPk
+                request.role = role.rawValue
+            }
 
             let response = try await client.issueVeilCapability(request: .init(message: request))
             return IssuedCapability(
@@ -50,7 +71,8 @@ final class VeilServiceClient: Sendable {
                 relayAddress: response.relayAddress.isEmpty ? relayAddress : response.relayAddress,
                 spki: response.spki,
                 sni: response.sni,
-                notAfter: response.notAfter
+                notAfter: response.notAfter,
+                capabilityVersion: response.capabilityVersion
             )
         }
     }
