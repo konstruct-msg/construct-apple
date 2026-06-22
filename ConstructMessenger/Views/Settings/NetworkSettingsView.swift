@@ -31,6 +31,7 @@ struct NetworkSettingsView: View {
     @State private var veilImportIsError = false
     /// Bumped after an import to refresh the configured-status row.
     @State private var veilTicketRefresh = 0
+    @State private var engineQuicOn = FeatureFlags.engineQuicExperimental
 
     private var veilConfiguredRelay: String? {
         _ = veilTicketRefresh
@@ -91,7 +92,8 @@ struct NetworkSettingsView: View {
                             : streamManager.activeTransport
                         let isLive = !streamManager.activeTransport.isEmpty
                         if !displayTransport.isEmpty {
-                            let isQUIC = displayTransport == "H3"
+                            // "H3" = legacy native stack; "QUIC" = engine QUIC (construct-transport).
+                            let isQUIC = displayTransport == "H3" || displayTransport == "QUIC"
                             Text(isQUIC ? NetworkSettingsLabels.quic : NetworkSettingsLabels.h2)
                                 .font(CTFont.regular(13))
                                 .foregroundColor(isLive
@@ -221,6 +223,31 @@ struct NetworkSettingsView: View {
                 }
 
                 veilAccessSection
+
+                // Experimental (available in test builds): route the message stream over the new
+                // QUIC/HTTP-3 transport (construct-transport). Opt-in, off by default; falls back to
+                // H2 on failure. Confirm it's live via the transport badge in the STATUS section above
+                // ("QUIC" when active, "H2" otherwise). Direct path only — ignored when VEIL is active.
+                CTSettingsSectionHeader(title: "EXPERIMENTAL", color: .orange)
+                CTSectionGroup {
+                    Toggle(isOn: $engineQuicOn) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("QUIC / HTTP-3 transport")
+                                .font(CTFont.regular(14))
+                                .foregroundStyle(.orange)
+                            Text("Route the message stream over QUIC instead of H2. Watch the transport badge above to confirm.")
+                                .font(CTFont.regular(11))
+                                .foregroundStyle(Color.CT.textDim)
+                        }
+                    }
+                    .tint(.orange)
+                    .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                    .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
+                    .onChange(of: engineQuicOn) { _, newValue in
+                        FeatureFlags.engineQuicExperimental = newValue
+                        streamManager.reconnectForTransportChange()
+                    }
+                }
 
                 #if DEBUG
                 // Debug-only: live FSM diagnostics. Every transport routing decision flows

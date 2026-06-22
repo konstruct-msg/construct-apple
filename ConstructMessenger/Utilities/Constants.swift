@@ -284,7 +284,16 @@ struct FeatureFlags {
     /// device gate passes between two real devices.
     ///
     /// See `decisions/quic-h3-transport-dedicated-rust-stack.md`.
-    static let engineQuicExperimental: Bool = false
+    ///
+    /// Runtime-toggleable at `Settings → Network → EXPERIMENTAL` (orange) so it can be
+    /// flipped on a test build without recompiling. Backed by `UserDefaults`; defaults
+    /// `false`. Read fresh on every stream open, so toggling + a stream reconnect switches
+    /// transport live (the active transport is shown as a badge in Network settings).
+    static let engineQuicExperimentalKey = "ff.engineQuicExperimental"
+    static var engineQuicExperimental: Bool {
+        get { UserDefaults.standard.bool(forKey: engineQuicExperimentalKey) }
+        set { UserDefaults.standard.set(newValue, forKey: engineQuicExperimentalKey) }
+    }
 }
 
 // MARK: - Traffic Protection Configuration

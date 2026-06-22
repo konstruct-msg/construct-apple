@@ -274,6 +274,26 @@ final class MessageStreamManager {
 
     /// Cancel any in-progress backoff/connection and start fresh immediately.
     /// Use when returning from background or recovering from a known-bad state.
+    /// Re-open the stream using the stored subscriptions/handler so a transport change
+    /// (toggling the engine-QUIC experiment in Settings → Network) takes effect immediately.
+    /// Invalidates the persistent H2 + engine-QUIC channels first so the next open builds the
+    /// newly-selected transport from scratch. The resulting active transport surfaces as the
+    /// badge in NetworkSettingsView ("QUIC" vs "H2").
+    func reconnectForTransportChange() {
+        GRPCChannelManager.shared.invalidatePersistentClient()
+#if os(iOS)
+        GRPCChannelManager.shared.forceInvalidateEngineQuicConnection()
+#endif
+        let ids = subscriptionUserIds
+        guard let cb = onMessageReceived else {
+            Log.info("Transport toggle — no callback yet, nothing to reconnect", category: "MessageStream")
+            return
+        }
+        Log.info("Transport toggle (engineQuic=\(FeatureFlags.engineQuicExperimental)) — forcing stream reconnect", category: "MessageStream")
+        forceDisconnect()
+        connect(contactUserIds: ids, onMessageReceived: cb)
+    }
+
     func forceReconnect(contactUserIds: [String], onMessageReceived: @escaping (ChatMessage) -> Void) {
         // Don't downgrade an active subscription list to empty.
         // This happens when forceReconnect fires while CoreData hasn't settled yet (context
