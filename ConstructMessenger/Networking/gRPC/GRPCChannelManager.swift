@@ -137,6 +137,20 @@ final class GRPCChannelManager: Sendable {
     }
 #endif
 
+    // Experimental engine-QUIC persistent connection (construct-transport Rust stack).
+    // Stored as Any? for the same #if-guard reason as the H3 box.
+    private nonisolated(unsafe) var _eqConnBox: Any? = nil
+    private nonisolated(unsafe) var _eqConnGeneration: UInt64 = 0
+    private let _eqConnLock = NSLock()
+
+#if os(iOS)
+    private struct PersistentConnEngineQuic: @unchecked Sendable {
+        let client: GRPCClient<QuicClientTransport>
+        let task:   Task<Void, Never>
+        let key:    String   // "engine-quic:<host>:<port>" — direct path only, never over VEIL
+    }
+#endif
+
     // Set by ConnectionLoop.prepare() via setDirectProxyPort(). veilProxyPort() returns this value.
     private nonisolated(unsafe) var _overrideProxyPort: UInt16? = nil
     private let _overrideProxyPortLock = NSLock()
@@ -429,6 +443,86 @@ final class GRPCChannelManager: Sendable {
         _h3connBox = nil
         _h3connGeneration &+= 1
         Log.debug("H3 persistent connection force-invalidated (gen=\(_h3connGeneration))", category: "GRPCChannel")
+    }
+#endif
+
+#if os(iOS)
+    /// Resolves the experimental engine-QUIC gateway config, or `nil` when the
+    /// experiment is off or the pinned gateway certificate is not bundled.
+    /// The gateway is the native quinn+h3 service (`quic.konstruct.cc:443`), separate
+    /// from the Envoy/Traefik H2 endpoint.
+    private func engineQuicConfig() -> QuicClientTransport.Config? {
+        guard FeatureFlags.engineQuicExperimental else { return nil }
+        let host = Bundle.main.object(forInfoDictionaryKey: "QUIC_GATEWAY_HOST") as? String ?? "quic.konstruct.cc"
+        let port = (Bundle.main.object(forInfoDictionaryKey: "QUIC_GATEWAY_PORT") as? String).flatMap(UInt16.init) ?? 443
+        // Self-signed gateway cert (DER), pinned. Bundled as `quic_gateway.der`.
+        guard let url = Bundle.main.url(forResource: "quic_gateway", withExtension: "der"),
+              let cert = try? Data(contentsOf: url) else {
+            Log.error("engine-QUIC enabled but quic_gateway.der is not bundled — cannot pin gateway cert", category: "GRPCChannel")
+            return nil
+        }
+        return QuicClientTransport.Config(host: host, port: port, serverName: host, trustCert: cert)
+    }
+
+    /// Creates a gRPC client over the experimental engine-QUIC transport, or `nil`
+    /// when the experiment/cert is unavailable. Direct path only — never over VEIL.
+    func makeClientEngineQuic() -> GRPCClient<QuicClientTransport>? {
+        guard let config = engineQuicConfig() else { return nil }
+        Log.debug("gRPC creating engine-QUIC channel → \(config.host):\(config.port)", category: "gRPC")
+        let transport = QuicClientTransport(config: config)
+        return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
+    }
+
+    /// Returns (or lazily creates) the shared persistent engine-QUIC channel, or `nil`
+    /// when the experiment is off. Mirrors `acquireH3Channel()`; callers MUST fall back
+    /// to the H2 path (`acquirePersistentClient()`) on `nil` or on any RPC failure.
+    func acquireEngineQuicChannel() -> GRPCClient<QuicClientTransport>? {
+        _eqConnLock.lock()
+        defer { _eqConnLock.unlock() }
+
+        let key = "engine-quic:\(currentHost):\(currentPort)"
+        if let conn = _eqConnBox as? PersistentConnEngineQuic, conn.key == key, !conn.task.isCancelled {
+            return conn.client
+        }
+
+        if let old = _eqConnBox as? PersistentConnEngineQuic {
+            old.client.beginGracefulShutdown()
+        }
+        _eqConnBox = nil
+        _eqConnGeneration &+= 1
+        let gen = _eqConnGeneration
+
+        guard let client = makeClientEngineQuic() else { return nil }
+        let task = Task.detached { [weak self, gen] in
+            guard let self else { return }
+            let valid = self._eqConnLock.withLock { self._eqConnGeneration == gen }
+            guard valid else {
+                Log.debug("engine-QUIC client gen=\(gen) already superseded — skipping runConnections()", category: "GRPCChannel")
+                return
+            }
+            do {
+                try await client.runConnections()
+            } catch is CancellationError {
+                // Normal shutdown.
+            } catch {
+                Log.error("engine-QUIC persistent connection closed: \(error)", category: "GRPCChannel")
+                self.invalidateEngineQuicConnection()
+            }
+        }
+        _eqConnBox = PersistentConnEngineQuic(client: client, task: task, key: key)
+        Log.debug("engine-QUIC persistent connection created (key=\(key) gen=\(gen))", category: "GRPCChannel")
+        return client
+    }
+
+    /// Gracefully shuts down the engine-QUIC persistent connection.
+    func invalidateEngineQuicConnection() {
+        _eqConnLock.lock()
+        defer { _eqConnLock.unlock() }
+        guard let conn = _eqConnBox as? PersistentConnEngineQuic else { return }
+        conn.client.beginGracefulShutdown()
+        _eqConnBox = nil
+        _eqConnGeneration &+= 1
+        Log.debug("engine-QUIC persistent connection invalidated (gen=\(_eqConnGeneration))", category: "GRPCChannel")
     }
 #endif
 

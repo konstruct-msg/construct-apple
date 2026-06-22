@@ -272,6 +272,19 @@ struct FeatureFlags {
     ///
     /// See `wiki/decisions/h3-disabled-on-ios.md` for the full context.
     static let h3Enabled: Bool = false
+
+    /// Experimental QUIC/HTTP-3 via the dedicated `construct-transport` Rust stack
+    /// (`QuicClientTransport`), routed through a native quinn+h3 gateway that bypasses
+    /// the Traefik QUIC↔h2c bridge that broke the old native Swift H3 path.
+    ///
+    /// **Dev-only, opt-in, default `false`.** This is NOT the dormant Swift H3 stack
+    /// (`h3Enabled`) — it is a separate experiment. When on, eligible RPCs use the
+    /// engine QUIC channel with a hard fallback to the H2 path at the router; it never
+    /// joins the happy-eyeballs race. Promote only after the bidi `MessageStream`
+    /// device gate passes between two real devices.
+    ///
+    /// See `decisions/quic-h3-transport-dedicated-rust-stack.md`.
+    static let engineQuicExperimental: Bool = false
 }
 
 // MARK: - Traffic Protection Configuration
