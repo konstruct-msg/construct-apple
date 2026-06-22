@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		4CC229F104334A44B3561AF2 /* GeoLite2-Country.mmdb in Resources */ = {isa = PBXBuildFile; fileRef = ECED362673164C2D8564E780 /* GeoLite2-Country.mmdb */; };
 		5DE6276511B842BCBB52CA05 /* GeoLite2-ASN.mmdb in Resources */ = {isa = PBXBuildFile; fileRef = 819FB256A68C4DC7BF0637F1 /* GeoLite2-ASN.mmdb */; };
+		68AFEF4061D54FD4D885332F /* ConstructTransport.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = FC6F98B0C3691C35F17194D3 /* ConstructTransport.xcframework */; };
 		A8FFA5FBCF4E4BCDBBE6AA04 /* ConstructEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */; };
 		BF0A1D232FCF418600D0597C /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = BF0A1D222FCF418600D0597C /* WhisperKit */; };
 		BF3DE8702F62C2000058C1AA /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -24,6 +25,7 @@
 		BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */; };
 		BFF6FD002F4C4E5300A31F36 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */; };
 		D5E79C3D4B5A42FA99FF5106 /* ConstructEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */; };
+		E1116245B437A841B1067B39 /* ConstructTransport.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = FC6F98B0C3691C35F17194D3 /* ConstructTransport.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +63,7 @@
 		BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ConstructMessengerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ConstructEngine.xcframework; sourceTree = "<group>"; };
 		ECED362673164C2D8564E780 /* GeoLite2-Country.mmdb */ = {isa = PBXFileReference; lastKnownFileType = file; path = "GeoLite2-Country.mmdb"; sourceTree = "<group>"; };
+		FC6F98B0C3691C35F17194D3 /* ConstructTransport.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = wrapper.xcframework; path = ConstructTransport.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -160,6 +163,7 @@
 				BF7098D12F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */,
 				D5E79C3D4B5A42FA99FF5106 /* ConstructEngine.xcframework in Frameworks */,
 				BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */,
+				E1116245B437A841B1067B39 /* ConstructTransport.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -195,6 +199,7 @@
 			files = (
 				BF7098D22F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */,
 				A8FFA5FBCF4E4BCDBBE6AA04 /* ConstructEngine.xcframework in Frameworks */,
+				68AFEF4061D54FD4D885332F /* ConstructTransport.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -234,6 +239,7 @@
 				D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */,
 				ECED362673164C2D8564E780 /* GeoLite2-Country.mmdb */,
 				819FB256A68C4DC7BF0637F1 /* GeoLite2-ASN.mmdb */,
+				FC6F98B0C3691C35F17194D3 /* ConstructTransport.xcframework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -314,8 +320,6 @@
 				BF3DE83F2F62C1C40058C1AA /* Construct DesktopTests */,
 			);
 			name = "Construct DesktopTests";
-			packageProductDependencies = (
-			);
 			productName = "Construct DesktopTests";
 			productReference = BF3DE83C2F62C1C40058C1AA /* Construct DesktopTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -337,8 +341,6 @@
 				BF3DE8492F62C1C40058C1AA /* Construct DesktopUITests */,
 			);
 			name = "Construct DesktopUITests";
-			packageProductDependencies = (
-			);
 			productName = "Construct DesktopUITests";
 			productReference = BF3DE8462F62C1C40058C1AA /* Construct DesktopUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -360,8 +362,6 @@
 				BF8A96FB2EFF0FAF009C5EF7 /* ConstructMessengerTests */,
 			);
 			name = ConstructMessengerTests;
-			packageProductDependencies = (
-			);
 			productName = ConstructMessengerTests;
 			productReference = BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -593,7 +593,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 460;
+				CURRENT_PROJECT_VERSION = 462;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -624,7 +624,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.15.12;
+				MARKETING_VERSION = 0.15.14;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -778,7 +778,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 460;
+				CURRENT_PROJECT_VERSION = 462;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -809,7 +809,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.15.12;
+				MARKETING_VERSION = 0.15.14;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -834,7 +834,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 460;
+				CURRENT_PROJECT_VERSION = 462;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -865,7 +865,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.15.12;
+				MARKETING_VERSION = 0.15.14;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
