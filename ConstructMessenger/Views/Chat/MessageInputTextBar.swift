@@ -27,7 +27,7 @@ struct MessageInputTextBar: View {
             voiceButton
         }
         .fixedSize(horizontal: false, vertical: true)
-        .glassCapsule(cornerRadius: 999) // use standardized glass capsule
+        .glassCapsule(cornerRadius: 18) // use standardized glass capsule
     }
 
     // MARK: - Text field

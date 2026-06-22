@@ -175,9 +175,6 @@ struct SettingsView: View {
             .sheet(isPresented: $showingQRCode) {
                 ContactQRCodeView(userId: viewModel.userId, username: viewModel.username)
             }
-            .onChange(of: navigationPath) { _, path in
-                chatsViewModel.isInSettings = !path.isEmpty
-            }
         }
     }
 

@@ -20,13 +20,6 @@ struct MainTabView: View {
     // Call overlays
     @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
 
-    /// Tracks which tab indices have been visited at least once.
-    /// A tab's content view is only inserted into the ZStack after its first visit,
-    /// preventing @FetchRequest from firing for every tab simultaneously at launch.
-    /// This was causing EXC_CRASH on iOS 26: _ZStackLayout.sizeThatFits triggers
-    /// @FetchRequest.update on ALL ZStack children (even opacity=0 ones) during layout.
-    @State private var visitedTabs: Set<Int> = [0]
-
     /// True when the in-call full-screen cover should be shown; false when the
     /// user has minimised the call to the top-of-screen mini bar. Persists across
     /// tab switches; reset to `true` whenever a new call begins.
@@ -90,77 +83,49 @@ struct MainTabView: View {
                 .environment(chatsViewModel)
         } else {
             @Bindable var vm = chatsViewModel
-            ZStack {
-                tabContent(vm: vm)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Standard system tab bar. SwiftUI loads each tab's content lazily on
+            // first selection, so there is no @FetchRequest burst at launch — the
+            // reason the old ZStack/visitedTabs workaround existed no longer applies.
+            // Tab values match the legacy indices: chats 0, synaps 1, calls 2
+            // (when enabled), settings 3-or-2. The per-tab tab-bar hiding inside a
+            // conversation lives on the ChatView navigation destination.
+            TabView(selection: $vm.selectedTab) {
+                Tab(value: 0) {
+                    ChatsListView()
+                        .environment(chatsViewModel)
+                } label: {
+                    Image(systemName: "message")
+                }
 
-                if !vm.isInChat && !vm.isInSettings {
-                    VStack {
-                        Spacer()
-                        CTTabBar(selected: $vm.selectedTab, items: tabItems)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .glassCapsule(cornerRadius: 999) // capsule shape for tab bar
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                Tab(value: 1) {
+                    SynapsView()
+                        .environment(chatsViewModel)
+                } label: {
+                    Image(systemName: "circle.grid.cross")
+                }
+
+                if CallsFeature.isEnabled {
+                    Tab(value: 2) {
+                        CallHistoryView()
+                    } label: {
+                        Image(systemName: "phone")
                     }
-                    .frame(maxHeight: .infinity, alignment: .bottom)
+                }
+
+                Tab(value: settingsTab) {
+                    SettingsView()
+                        .environment(chatsViewModel)
+                } label: {
+                    Image(systemName: "gearshape")
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: vm.isInChat || vm.isInSettings)
+            .tint(Color.CT.accent)
             .ctBackground()
         }
     }
 
-    /// Renders tab views lazily: a tab's content is inserted into the ZStack only after
-    /// it is first selected. Once mounted it stays alive (preserving scroll/nav state).
-    /// Only tab 0 (ChatsListView) is rendered at startup to avoid @FetchRequest bursts.
-    @ViewBuilder
-    private func tabContent(vm: ChatsViewModel) -> some View {
-        ZStack {
-            // Tab 0: always rendered (initial tab).
-            ChatsListView()
-                .environment(chatsViewModel)
-                .opacity(vm.selectedTab == 0 ? 1 : 0)
-                .allowsHitTesting(vm.selectedTab == 0)
-
-            // Tab 1–N: mounted only after first visit.
-            if visitedTabs.contains(1) {
-                SynapsView()
-                    .environment(chatsViewModel)
-                    .opacity(vm.selectedTab == 1 ? 1 : 0)
-                    .allowsHitTesting(vm.selectedTab == 1)
-            }
-
-            if CallsFeature.isEnabled, visitedTabs.contains(2) {
-                CallHistoryView()
-                    .opacity(vm.selectedTab == 2 ? 1 : 0)
-                    .allowsHitTesting(vm.selectedTab == 2)
-            }
-
-            let settingsTab = CallsFeature.isEnabled ? 3 : 2
-            if visitedTabs.contains(settingsTab) {
-                SettingsView()
-                    .environment(chatsViewModel)
-                    .opacity(vm.selectedTab == settingsTab ? 1 : 0)
-                    .allowsHitTesting(vm.selectedTab == settingsTab)
-            }
-        }
-        .onChange(of: vm.selectedTab) { _, newTab in
-            visitedTabs.insert(newTab)
-        }
-    }
-
-    private var tabItems: [CTTabItem] {
-        var items: [CTTabItem] = [
-            CTTabItem(sfName: "message"),
-            CTTabItem(sfName: "circle.grid.cross"),
-        ]
-        if CallsFeature.isEnabled {
-            items.append(CTTabItem(sfName: "phone"))
-        }
-        items.append(CTTabItem(sfName: "gearshape"))
-        return items
-    }
+    /// Settings tab value — shifts to 3 when the calls tab is present, else 2.
+    private var settingsTab: Int { CallsFeature.isEnabled ? 3 : 2 }
 
     // MARK: - Call state helpers
 

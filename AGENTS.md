@@ -242,7 +242,7 @@ decorative elements (noise, separators, `>` section headers, `✷`, bracket glyp
 - **Dividers**: `Rectangle().fill(Color.CT.noise).frame(height: 1)` (full-width) or with `.padding(.horizontal, 20)` (between rows).
 - **Action rows**: trailing `[→]` / `CTSymbol.forward`, font `.regular(13)`.
 - **Developer/debug UI**: use `.orange` color for all dev-facing elements.
-- **Tab bar**: controlled by `ChatsViewModel.isInChat` and `ChatsViewModel.isInSettings`. Never hide/show it directly.
+- **Tab bar**: standard SwiftUI `TabView` (`MainTabView`). Hide it inside a conversation only via `.toolbar(.hidden, for: .tabBar)` on the `ChatView` destination — see *Tab bar (native `TabView`)* below.
 
 ### Components
 - `CTNavBar` — navigation bar with optional back `[←]` and trailing action
@@ -344,20 +344,26 @@ On failure: falls through to END_SESSION → full re-init.
 **Auth guard**: if `isAuthenticated == true` in memory, skip Keychain re-read.
 Device keys are only deleted on gRPC UNAUTHENTICATED (16) or PERMISSION_DENIED (7) — never on network errors.
 
-### Tab bar visibility
-- `ChatsViewModel.isInChat: Bool` — set by `ChatsListView.onChange(of: navigationPath)`
-- `ChatsViewModel.isInSettings: Bool` — set by `SettingsView.onChange(of: navigationPath)`
-- `CTTabBar` renders only when both are `false`
-- `SettingsView` must receive `.environment(chatsViewModel)` from `MainTabView`
+### Tab bar (native `TabView`)
+The bottom navigation is the **standard SwiftUI `TabView`** (`MainTabView.callContent`,
+compact size class only — the regular/iPad branch still uses `ChatsSplitView`). It replaced the
+old custom floating `CTTabBar` glass capsule + `ZStack(opacity:)` + `visitedTabs` workaround
+(removed 2026-06-22 — see below). Icon-only tabs via `Image(systemName:)` labels; selected
+tint is `Color.CT.accent`.
 
-### Tab rendering
-All tab views coexist in a `ZStack` with `opacity(0/1)` + `allowsHitTesting`.
-**iOS 26 fix**: tabs are gated by `@State private var visitedTabs: Set<Int>`.
-Tab content is only inserted into the ZStack after the first visit (`if visitedTabs.contains(n)`).
-This prevents iOS 26's `_ZStackLayout.sizeThatFits` from triggering `@FetchRequest.update()` on
-invisible tabs during layout. Tab 0 (ChatsListView) is always in the set at init.
-- `confirmationDialog` is blocked in ZStack hierarchy — use `.alert` instead
-- State is preserved across tab switches (intended)
+- Tab values match the legacy indices: chats `0`, synaps `1`, calls `2` (only when
+  `CallsFeature.isEnabled`), settings `3`-or-`2` (`settingsTab` shifts with the calls tab).
+  `ChatsViewModel.selectedTab: Int` is the selection binding.
+- **Tab-bar hiding inside a conversation** is the standard `.toolbar(.hidden, for: .tabBar)`
+  on the `ChatView` navigation destination in `ChatsListView` (messenger convention: the input
+  bar replaces the tab bar). Settings/synaps sub-screens keep the tab bar visible (standard iOS).
+- There is **no more** `isInChat` / `isInSettings` state — do not reintroduce it.
+- **iOS 26 @FetchRequest crash**: native `TabView` loads each tab's content lazily on first
+  selection, so the old `_ZStackLayout.sizeThatFits → @FetchRequest.update()` storm (which the
+  `visitedTabs` gate guarded against) does not occur. If a per-tab `@FetchRequest` crash ever
+  resurfaces on a new OS, the fix is lazy gating of that tab's content — not a return to the ZStack.
+- `confirmationDialog` worked poorly in the old ZStack; `.alert` remains the safer default.
+- State is preserved across tab switches (intended).
 
 ### construct-engine and EngineAdapter (CRITICAL for macOS/Desktop work)
 

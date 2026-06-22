@@ -896,11 +896,6 @@
 "call_error_busy" = "You're already in a call.";
 "call_error_peer_offline" = "Node is offline. Try again later.";
 
-/* Tab bar labels */
-"tab_chats" = "MSG";
-"tab_synapses" = "SYN";
-"tab_settings" = "CFG";
-
 /* Engine background push notifications */
 "notification.new_message.title" = "New message";
 "notification.new_message.body" = "You have a new encrypted message.";

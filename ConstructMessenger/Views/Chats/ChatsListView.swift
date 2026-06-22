@@ -51,6 +51,9 @@ struct ChatsListView: View {
             .navigationDestination(for: String.self) { chatId in
                     if let chat = chats.first(where: { $0.id == chatId }) {
                         ChatView(chat: chat, context: viewContext)
+                            // Messenger convention: the bottom tab bar yields to the
+                            // message input bar while inside a conversation.
+                            .toolbar(.hidden, for: .tabBar)
                     }
             }
             .sheet(isPresented: $showingQRScanner) {
@@ -60,9 +63,6 @@ struct ChatsListView: View {
                     chatsViewModel.setContext(viewContext)
                     LocalNotificationManager.shared.clearBadge()
                     updateTotalUnreadCount()
-            }
-            .onChange(of: navigationPath) { _, path in
-                    chatsViewModel.isInChat = !path.isEmpty
             }
             .onChange(of: chatsViewModel.chatToOpen) { _, chatId in
                     if let chatId {

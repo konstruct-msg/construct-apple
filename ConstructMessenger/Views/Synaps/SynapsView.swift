@@ -53,6 +53,11 @@ struct SynapsView: View {
     @State private var selectedRequest: ContactRequestsViewModel.IncomingRequest? = nil
     @State private var contactMetricsByUser: [String: ContactMetrics] = [:]
     @State private var isRefreshingContactRequests = false
+    @State private var lastContactRequestsRefresh: Date = .distantPast
+
+    /// Minimum gap between contact-request refreshes. Guards against RPC chatter
+    /// from rapid tab re-entries (native TabView re-runs `.task` on every appear).
+    private static let contactRequestsRefreshInterval: TimeInterval = 8
 
     private var filtered: [User] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -143,13 +148,13 @@ struct SynapsView: View {
                 rebuildContactMetrics()
             }
             .task {
-                let vm = ContactRequestsViewModel(viewContext: context)
+                // Native TabView fires `.task` on every appear (i.e. each time this
+                // tab is selected) and cancels it on disappear — so this is also the
+                // "tab re-entered" refresh. No separate onChange(selectedTab) trigger
+                // is needed; refreshContactRequests throttles rapid re-entries.
+                let vm = contactRequestsVM ?? ContactRequestsViewModel(viewContext: context)
                 contactRequestsVM = vm
-                await refreshContactRequests(vm: vm, reason: "initial_task")
-            }
-            .onChange(of: chatsViewModel.selectedTab) { _, newTab in
-                guard newTab == 1, let vm = contactRequestsVM else { return }
-                Task { await refreshContactRequests(vm: vm, reason: "tab_selected") }
+                await refreshContactRequests(vm: vm, reason: "tab_appear")
             }
             .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
                 guard chatsViewModel.selectedTab == 1, let vm = contactRequestsVM else { return }
@@ -292,7 +297,13 @@ struct SynapsView: View {
             Log.debug("Skipping contact request refresh (\(reason)) — already in progress", category: "SynapsView")
             return
         }
+        let sinceLast = Date().timeIntervalSince(lastContactRequestsRefresh)
+        guard sinceLast >= Self.contactRequestsRefreshInterval else {
+            Log.debug("Skipping contact request refresh (\(reason)) — throttled (\(Int(sinceLast))s ago)", category: "SynapsView")
+            return
+        }
         isRefreshingContactRequests = true
+        lastContactRequestsRefresh = Date()
         defer { isRefreshingContactRequests = false }
 
         Log.info("Refreshing contact requests (\(reason))", category: "SynapsView")

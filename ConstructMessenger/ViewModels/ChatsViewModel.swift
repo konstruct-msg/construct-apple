@@ -18,8 +18,6 @@ class ChatsViewModel {
     // MARK: - UI state
 
     var chatToOpen: String?
-    var isInChat: Bool = false
-    var isInSettings: Bool = false
     var selectedTab: Int = 0
     var showNewChat: Bool = false
     var sidebarSearchFocused: Bool = false

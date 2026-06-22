@@ -611,48 +611,6 @@ extension CTNavBar where Trailing == EmptyView {
     }
 }
 
-// MARK: - Tab Bar
-
-struct CTTabItem {
-    var sfName: String
-}
-
-struct CTTabBar: View {
-    @Binding var selected: Int
-    var items: [CTTabItem]
-
-    /// Convenience initialiser with default 3-tab layout (chats / synaps / settings).
-    init(selected: Binding<Int>, items: [CTTabItem] = CTTabBar.defaultItems) {
-        _selected = selected
-        self.items = items
-    }
-
-    static var defaultItems: [CTTabItem] {
-        [
-            CTTabItem(sfName: "message"),
-            CTTabItem(sfName: "circle.grid.cross"),
-            CTTabItem(sfName: "gearshape"),
-        ]
-    }
-
-    var body: some View {
-        HStack {
-            ForEach(Array(items.enumerated()), id: \.offset) { pair in
-                Spacer()
-                Button(action: { selected = pair.offset }) {
-                    let sf = pair.element.sfName
-                    Image(systemName: selected == pair.offset && !sf.hasSuffix(".fill") ? sf + ".fill" : sf)
-                        .font(.system(size: 20))
-                        .foregroundColor(selected == pair.offset ? Color.CT.accent : Color.CT.textDim)
-                    
-                }
-                Spacer()
-            }
-        }
-        .padding(.vertical, 8) // internal padding inside the glass capsule
-    }
-}
-
 // MARK: - Settings Components
 
 struct CTSettingsSectionHeader: View {

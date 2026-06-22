@@ -2,12 +2,15 @@
 //  LatticeBackgroundView.swift
 //  Construct Messenger
 //
-//  CT-style ASCII matrix background — a static grid of terminal characters
-//  that slowly mutates over time. Barely visible watermark effect.
+//  CT-style ASCII matrix background — a static grid of terminal characters,
+//  a barely visible (0.05 opacity) watermark. Built once per size; it does NOT
+//  animate. The previous 2.5s mutation timer was removed (2026-06-22): at this
+//  opacity the mutation was imperceptible yet it redrew the whole Canvas forever
+//  on every screen that uses this background, keeping the render loop awake and
+//  preventing the display from idling. A static grid lets the screen go idle.
 //
 
 import SwiftUI
-import Combine
 
 // MARK: - CTMatrixBackground
 
@@ -15,8 +18,6 @@ struct CTMatrixBackground: View {
     private static let chars: [Character] = Array("01ABCDEFabcdef><[]{}|~.")
 
     @State private var grid: [[Character]] = []
-
-    let timer = Timer.publish(every: 2.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
         Canvas { context, canvasSize in
@@ -42,7 +43,6 @@ struct CTMatrixBackground: View {
                     .onChange(of: geo.size) { _, s in buildGrid(size: s) }
             }
         )
-        .onReceive(timer) { _ in mutateSome() }
         .allowsHitTesting(false)
     }
 
@@ -52,17 +52,6 @@ struct CTMatrixBackground: View {
         let c = max(1, Int(size.width / cellSize) + 1)
         let r = max(1, Int(size.height / cellSize) + 1)
         grid = (0..<r).map { _ in (0..<c).map { _ in Self.chars.randomElement()! } }
-    }
-
-    private func mutateSome() {
-        guard !grid.isEmpty else { return }
-        let r = grid.count, c = grid[0].count
-        let count = max(1, (r * c) / 20)  // ~5%
-        for _ in 0..<count {
-            let ri = Int.random(in: 0..<r)
-            let ci = Int.random(in: 0..<c)
-            grid[ri][ci] = Self.chars.randomElement() ?? " "
-        }
     }
 }
 
