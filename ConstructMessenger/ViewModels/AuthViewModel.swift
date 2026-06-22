@@ -174,7 +174,13 @@ class AuthViewModel {
         defer { restoreInFlight = false }
 
         Log.info("restoreOrAuthenticateDevice() called")
-        
+
+        // One-time: migrate crypto key material to AfterFirstUnlock accessibility so a
+        // push-driven decrypt while the device is locked can read the keys and build
+        // OrchestratorCore (otherwise → coreNotInitialized → spurious END_SESSION/desync).
+        // Self-guards: a locked read is a no-op and retries on the next foreground launch.
+        KeychainManager.shared.migrateCryptoKeysAccessibility()
+
         // Step 1: Try to restore existing session token
         AuthSessionManager.shared.loadSessionToken()
 
