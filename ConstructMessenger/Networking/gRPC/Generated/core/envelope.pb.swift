@@ -88,6 +88,17 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
   /// legacy two-step (END_SESSION → 200ms delay → session ping) tie-break path.
   /// Server treats this identically to E2EE_SIGNAL (opaque bytes, no inspection).
   case sessionResetInit // = 24
+
+  /// SESSION_PING — tie-break handshake nudge (INITIATOR → peer) that triggers the
+  /// RESPONDER's receiving-session init. Payload is a SessionControl (op=PING).
+  /// Replaces the legacy "__session_ping_<UUID>__" plaintext magic string so the
+  /// signal can never render as a chat bubble. Server forwards opaquely.
+  case sessionPing // = 25
+
+  /// SESSION_READY — phase 2 of the two-phase handshake (RESPONDER → INITIATOR),
+  /// sent after a successful initReceivingSession to confirm both sides match.
+  /// Payload is a SessionControl (op=READY). Replaces "__session_ready_<UUID>__".
+  case sessionReady // = 26
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -109,6 +120,8 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case 22: self = .keySync
     case 23: self = .senderSync
     case 24: self = .sessionResetInit
+    case 25: self = .sessionPing
+    case 26: self = .sessionReady
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -128,6 +141,8 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case .keySync: return 22
     case .senderSync: return 23
     case .sessionResetInit: return 24
+    case .sessionPing: return 25
+    case .sessionReady: return 26
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -147,6 +162,8 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     .keySync,
     .senderSync,
     .sessionResetInit,
+    .sessionPing,
+    .sessionReady,
   ]
 
 }
@@ -690,7 +707,7 @@ public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
 fileprivate let _protobuf_package = "shared.proto.core.v1"
 
 extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0")
 }
 
 extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {

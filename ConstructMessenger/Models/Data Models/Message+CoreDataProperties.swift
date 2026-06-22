@@ -43,8 +43,28 @@ enum MessageContentType: Int16 {
     static func infer(from plaintext: String) -> MessageContentType {
         if plaintext.hasPrefix("__session_ping") { return .sessionPing }
         if plaintext.hasPrefix("__session_ready") || plaintext.hasPrefix("session_ready_") { return .sessionReady }
-        if plaintext.hasPrefix("__END_SESSION") { return .sessionReset }
+        if plaintext.hasPrefix("__END_SESSION")
+            || plaintext.hasPrefix("__session_reset_init") || plaintext.hasPrefix("session_reset_init_")
+            || plaintext.hasPrefix("__binary_init_") { return .sessionReset }
         return .regular
+    }
+
+    /// Single source of truth for "this decrypted plaintext is an internal control
+    /// signal that must NEVER render as a chat bubble". Covers every handshake/session
+    /// marker emitted by current and legacy clients (with or without `__` framing).
+    ///
+    /// Prefix-on-`decryptedContent` Core Data predicates cannot enforce this: messages
+    /// are encrypted at rest (`decryptedContent == nil`), so filtering must run on the
+    /// decrypted `displayText` in Swift. Keep this list aligned with the discard checks
+    /// in `MessageRouter` and `SessionCoordinator`.
+    static func isControlPayload(_ plaintext: String) -> Bool {
+        plaintext.hasPrefix("__session_ping")
+            || plaintext.hasPrefix("__session_ready")
+            || plaintext.hasPrefix("session_ready_")
+            || plaintext.hasPrefix("__session_reset_init")
+            || plaintext.hasPrefix("session_reset_init_")
+            || plaintext.hasPrefix("__binary_init_")
+            || plaintext.hasPrefix("__END_SESSION")
     }
 }
 

@@ -17,9 +17,10 @@ extension MessageBubble {
             // the next SwiftUI layout pass).
             if message.isDeleted || message.managedObjectContext == nil {
                 EmptyView()
-            } else if message.isServiceArtifact {
-                // A service/control payload (e.g. a delivery_receipt JSON) that leaked
-                // into the transcript from an older build. Never render it as a bubble.
+            } else if message.isServiceArtifact || message.isControlArtifact {
+                // A service/control payload (delivery_receipt JSON, or a session-control
+                // signal like `session_ready`/`session_ping`) that leaked into the
+                // transcript. These are for logs, not the chat — never render a bubble.
                 EmptyView()
             } else if message.fromUserId == "SYSTEM" {
                 // A SYSTEM row with no resolvable text has nothing to show — render

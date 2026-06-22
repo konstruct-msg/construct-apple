@@ -45,6 +45,16 @@ public class Message: NSManagedObject {
         return true
     }
 
+    /// True if this row is an internal session-control signal (`session_ready`,
+    /// `session_ping`, `binary_init`, `END_SESSION`, …) that leaked into the transcript.
+    /// Such rows must never render as a chat bubble. Because messages are encrypted at
+    /// rest (`decryptedContent == nil`), Core Data prefix predicates cannot catch these —
+    /// detection runs on the decrypted `displayText`. This is the last-line display guard
+    /// backing the persist-time `contentTypeRaw` stamping in `applyStoredEncryption`.
+    var isControlArtifact: Bool {
+        contentType.isEphemeral || MessageContentType.isControlPayload(displayText)
+    }
+
     // MARK: - Storage Encryption
 
     /// Encrypt `plaintext` with a fresh random key and persist it in place of the wire bytes.
@@ -65,6 +75,12 @@ public class Message: NSManagedObject {
             return
         }
         let msgId = id
+
+        // Stamp the content type so the chat FRC (`contentTypeRaw == 0`) excludes any
+        // session-control payload that slipped past a router's discard check. Only
+        // control payloads are re-typed; regular text and media JSON stay `.regular` (0).
+        let inferredType = MessageContentType.infer(from: plaintext)
+        if inferredType != .regular { contentType = inferredType }
 
         var keyBytes = Data(count: 32)
         let status = keyBytes.withUnsafeMutableBytes {

@@ -124,7 +124,21 @@ final class MessageRouter {
             return
         }
         defer { endProcessing(message.id) }
-        
+
+        // Locked-device guard. When the app is woken by a push while the screen is locked,
+        // the device key material (signing/identity/prekeys) can be unreadable, so
+        // OrchestratorCore never gets built (`coreNotInitialized`). We can neither decrypt
+        // nor init a session. DEFER: hold the stream cursor, do NOT ACK and do NOT send
+        // END_SESSION — the server re-delivers and we process once unlocked + core is ready.
+        // This is the fix for the "Encrypted session out of sync" desync: previously a
+        // locked-launch incoming with no session tore down a perfectly healthy session.
+        // Mirrors AuthViewModel's "defer recovery to foreground" behaviour.
+        if !CryptoManager.shared.isInitialized {
+            Log.info("Core not initialized (device likely locked) — deferring incoming \(message.id.prefix(8))… (no ACK, no END_SESSION)", category: "MessageRouter")
+            streamOutcome = .deferred
+            return
+        }
+
         #if DEBUG
         Log.debug("INCOMING message RAW from server:", category: "MessageRouter")
         Log.debug("   messageId: \(message.id)", category: "MessageRouter")
@@ -500,6 +514,17 @@ final class MessageRouter {
                     continue
                 }
 
+                // SESSION_PING (25) / SESSION_READY (26): typed handshake control signals.
+                // Dispatch on content_type before the reassembler so they never enter the
+                // renderable text pipeline. (RESET_INIT=24 is intentionally NOT handled here:
+                // it carries a real X3DH first-ratchet payload.) Legacy peers send these as
+                // magic-string plaintext — that fallback lives in handleResolvedMessage.
+                if let op = SessionControlCodec.op(forContentType: Int(message.contentType)),
+                   op == .ping || op == .ready {
+                    handleSessionControlSignal(op, for: message, from: otherUserId, chat: chat, in: context)
+                    continue
+                }
+
                 // Profile share: support binary wire (no JSON) + legacy. Detect on raw Data here.
                 if let profile = ProfileShareData.fromBinaryData(plaintext) {
                     ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
@@ -550,6 +575,38 @@ final class MessageRouter {
     }
 
 
+    /// React to a session-handshake control signal (ping/ready) on an established session,
+    /// whether it arrived typed (content_type 25/26) or as a legacy plaintext magic string.
+    /// Never persists a Message row — these are for the protocol, not the transcript.
+    private func handleSessionControlSignal(
+        _ op: Shared_Proto_Messaging_V1_SessionOp,
+        for message: ChatMessage,
+        from otherUserId: String,
+        chat: Chat,
+        in context: NSManagedObjectContext
+    ) {
+        PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+        delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+
+        switch op {
+        case .ready:
+            Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(otherUserId.prefix(8))… confirmed session — discarding control signal", category: "MessageRouter")
+            // Mark session confirmed so ChatViewModel stops buffering outgoing messages.
+            SessionConfirmationTracker.shared.markConfirmed(otherUserId)
+            // Flush messages buffered while waiting for RESPONDER confirmation.
+            if let myId = AuthSessionManager.shared.currentUserId {
+                MessageRetryManager.shared.sendQueuedMessages(
+                    for: chat,
+                    recipientId: otherUserId,
+                    currentUserId: myId,
+                    context: context
+                )
+            }
+        default: // .ping (and any other non-ready signal routed here)
+            Log.info("SESSION_STATE[session_ping_received]: discarding session ping from \(otherUserId.prefix(8))…", category: "MessageRouter")
+        }
+    }
+
     private func handleResolvedMessage(
         _ decryptedContent: String,
         quotedMessage: Shared_Proto_Messaging_V1_QuotedMessage?,
@@ -568,10 +625,9 @@ final class MessageRouter {
 
         // Silently discard session establishment pings received on the normal message path.
         // These are sent after a tie-break win to trigger RESPONDER init on the peer.
+        // Legacy plaintext form; typed (content_type=25) form is handled before the reassembler.
         if decryptedContent.hasPrefix("__session_ping") && decryptedContent.hasSuffix("__") {
-            Log.info("SESSION_STATE[ping_received_normal_path]: discarding session ping", category: "MessageRouter")
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+            handleSessionControlSignal(.ping, for: message, from: otherUserId, chat: chat, in: context)
             return
         }
 
@@ -587,21 +643,9 @@ final class MessageRouter {
         // Silently discard two-phase handshake confirmation signals.
         // __session_ready_<UUID>__ is sent by the RESPONDER after initReceivingSession succeeds.
         // Also handle legacy format without __ markers (older client versions).
+        // Typed (content_type=26) form is handled before the reassembler.
         if decryptedContent.hasPrefix("__session_ready") || decryptedContent.hasPrefix("session_ready_") {
-            Log.info("SESSION_STATE[session_ready_rust_path]: RESPONDER \(otherUserId.prefix(8))… confirmed session — discarding control message", category: "MessageRouter")
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
-            // Mark session as confirmed so ChatViewModel stops buffering outgoing messages.
-            SessionConfirmationTracker.shared.markConfirmed(otherUserId)
-            // Flush messages that were buffered while waiting for RESPONDER confirmation.
-            if let myId = AuthSessionManager.shared.currentUserId {
-                MessageRetryManager.shared.sendQueuedMessages(
-                    for: chat,
-                    recipientId: otherUserId,
-                    currentUserId: myId,
-                    context: context
-                )
-            }
+            handleSessionControlSignal(.ready, for: message, from: otherUserId, chat: chat, in: context)
             return
         }
 
@@ -1482,7 +1526,11 @@ final class MessageRouter {
             return
         }
 
-        // Discard session control strings — they carry no user-visible content.
+        // Discard session control signals — they carry no user-visible content.
+        // Typed (content_type 24/25/26) first, then legacy plaintext fallback.
+        if SessionControlCodec.op(forContentType: Int(original.contentType)) != nil {
+            return
+        }
         if decrypted.hasPrefix("__session_ping") || decrypted.hasPrefix("__session_reset_init")
             || decrypted.hasPrefix("__session_ready") || decrypted.hasPrefix("session_ready_")
         {

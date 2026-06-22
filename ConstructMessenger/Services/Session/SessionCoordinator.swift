@@ -545,6 +545,14 @@ final class SessionCoordinator: MessageRouterDelegate {
                     guard let self else { return }
                     await self.sendSessionReady(to: userId)
                 }
+            } else if !CryptoManager.shared.isInitialized {
+                // initReceivingSession failed because the crypto core isn't initialized
+                // (device woken by push while locked → key material unreadable). This is
+                // transient, NOT a broken session: do NOT ACK and do NOT send END_SESSION.
+                // Leave the message queued; it is retried once the device unlocks and the
+                // core is restored. Tearing the session down here is the locked-launch
+                // desync bug (see also the entry guard in MessageRouter.routeIncomingMessage).
+                Log.info("initReceivingSession deferred — core not initialized (device likely locked) for \(userId.prefix(8))… (no END_SESSION)", category: "SessionInit")
             } else {
                 // initReceivingSession failed — prekey exhausted or invalid.
                 Log.info("initReceivingSession failed — clearing queue, sending END_SESSION to \(userId.prefix(8))...", category: "SessionInit")
@@ -992,6 +1000,36 @@ final class SessionCoordinator: MessageRouterDelegate {
         case .invalid(let reason):
             Log.error("Session-init message envelope invalid: \(reason) — dropping", category: "SessionCoordinator")
             return
+        }
+
+        // Typed handshake control signals (content_type 24/25/26): dispatch by op before the
+        // plaintext-prefix fallback below. The X3DH init for these already ran in
+        // initReceivingSession; the decrypted inner is just a sentinel, so we never persist it.
+        // Legacy peers send these as magic strings — handled by the string checks that follow.
+        if let op = SessionControlCodec.op(forContentType: Int(messageData.contentType)) {
+            let peerId = messageData.from
+            switch op {
+            case .resetInit:
+                Log.info("SESSION_RESET_INIT payload discarded (not user-visible, content_type=24)", category: "SessionCoordinator")
+                cancelTieBreakWatchdog(for: peerId)
+                cancelResponderFallback(for: peerId)
+                return
+            case .ping:
+                Log.info("SESSION_STATE[ping_received]: session established as RESPONDER (ping discarded, content_type=25)", category: "SessionCoordinator")
+                cancelTieBreakWatchdog(for: peerId)
+                cancelResponderFallback(for: peerId)
+                return
+            case .ready:
+                Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed (content_type=26)", category: "SessionCoordinator")
+                cancelTieBreakWatchdog(for: peerId)
+                cancelResponderFallback(for: peerId)
+                markActive(peerId)
+                SessionConfirmationTracker.shared.markConfirmed(peerId)
+                sendSessionQueuedMessages(for: peerId)
+                return
+            case .end, .unspecified, .UNRECOGNIZED:
+                break  // fall through to normal handling
+            }
         }
 
         // Silently discard SESSION_RESET_INIT control payloads — they are sent as the X3DH
