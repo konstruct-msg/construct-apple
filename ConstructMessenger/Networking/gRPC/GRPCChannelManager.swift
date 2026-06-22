@@ -524,6 +524,20 @@ final class GRPCChannelManager: Sendable {
         _eqConnGeneration &+= 1
         Log.debug("engine-QUIC persistent connection invalidated (gen=\(_eqConnGeneration))", category: "GRPCChannel")
     }
+
+    /// Force-cancels the engine-QUIC connection: cancels the runConnections() task and
+    /// begins graceful shutdown. Mirrors forceInvalidateH3Connection() for the silent-UDP
+    /// fast-failover path (a QUIC handshake that passed but is being dropped at the UDP layer).
+    func forceInvalidateEngineQuicConnection() {
+        _eqConnLock.lock()
+        defer { _eqConnLock.unlock() }
+        guard let conn = _eqConnBox as? PersistentConnEngineQuic else { return }
+        conn.task.cancel()
+        conn.client.beginGracefulShutdown()
+        _eqConnBox = nil
+        _eqConnGeneration &+= 1
+        Log.debug("engine-QUIC persistent connection force-invalidated (gen=\(_eqConnGeneration))", category: "GRPCChannel")
+    }
 #endif
 
     /// Execute a gRPC operation with automatic retry, auth refresh, and VEIL failover.

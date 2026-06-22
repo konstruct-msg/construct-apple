@@ -59,8 +59,21 @@ final class GRPCStreamTransport: StreamTransport {
             }
         )
 
+#if os(iOS)
+        // Experimental engine-QUIC (construct-transport Rust stack). Direct path only,
+        // gated by FeatureFlags.engineQuicExperimental. `acquireEngineQuicChannel()` returns
+        // nil when the flag is off or the pinned gateway cert is missing → fall through to
+        // the H3/H2 selection below (never a silent native-H3 attempt — see h3Enabled guard).
+        if !useH2Fallback, GRPCChannelManager.shared.veilProxyPort() == nil,
+           let eq = GRPCChannelManager.shared.acquireEngineQuicChannel() {
+            let client = Shared_Proto_Services_V1_MessagingService.Client(wrapping: eq)
+            try await runStream(client: client, request: request, events: events,
+                                metricsLabel: metricsLabel, label: "QUIC", onAccepted: onAccepted)
+            return
+        }
+#endif
 #if canImport(Network)
-        if !useH2Fallback, GRPCChannelManager.shared.veilProxyPort() == nil {
+        if !useH2Fallback, FeatureFlags.h3Enabled, GRPCChannelManager.shared.veilProxyPort() == nil {
             let h3 = GRPCChannelManager.shared.acquireH3Channel()
             let client = Shared_Proto_Services_V1_MessagingService.Client(wrapping: h3)
             try await runStream(client: client, request: request, events: events,
@@ -132,7 +145,12 @@ extension MessageStreamManager {
         //
         // Global H3 disable: `FeatureFlags.h3Enabled` short-circuits everything when H3 is
         // turned off project-wide (see flag's docs for the 2026-05-29 disable reason).
-        let useH2Fallback = !FeatureFlags.h3Enabled
+        // Experimental engine-QUIC (construct-transport Rust stack) reuses the H3 "fast UDP"
+        // slot: when on, it suppresses the H2-only short-circuit so the QUIC branch in
+        // GRPCStreamTransport.open() is reached. It shares the same silent-UDP failover and
+        // open-failure counter as native H3 (consecutiveH3OpenFailures / shouldFallbackToH2Direct).
+        let experimentalQuic = FeatureFlags.engineQuicExperimental
+        let useH2Fallback = (!FeatureFlags.h3Enabled && !experimentalQuic)
             || shouldFallbackToH2Direct
             || consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold
         if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
@@ -156,8 +174,17 @@ extension MessageStreamManager {
         // Fall back to H2 when VEIL is active or when useH2Fallback is set
         // (previous H3 attempt timed out — trying H2 direct before escalating to VEIL).
         let transportLabel: String
-#if canImport(Network)
-        if !useH2Fallback, GRPCChannelManager.shared.veilProxyPort() == nil {
+        let directPath = GRPCChannelManager.shared.veilProxyPort() == nil
+#if os(iOS)
+        if !useH2Fallback, directPath, experimentalQuic {
+            transportLabel = "QUIC"
+        } else if !useH2Fallback, directPath, FeatureFlags.h3Enabled {
+            transportLabel = "H3"
+        } else {
+            transportLabel = "H2"
+        }
+#elseif canImport(Network)
+        if !useH2Fallback, directPath, FeatureFlags.h3Enabled {
             transportLabel = "H3"
         } else {
             transportLabel = "H2"
@@ -165,7 +192,8 @@ extension MessageStreamManager {
 #else
         transportLabel = "H2"
 #endif
-        lastStreamTransportWasH3 = (transportLabel == "H3")
+        // "QUIC" and "H3" are both fast-UDP transports for the silent-drop failover below.
+        lastStreamTransportWasH3 = (transportLabel == "H3" || transportLabel == "QUIC")
         Log.debug("openStream transport=\(transportLabel) → \(host):\(port)", category: "MessageStream")
 
         // Create outbound stream
@@ -358,7 +386,19 @@ extension MessageStreamManager {
 
         // Fast VEIL failover for stream open: if the RPC isn't accepted quickly, we retry
         // through VEIL instead of waiting for long TCP/TLS timeouts on DPI-blocked networks.
-        let isH3Transport = lastStreamTransportWasH3
+        // "Fast UDP" = native H3 or experimental engine-QUIC; both share the silent-drop
+        // failover. isQuicTransport only picks which connection the force-invalidator tears down.
+        let isH3Transport = (transportLabel == "H3" || transportLabel == "QUIC")
+        let isQuicTransport = (transportLabel == "QUIC")
+        let invalidateFastUdpConnection: @Sendable () -> Void = {
+#if os(iOS)
+            if isQuicTransport {
+                GRPCChannelManager.shared.forceInvalidateEngineQuicConnection()
+                return
+            }
+#endif
+            GRPCChannelManager.shared.forceInvalidateH3Connection()
+        }
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in
                 // 1) Accepted watcher
@@ -402,7 +442,7 @@ extension MessageStreamManager {
                 if isH3Transport {
                     group.addTask {
                         try await Task.sleep(for: .seconds(NetworkTiming.GRPC.streamOpenAcceptTimeoutH3Hard))
-                        GRPCChannelManager.shared.forceInvalidateH3Connection()
+                        invalidateFastUdpConnection()
                         throw StreamAcceptTimeout()
                     }
                 }
@@ -428,7 +468,7 @@ extension MessageStreamManager {
                 // immediately.  beginGracefulShutdown() (used by invalidatePersistentClient) does
                 // not close a stuck QUIC handshake — task cancellation does.
                 if isH3Transport {
-                    GRPCChannelManager.shared.forceInvalidateH3Connection()
+                    invalidateFastUdpConnection()
                 }
                 // Always invalidate the persistent client on stream timeout.
                 // If the underlying TCP connection was RST'd (server keepalive timeout, NAT expiry,
@@ -470,7 +510,7 @@ extension MessageStreamManager {
                 // immediately; streamTask.cancel propagates to the gRPC client. The outer
                 // connectLoop sees a CancellationError and re-enters openStream with
                 // shouldFallbackToH2Direct=true, which routes to H2.
-                GRPCChannelManager.shared.forceInvalidateH3Connection()
+                invalidateFastUdpConnection()
                 streamTask.cancel()
             }
             defer { firstEventWatchdog.cancel() }
