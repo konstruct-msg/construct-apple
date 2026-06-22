@@ -312,10 +312,8 @@ private struct DesktopContactNode: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                Circle().fill(accentColor.opacity(0.18))
-                Text(initials)
-                    .font(CTFont.bold(effectiveSize * 0.26))
-                    .foregroundStyle(accentColor)
+                Circle().fill(accentColor.opacity(0.12))
+                IdenticonView(seed: user.id)
             }
         }
         .frame(width: effectiveSize, height: effectiveSize)
@@ -410,17 +408,6 @@ private struct DesktopContactNode: View {
         user.isBlocked ? Color.red.opacity(0.55) : Color.CT.textDim.opacity(0.5)
     }
 
-    private var initials: String {
-        let words = user.displayName
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .components(separatedBy: .whitespaces)
-            .filter { !$0.isEmpty }
-        switch words.count {
-        case 0:  return "?"
-        case 1:  return String(words[0].prefix(2)).uppercased()
-        default: return (String(words[0].prefix(1)) + String(words[1].prefix(1))).uppercased()
-        }
-    }
 }
 
 // MARK: - DesktopNodePopover
@@ -495,11 +482,10 @@ private struct DesktopNodePopover: View {
             } else {
                 let accent = Color.hexagonAccent(for: user.id)
                 Circle()
-                    .fill(accent.opacity(0.18))
+                    .fill(accent.opacity(0.12))
                     .frame(width: size, height: size)
-                Text(initials)
-                    .font(CTFont.bold(size * 0.3))
-                    .foregroundStyle(accent)
+                IdenticonView(seed: user.id)
+                    .frame(width: size, height: size)
             }
         }
         .overlay(
@@ -528,15 +514,4 @@ private struct DesktopNodePopover: View {
         }
     }
 
-    private var initials: String {
-        let words = user.displayName
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .components(separatedBy: .whitespaces)
-            .filter { !$0.isEmpty }
-        switch words.count {
-        case 0:  return "?"
-        case 1:  return String(words[0].prefix(2)).uppercased()
-        default: return (String(words[0].prefix(1)) + String(words[1].prefix(1))).uppercased()
-        }
-    }
 }
