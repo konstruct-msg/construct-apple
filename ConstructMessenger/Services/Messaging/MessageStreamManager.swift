@@ -204,7 +204,7 @@ final class MessageStreamManager {
             return
         }
         Log.info("Network path changed — forcing stream reconnect", category: "MessageStream")
-        forceDisconnect()
+        forceDisconnect(reason: "networkPathChanged")
         connect(contactUserIds: ids, onMessageReceived: cb)
     }
 
@@ -230,7 +230,7 @@ final class MessageStreamManager {
             let added = newSet.subtracting(oldSet)
             let removed = oldSet.subtracting(newSet)
             Log.info("Subscriptions changed (\(oldSet.count)→\(newSet.count)) — reconnecting stream. added=\(Array(added)) removed=\(Array(removed))", category: "MessageStream")
-            forceDisconnect()
+            forceDisconnect(reason: "subscriptionChanged")
         }
 
         self.subscriptionUserIds = contactUserIds
@@ -261,7 +261,7 @@ final class MessageStreamManager {
                 Task { @MainActor in
                     let ids = self.subscriptionUserIds
                     let cb = self.onMessageReceived
-                    self.forceDisconnect()
+                    self.forceDisconnect(reason: "serverChanged")
                     if let cb { self.connect(contactUserIds: ids, onMessageReceived: cb) }
                 }
             }
@@ -308,7 +308,7 @@ final class MessageStreamManager {
         consecutiveH3OpenFailures = 0
         shouldFallbackToH2Direct = false
         Log.info("Transport toggle (engineQuic=\(FeatureFlags.engineQuicExperimental)) — forcing stream reconnect", category: "MessageStream")
-        forceDisconnect()
+        forceDisconnect(reason: "transportToggle")
         connect(contactUserIds: ids, onMessageReceived: cb)
     }
 
@@ -357,11 +357,13 @@ final class MessageStreamManager {
             NotificationCenter.default.removeObserver(obs)
             serverChangedObserver = nil
         }
-        forceDisconnect()
+        forceDisconnect(reason: "disconnect")
     }
 
     /// Disconnect without removing the server-change observer (used for reconnects).
-    private func forceDisconnect() {
+    /// `reason` is logged so a reconnect storm can be traced to its trigger.
+    private func forceDisconnect(reason: String = "unknown") {
+        Log.info("forceDisconnect — reason=\(reason)", category: "MessageStream")
         isConnected = false
         activeTransport = ""
         outboundContinuation?.finish()
