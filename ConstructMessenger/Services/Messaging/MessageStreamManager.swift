@@ -217,12 +217,19 @@ final class MessageStreamManager {
         // non-deterministic across calls, so the same 3 IDs may arrive in a different order on
         // each reconnect attempt.  An order-sensitive != would trigger a spurious forceDisconnect()
         // even when the actual subscription set hasn't changed, causing the stream to loop.
-        let subscriptionChanged = Set(contactUserIds) != Set(subscriptionUserIds)
+        let oldSet = Set(subscriptionUserIds)
+        let newSet = Set(contactUserIds)
+        let subscriptionChanged = newSet != oldSet
 
         // If subscriptions changed and a loop is running, force reconnect so the
         // new contact's conversation ID is included in the subscribe request.
         if subscriptionChanged && (isConnected || streamTask != nil) {
-            Log.info("Subscriptions changed (\(subscriptionUserIds.count)→\(contactUserIds.count)) — reconnecting stream", category: "MessageStream")
+            // Diagnostic: log exactly which subscription IDs flapped. A reconnect storm
+            // during active messaging means the set is churning (e.g. a contact added/removed
+            // as its session is established) — added/removed pinpoints the source.
+            let added = newSet.subtracting(oldSet)
+            let removed = oldSet.subtracting(newSet)
+            Log.info("Subscriptions changed (\(oldSet.count)→\(newSet.count)) — reconnecting stream. added=\(Array(added)) removed=\(Array(removed))", category: "MessageStream")
             forceDisconnect()
         }
 
