@@ -541,52 +541,11 @@ struct DesktopChatView: View {
 
     @ViewBuilder
     private func searchOverlay() -> some View {
-        if isSearchActive {
-            VStack(spacing: 0) {
-                TextField(NSLocalizedString("search_messages", comment: ""), text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(CTFont.regular(14))
-                    .foregroundStyle(Color.CT.text)
-                    .tint(Color.CT.accent)
-                    .autocorrectionDisabled()
-                    .padding(.leading, 10)
-                    .padding(.trailing, 32)
-                    .padding(.vertical, 7)
-                    .overlay(alignment: .trailing) {
-                        Button {
-                            if searchText.isEmpty {
-                                withAnimation { isSearchActive = false }
-                            } else {
-                                searchText = ""
-                            }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundStyle(Color.CT.textDim)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 8)
-                    }
-                    .background(Color.CT.bgMsg, in: Capsule())
-                    .overlay { Capsule().stroke(Color.CT.noise, lineWidth: 1) }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Color.CT.bg)
-
-                if !searchText.isEmpty {
-                    HStack {
-                        Text("[\(filteredMessages.count) results]")
-                            .font(CTFont.regular(12))
-                            .foregroundStyle(Color.CT.textDim)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 6)
-                    .background(Color.CT.bg)
-                }
-
-            }
-        }
+        ChatSearchOverlayView(
+            isSearchActive: $isSearchActive,
+            searchText: $searchText,
+            resultCount: filteredMessages.count
+        )
     }
 
     // MARK: - Computed Properties

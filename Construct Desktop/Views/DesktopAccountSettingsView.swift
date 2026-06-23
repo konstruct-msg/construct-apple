@@ -144,9 +144,10 @@ struct DesktopAccountSettingsView: View {
                     .foregroundStyle(Color.CT.textDim)
                     .frame(width: 120, alignment: .leading)
                 TextField("", text: $vm.displayName)
-                    .textFieldStyle(.plain)
                     .font(CTFont.regular(13))
                     .foregroundStyle(Color.CT.text)
+                    .textFieldStyle(.plain)
+                    .ctInputChrome(.compact)
                     .onChange(of: vm.displayName) { _, val in
                         viewModel.saveDisplayName(val, authViewModel: authViewModel)
                     }
@@ -162,9 +163,13 @@ struct DesktopAccountSettingsView: View {
                     .foregroundStyle(Color.CT.textDim)
                     .frame(width: 120, alignment: .leading)
                 TextField("", text: $vm.username)
-                    .textFieldStyle(.plain)
                     .font(CTFont.regular(13))
                     .foregroundStyle(Color.CT.text)
+                    .textFieldStyle(.plain)
+                    .ctInputChrome(
+                        .compact,
+                        strokeColor: viewModel.usernameSaveError == nil ? Color.CT.noise : Color.CT.danger
+                    )
                     .autocorrectionDisabled()
                     .onSubmit { Task { await saveUsernameIfNeeded() } }
                 Spacer()
@@ -398,4 +403,3 @@ struct DesktopDeleteAccountSheet: View {
         .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
         .frame(width: 500, height: 600)
 }
-

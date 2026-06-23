@@ -132,33 +132,11 @@ struct DesktopSynapsView: View {
 
             Spacer()
 
-            // Inline search
-            HStack(spacing: 4) {
-                Text("[")
-                    .font(CTFont.regular(12))
-                    .foregroundStyle(Color.CT.textDim)
-                TextField("", text: $searchText,
-                          prompt: Text(LocalizedStringKey("synaps_search_prompt"))
-                    .font(CTFont.regular(12))
-                    .foregroundStyle(Color.CT.textDim))
-                    .font(CTFont.regular(12))
-                    .foregroundStyle(Color.CT.text)
-                    .tint(Color.CT.accent)
-                    .frame(width: 110)
-                    .textFieldStyle(.plain)
-                if !searchText.isEmpty {
-                    Button { searchText = "" } label: {
-                        Text("×")
-                            .font(CTFont.regular(12))
-                            .foregroundStyle(Color.CT.textDim)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Text("]")
-                        .font(CTFont.regular(12))
-                        .foregroundStyle(Color.CT.textDim)
-                }
-            }
+            CTSearchBar(
+                text: $searchText,
+                placeholder: LocalizedStringKey("synaps_search_prompt")
+            )
+            .frame(width: 170)
 
             Spacer().frame(width: 6)
 
@@ -176,7 +154,7 @@ struct DesktopSynapsView: View {
             .help(NSLocalizedString("add_contact", comment: ""))
             .padding(.trailing, 10)
         }
-        .frame(height: 36)
+        .frame(height: 52)
         .background(Color.CT.bg)
     }
 

@@ -66,29 +66,7 @@ struct DesktopChatsListView: View {
     // MARK: - Search Bar
 
     private var searchBar: some View {
-        TextField("", text: $searchQuery, prompt: Text(LocalizedStringKey("Search..."))
-            .foregroundColor(Color.CT.textDim))
-            .textFieldStyle(.plain)
-            .font(CTFont.regular(12))
-            .foregroundColor(Color.CT.text)
-            .autocorrectionDisabled()
-            .tint(Color.CT.accent)
-            .padding(.leading, 10)
-            .padding(.trailing, 32)
-            .padding(.vertical, 7)
-            .overlay(alignment: .trailing) {
-                if !searchQuery.isEmpty {
-                    Button { searchQuery = "" } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.CT.textDim)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.trailing, 8)
-                }
-            }
-            .background(Color.CT.bgMsg, in: Capsule())
-            .overlay { Capsule().stroke(Color.CT.noise, lineWidth: 1) }
+        CTSearchBar(text: $searchQuery)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(Color.CT.bg)

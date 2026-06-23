@@ -548,19 +548,11 @@ private struct PasteTab: View {
                     .textFieldStyle(.plain)
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(DesktopTheme.textPrimary)
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(DesktopTheme.backgroundPanel)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .strokeBorder(
-                                        focused ? DesktopTheme.accent.opacity(0.6) : DesktopTheme.separator,
-                                        lineWidth: 1
-                                    )
-                            )
-                    )
                     .focused($focused)
+                    .ctInputChrome(
+                        .standard,
+                        strokeColor: focused ? Color.CT.accent.opacity(0.7) : Color.CT.noise
+                    )
                     .onSubmit { submit() }
             }
 
