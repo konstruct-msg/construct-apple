@@ -298,6 +298,12 @@ uint64_t uniffi_construct_transport_fn_method_quicstream_recv_trailers(uint64_t 
 uint64_t uniffi_construct_transport_fn_method_quicstream_send_message(uint64_t ptr, RustBuffer message
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_TRANSPORT_FN_FUNC_TRANSPORT_BUILD_MARKER
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_TRANSPORT_FN_FUNC_TRANSPORT_BUILD_MARKER
+RustBuffer uniffi_construct_transport_fn_func_transport_build_marker(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_FFI_CONSTRUCT_TRANSPORT_RUSTBUFFER_ALLOC
 #define UNIFFI_FFIDEF_FFI_CONSTRUCT_TRANSPORT_RUSTBUFFER_ALLOC
 RustBuffer ffi_construct_transport_rustbuffer_alloc(uint64_t size, RustCallStatus *_Nonnull out_status
@@ -556,6 +562,12 @@ void ffi_construct_transport_rust_future_free_void(uint64_t handle
 #ifndef UNIFFI_FFIDEF_FFI_CONSTRUCT_TRANSPORT_RUST_FUTURE_COMPLETE_VOID
 #define UNIFFI_FFIDEF_FFI_CONSTRUCT_TRANSPORT_RUST_FUTURE_COMPLETE_VOID
 void ffi_construct_transport_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_TRANSPORT_CHECKSUM_FUNC_TRANSPORT_BUILD_MARKER
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_TRANSPORT_CHECKSUM_FUNC_TRANSPORT_BUILD_MARKER
+uint16_t uniffi_construct_transport_checksum_func_transport_build_marker(void
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_TRANSPORT_CHECKSUM_METHOD_QUICCHANNEL_OPEN_STREAM

@@ -36,6 +36,7 @@ final class QuicClientTransport: ClientTransport, @unchecked Sendable {
     }
 
     func connect() async throws {
+        Log.info("engine-QUIC transport build=\(transportBuildMarker()) → \(config.host):\(config.port)", category: "QuicTransport")
         state.markConnecting()
         do {
             let channel = try await QuicChannel.connect(

@@ -651,7 +651,7 @@ public func FfiConverterTypeQuicChannel_lower(_ value: QuicChannel) -> UInt64 {
 
 /**
  * One gRPC call. Send and receive halves are independently locked, so a Swift
- * sender task and receiver task run concurrently.
+ * sender task and receiver task run concurrently. Every operation runs on `RT`.
  */
 public protocol QuicStreamProtocol: AnyObject, Sendable {
     
@@ -683,7 +683,7 @@ public protocol QuicStreamProtocol: AnyObject, Sendable {
 }
 /**
  * One gRPC call. Send and receive halves are independently locked, so a Swift
- * sender task and receiver task run concurrently.
+ * sender task and receiver task run concurrently. Every operation runs on `RT`.
  */
 open class QuicStream: QuicStreamProtocol, @unchecked Sendable {
     fileprivate let handle: UInt64
@@ -1108,6 +1108,17 @@ fileprivate func uniffiFutureContinuationCallback(handle: UInt64, pollResult: In
         print("uniffiFutureContinuationCallback invalid handle")
     }
 }
+/**
+ * Build/behaviour marker so the iOS app log can confirm exactly which transport binary
+ * (.a) is actually linked — Xcode silently reuses a cached static lib, which has masked
+ * several fixes. Bump on changes that need on-device verification.
+ */
+public func transportBuildMarker() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_transport_fn_func_transport_build_marker($0
+    )
+})
+}
 
 private enum InitializationResult {
     case ok
@@ -1123,6 +1134,9 @@ private let initializationResult: InitializationResult = {
     let scaffolding_contract_version = ffi_construct_transport_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
+    }
+    if (uniffi_construct_transport_checksum_func_transport_build_marker() != 44196) {
+        return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_transport_checksum_method_quicchannel_open_stream() != 8948) {
         return InitializationResult.apiChecksumMismatch
