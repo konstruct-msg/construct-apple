@@ -141,7 +141,9 @@ private final class QuicOutbound: ClosableRPCWriterProtocol, @unchecked Sendable
             }
             do {
                 try await stream.sendMessage(message: bytes.data)
+                #if DEBUG
                 Log.debug("QUIC send ok (\(bytes.data.count)B) \(path)", category: "QuicTransport")
+                #endif
             } catch {
                 Log.error("QUIC send FAILED \(path): \(error)", category: "QuicTransport")
                 throw error
@@ -163,9 +165,11 @@ private final class QuicOutbound: ClosableRPCWriterProtocol, @unchecked Sendable
     private func startReceivePump(on stream: QuicStream) {
         let continuation = self.continuation
         let path = self.path
+        #if DEBUG
+        // Debug-only: poll live quinn connection stats every 5s. `ping_tx` should grow
+        // (keep-alive); if it stalls, quinn isn't driving the connection on-device. This does
+        // real FFI work per tick, so it is compiled out of release builds entirely.
         let channel = self.channel
-        // Diagnostic: log live quinn connection stats every 5s. `ping_tx` should grow
-        // (keep-alive); if it stalls, quinn isn't driving the connection on-device.
         let statsTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(5))
@@ -175,11 +179,13 @@ private final class QuicOutbound: ClosableRPCWriterProtocol, @unchecked Sendable
                 }
             }
         }
+        #endif
         Task {
+            #if DEBUG
             defer { statsTask.cancel() }
+            #endif
             do {
                 let httpStatus = try await stream.recvResponse()
-                Log.debug("QUIC recvResponse \(httpStatus) \(path)", category: "QuicTransport")
                 guard httpStatus == 200 else {
                     continuation.yield(.status(
                         Status(code: .unavailable, message: "QUIC gateway HTTP \(httpStatus)"),
@@ -191,17 +197,19 @@ private final class QuicOutbound: ClosableRPCWriterProtocol, @unchecked Sendable
                 // Response headers are not surfaced by the FFI yet; gRPC initial metadata is empty.
                 continuation.yield(.metadata([:]))
 
+                #if DEBUG
                 var received = 0
+                #endif
                 while let message = try await stream.recvMessage() {
+                    #if DEBUG
                     received += 1
                     Log.debug("QUIC recv msg #\(received) (\(message.count)B) \(path)", category: "QuicTransport")
+                    #endif
                     continuation.yield(.message(GRPCNetworkTransportBytes(message)))
                 }
-                Log.info("QUIC recv stream ended after \(received) msg(s), reading trailers \(path)", category: "QuicTransport")
 
                 let trailers = try await stream.recvTrailers()
                 let (status, trailingMetadata) = Self.parseStatus(from: trailers)
-                Log.info("QUIC trailers grpc-status=\(status.code) \(path)", category: "QuicTransport")
                 continuation.yield(.status(status, trailingMetadata))
                 continuation.finish()
             } catch {
