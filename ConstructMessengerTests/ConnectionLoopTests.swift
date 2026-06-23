@@ -126,6 +126,23 @@ final class ConnectionLoopTests: XCTestCase {
         XCTAssertTrue(outcome.effects.contains(.requestProxyStart))
     }
 
+    /// Regression: a proxy that finishes starting AFTER we are on the direct path (e.g. an
+    /// obfs4 handshake that was in flight when the user turned VEIL OFF, completing ~200ms
+    /// later) must NOT re-activate VEIL. The reducer rejects the stale proxyStarted and tears
+    /// the stray proxy down, so OFF stays OFF.
+    func testTransportReducer_StaleProxyStartedWhileDirect_DoesNotReactivateVEIL() {
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 0),
+            event: .proxyStarted(relay: "relay.example:443", port: 49262, restarted: false),
+            config: .default,
+            now: Date()
+        )
+
+        XCTAssertEqual(outcome.state, .direct(consecutiveFails: 0))
+        XCTAssertTrue(outcome.effects.contains(.requestProxyStop))
+        XCTAssertFalse(outcome.effects.contains(.invalidateGRPCClient))
+    }
+
     // MARK: - Router (async, with mock effectors)
 
     func testTransportRouter_ModeOff_DirectFailuresNeverStartVEIL() async {

@@ -147,11 +147,17 @@ enum TransportReducer {
             }
             return (.direct(consecutiveFails: newFails), [])
 
-        case .proxyStarted(let relay, let port, let restarted):
-            // Defensive: someone started VEIL while we thought we were direct. Adopt it.
-            var effects: [TransportEffect] = [.setVeilPort(port)]
-            if restarted { effects.append(.invalidateGRPCClient) }
-            return (.veilActive(relay: relay, port: port, since: now), effects)
+        case .proxyStarted:
+            // We are deliberately on the direct path — every transition INTO .direct
+            // (mode=off, manualReset, a fresh network path) issues requestProxyStop. A
+            // proxyStarted arriving here is therefore a STALE start that raced past that
+            // stop: e.g. an obfs4 handshake already in flight when the user turned VEIL
+            // OFF, completing ~200ms later. Adopting it would silently re-activate VEIL
+            // after an explicit OFF (observed device bug). Reject it and tear the stray
+            // proxy down so OFF means OFF. Legitimate starts are always awaited in
+            // .veilProbing (requestProxyStart only ever transitions to probing), so this
+            // never drops a wanted proxy.
+            return (.direct(consecutiveFails: fails), [.requestProxyStop, .setVeilPort(nil)])
 
         default:
             return (.direct(consecutiveFails: fails), [])
