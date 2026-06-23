@@ -95,8 +95,17 @@ struct NetworkSettingsView: View {
                         if !displayTransport.isEmpty {
                             // "H3" = legacy native stack; "QUIC" = engine QUIC (construct-transport).
                             let isQUIC = displayTransport == "H3" || displayTransport == "QUIC"
-                            Text(isQUIC ? NetworkSettingsLabels.quic : NetworkSettingsLabels.h2)
-                                .font(CTFont.regular(13))
+                            // Lock when the live transport is obfuscated QUIC — at-a-glance proof
+                            // the direct traffic is DPI-obfuscated even with VEIL off.
+                            let obfuscated = isLive && isQUIC
+                                && FeatureFlags.engineQuicExperimental && FeatureFlags.engineQuicObfuscated
+                            HStack(spacing: 4) {
+                                if obfuscated {
+                                    Image(systemName: "lock.fill").font(.system(size: 10))
+                                }
+                                Text(isQUIC ? NetworkSettingsLabels.quic : NetworkSettingsLabels.h2)
+                                    .font(CTFont.regular(13))
+                            }
                                 .foregroundColor(isLive
                                     ? (isQUIC ? Color.CT.accent : Color.CT.accentDim)
                                     : Color.CT.textDim)
@@ -451,7 +460,18 @@ struct NetworkSettingsView: View {
 
     private var veilFooterKey: String {
         switch veilManager.mode {
-        case .off:  return "veil_footer_off"
+        case .off:
+            // VEIL off does NOT mean "no protection": obfuscated QUIC on the direct path is
+            // itself DPI-evasion. Tell the truth about the LIVE transport, not just the mode.
+            guard FeatureFlags.engineQuicExperimental && FeatureFlags.engineQuicObfuscated else {
+                return "veil_footer_off"  // genuinely plain direct — no obfuscation anywhere
+            }
+            let live = streamManager.activeTransport
+            // "QUIC"/"H3" live → traffic is obfuscated right now; otherwise on the H2 fallback
+            // (or connecting) → not obfuscated this moment. The badge shows which it is.
+            return (live == "QUIC" || live == "H3")
+                ? "veil_footer_off_obf_active"
+                : "veil_footer_off_obf_fallback"
         case .auto: return "veil_footer_auto"
         case .on:   return "veil_footer_on"
         }

@@ -444,6 +444,8 @@
 "veil_mode_auto" = "auto";
 "veil_mode_on" = "on";
 "veil_footer_off" = "Traffic protection disabled. Direct connection only.";
+"veil_footer_off_obf_active" = "VEIL off — direct traffic is obfuscated via QUIC (Salamander).";
+"veil_footer_off_obf_fallback" = "VEIL off — QUIC obfuscation enabled; currently on H2 fallback (not obfuscated).";
 "veil_footer_auto" = "VEIL activates automatically when network blocking is detected.";
 "veil_footer_on" = "All traffic routed through VEIL relay.";
 "veil_auto_active" = "Auto-activated · direct blocked";

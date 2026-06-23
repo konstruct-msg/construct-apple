@@ -445,6 +445,8 @@
 "veil_mode_auto" = "авто";
 "veil_mode_on" = "вкл";
 "veil_footer_off" = "Защита трафика отключена. Только прямое подключение.";
+"veil_footer_off_obf_active" = "VEIL выкл — прямой трафик обфусцирован через QUIC (Salamander).";
+"veil_footer_off_obf_fallback" = "VEIL выкл — обфускация QUIC включена; сейчас откат на H2 (без обфускации).";
 "veil_footer_auto" = "VEIL активируется автоматически при обнаружении блокировки.";
 "veil_footer_on" = "Весь трафик проходит через VEIL.";
 "veil_auto_active" = "Авто · прямое заблокировано";
