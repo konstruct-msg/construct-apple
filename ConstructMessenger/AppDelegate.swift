@@ -177,6 +177,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
+        // A new_message silent push that lands while the app is foregrounded with a LIVE
+        // MessageStream is redundant — the stream already delivered the message — and was the
+        // confirmed trigger of a reconnect storm: every incoming message produced a push, and
+        // the push-driven fetch churned the stream (~1 reconnect per message, transport-agnostic;
+        // device logs showed the push immediately preceding "Starting MessageStream connection"
+        // on every cycle). Silent pushes exist to wake a BACKGROUNDED app (or one whose stream is
+        // down) to fetch; in the foreground the stream handles it. Skip the fetch in that case.
+        let foregroundLiveStream = MainActor.assumeIsolated {
+            UIApplication.shared.applicationState == .active && MessageStreamManager.shared.isConnected
+        }
+        if foregroundLiveStream {
+            Log.info("Silent push (\(activityType ?? "?")) ignored — foreground MessageStream is live", category: "Push")
+            completionHandler(.noData)
+            return
+        }
+
         // FIXME(masque): When MASQUE-over-TCP is implemented, the engine path replaces this.
         // For now the engine never starts on iOS (UDP 443 blocked by OS), so use the
         // legacy BackgroundFetchManager path directly.
