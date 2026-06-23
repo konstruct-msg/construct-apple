@@ -119,6 +119,13 @@ final class MessageStreamManager {
     /// Cleared when H3 succeeds or the stream ends cleanly.
     var consecutiveH3OpenFailures = 0
     static let h3OpenFailureThreshold = 2
+    /// Session-level suppression of the fast-UDP transport (native H3 / engine-QUIC) after it
+    /// proves unhealthy on this network — e.g. QUIC connects then dies at the idle timeout every
+    /// ~30s because DPI throttles UDP. Without this, each reconnect re-tries QUIC, dies, falls to
+    /// H2, and (on a clean H2 end) resets the counter → endless QUIC thrash. While set in the
+    /// future, `openStream()` goes straight to H2. Reset by an explicit transport toggle.
+    var fastUdpUnhealthyUntil: Date?
+    static let fastUdpCooldown: TimeInterval = 300
     private(set) var isPaused = false
     private(set) var subscriptionUserIds: [String] = []
     private var lastPendingCursor: String = UserDefaults.standard.string(forKey: "construct.pendingCursor") ?? "" {
@@ -289,6 +296,10 @@ final class MessageStreamManager {
             Log.info("Transport toggle — no callback yet, nothing to reconnect", category: "MessageStream")
             return
         }
+        // Explicit toggle = give the chosen transport a clean slate (clear QUIC suppression).
+        fastUdpUnhealthyUntil = nil
+        consecutiveH3OpenFailures = 0
+        shouldFallbackToH2Direct = false
         Log.info("Transport toggle (engineQuic=\(FeatureFlags.engineQuicExperimental)) — forcing stream reconnect", category: "MessageStream")
         forceDisconnect()
         connect(contactUserIds: ids, onMessageReceived: cb)
@@ -594,6 +605,10 @@ final class MessageStreamManager {
                     if lastStreamTransportWasH3 {
                         consecutiveH3OpenFailures += 1
                         Log.info("H3 open failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold)", category: "MessageStream")
+                        if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
+                            fastUdpUnhealthyUntil = Date().addingTimeInterval(Self.fastUdpCooldown)
+                            Log.info("Fast-UDP (QUIC/H3) suppressed \(Int(Self.fastUdpCooldown))s — using H2", category: "MessageStream")
+                        }
                     }
                     // H3→H2 fallback: if H3 failed on the direct path and VEIL isn't active yet,
                     // try H2 once before activating VEIL (H3 may be unsupported, not blocked).
@@ -622,6 +637,10 @@ final class MessageStreamManager {
                 if lastStreamTransportWasH3 {
                     consecutiveH3OpenFailures += 1
                     Log.info("H3 failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold)", category: "MessageStream")
+                    if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
+                        fastUdpUnhealthyUntil = Date().addingTimeInterval(Self.fastUdpCooldown)
+                        Log.info("Fast-UDP (QUIC/H3) suppressed \(Int(Self.fastUdpCooldown))s — DPI/idle death on this network, using H2", category: "MessageStream")
+                    }
                 }
                 // Log full error details for diagnosis
                 if let rpcError = error as? RPCError {

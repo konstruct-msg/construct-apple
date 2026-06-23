@@ -150,9 +150,13 @@ extension MessageStreamManager {
         // GRPCStreamTransport.open() is reached. It shares the same silent-UDP failover and
         // open-failure counter as native H3 (consecutiveH3OpenFailures / shouldFallbackToH2Direct).
         let experimentalQuic = FeatureFlags.engineQuicExperimental
+        // Session cooldown: if the fast-UDP transport was flagged unhealthy (QUIC kept dying on
+        // this network), stay on H2 until the cooldown expires rather than re-trying QUIC.
+        let fastUdpInCooldown = (fastUdpUnhealthyUntil.map { $0 > Date() }) ?? false
         let useH2Fallback = (!FeatureFlags.h3Enabled && !experimentalQuic)
             || shouldFallbackToH2Direct
             || consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold
+            || fastUdpInCooldown
         if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
             Log.info("H3 disabled — \(consecutiveH3OpenFailures) consecutive failures, using H2 direct", category: "MessageStream")
         }
