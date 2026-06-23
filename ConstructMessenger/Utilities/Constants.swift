@@ -277,36 +277,37 @@ struct FeatureFlags {
     /// (`QuicClientTransport`), routed through a native quinn+h3 gateway that bypasses
     /// the Traefik QUIC↔h2c bridge that broke the old native Swift H3 path.
     ///
-    /// **Dev-only, opt-in, default `false`.** This is NOT the dormant Swift H3 stack
-    /// (`h3Enabled`) — it is a separate experiment. When on, eligible RPCs use the
-    /// engine QUIC channel with a hard fallback to the H2 path at the router; it never
-    /// joins the happy-eyeballs race. Promote only after the bidi `MessageStream`
-    /// device gate passes between two real devices.
+    /// **Default `true` (auto-on).** This is NOT the dormant Swift H3 stack (`h3Enabled`) —
+    /// it is the construct-transport QUIC path. When on, eligible RPCs use the engine QUIC
+    /// channel with a fast hard fallback to H2 at the router (handshake 3s / idle 10s; see
+    /// fast-fallback in construct-transport `tls.rs`). Auto-on is safe now that fallback is
+    /// fast: on networks where QUIC is blocked/throttled it drops to H2/VEIL in seconds, and
+    /// on networks where it works it's a win. The visible toggle is now a **kill-switch**
+    /// (will move to `#if DEBUG` once we're confident — UI polish step).
     ///
-    /// See `decisions/quic-h3-transport-dedicated-rust-stack.md`.
+    /// See `decisions/quic-moderate-dpi-udp-obfuscation.md`.
     ///
-    /// Runtime-toggleable at `Settings → Network → EXPERIMENTAL` (orange) so it can be
-    /// flipped on a test build without recompiling. Backed by `UserDefaults`; defaults
-    /// `false`. Read fresh on every stream open, so toggling + a stream reconnect switches
-    /// transport live (the active transport is shown as a badge in Network settings).
+    /// Backed by `UserDefaults`, defaulting `true` when never set (a stored value — i.e. an
+    /// explicit user toggle — is respected). Read fresh on every stream open, so toggling +
+    /// a stream reconnect switches transport live (active transport shown as a badge).
     static let engineQuicExperimentalKey = "ff.engineQuicExperimental"
     static var engineQuicExperimental: Bool {
-        get { UserDefaults.standard.bool(forKey: engineQuicExperimentalKey) }
+        get { UserDefaults.standard.object(forKey: engineQuicExperimentalKey) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: engineQuicExperimentalKey) }
     }
 
-    /// **Dev-only, opt-in, default `false`.** Salamander-obfuscate the engine-QUIC datagrams
-    /// (DPI-evasion rung). Only meaningful when `engineQuicExperimental` is also on. When on,
-    /// the QUIC channel connects via `connectObfuscated(psk:)` IF a per-gateway Salamander PSK
-    /// has been provisioned (`QuicObfPskStore`); with no PSK it falls back to plain QUIC so the
-    /// experiment still works on free networks. The PSK is a shared per-gateway secret
-    /// provisioned out-of-band (see `decisions/salamander-psk-shared-per-gateway.md`).
+    /// **Default `true` (auto-on).** Salamander-obfuscate the engine-QUIC datagrams. This is
+    /// effectively mandatory in production, not optional: the gateway is obf-only (one UDP
+    /// port can't serve both plain and obfuscated), so a plain-QUIC client cannot handshake
+    /// it — `engineQuicExperimental` on therefore requires this on too. The PSK is a shared
+    /// per-gateway secret (provisioned via `QuicObfPskStore`, falling back to the bundled dev
+    /// PSK in `QuicGatewayConfig`); see `decisions/salamander-psk-shared-per-gateway.md`.
+    /// The separate toggle exists mainly as a DEBUG aid to test plain vs obfuscated.
     ///
-    /// Runtime-toggleable at `Settings → Network → EXPERIMENTAL` (orange); UserDefaults-backed,
-    /// read fresh on every stream open so toggling + a reconnect switches obfuscation live.
+    /// Backed by `UserDefaults`, defaulting `true` when never set (an explicit toggle is kept).
     static let engineQuicObfuscatedKey = "ff.engineQuicObfuscated"
     static var engineQuicObfuscated: Bool {
-        get { UserDefaults.standard.bool(forKey: engineQuicObfuscatedKey) }
+        get { UserDefaults.standard.object(forKey: engineQuicObfuscatedKey) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: engineQuicObfuscatedKey) }
     }
 }
