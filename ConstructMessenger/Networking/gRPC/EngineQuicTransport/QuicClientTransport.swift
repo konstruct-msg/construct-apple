@@ -36,7 +36,7 @@ final class QuicClientTransport: ClientTransport, @unchecked Sendable {
     }
 
     func connect() async throws {
-        await state.markConnecting()
+        state.markConnecting()
         do {
             let channel = try await QuicChannel.connect(
                 host: config.host,
@@ -46,8 +46,9 @@ final class QuicClientTransport: ClientTransport, @unchecked Sendable {
             )
             state.setRunning(channel)
         } catch {
-            state.shutdown()
-            throw RPCError(code: .unavailable, message: "QUIC connect failed: \(error)")
+            let rpcError = RPCError(code: .unavailable, message: "QUIC connect failed: \(error)")
+            state.fail(rpcError)
+            throw rpcError
         }
         // Hold the connection open until graceful shutdown, mirroring the H2/H3 transports.
         await state.waitForShutdown()
@@ -64,9 +65,9 @@ final class QuicClientTransport: ClientTransport, @unchecked Sendable {
         options: CallOptions,
         _ closure: (_ stream: RPCStream<Inbound, Outbound>, _ context: ClientContext) async throws -> T
     ) async throws -> T {
-        guard let channel = state.channel else {
-            throw RPCError(code: .unavailable, message: "QUIC transport is not connected.")
-        }
+        // Await the established channel — the QUIC handshake completes asynchronously in
+        // connect(), so reading it eagerly would race the first RPC ahead of the handshake.
+        let channel = try await state.waitForChannel()
         let path = "/\(descriptor.fullyQualifiedMethod)"
         let rpcStream = makeRPCStream(descriptor: descriptor, channel: channel, path: path)
         let context = ClientContext(
@@ -206,46 +207,88 @@ private final class QuicOutbound: ClosableRPCWriterProtocol, @unchecked Sendable
 
 // MARK: - Connection state
 
-/// Minimal lifecycle gate: holds the established `QuicChannel` and a shutdown latch so
-/// `connect()` can block until `beginGracefulShutdown()`, mirroring the H3 transport.
+/// Lifecycle gate. `connect()` establishes the channel asynchronously (the QUIC handshake
+/// takes ~100ms); `withStream` must therefore *await* readiness rather than read the channel
+/// eagerly — otherwise the first RPC races ahead of the handshake and fails with
+/// "transport is not connected" (observed device bug). Holds the channel, fails pending
+/// stream waiters on connect-failure/shutdown, and provides the shutdown latch for connect().
 private final class StateMachine: @unchecked Sendable {
-    private enum State { case idle, connecting, running, done }
+    private enum Phase { case idle, connecting, running, failed, done }
 
     private let lock = NSLock()
-    private var state: State = .idle
+    private var phase: Phase = .idle
     private var _channel: QuicChannel?
+    private var failureError: (any Error)?
+    private var channelWaiters: [CheckedContinuation<QuicChannel, any Error>] = []
     private var shutdownContinuation: CheckedContinuation<Void, Never>?
 
-    var channel: QuicChannel? {
-        lock.withLock { _channel }
-    }
-
-    func markConnecting() async {
-        lock.withLock { if state == .idle { state = .connecting } }
+    func markConnecting() {
+        lock.withLock { if phase == .idle { phase = .connecting } }
     }
 
     func setRunning(_ channel: QuicChannel) {
-        lock.withLock {
+        let waiters: [CheckedContinuation<QuicChannel, any Error>] = lock.withLock {
             _channel = channel
-            state = .running
+            phase = .running
+            let w = channelWaiters
+            channelWaiters = []
+            return w
         }
+        for w in waiters { w.resume(returning: channel) }
+    }
+
+    /// Connect failed: fail any pending stream waiters and release the shutdown latch.
+    func fail(_ error: any Error) {
+        let (waiters, shutdown): ([CheckedContinuation<QuicChannel, any Error>], CheckedContinuation<Void, Never>?) = lock.withLock {
+            if phase != .done { phase = .failed; failureError = error }
+            _channel = nil
+            let w = channelWaiters; channelWaiters = []
+            let s = shutdownContinuation; shutdownContinuation = nil
+            return (w, s)
+        }
+        for w in waiters { w.resume(throwing: error) }
+        shutdown?.resume()
     }
 
     func shutdown() {
-        let cont: CheckedContinuation<Void, Never>? = lock.withLock {
-            state = .done
+        let (waiters, cont): ([CheckedContinuation<QuicChannel, any Error>], CheckedContinuation<Void, Never>?) = lock.withLock {
+            phase = .done
             _channel = nil
-            let c = shutdownContinuation
-            shutdownContinuation = nil
-            return c
+            let w = channelWaiters; channelWaiters = []
+            let c = shutdownContinuation; shutdownContinuation = nil
+            return (w, c)
         }
+        let err = RPCError(code: .unavailable, message: "QUIC transport shut down.")
+        for w in waiters { w.resume(throwing: err) }
         cont?.resume()
+    }
+
+    /// Await the established channel: returns immediately when running, throws if the
+    /// transport already failed/shut down, otherwise suspends until `connect()` resolves.
+    func waitForChannel() async throws -> QuicChannel {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<QuicChannel, any Error>) in
+            let resume: (() -> Void)? = lock.withLock {
+                switch phase {
+                case .running:
+                    if let ch = _channel { return { cont.resume(returning: ch) } }
+                    channelWaiters.append(cont); return nil
+                case .failed:
+                    let e = failureError ?? RPCError(code: .unavailable, message: "QUIC connect failed.")
+                    return { cont.resume(throwing: e) }
+                case .done:
+                    return { cont.resume(throwing: RPCError(code: .unavailable, message: "QUIC transport shut down.")) }
+                case .idle, .connecting:
+                    channelWaiters.append(cont); return nil
+                }
+            }
+            resume?()
+        }
     }
 
     func waitForShutdown() async {
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             let alreadyDone: Bool = lock.withLock {
-                if state == .done { return true }
+                if phase == .done || phase == .failed { return true }
                 shutdownContinuation = cont
                 return false
             }
