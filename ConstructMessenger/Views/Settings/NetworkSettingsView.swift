@@ -32,6 +32,7 @@ struct NetworkSettingsView: View {
     /// Bumped after an import to refresh the configured-status row.
     @State private var veilTicketRefresh = 0
     @State private var engineQuicOn = FeatureFlags.engineQuicExperimental
+    @State private var engineQuicObfOn = FeatureFlags.engineQuicObfuscated
 
     private var veilConfiguredRelay: String? {
         _ = veilTicketRefresh
@@ -245,6 +246,31 @@ struct NetworkSettingsView: View {
                     .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
                     .onChange(of: engineQuicOn) { _, newValue in
                         FeatureFlags.engineQuicExperimental = newValue
+                        streamManager.reconnectForTransportChange()
+                    }
+
+                    CTSep(style: .thin)
+
+                    // Salamander obfuscation of the QUIC datagrams (DPI-evasion). Only meaningful
+                    // when QUIC is on AND a per-gateway PSK has been provisioned (via veil-config);
+                    // with no PSK it transparently stays plain QUIC.
+                    Toggle(isOn: $engineQuicObfOn) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("QUIC obfuscation (Salamander)")
+                                .font(CTFont.regular(14))
+                                .foregroundStyle(.orange)
+                            Text("Obfuscate QUIC datagrams to evade DPI. Needs a provisioned gateway PSK; otherwise stays plain QUIC.")
+                                .font(CTFont.regular(11))
+                                .foregroundStyle(Color.CT.textDim)
+                        }
+                    }
+                    .tint(.orange)
+                    .disabled(!engineQuicOn)
+                    .opacity(engineQuicOn ? 1 : 0.4)
+                    .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                    .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
+                    .onChange(of: engineQuicObfOn) { _, newValue in
+                        FeatureFlags.engineQuicObfuscated = newValue
                         streamManager.reconnectForTransportChange()
                     }
                 }

@@ -453,15 +453,25 @@ final class GRPCChannelManager: Sendable {
     /// from the Envoy/Traefik H2 endpoint.
     private func engineQuicConfig() -> QuicClientTransport.Config? {
         guard FeatureFlags.engineQuicExperimental else { return nil }
-        let host = Bundle.main.object(forInfoDictionaryKey: "QUIC_GATEWAY_HOST") as? String ?? "quic.konstruct.cc"
-        let port = (Bundle.main.object(forInfoDictionaryKey: "QUIC_GATEWAY_PORT") as? String).flatMap(UInt16.init) ?? 443
+        let host = QuicGatewayConfig.host
+        let port = QuicGatewayConfig.port
         // Self-signed gateway cert (DER), pinned. Bundled as `quic_gateway.der`.
         guard let url = Bundle.main.url(forResource: "quic_gateway", withExtension: "der"),
               let cert = try? Data(contentsOf: url) else {
             Log.error("engine-QUIC enabled but quic_gateway.der is not bundled — cannot pin gateway cert", category: "GRPCChannel")
             return nil
         }
-        return QuicClientTransport.Config(host: host, port: port, serverName: host, trustCert: cert)
+        // Salamander obfuscation: only when the experiment is enabled AND a per-gateway PSK has
+        // been provisioned. No PSK → plain QUIC (so the experiment still works on free networks);
+        // see decisions/salamander-psk-shared-per-gateway.md.
+        var obfPsk: Data?
+        if FeatureFlags.engineQuicObfuscated {
+            obfPsk = QuicObfPskStore.psk(for: host)
+            if obfPsk == nil {
+                Log.info("engine-QUIC obfuscation enabled but no Salamander PSK provisioned for \(host) — using plain QUIC", category: "GRPCChannel")
+            }
+        }
+        return QuicClientTransport.Config(host: host, port: port, serverName: host, trustCert: cert, obfPsk: obfPsk)
     }
 
     /// Creates a gRPC client over the experimental engine-QUIC transport, or `nil`
@@ -480,7 +490,11 @@ final class GRPCChannelManager: Sendable {
         _eqConnLock.lock()
         defer { _eqConnLock.unlock() }
 
-        let key = "engine-quic:\(currentHost):\(currentPort)"
+        // Key includes obf-active state so toggling obfuscation (or provisioning a PSK)
+        // changes the identity → the stale connection is replaced on the next acquire.
+        let obfActive = FeatureFlags.engineQuicObfuscated
+            && QuicObfPskStore.psk(for: QuicGatewayConfig.host) != nil
+        let key = "engine-quic:\(currentHost):\(currentPort):\(obfActive ? "obf" : "plain")"
         if let conn = _eqConnBox as? PersistentConnEngineQuic, conn.key == key, !conn.task.isCancelled {
             return conn.client
         }

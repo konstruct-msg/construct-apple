@@ -583,6 +583,26 @@ public static func connect(host: String, port: UInt16, serverName: String, trust
         )
 }
     
+    /**
+     * Like [`connect`](Self::connect) but Salamander-obfuscates every datagram with `psk`
+     * (the DPI-evading path). The gateway must apply the same PSK; `psk` is provisioned
+     * out-of-band via the veil-ticket mechanism, never hardcoded.
+     */
+public static func connectObfuscated(host: String, port: UInt16, serverName: String, trustCert: Data, psk: Data)async throws  -> QuicChannel  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_construct_transport_fn_constructor_quicchannel_connect_obfuscated(FfiConverterString.lower(host),FfiConverterUInt16.lower(port),FfiConverterString.lower(serverName),FfiConverterData.lower(trustCert),FfiConverterData.lower(psk)
+                )
+            },
+            pollFunc: ffi_construct_transport_rust_future_poll_u64,
+            completeFunc: ffi_construct_transport_rust_future_complete_u64,
+            freeFunc: ffi_construct_transport_rust_future_free_u64,
+            liftFunc: FfiConverterTypeQuicChannel_lift,
+            errorHandler: FfiConverterTypeTransportError_lift
+        )
+}
+    
 
     
     /**
@@ -1189,6 +1209,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_transport_checksum_constructor_quicchannel_connect() != 1531) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_transport_checksum_constructor_quicchannel_connect_obfuscated() != 54678) {
         return InitializationResult.apiChecksumMismatch
     }
 

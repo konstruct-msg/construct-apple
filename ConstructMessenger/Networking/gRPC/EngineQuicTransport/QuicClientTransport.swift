@@ -24,6 +24,10 @@ final class QuicClientTransport: ClientTransport, @unchecked Sendable {
         var serverName: String
         /// Pinned gateway certificate (DER) — the gateway is self-signed.
         var trustCert: Data
+        /// When set, Salamander-obfuscate every datagram with this PSK (the gateway must use the
+        /// same PSK). nil = plain QUIC. Shared per-gateway secret, never per-user — see
+        /// decisions/salamander-psk-shared-per-gateway.md.
+        var obfPsk: Data?
     }
 
     private let config: Config
@@ -36,15 +40,27 @@ final class QuicClientTransport: ClientTransport, @unchecked Sendable {
     }
 
     func connect() async throws {
-        Log.info("engine-QUIC transport build=\(transportBuildMarker()) → \(config.host):\(config.port)", category: "QuicTransport")
+        let obfLabel = config.obfPsk == nil ? "plain" : "salamander"
+        Log.info("engine-QUIC transport build=\(transportBuildMarker()) [\(obfLabel)] → \(config.host):\(config.port)", category: "QuicTransport")
         state.markConnecting()
         do {
-            let channel = try await QuicChannel.connect(
-                host: config.host,
-                port: config.port,
-                serverName: config.serverName,
-                trustCert: config.trustCert
-            )
+            let channel: QuicChannel
+            if let psk = config.obfPsk {
+                channel = try await QuicChannel.connectObfuscated(
+                    host: config.host,
+                    port: config.port,
+                    serverName: config.serverName,
+                    trustCert: config.trustCert,
+                    psk: psk
+                )
+            } else {
+                channel = try await QuicChannel.connect(
+                    host: config.host,
+                    port: config.port,
+                    serverName: config.serverName,
+                    trustCert: config.trustCert
+                )
+            }
             state.setRunning(channel)
         } catch {
             let rpcError = RPCError(code: .unavailable, message: "QUIC connect failed: \(error)")

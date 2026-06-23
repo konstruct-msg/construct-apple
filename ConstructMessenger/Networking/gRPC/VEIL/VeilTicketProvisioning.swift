@@ -48,6 +48,7 @@ struct VeilConfigBlob {
     let spki: String    // hex SHA-256 SPKI pin
     let ticket: String  // base64 veil-front ticket
     let exp: Int64?     // unix expiry (nil = no expiry encoded)
+    let obfPsk: Data?   // optional Salamander PSK (hex) for the QUIC gateway — shared per-gateway
 }
 
 enum VeilConfigImporter {
@@ -83,6 +84,12 @@ enum VeilConfigImporter {
             }
             guard VeilTicketStore.store(ticket: cfg.ticket, for: cfg.relay) else {
                 return .failure(ImportError.malformed)
+            }
+            // If the (signed) blob carries a Salamander PSK, provision it for the QUIC gateway
+            // (shared per-gateway secret — see decisions/salamander-psk-shared-per-gateway.md).
+            if let obfPsk = cfg.obfPsk {
+                QuicObfPskStore.store(psk: obfPsk, for: QuicGatewayConfig.host)
+                Log.info("Imported Salamander PSK for QUIC gateway \(QuicGatewayConfig.host) (len=\(obfPsk.count))", category: "VEIL")
             }
             Log.info("Imported veil-front ticket for \(cfg.relay) (len=\(cfg.ticket.count))", category: "VEIL")
             return .success(cfg.relay)
@@ -165,7 +172,10 @@ enum VeilConfigImporter {
         let sni = (obj["sni"] as? String) ?? relay.components(separatedBy: ":").first ?? relay
         let exp = (obj["exp"] as? NSNumber)?.int64Value
         if let exp, exp < Int64(Date().timeIntervalSince1970) { throw ImportError.expired }
-        return VeilConfigBlob(relay: relay, sni: sni, spki: spki, ticket: capability, exp: exp)
+        // Optional Salamander PSK for the QUIC gateway (shared per-gateway secret, hex). Absent
+        // in blobs that don't provision the obfuscated QUIC path.
+        let obfPsk = (obj["obf_psk"] as? String).flatMap { Data(veilHexString: $0) }
+        return VeilConfigBlob(relay: relay, sni: sni, spki: spki, ticket: capability, exp: exp, obfPsk: obfPsk)
     }
 
     /// Ed25519 over canonical JSON (sorted keys, no `signature` field) — the same

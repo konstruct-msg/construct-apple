@@ -294,6 +294,21 @@ struct FeatureFlags {
         get { UserDefaults.standard.bool(forKey: engineQuicExperimentalKey) }
         set { UserDefaults.standard.set(newValue, forKey: engineQuicExperimentalKey) }
     }
+
+    /// **Dev-only, opt-in, default `false`.** Salamander-obfuscate the engine-QUIC datagrams
+    /// (DPI-evasion rung). Only meaningful when `engineQuicExperimental` is also on. When on,
+    /// the QUIC channel connects via `connectObfuscated(psk:)` IF a per-gateway Salamander PSK
+    /// has been provisioned (`QuicObfPskStore`); with no PSK it falls back to plain QUIC so the
+    /// experiment still works on free networks. The PSK is a shared per-gateway secret
+    /// provisioned out-of-band (see `decisions/salamander-psk-shared-per-gateway.md`).
+    ///
+    /// Runtime-toggleable at `Settings → Network → EXPERIMENTAL` (orange); UserDefaults-backed,
+    /// read fresh on every stream open so toggling + a reconnect switches obfuscation live.
+    static let engineQuicObfuscatedKey = "ff.engineQuicObfuscated"
+    static var engineQuicObfuscated: Bool {
+        get { UserDefaults.standard.bool(forKey: engineQuicObfuscatedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: engineQuicObfuscatedKey) }
+    }
 }
 
 // MARK: - Traffic Protection Configuration
