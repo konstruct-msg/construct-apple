@@ -615,7 +615,14 @@
 "calls_recents" = "履歴";
 "calls_clear" = "消去";
 "calls_clear_confirm" = "すべての着信履歴を消去しますか？";
+"calls_filter_all" = "すべて";
+"calls_filter_missed" = "不在着信";
 "calls_empty" = "通話履歴はありません";
+"calls_empty_missed" = "不在着信はありません";
+"calls_section_today" = "今日";
+"calls_section_yesterday" = "昨日";
+"calls_section_earlier" = "最近";
+"calls_section_older" = "以前";
 "call_outgoing" = "発信";
 "call_incoming" = "着信";
 "call_missed" = "不在着信";

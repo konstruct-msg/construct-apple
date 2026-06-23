@@ -73,9 +73,7 @@ struct RecoveryEntryView: View {
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         #endif
-                        .padding(10)
-                        .background(Color.CT.bgMsg)
-                        .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
+                        .ctInputChrome(.standard)
                 }
                 .padding(.horizontal)
 
@@ -141,10 +139,7 @@ struct RecoveryEntryView: View {
                     else { focusedField = nil }
                 }
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 8)
-        .background(Color.CT.bgMsg)
-        .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
+        .ctInputChrome(.compact)
     }
 
     // Safe indexed iteration snapshot for @Observable / @State arrays.

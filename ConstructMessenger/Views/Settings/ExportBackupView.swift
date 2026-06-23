@@ -165,8 +165,8 @@ struct ExportBackupView: View {
 
                 Button { confirmedSaved.toggle() } label: {
                     HStack(spacing: 10) {
-                        Text(confirmedSaved ? "[✓]" : "[ ]")
-                            .font(CTFont.bold(14))
+                        Image(systemName: confirmedSaved ? "checkmark.square.fill" : "square")
+                            .font(.system(size: 16, weight: .regular))
                             .foregroundStyle(confirmedSaved ? Color.CT.accent : Color.CT.textDim)
                         Text(NSLocalizedString("backup_confirm_saved", comment: ""))
                             .font(CTFont.regular(13))

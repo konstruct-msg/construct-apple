@@ -13,15 +13,13 @@ struct CallHistoryView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
     // iOS 26: @FetchRequest(keyPath:) calls entity(). Using a plain @State array +
-    // initialisation, which triggers the "unique match" CoreData crash on iOS 26 when
-    // the NSManagedObjectModel is not yet fully settled. Using a plain @State array +
     // manual NSFetchRequest(entityName:) avoids the class-introspection path entirely.
     @State private var records: [CTCallRecord] = []
+    @State private var selectedFilter: CallHistoryFilter = .all
     @State private var showClearConfirm = false
 
     var body: some View {
         VStack(spacing: 0) {
-            // Section title as plain left-aligned label (not a capsule)
             HStack {
                 Text(NSLocalizedString("calls_recents", comment: "").uppercased())
                     .font(CTFont.bold(14))
@@ -40,10 +38,12 @@ struct CallHistoryView: View {
             .padding(.horizontal, CTLayout.edgePad)
             .frame(height: CTLayout.navBarHeight)
 
+            filterBar
+
             ZStack {
                 CTMatrixBackground().ignoresSafeArea()
 
-                if records.isEmpty {
+                if filteredRecords.isEmpty {
                     emptyState
                 } else {
                     callList
@@ -52,7 +52,6 @@ struct CallHistoryView: View {
         }
         .background(Color.CT.bg.ignoresSafeArea())
         .onAppear { loadRecords() }
-        // Refresh whenever any CoreData save happens (new call logged, record deleted, clear all)
         .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
             guard notificationContainsCallRecordChanges(note) else { return }
             loadRecords()
@@ -65,10 +64,41 @@ struct CallHistoryView: View {
         }
     }
 
-    // MARK: - Data
+    private var filterBar: some View {
+        HStack {
+            CTModeSelector(
+                selection: $selectedFilter,
+                options: CallHistoryFilter.allCases,
+                labels: [
+                    .all: NSLocalizedString("calls_filter_all", comment: ""),
+                    .missed: NSLocalizedString("calls_filter_missed", comment: "")
+                ],
+                width: .infinity
+            )
+            Spacer()
+        }
+        .padding(.horizontal, CTLayout.edgePad)
+        .padding(.bottom, 10)
+    }
+
+    private var filteredRecords: [CTCallRecord] {
+        switch selectedFilter {
+        case .all:
+            return records
+        case .missed:
+            return records.filter { $0.status == .missed }
+        }
+    }
+
+    private var groupedSections: [CallHistorySection] {
+        let grouped = Dictionary(grouping: filteredRecords, by: sectionKind(for:))
+        return CallHistorySection.Kind.allCases.compactMap { kind in
+            guard let records = grouped[kind], !records.isEmpty else { return nil }
+            return CallHistorySection(kind: kind, records: records)
+        }
+    }
 
     private func loadRecords() {
-        // Fetch as NSManagedObject to avoid Swift bridging casting pitfalls on iOS 26.
         let req = NSFetchRequest<NSManagedObject>(entityName: "CallRecord")
         req.sortDescriptors = [NSSortDescriptor(key: "startedAt", ascending: false)]
         req.fetchLimit = 200
@@ -76,7 +106,6 @@ struct CallHistoryView: View {
         records = objects.compactMap { $0 as? CTCallRecord }
     }
 
-    /// Ignore unrelated Core Data saves from other screens/tabs.
     private func notificationContainsCallRecordChanges(_ note: Notification) -> Bool {
         let keys = [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey]
         for key in keys {
@@ -88,29 +117,48 @@ struct CallHistoryView: View {
         return false
     }
 
-    // MARK: - List
-
     private var callList: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
-                ForEach(records, id: \.id) { record in
-                    CallHistoryRow(record: record, onDelete: { deleteRecord(record) }, onCallBack: { callBack(record) })
-                    Rectangle()
-                        .fill(Color.CT.noise.opacity(0.35))
-                        .frame(height: 1)
-                        .padding(.leading, 72)
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                ForEach(groupedSections) { section in
+                    Section {
+                        ForEach(section.records, id: \.id) { record in
+                            CallHistoryRow(
+                                record: record,
+                                onDelete: { deleteRecord(record) },
+                                onCallBack: { callBack(record) }
+                            )
+                            Rectangle()
+                                .fill(Color.CT.noise.opacity(0.35))
+                                .frame(height: 1)
+                                .padding(.leading, 72)
+                        }
+                    } header: {
+                        sectionHeader(title: section.title)
+                    }
                 }
-                // Spacer for floating tab capsule
                 Color.clear.frame(height: 72)
             }
         }
     }
 
-    // MARK: - Empty state
+    private func sectionHeader(title: String) -> some View {
+        ZStack {
+            Color.CT.bg.opacity(0.96)
+            HStack {
+                Text(title.uppercased())
+                    .font(CTFont.bold(11))
+                    .foregroundStyle(Color.CT.accentDim)
+                Spacer()
+            }
+            .padding(.horizontal, CTLayout.edgePad)
+            .padding(.vertical, 8)
+        }
+    }
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Text(NSLocalizedString("calls_empty", comment: ""))
+            Text(emptyStateText)
                 .font(CTFont.regular(13))
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
@@ -118,12 +166,18 @@ struct CallHistoryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Actions
+    private var emptyStateText: String {
+        switch selectedFilter {
+        case .all:
+            return NSLocalizedString("calls_empty", comment: "")
+        case .missed:
+            return NSLocalizedString("calls_empty_missed", comment: "")
+        }
+    }
 
     private func deleteRecord(_ record: CTCallRecord) {
         viewContext.delete(record)
         try? viewContext.save()
-        // loadRecords() will be called automatically via NSManagedObjectContextDidSave
     }
 
     private func callBack(_ record: CTCallRecord) {
@@ -136,9 +190,54 @@ struct CallHistoryView: View {
             )
         }
     }
+
+    private func sectionKind(for record: CTCallRecord) -> CallHistorySection.Kind {
+        guard let startedAt = record.startedAt else { return .older }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(startedAt) {
+            return .today
+        }
+        if calendar.isDateInYesterday(startedAt) {
+            return .yesterday
+        }
+        if let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()), startedAt >= weekAgo {
+            return .earlier
+        }
+        return .older
+    }
 }
 
-// MARK: - Row
+private enum CallHistoryFilter: CaseIterable {
+    case all
+    case missed
+}
+
+private struct CallHistorySection: Identifiable {
+    enum Kind: CaseIterable {
+        case today
+        case yesterday
+        case earlier
+        case older
+    }
+
+    let kind: Kind
+    let records: [CTCallRecord]
+
+    var id: Kind { kind }
+
+    var title: String {
+        switch kind {
+        case .today:
+            return NSLocalizedString("calls_section_today", comment: "")
+        case .yesterday:
+            return NSLocalizedString("calls_section_yesterday", comment: "")
+        case .earlier:
+            return NSLocalizedString("calls_section_earlier", comment: "")
+        case .older:
+            return NSLocalizedString("calls_section_older", comment: "")
+        }
+    }
+}
 
 private struct CallHistoryRow: View {
     let record: CTCallRecord
@@ -148,20 +247,17 @@ private struct CallHistoryRow: View {
     var body: some View {
         Button(action: onCallBack) {
             HStack(spacing: 12) {
-                // Direction indicator
                 Text(directionTag)
                     .font(CTFont.regular(10))
                     .foregroundStyle(directionColor)
                     .frame(width: 20, alignment: .center)
 
-                // Avatar
                 MainAvatarView(
                     userId: record.peerUserId,
                     displayName: record.peerName,
                     size: 40
                 )
 
-                // Name + status
                 VStack(alignment: .leading, spacing: 3) {
                     Text(record.peerName)
                         .font(CTFont.bold(15))
@@ -174,7 +270,6 @@ private struct CallHistoryRow: View {
 
                 Spacer()
 
-                // Time + duration + call-back hint
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(relativeTime)
                         .font(CTFont.regular(11))
@@ -209,18 +304,25 @@ private struct CallHistoryRow: View {
 
     private var directionTag: String {
         switch record.direction {
-        case .outgoing: return "↗"
-        case .incoming: return record.status == .missed ? "↙" : "↙"
-        @unknown default: return "~"
+        case .outgoing:
+            return "↗"
+        case .incoming:
+            return "↙"
+        @unknown default:
+            return "~"
         }
     }
 
     private var directionColor: Color {
         switch record.status {
-        case .missed, .declined: return Color.CT.danger
-        case .completed:         return record.direction == .outgoing ? Color.CT.textDim : Color.CT.accent
-        case .failed:            return .orange
-        @unknown default:        return Color.CT.textDim
+        case .missed, .declined:
+            return Color.CT.danger
+        case .completed:
+            return record.direction == .outgoing ? Color.CT.textDim : Color.CT.accent
+        case .failed:
+            return .orange
+        @unknown default:
+            return Color.CT.textDim
         }
     }
 
@@ -230,10 +332,14 @@ private struct CallHistoryRow: View {
             return record.direction == .outgoing
                 ? NSLocalizedString("call_outgoing", comment: "")
                 : NSLocalizedString("call_incoming", comment: "")
-        case .missed:   return NSLocalizedString("call_missed", comment: "")
-        case .declined: return NSLocalizedString("call_declined", comment: "")
-        case .failed:   return NSLocalizedString("call_failed", comment: "")
-        @unknown default: return ""
+        case .missed:
+            return NSLocalizedString("call_missed", comment: "")
+        case .declined:
+            return NSLocalizedString("call_declined", comment: "")
+        case .failed:
+            return NSLocalizedString("call_failed", comment: "")
+        @unknown default:
+            return ""
         }
     }
 

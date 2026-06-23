@@ -496,6 +496,12 @@ private struct KTStatusSection: View {
         return NSLocalizedString("kt_no_data", comment: "")
     }
 
+    private var statusBadge: CTStatus {
+        if failureCount > 0 { return .warning }
+        if verifiedCount > 0 { return .ok }
+        return .unknown
+    }
+
     private var statusColor: Color {
         if failureCount > 0 { return Color.CT.danger }
         if verifiedCount > 0 { return Color.CT.accent }
@@ -511,6 +517,7 @@ private struct KTStatusSection: View {
                 .font(CTFont.regular(13))
                 .foregroundStyle(Color.CT.text)
             Spacer()
+            CTStatusBadge(status: statusBadge, size: 12)
             Text(statusText)
                 .font(CTFont.regular(11))
                 .foregroundStyle(statusColor)

@@ -75,9 +75,7 @@ struct NotificationsSettingsView: View {
                         Text(statusText)
                             .font(CTFont.regular(13))
                             .foregroundColor(statusColor)
-                        Text(statusIcon)
-                            .font(CTFont.regular(13))
-                            .foregroundColor(statusColor)
+                        CTStatusBadge(status: statusBadge)
                     }
                     .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
                     .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
@@ -241,20 +239,14 @@ struct NotificationsSettingsView: View {
     }
 
     // MARK: - Computed Properties
-    private var statusIcon: String {
+    private var statusBadge: CTStatus {
         switch authorizationStatus {
-        case .authorized:
-            return "[ok]"
-        case .denied:
-            return "[err]"
-        case .notDetermined:
-            return "[?]"
-        case .provisional:
-            return "[ok]"
-        case .ephemeral:
-            return "[ok]"
-        @unknown default:
-            return "[?]"
+        case .authorized:    return .ok
+        case .denied:        return .error
+        case .notDetermined: return .warning
+        case .provisional:   return .ok
+        case .ephemeral:     return .ok
+        @unknown default:    return .unknown
         }
     }
 

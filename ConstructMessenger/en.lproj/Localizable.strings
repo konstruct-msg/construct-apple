@@ -642,7 +642,14 @@
 "calls_recents" = "Recents";
 "calls_clear" = "Clear";
 "calls_clear_confirm" = "Clear all recent calls?";
+"calls_filter_all" = "All";
+"calls_filter_missed" = "Missed";
 "calls_empty" = "No recent calls";
+"calls_empty_missed" = "No missed calls";
+"calls_section_today" = "Today";
+"calls_section_yesterday" = "Yesterday";
+"calls_section_earlier" = "Earlier";
+"calls_section_older" = "Older";
 "call_outgoing" = "Outgoing";
 "call_incoming" = "Incoming";
 "call_missed" = "Missed";
@@ -730,8 +737,8 @@
 "searchable_confirm_action" = "enable";
 "searchable_no_username_hint" = "set a username first to enable search";
 "username_not_set" = "no username";
-"searchable_indicator" = "[⊙] searchable";
-"searchable_indicator_off" = "[ ] searchable";
+"searchable_indicator" = "searchable";
+"searchable_indicator_off" = "not searchable";
 "synapses_remote_result_header" = "found on construct";
 "synapses_searching" = "searching...";
 "synapses_not_found" = "not found";
@@ -780,9 +787,9 @@
 // Key Transparency
 "kt_section" = "key transparency";
 "kt_status" = "merkle log";
-"kt_verified" = "[✓] verified";
-"kt_warning" = "[!] warning";
-"kt_no_data" = "[–] no data";
+"kt_verified" = "verified";
+"kt_warning" = "warning";
+"kt_no_data" = "no data";
 "kt_hint" = "every identity key is permanently recorded in an append-only merkle log. tampering is cryptographically detectable.";
 "kt_failure_hint" = "key transparency verification failed — possible tampering detected.";
 "kt_last_failure_at" = "last failure: %@";

@@ -59,8 +59,8 @@ struct AppearanceSettingsView: View {
                                                         .strokeBorder(Color.CT.noise, lineWidth: AppearanceSettingsConfig.availabilityBadgeStrokeWidth)
                                                 )
                                         } else if appTheme == theme {
-                                            Text("[✓]")
-                                                .font(CTFont.bold(14))
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 14, weight: .semibold))
                                                 .foregroundStyle(Color.CT.accent)
                                         }
                                     }

@@ -287,11 +287,12 @@ struct AccountSettingsView: View {
             )
             flatRowDivider()
             HStack(spacing: AccountSettingsLayout.discoverableRowSpacing) {
+                CTStatusBadge(status: viewModel.isDiscoverable ? .on : .off, size: 12)
                 Text(viewModel.isDiscoverable
                     ? NSLocalizedString("searchable_indicator", comment: "")
                     : NSLocalizedString("searchable_indicator_off", comment: ""))
                     .font(CTFont.regular(12))
-                    .foregroundStyle(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.noise)
+                    .foregroundStyle(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
             }
             .padding(.horizontal, AccountSettingsLayout.discoverableRowHorizontalPadding)
             .padding(.vertical, AccountSettingsLayout.discoverableRowVerticalPadding)

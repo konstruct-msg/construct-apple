@@ -399,8 +399,8 @@ struct CTSectionGroup<Content: View>: View {
 
 // MARK: - Search Bar
 
-/// Unified terminal-style search bar. Used in ChatsListView and SynapsView.
-/// Renders as a full-width row with bottom border (same visual weight as nav bars).
+/// Unified search field for list, chat, and graph search.
+/// Keeps the CT palette, but uses a familiar platform search-field shape.
 ///
 /// Usage:
 ///   CTSearchBar(text: $searchQuery)
@@ -413,7 +413,7 @@ struct CTSearchBar: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 13, weight: .regular))
+                .font(.system(size: 14, weight: .regular))
                 .foregroundColor(Color.CT.textDim)
 
             TextField("", text: $text,
@@ -427,6 +427,10 @@ struct CTSearchBar: View {
                 .textInputAutocapitalization(.never)
                 .submitLabel(.search)
                 #endif
+                #if os(macOS)
+                .textFieldStyle(.plain)
+                #endif
+                .applyOptionalFocus(focused)
                 .tint(Color.CT.accent)
 
             if !text.isEmpty {
@@ -439,9 +443,13 @@ struct CTSearchBar: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        // Independent floating glass capsule for search (consistent with nav/input/tab capsulization)
-        .glassCapsule(cornerRadius: 16)
+        .padding(.vertical, 11)
+        .background(Color.CT.outMsgBg)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.CT.noise, lineWidth: 0.5)
+        )
     }
 }
 
@@ -611,6 +619,58 @@ extension CTNavBar where Trailing == EmptyView {
     }
 }
 
+// MARK: - Status Badge
+
+/// Semantic status states, replacing the legacy `[ok]` / `[err]` / `[~]` text tokens.
+/// Each maps to an SF Symbol + semantic colour so state reads instantly (see design
+/// doctrine: terminal glyphs are decorative-only). Render with `CTStatusBadge`.
+enum CTStatus {
+    case ok        // healthy / connected / authorized   ([ok], [✓])
+    case error     // failed / denied                    ([err], [✗])
+    case warning   // degraded / needs attention         ([!], [⚠])
+    case on        // feature enabled                     ([on], [⊙])
+    case off       // feature disabled                    ([off], [ ])
+    case busy      // in progress / scheduled / cooldown ([~])
+    case unknown   // not determined / no data            ([?], [–])
+
+    var symbol: String {
+        switch self {
+        case .ok:      return "checkmark.circle.fill"
+        case .error:   return "exclamationmark.triangle.fill"
+        case .warning: return "exclamationmark.circle.fill"
+        case .on:      return "checkmark.circle.fill"
+        case .off:     return "circle"
+        case .busy:    return "arrow.triangle.2.circlepath"
+        case .unknown: return "questionmark.circle"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .ok:      return Color.CT.accent
+        case .error:   return Color.CT.danger
+        case .warning: return .orange
+        case .on:      return Color.CT.accentDim
+        case .off:     return Color.CT.textDim
+        case .busy:    return Color.CT.textDim
+        case .unknown: return Color.CT.textDim
+        }
+    }
+}
+
+/// Trailing/leading status indicator: SF Symbol in the status's semantic colour.
+struct CTStatusBadge: View {
+    let status: CTStatus
+    var size: CGFloat = 14
+
+    var body: some View {
+        Image(systemName: status.symbol)
+            .font(.system(size: size, weight: .semibold))
+            .foregroundStyle(status.color)
+            .accessibilityHidden(true)
+    }
+}
+
 // MARK: - Settings Components
 
 struct CTSettingsSectionHeader: View {
@@ -636,14 +696,18 @@ struct CTSettingsSectionHeader: View {
 
 struct CTSettingsRow: View {
     let label: String
-    /// Optional trailing value text (status / detail). Empty = no value shown.
+    /// Optional trailing value text (detail). Empty = no value shown.
     var value: String       = ""
+    /// Optional trailing status indicator (SF Symbol badge), shown after `value`.
+    var status: CTStatus?   = nil
     var icon: String?       = nil
     var labelColor: Color   = Color.CT.text
     var valueColor: Color   = Color.CT.text
     var isAction: Bool      = false
     var isDestructive: Bool = false
     var disclosure: Bool    = false
+
+    private var hasTrailingContent: Bool { !value.isEmpty || status != nil }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -668,11 +732,15 @@ struct CTSettingsRow: View {
                     )
                     .multilineTextAlignment(.trailing)
             }
+            if let status {
+                CTStatusBadge(status: status)
+                    .padding(.leading, value.isEmpty ? 0 : 6)
+            }
             if disclosure {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(isDestructive ? Color.CT.danger : Color.CT.textDim)
-                    .padding(.leading, value.isEmpty ? 0 : 6)
+                    .padding(.leading, hasTrailingContent ? 6 : 0)
             }
         }
         .padding(.horizontal, 12)
@@ -701,11 +769,7 @@ struct CTTextField: View {
         .font(CTFont.regular(14))
         .foregroundColor(Color.CT.text)
         .multilineTextAlignment(alignment)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
-        .background(Color.CT.bgMsg)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 0.5))
+        .ctInputChrome(.standard)
         #if os(macOS)
         .textFieldStyle(.plain)
         #endif
@@ -837,5 +901,75 @@ extension View {
                     .stroke(Color.CT.noise.opacity(0.5), lineWidth: 0.5)
             )
             .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+    }
+
+    func ctInputChrome(
+        _ style: CTInputChromeStyle = .standard,
+        strokeColor: Color? = nil
+    ) -> some View {
+        modifier(
+            CTInputChromeModifier(
+                style: style,
+                strokeColor: strokeColor ?? style.defaultStrokeColor
+            )
+        )
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func applyOptionalFocus(_ focused: FocusState<Bool>.Binding?) -> some View {
+        if let focused {
+            self.focused(focused)
+        } else {
+            self
+        }
+    }
+}
+
+enum CTInputChromeStyle {
+    case standard
+    case compact
+
+    fileprivate var horizontalPadding: CGFloat {
+        switch self {
+        case .standard: return 12
+        case .compact: return 10
+        }
+    }
+
+    fileprivate var verticalPadding: CGFloat {
+        switch self {
+        case .standard: return 11
+        case .compact: return 8
+        }
+    }
+
+    fileprivate var cornerRadius: CGFloat {
+        switch self {
+        case .standard: return 8
+        case .compact: return 8
+        }
+    }
+
+    fileprivate var defaultStrokeColor: Color {
+        Color.CT.noise
+    }
+}
+
+private struct CTInputChromeModifier: ViewModifier {
+    let style: CTInputChromeStyle
+    let strokeColor: Color
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, style.horizontalPadding)
+            .padding(.vertical, style.verticalPadding)
+            .background(Color.CT.bgMsg)
+            .clipShape(RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+                    .stroke(strokeColor, lineWidth: 0.5)
+            )
     }
 }

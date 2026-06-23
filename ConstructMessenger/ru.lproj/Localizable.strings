@@ -644,7 +644,14 @@
 "calls_recents" = "Недавние";
 "calls_clear" = "Очистить";
 "calls_clear_confirm" = "Очистить историю звонков?";
+"calls_filter_all" = "Все";
+"calls_filter_missed" = "Пропущенные";
 "calls_empty" = "Нет недавних звонков";
+"calls_empty_missed" = "Нет пропущенных звонков";
+"calls_section_today" = "Сегодня";
+"calls_section_yesterday" = "Вчера";
+"calls_section_earlier" = "Ранее";
+"calls_section_older" = "Старые";
 "call_outgoing" = "Исходящий";
 "call_incoming" = "Входящий";
 "call_missed" = "Пропущенный";
@@ -740,8 +747,8 @@
 "searchable_confirm_action" = "включить";
 "searchable_no_username_hint" = "сначала задайте username";
 "username_not_set" = "username не задан";
-"searchable_indicator" = "[⊙] в поиске";
-"searchable_indicator_off" = "[ ] в поиске";
+"searchable_indicator" = "в поиске";
+"searchable_indicator_off" = "не в поиске";
 "synapses_remote_result_header" = "найдено в construct";
 "synapses_searching" = "поиск...";
 "synapses_not_found" = "не найдено";
@@ -790,9 +797,9 @@
 // Key Transparency
 "kt_section" = "прозрачность ключей";
 "kt_status" = "merkle-лог";
-"kt_verified" = "[✓] подтверждено";
-"kt_warning" = "[!] внимание";
-"kt_no_data" = "[–] нет данных";
+"kt_verified" = "подтверждено";
+"kt_warning" = "внимание";
+"kt_no_data" = "нет данных";
 "kt_hint" = "каждый ключ идентификации постоянно записывается в append-only merkle-лог. подделка криптографически обнаруживаема.";
 "kt_failure_hint" = "проверка прозрачности ключей не прошла — возможна подделка.";
 "kt_last_failure_at" = "последний сбой: %@";
