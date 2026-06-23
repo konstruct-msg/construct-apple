@@ -200,10 +200,23 @@ Construct uses a **hybrid design language**: the terminal / cyberpunk aesthetic 
 Apple's HIG conventions so that users intuitively understand how to interact with the interface.
 The goal is a **bespoke look** that does not clash with iOS / macOS platform norms.
 
-**Keep**: JetBrains Mono, `#090909` background, CT color palette, information density, ASCII
-decorative elements (noise, separators, `>` section headers, `✷`, bracket glyphs).  
+**Keep**: JetBrains Mono, `#090909` background, CT color palette, information density,
+*decorative* terminal chrome (noise, `-`/`=` separators, `>` prefixes, `✷`, hex avatars).  
 **Evolve**: touch affordances, icon legibility for interactive controls, bubble readability.  
 **Never**: sacrifice usability or clash visibly with iOS 26 / macOS guidelines.
+
+> **Terminal glyphs are decorative-only — not functional (revised 2026-06-22).** Testers and
+> users did not embrace the `[…]` bracket pastiche on functional controls. **State and
+> affordance must read instantly**, so `[ok] [err] [on] [off] [✓] [ ] [!] [~] [?]` and similar
+> are replaced by SF Symbols + semantic colour (`CTStatus` / `CTStatusBadge`) or native
+> controls (`Toggle`, selection `checkmark`). ASCII may remain only as unobtrusive *chrome*
+> (separators, the `>` prefix on system messages / section headers, decorative `✷`).
+>
+> **Migration is phased** (do later phases when scheduled, don't regress earlier ones):
+> - **Phase 1 (done)**: status values + selection checkmarks → `CTStatusBadge` / `checkmark`.
+> - **Pending**: `[→]` row affordance → `chevron`; `[ BUTTON ]` labels → real buttons;
+>   `CTRowIcon("[x]")` ASCII row icons → SF Symbols; contact-request action glyphs;
+>   eventually re-evaluate `> SECTION` headers vs native `Section` headers.
 
 ### Tokens
 - Colors: `Color.CT.bg`, `Color.CT.text`, `Color.CT.accent`, `Color.CT.danger`, `Color.CT.noise`, `Color.CT.textDim`
@@ -216,10 +229,15 @@ decorative elements (noise, separators, `>` section headers, `✷`, bracket glyp
 - **SF Symbols** (`Image(systemName:)`): use for **all interactive controls** on both iOS and macOS —
   back/close buttons, action buttons, tab bar items, media controls, send, attach (`plus.circle`),
   mic, search, close (×). This rule applies to both platforms.
-- **`CTSymbol.*` ASCII glyphs**: use for **structural / decorative elements only** —
-  forward `[→]`, section headers (`> TITLE`), separators, status indicators, decorative symbols.
-  Do **not** use `CTSymbol.back` (`[←]`) or `CTSymbol.attach` (`[+]`) — these are replaced by SF Symbols.
-- Dividing line: *interactive tappable action?* → SF Symbol. *Terminal aesthetic chrome?* → CTSymbol.
+- **`CTSymbol.*` / ASCII glyphs**: use for **decorative chrome only** —
+  section headers (`> TITLE`), `-`/`=` separators, the `>` system-message prefix.
+  Do **not** use ASCII for **state or controls**: status → `CTStatusBadge` (SF Symbol + semantic
+  colour); selection → `checkmark`; on/off → `Toggle`. Do not use `[←]` / `[+]` / `[→]` for
+  back / attach / disclosure — those are SF Symbols (`chevron.*`, `plus.circle`).
+- Dividing line: *conveys state, or is a tappable action?* → SF Symbol / native control.
+  *Purely decorative terminal chrome?* → ASCII.
+- **Status**: `CTStatusBadge(status:)` with the `CTStatus` enum (`.ok .error .warning .on .off
+  .busy .unknown`) — never a `"[ok]"` / `"[err]"` text token. `CTSettingsRow(status:)` renders it.
 
 **Platform-specific SF Symbol conventions (iOS is primary, macOS follows):**
 - Back navigation: iOS → `chevron.backward.circle.fill` (size 22); macOS → `chevron.backward.circle` (size 18)
