@@ -138,7 +138,13 @@ private final class QuicOutbound: ClosableRPCWriterProtocol, @unchecked Sendable
             guard let stream else {
                 throw RPCError(code: .internalError, message: "QUIC stream message before metadata.")
             }
-            try await stream.sendMessage(message: bytes.data)
+            do {
+                try await stream.sendMessage(message: bytes.data)
+                Log.debug("QUIC send ok (\(bytes.data.count)B) \(path)", category: "QuicTransport")
+            } catch {
+                Log.error("QUIC send FAILED \(path): \(error)", category: "QuicTransport")
+                throw error
+            }
         }
     }
 
@@ -155,9 +161,11 @@ private final class QuicOutbound: ClosableRPCWriterProtocol, @unchecked Sendable
     /// Drains the response: HTTP status → initial metadata → messages → gRPC trailers.
     private func startReceivePump(on stream: QuicStream) {
         let continuation = self.continuation
+        let path = self.path
         Task {
             do {
                 let httpStatus = try await stream.recvResponse()
+                Log.debug("QUIC recvResponse \(httpStatus) \(path)", category: "QuicTransport")
                 guard httpStatus == 200 else {
                     continuation.yield(.status(
                         Status(code: .unavailable, message: "QUIC gateway HTTP \(httpStatus)"),
@@ -169,15 +177,21 @@ private final class QuicOutbound: ClosableRPCWriterProtocol, @unchecked Sendable
                 // Response headers are not surfaced by the FFI yet; gRPC initial metadata is empty.
                 continuation.yield(.metadata([:]))
 
+                var received = 0
                 while let message = try await stream.recvMessage() {
+                    received += 1
+                    Log.debug("QUIC recv msg #\(received) (\(message.count)B) \(path)", category: "QuicTransport")
                     continuation.yield(.message(GRPCNetworkTransportBytes(message)))
                 }
+                Log.info("QUIC recv stream ended after \(received) msg(s), reading trailers \(path)", category: "QuicTransport")
 
                 let trailers = try await stream.recvTrailers()
                 let (status, trailingMetadata) = Self.parseStatus(from: trailers)
+                Log.info("QUIC trailers grpc-status=\(status.code) \(path)", category: "QuicTransport")
                 continuation.yield(.status(status, trailingMetadata))
                 continuation.finish()
             } catch {
+                Log.error("QUIC recv pump error \(path): \(error)", category: "QuicTransport")
                 continuation.finish(throwing: error)
             }
         }
