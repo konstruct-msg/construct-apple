@@ -501,6 +501,13 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 public protocol QuicChannelProtocol: AnyObject, Sendable {
     
     /**
+     * Diagnostic: live quinn connection stats (tx/rx datagrams, PING frames sent, RTT,
+     * close reason). Runs on `RT`, so it also proves the dedicated runtime is responsive.
+     * `ping_tx` not growing over time ⇒ keep-alive isn't firing.
+     */
+    func connectionStats() async throws  -> String
+    
+    /**
      * Open a gRPC call on `path` (`/package.Service/Method`) with extra request
      * `metadata` headers.
      */
@@ -577,6 +584,28 @@ public static func connect(host: String, port: UInt16, serverName: String, trust
 }
     
 
+    
+    /**
+     * Diagnostic: live quinn connection stats (tx/rx datagrams, PING frames sent, RTT,
+     * close reason). Runs on `RT`, so it also proves the dedicated runtime is responsive.
+     * `ping_tx` not growing over time ⇒ keep-alive isn't firing.
+     */
+open func connectionStats()async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_construct_transport_fn_method_quicchannel_connection_stats(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_construct_transport_rust_future_poll_rust_buffer,
+            completeFunc: ffi_construct_transport_rust_future_complete_rust_buffer,
+            freeFunc: ffi_construct_transport_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeTransportError_lift
+        )
+}
     
     /**
      * Open a gRPC call on `path` (`/package.Service/Method`) with extra request
@@ -1136,6 +1165,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.contractVersionMismatch
     }
     if (uniffi_construct_transport_checksum_func_transport_build_marker() != 44196) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_transport_checksum_method_quicchannel_connection_stats() != 26635) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_transport_checksum_method_quicchannel_open_stream() != 8948) {

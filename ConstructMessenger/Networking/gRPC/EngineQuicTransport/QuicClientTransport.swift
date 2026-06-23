@@ -163,7 +163,20 @@ private final class QuicOutbound: ClosableRPCWriterProtocol, @unchecked Sendable
     private func startReceivePump(on stream: QuicStream) {
         let continuation = self.continuation
         let path = self.path
+        let channel = self.channel
+        // Diagnostic: log live quinn connection stats every 5s. `ping_tx` should grow
+        // (keep-alive); if it stalls, quinn isn't driving the connection on-device.
+        let statsTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled else { break }
+                if let stats = try? await channel.connectionStats() {
+                    Log.info("QUIC stats \(stats) \(path)", category: "QuicTransport")
+                }
+            }
+        }
         Task {
+            defer { statsTask.cancel() }
             do {
                 let httpStatus = try await stream.recvResponse()
                 Log.debug("QUIC recvResponse \(httpStatus) \(path)", category: "QuicTransport")
