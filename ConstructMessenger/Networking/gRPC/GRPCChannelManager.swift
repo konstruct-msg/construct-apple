@@ -466,9 +466,10 @@ final class GRPCChannelManager: Sendable {
         // see decisions/salamander-psk-shared-per-gateway.md.
         var obfPsk: Data?
         if FeatureFlags.engineQuicObfuscated {
-            obfPsk = QuicObfPskStore.psk(for: host)
+            // Provisioned PSK wins; fall back to the bundled dev PSK until in-band delivery exists.
+            obfPsk = QuicObfPskStore.psk(for: host) ?? QuicGatewayConfig.bundledObfPsk
             if obfPsk == nil {
-                Log.info("engine-QUIC obfuscation enabled but no Salamander PSK provisioned for \(host) — using plain QUIC", category: "GRPCChannel")
+                Log.info("engine-QUIC obfuscation enabled but no Salamander PSK available for \(host) — using plain QUIC", category: "GRPCChannel")
             }
         }
         return QuicClientTransport.Config(host: host, port: port, serverName: host, trustCert: cert, obfPsk: obfPsk)
@@ -493,7 +494,7 @@ final class GRPCChannelManager: Sendable {
         // Key includes obf-active state so toggling obfuscation (or provisioning a PSK)
         // changes the identity → the stale connection is replaced on the next acquire.
         let obfActive = FeatureFlags.engineQuicObfuscated
-            && QuicObfPskStore.psk(for: QuicGatewayConfig.host) != nil
+            && (QuicObfPskStore.psk(for: QuicGatewayConfig.host) != nil || QuicGatewayConfig.bundledObfPsk != nil)
         let key = "engine-quic:\(currentHost):\(currentPort):\(obfActive ? "obf" : "plain")"
         if let conn = _eqConnBox as? PersistentConnEngineQuic, conn.key == key, !conn.task.isCancelled {
             return conn.client
