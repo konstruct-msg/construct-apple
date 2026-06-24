@@ -164,7 +164,9 @@ final class ChatSessionManager {
                 senderId: myId,
                 conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
                 encryptedPayload: payload,
-                timestamp: UInt64(Date().timeIntervalSince1970)
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                // S2 dual-send: typed opcode for new consumers; magic-string payload is the fallback.
+                contentType: FeatureFlags.typedSessionControl ? .sessionPing : .e2EeSignal
             )
             Log.info("SESSION_STATE[init_ping_sent]: msgNum=0 ping sent to \(userId.prefix(8))… — user messages follow as msgNum=1+", category: "SessionInit")
         } catch {

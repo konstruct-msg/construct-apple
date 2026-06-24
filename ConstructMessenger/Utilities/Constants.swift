@@ -296,19 +296,49 @@ struct FeatureFlags {
         set { UserDefaults.standard.set(newValue, forKey: engineQuicExperimentalKey) }
     }
 
-    /// **Default `true` (auto-on).** Salamander-obfuscate the engine-QUIC datagrams. This is
-    /// effectively mandatory in production, not optional: the gateway is obf-only (one UDP
-    /// port can't serve both plain and obfuscated), so a plain-QUIC client cannot handshake
-    /// it — `engineQuicExperimental` on therefore requires this on too. The PSK is a shared
-    /// per-gateway secret (provisioned via `QuicObfPskStore`, falling back to the bundled dev
-    /// PSK in `QuicGatewayConfig`); see `decisions/salamander-psk-shared-per-gateway.md`.
-    /// The separate toggle exists mainly as a DEBUG aid to test plain vs obfuscated.
+    /// **Default `false` (plain QUIC).** Salamander-obfuscate the engine-QUIC datagrams.
+    /// Decided 2026-06-24 (see `decisions/quic-plain-vs-obfuscated.md`): QUIC is shipped as a
+    /// plain transport — a competitive feature that works well on uncensored networks. On the
+    /// blocked networks we care about the throttling is volumetric (sustained-UDP), which
+    /// Salamander does NOT defeat (it only resists fingerprint-based DPI); and a bundled static
+    /// PSK is weak against a targeted adversary anyway. So obfuscation is off by default and its
+    /// only justification (Phase B in-band PSK rotation) is dropped. The Salamander obf path
+    /// (`QuicObfPskStore`, `QuicGatewayConfig.bundledObfPsk`, Rust `connect_obfuscated`) stays
+    /// as a dormant DEBUG-only option for experimentation; the production gateway runs plain.
     ///
-    /// Backed by `UserDefaults`, defaulting `true` when never set (an explicit toggle is kept).
+    /// Backed by `UserDefaults`, defaulting `false` when never set (an explicit toggle is kept).
     static let engineQuicObfuscatedKey = "ff.engineQuicObfuscated"
     static var engineQuicObfuscated: Bool {
-        get { UserDefaults.standard.object(forKey: engineQuicObfuscatedKey) as? Bool ?? true }
+        get { UserDefaults.standard.object(forKey: engineQuicObfuscatedKey) as? Bool ?? false }
         set { UserDefaults.standard.set(newValue, forKey: engineQuicObfuscatedKey) }
+    }
+
+    /// **Default `false`.** Phase S2 of the typed binary session-control migration
+    /// (`decisions/binary-control-message-format.md`).
+    ///
+    /// When `true`, session-handshake signals carry a typed Envelope `content_type`
+    /// (`CONTENT_TYPE_SESSION_PING = 25`, `CONTENT_TYPE_SESSION_READY = 26`) **in addition**
+    /// to the legacy `__session_ping_<UUID>__` / `__session_ready_<UUID>__` plaintext payload
+    /// (dual-send). New consumers (S1, already shipped) dispatch on the typed `content_type`;
+    /// old peers still read the magic string, so flipping this on never breaks them.
+    /// `content_type` is NOT part of the AEAD associated data, so the typed byte can never
+    /// cause a decrypt failure.
+    ///
+    /// Keep `false` until the server fleet (S0) is deployed everywhere — the server is
+    /// fail-open and would rewrite an unknown 25/26 to `E2EE_SIGNAL`, which (since the payload
+    /// is preserved) only degrades to the legacy string path, but there is no upside to
+    /// emitting it before the server understands it. `SESSION_RESET_INIT` (24) is already sent
+    /// typed unconditionally — it predates this flag and is server-known. Dropping the legacy
+    /// string and sending a pure `SessionControl` payload is the later S3 step.
+    ///
+    /// Backed by `UserDefaults`, defaulting `false` when never set (a stored value — an explicit
+    /// toggle — is respected). Read fresh at each send, so flipping it takes effect on the next
+    /// handshake without a rebuild. Flip to `true` only once the Phase 1 consumer dispatch is
+    /// fleet-wide; until then leave it off (older consumers fall back to the legacy string anyway).
+    static let typedSessionControlKey = "ff.typedSessionControl"
+    static var typedSessionControl: Bool {
+        get { UserDefaults.standard.object(forKey: typedSessionControlKey) as? Bool ?? false }
+        set { UserDefaults.standard.set(newValue, forKey: typedSessionControlKey) }
     }
 }
 

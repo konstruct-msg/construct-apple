@@ -92,6 +92,30 @@ struct DiagnosticsView: View {
                             .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                     }
                 }
+                
+                #if DEBUG
+                // MARK: - Dev Tools (Debug only)
+                VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        CTSettingsSectionHeader(title: NSLocalizedString("DEVELOPER", comment: ""), color: .orange)
+                        CTSectionGroup {
+                            ConstructActionRow(systemImage: "arrow.clockwise", title: LocalizedStringKey("diagnostics_force_spk_rotation"), role: .secondary) {
+                                Task {
+                                    await PreKeyRotationService.shared.forceRotate()
+                                }
+                            }
+                            ConstructActionRow(systemImage: "exclamationmark.triangle", title: LocalizedStringKey("diagnostics_reset_local_data_keychain"), role: .destructive) {
+                                resetLocalData()
+                            }
+                        }
+                    }
+                    Text(LocalizedStringKey("diagnostics_dev_tools_footer"))
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
+                }
+                #endif
+
 
                 // MARK: - Status
                 CTSectionGroup {
@@ -143,36 +167,7 @@ struct DiagnosticsView: View {
                     ConstructActionRow(systemImage: "square.and.arrow.up", title: LocalizedStringKey("diagnostics_share_logs"), role: .accent) {
                         shareArchive()
                     }
-
-                    ConstructActionRow(systemImage: "trash", title: LocalizedStringKey("diagnostics_clear_logs"), role: .destructive) {
-                        clearLogs()
-                    }
-                    .disabled(!isLogCollectionEnabled)
-                    .opacity(isLogCollectionEnabled ? 1 : DiagnosticsLayout.disabledActionOpacity)
                 }
-
-                #if DEBUG
-                // MARK: - Dev Tools (Debug only)
-                VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        CTSettingsSectionHeader(title: NSLocalizedString("DEVELOPER", comment: ""), color: .orange)
-                        CTSectionGroup {
-                            ConstructActionRow(systemImage: "arrow.clockwise", title: LocalizedStringKey("diagnostics_force_spk_rotation"), role: .secondary) {
-                                Task {
-                                    await PreKeyRotationService.shared.forceRotate()
-                                }
-                            }
-                            ConstructActionRow(systemImage: "exclamationmark.triangle", title: LocalizedStringKey("diagnostics_reset_local_data_keychain"), role: .destructive) {
-                                resetLocalData()
-                            }
-                        }
-                    }
-                    Text(LocalizedStringKey("diagnostics_dev_tools_footer"))
-                        .font(CTFont.regular(12))
-                        .foregroundStyle(Color.CT.textDim)
-                        .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
-                }
-                #endif
 
                 // MARK: - Recent Logs
                 if !logText.isEmpty {
@@ -190,6 +185,16 @@ struct DiagnosticsView: View {
                             .frame(height: DiagnosticsConfig.recentLogContainerHeight)
                         }
                     }
+                }
+                
+                // MARK: - Actions
+                CTSectionGroup {
+
+                    ConstructActionRow(systemImage: "trash", title: LocalizedStringKey("diagnostics_clear_logs"), role: .destructive) {
+                        clearLogs()
+                    }
+                    .disabled(!isLogCollectionEnabled)
+                    .opacity(isLogCollectionEnabled ? 1 : DiagnosticsLayout.disabledActionOpacity)
                 }
             }
             .padding(.vertical, SettingsLayout.screenVerticalPadding)

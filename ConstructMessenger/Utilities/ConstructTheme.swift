@@ -802,9 +802,9 @@ struct CTButton: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(bgColor)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: 10)
                         .stroke(isEnabled ? Color.clear : Color.CT.noise, lineWidth: 0.5)
                 )
         }

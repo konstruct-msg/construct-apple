@@ -845,7 +845,10 @@ final class SessionCoordinator: MessageRouterDelegate {
                         messageId: pingMessageId,
                         recipientId: userId
                     ),
-                    timestamp: UInt64(Date().timeIntervalSince1970)
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    // S2 dual-send: typed opcode for new consumers; the magic-string payload
+                    // above remains the fallback for peers that predate the typed dispatch.
+                    contentType: FeatureFlags.typedSessionControl ? .sessionPing : .e2EeSignal
                 )
                 Log.info("SESSION_STATE[tie_break_ping]: sent to \(userId.prefix(8))… (attempt \(attempt)) — loser can now init as RESPONDER", category: "SessionInit")
                 return
@@ -890,7 +893,10 @@ final class SessionCoordinator: MessageRouterDelegate {
                     messageId: readyMessageId,
                     recipientId: userId
                 ),
-                timestamp: UInt64(Date().timeIntervalSince1970)
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                // S2 dual-send: typed opcode for new consumers; the magic-string payload
+                // above remains the fallback for peers that predate the typed dispatch.
+                contentType: FeatureFlags.typedSessionControl ? .sessionReady : .e2EeSignal
             )
             Log.info("SESSION_STATE[session_ready_sent]: RESPONDER notified INITIATOR \(userId.prefix(8))…", category: "SessionInit")
         } catch {
