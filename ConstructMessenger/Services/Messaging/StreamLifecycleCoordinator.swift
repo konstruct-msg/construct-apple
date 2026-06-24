@@ -343,8 +343,19 @@ final class StreamLifecycleCoordinator {
                 }
                 guard !Task.isCancelled else { break }
                 if PushNotificationManager.shared.lastSilentPushDate != nil {
-                    Log.info("Silent push — reconnecting stream to fetch pending messages", category: "StreamLifecycle")
-                    self.forceReconnect()
+                    // A silent push that lands while the app is foreground with a LIVE stream is
+                    // redundant — the stream already delivered the message. Reconnecting here was
+                    // the residual churn driver (one full reconnect per incoming message; device
+                    // logs showed "Silent push — reconnecting stream" → forceReconnect on every
+                    // push). This mirrors the same guard on the BackgroundFetchManager path in
+                    // AppDelegate. When the stream is DOWN (or app backgrounded) we still
+                    // reconnect to fetch pending messages — that is the legitimate wake-up case.
+                    if UIApplication.shared.applicationState == .active, self.streamManager.isConnected {
+                        Log.info("Silent push — foreground stream live, skipping reconnect", category: "StreamLifecycle")
+                    } else {
+                        Log.info("Silent push — reconnecting stream to fetch pending messages", category: "StreamLifecycle")
+                        self.forceReconnect()
+                    }
                 }
                 #else
                 try? await Task.sleep(for: .seconds(60))
