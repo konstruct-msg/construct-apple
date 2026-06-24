@@ -99,7 +99,7 @@ final class StreamLifecycleCoordinator {
 
     // MARK: - Stream control
 
-    func startMessageStream() {
+    func startMessageStream(reason: String = "?") {
         guard !streamManager.isPaused else {
             Log.debug("Stream paused — skipping startMessageStream", category: "StreamLifecycle")
             return
@@ -110,7 +110,7 @@ final class StreamLifecycleCoordinator {
             return
         }
         wireStreamCallbacks()
-        streamManager.connect(contactUserIds: ids) { [weak self] message in
+        streamManager.connect(contactUserIds: ids, trigger: "startMessageStream(\(reason))") { [weak self] message in
             self?.handleIncomingMessage(message)
         }
         #if !os(macOS)
@@ -223,12 +223,12 @@ final class StreamLifecycleCoordinator {
             if !pollingStateHadToken {
                 pollingStateHadToken = true
                 if streamManager.isActivelyConnecting || streamManager.isConnected {
-                    startMessageStream()
+                    startMessageStream(reason: "pollingFirstToken")
                 } else {
                     forceReconnect()
                 }
             } else {
-                startMessageStream()
+                startMessageStream(reason: "pollingStatusChange(\(state.status.text()))")
             }
         } else {
             pollingStateHadToken = false

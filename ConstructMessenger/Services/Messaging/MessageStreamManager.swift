@@ -210,7 +210,7 @@ final class MessageStreamManager {
 
     // MARK: - Public API
 
-    func connect(contactUserIds: [String] = [], onMessageReceived: @escaping (ChatMessage) -> Void) {
+    func connect(contactUserIds: [String] = [], trigger: String = "?", onMessageReceived: @escaping (ChatMessage) -> Void) {
         self.onMessageReceived = onMessageReceived
 
         // Use Set comparison: currentConversationIds() builds from Array(Set) whose order is
@@ -262,7 +262,7 @@ final class MessageStreamManager {
                     let ids = self.subscriptionUserIds
                     let cb = self.onMessageReceived
                     self.forceDisconnect(reason: "serverChanged")
-                    if let cb { self.connect(contactUserIds: ids, onMessageReceived: cb) }
+                    if let cb { self.connect(contactUserIds: ids, trigger: "serverChanged", onMessageReceived: cb) }
                 }
             }
         }
@@ -279,7 +279,7 @@ final class MessageStreamManager {
             }
         }
 
-        Log.info("Starting MessageStream connection (subscribed to \(contactUserIds.count) contacts)", category: "MessageStream")
+        Log.info("Starting MessageStream connection (trigger=\(trigger), subscribed to \(contactUserIds.count) contacts)", category: "MessageStream")
         connectStartTime = Date()
         streamTask = Task { [weak self] in
             await self?.connectLoop()
@@ -349,7 +349,7 @@ final class MessageStreamManager {
         consecutiveH3OpenFailures = 0
         continuousFailureStreakStart = nil
         isInDegradedMode = false
-        connect(contactUserIds: contactUserIds, onMessageReceived: onMessageReceived)
+        connect(contactUserIds: contactUserIds, trigger: "forceReconnect", onMessageReceived: onMessageReceived)
     }
 
     func disconnect() {
