@@ -31,8 +31,10 @@ struct NetworkSettingsView: View {
     @State private var veilImportIsError = false
     /// Bumped after an import to refresh the configured-status row.
     @State private var veilTicketRefresh = 0
+    #if DEBUG
     @State private var engineQuicOn = FeatureFlags.engineQuicExperimental
     @State private var engineQuicObfOn = FeatureFlags.engineQuicObfuscated
+    #endif
 
     private var veilConfiguredRelay: String? {
         _ = veilTicketRefresh
@@ -96,9 +98,14 @@ struct NetworkSettingsView: View {
                             // "H3" = legacy native stack; "QUIC" = engine QUIC (construct-transport).
                             let isQUIC = displayTransport == "H3" || displayTransport == "QUIC"
                             // Lock when the live transport is obfuscated QUIC — at-a-glance proof
-                            // the direct traffic is DPI-obfuscated even with VEIL off.
+                            // the direct traffic is DPI-obfuscated. Production ships plain QUIC, so
+                            // this only ever shows in DEBUG when obfuscation is explicitly enabled.
+                            #if DEBUG
                             let obfuscated = isLive && isQUIC
                                 && FeatureFlags.engineQuicExperimental && FeatureFlags.engineQuicObfuscated
+                            #else
+                            let obfuscated = false
+                            #endif
                             HStack(spacing: 4) {
                                 if obfuscated {
                                     Image(systemName: "lock.fill").font(.system(size: 10))
@@ -234,11 +241,15 @@ struct NetworkSettingsView: View {
 
                 veilAccessSection
 
-                // Experimental (available in test builds): route the message stream over the new
-                // QUIC/HTTP-3 transport (construct-transport). Opt-in, off by default; falls back to
-                // H2 on failure. Confirm it's live via the transport badge in the STATUS section above
-                // ("QUIC" when active, "H2" otherwise). Direct path only — ignored when VEIL is active.
-                CTSettingsSectionHeader(title: "EXPERIMENTAL", color: .orange)
+                // QUIC/HTTP-3 transport (construct-transport). In production it is always-on and
+                // automatic (plain QUIC, falls back to H2 on failure) — there is no user-facing
+                // toggle; confirm it's live via the transport badge in the STATUS section above
+                // ("QUIC" when active, "H2" otherwise). The manual force-on/off + Salamander
+                // obfuscation toggles below are DEBUG-only experimentation aids (the user asked
+                // that forcing transport on/off live only in DEBUG). Direct path only — ignored
+                // when VEIL is active.
+                #if DEBUG
+                CTSettingsSectionHeader(title: "EXPERIMENTAL (DEBUG)", color: .orange)
                 CTSectionGroup {
                     Toggle(isOn: $engineQuicOn) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -283,6 +294,7 @@ struct NetworkSettingsView: View {
                         streamManager.reconnectForTransportChange()
                     }
                 }
+                #endif
 
                 #if DEBUG
                 // Debug-only: live FSM diagnostics. Every transport routing decision flows
@@ -461,17 +473,19 @@ struct NetworkSettingsView: View {
     private var veilFooterKey: String {
         switch veilManager.mode {
         case .off:
-            // VEIL off does NOT mean "no protection": obfuscated QUIC on the direct path is
-            // itself DPI-evasion. Tell the truth about the LIVE transport, not just the mode.
-            guard FeatureFlags.engineQuicExperimental && FeatureFlags.engineQuicObfuscated else {
-                return "veil_footer_off"  // genuinely plain direct — no obfuscation anywhere
+            // Production ships plain QUIC, so VEIL off == genuinely no obfuscation: tell the truth.
+            // In DEBUG, obfuscated QUIC on the direct path IS DPI-evasion, so reflect the live
+            // transport when obf is explicitly enabled.
+            #if DEBUG
+            if FeatureFlags.engineQuicExperimental && FeatureFlags.engineQuicObfuscated {
+                let live = streamManager.activeTransport
+                // "QUIC"/"H3" live → obfuscated right now; otherwise on the H2 fallback/connecting.
+                return (live == "QUIC" || live == "H3")
+                    ? "veil_footer_off_obf_active"
+                    : "veil_footer_off_obf_fallback"
             }
-            let live = streamManager.activeTransport
-            // "QUIC"/"H3" live → traffic is obfuscated right now; otherwise on the H2 fallback
-            // (or connecting) → not obfuscated this moment. The badge shows which it is.
-            return (live == "QUIC" || live == "H3")
-                ? "veil_footer_off_obf_active"
-                : "veil_footer_off_obf_fallback"
+            #endif
+            return "veil_footer_off"
         case .auto: return "veil_footer_auto"
         case .on:   return "veil_footer_on"
         }

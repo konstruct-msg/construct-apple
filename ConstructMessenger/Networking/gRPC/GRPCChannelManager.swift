@@ -461,17 +461,19 @@ final class GRPCChannelManager: Sendable {
             Log.error("engine-QUIC enabled but quic_gateway.der is not bundled — cannot pin gateway cert", category: "GRPCChannel")
             return nil
         }
-        // Salamander obfuscation: only when the experiment is enabled AND a per-gateway PSK has
-        // been provisioned. No PSK → plain QUIC (so the experiment still works on free networks);
-        // see decisions/salamander-psk-shared-per-gateway.md.
+        // Production ships PLAIN QUIC (decisions/quic-plain-vs-obfuscated.md): the gateway runs
+        // plain, so the client must too. Salamander obfuscation is a DEBUG-only experiment — even
+        // if a stale `engineQuicObfuscated=true` is left in UserDefaults from an older build, a
+        // release build never requests obf (it couldn't handshake the plain gateway anyway).
         var obfPsk: Data?
+        #if DEBUG
         if FeatureFlags.engineQuicObfuscated {
-            // Provisioned PSK wins; fall back to the bundled dev PSK until in-band delivery exists.
             obfPsk = QuicObfPskStore.psk(for: host) ?? QuicGatewayConfig.bundledObfPsk
             if obfPsk == nil {
                 Log.info("engine-QUIC obfuscation enabled but no Salamander PSK available for \(host) — using plain QUIC", category: "GRPCChannel")
             }
         }
+        #endif
         return QuicClientTransport.Config(host: host, port: port, serverName: host, trustCert: cert, obfPsk: obfPsk)
     }
 
@@ -493,9 +495,15 @@ final class GRPCChannelManager: Sendable {
 
         // Key includes obf-active state so toggling obfuscation (or provisioning a PSK)
         // changes the identity → the stale connection is replaced on the next acquire.
+        // Mirrors engineQuicConfig(): obf is DEBUG-only, release is always plain.
+        #if DEBUG
         let obfActive = FeatureFlags.engineQuicObfuscated
             && (QuicObfPskStore.psk(for: QuicGatewayConfig.host) != nil || QuicGatewayConfig.bundledObfPsk != nil)
-        let key = "engine-quic:\(currentHost):\(currentPort):\(obfActive ? "obf" : "plain")"
+        let obfSuffix = obfActive ? "obf" : "plain"
+        #else
+        let obfSuffix = "plain"
+        #endif
+        let key = "engine-quic:\(currentHost):\(currentPort):\(obfSuffix)"
         if let conn = _eqConnBox as? PersistentConnEngineQuic, conn.key == key, !conn.task.isCancelled {
             return conn.client
         }
