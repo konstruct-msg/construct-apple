@@ -73,7 +73,8 @@ class SessionInitializationService {
     func initializeSession(
         userId: String,
         bundle: PublicKeyBundleData,
-        deleteExisting: Bool = true
+        deleteExisting: Bool = true,
+        allowStale: Bool = false
     ) throws -> Void {
         // Proactively delete stale session if requested
         if deleteExisting {
@@ -127,10 +128,19 @@ class SessionInitializationService {
                 spkUploadedAt: bundle.spkUploadedAt,
                 spkRotationEpoch: bundle.spkRotationEpoch,
                 kyberSpkUploadedAt: bundle.kyberSpkUploadedAt,
-                kyberSpkRotationEpoch: bundle.kyberSpkRotationEpoch
+                kyberSpkRotationEpoch: bundle.kyberSpkRotationEpoch,
+                allowStale: allowStale
             )
             PerformanceMetrics.shared.end(.sessionInitStart, endEvent: .sessionInitEnd, label: String(userId.prefix(8)))
-            Log.info("Session initialized as INITIATOR for \(userId)", category: "SessionInit")
+            // Track at-risk state: a degraded (stale-SPK) init is authentic but should be
+            // re-keyed once the peer rotates; a clean init clears any prior at-risk flag.
+            if allowStale {
+                KeychainManager.shared.saveSessionAtRiskFlag(for: userId)
+                Log.info("Session initialized as INITIATOR (degraded/at-risk) for \(userId)", category: "SessionInit")
+            } else {
+                KeychainManager.shared.deleteSessionAtRiskFlag(for: userId)
+                Log.info("Session initialized as INITIATOR for \(userId)", category: "SessionInit")
+            }
         } catch let sessionError as SessionError {
             throw sessionError
         } catch {
@@ -147,9 +157,9 @@ class SessionInitializationService {
     /// `spk_uploaded_at`. In that case we wait `staleSPKRetryDelay` seconds and retry
     /// up to `staleSPKMaxRetries` times.
     ///
-    /// **Fast-fail path**: if `ageDays >= staleSPKFastFailDays` (default 14.25d = 6h
-    /// past the Rust 14d hard limit), the peer has clearly not been online recently —
-    /// retrying is pointless and wastes 2 × 60 s. Fail immediately instead.
+    /// **Degrade path**: if `ageDays >= staleSPKFastFailDays` (30.25d = 6h past the Rust 30-day
+    /// limit), the peer has clearly not been online recently — waiting is pointless, so we go
+    /// straight to a degraded (at-risk) init instead of burning 2 × 60 s on retries.
     func initializeSessionProactively(
         userId: String,
         onSuccess: @escaping () -> Void,
@@ -159,11 +169,11 @@ class SessionInitializationService {
 
         let staleSPKMaxRetries = 2
         let staleSPKRetryDelay: UInt64 = 60 // seconds
-        /// Grace window above the Rust 10-day hard limit. If the SPK is only ≤ 6 h past
+        /// Grace window above the Rust 30-day staleness limit. If the SPK is only ≤ 6 h past
         /// the limit the peer may have just come online and rotated; the server bundle
         /// cache may simply not have propagated yet. Beyond this window the peer has been
-        /// offline for a long time and no amount of waiting will help.
-        let staleSPKFastFailDays: Double = 10.25
+        /// offline for a long time and no amount of waiting will help — degrade instead.
+        let staleSPKFastFailDays: Double = 30.25
 
         var lastError: Error?
         for attempt in 0...staleSPKMaxRetries {
@@ -188,10 +198,23 @@ class SessionInitializationService {
                 continue
             } catch SessionError.peerSPKStale(let days) {
                 // SPK is well past the staleness limit — peer has been offline for a long
-                // time. Retrying after 60s is pointless; fail immediately.
-                Log.error("SESSION_STATE[stale_spk_fast_fail]: peer \(userId.prefix(8))… SPK is \(String(format: "%.1f", days))d old (≥\(staleSPKFastFailDays)d threshold) — skipping retries", category: "SessionInit")
-                lastError = SessionError.peerSPKStale(ageDays: days)
-                break
+                // time and won't rotate by waiting. Rather than dead-ending, fall back to a
+                // DEGRADED init so the message can still be established + queued. The session
+                // is flagged at-risk; if the peer rotated and dropped the old SPK private key,
+                // the first message fails to decrypt and the existing healing path repairs it.
+                // See the stale-peer-reachability decision record.
+                Log.error("SESSION_STATE[stale_spk_degraded_init]: peer \(userId.prefix(8))… SPK is \(String(format: "%.1f", days))d old (≥\(staleSPKFastFailDays)d) — initiating degraded (at-risk) session", category: "SessionInit")
+                do {
+                    let bundle = try await fetchPublicKeyWithRetry(userId: userId)
+                    try initializeSession(userId: userId, bundle: bundle, deleteExisting: true, allowStale: true)
+                    Log.info("SESSION_STATE[proactive_init_success_degraded]: userId=\(userId.prefix(8))…", category: "SessionInit")
+                    await MainActor.run { onSuccess() }
+                    return
+                } catch {
+                    Log.error("SESSION_STATE[degraded_init_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                    lastError = error
+                    break
+                }
             } catch {
                 lastError = error
                 break
@@ -201,5 +224,57 @@ class SessionInitializationService {
         let finalError = lastError ?? NetworkError.connectionFailed
         Log.error("SESSION_STATE[proactive_init_failed]: userId=\(userId.prefix(8))..., error=\(finalError.localizedDescription)", category: "SessionInit")
         await MainActor.run { onFailure(finalError) }
+    }
+
+    // MARK: - At-risk session auto-upgrade (Phase 2)
+
+    /// SPK age below which we consider a peer to have come back online and rotated, so an at-risk
+    /// (degraded) session can be safely re-keyed to a fresh one. A peer who came back online
+    /// force-rotates (8-day client threshold), so a genuinely-returned peer is well under this.
+    /// Comfortably under the Rust 30-day strict limit so the subsequent strict `initializeSession`
+    /// cannot itself throw `peerSPKStale`.
+    private let atRiskUpgradeFreshnessDays: Double = 9.0
+    /// Minimum spacing between upgrade attempts per contact, so a peer who is still offline doesn't
+    /// trigger a bundle fetch on every chat open.
+    private let atRiskUpgradeCooldown: TimeInterval = 3600 // 1 hour
+    private static let atRiskUpgradeAttemptPrefix = "session.atRiskUpgrade.lastAttempt."
+
+    /// If the session with `userId` was established via a degraded (stale-SPK) init AND the peer has
+    /// since rotated their SPK (now fresh), re-key cleanly to a fresh session and clear the at-risk
+    /// flag — restoring full forward secrecy. No-op if the session isn't at-risk, the peer is still
+    /// stale (keeps the working degraded session — no churn), or we attempted recently. See the
+    /// `stale-peer-reachability` decision record (Phase 2).
+    func upgradeAtRiskSessionIfPeerFresh(userId: String) async {
+        guard KeychainManager.shared.loadSessionAtRiskFlag(for: userId) else { return }
+        guard CryptoManager.shared.hasSession(for: userId) else { return }
+
+        // Rate-limit per contact.
+        let attemptKey = Self.atRiskUpgradeAttemptPrefix + userId
+        let now = Date().timeIntervalSince1970
+        let last = UserDefaults.standard.double(forKey: attemptKey)
+        if last > 0, now - last < atRiskUpgradeCooldown { return }
+        UserDefaults.standard.set(now, forKey: attemptKey)
+
+        do {
+            let bundle = try await fetchPublicKeyWithRetry(userId: userId)
+            // spk_uploaded_at == 0 means a legacy server that doesn't report freshness — we can't
+            // tell if the peer rotated, so leave the degraded session in place.
+            guard bundle.spkUploadedAt > 0 else { return }
+            let ageDays = (now - Double(bundle.spkUploadedAt)) / 86400.0
+            guard ageDays < atRiskUpgradeFreshnessDays else {
+                Log.info("SESSION_STATE[at_risk_upgrade_skip]: peer \(userId.prefix(8))… SPK still \(String(format: "%.1f", ageDays))d old — keeping degraded session", category: "SessionInit")
+                return
+            }
+
+            // Peer is fresh again → clean strict re-init. On success, initializeSession clears the
+            // at-risk flag (deleteSessionAtRiskFlag in the non-degraded branch).
+            try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
+            Log.info("SESSION_STATE[at_risk_upgraded]: re-keyed to fresh session for \(userId.prefix(8))…", category: "SessionInit")
+            await MainActor.run {
+                NotificationCenter.default.post(name: .sessionAtRiskChanged, object: nil, userInfo: ["userId": userId])
+            }
+        } catch {
+            Log.info("SESSION_STATE[at_risk_upgrade_failed]: \(error.localizedDescription) for \(userId.prefix(8))… — will retry later", category: "SessionInit")
+        }
     }
 }

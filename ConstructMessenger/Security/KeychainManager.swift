@@ -559,6 +559,33 @@ class KeychainManager {
         delete(forKey: pqxdhDowngradedKey(for: userId))
     }
 
+    // MARK: - At-Risk Session Flag (per-peer)
+    // Set when a session was established via DEGRADED init (peer's SPK was past the
+    // staleness limit — see the stale-peer-reachability decision). Such a session is
+    // authentic (identity key permanent, SPK signature verified) but should be re-keyed
+    // once the peer comes online and rotates. Drives a non-blocking UI hint and lets the
+    // next init prefer a fresh (non-degraded) handshake. Cleared on a clean re-init.
+
+    private func sessionAtRiskKey(for userId: String) -> String {
+        "construct.session.atRisk.\(userId)"
+    }
+
+    func saveSessionAtRiskFlag(for userId: String) {
+        var value: UInt8 = 1
+        let data = Data(bytes: &value, count: 1)
+        _ = save(data, forKey: sessionAtRiskKey(for: userId), accessible: kSecAttrAccessibleAfterFirstUnlock)
+    }
+
+    func loadSessionAtRiskFlag(for userId: String) -> Bool {
+        guard let data = load(forKey: sessionAtRiskKey(for: userId)),
+              data.count == 1 else { return false }
+        return data[0] != 0
+    }
+
+    func deleteSessionAtRiskFlag(for userId: String) {
+        delete(forKey: sessionAtRiskKey(for: userId))
+    }
+
     // MARK: - Contact Request Mappings
     //
     // Stores requestId → toUserId so User A can create a contact after acceptance.

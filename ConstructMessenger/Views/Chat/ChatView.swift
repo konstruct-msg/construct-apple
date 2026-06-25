@@ -41,6 +41,8 @@ struct ChatView: View {
 
     // Key Transparency status for the contact in this chat
     @State private var contactKTStatus: KTStatus = .unverified
+    /// True when the session with this contact was established via a degraded (stale-SPK) init.
+    @State private var isSessionAtRisk = false
 
     @State private var containerWidth: CGFloat = 390
     
@@ -265,6 +267,8 @@ struct ChatView: View {
 
                 floodBurstBanner
 
+                atRiskBanner
+
                 deleteButtonBar
 
                 Spacer(minLength: 0)
@@ -343,6 +347,14 @@ struct ChatView: View {
         }
         .onAppear(perform: handleViewAppear)
         .onReceive(NotificationCenter.default.publisher(for: .contactKeyChanged), perform: handleContactKeyChanged)
+        // Session init/degrade happens during send; re-read the at-risk flag when it settles.
+        .onChange(of: viewModel.isInitializingSession) { _, _ in refreshSessionAtRiskState() }
+        // Posted when an at-risk session is auto-upgraded — refresh the banner so it disappears.
+        .onReceive(NotificationCenter.default.publisher(for: .sessionAtRiskChanged)) { note in
+            if (note.userInfo?["userId"] as? String) == viewModel.chat.otherUser?.id {
+                refreshSessionAtRiskState()
+            }
+        }
         .onDisappear(perform: handleViewDisappear)
         #if os(iOS)
         .fullScreenCover(item: $galleryStartItem) { item in
@@ -376,6 +388,20 @@ struct ChatView: View {
             onAllow: unsuppressFloodSender,
             onBlock: blockAndUnsuppressFloodSender
         )
+    }
+
+    /// Informational banner shown when the session was established via degraded (stale-SPK) init.
+    private var atRiskBanner: some View {
+        ChatAtRiskBannerView(isVisible: isSessionAtRisk)
+    }
+
+    /// Refresh the at-risk state from the per-peer Keychain flag set by degraded init.
+    private func refreshSessionAtRiskState() {
+        guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else {
+            isSessionAtRisk = false
+            return
+        }
+        isSessionAtRisk = KeychainManager.shared.loadSessionAtRiskFlag(for: contactId)
     }
 
     private var floodSenderId: String {
@@ -600,6 +626,12 @@ struct ChatView: View {
         markChatAsRead()
         viewModel.onViewAppear()
         loadContactKTStatus()
+        refreshSessionAtRiskState()
+        // Phase 2: if this contact was reached via a degraded session and has since rotated
+        // their keys, opportunistically re-key to a fresh session (no-op otherwise).
+        if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
+            Task { await SessionInitializationService.shared.upgradeAtRiskSessionIfPeerFresh(userId: contactId) }
+        }
         setActiveChatState(isActive: true)
         // Active chat owns continuous voice playback: advance to the next voice message
         // (older → newer) when one finishes, if the setting is on.

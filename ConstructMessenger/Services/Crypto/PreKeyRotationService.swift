@@ -26,12 +26,12 @@ final class PreKeyRotationService {
     /// Used to detect SPK age independently from the rotation timer, so we can force-rotate
     /// before the Rust core's staleness limit rejects the bundle on the peer side.
     private static let spkUploadKey       = "construct.spk.uploadTimestamp"
-    /// Must be strictly less than SPK_MAX_AGE_SECS in the Rust core (currently 10 days).
-    /// 7 days = weekly rotation; gives a full rotation-period grace buffer before
-    /// the Rust peer-side check rejects the bundle as stale.
+    /// Weekly rotation. We rotate the client's OWN SPK far more aggressively (7 days) than the
+    /// peer-side staleness limit (`SPK_MAX_AGE_SECS`, now 30 days) requires — this is forward-secrecy
+    /// hygiene for our own outbound sessions, independent of how tolerant peers are of stale bundles.
     private static let rotationIntervalDays: Double = 7
-    /// Force rotation when the actual SPK age approaches the Rust staleness limit.
-    /// 8 days = 2-day safety margin before the Rust 10-day hard rejection.
+    /// Force rotation when the SPK age crosses this, even if the timer hasn't fired. Kept tight
+    /// (8 days, ~weekly) for FS hygiene; comfortably below the 30-day peer staleness limit.
     private static let spkMaxAgeDays: Double = 8
     /// Minimum interval between retry attempts when the stream was down during a previous try.
     /// Prevents hammering the server during rapid reconnect cycling.

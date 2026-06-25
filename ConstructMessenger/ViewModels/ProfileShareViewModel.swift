@@ -64,7 +64,13 @@ class ProfileShareViewModel {
                 let service = SessionInitializationService.shared
                 do {
                     let bundle = try await service.fetchPublicKeyWithRetry(userId: userId)
-                    try service.initializeSession(userId: userId, bundle: bundle, deleteExisting: false)
+                    do {
+                        try service.initializeSession(userId: userId, bundle: bundle, deleteExisting: false)
+                    } catch SessionError.peerSPKStale {
+                        // Contact offline too long to rotate their SPK — degrade so the profile
+                        // still shares. Flags the session at-risk (see stale-peer-reachability).
+                        try service.initializeSession(userId: userId, bundle: bundle, deleteExisting: false, allowStale: true)
+                    }
                     Log.info("Session initialized for profile share with \(userId)", category: "ProfileShare")
                 } catch {
                     Log.error("Failed to initialize session for profile share: \(error)", category: "ProfileShare")

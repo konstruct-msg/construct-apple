@@ -603,6 +603,8 @@
 "flood_alert_body" = "Sent %d messages in a short time. Notifications suppressed.";
 "flood_banner_title" = "Too many messages";
 "flood_banner_subtitle" = "Notifications from this contact are paused. Review and decide.";
+"session_at_risk_title" = "Contact's keys aren't fresh";
+"session_at_risk_subtitle" = "They've been offline a while. Messages still send securely; keys refresh when they're back.";
 "lockdown_mode" = "Lockdown Mode";
 "lockdown_active_since" = "Active since %@";
 "lockdown_mode_hint" = "Only contacts added before activation receive notifications. New senders are silently saved — you can review them anytime.";

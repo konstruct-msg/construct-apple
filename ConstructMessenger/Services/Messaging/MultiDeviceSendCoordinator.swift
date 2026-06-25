@@ -188,11 +188,22 @@ final class MultiDeviceSendCoordinator {
         do {
             // Ensure a session exists for this contactId; never clobber an existing one.
             if !CryptoManager.shared.hasSession(for: contactId) {
-                _ = try SessionInitializationService.shared.initializeSession(
-                    userId: contactId,
-                    bundle: bundle,
-                    deleteExisting: false
-                )
+                do {
+                    _ = try SessionInitializationService.shared.initializeSession(
+                        userId: contactId,
+                        bundle: bundle,
+                        deleteExisting: false
+                    )
+                } catch SessionError.peerSPKStale {
+                    // Own replica has been offline too long to rotate its SPK — degrade rather
+                    // than drop the sync. Flags the session at-risk (see stale-peer-reachability).
+                    _ = try SessionInitializationService.shared.initializeSession(
+                        userId: contactId,
+                        bundle: bundle,
+                        deleteExisting: false,
+                        allowStale: true
+                    )
+                }
             }
 
             // Explicitly never use stealth for multi-device traffic (see comment above).

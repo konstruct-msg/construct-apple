@@ -109,6 +109,32 @@ final class CryptoWireIntegrationTests: XCTestCase {
             )
             return String(bytes: result.decryptedMessage, encoding: .utf8) ?? "__binary_init__"
         }
+
+        /// Initiate a session against a peer whose SPK is `spkAgeDays` old.
+        /// `allowStale == false` exercises the strict gate (`initSession`, expected to throw
+        /// `PeerSpkStale` past the 30-day limit); `allowStale == true` exercises the degraded
+        /// path (`initSessionAllowingStale`). Verifies the FFI binding + xcframework wiring of
+        /// the stale-peer-reachability Phase 1 change end-to-end.
+        func initSenderSession(to contactId: String,
+                                recipientBundle: (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
+                                                  signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16),
+                                spkAgeDays: UInt64,
+                                allowStale: Bool) throws {
+            let now = UInt64(Date().timeIntervalSince1970)
+            let bundle = BinaryKeyBundle(
+                identityPublic: recipientBundle.identityPublic, signedPrekeyPublic: recipientBundle.signedPrekeyPublic,
+                signature: recipientBundle.signature, verifyingKey: recipientBundle.verifyingKey,
+                suiteId: recipientBundle.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
+                spkUploadedAt: now - spkAgeDays * 86_400, spkRotationEpoch: 0,
+                kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
+                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
+            )
+            if allowStale {
+                _ = try core.initSessionAllowingStale(contactId: contactId, recipientBundle: bundle)
+            } else {
+                _ = try core.initSession(contactId: contactId, recipientBundle: bundle)
+            }
+        }
     }
 
     // MARK: - Full Wire Pipeline: Alice → Bob
@@ -138,6 +164,59 @@ final class CryptoWireIntegrationTests: XCTestCase {
             wirePayload: wirePayload
         )
         XCTAssertEqual(decrypted1, plaintext1, "First message through full wire pipeline")
+    }
+
+    // MARK: - Stale-peer reachability (Phase 1 — degraded init)
+
+    /// The strict initiator path must reject a peer whose SPK is past the 30-day staleness limit.
+    func testStrictInitRejectsStaleSPK() throws {
+        let alice = try CryptoPeer(userId: "alice-uuid-stale-1")
+        let bob   = try CryptoPeer(userId: "bob-uuid-stale-1")
+        let bobBundle = try bob.bundle()
+
+        XCTAssertThrowsError(
+            try alice.initSenderSession(to: bob.userId, recipientBundle: bobBundle, spkAgeDays: 31, allowStale: false),
+            "strict init must reject a stale SPK"
+        ) { error in
+            guard case CryptoError.PeerSpkStale = error else {
+                return XCTFail("expected CryptoError.PeerSpkStale, got \(error)")
+            }
+        }
+    }
+
+    /// The degraded initiator path must accept the same stale bundle the strict path rejects.
+    func testDegradedInitAcceptsStaleSPK() throws {
+        let alice = try CryptoPeer(userId: "alice-uuid-stale-2")
+        let bob   = try CryptoPeer(userId: "bob-uuid-stale-2")
+        let bobBundle = try bob.bundle()
+
+        XCTAssertNoThrow(
+            try alice.initSenderSession(to: bob.userId, recipientBundle: bobBundle, spkAgeDays: 60, allowStale: true),
+            "degraded init must accept a stale SPK"
+        )
+    }
+
+    /// A degraded session must be fully functional end-to-end through the wire pipeline when the
+    /// peer still holds its SPK private key (the lost-SPK case falls through to session healing).
+    func testDegradedSessionFullWirePipeline() throws {
+        let alice = try CryptoPeer(userId: "alice-uuid-stale-3")
+        let bob   = try CryptoPeer(userId: "bob-uuid-stale-3")
+        let aliceBundle = try alice.bundle()
+        let bobBundle   = try bob.bundle()
+
+        // Bob has been offline 35 days → only the degraded path can reach him.
+        try alice.initSenderSession(to: bob.userId, recipientBundle: bobBundle, spkAgeDays: 35, allowStale: true)
+
+        let plaintext = "Reachable even though your keys are stale."
+        let components = try alice.encryptRaw(plaintext, to: bob.userId)
+        let wirePayload = try alice.encodeWire(components)
+
+        let decrypted = try bob.initReceiverSession(
+            from: alice.userId,
+            senderBundle: aliceBundle,
+            wirePayload: wirePayload
+        )
+        XCTAssertEqual(decrypted, plaintext, "degraded-init first message must decrypt over the wire")
     }
 
     func testFullWirePipelineBidirectional() throws {

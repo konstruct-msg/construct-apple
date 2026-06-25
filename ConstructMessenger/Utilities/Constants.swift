@@ -287,13 +287,29 @@ struct FeatureFlags {
     ///
     /// See `decisions/quic-moderate-dpi-udp-obfuscation.md`.
     ///
-    /// Backed by `UserDefaults`, defaulting `true` when never set (a stored value — i.e. an
-    /// explicit user toggle — is respected). Read fresh on every stream open, so toggling +
-    /// a stream reconnect switches transport live (active transport shown as a badge).
+    /// **Release: always `true` (forced).** QUIC is a production transport, on for everyone with a
+    /// fast hard fallback to H2 — there is no user kill-switch in release, and a stale stored value
+    /// from an older build can never disable it. **DEBUG:** `UserDefaults`-backed (default `true`),
+    /// so the DEBUG-only toggle in `NetworkSettingsView` can force it on/off for testing. Read fresh
+    /// on every stream open, so toggling + a stream reconnect switches transport live (DEBUG only).
+    /// `INTERNAL_TOOLS` is an opt-in compilation condition for internal TestFlight builds (which
+    /// are Release config but need the QUIC kill-switch visible). Define it in the app target's
+    /// Release Active Compilation Conditions for the internal round; remove it for the external
+    /// round so QUIC is force-on with no toggle.
     static let engineQuicExperimentalKey = "ff.engineQuicExperimental"
     static var engineQuicExperimental: Bool {
-        get { UserDefaults.standard.object(forKey: engineQuicExperimentalKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: engineQuicExperimentalKey) }
+        get {
+//            #if DEBUG
+            UserDefaults.standard.object(forKey: engineQuicExperimentalKey) as? Bool ?? true
+//            #else
+            //true  // forced on in external release — no kill-switch, stale stored value ignored
+//            #endif
+        }
+        set {
+//            #if DEBUG
+            UserDefaults.standard.set(newValue, forKey: engineQuicExperimentalKey)
+//            #endif
+        }
     }
 
     /// **Default `false` (plain QUIC).** Salamander-obfuscate the engine-QUIC datagrams.
@@ -306,11 +322,24 @@ struct FeatureFlags {
     /// (`QuicObfPskStore`, `QuicGatewayConfig.bundledObfPsk`, Rust `connect_obfuscated`) stays
     /// as a dormant DEBUG-only option for experimentation; the production gateway runs plain.
     ///
-    /// Backed by `UserDefaults`, defaulting `false` when never set (an explicit toggle is kept).
+    /// **Release: always `false` (forced).** Production ships plain QUIC; obfuscation never runs in
+    /// release regardless of any stored value (the gateway is plain — obf datagrams would just be
+    /// dropped). **DEBUG:** `UserDefaults`-backed (default `false`) so the DEBUG-only toggle can
+    /// exercise the dormant Salamander path against a debug obf gateway.
     static let engineQuicObfuscatedKey = "ff.engineQuicObfuscated"
     static var engineQuicObfuscated: Bool {
-        get { UserDefaults.standard.object(forKey: engineQuicObfuscatedKey) as? Bool ?? false }
-        set { UserDefaults.standard.set(newValue, forKey: engineQuicObfuscatedKey) }
+        get {
+            #if DEBUG
+            UserDefaults.standard.object(forKey: engineQuicObfuscatedKey) as? Bool ?? false
+            #else
+            false  // forced off in release — production gateway is plain
+            #endif
+        }
+        set {
+            #if DEBUG
+            UserDefaults.standard.set(newValue, forKey: engineQuicObfuscatedKey)
+            #endif
+        }
     }
 
     /// **Default `false`.** Phase S2 of the typed binary session-control migration
@@ -645,4 +674,7 @@ extension Notification.Name {
     /// Posted when a contact's identity key changes since the last verified bundle.
     /// userInfo: ["userId": String]
     static let contactKeyChanged  = Notification.Name("constructContactKeyChanged")
+    /// Posted when a contact's at-risk (degraded-session) state changes — e.g. after an at-risk
+    /// session is auto-upgraded to a fresh one. userInfo: ["userId": String]
+    static let sessionAtRiskChanged = Notification.Name("constructSessionAtRiskChanged")
 }

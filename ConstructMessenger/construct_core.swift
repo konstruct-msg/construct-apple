@@ -1259,6 +1259,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func initSession(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
     
+    func initSessionAllowingStale(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
+    
     func oneTimePrekeyCount()  -> UInt32
     
     func prekeysAvailableCount()  -> UInt32
@@ -1612,6 +1614,16 @@ open func initReceivingSession(contactId: String, recipientBundle: BinaryKeyBund
 open func initSession(contactId: String, recipientBundle: BinaryKeyBundle)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_init_session(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),$0
+    )
+})
+}
+    
+open func initSessionAllowingStale(contactId: String, recipientBundle: BinaryKeyBundle)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_init_session_allowing_stale(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),$0
@@ -6785,6 +6797,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_init_session() != 15049) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_init_session_allowing_stale() != 35577) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_one_time_prekey_count() != 21478) {

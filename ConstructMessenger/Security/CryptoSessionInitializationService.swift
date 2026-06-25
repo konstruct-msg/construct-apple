@@ -21,6 +21,7 @@ final class CryptoSessionInitializationService {
         spkRotationEpoch: UInt32 = 0,
         kyberSpkUploadedAt: UInt64 = 0,
         kyberSpkRotationEpoch: UInt32 = 0,
+        allowStale: Bool = false,
         core: OrchestratorCore?,
         archiveSession: (String, ArchiveReason) -> Void,
         saveSession: (String) -> Void
@@ -61,10 +62,12 @@ final class CryptoSessionInitializationService {
         )
 
         do {
-            let sessionId = try core.initSession(contactId: userId, recipientBundle: bundle)
+            let sessionId = allowStale
+                ? try core.initSessionAllowingStale(contactId: userId, recipientBundle: bundle)
+                : try core.initSession(contactId: userId, recipientBundle: bundle)
             KeychainManager.shared.saveSessionSuiteId(userId: userId, suiteId: suiteID)
             saveSession(userId)
-            Log.info("INITIATOR session created: \(sessionId.prefix(16))...", category: "CryptoManager")
+            Log.info("INITIATOR session created\(allowStale ? " (degraded/at-risk)" : ""): \(sessionId.prefix(16))...", category: "CryptoManager")
         } catch CryptoError.PeerSpkStale(let message) {
             let ageSecs: UInt64
             if let range = message.range(of: "age_secs=") {

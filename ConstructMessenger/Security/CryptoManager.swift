@@ -606,7 +606,7 @@ class CryptoManager {
         // MARK: - Session Management
 
     /// Initializes a secure session with a recipient using the Rust core.
-    func initializeSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil, spkUploadedAt: UInt64 = 0, spkRotationEpoch: UInt32 = 0, kyberSpkUploadedAt: UInt64 = 0, kyberSpkRotationEpoch: UInt32 = 0) throws {
+    func initializeSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil, spkUploadedAt: UInt64 = 0, spkRotationEpoch: UInt32 = 0, kyberSpkUploadedAt: UInt64 = 0, kyberSpkRotationEpoch: UInt32 = 0, allowStale: Bool = false) throws {
         do {
             try sessionInitService.initializeSession(
                 for: userId,
@@ -620,6 +620,7 @@ class CryptoManager {
                 spkRotationEpoch: spkRotationEpoch,
                 kyberSpkUploadedAt: kyberSpkUploadedAt,
                 kyberSpkRotationEpoch: kyberSpkRotationEpoch,
+                allowStale: allowStale,
                 core: orchestratorCore,
                 archiveSession: { [weak self] userId, reason in
                     Log.info("Existing session found for \(userId) - archiving before reinitialization to prevent desync", category: "CryptoManager")

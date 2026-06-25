@@ -31,8 +31,10 @@ struct NetworkSettingsView: View {
     @State private var veilImportIsError = false
     /// Bumped after an import to refresh the configured-status row.
     @State private var veilTicketRefresh = 0
-    #if DEBUG
+//    #if DEBUG
     @State private var engineQuicOn = FeatureFlags.engineQuicExperimental
+//    #endif
+    #if DEBUG
     @State private var engineQuicObfOn = FeatureFlags.engineQuicObfuscated
     #endif
 
@@ -241,15 +243,19 @@ struct NetworkSettingsView: View {
 
                 veilAccessSection
 
-                // QUIC/HTTP-3 transport (construct-transport). In production it is always-on and
-                // automatic (plain QUIC, falls back to H2 on failure) — there is no user-facing
-                // toggle; confirm it's live via the transport badge in the STATUS section above
-                // ("QUIC" when active, "H2" otherwise). The manual force-on/off + Salamander
-                // obfuscation toggles below are DEBUG-only experimentation aids (the user asked
-                // that forcing transport on/off live only in DEBUG). Direct path only — ignored
+                // QUIC/HTTP-3 transport (construct-transport). For the external release it is
+                // always-on and automatic (plain QUIC, falls back to H2 on failure) with no
+                // user-facing toggle — confirm it's live via the transport badge in the STATUS
+                // section above ("QUIC" when active, "H2" otherwise).
+                //
+                // The QUIC kill-switch below is visible in DEBUG and on internal TestFlight builds
+                // (INTERNAL_TOOLS) so we can A/B QUIC vs H2 across networks; it is compiled out for
+                // the external release. The Salamander obfuscation toggle stays DEBUG-only: the
+                // production gateway is plain, so enabling obf on a TestFlight build would just get
+                // datagrams dropped (invalid CID) and fall back to H2. Direct path only — ignored
                 // when VEIL is active.
-                #if DEBUG
-                CTSettingsSectionHeader(title: "EXPERIMENTAL (DEBUG)", color: .orange)
+//                #if DEBUG
+                CTSettingsSectionHeader(title: "EXPERIMENTAL", color: .orange)
                 CTSectionGroup {
                     Toggle(isOn: $engineQuicOn) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -269,11 +275,12 @@ struct NetworkSettingsView: View {
                         streamManager.reconnectForTransportChange()
                     }
 
+                    #if DEBUG
                     CTSep(style: .thin)
 
-                    // Salamander obfuscation of the QUIC datagrams (DPI-evasion). Only meaningful
-                    // when QUIC is on AND a per-gateway PSK has been provisioned (via veil-config);
-                    // with no PSK it transparently stays plain QUIC.
+                    // Salamander obfuscation of the QUIC datagrams (DPI-evasion). DEBUG-only —
+                    // needs a per-gateway PSK + an obf gateway; against the plain prod gateway it
+                    // stays plain / drops.
                     Toggle(isOn: $engineQuicObfOn) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("QUIC obfuscation (Salamander)")
@@ -293,8 +300,9 @@ struct NetworkSettingsView: View {
                         FeatureFlags.engineQuicObfuscated = newValue
                         streamManager.reconnectForTransportChange()
                     }
+                    #endif
                 }
-                #endif
+//                #endif
 
                 #if DEBUG
                 // Debug-only: live FSM diagnostics. Every transport routing decision flows
