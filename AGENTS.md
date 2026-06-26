@@ -92,22 +92,6 @@ cat *.log | ./tools/squash_logs.py
 ./tools/project_index ~/Code/construct-server   # index another repo
 ```
 
-### Expected workflow
-
-```bash
-# Before reading ANY file — strip noise
-./tools/squash_file path/to/File.swift
-
-# Before exploring a new directory — get the map
-./tools/project_index
-
-# After every build attempt — filter output
-xcodebuild ... 2>&1 | ./tools/squash_build
-
-# Before pasting logs into context
-./tools/squash_logs.py app.log
-```
-
 ### Token impact
 | Tool | When to use | Savings |
 |------|------------|:------:|
@@ -205,18 +189,13 @@ The goal is a **bespoke look** that does not clash with iOS / macOS platform nor
 **Evolve**: touch affordances, icon legibility for interactive controls, bubble readability.  
 **Never**: sacrifice usability or clash visibly with iOS 26 / macOS guidelines.
 
-> **Terminal glyphs are decorative-only — not functional (revised 2026-06-22).** Testers and
-> users did not embrace the `[…]` bracket pastiche on functional controls. **State and
-> affordance must read instantly**, so `[ok] [err] [on] [off] [✓] [ ] [!] [~] [?]` and similar
-> are replaced by SF Symbols + semantic colour (`CTStatus` / `CTStatusBadge`) or native
-> controls (`Toggle`, selection `checkmark`). ASCII may remain only as unobtrusive *chrome*
-> (separators, the `>` prefix on system messages / section headers, decorative `✷`).
->
-> **Migration is phased** (do later phases when scheduled, don't regress earlier ones):
-> - **Phase 1 (done)**: status values + selection checkmarks → `CTStatusBadge` / `checkmark`.
-> - **Pending**: `[→]` row affordance → `chevron`; `[ BUTTON ]` labels → real buttons;
->   `CTRowIcon("[x]")` ASCII row icons → SF Symbols; contact-request action glyphs;
->   eventually re-evaluate `> SECTION` headers vs native `Section` headers.
+> **Terminal glyphs are decorative-only — not functional.** **State and affordance must read
+> instantly**, so `[ok] [err] [on] [off] [✓] [ ] [!] [~] [?]` and similar are replaced by SF
+> Symbols + semantic colour (`CTStatus` / `CTStatusBadge`) or native controls (`Toggle`, selection
+> `checkmark`). ASCII may remain only as unobtrusive *chrome* (separators, `>` prefix on
+> system messages / section headers, decorative `✷`). Migration to SF Symbols is ongoing — never
+> regress a converted control back to ASCII; remaining ASCII affordances (`[→]` rows, `[ BUTTON ]`
+> labels, `CTRowIcon("[x]")`) are pending conversion, not the target state.
 
 ### Tokens
 - Colors: `Color.CT.bg`, `Color.CT.text`, `Color.CT.accent`, `Color.CT.danger`, `Color.CT.noise`, `Color.CT.textDim`
@@ -355,8 +334,7 @@ On failure: falls through to END_SESSION → full re-init.
 - `deviceSigningKey` / `deviceIdentityKey`: `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (changed 2026-06-21 — see below). Together with `crypto_private_keys`, `crypto_otpks`, `identity_key`, `signed_prekey`, `signing_key`, `hybrid_sig_private_key`, `APIConstants.privateKeyKey` these are the keys needed to (re)build `OrchestratorCore`; use the `KeychainManager.cryptoKeyAccessible` constant for all of them.
 - `deviceId`: `kSecAttrAccessibleAfterFirstUnlock`
 - Per-contact session data (`saveSessionData`): `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (needed for push-driven background decrypt)
-- **Double Ratchet orchestrator state** (`construct.orchestrator_state`): `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (changed 2026-06-09). It advances during background/locked push decrypt; the old `WhenUnlockedThisDeviceOnly` made the locked-device save fail → the advanced ratchet was lost → silent session desync on next launch. Any crypto state that must survive a background decrypt MUST use `AfterFirstUnlock*`, never `WhenUnlocked*`.
-- **Device + core crypto keys** migrated to `AfterFirstUnlockThisDeviceOnly` on 2026-06-21 (one-time `KeychainManager.migrateCryptoKeysAccessibility()`, called from `restoreOrAuthenticateDevice`; `SecItemUpdate` can't change accessibility so each item is re-added, self-guarded against locked reads). Under the old `WhenUnlocked*` a push that woke a *locked* device couldn't read these keys → `coreNotInitialized` → the incoming-message path fired END_SESSION and tore down a healthy session ("Encrypted session out of sync"). Companion guard: `MessageRouter.routeIncomingMessage` and `SessionCoordinator` now DEFER (hold the stream cursor, no ACK, no END_SESSION) when `!CryptoManager.shared.isInitialized` instead of destroying the session. (Session archives + PQC OTPK/SPK via the generic `saveData` default still use `WhenUnlockedThisDeviceOnly` — same latent class, lower blast radius, not yet migrated.)
+- **Double Ratchet orchestrator state** (`construct.orchestrator_state`) + device/core crypto keys: `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. **INVARIANT**: any crypto state that must survive a background/locked push decrypt MUST use `AfterFirstUnlock*`, never `WhenUnlocked*` — otherwise a locked-device save/read fails → silent session desync or END_SESSION teardown of a healthy session. (Migration helper `KeychainManager.migrateCryptoKeysAccessibility()`. Session archives + PQC OTPK/SPK via generic `saveData` still use `WhenUnlockedThisDeviceOnly` — not yet migrated.) Companion guard: `MessageRouter.routeIncomingMessage` / `SessionCoordinator` DEFER (hold cursor, no ACK, no END_SESSION) when `!CryptoManager.shared.isInitialized`. Full postmortem: construct-docs `security/`.
 - Auth token: `kSecAttrAccessibleAfterFirstUnlock`
 
 **Auth guard**: if `isAuthenticated == true` in memory, skip Keychain re-read.
@@ -364,24 +342,18 @@ Device keys are only deleted on gRPC UNAUTHENTICATED (16) or PERMISSION_DENIED (
 
 ### Tab bar (native `TabView`)
 The bottom navigation is the **standard SwiftUI `TabView`** (`MainTabView.callContent`,
-compact size class only — the regular/iPad branch still uses `ChatsSplitView`). It replaced the
-old custom floating `CTTabBar` glass capsule + `ZStack(opacity:)` + `visitedTabs` workaround
-(removed 2026-06-22 — see below). Icon-only tabs via `Image(systemName:)` labels; selected
-tint is `Color.CT.accent`.
+compact size class only — the regular/iPad branch uses `ChatsSplitView`). Icon-only tabs via
+`Image(systemName:)`; selected tint `Color.CT.accent`. (Replaced an old custom `CTTabBar` +
+`ZStack`/`visitedTabs` workaround — do **not** reintroduce that pattern.)
 
-- Tab values match the legacy indices: chats `0`, synaps `1`, calls `2` (only when
+- Tab values match legacy indices: chats `0`, synaps `1`, calls `2` (only when
   `CallsFeature.isEnabled`), settings `3`-or-`2` (`settingsTab` shifts with the calls tab).
   `ChatsViewModel.selectedTab: Int` is the selection binding.
-- **Tab-bar hiding inside a conversation** is the standard `.toolbar(.hidden, for: .tabBar)`
-  on the `ChatView` navigation destination in `ChatsListView` (messenger convention: the input
-  bar replaces the tab bar). Settings/synaps sub-screens keep the tab bar visible (standard iOS).
+- **Tab-bar hiding inside a conversation**: standard `.toolbar(.hidden, for: .tabBar)` on the
+  `ChatView` destination (the input bar replaces the tab bar). Sub-screens keep it visible.
 - There is **no more** `isInChat` / `isInSettings` state — do not reintroduce it.
-- **iOS 26 @FetchRequest crash**: native `TabView` loads each tab's content lazily on first
-  selection, so the old `_ZStackLayout.sizeThatFits → @FetchRequest.update()` storm (which the
-  `visitedTabs` gate guarded against) does not occur. If a per-tab `@FetchRequest` crash ever
-  resurfaces on a new OS, the fix is lazy gating of that tab's content — not a return to the ZStack.
-- `confirmationDialog` worked poorly in the old ZStack; `.alert` remains the safer default.
-- State is preserved across tab switches (intended).
+- If a per-tab `@FetchRequest` crash resurfaces on a new OS, fix by lazy-gating that tab's
+  content — not by returning to the ZStack. Prefer `.alert` over `confirmationDialog`.
 
 ### construct-engine and EngineAdapter (CRITICAL for macOS/Desktop work)
 
@@ -403,27 +375,23 @@ macOS (Construct Desktop target)  ← TARGET ARCHITECTURE
     └── PQ key management        ← TO DO (Phase 5)
 ```
 
-**Current state (technical debt)**: macOS Desktop still has a *second* path — it compiles
-the shared `CryptoManager.swift` / `MessageCryptoService.swift` / etc. which call
-`OrchestratorCore` directly via `ConstructCore.xcframework`. This is wrong — the goal is to
-route all crypto through `EngineAdapter` and remove `ConstructCore.xcframework` from the
-Desktop target entirely (saves ~83 MB binary, eliminates dual-state OrchestratorCore).
+**Current state (technical debt)**: macOS Desktop still has a *second* path — it compiles the
+shared `CryptoManager.swift` / `MessageCryptoService.swift` / etc. calling `OrchestratorCore`
+directly via `ConstructCore.xcframework`. Goal: route all crypto through `EngineAdapter` and remove
+`ConstructCore.xcframework` from the Desktop target (saves ~83 MB, kills dual-state OrchestratorCore).
 
 #### iOS keeps direct UniFFI path (intentional)
 
-iOS cannot run `construct-engine` with QUIC natively. The iOS direct path is production-stable.
+iOS cannot run `construct-engine` with QUIC natively; the iOS direct path is production-stable.
 Do NOT use `EngineAdapter` for crypto on iOS.
 
 #### Compiler guard pattern for crypto code
 
-macOS Desktop now follows the direct iOS path (Strategy B). Guards are used for
-iOS-only features (e.g. calls/WebRTC) or when future platforms adopt the engine.
-Example:
+macOS Desktop now follows the direct iOS path (Strategy B). Guard only for iOS-only features
+(e.g. calls/WebRTC) or future engine-platforms:
 ```swift
-#if os(iOS) && canImport(WebRTC)
-// iOS-only calls
-#else
-// Direct core path (iOS + macOS Desktop)
+#if os(iOS) && canImport(WebRTC)   // iOS-only calls
+#else                              // Direct core path (iOS + macOS Desktop)
 #endif
 ```
 
@@ -480,28 +448,17 @@ CPU cost, allocation pressure, and potential encoding bugs at every message.
 3. **UniFFI boundary uses `Data` / `[UInt8]`.** All Swift ↔ Rust FFI calls pass binary
    data as `Data` (Swift) or `[UInt8]` (UniFFI-generated). Never stringify before
    crossing the boundary. Two patterns to watch:
-   - A UniFFI struct that exposes `String` fields holding base64 is a leak —
-     declare the UDL field as `sequence<u8>` instead. (Historical example:
-     `RegistrationBundleJson` returned base64 strings; replaced 2026-05-30 by
-     `RegistrationBundleFields` with raw byte fields.)
-   - `[UInt8](data)` / `Data(bytes)` Swift-side wrapping is the current
-     idiomatic UniFFI cost. Acceptable, but minimise — don't double-wrap.
+   - A UniFFI struct exposing `String` fields that hold base64 is a leak — declare the UDL field
+     as `sequence<u8>` instead.
+   - `[UInt8](data)` / `Data(bytes)` Swift-side wrapping is the current idiomatic UniFFI cost.
+     Acceptable, but minimise — don't double-wrap.
 
 4. **CFE binary format for session state.** Sessions persist as CFE envelopes
-   (`CfeSessionStateV1`) — 16-byte header + MessagePack payload via `rmp_serde`.
-   The legacy `CfeSessionJsonWrapperV1` (JSON wrapped in a CFE envelope) was
-   removed from production paths on 2026-05-30; it survives only in tests
-   that exercise import backwards-compatibility. New session fields go into the
-   binary CFE layer. Do not introduce JSON-bytes-into-Keychain anywhere on the
-   crypto pipeline — every `Action::SaveSessionToSecureStore` data field must
-   originate from `export_session_bytes_for` (CFE), never from
-   `export_session_json_for`.
-
-   Active paths producing the right CFE binary today:
-   - `encrypt` / `decrypt` / `decrypt_wire_payload` follow-up save
-   - `archive_session` snapshot
-   - `maybe_apply_pq_contribution` post-Kyber save
-   - `restore_latest_archive` round-trip
+   (`CfeSessionStateV1`) — 16-byte header + MessagePack payload via `rmp_serde`. New session fields
+   go into the binary CFE layer. Do not introduce JSON-bytes-into-Keychain anywhere on the crypto
+   pipeline — every `Action::SaveSessionToSecureStore` data field must originate from
+   `export_session_bytes_for` (CFE), never `export_session_json_for`. (`CfeSessionJsonWrapperV1` is
+   removed from production; survives only in backwards-compat import tests.)
 
 5. **`Codable` `Data` fields are fine.** Swift's `JSONEncoder`/`JSONDecoder` transparently
    base64-encodes `Data` values in JSON — this is acceptable for UserDefaults persistence
@@ -535,19 +492,12 @@ There are two separate user identity formats in this codebase. **Never mix them.
 | `ServerUserId` | `Utilities/UserIdentity.swift` | 36-char UUID with dashes `14f28d31-…` | Server-assigned at registration | All session addressing: `local_user_id`, `contact_id`, `conversation_id`, contact lists |
 | `CryptoDeviceId` | `Utilities/UserIdentity.swift` | 32-char hex `6f5e37ac…` | `deriveDeviceId(identityPublicKey)` | Multi-device linking, QR codes ONLY |
 
-### The AD bug (postmortem — fixed in commit that adds this section)
+### The AD bug (why this matters)
 
-`CryptoManager.cryptoLocalUserId` previously returned `loadDeviceID()` (32-hex CryptoDeviceId)
-instead of `_cachedUserId` (36-char ServerUserId). The Double Ratchet AD is:
-
-```
-ENCRYPT: AD_VERSION || local_user_id || contact_id || …
-DECRYPT: AD_VERSION || contact_id   || local_user_id || …
-```
-
-INITIATOR stored `local_user_id = "6f5e37ac…"` (32 hex).
-RESPONDER stored `contact_id    = "14f28d31-…"` (36 UUID).
-These never matched → permanent AEAD failure on every session, 100% reproducible.
+The Double Ratchet AD mixes `local_user_id` + `contact_id`. Mixing the two ID spaces (e.g.
+`cryptoLocalUserId` returning a 32-hex CryptoDeviceId instead of the 36-char ServerUserId) makes
+INITIATOR's and RESPONDER's AD never match → permanent AEAD failure on every session. (Full
+postmortem in construct-docs.)
 
 **Invariant to maintain**: Everything passed to the Rust session layer (`init_session`,
 `init_receiving_session`, `set_local_user_id`) MUST be a `ServerUserId`. The Rust
