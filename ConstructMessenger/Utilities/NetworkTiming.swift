@@ -290,6 +290,8 @@ enum NetworkTiming {
         // both sides comfortably fresh within the 15s window.
         static let signalingKeepaliveInterval: TimeInterval = 10
         static let signalingStreamOpenAcceptTimeout: TimeInterval = 2.5
+        static let iceRestartGraceDelay: TimeInterval = 2.0
+        static let maxIceRestartAttempts: Int = 3
         static let endedAutoClearDelay: TimeInterval = 3
         static let audioPreferredSampleRateHz: Double = 48_000
         static let audioPreferredIOBufferDuration: TimeInterval = 0.01

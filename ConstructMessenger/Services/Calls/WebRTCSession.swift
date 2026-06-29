@@ -31,6 +31,7 @@ protocol WebRTCSessionProtocol: AnyObject {
     var onQualityChanged: (@Sendable (CallQuality) -> Void)? { get set }
 
     func createOffer() async throws -> String
+    func restartIce() async throws -> String
     func createAnswer() async throws -> String
     func setRemoteOffer(sdp: String) async throws
     func setRemoteAnswer(sdp: String) async throws
@@ -173,14 +174,29 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     }
 
     func createOffer() async throws -> String {
+        try await createOffer(iceRestart: false)
+    }
+
+    func restartIce() async throws -> String {
+        try await createOffer(iceRestart: true)
+    }
+
+    private func createOffer(iceRestart: Bool) async throws -> String {
         let offerConstraints = RTCMediaConstraints(
-            mandatoryConstraints: ["OfferToReceiveAudio": "true", "OfferToReceiveVideo": "false"],
+            mandatoryConstraints: [
+                "OfferToReceiveAudio": "true",
+                "OfferToReceiveVideo": "false",
+                "IceRestart": iceRestart ? "true" : "false"
+            ],
             optionalConstraints: nil
         )
         let offer = try await createSessionDescription { completion in
             self.peerConnection.offer(for: offerConstraints, completionHandler: completion)
         }
         try await setLocalDescription(offer)
+        if iceRestart {
+            Log.info("WebRTC ICE restart offer created", category: "Calls")
+        }
         return offer.sdp
     }
 
@@ -497,6 +513,7 @@ final class WebRTCSession: WebRTCSessionProtocol {
     }
 
     func createOffer() async throws -> String { throw WebRTCSessionError.webRTCLibraryMissing }
+    func restartIce() async throws -> String { throw WebRTCSessionError.webRTCLibraryMissing }
     func createAnswer() async throws -> String { throw WebRTCSessionError.webRTCLibraryMissing }
     func setRemoteOffer(sdp: String) async throws { throw WebRTCSessionError.webRTCLibraryMissing }
     func setRemoteAnswer(sdp: String) async throws { throw WebRTCSessionError.webRTCLibraryMissing }

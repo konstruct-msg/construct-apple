@@ -14,11 +14,21 @@ import AVFoundation
 import CoreData
 import GRPCCore
 import SwiftProtobuf
+#if os(iOS)
+import UIKit
+#endif
 
 @MainActor
 @Observable
 final class CallManager: CallUIManaging {
     static let shared = CallManager()
+
+    private enum CallEndSource: String {
+        case inAppEndButton = "ui_end_button"
+        case inAppDeclineButton = "ui_decline_button"
+        case callKit = "callkit"
+        case programmatic = "programmatic"
+    }
 
     private(set) var state: CallState = .idle
     private(set) var lastError: String? = nil
@@ -74,6 +84,14 @@ final class CallManager: CallUIManaging {
         /// Capped to avoid a tight reconnect loop if the server keeps closing the stream.
         var postMediaStreamReconnects: Int = 0
         static let maxPostMediaReconnects = 5
+        /// Debounced restart task fired after `.disconnected` if the call does not
+        /// self-heal. Cancelled as soon as ICE returns to `.connected/.completed`.
+        var iceRestartTask: Task<Void, Never>?
+        /// True while we have already generated and sent an ICE-restart offer and are
+        /// waiting for the connection to recover or for the peer's answer.
+        var isIceRestartInFlight: Bool = false
+        /// Count caller-driven ICE restart attempts for this call.
+        var iceRestartAttempts: Int = 0
 
         init(session: CallSession) {
             self.session = session
@@ -85,7 +103,9 @@ final class CallManager: CallUIManaging {
             receiveTask?.cancel()
             acceptTask?.cancel()
             iceFlushTask?.cancel()
+            iceRestartTask?.cancel()
             iceFlushTask = nil
+            iceRestartTask = nil
             webrtc?.close()
             webrtc = nil
             stream?.close()
@@ -111,7 +131,7 @@ final class CallManager: CallUIManaging {
             Task { @MainActor in self?.answer(callUUID: uuid) }
         }
         CallKitProvider.shared.onEnd = { [weak self] uuid in
-            Task { @MainActor in self?.end(callUUID: uuid, fromCallKit: true) }
+            Task { @MainActor in self?.end(callUUID: uuid, source: .callKit) }
         }
         // Audio session lifecycle is owned by CallAudioController; CallKit's
         // didActivate/didDeactivate forward to it directly (see CallKitProvider).
@@ -403,7 +423,7 @@ final class CallManager: CallUIManaging {
     /// End the active call (for in-app end-call button).
     func endCall() {
         guard let active else { return }
-        end(callUUID: active.session.uuid)
+        end(callUUID: active.session.uuid, source: .inAppEndButton)
     }
 
     /// Dismiss the post-call `.ended` overlay immediately, before the auto-clear
@@ -423,7 +443,7 @@ final class CallManager: CallUIManaging {
     /// Decline the current incoming call from in-app UI.
     func declineIncomingCall() {
         guard let active, case .incoming = state else { return }
-        end(callUUID: active.session.uuid)
+        end(callUUID: active.session.uuid, source: .inAppDeclineButton)
     }
 
     /// Mute or unmute the local microphone.
@@ -433,14 +453,11 @@ final class CallManager: CallUIManaging {
 
     /// End the call identified by `callUUID`.
     ///
-    /// - Parameter fromCallKit: Pass `true` when called from the `CXEndCallAction`
-    ///   delegate (`onEnd` callback) — CallKit already knows the call is ending, so
-    ///   no `requestEndCall` is needed. Pass `false` (default) when called from in-app
-    ///   UI (End/Decline buttons), which requires us to tell CallKit via
-    ///   `requestEndCall` so the lock-screen call UI is dismissed.
-    func end(callUUID: UUID, fromCallKit: Bool = false) {
+    /// - Parameter source: Origin of the end request. Logged so postmortems can
+    ///   distinguish explicit UI actions from CallKit/system-driven termination.
+    private func end(callUUID: UUID, source: CallEndSource = .programmatic) {
         guard let active, active.session.uuid == callUUID else {
-            Log.info("End for unknown call uuid=\(callUUID.uuidString.prefix(8))…", category: "Calls")
+            Log.info("End for unknown call uuid=\(callUUID.uuidString.prefix(8))… source=\(source.rawValue) \(Self.currentAppContext())", category: "Calls")
             return
         }
 
@@ -452,6 +469,10 @@ final class CallManager: CallUIManaging {
         }
 
         let wasRegisteredWithCallKit = active.callKitRegistered
+        Log.info(
+            "Call end requested source=\(source.rawValue) reason=\(reason) \(describeEndContext(active: active))",
+            category: "Calls"
+        )
 
         Task {
             // Best-effort: open the signaling stream so the hangup also takes the fast
@@ -466,7 +487,7 @@ final class CallManager: CallUIManaging {
             // call is active. Requesting CXEndCallAction via the call controller causes
             // CallKit to dismiss the lock-screen call UI. The resulting onEnd callback
             // will call end() again, but active will be nil by then, so it's a no-op.
-            if !fromCallKit && wasRegisteredWithCallKit {
+            if source != .callKit && wasRegisteredWithCallKit {
                 await CallKitProvider.shared.requestEndCall(uuid: callUUID)
             }
             #endif
@@ -768,6 +789,67 @@ final class CallManager: CallUIManaging {
         Log.info("CallConnected presence sent (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
     }
 
+    private func scheduleIceRestartIfNeeded() {
+        guard let active else { return }
+        guard active.mediaConnected else { return }
+        guard active.session.direction == .outgoing else {
+            Log.info("ICE disconnected on callee side — waiting for caller-driven restart", category: "Calls")
+            return
+        }
+        guard active.webrtc != nil else { return }
+        guard !active.isIceRestartInFlight else { return }
+        guard active.iceRestartTask == nil else { return }
+        guard active.iceRestartAttempts < NetworkTiming.Calls.maxIceRestartAttempts else {
+            Log.error("ICE restart cap reached for call_id=\(active.session.id.prefix(8))…", category: "Calls")
+            return
+        }
+
+        let expectedSessionId = active.session.id
+        active.iceRestartTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                if self.active?.session.id == expectedSessionId {
+                    self.active?.iceRestartTask = nil
+                }
+            }
+            try? await Task.sleep(for: .seconds(NetworkTiming.Calls.iceRestartGraceDelay))
+            guard !Task.isCancelled else { return }
+            guard let active = self.active, active.session.id == expectedSessionId else { return }
+            guard self.callQuality == .reconnecting else { return }
+            await self.performIceRestart(for: active)
+        }
+        Log.info("ICE disconnected — scheduling restart for call_id=\(active.session.id.prefix(8))…", category: "Calls")
+    }
+
+    private func performIceRestart(for active: ActiveCall) async {
+        guard self.active === active else { return }
+        guard !active.isIceRestartInFlight else { return }
+        guard active.iceRestartAttempts < NetworkTiming.Calls.maxIceRestartAttempts else { return }
+
+        active.isIceRestartInFlight = true
+        active.iceRestartAttempts += 1
+        defer {
+            if self.active === active {
+                active.isIceRestartInFlight = false
+            }
+        }
+
+        do {
+            try? openStreamIfNeeded()
+            guard let sdp = try await active.webrtc?.restartIce(), !sdp.isEmpty else {
+                throw WebRTCSessionError.invalidState("restartIce returned empty SDP")
+            }
+            guard self.active === active else { return }
+            sendOffer(sdp: sdp, toUserId: active.session.peerUserId, isIceRestart: true)
+            Log.info(
+                "ICE restart offer sent (attempt \(active.iceRestartAttempts)/\(NetworkTiming.Calls.maxIceRestartAttempts)) call_id=\(active.session.id.prefix(8))…",
+                category: "Calls"
+            )
+        } catch {
+            Log.error("ICE restart failed for call_id=\(active.session.id.prefix(8))…: \(error)", category: "Calls")
+        }
+    }
+
     private func sendHangup(reason: Shared_Proto_Signaling_V1_HangupReason) {
         guard let active else { return }
         var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
@@ -813,6 +895,10 @@ final class CallManager: CallUIManaging {
                 // Media path is up — from now on the call survives signaling-stream drops
                 // (see receive-loop close handler in openStreamIfNeeded).
                 self.active?.mediaConnected = true
+                self.active?.iceRestartTask?.cancel()
+                self.active?.iceRestartTask = nil
+                self.active?.isIceRestartInFlight = false
+                self.active?.iceRestartAttempts = 0
                 // Promote the call to "answered" server-side so the aggressive
                 // ringing-without-answer reaper stops applying (E2EE answer never reaches
                 // the signaling stream). Non-SDP presence signal; note_connected is idempotent.
@@ -828,7 +914,17 @@ final class CallManager: CallUIManaging {
             }
         }
         webrtc.onQualityChanged = { [weak self] q in
-            Task { @MainActor in self?.callQuality = q }
+            Task { @MainActor in
+                guard let self else { return }
+                self.callQuality = q
+                switch q {
+                case .reconnecting:
+                    self.scheduleIceRestartIfNeeded()
+                case .good:
+                    self.active?.iceRestartTask?.cancel()
+                    self.active?.iceRestartTask = nil
+                }
+            }
         }
         callQuality = .good   // reset for a fresh call
         active.webrtc = webrtc
@@ -1056,12 +1152,19 @@ final class CallManager: CallUIManaging {
 
         switch signal.signal {
         case .offer(let offer):
-            // Note: `offer.callerUserID` is a UUID, not a display name. Resolve via
-            // local CoreData like the PushKit path does.
-            handleIncomingCallOffer(callId: signal.callID, callerUserId: senderUserId,
-                                    callerName: nil,
-                                    sdp: offer.sdp)
-            _ = offer  // currently unused; reserved for future video-flag etc.
+            if let active, active.session.id == signal.callID {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    await self.handleRemoteOffer(offer, for: active.session)
+                }
+            } else {
+                // Note: `offer.callerUserID` is a UUID, not a display name. Resolve via
+                // local CoreData like the PushKit path does.
+                handleIncomingCallOffer(callId: signal.callID, callerUserId: senderUserId,
+                                        callerName: nil,
+                                        sdp: offer.sdp)
+                _ = offer  // currently unused; reserved for future video-flag etc.
+            }
         case .answer(let answer):
             guard active?.session.id == signal.callID else { return }
             let sdp = answer.sdp
@@ -1221,6 +1324,11 @@ final class CallManager: CallUIManaging {
         guard let active else { throw RPCError(code: .failedPrecondition, message: "No active call") }
         try ensureWebRTC(role: .caller)
         let plainSdp = try await active.webrtc?.createOffer() ?? ""
+        sendOffer(sdp: plainSdp, toUserId: toUserId, isIceRestart: false)
+    }
+
+    private func sendOffer(sdp plainSdp: String, toUserId: String, isIceRestart: Bool) {
+        guard let active else { return }
         var offer = Shared_Proto_Signaling_V1_CallOffer()
         offer.sdp = plainSdp
         offer.callType = .audio
@@ -1233,7 +1341,8 @@ final class CallManager: CallUIManaging {
         sig.timestamp = Self.nowMs()
         sig.signal = .offer(offer)
         sendCallSignalProto(sig, to: toUserId)
-        Log.info("Offer (proto) sent via E2EE to \(toUserId.prefix(8))… call_id=\(active.session.id.prefix(8))…", category: "Calls")
+        let kind = isIceRestart ? "ICE restart offer" : "Offer"
+        Log.info("\(kind) (proto) sent via E2EE to \(toUserId.prefix(8))… call_id=\(active.session.id.prefix(8))…", category: "Calls")
     }
 
     /// ICE candidates are batched with a 200ms debounce before sending to stay under the
@@ -1307,6 +1416,36 @@ final class CallManager: CallUIManaging {
         return (try? ctx.fetch(req))?.first?.resolvedDisplayName
     }
 
+    private func describeEndContext(active: ActiveCall) -> String {
+        let setupMs = Int(Date().timeIntervalSince(active.startedAt) * 1000)
+        let answerMs = active.answeredAt.map { Int(Date().timeIntervalSince($0) * 1000) }
+        return [
+            "call_id=\(active.session.id.prefix(8))…",
+            "dir=\(active.session.direction.debugName)",
+            "state=\(state.debugName)",
+            "mediaConnected=\(active.mediaConnected)",
+            "streamOpen=\(active.stream != nil)",
+            "callKitRegistered=\(active.callKitRegistered)",
+            "answered=\(active.answeredAt != nil)",
+            "setupAgeMs=\(setupMs)",
+            "answerAgeMs=\(answerMs.map(String.init) ?? "nil")",
+            Self.currentAppContext()
+        ].joined(separator: " ")
+    }
+
+    private static func currentAppContext() -> String {
+        #if os(iOS)
+        let app = UIApplication.shared
+        let sceneStates = app.connectedScenes
+            .map { $0.activationState.debugName }
+            .sorted()
+            .joined(separator: ",")
+        return "appState=\(app.applicationState.debugName) protectedData=\(app.isProtectedDataAvailable) scenes=[\(sceneStates)]"
+        #else
+        return "appState=n/a"
+        #endif
+    }
+
     private static func makePing(timestampMs: Int64) -> Shared_Proto_Signaling_V1_SignalRequest {
         var ping = Shared_Proto_Signaling_V1_SignalPing()
         ping.timestamp = timestampMs
@@ -1360,3 +1499,51 @@ final class CallManager: CallUIManaging {
         return h
     }
 }
+
+private extension CallState {
+    var debugName: String {
+        switch self {
+        case .idle: return "idle"
+        case .incoming: return "incoming"
+        case .dialing: return "dialing"
+        case .ringing: return "ringing"
+        case .connecting: return "connecting"
+        case .active: return "active"
+        case .ended: return "ended"
+        }
+    }
+}
+
+private extension CallSession.Direction {
+    var debugName: String {
+        switch self {
+        case .incoming: return "incoming"
+        case .outgoing: return "outgoing"
+        }
+    }
+}
+
+#if os(iOS)
+private extension UIApplication.State {
+    var debugName: String {
+        switch self {
+        case .active: return "active"
+        case .inactive: return "inactive"
+        case .background: return "background"
+        @unknown default: return "unknown(\(rawValue))"
+        }
+    }
+}
+
+private extension UIScene.ActivationState {
+    var debugName: String {
+        switch self {
+        case .foregroundActive: return "foregroundActive"
+        case .foregroundInactive: return "foregroundInactive"
+        case .background: return "background"
+        case .unattached: return "unattached"
+        @unknown default: return "unknown"
+        }
+    }
+}
+#endif
