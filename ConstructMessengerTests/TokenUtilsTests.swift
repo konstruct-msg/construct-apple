@@ -4,7 +4,7 @@
 //
 
 import XCTest
-@testable import ConstructMessenger
+@testable import Construct_Messenger
 
 final class TokenUtilsTests: XCTestCase {
 
