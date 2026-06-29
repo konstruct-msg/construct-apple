@@ -57,6 +57,14 @@ final class SessionLifecycleController {
         coordinator.prewarmSessions(for: contactIds, skipEndSessionNotification: skipEndSessionNotification)
     }
 
+    /// Re-establish a session for a purely-outbound peer that has queued messages but no live
+    /// session (the "zombie session"). Forces the INITIATOR role to break the deadlock where we
+    /// are the natural RESPONDER and nothing else ever triggers an init. Called from
+    /// `MessageRetryManager` when a queued flush finds no session and the core is ready.
+    func reestablishSessionForQueuedOutbound(to userId: String) {
+        coordinator.reestablishSessionForQueuedOutbound(to: userId)
+    }
+
     /// Send END_SESSION to a specific contact and archive local state.
     func sendEndSession(to userId: String, reason: String = "manual_reset") async throws {
         try await coordinator.sendEndSession(to: userId, reason: reason)

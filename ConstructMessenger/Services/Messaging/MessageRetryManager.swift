@@ -127,15 +127,31 @@ class MessageRetryManager {
             return
         }
 
-        // Wire payload not found — either it predates OutgoingWirePayloadStore or its
-        // 24h TTL has expired. Re-encrypting with the same message ID would advance the
-        // Double Ratchet on our side without the peer receiving the previous ciphertext,
-        // causing permanent ratchet desync. Mark as failed and signal the caller to
-        // send fresh content under a new message ID instead.
-        Log.error("Retry: wire payload not found for \(capturedMessageId.prefix(8))… — payload expired, cannot re-send safely", category: "MessageRetryManager")
-        message.deliveryStatus = .failed
-        context.saveAndLog()
-        onError("payload_expired")
+        // Wire payload not found — it predates OutgoingWirePayloadStore, its 24h TTL has expired,
+        // or it was purged after a zombie-session re-establishment. Re-encrypt the recoverable
+        // plaintext under the CURRENT session with a FRESH wire id (re-using the same id would
+        // advance our ratchet without the peer ever getting the old ciphertext → desync). Falls
+        // back to .failed (and the legacy `payload_expired` signal) for media / unrecoverable.
+        Log.info("Retry: wire payload gone for \(capturedMessageId.prefix(8))… — re-encrypting under current session", category: "MessageRetryManager")
+        Task { [weak self] in
+            guard let self else { return }
+            let status = await self.reencryptAndSend(messageId: capturedMessageId, recipientId: recipientId, senderId: capturedSenderId, context: context)
+            await MainActor.run {
+                let fr = Message.fetchRequest()
+                fr.predicate = NSPredicate(format: "id == %@", capturedMessageId)
+                fr.fetchLimit = 1
+                guard let liveMsg = try? context.fetch(fr).first else { return }
+                liveMsg.deliveryStatus = status
+                context.saveAndLog()
+                if status == .sent || status == .delivered || status == .failed {
+                    OutgoingWirePayloadStore.shared.remove(baseMessageId: capturedMessageId)
+                }
+                if status == .failed {
+                    onError("payload_expired")
+                }
+                Log.info("Retry re-encrypt result for \(capturedMessageId.prefix(8))…: \(status)", category: "MessageRetryManager")
+            }
+        }
     }
     
     // MARK: - Global Queued Messages Processing
@@ -195,31 +211,61 @@ class MessageRetryManager {
             return
         }
 
-        // Guard: if no session exists yet (e.g. we just got END_SESSION and are waiting as
-        // RESPONDER), skip here — SessionCoordinator.sendSessionQueuedMessages() will call
-        // us again once the new session is established.
+        // Guard: no live session for this contact.
+        //
+        // If the crypto core is ready, the absence is real (the "zombie session"): any stored
+        // wire payloads are bound to a dead/replaced ratchet the peer can no longer decrypt, so
+        // we purge them and force an INITIATOR re-establish. We may be the natural RESPONDER for a
+        // purely-outbound peer, where prewarm (INITIATOR-only) never fires and no inbound traffic
+        // triggers a RESPONDER init — without this nudge the queue would defer forever. We defer
+        // THIS tick; the queued flush re-runs via sendSessionQueuedMessages once session_ready
+        // arrives, and by then the purged payloads route through the re-encrypt path below.
+        //
+        // If the core is NOT ready, hasSession returns false for every contact (startup race);
+        // a plain defer is correct — a later forceReconnect re-triggers us once the core builds.
         guard CryptoManager.shared.hasSession(for: recipientId) else {
-            Log.debug("sendQueuedMessages: no active session for \(recipientId.prefix(8))… — deferring until session is ready", category: "MessageRetryManager")
+            if CryptoManager.shared.isCoreReady {
+                for message in queuedMessages {
+                    OutgoingWirePayloadStore.shared.remove(baseMessageId: message.id)
+                }
+                Log.info("sendQueuedMessages: no session for \(recipientId.prefix(8))… (core ready) — purged \(queuedMessages.count) orphaned payload(s), forcing re-establish", category: "MessageRetryManager")
+                SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
+            } else {
+                Log.debug("sendQueuedMessages: no active session for \(recipientId.prefix(8))… and core not ready — deferring", category: "MessageRetryManager")
+            }
             return
         }
 
-        Log.info("Sending \(queuedMessages.count) queued messages (sequential to preserve ratchet state)", category: "MessageRetryManager")
+        let pendingIds = prepareMessagesForGlobalRetry(queuedMessages, context: context)
 
-        // Capture ids before the Task to avoid managed object threading issues
-        let pendingIds: [String] = queuedMessages.map { $0.id }
+        // Messages whose stored wire payload is gone — TTL expiry, or purged above after a
+        // zombie-session re-establishment — but whose plaintext is still recoverable. The session
+        // is live again here, so re-encrypt them under the current ratchet with a fresh wire id.
+        let reencryptIds = queuedMessages
+            .filter { OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: $0.id) == nil && $0.hasDecryptedContent }
+            .map { $0.id }
 
-        // Mark all as sending synchronously before the async work starts
-        for message in queuedMessages where message.hasDecryptedContent {
+        guard !pendingIds.isEmpty || !reencryptIds.isEmpty else {
+            Log.info("sendQueuedMessages: no queued messages with reusable wire payload or recoverable plaintext for \(recipientId.prefix(8))… — preserving local queue", category: "MessageRetryManager")
+            return
+        }
+
+        // Mark the re-encrypt targets as sending up front so the UI reflects progress and the
+        // retry count advances exactly once per tick (mirrors prepareMessagesForGlobalRetry).
+        for message in queuedMessages where reencryptIds.contains(message.id) {
             message.deliveryStatus = .sending
             message.retryCount += 1
             messageQueueManager.markMessageAsSending(message.id)
         }
+
+        Log.info("Sending \(pendingIds.count) queued (stored ciphertext) + \(reencryptIds.count) re-encrypted message(s) (sequential to preserve ratchet state)", category: "MessageRetryManager")
         context.saveAndLog()
 
         // Send SEQUENTIALLY inside a single Task — Double Ratchet encryption must not run
         // concurrently for the same recipient to prevent ratchet state divergence and
-        // concurrent Keychain write failures.
-        Task {
+        // concurrent Keychain write failures. Stored-ciphertext resends (no ratchet mutation)
+        // go first, then re-encrypted messages (which advance the ratchet to the newest numbers).
+        Task { [weak self] in
             for messageId in pendingIds {
                 do {
                     var finalStatus: DeliveryStatus = .sent
@@ -244,14 +290,10 @@ class MessageRetryManager {
                             if finalStatus == .failed { break }
                         }
                     } else {
-                        // Wire payload not found — message predates OutgoingWirePayloadStore
-                        // or its 24h TTL expired. Cannot re-encrypt: doing so would advance
-                        // the Double Ratchet without the peer receiving the previous
-                        // ciphertext, causing permanent desync. Mark failed; the user can
-                        // manually resend via the retry button, which sends fresh content
-                        // under a new message ID.
-                        Log.error("sendQueuedMessages: no wire payload for \(messageId.prefix(8))… — skipping (payload expired)", category: "MessageRetryManager")
-                        finalStatus = .failed
+                        // The payload disappeared after preflight (e.g. TTL expiry). Preserve
+                        // the local queue so the user can still manually retry as a fresh send.
+                        Log.error("sendQueuedMessages: wire payload vanished for \(messageId.prefix(8))… after preflight — restoring queued state", category: "MessageRetryManager")
+                        finalStatus = .queued
                     }
                     await MainActor.run {
                         let fr = Message.fetchRequest()
@@ -265,11 +307,7 @@ class MessageRetryManager {
                         } else if finalStatus == .failed {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                         }
-                        if finalStatus == .failed && OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: messageId) == nil {
-                            Log.error("Message \(messageId.prefix(8))… marked failed: no wire payload (engine-path message lost while transport was down)", category: "MessageRetryManager")
-                        } else {
-                            Log.debug("Re-sent queued message via gRPC: \(messageId) status=\(finalStatus) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
-                        }
+                        Log.debug("Re-sent queued message via gRPC: \(messageId) status=\(finalStatus) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
                     }
                 } catch {
                     await MainActor.run {
@@ -290,6 +328,152 @@ class MessageRetryManager {
                     }
                 }
             }
+
+            // Re-encrypt pass: messages whose ciphertext was orphaned by a dead session.
+            for messageId in reencryptIds {
+                guard let self else { break }
+                let status = await self.reencryptAndSend(messageId: messageId, recipientId: recipientId, senderId: currentUserId, context: context)
+                await MainActor.run {
+                    let fr = Message.fetchRequest()
+                    fr.predicate = NSPredicate(format: "id == %@", messageId)
+                    fr.fetchLimit = 1
+                    guard let liveMsg = try? context.fetch(fr).first else { return }
+                    liveMsg.deliveryStatus = status
+                    context.saveAndLog()
+                    if status == .sent || status == .delivered || status == .failed {
+                        OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
+                    }
+                    Log.info("Re-encrypted queued message \(messageId.prefix(8))… → \(status)", category: "MessageRetryManager")
+                }
+            }
         }
+    }
+
+    /// Re-encrypts a queued/failed message's recoverable plaintext under the CURRENT session with a
+    /// FRESH wire message id and sends it. Used when the original wire payload is gone (TTL expiry,
+    /// or purged after a zombie-session re-establishment) — the stale ciphertext was bound to a
+    /// dead ratchet the peer can no longer decrypt.
+    ///
+    /// Re-using the same wire id would advance our ratchet without the peer ever receiving the old
+    /// ciphertext (and risks dedup-drop on the peer) → permanent desync. A fresh wire UUID is safe:
+    /// the new ratchet output is a normal forward message the peer's DR handles via skipped keys.
+    ///
+    /// Only text content (content_type 0) is re-encryptable — media wire plaintext is a binary
+    /// album proto not reconstructable from the persisted model, so media returns `.failed` for
+    /// manual resend. Returns the resulting status; the caller persists it on MainActor.
+    private func reencryptAndSend(
+        messageId: String,
+        recipientId: String,
+        senderId: String,
+        context: NSManagedObjectContext
+    ) async -> DeliveryStatus {
+        // Fetch on MainActor (this method is @MainActor); the Message stays local so no
+        // non-Sendable NSManagedObject ever crosses the await boundary into the caller.
+        let fr = Message.fetchRequest()
+        fr.predicate = NSPredicate(format: "id == %@", messageId)
+        fr.fetchLimit = 1
+        guard let message = try? context.fetch(fr).first else {
+            Log.error("reencryptAndSend: message \(messageId.prefix(8))… vanished before re-encrypt", category: "MessageRetryManager")
+            return .failed
+        }
+
+        guard CryptoManager.shared.hasSession(for: recipientId) else {
+            // Session vanished again before we got here — nudge a re-establish and keep it queued.
+            SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
+            return .queued
+        }
+        guard message.contentType != .media else {
+            Log.info("reencryptAndSend: \(messageId.prefix(8))… is media — cannot reconstruct wire plaintext, failing", category: "MessageRetryManager")
+            return .failed
+        }
+        let text = message.displayText
+        guard !text.isEmpty, !MessageContentType.isControlPayload(text) else {
+            Log.error("reencryptAndSend: \(messageId.prefix(8))… has no recoverable plaintext — failing", category: "MessageRetryManager")
+            return .failed
+        }
+
+        var textMsg = Shared_Proto_Messaging_V1_TextMessage()
+        textMsg.text = text
+        if let replyId = message.replyToMessageId, !replyId.isEmpty {
+            var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
+            quoted.messageID = replyId
+            quoted.textPreview = message.replyToContent ?? ""
+            textMsg.quoted = quoted
+        }
+        var content = Shared_Proto_Messaging_V1_MessageContent()
+        content.text = textMsg
+        guard let plaintext = try? content.serializedData(), !plaintext.isEmpty else {
+            Log.error("reencryptAndSend: failed to serialize MessageContent for \(messageId.prefix(8))…", category: "MessageRetryManager")
+            return .failed
+        }
+
+        // Drop any orphaned ciphertext, then re-chunk under a FRESH wire UUID. The local payload
+        // store and delivery tracking stay keyed by the original baseMessageId (UI continuity);
+        // only the wire-level chunk ids are new.
+        OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
+        let plan = ChunkedMessageSender.shared.buildPlan(plaintext: plaintext, messageId: UUID())
+        guard !plan.payloads.isEmpty else {
+            Log.error("reencryptAndSend: empty chunk plan for \(messageId.prefix(8))…", category: "MessageRetryManager")
+            return .failed
+        }
+
+        do {
+            let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
+                plan: plan,
+                baseMessageId: messageId,
+                senderId: senderId,
+                recipientId: recipientId,
+                conversationId: ConversationId.direct(myUserId: senderId, theirUserId: recipientId),
+                timestamp: UInt64(Date().timeIntervalSince1970)
+            )
+            switch aggregated.status.lowercased() {
+            case "failed":    return aggregated.retryable ? .queued : .failed
+            case "queued":    return .queued
+            case "delivered": return .delivered
+            default:          return .sent
+            }
+        } catch {
+            let isRetryableTransport: Bool = {
+                if error is GRPCClientError { return true }
+                if let rpc = error as? RPCError {
+                    return rpc.code == .deadlineExceeded || rpc.code == .unavailable || rpc.code == .cancelled
+                }
+                return false
+            }()
+            Log.error("reencryptAndSend: send failed for \(messageId.prefix(8))…: \(error.localizedDescription)", category: "MessageRetryManager")
+            return isRetryableTransport ? .queued : .failed
+        }
+    }
+
+    func prepareMessagesForGlobalRetry(_ messages: [Message], context: NSManagedObjectContext) -> [String] {
+        var pendingIds: [String] = []
+        pendingIds.reserveCapacity(messages.count)
+
+        for message in messages where message.hasDecryptedContent {
+            guard OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: message.id) != nil else {
+                switch message.deliveryStatus {
+                case .queued:
+                    Log.info(
+                        "sendQueuedMessages: preserving queued \(message.id.prefix(8))… — no wire payload, needs fresh resend path",
+                        category: "MessageRetryManager"
+                    )
+                case .failed:
+                    Log.debug(
+                        "sendQueuedMessages: skipping failed \(message.id.prefix(8))… — no wire payload for safe global retry",
+                        category: "MessageRetryManager"
+                    )
+                default:
+                    break
+                }
+                continue
+            }
+
+            message.deliveryStatus = .sending
+            message.retryCount += 1
+            messageQueueManager.markMessageAsSending(message.id)
+            pendingIds.append(message.id)
+        }
+
+        return pendingIds
     }
 }

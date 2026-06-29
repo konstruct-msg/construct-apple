@@ -472,6 +472,50 @@ final class SessionCoordinator: MessageRouterDelegate {
         startTieBreakWatchdog(for: userId)
     }
 
+    /// Re-establish a session for a peer that has QUEUED OUTBOUND messages but no live session
+    /// (the "zombie session"): we are the natural RESPONDER for a purely-outbound peer, so
+    /// `prewarmSessions` (INITIATOR-only) never fires and no inbound traffic ever triggers a
+    /// RESPONDER init — the queued flush in `MessageRetryManager.sendQueuedMessages` would defer
+    /// forever waiting for a session that nothing creates.
+    ///
+    /// Forces the INITIATOR role and transmits SESSION_RESET_INIT, exactly like a tie-break win,
+    /// so the peer bootstraps its RESPONDER session and replies `session_ready`. That clears
+    /// `SessionConfirmationTracker.pending` and flushes the queue via `sendSessionQueuedMessages`
+    /// → `MessageRetryManager`, where the orphaned ciphertext (bound to the dead ratchet) has been
+    /// purged and the recoverable plaintext is re-encrypted under the fresh session.
+    ///
+    /// Guarded (`isCoreReady`, `!hasSession`, `!isInitializing` + `beginInit`) so repeated retry
+    /// ticks don't spawn parallel inits and we never tear down a healthy-but-not-yet-imported
+    /// session during the startup race.
+    func reestablishSessionForQueuedOutbound(to userId: String) {
+        assertMainThread()
+        guard CryptoManager.shared.isCoreReady else {
+            Log.info("reestablishSessionForQueuedOutbound: crypto core not ready — deferring for \(userId.prefix(8))…", category: "SessionInit")
+            return
+        }
+        guard !CryptoManager.shared.hasSession(for: userId) else { return }
+        guard !isInitializing(userId) else {
+            Log.debug("reestablishSessionForQueuedOutbound: init already in progress for \(userId.prefix(8))…", category: "SessionInit")
+            return
+        }
+        Log.info("SESSION_STATE[zombie_recover]: no session for purely-outbound peer \(userId.prefix(8))… with queued messages — forcing INITIATOR re-establish", category: "SessionInit")
+        let endInit = beginInit(userId)
+        Task { [weak self] in
+            guard let self else { endInit(); return }
+            defer { endInit() }
+            await self.sessionInitService.initializeSessionProactively(
+                userId: userId,
+                onSuccess: { },
+                onFailure: { err in
+                    Log.error("SESSION_STATE[zombie_recover_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                }
+            )
+            await self.sendSessionResetInit(to: userId)
+            SessionConfirmationTracker.shared.markPending(userId)
+        }
+        startTieBreakWatchdog(for: userId)
+    }
+
     func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {
         onE2EDeliveryReceiptDecrypted?(messageIds)
     }
