@@ -104,13 +104,16 @@ class AuthSessionManager {
         refreshToken = KeychainManager.shared.loadRefreshToken()
         userId = KeychainManager.shared.loadUserID()
 
-        if let token = sessionToken,
-           let alg = JWTUtils.headerAlgorithm(from: token),
-           alg != "RS256" {
-            Log.error("Unsupported JWT alg in cached token: \(alg). Clearing session.", category: "SessionManager")
-            clearSession()
-            isSessionInvalidated = true
-            return
+        if let token = sessionToken {
+            // Dual-format during JWT → PASETO v4.public migration.
+            // Accept PASETO v4.public and legacy RS256 JWT; reject anything else.
+            let fmt = TokenUtils.format(of: token)
+            guard fmt == .paseto || fmt == .jwt else {
+                Log.error("Unsupported token format in cached token: \(fmt). Clearing session.", category: "SessionManager")
+                clearSession()
+                isSessionInvalidated = true
+                return
+            }
         }
         syncAuthCache()
     }
