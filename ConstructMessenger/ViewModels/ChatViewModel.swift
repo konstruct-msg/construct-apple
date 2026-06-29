@@ -88,6 +88,14 @@ class ChatViewModel {
         sessionManager.fetchRecipientPublicKey()
     }
 
+    func onPreviewAppear() {
+        guard !isSetupCalled else { return }
+        isSetupCalled = true
+        messageStore.setViewModel(self)
+        messageStore.setup()
+        Log.debug("ChatViewModel preview initialized with sample messages", category: "ChatViewModel")
+    }
+
     // MARK: - Connection subscribers
 
     private func setupSubscribers() {

@@ -120,6 +120,7 @@ struct MainTabView: View {
                 }
             }
             .tint(Color.CT.accent)
+            .toolbarBackground(.hidden, for: .tabBar)
             .ctBackground()
         }
     }
@@ -166,10 +167,15 @@ struct MainTabView: View {
 /// Top-of-screen pill shown while a call is live and the user has minimised
 /// the full-screen `InCallView`. Tap restores full-screen. Mirrors the iOS
 /// system in-call indicator pattern: thin, accent-coloured, single tap area.
-private struct InCallMiniBar: View {
+struct InCallMiniBar: View {
     let peerName: String
     let isConnecting: Bool
     let onTap: () -> Void
+
+    /// Approximate laid-out height (text + vertical padding). Used by views that must reserve
+    /// space for the bar themselves because `.safeAreaInset` on the TabView does not propagate
+    /// into pushed NavigationStack destinations (e.g. ChatView's floating nav capsule).
+    static let barHeight: CGFloat = 30
 
     var body: some View {
         Button(action: onTap) {

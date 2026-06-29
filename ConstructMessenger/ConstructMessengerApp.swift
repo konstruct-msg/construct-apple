@@ -97,8 +97,10 @@ struct Construct_MessengerApp: App {
 
         // ── Tab bar ──────────────────────────────────────────────────────────
         let tabApp = UITabBarAppearance()
-        tabApp.configureWithOpaqueBackground()
-        tabApp.backgroundColor = UIColor(Color.CT.bg)
+        tabApp.configureWithTransparentBackground()
+        tabApp.backgroundColor = .clear
+        tabApp.backgroundEffect = nil
+        tabApp.shadowColor = .clear
         tabApp.stackedLayoutAppearance.selected.iconColor = accent
         tabApp.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: accent]
         tabApp.stackedLayoutAppearance.normal.iconColor  = dim

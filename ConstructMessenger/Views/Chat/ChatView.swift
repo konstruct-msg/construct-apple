@@ -46,9 +46,11 @@ struct ChatView: View {
 
     @State private var containerWidth: CGFloat = 390
     
-    /// Dynamic bottom padding reserved so the last message is not hidden behind the floating input glass.
-    /// Updated by measuring the actual height of the input stack (reply + attachments + voice + main row).
-    @State private var bottomContentInset: CGFloat = 72
+    private enum Layout {
+        static let composerHorizontalPadding: CGFloat = 8
+        static let composerBottomPadding: CGFloat = 8
+        static let messageBottomClearance: CGFloat = 12
+    }
     
     // ❌ REMOVED: Scroll-related @State variables (moved to ChatScrollManager)
     // - hasScrolledToBottom
@@ -67,6 +69,12 @@ struct ChatView: View {
 
         // Floating capsule glass panels (top nav + bottom input) over scroll, following Apple's capsulization
         ZStack {
+            // Full-bleed chat background so the floating input capsule sits over a continuous
+            // surface — without this the ScrollView's own background stops at the safe area and
+            // the bottom safe-area band renders with the window background, reading as an opaque
+            // strip under the capsule.
+            Color.CT.bg.ignoresSafeArea()
+
             // Message list — base layer, scrolls underneath the floating capsules
             ScrollViewReader { proxy in
                 ScrollView {
@@ -146,20 +154,17 @@ struct ChatView: View {
                                 }
                             }
                         }
-                        // Inset that keeps the last message clear of the floating input glass.
-                        // It MUST live inside the scroll content and BEFORE the "bottom" anchor,
-                        // so scrollTo("bottom", anchor: .bottom) leaves this gap between the last
-                        // message and the viewport bottom (where the input overlay sits) instead
-                        // of pushing the last message behind the glass.
+                        // Breathing room below the last message once the composer itself is
+                        // installed via `safeAreaInset`.
                         Color.clear
-                            .frame(height: bottomContentInset)
+                            .frame(height: Layout.messageBottomClearance)
                         // Bottom anchor for scrollToBottom
                         Color.clear
                             .frame(height: 1)
                             .id("bottom")
                     }
-                    // Top space for floating nav capsule.
-                    .padding(.top, 70)
+                    // Top space for floating nav capsule (+ call mini-bar when a call is active).
+                    .padding(.top, 70 + callBarInset)
                     .padding(.horizontal)
                 }
                 .background(Color.CT.bg) // base under glass
@@ -196,8 +201,8 @@ struct ChatView: View {
                         let delay = ChatViewConstants.MessageDelay.mediaRender
                         Task { @MainActor in
                             try? await Task.sleep(for: .seconds(delay))
-                            // Use the virtual "bottom" anchor (which sits after the dynamic bottom padding)
-                            // so the last real message ends up visually above the input glass.
+                            // Use the virtual bottom anchor so the last real message ends up
+                            // visually above the composer inset.
                             scrollManager.scrollToBottom()
                         }
                     }
@@ -263,7 +268,7 @@ struct ChatView: View {
             VStack(spacing: 8) {
                 chatNavBar
                     .padding(.horizontal, 8)
-                    .padding(.top, 4)
+                    .padding(.top, 4 + callBarInset)
 
                 floodBurstBanner
 
@@ -275,42 +280,17 @@ struct ChatView: View {
             }
             .frame(maxHeight: .infinity, alignment: .top)
 
-            // Bottom: separate floating glass capsules for attachment + text input
-            VStack {
-                Spacer(minLength: 0)
-
-                messageInputView
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 8)
-                    .background {
-                        // Measure the real-time height of the entire input stack (can grow with reply/attachments/voice).
-                        GeometryReader { geo in
-                            Color.clear
-                                .preference(key: BottomInputHeightPreference.self, value: geo.size.height)
-                        }
-                    }
-            }
-            .frame(maxHeight: .infinity, alignment: .bottom)
-            .onPreferenceChange(BottomInputHeightPreference.self) { height in
-                // `height` already includes the input's 8pt bottom padding; add a small margin
-                // so the last bubble sits just clear of the glass (no large floor — the scroll
-                // now respects this inset exactly, so any padding here is directly visible).
-                bottomContentInset = height + 8
-
-                // If we were at the visual bottom, re-anchor after the input bar changed size
-                // (e.g. user added photo preview or reply).
-                if scrollManager.shouldScrollToBottom {
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(80))
-                        scrollManager.scrollToBottom()
-                    }
-                }
-            }
         }
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         #endif
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            messageInputView
+                .padding(.horizontal, Layout.composerHorizontalPadding)
+                .padding(.bottom, Layout.composerBottomPadding)
+                .background(Color.clear)
+        }
         // Edge-swipe-back is handled natively by interactivePopGestureRecognizer
         // (see InteractiveSwipeBack.swift) — no manual DragGesture needed.
         .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
@@ -583,6 +563,18 @@ struct ChatView: View {
         }
     }
 
+    /// The InCallMiniBar (rendered at MainTabView level via `.safeAreaInset`) does not push the
+    /// pushed ChatView down — TabView doesn't propagate that inset into a NavigationStack
+    /// destination. So when a call is active/connecting (bar is showing), ChatView reserves the
+    /// bar's height itself to keep the floating nav capsule from sitting under it.
+    private var callBarInset: CGFloat {
+        guard CallsFeature.isEnabled, let state = callManager?.state else { return 0 }
+        switch state {
+        case .active, .connecting: return InCallMiniBar.barHeight
+        default: return 0
+        }
+    }
+
     private var navigationStatusSubtitle: String? {
         connectionManager.navigationStatusSubtitle(
             isInitializingSession: viewModel.isInitializingSession
@@ -618,7 +610,11 @@ struct ChatView: View {
     }
 
     private func handleViewAppear() {
-        guard !isPreviewRuntime else { return }
+        if isPreviewRuntime {
+            viewModel.onPreviewAppear()
+            loadContactKTStatus()
+            return
+        }
         // Restore an unsent draft saved when we last left this chat.
         if viewModel.editingMessage == nil, messageText.isEmpty {
             messageText = DraftStore.shared.draft(for: viewModel.chat.id)
@@ -725,15 +721,6 @@ struct ChatView: View {
             }
         }
         return handled
-    }
-}
-
-// MARK: - Dynamic bottom inset measurement
-
-private struct BottomInputHeightPreference: PreferenceKey {
-    static var defaultValue: CGFloat = 130
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }
 
