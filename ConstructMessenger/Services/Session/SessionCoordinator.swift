@@ -830,7 +830,7 @@ final class SessionCoordinator: MessageRouterDelegate {
 
         for attempt in 1...pingMaxAttempts {
             do {
-                let sriContent = "__session_reset_init_\(UUID().uuidString)__"
+                let nonce = UUID().uuidString
                 let sriId = UUID().uuidString.lowercased()
                 let _ = try await MessagingServiceClient.shared.sendMessage(
                     messageId: sriId,
@@ -838,7 +838,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     senderId: myId,
                     conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
                     encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
-                        plaintext: sriContent,
+                        payload: SessionControlCodec.encodePayload(op: .resetInit, nonce: nonce),
                         messageId: sriId,
                         recipientId: userId
                     ),
@@ -882,7 +882,7 @@ final class SessionCoordinator: MessageRouterDelegate {
 
         for attempt in 1...pingMaxAttempts {
             do {
-                let pingContent = "__session_ping_\(UUID().uuidString)__"
+                let nonce = UUID().uuidString
                 let pingId = UUID()
                 let pingMessageId = pingId.uuidString.lowercased()
                 let _ = try await MessagingServiceClient.shared.sendMessage(
@@ -891,7 +891,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     senderId: myId,
                     conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
                     encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
-                        plaintext: pingContent,
+                        payload: SessionControlCodec.encodePayload(op: .ping, nonce: nonce),
                         messageId: pingMessageId,
                         recipientId: userId
                     ),
@@ -931,7 +931,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
 
         do {
-            let readyContent = "__session_ready_\(UUID().uuidString)__"
+            let nonce = UUID().uuidString
             let readyMessageId = UUID().uuidString.lowercased()
             let _ = try await MessagingServiceClient.shared.sendMessage(
                 messageId: readyMessageId,
@@ -939,7 +939,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 senderId: myId,
                 conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
                 encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
-                    plaintext: readyContent,
+                    payload: SessionControlCodec.encodePayload(op: .ready, nonce: nonce),
                     messageId: readyMessageId,
                     recipientId: userId
                 ),

@@ -151,10 +151,10 @@ final class ChatSessionManager {
         guard CryptoManager.shared.hasSession(for: userId) else { return }
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
         let pingId = UUID().uuidString.lowercased()
-        let pingContent = "__session_ping_\(UUID().uuidString)__"
+        let nonce = UUID().uuidString
         do {
             let payload = try OutboundSessionService.shared.encryptSessionControl(
-                plaintext: pingContent,
+                payload: SessionControlCodec.encodePayload(op: .ping, nonce: nonce),
                 messageId: pingId,
                 recipientId: userId
             )

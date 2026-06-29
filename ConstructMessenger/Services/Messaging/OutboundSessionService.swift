@@ -105,8 +105,23 @@ final class OutboundSessionService {
         messageId: String,
         recipientId: String
     ) throws -> Data {
+        try encryptSessionControl(
+            payload: Data(plaintext.utf8),
+            messageId: messageId,
+            recipientId: recipientId
+        )
+    }
+
+    /// Binary variant for typed session-control payloads (serialized `SessionControl`, built by
+    /// `SessionControlCodec.encodePayload`). The control payload stays `Data` end-to-end — no
+    /// stringification across the crypto boundary.
+    func encryptSessionControl(
+        payload: Data,
+        messageId: String,
+        recipientId: String
+    ) throws -> Data {
         try encryptOutgoing(
-            plaintext: Data(plaintext.utf8),
+            plaintext: payload,
             messageId: messageId,
             recipientId: recipientId,
             contentType: 0
