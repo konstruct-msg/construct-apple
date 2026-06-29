@@ -433,6 +433,7 @@ class BackgroundFetchManager: NSObject {
                 let legacyPrefixBytes = Data(ChunkedMessageCodec.legacyPrefix.utf8)
                 let binaryMagic = Data([0x4B, 0x4E, 0x53, 0x54]) // "KNST"
                 var assembled: String? = nil
+                var assembledProfile: Data? = nil
                 var modernEditTarget: String? = nil
                 var modernEditText: String? = nil
                 if let dc = decryptedContent,
@@ -441,6 +442,7 @@ class BackgroundFetchManager: NSObject {
                         switch ChunkedMessageReassembler.shared.process(data: dc) {
                         case .assembled(let text, _): assembled = text
                         case .legacy(let text):        assembled = text
+                        case .profile(let data):       assembledProfile = data
                         case .edit(let target, let nt, _):
                             modernEditTarget = target
                             modernEditText = nt.text
@@ -451,6 +453,11 @@ class BackgroundFetchManager: NSObject {
                     if let text = assembled {
                         Log.debug("Chunk assembled in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
                         decryptedContent = Data(text.utf8)
+                    } else if let profile = assembledProfile {
+                        // Reassembled binary profile share → surface as the raw profile bytes so the
+                        // profile-defer path below renders it as a profile, not a placeholder string.
+                        Log.debug("Chunk assembled profile in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
+                        decryptedContent = profile
                     } else if modernEditTarget != nil {
                         // Modern edit will be applied below; already ACK'd the chunk delivery.
                     } else {

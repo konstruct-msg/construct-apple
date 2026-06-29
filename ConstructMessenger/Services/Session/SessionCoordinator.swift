@@ -1004,6 +1004,13 @@ final class SessionCoordinator: MessageRouterDelegate {
             plaintext = text
         case .legacy(let text):
             plaintext = text
+        case .profile(let profileData):
+            // A profile share arrived as the session's first message — render it as a profile,
+            // never persist a placeholder string.
+            if let profile = ProfileShareData.fromBinaryData(profileData) {
+                ProfileSharingManager.shared.handleProfileMessage(profile, from: messageData.from, in: context)
+            }
+            return
         case .edit:
             plaintext = ""
         case .incomplete:

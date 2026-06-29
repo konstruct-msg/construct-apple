@@ -163,11 +163,13 @@ final class ChunkedMessageReassembler {
             let (text, quoted) = extract(content)
             return .assembled(text: text, quoted: quoted)
         }
+        // Binary profile share before the UTF-8 fallback — it's a more specific, structured format,
+        // and must surface as a profile (not a "__PROFILE_BINARY__" placeholder string).
+        if ProfileShareData.fromBinaryData(data) != nil {
+            return .profile(data)
+        }
         if let text = String(data: data, encoding: .utf8) {
             return text.isEmpty ? .invalid("empty plaintext") : .assembled(text: text, quoted: nil)
-        }
-        if let profile = ProfileShareData.fromBinaryData(data) {
-            return .legacy("__PROFILE_BINARY__")
         }
         return .invalid("non-decodable binary (\(data.count) bytes)")
     }
@@ -183,13 +185,14 @@ final class ChunkedMessageReassembler {
             let (text, quoted) = extract(content)
             return .assembled(text: text, quoted: quoted)
         }
+        // Binary profile share (new format, no JSON) — check before the UTF-8 fallback so it
+        // surfaces as a profile, not a "__PROFILE_BINARY__" placeholder text message.
+        if ProfileShareData.fromBinaryData(data) != nil {
+            return .profile(data)
+        }
         // Session control strings, legacy plain-text messages
         if let text = String(data: data, encoding: .utf8) {
             return text.isEmpty ? .invalid("empty plaintext") : .legacy(text)
-        }
-        // Support binary profile share (new format, no JSON in payload)
-        if let profile = ProfileShareData.fromBinaryData(data) {
-            return .legacy("__PROFILE_BINARY__")
         }
         return .invalid("non-decodable binary (\(data.count) bytes)")
     }
@@ -290,6 +293,9 @@ enum ChunkedMessageResult {
     case assembled(text: String, quoted: Shared_Proto_Messaging_V1_QuotedMessage?)
     /// Non-KNST data decoded as plain UTF-8 (session control strings, legacy messages).
     case legacy(String)
+    /// Assembled binary profile-share payload (raw bytes; decode with `ProfileShareData.fromBinaryData`).
+    /// Must NOT be rendered as text — the caller turns it into a profile bubble.
+    case profile(Data)
     case incomplete
     case invalid(String)
     /// Modern edit inside MessageContent.

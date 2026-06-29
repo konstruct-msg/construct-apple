@@ -65,6 +65,11 @@ enum MessageContentType: Int16 {
             || plaintext.hasPrefix("session_reset_init_")
             || plaintext.hasPrefix("__binary_init_")
             || plaintext.hasPrefix("__END_SESSION")
+            // Legacy leak: chunked profile shares once decoded to this placeholder string and were
+            // persisted as text. The decode bug is fixed (they now render as profiles), but already-
+            // leaked rows must stay hidden. Match with/without framing underscores defensively.
+            || plaintext == "__PROFILE_BINARY__"
+            || plaintext == "PROFILE_BINARY"
     }
 }
 

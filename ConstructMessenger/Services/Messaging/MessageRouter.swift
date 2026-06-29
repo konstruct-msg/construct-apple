@@ -544,6 +544,15 @@ final class MessageRouter {
                     handleResolvedMessage(text, quotedMessage: quoted, for: message, from: otherUserId, chat: chat, in: context)
                 case .legacy(let text):
                     handleResolvedMessage(text, quotedMessage: nil, for: message, from: otherUserId, chat: chat, in: context)
+                case .profile(let profileData):
+                    // Chunked binary profile share (large profiles with avatars arrive here, not via
+                    // the pre-reassembler check above). Render as a profile, never as text.
+                    if let profile = ProfileShareData.fromBinaryData(profileData) {
+                        ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
+                    }
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+                    continue
                 case .edit(let targetMessageID, let newText, _):
                     // Modern edit from MessageContent.edit (newText carries caption for media too)
                     let fetch = Message.fetchRequest()
@@ -1517,6 +1526,11 @@ final class MessageRouter {
             decrypted = text
         case .legacy(let text):
             decrypted = text
+        case .profile:
+            // A profile share synced from our own other device — never persist a placeholder.
+            // (Rendering it as an outgoing profile bubble on the synced device is not needed here.)
+            Log.info("SENDER_SYNC: profile-share carrier, not persisting as text", category: "MessageRouter")
+            return
         case .edit:
             // edits shouldn't appear in SENDER_SYNC init carrier
             Log.info("SENDER_SYNC: edit in init-carrier, ignoring", category: "MessageRouter")
