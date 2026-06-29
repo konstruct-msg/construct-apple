@@ -19,6 +19,7 @@ import UIKit
 
 @MainActor
 final class StreamLifecycleCoordinator {
+    private static weak var activeCoordinator: StreamLifecycleCoordinator?
 
     // MARK: - Dependencies
 
@@ -31,6 +32,7 @@ final class StreamLifecycleCoordinator {
     private var observationTasks: [Task<Void, Never>] = []
     private var reconnectDebounceTask: Task<Void, Never>?
     private var backgroundDisconnectTask: Task<Void, Never>?
+    private var isStarted = false
 
     private static let backgroundGracePeriod: Duration = {
         #if os(macOS)
@@ -87,14 +89,32 @@ final class StreamLifecycleCoordinator {
     }
 
     func start() {
+        if let active = Self.activeCoordinator, active !== self {
+            Log.info("StreamLifecycle start superseding previous coordinator instance", category: "StreamLifecycle")
+            active.stop()
+        }
+        guard !isStarted else {
+            Log.debug("StreamLifecycle start ignored — already started", category: "StreamLifecycle")
+            return
+        }
+        Self.activeCoordinator = self
+        isStarted = true
         setupSubscribers()
         setupAppLifecycleObservers()
     }
 
     func stop() {
+        isStarted = false
+        reconnectDebounceTask?.cancel()
+        reconnectDebounceTask = nil
+        backgroundDisconnectTask?.cancel()
+        backgroundDisconnectTask = nil
         observationTasks.forEach { $0.cancel() }
         observationTasks.removeAll()
         streamManager.disconnect()
+        if Self.activeCoordinator === self {
+            Self.activeCoordinator = nil
+        }
     }
 
     // MARK: - Stream control
