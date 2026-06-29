@@ -92,12 +92,14 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
   /// SESSION_PING — tie-break handshake nudge (INITIATOR → peer) that triggers the
   /// RESPONDER's receiving-session init. Payload is a SessionControl (op=PING).
   /// Replaces the legacy "__session_ping_<UUID>__" plaintext magic string so the
-  /// signal can never render as a chat bubble. Server forwards opaquely.
+  /// signal can never render as a chat bubble. Server forwards opaquely (treat
+  /// identically to E2EE_SIGNAL — opaque bytes, no inspection, payload preserved).
   case sessionPing // = 25
 
   /// SESSION_READY — phase 2 of the two-phase handshake (RESPONDER → INITIATOR),
   /// sent after a successful initReceivingSession to confirm both sides match.
   /// Payload is a SessionControl (op=READY). Replaces "__session_ready_<UUID>__".
+  /// Server forwards opaquely (treat identically to E2EE_SIGNAL).
   case sessionReady // = 26
   case UNRECOGNIZED(Int)
 

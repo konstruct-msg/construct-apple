@@ -249,6 +249,58 @@ public enum Shared_Proto_Messaging_V1_FormatType: SwiftProtobuf.Enum, Swift.Case
 
 }
 
+/// SessionOp - typed session-handshake control opcode. Replaces the legacy
+/// "__session_ping_<UUID>__" / "__session_ready_<UUID>__" / "__session_reset_init_<UUID>__"
+/// plaintext magic strings so a handshake signal can never render as a chat bubble.
+/// Carried as the E2EE payload of an Envelope whose content_type is
+/// CONTENT_TYPE_SESSION_PING (25) / SESSION_READY (26) / SESSION_RESET_INIT (24) /
+/// SESSION_RESET (21). The server forwards these opaquely (identical to E2EE_SIGNAL).
+public enum Shared_Proto_Messaging_V1_SessionOp: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case ping // = 1
+  case ready // = 2
+  case resetInit // = 3
+  case end // = 4
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .ping
+    case 2: self = .ready
+    case 3: self = .resetInit
+    case 4: self = .end
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .ping: return 1
+    case .ready: return 2
+    case .resetInit: return 3
+    case .end: return 4
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Shared_Proto_Messaging_V1_SessionOp] = [
+    .unspecified,
+    .ping,
+    .ready,
+    .resetInit,
+    .end,
+  ]
+
+}
+
 /// MessageContent - Decrypted message content
 /// This is the plaintext content after E2EE decryption
 /// Never transmitted in plaintext over network
@@ -1042,6 +1094,24 @@ public struct Shared_Proto_Messaging_V1_PreviewMetadata: Sendable {
   fileprivate var _siteName: String? = nil
 }
 
+/// SessionControl - typed payload for a session-handshake control signal.
+public struct Shared_Proto_Messaging_V1_SessionControl: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Which handshake signal this is.
+  public var op: Shared_Proto_Messaging_V1_SessionOp = .unspecified
+
+  /// Correlation nonce (replaces the per-signal UUID embedded in the legacy magic
+  /// string); lets the receiver dedup retransmitted control signals.
+  public var nonce: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "shared.proto.messaging.v1"
@@ -1060,6 +1130,10 @@ extension Shared_Proto_Messaging_V1_DeleteScope: SwiftProtobuf._ProtoNameProvidi
 
 extension Shared_Proto_Messaging_V1_FormatType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0FORMAT_TYPE_UNSPECIFIED\0\u{1}FORMAT_TYPE_BOLD\0\u{1}FORMAT_TYPE_ITALIC\0\u{1}FORMAT_TYPE_CODE\0\u{1}FORMAT_TYPE_LINK\0\u{1}FORMAT_TYPE_MENTION\0\u{1}FORMAT_TYPE_STRIKETHROUGH\0")
+}
+
+extension Shared_Proto_Messaging_V1_SessionOp: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SESSION_OP_UNSPECIFIED\0\u{1}SESSION_OP_PING\0\u{1}SESSION_OP_READY\0\u{1}SESSION_OP_RESET_INIT\0\u{1}SESSION_OP_END\0")
 }
 
 extension Shared_Proto_Messaging_V1_MessageContent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -2185,6 +2259,41 @@ extension Shared_Proto_Messaging_V1_PreviewMetadata: SwiftProtobuf.Message, Swif
     if lhs._description_p != rhs._description_p {return false}
     if lhs._imageURL != rhs._imageURL {return false}
     if lhs._siteName != rhs._siteName {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Messaging_V1_SessionControl: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SessionControl"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}op\0\u{1}nonce\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.op) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.nonce) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.op != .unspecified {
+      try visitor.visitSingularEnumField(value: self.op, fieldNumber: 1)
+    }
+    if !self.nonce.isEmpty {
+      try visitor.visitSingularStringField(value: self.nonce, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Messaging_V1_SessionControl, rhs: Shared_Proto_Messaging_V1_SessionControl) -> Bool {
+    if lhs.op != rhs.op {return false}
+    if lhs.nonce != rhs.nonce {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

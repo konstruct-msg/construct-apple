@@ -104,6 +104,18 @@ public enum Shared_Proto_Services_V1_NotificationService: Sendable {
                 method: "SendVoipIncomingCall"
             )
         }
+        /// Namespace for "SendKeyRotationWake" metadata.
+        public enum SendKeyRotationWake: Sendable {
+            /// Request type for "SendKeyRotationWake".
+            public typealias Input = Shared_Proto_Services_V1_SendKeyRotationWakeRequest
+            /// Response type for "SendKeyRotationWake".
+            public typealias Output = Shared_Proto_Services_V1_SendKeyRotationWakeResponse
+            /// Descriptor for "SendKeyRotationWake".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.NotificationService"),
+                method: "SendKeyRotationWake"
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.services.v1.NotificationService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             SendBlindNotification.descriptor,
@@ -112,7 +124,8 @@ public enum Shared_Proto_Services_V1_NotificationService: Sendable {
             UpdateNotificationPreferences.descriptor,
             RegisterVoipToken.descriptor,
             UnregisterVoipToken.descriptor,
-            SendVoipIncomingCall.descriptor
+            SendVoipIncomingCall.descriptor,
+            SendKeyRotationWake.descriptor
         ]
     }
 }
@@ -298,6 +311,32 @@ extension Shared_Proto_Services_V1_NotificationService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SendVoipIncomingCallResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendVoipIncomingCallResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SendKeyRotationWake" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SendKeyRotationWake - internal RPC: send a silent background push prompting the
+        /// > recipient to rotate their Signed Pre-Key (SPK) and replenish one-time pre-keys.
+        /// > Called by key-service when a bundle's SPK is approaching the client-side degrade limit.
+        /// > The payload carries only a "rotate_keys" marker — no sender identity, no conversation context.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_SendKeyRotationWakeRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_SendKeyRotationWakeRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SendKeyRotationWakeResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func sendKeyRotationWake<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendKeyRotationWakeRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SendKeyRotationWakeRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SendKeyRotationWakeResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendKeyRotationWakeResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -561,6 +600,43 @@ extension Shared_Proto_Services_V1_NotificationService {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "SendKeyRotationWake" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SendKeyRotationWake - internal RPC: send a silent background push prompting the
+        /// > recipient to rotate their Signed Pre-Key (SPK) and replenish one-time pre-keys.
+        /// > Called by key-service when a bundle's SPK is approaching the client-side degrade limit.
+        /// > The payload carries only a "rotate_keys" marker — no sender identity, no conversation context.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_SendKeyRotationWakeRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_SendKeyRotationWakeRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SendKeyRotationWakeResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func sendKeyRotationWake<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendKeyRotationWakeRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SendKeyRotationWakeRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SendKeyRotationWakeResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendKeyRotationWakeResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_NotificationService.Method.SendKeyRotationWake.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -768,6 +844,38 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_SendVoipIncomingCallRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_SendVoipIncomingCallResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SendKeyRotationWake" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SendKeyRotationWake - internal RPC: send a silent background push prompting the
+    /// > recipient to rotate their Signed Pre-Key (SPK) and replenish one-time pre-keys.
+    /// > Called by key-service when a bundle's SPK is approaching the client-side degrade limit.
+    /// > The payload carries only a "rotate_keys" marker — no sender identity, no conversation context.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_SendKeyRotationWakeRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func sendKeyRotationWake<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendKeyRotationWakeRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendKeyRotationWakeResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.sendKeyRotationWake(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_SendKeyRotationWakeRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_SendKeyRotationWakeResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -1005,6 +1113,42 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
             metadata: metadata
         )
         return try await self.sendVoipIncomingCall(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SendKeyRotationWake" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SendKeyRotationWake - internal RPC: send a silent background push prompting the
+    /// > recipient to rotate their Signed Pre-Key (SPK) and replenish one-time pre-keys.
+    /// > Called by key-service when a bundle's SPK is approaching the client-side degrade limit.
+    /// > The payload carries only a "rotate_keys" marker — no sender identity, no conversation context.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func sendKeyRotationWake<Result>(
+        _ message: Shared_Proto_Services_V1_SendKeyRotationWakeRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendKeyRotationWakeResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendKeyRotationWakeRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.sendKeyRotationWake(
             request: request,
             options: options,
             onResponse: handleResponse

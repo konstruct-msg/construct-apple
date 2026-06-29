@@ -141,63 +141,6 @@ public enum Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf.Enum, S
 
 }
 
-/// SessionOp - which session-handshake signal this is.
-public enum Shared_Proto_Messaging_V1_SessionOp: SwiftProtobuf.Enum, Swift.CaseIterable {
-  public typealias RawValue = Int
-
-  /// Unspecified (must be 0) — receiver ignores.
-  case unspecified // = 0
-
-  /// Tie-break nudge that triggers the peer's receiving-session init.
-  case ping // = 1
-
-  /// Phase-2 confirmation that the RESPONDER session is established.
-  case ready // = 2
-
-  /// Atomic END_SESSION + new X3DH init carrier (msgNum=0 under the new session).
-  case resetInit // = 3
-
-  /// Plain END_SESSION teardown request.
-  case end // = 4
-  case UNRECOGNIZED(Int)
-
-  public init() {
-    self = .unspecified
-  }
-
-  public init?(rawValue: Int) {
-    switch rawValue {
-    case 0: self = .unspecified
-    case 1: self = .ping
-    case 2: self = .ready
-    case 3: self = .resetInit
-    case 4: self = .end
-    default: self = .UNRECOGNIZED(rawValue)
-    }
-  }
-
-  public var rawValue: Int {
-    switch self {
-    case .unspecified: return 0
-    case .ping: return 1
-    case .ready: return 2
-    case .resetInit: return 3
-    case .end: return 4
-    case .UNRECOGNIZED(let i): return i
-    }
-  }
-
-  // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Shared_Proto_Messaging_V1_SessionOp] = [
-    .unspecified,
-    .ping,
-    .ready,
-    .resetInit,
-    .end,
-  ]
-
-}
-
 /// SignalMessage - Double Ratchet message (after session established)
 public struct Shared_Proto_Messaging_V1_SignalMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -541,38 +484,6 @@ public struct Shared_Proto_Messaging_V1_RatchetState: Sendable {
   public init() {}
 }
 
-/// SessionControl - typed payload for session-handshake control signals.
-///
-/// Replaces the legacy plaintext magic strings ("__session_ping_<UUID>__",
-/// "__session_ready_<UUID>__", "__session_reset_init_<UUID>__"). Carried in the
-/// encrypted_payload of an Envelope whose content_type identifies the op
-/// (CONTENT_TYPE_SESSION_PING/READY/RESET_INIT). Moving the discriminator into the
-/// typed content_type field means a control frame can never enter the renderable
-/// text pipeline and never leaks as a chat bubble. Integrity is already provided by
-/// the Double Ratchet AEAD, so this carries no checksum — the byte budget is spent
-/// on version + op for forward-compat ("unknown (op,version) => ignore safely").
-/// See decisions/binary-control-message-format.md.
-public struct Shared_Proto_Messaging_V1_SessionControl: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// Schema version. Unknown versions are ignored by the receiver.
-  public var version: UInt32 = 0
-
-  /// Operation. Mirrors the Envelope content_type for self-description; a receiver
-  /// dispatches on content_type and may cross-check op.
-  public var op: Shared_Proto_Messaging_V1_SessionOp = .unspecified
-
-  /// Random per-signal nonce (replaces the legacy random UUID): used for
-  /// dedup and tie-break watchdog correlation. Opaque bytes.
-  public var nonce: Data = Data()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "shared.proto.messaging.v1"
@@ -583,10 +494,6 @@ extension Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf._ProtoName
 
 extension Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DECRYPTION_ERROR_TYPE_UNSPECIFIED\0\u{1}DECRYPTION_ERROR_TYPE_MAC_FAILED\0\u{1}DECRYPTION_ERROR_TYPE_TOO_OLD\0\u{1}DECRYPTION_ERROR_TYPE_DUPLICATE\0\u{1}DECRYPTION_ERROR_TYPE_NO_SESSION\0\u{1}DECRYPTION_ERROR_TYPE_INVALID_FORMAT\0")
-}
-
-extension Shared_Proto_Messaging_V1_SessionOp: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SESSION_OP_UNSPECIFIED\0\u{1}SESSION_OP_PING\0\u{1}SESSION_OP_READY\0\u{1}SESSION_OP_RESET_INIT\0\u{1}SESSION_OP_END\0")
 }
 
 extension Shared_Proto_Messaging_V1_SignalMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -1085,46 +992,6 @@ extension Shared_Proto_Messaging_V1_RatchetState: SwiftProtobuf.Message, SwiftPr
     if lhs.prevSendCounter != rhs.prevSendCounter {return false}
     if lhs.hasRootKey_p != rhs.hasRootKey_p {return false}
     if lhs.hasChainKey_p != rhs.hasChainKey_p {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension Shared_Proto_Messaging_V1_SessionControl: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".SessionControl"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}version\0\u{1}op\0\u{1}nonce\0\u{c}\u{4}\u{c}")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.version) }()
-      case 2: try { try decoder.decodeSingularEnumField(value: &self.op) }()
-      case 3: try { try decoder.decodeSingularBytesField(value: &self.nonce) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.version != 0 {
-      try visitor.visitSingularUInt32Field(value: self.version, fieldNumber: 1)
-    }
-    if self.op != .unspecified {
-      try visitor.visitSingularEnumField(value: self.op, fieldNumber: 2)
-    }
-    if !self.nonce.isEmpty {
-      try visitor.visitSingularBytesField(value: self.nonce, fieldNumber: 3)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Shared_Proto_Messaging_V1_SessionControl, rhs: Shared_Proto_Messaging_V1_SessionControl) -> Bool {
-    if lhs.version != rhs.version {return false}
-    if lhs.op != rhs.op {return false}
-    if lhs.nonce != rhs.nonce {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
