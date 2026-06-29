@@ -63,6 +63,7 @@ struct Construct_MessengerApp: App {
                 if PreviewDetector.isRunningInPreview {
                     return
                 }
+                RuntimeDiagnostics.shared.start()
                 MediaManager.shared.evictOldFiles()
                 StorageMigrationService.shared.migrateIfNeeded(
                     context: rootContainer.viewContext
