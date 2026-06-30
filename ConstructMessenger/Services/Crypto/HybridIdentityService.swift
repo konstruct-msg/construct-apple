@@ -21,6 +21,7 @@
 
 import Foundation
 import CryptoKit
+import GRPCCore
 
 @MainActor
 enum HybridIdentityService {
@@ -44,21 +45,66 @@ enum HybridIdentityService {
     /// `publishIfNeeded` skip forever.
     private static let spkFingerprintKey = "construct.hybridIdentity.spkFingerprint.v1"
 
+    /// Transient transport codes worth retrying in-session — same set the media
+    /// up/download paths treat as retryable. `.cancelled`/`.unknown` cover the VEIL
+    /// proxy restarting mid-stream during startup churn.
+    private static let retryablePublishCodes: Set<RPCError.Code> = [.cancelled, .unavailable, .deadlineExceeded, .unknown]
+
+    /// In-session backoff schedule. The publish lands during startup connection churn
+    /// (VEIL coming up, QUIC toggle), which typically settles within ~30–60 s.
+    private static let publishBackoffsNs: [UInt64] = [5_000_000_000, 15_000_000_000, 30_000_000_000]
+
     /// Publish the hybrid identity bundle when needed. Self-healing and best-effort:
     /// re-publishes when never published OR when the SPK has rotated since the last
-    /// successful publish (stale server-side hybrid SPK signature). On failure nothing
-    /// is recorded, so the next launch retries.
+    /// successful publish (stale server-side hybrid SPK signature).
+    ///
+    /// Retries in-session on transient transport failures (bounded backoff): the launch
+    /// publish frequently lands mid startup churn, and a single transient failure used to
+    /// leave the bundle unverifiable ("SPK hybrid signature missing") until the next cold
+    /// launch or a server `republish_hybrid_prekeys` push — during which peers hard-reject
+    /// our bundle. A permanent error (bad signature, auth) won't heal by retrying, so we
+    /// bail to next-launch immediately. On final failure nothing is recorded, so the next
+    /// launch still retries.
     static func publishIfNeeded(deviceId: String) async {
         let published = UserDefaults.standard.bool(forKey: publishedFlagKey)
         let current = try? currentSpkFingerprint()
         let recorded = UserDefaults.standard.string(forKey: spkFingerprintKey)
         // Up to date only when we've published AND the SPK hasn't rotated since.
         if published, let current, current == recorded { return }
-        do {
-            try await publish(deviceId: deviceId)
-        } catch {
-            Log.error("Hybrid identity publish failed (will retry next launch): \(error.localizedDescription)", category: "HybridPQ")
+
+        var attempt = 0
+        while true {
+            if Task.isCancelled { return }
+            do {
+                try await publish(deviceId: deviceId)
+                return
+            } catch {
+                guard isTransientPublishFailure(error), attempt < publishBackoffsNs.count else {
+                    Log.error("Hybrid identity publish failed (will retry next launch): \(error.localizedDescription)", category: "HybridPQ")
+                    return
+                }
+                let delay = publishBackoffsNs[attempt]
+                attempt += 1
+                Log.info("Hybrid identity publish transient failure (attempt \(attempt)/\(publishBackoffsNs.count)) — retrying in \(delay / 1_000_000_000)s: \(error.localizedDescription)", category: "HybridPQ")
+                do {
+                    try await Task.sleep(nanoseconds: delay)
+                } catch {
+                    return  // cancelled while backing off
+                }
+            }
         }
+    }
+
+    /// True when a publish error is a transient transport failure worth an in-session retry.
+    /// A `CancellationError`/`GRPCClientError` or a non-RPC error (e.g. NWError) thrown before
+    /// the call completed is transport-level; an RPCError is retryable only for the transient
+    /// codes (`.unavailable`, `.deadlineExceeded`, `.cancelled`, `.unknown`). Application/auth
+    /// errors (`.invalidArgument`, `.unauthenticated`, …) are permanent — do not retry.
+    private static func isTransientPublishFailure(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if error is GRPCClientError { return true }
+        guard let rpc = error as? RPCError else { return true }
+        return retryablePublishCodes.contains(rpc.code)
     }
 
     /// Build and upload the hybrid identity bundle over the device's current prekeys.
