@@ -53,17 +53,19 @@ enum SessionControlCodec {
 
     /// Build the encrypted inner payload for an outgoing control signal (producer half).
     ///
-    /// Phase 3 (flag `typedSessionControl` ON): a serialized `SessionControl{op, nonce}` — the
-    /// magic string is dropped; new consumers dispatch on the typed `content_type` and read the
-    /// payload only for `nonce`. Phase 2 (flag OFF, today): the legacy magic string, so peers that
-    /// predate the typed consumer dispatch (`legacyOp`) still recognise the signal. The flip is the
-    /// destructive step and must wait until the typed consumer is fleet-wide (see
-    /// `decisions/binary-control-message-format.md`).
+    /// S3 (`binarySessionControlPayload` ON, destructive): a serialized `SessionControl{op, nonce}` —
+    /// the magic string is dropped; new consumers dispatch on the typed `content_type` and read the
+    /// payload only for `nonce`. This breaks pre-S1 peers and must wait until the typed consumer is
+    /// fleet-wide.
     ///
-    /// Returns the same bytes the legacy producer used while the flag is OFF, so this is inert
-    /// until the flag is flipped.
+    /// S2 / default (`binarySessionControlPayload` OFF): the legacy magic string, so peers that
+    /// predate the typed consumer dispatch (`legacyOp`) still recognise the signal. In S2 dual-send
+    /// the typed signal still rides in the Envelope `content_type` (gated by `typedSessionControl`,
+    /// default ON) — this is the backward-safe "binary first, string fallback" wire form.
+    ///
+    /// See `decisions/binary-control-message-format.md`.
     static func encodePayload(op: Op, nonce: String) -> Data {
-        if FeatureFlags.typedSessionControl {
+        if FeatureFlags.binarySessionControlPayload {
             var control = Shared_Proto_Messaging_V1_SessionControl()
             control.op = op
             control.nonce = nonce

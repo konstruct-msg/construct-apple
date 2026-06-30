@@ -342,32 +342,44 @@ struct FeatureFlags {
         }
     }
 
-    /// **Default `false`.** Phase S2 of the typed binary session-control migration
-    /// (`decisions/binary-control-message-format.md`).
+    /// **Default `true` (S2 dual-send enabled 2026-06-30).** Phase S2 of the typed binary
+    /// session-control migration (`decisions/binary-control-message-format.md`).
     ///
     /// When `true`, session-handshake signals carry a typed Envelope `content_type`
     /// (`CONTENT_TYPE_SESSION_PING = 25`, `CONTENT_TYPE_SESSION_READY = 26`) **in addition**
     /// to the legacy `__session_ping_<UUID>__` / `__session_ready_<UUID>__` plaintext payload
     /// (dual-send). New consumers (S1, already shipped) dispatch on the typed `content_type`;
-    /// old peers still read the magic string, so flipping this on never breaks them.
+    /// old peers still read the magic string, so this is backward-compatible in both directions —
+    /// enabling it never breaks anyone, which is why the default is now `true`.
     /// `content_type` is NOT part of the AEAD associated data, so the typed byte can never
-    /// cause a decrypt failure.
+    /// cause a decrypt failure. Server fleet (S0) is deployed and understands 25/26.
+    /// `SESSION_RESET_INIT` (24) was already sent typed unconditionally.
     ///
-    /// Keep `false` until the server fleet (S0) is deployed everywhere — the server is
-    /// fail-open and would rewrite an unknown 25/26 to `E2EE_SIGNAL`, which (since the payload
-    /// is preserved) only degrades to the legacy string path, but there is no upside to
-    /// emitting it before the server understands it. `SESSION_RESET_INIT` (24) is already sent
-    /// typed unconditionally — it predates this flag and is server-known. Dropping the legacy
-    /// string and sending a pure `SessionControl` payload is the later S3 step.
+    /// This flag does NOT drop the legacy string — the payload stays the magic string so old
+    /// peers keep working. Dropping the string and sending a pure binary `SessionControl`
+    /// payload is the later S3 step, gated separately by `binarySessionControlPayload`.
     ///
-    /// Backed by `UserDefaults`, defaulting `false` when never set (a stored value — an explicit
-    /// toggle — is respected). Read fresh at each send, so flipping it takes effect on the next
-    /// handshake without a rebuild. Flip to `true` only once the Phase 1 consumer dispatch is
-    /// fleet-wide; until then leave it off (older consumers fall back to the legacy string anyway).
+    /// Backed by `UserDefaults`, defaulting `true` when never set (a stored value — an explicit
+    /// toggle — is respected). Read fresh at each send, so it takes effect on the next handshake.
     static let typedSessionControlKey = "ff.typedSessionControl"
     static var typedSessionControl: Bool {
-        get { UserDefaults.standard.object(forKey: typedSessionControlKey) as? Bool ?? false }
+        get { UserDefaults.standard.object(forKey: typedSessionControlKey) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: typedSessionControlKey) }
+    }
+
+    /// **Default `false`.** Phase S3 (destructive) of the typed session-control migration.
+    ///
+    /// When `true`, handshake producers send a pure binary `SessionControl{op, nonce}` as the
+    /// encrypted payload and **drop** the legacy magic string. This is only safe once the S1
+    /// typed consumer is fleet-wide: a peer on a pre-S1 build has no `content_type` dispatch and
+    /// reads the payload as a string — a binary payload would be unrecognised (silent handshake
+    /// loss → session desync). Keep `false` until adoption telemetry confirms pre-S1 peers are
+    /// negligible, then flip (ideally via staged/remote config). Independent of
+    /// `typedSessionControl`, which only controls the (backward-safe) typed `content_type`.
+    static let binarySessionControlPayloadKey = "ff.binarySessionControlPayload"
+    static var binarySessionControlPayload: Bool {
+        get { UserDefaults.standard.object(forKey: binarySessionControlPayloadKey) as? Bool ?? false }
+        set { UserDefaults.standard.set(newValue, forKey: binarySessionControlPayloadKey) }
     }
 }
 

@@ -12,22 +12,22 @@ import XCTest
 
 final class SessionControlCodecTests: XCTestCase {
 
-    private var originalFlag: Bool!
+    private var originalBinary: Bool!
 
     override func setUp() {
         super.setUp()
-        originalFlag = FeatureFlags.typedSessionControl
+        originalBinary = FeatureFlags.binarySessionControlPayload
     }
 
     override func tearDown() {
-        FeatureFlags.typedSessionControl = originalFlag
+        FeatureFlags.binarySessionControlPayload = originalBinary
         super.tearDown()
     }
 
-    // MARK: - Flag OFF (Phase 2, default fleet state): legacy magic string, byte-identical
+    // MARK: - S2 dual-send (binary payload OFF): legacy magic string payload, byte-identical
 
     func testEncodePayload_FlagOff_EmitsLegacyMagicString() {
-        FeatureFlags.typedSessionControl = false
+        FeatureFlags.binarySessionControlPayload = false
         let nonce = "ABC-123"
 
         for op in [SessionControlCodec.Op.ping, .ready, .resetInit] {
@@ -47,7 +47,7 @@ final class SessionControlCodecTests: XCTestCase {
     /// The flag-off bytes the new producer emits must still be recognised by the consumer fallback,
     /// so a peer on an older (string-only) build keeps working.
     func testLegacyRoundTrip_ProducerToConsumerFallback() {
-        FeatureFlags.typedSessionControl = false
+        FeatureFlags.binarySessionControlPayload = false
         for op in [SessionControlCodec.Op.ping, .ready, .resetInit] {
             let payload = SessionControlCodec.encodePayload(op: op, nonce: UUID().uuidString)
             let text = String(data: payload, encoding: .utf8)!
@@ -56,10 +56,10 @@ final class SessionControlCodecTests: XCTestCase {
         }
     }
 
-    // MARK: - Flag ON (Phase 3): typed SessionControl payload, parseable, no magic string
+    // MARK: - S3 (binary payload ON): typed SessionControl payload, parseable, no magic string
 
     func testEncodePayload_FlagOn_EmitsParseableSessionControl() {
-        FeatureFlags.typedSessionControl = true
+        FeatureFlags.binarySessionControlPayload = true
         let nonce = UUID().uuidString
 
         for op in [SessionControlCodec.Op.ping, .ready, .resetInit] {
