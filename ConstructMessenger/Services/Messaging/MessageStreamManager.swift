@@ -126,6 +126,12 @@ final class MessageStreamManager {
     /// future, `openStream()` goes straight to H2. Reset by an explicit transport toggle.
     var fastUdpUnhealthyUntil: Date?
     static let fastUdpCooldown: TimeInterval = 300
+    /// Debounce for `reconnectForTransportChange`. A transport toggle does a full teardown +
+    /// reconnect; toggling rapidly (or SwiftUI firing `.onChange` twice) stacks teardowns and
+    /// creates connect→immediate-invalidate races. We coalesce bursts into a single reconnect to
+    /// the final transport selection after a short settle delay.
+    private var transportToggleDebounce: Task<Void, Never>?
+    static let transportToggleDebounceNs: UInt64 = 500_000_000
     private(set) var isPaused = false
     private(set) var subscriptionUserIds: [String] = []
     private var lastPendingCursor: String = UserDefaults.standard.string(forKey: "construct.pendingCursor") ?? "" {
@@ -294,6 +300,22 @@ final class MessageStreamManager {
     /// newly-selected transport from scratch. The resulting active transport surfaces as the
     /// badge in NetworkSettingsView ("QUIC" vs "H2").
     func reconnectForTransportChange() {
+        // Coalesce rapid toggles: cancel any pending reconnect and reschedule. Reading
+        // FeatureFlags.engineQuicExperimental at FIRE time (not now) means a burst of toggles
+        // settles on the final selection with exactly one teardown + reconnect.
+        transportToggleDebounce?.cancel()
+        transportToggleDebounce = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: Self.transportToggleDebounceNs)
+            } catch {
+                return  // superseded by a newer toggle
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.performTransportReconnect()
+        }
+    }
+
+    private func performTransportReconnect() {
         GRPCChannelManager.shared.invalidatePersistentClient()
 #if os(iOS)
         GRPCChannelManager.shared.forceInvalidateEngineQuicConnection()
