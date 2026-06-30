@@ -682,18 +682,20 @@ class BackgroundFetchManager: NSObject {
     
     /// Perform maintenance operations (cache cleanup, token minting, etc.)
     private func performMaintenance(completion: @escaping (Bool) -> Void) {
-        DispatchQueue.global().async {
-            Task { @MainActor in
-                // Replenish blind tokens during maintenance window (up to 15 per cycle).
-                // BlindTokenService enforces 1-hour cooldown to respect server rate limit.
-                await BlindTokenService.shared.replenish(count: 15)
+        // Run all maintenance inside one @MainActor Task and call `completion` only after it
+        // finishes, so the BGProcessingTask isn't marked complete (and the app suspended) before
+        // the async work actually runs.
+        Task { @MainActor in
+            // Replenish blind tokens during maintenance window (up to 15 per cycle).
+            // BlindTokenService enforces 1-hour cooldown to respect server rate limit.
+            await BlindTokenService.shared.replenish(count: 15)
 
-                // Session health audit: send heartbeats to contacts silent for 12+ hours,
-                // then log a health summary for diagnostics. Mirrors the foreground path in
-                // applicationWillEnterForeground — keeps sessions alive between launches.
-                await SessionActivityTracker.shared.sendStaleSessionHeartbeats()
-                SessionActivityTracker.shared.logSessionHealthSummary()
-            }
+            // Session health audit: send heartbeats to contacts silent for 12+ hours,
+            // then log a health summary for diagnostics. Mirrors the foreground path in
+            // applicationWillEnterForeground — keeps sessions alive between launches.
+            await SessionActivityTracker.shared.sendStaleSessionHeartbeats()
+            SessionActivityTracker.shared.logSessionHealthSummary()
+
             completion(true)
         }
     }

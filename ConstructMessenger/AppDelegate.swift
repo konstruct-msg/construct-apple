@@ -300,6 +300,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Ensure background fetch is scheduled if enabled
         if BackgroundFetchConfig.shouldBeEnabled {
             BackgroundFetchManager.shared.scheduleBackgroundFetch()
+            // Stale-peer reachability Phase 3A: arm the maintenance BGProcessingTask (background
+            // SPK rotation + blind-token top-up + stale-session heartbeats). It was registered but
+            // never scheduled, so the maintenance cycle never actually ran.
+            BackgroundFetchManager.shared.scheduleMaintenanceTask()
         } else {
             BackgroundFetchManager.shared.cancelAllBackgroundTasks()
         }
