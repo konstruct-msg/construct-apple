@@ -39,6 +39,13 @@ class MediaManager {
     private var mediaCache: [String: Data] = [:]
     /// Deduplicates concurrent fetches for the same media ID while the first request is in flight.
     private var inFlightDownloads: [String: Task<Data, Error>] = [:]
+    /// Media IDs the server reported as gone (expired past retention / never existed), with the
+    /// time they were marked. Short-circuits re-download storms: without this, every chat/grid
+    /// re-render re-fetches a permanently-missing blob, and each round-trip throws `.notFound`
+    /// and emits a (neutral but noisy) transport `rpc-fail` event.
+    private var notFoundMedia: [String: Date] = [:]
+    /// How long a not-found verdict is trusted before a re-check is allowed.
+    private static let notFoundTTL: TimeInterval = 30 * 60
     private let maxCacheSize = 50 * 1024 * 1024  // 50 MB
     private var currentCacheSize = 0
 
@@ -469,7 +476,17 @@ class MediaManager {
             }
             return diskData
         }
-        
+
+        // 3. Negative cache — the server already reported this blob gone (expired past the 7d
+        //    retention, or never existed). Fail fast locally so we don't re-hit the network and
+        //    emit a transport rpc-fail event on every grid/chat re-render.
+        if let markedAt = notFoundMedia[cacheKey] {
+            if Date().timeIntervalSince(markedAt) < Self.notFoundTTL {
+                throw RPCError(code: .notFound, message: "Media file not found on disk")
+            }
+            notFoundMedia.removeValue(forKey: cacheKey)  // TTL elapsed — allow one re-check
+        }
+
         guard mediaKey.count == 32 else {
             Log.error("Invalid media key size: \(mediaKey.count) (expected 32)", category: "MediaManager")
             throw MediaManagerError.invalidMediaKey
@@ -489,7 +506,15 @@ class MediaManager {
         }
         inFlightDownloads[cacheKey] = task
         defer { inFlightDownloads.removeValue(forKey: cacheKey) }
-        let decryptedData = try await task.value
+        let decryptedData: Data
+        do {
+            decryptedData = try await task.value
+        } catch let error as RPCError where error.code == .notFound {
+            // Permanently gone — record so concurrent/subsequent renders short-circuit above.
+            notFoundMedia[cacheKey] = Date()
+            Log.info("Media \(mediaId.prefix(8))… not found on server (expired/removed) — negative-caching for \(Int(Self.notFoundTTL))s", category: "MediaManager")
+            throw error
+        }
         
         // Persist to disk cache so media survives app restarts and updates
         saveToDiskcache(decryptedData, mediaId: mediaId)
@@ -534,6 +559,7 @@ class MediaManager {
     }
     func clearCache(includingDisk: Bool = false) {
         mediaCache.removeAll()
+        notFoundMedia.removeAll()
         currentCacheSize = 0
         if includingDisk {
             try? FileManager.default.removeItem(at: diskCacheDirectory)
