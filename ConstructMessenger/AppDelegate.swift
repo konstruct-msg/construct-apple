@@ -158,6 +158,36 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
+        if activityType == "rotate_keys" {
+            // Stale-peer reachability Phase 3B: a peer fetched our pre-key bundle while our
+            // Signed Pre-Key was going stale, so the server woke us to refresh it (see
+            // backend/SPK_WAKE_PUSH_SERVER_SPEC.md). Rotate the SPK (no-op if already fresh —
+            // e.g. the background maintenance task, Phase 3A, beat us to it) and top up OTPKs so
+            // the peer's next bundle fetch gets a fresh bundle and its session init stops
+            // degrading to at-risk. Best-effort, bounded to the background push window.
+            //
+            // INERT until the server emits this activity_type — the SendKeyRotationWake RPC is
+            // not built yet (proposed in SPK_WAKE_PUSH_SERVER_SPEC.md). The marker contract is
+            // `activity_type = "rotate_keys"`, matching the other key-maintenance wakes above.
+            Task {
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        guard let deviceId = KeychainManager.shared.loadDeviceID() else {
+                            Log.error("Key-rotation wake: no deviceId in Keychain", category: "Push")
+                            return
+                        }
+                        await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+                        await OtpkReplenishmentService.replenishForPush(deviceId: deviceId)
+                    }
+                    group.addTask { try? await Task.sleep(nanoseconds: 27_000_000_000) }
+                    await group.next()
+                    group.cancelAll()
+                }
+                completionHandler(.newData)
+            }
+            return
+        }
+
         if activityType == "contact_request_accepted" {
             let requestId = construct?["conversation_id"] as? String
             Log.info("contact_request_accepted push — requestId: \(requestId ?? "nil")", category: "Push")
