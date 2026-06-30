@@ -696,6 +696,19 @@ class BackgroundFetchManager: NSObject {
             await SessionActivityTracker.shared.sendStaleSessionHeartbeats()
             SessionActivityTracker.shared.logSessionHealthSummary()
 
+            // Stale-peer reachability Phase 3A: rotate the Signed Pre-Key in the background when it
+            // has aged past the rotation threshold, so a long-dormant device keeps a fresh SPK
+            // without needing a foreground launch. Otherwise its SPK goes stale and peers'
+            // new-session init degrades (at-risk) until the device is woken or next opened.
+            // `rotateIfNeeded` is a no-op when the SPK is still fresh and serialises/throttles
+            // internally; gated on auth + a ready crypto core so it stays silent when the app was
+            // launched into the background without them.
+            if GRPCAuthCache.shared.snapshot.token != nil,
+               CryptoManager.shared.isCoreReady,
+               let deviceId = KeychainManager.shared.loadDeviceID(), !deviceId.isEmpty {
+                await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+            }
+
             completion(true)
         }
     }
