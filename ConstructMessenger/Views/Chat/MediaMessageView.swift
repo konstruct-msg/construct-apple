@@ -114,7 +114,9 @@ private struct SingleMediaCell: View {
     /// Video bubble: poster (sender) or blurhash preview (receiver) + play + duration.
     /// Never downloads the full video — playback happens on tap in the gallery.
     private var videoCell: some View {
-        let poster = thumbnailImage ?? blurPreview
+        // Prefer a real first-frame poster (cached after the clip is downloaded) over the
+        // blurhash. MediaImageCache is observed, so the bubble swaps live once it's ready.
+        let poster = MediaImageCache.shared.image(for: message.id, at: itemIndex) ?? thumbnailImage ?? blurPreview
         let isUploading = isPlaceholder && message.deliveryStatus == .sending
         return ZStack {
             if let poster {
@@ -491,10 +493,10 @@ private struct GridCell: View {
 
     var body: some View {
         ZStack {
-            if let img = thumbnailImage {
+            if isVideo, let poster = MediaImageCache.shared.image(for: message.id, at: itemIndex) ?? thumbnailImage ?? blurPreview {
+                Image(platformImage: poster).resizable().scaledToFill()
+            } else if let img = thumbnailImage {
                 Image(platformImage: img).resizable().scaledToFill()
-            } else if isVideo, let preview = blurPreview {
-                Image(platformImage: preview).resizable().scaledToFill()
             } else {
                 if isLoading {
                     loadingPlaceholder

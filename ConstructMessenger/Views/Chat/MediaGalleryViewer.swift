@@ -215,6 +215,7 @@ struct MediaGalleryViewer: View {
 
     private func saveCurrentImage() {
         guard let entry = entries.first(where: { $0.id == currentEntryId }),
+              !Self.isVideoEntry(entry),
               let img = MediaImageCache.shared.image(for: entry.message.id, at: entry.itemIndex) else { return }
         saveStatus = .saving
 
@@ -259,6 +260,7 @@ struct MediaGalleryViewer: View {
 
     private func shareCurrentImage() {
         guard let entry = entries.first(where: { $0.id == currentEntryId }),
+              !Self.isVideoEntry(entry),
               let img = MediaImageCache.shared.image(for: entry.message.id, at: entry.itemIndex) else { return }
 
 #if canImport(UIKit)
@@ -444,38 +446,39 @@ struct MediaGalleryPage: View {
     }
 }
 
-// MARK: - Drag-to-dismiss (shared, latched)
+// MARK: - Drag-to-dismiss (shared)
 
-/// Downward drag-to-dismiss for a gallery page. Once a drag is recognised as clearly
-/// vertical it *latches* and keeps following the finger, so the enclosing paging `TabView`
-/// can't reclaim the gesture mid-swipe (the cause of the old sideways jitter). Horizontal
-/// swipes never engage it, so paging stays smooth.
+/// Downward drag-to-dismiss for a gallery page, coexisting with the paging `TabView`.
+///
+/// Two things make this behave:
+/// - **`.global` coordinate space.** The gallery moves its whole hierarchy by
+///   `dismissOffset` while dragging. Reading `translation` in the default `.local` space
+///   then measures against a view that is itself moving → a feedback loop that reads as the
+///   image juddering up/down when you slow or hold the finger. Global space is fixed to the
+///   screen, so translation is stable.
+/// - **`minimumDistance: 20` + directional guard + `.simultaneousGesture`.** Only a clearly
+///   vertical-downward drag drives dismissal; horizontal drags fall through untouched so the
+///   TabView still owns paging.
 private struct DragToDismiss: ViewModifier {
     @Binding var dismissOffset: CGFloat
     let isEnabled: Bool
     let onDismiss: () -> Void
 
-    @State private var active = false
-
     func body(content: Content) -> some View {
         content.simultaneousGesture(
-            DragGesture(minimumDistance: 12)
+            DragGesture(minimumDistance: 20, coordinateSpace: .global)
                 .onChanged { value in
-                    guard isEnabled else { return }
-                    if !active {
-                        guard value.translation.height > 6,
-                              value.translation.height > abs(value.translation.width) * 1.6 else { return }
-                        active = true
-                    }
-                    dismissOffset = max(0, value.translation.height)
+                    guard isEnabled,
+                          value.translation.height > 0,
+                          abs(value.translation.height) > abs(value.translation.width) else { return }
+                    dismissOffset = value.translation.height
                 }
                 .onEnded { _ in
-                    defer { active = false }
                     guard isEnabled else { return }
-                    if dismissOffset > 100 {
+                    if dismissOffset > 120 {
                         onDismiss()
                     } else {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                             dismissOffset = 0
                         }
                     }
@@ -580,10 +583,28 @@ struct GalleryVideoPage: View {
                     isLoading = false
                     p.play()
                 }
+                await Self.cacheFirstFramePoster(from: url, messageId: message.id, itemIndex: itemIndex)
             } catch {
                 Log.error("Gallery video load failed: \(error)", category: "MediaGalleryViewer")
                 await MainActor.run { isLoading = false; failed = true }
             }
+        }
+    }
+
+    /// Derive a real first-frame poster from the downloaded clip so the bubble stops showing
+    /// the blurry blurhash. Cached in-memory (live refresh) + persisted (survives relaunch).
+    /// No-op if a poster already exists (e.g. the sender's own upload).
+    private static func cacheFirstFramePoster(from url: URL, messageId: String, itemIndex: Int) async {
+        let hasPoster = await MainActor.run {
+            MediaImageCache.shared.image(for: messageId, at: itemIndex) != nil
+                || MediaManager.shared.retrieveThumbnail(for: messageId, at: itemIndex) != nil
+        }
+        if hasPoster { return }
+        guard let posterData = try? await MediaOptimizer.generateVideoThumbnail(from: url),
+              let poster = PlatformImage(data: posterData) else { return }
+        await MainActor.run {
+            MediaImageCache.shared.store(poster, for: messageId, at: itemIndex)
+            MediaManager.shared.storeThumbnail(posterData, for: messageId, at: itemIndex)
         }
     }
 }
