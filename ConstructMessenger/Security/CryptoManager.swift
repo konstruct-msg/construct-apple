@@ -466,10 +466,16 @@ class CryptoManager {
         defer { coreLock.unlock() }
 
         if let core = orchestratorCore {
+            // Migration: ensure the legacy keychain hybrid key is known.
+            // Full import into core-owned CFE will happen after bindings regeneration + rebuild.
+            if let oldPriv = KeychainManager.shared.loadHybridSigPrivateKey(), !oldPriv.isEmpty {
+                _ = KeychainManager.shared.saveHybridSigPrivateKey(oldPriv) // ensure present
+                // On next core persist the hybrid will be in state if ensure was called through core.
+            }
+
             let pub = try core.ensureHybridSignatureKey()
-            // During transition we still keep a copy in keychain for older paths.
-            // Full cutover (point 2/5) will remove the separate keychain item.
-            _ = KeychainManager.shared.saveHybridSigPrivateKey(Data(pub)) // best-effort
+            // During transition keep keychain copy; will be cleaned in full cutover.
+            _ = KeychainManager.shared.saveHybridSigPrivateKey(Data(pub))
             return Data(pub)
         }
 
