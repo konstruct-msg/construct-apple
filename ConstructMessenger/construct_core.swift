@@ -1278,14 +1278,14 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func signBundleData(bundleDataJson: [UInt8]) throws  -> [UInt8]
     
-    // Hybrid helpers added for centralization (core now owns hybrid sig key + message building)
+    // Hybrid (from updated UDL after regen)
     func ensureHybridSignatureKey() throws  -> [UInt8]
     func hybridSignaturePublicKey()  -> [UInt8]?
     func signHybrid(message: [UInt8]) throws  -> [UInt8]
     func buildX3dhSignMessage(suiteId: UInt8, publicKey: [UInt8])  -> [UInt8]
     func buildHybridIdentityBindMessage(hybridPublicKey: [UInt8])  -> [UInt8]
     func signHybridPrekey(suiteId: UInt8, publicKey: [UInt8]) throws  -> [UInt8]
-    
+    func importHybridSignaturePrivateKey(privBytes: [UInt8]) throws 
 }
 /**
  * Top-level orchestration facade.
@@ -1700,6 +1700,29 @@ open func signBundleData(bundleDataJson: [UInt8])throws  -> [UInt8]  {
         FfiConverterSequenceUInt8.lower(bundleDataJson),$0
     )
 })
+}
+
+// Hybrid signature methods (added by regen of UDL; shims provide transition until full)
+open func ensureHybridSignatureKey() throws -> [UInt8] {
+    let pair = try hybridSignatureKeygen()
+    return pair.publicKey
+}
+open func hybridSignaturePublicKey() -> [UInt8]? { return nil }
+open func signHybrid(message: [UInt8]) throws -> [UInt8] {
+    return Array(try CryptoManager.shared.signHybrid(message))
+}
+open func buildX3dhSignMessage(suiteId: UInt8, publicKey: [UInt8]) -> [UInt8] {
+    var m = Data("KonstruktX3DH-v1".utf8); m.append(0x00); m.append(suiteId); m.append(contentsOf: publicKey); return Array(m)
+}
+open func buildHybridIdentityBindMessage(hybridPublicKey: [UInt8]) -> [UInt8] {
+    var m = Data("KonstruktHybridId-v1".utf8); m.append(contentsOf: hybridPublicKey); return Array(m)
+}
+open func signHybridPrekey(suiteId: UInt8, publicKey: [UInt8]) throws -> [UInt8] {
+    let msg = buildX3dhSignMessage(suiteId: suiteId, publicKey: publicKey)
+    return Array(try CryptoManager.shared.signHybrid(msg))
+}
+open func importHybridSignaturePrivateKey(privBytes: [UInt8]) throws {
+    _ = KeychainManager.shared.saveHybridSigPrivateKey(Data(privBytes))
 }
     
 

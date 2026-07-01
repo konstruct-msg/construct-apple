@@ -443,68 +443,60 @@ class CryptoManager {
 
     // MARK: - Hybrid PQ Identity Signatures (Ed25519 + ML-DSA-65)
     //
-    // These wrap the stateless `hybrid*` free functions from construct-core for the
-    // primitive operations. The hybrid signature private key is now owned by the
-    // Rust core (KeyManager + CFE private keys export/import) for centralization.
-    // The "when to generate / sign SPK / publish" orchestration policy remains in
-    // Swift (HybridIdentityService) per the integration plan; the crypto lives in core.
+    // The hybrid signature private key is owned by the Rust core (KeyManager + CFE).
+    // All generation, signing and public key derivation go through OrchestratorCore.
+    // The "when to generate / sign SPK / publish" policy remains in Swift services.
     //
     // Client and server share the SAME implementation (RustCrypto ml-dsa, seed-based),
-    // so every format is byte-identical and signatures cross-verify:
-    //   private key 2016 = [ed25519_seed (32)] [mldsa65_seed (32)] [mldsa65_pk (1952)]
-    //   public key  1984 = [ed25519_pk (32)] [mldsa65_pk (1952)]
-    //   signature   3373 = [ed25519_sig (64)] [mldsa65_sig (3309)]
+    // so every format is byte-identical and signatures cross-verify.
 
-    /// Returns the device hybrid identity public key (1984 bytes), generating and
-    /// persisting a fresh hybrid keypair on first use.
-    ///
-    /// Prefers the core (OrchestratorCore) when available — the hybrid key is now
-    /// owned inside the Rust KeyManager + CFE.
+    /// Returns the device hybrid identity public key (1984 bytes).
+    /// The key is ensured inside the core on first use.
     @discardableResult
     func ensureHybridIdentityPublicKey() throws -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
 
-        if orchestratorCore != nil {
-            // TODO after full regeneration + rebuild: 
-            //   if let pub = try? core.ensureHybridSignatureKey() { ... use core }
-            // For now use legacy path (core will own after cutover).
+        guard let core = orchestratorCore else {
+            throw CryptoManagerError.coreNotInitialized
         }
 
-        // Legacy / bootstrap path (no core yet)
-        if let stored = KeychainManager.shared.loadHybridSigPrivateKey() {
-            return Data(try hybridPublicKeyFromPrivate(privateKey: [UInt8](stored)))
-        }
-        let pair = try hybridSignatureKeygen()
-        guard KeychainManager.shared.saveHybridSigPrivateKey(Data(pair.privateKey)) else {
-            throw CryptoManagerError.invalidKeyData
-        }
-        Log.info("Generated hybrid PQ identity signing keypair (Ed25519 + ML-DSA-65)", category: "CryptoManager")
-        return Data(pair.publicKey)
-    }
-
-    /// The device hybrid identity public key if a keypair already exists, else nil
-    /// (does not generate one).
-    func hybridIdentityPublicKey() -> Data? {
-        guard let stored = KeychainManager.shared.loadHybridSigPrivateKey() else { return nil }
-        return (try? hybridPublicKeyFromPrivate(privateKey: [UInt8](stored))).map { Data($0) }
-    }
-
-    /// Signs a message with the device hybrid identity key, generating the keypair on
-    /// first use. Returns a 3373-byte hybrid signature.
-    func signHybrid(_ message: [UInt8]) throws -> Data {
-        let priv: [UInt8]
-        if let stored = KeychainManager.shared.loadHybridSigPrivateKey() {
-            priv = [UInt8](stored)
-        } else {
-            let pair = try hybridSignatureKeygen()
-            guard KeychainManager.shared.saveHybridSigPrivateKey(Data(pair.privateKey)) else {
-                throw CryptoManagerError.invalidKeyData
+        // Migration from legacy separate keychain item (if any).
+        if core.hybridSignaturePublicKey() == nil,
+           let oldPriv = KeychainManager.shared.loadHybridSigPrivateKey(),
+           !oldPriv.isEmpty {
+            do {
+                try core.importHybridSignaturePrivateKey(privBytes: [UInt8](oldPriv))
+                _ = persistCoreState()
+                // Clean up the old separate item now that it's in core.
+                KeychainManager.shared.deleteHybridSigPrivateKey()
+                Log.info("Migrated legacy hybrid sig private key into core CFE", category: "CryptoManager")
+            } catch {
+                Log.error("Hybrid key migration import failed (will retry): \(error)", category: "CryptoManager")
             }
-            Log.info("Generated hybrid PQ identity signing keypair (Ed25519 + ML-DSA-65)", category: "CryptoManager")
-            priv = pair.privateKey
         }
-        return Data(try hybridSign(privateKey: priv, message: message))
+
+        let pub = try core.ensureHybridSignatureKey()
+        // Capture the hybrid key (if this call just generated it) into the CFE blob.
+        _ = persistCoreState()
+        return Data(pub)
+    }
+
+    /// The device hybrid identity public key if one exists in core, else nil.
+    func hybridIdentityPublicKey() -> Data? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { return nil }
+        return core.hybridSignaturePublicKey().map { Data($0) }
+    }
+
+    /// Signs a message with the device hybrid identity key (core-owned).
+    func signHybrid(_ message: [UInt8]) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        let sig = try core.signHybrid(message: message)
+        return Data(sig)
     }
 
     /// Verifies a hybrid signature against a peer's hybrid public key. Both the
@@ -513,30 +505,41 @@ class CryptoManager {
         return try hybridVerify(publicKey: publicKey, message: message, signature: signature)
     }
 
-    // MARK: - Core-delegated hybrid helpers (point 1+2 of centralization)
+    // MARK: - Core-delegated hybrid helpers (fully switched after bindings regen)
 
-    /// Ask the core (when orchestrator is initialized) for the canonical X3DH prekey
-    /// sign message. Falls back to the same bytes for transition.
     func buildX3dhSignMessage(suiteId: UInt8, publicKey: Data) -> [UInt8] {
-        // Core provides the canonical implementation (after bindings/lib rebuild).
-        // Current generated binding does not expose it yet, so use the same bytes.
-        var m = Data("KonstruktX3DH-v1".utf8)
-        m.append(0x00)
-        m.append(suiteId)
-        m.append(publicKey)
-        return [UInt8](m)
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else {
+            // Should not happen in normal use after core init; fall back to known bytes
+            var m = Data("KonstruktX3DH-v1".utf8)
+            m.append(0x00)
+            m.append(suiteId)
+            m.append(publicKey)
+            return [UInt8](m)
+        }
+        return core.buildX3dhSignMessage(suiteId: suiteId, publicKey: [UInt8](publicKey))
     }
 
     func buildHybridIdentityBindMessage(hybridPublic: Data) -> [UInt8] {
-        var m = Data("KonstruktHybridId-v1".utf8)
-        m.append(hybridPublic)
-        return [UInt8](m)
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else {
+            var m = Data("KonstruktHybridId-v1".utf8)
+            m.append(hybridPublic)
+            return [UInt8](m)
+        }
+        return core.buildHybridIdentityBindMessage(hybridPublicKey: [UInt8](hybridPublic))
     }
 
-    /// High-level: produce a hybrid signature over a prekey using the core when possible.
+    /// High-level: ensure hybrid key (if needed) + produce hybrid signature over the
+    /// standard X3DH prekey sign-message.
     func signHybridPrekey(suiteId: UInt8, publicKey: Data) throws -> Data {
-        let msg = buildX3dhSignMessage(suiteId: suiteId, publicKey: publicKey)
-        return try signHybrid(msg)
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        let sig = try core.signHybridPrekey(suiteId: suiteId, publicKey: [UInt8](publicKey))
+        return Data(sig)
     }
 
     /// Returns the hybrid signatures (if hybrid identity is published) over the
