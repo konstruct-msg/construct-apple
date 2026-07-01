@@ -118,15 +118,8 @@ enum HybridIdentityService {
         let bindMessage = cm.buildHybridIdentityBindMessage(hybridPublic: hybridPub)
         let crossSignature = try cm.signBundleData(bindMessage) // 64 B Ed25519 (uses main device signing key)
 
-        // 3. Hybrid-sign the CURRENT classic SPK (suite 0x01).
-        let spkPublic = try cm.localBundlePublicKeys().signedPrekeyPublic
-        let spkHybridSig = try cm.signHybrid(x3dhSignMessage(suiteId: 0x01, publicKey: spkPublic))
-
-        // 4. Hybrid-sign the CURRENT Kyber SPK (suite 0x10), when one exists.
-        var kyberHybridSig: Data?
-        if let kyberPublic = try? PQCKeyManager.shared.kyberSPKPublic() {
-            kyberHybridSig = try cm.signHybrid(x3dhSignMessage(suiteId: 0x10, publicKey: kyberPublic))
-        }
+        // 3+4. Hybrid signatures over current prekeys. Use the lifted helper that prefers core.
+        let (spkHybridSig, kyberHybridSig) = cm.currentHybridPrekeySignatures()
 
         // 5. Upload the self-contained bundle (no rotation triggered).
         _ = try await KeyServiceClient.shared.uploadPreKeys(
@@ -136,12 +129,12 @@ enum HybridIdentityService {
             kyberSignedPreKeyHybridSignature: kyberHybridSig
         )
 
-        // 6. Record success so publishIfNeeded can detect a later SPK rotation and
-        //    re-attach. Only set AFTER the upload is acknowledged — a failed publish
-        //    must leave the fingerprint stale so the next launch retries.
+        // 6. Record success...
         UserDefaults.standard.set(true, forKey: publishedFlagKey)
-        UserDefaults.standard.set(Self.fingerprint(spkPublic), forKey: spkFingerprintKey)
-        Log.info("Hybrid PQ identity published (key=\(hybridPub.count)B, spkSig=\(spkHybridSig.count)B, kyberSig=\(kyberHybridSig?.count ?? 0)B)", category: "HybridPQ")
+        if let spkPublicForFp = try? cm.localBundlePublicKeys().signedPrekeyPublic {
+            UserDefaults.standard.set(Self.fingerprint(spkPublicForFp), forKey: spkFingerprintKey)
+        }
+        Log.info("Hybrid PQ identity published (key=\(hybridPub.count)B, spkSig=\(spkHybridSig?.count ?? 0)B, kyberSig=\(kyberHybridSig?.count ?? 0)B)", category: "HybridPQ")
     }
 
     /// SHA-256 hex of the device's current classic SPK — the staleness key for the
@@ -153,11 +146,6 @@ enum HybridIdentityService {
 
     private static func fingerprint(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-    }
-
-    /// Canonical X3DH sign message, now obtained from core (centralized construction).
-    private static func x3dhSignMessage(suiteId: UInt8, publicKey: Data) -> [UInt8] {
-        return CryptoManager.shared.buildX3dhSignMessage(suiteId: suiteId, publicKey: publicKey)
     }
 
     /// True once the hybrid identity key + cross-signature have been published to the server.
