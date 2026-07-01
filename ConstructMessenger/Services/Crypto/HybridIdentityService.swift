@@ -6,9 +6,13 @@
 //
 //  Publishes the device's hybrid PQ identity bundle (Ed25519 + ML-DSA-65) to the
 //  server, decoupled from key rotation:
-//    - hybrid identity public key (1984 B), generated lazily on first launch;
-//    - an Ed25519 cross-signature binding it to the device's existing identity;
+//    - hybrid identity public key (1984 B), generated lazily on first launch (core-owned);
+//    - an Ed25519 cross-signature binding it to the device's existing identity (core signBundle);
 //    - hybrid signatures over the CURRENT classic SPK (suite 0x01) and Kyber SPK (0x10).
+//
+//  Crypto primitives + key ownership (ensure/sign) live in construct-core (KeyManager + CFE).
+//  No hybrid signature algorithm lives outside core. The "when to publish / on rotation"
+//  policy + downgrade state live here (as designed in the integration plan).
 //
 //  The server (key-service `store_hybrid_identity`) verifies each signature against
 //  the currently stored prekeys and never triggers a rotation. Verification is
@@ -16,7 +20,7 @@
 //
 //  Binding model: the hybrid key's Ed25519 half is INDEPENDENT of the device
 //  identity; the cross-signature is the binding. See
-//  construct-docs/wiki/decisions/pq-signature-protocol-integration-plan.md.
+//  decisions/pq-signature-protocol-integration-plan.md.
 //
 
 import Foundation
@@ -25,13 +29,6 @@ import GRPCCore
 
 @MainActor
 enum HybridIdentityService {
-    /// Domain-separation prologue for the cross-signature. MUST match the server
-    /// constant `HYBRID_ID_BIND_PROLOGUE` in `key-service/src/core.rs`.
-    private static let bindPrologue = "KonstruktHybridId-v1"
-
-    /// X3DH prekey sign-message prologue (shared with the Ed25519 prekey signatures).
-    private static let x3dhPrologue = "KonstruktX3DH-v1"
-
     /// Set once the hybrid bundle has been accepted by the server. Bump the suffix to
     /// force a one-time re-publish after a protocol change.
     private static let publishedFlagKey = "construct.hybridIdentity.published.v1"
@@ -117,9 +114,9 @@ enum HybridIdentityService {
         let hybridPub = try cm.ensureHybridIdentityPublicKey() // 1984 B
 
         // 2. Cross-sign the hybrid key with the device Ed25519 identity.
-        var bindMessage = Data(bindPrologue.utf8)
-        bindMessage.append(hybridPub)
-        let crossSignature = try cm.signBundleData([UInt8](bindMessage)) // 64 B Ed25519
+        // Message construction now comes from core for single source of truth.
+        let bindMessage = cm.buildHybridIdentityBindMessage(hybridPublic: hybridPub)
+        let crossSignature = try cm.signBundleData(bindMessage) // 64 B Ed25519 (uses main device signing key)
 
         // 3. Hybrid-sign the CURRENT classic SPK (suite 0x01).
         let spkPublic = try cm.localBundlePublicKeys().signedPrekeyPublic
@@ -158,13 +155,9 @@ enum HybridIdentityService {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
-    /// `x3dhPrologue || [0x00, suite_id] || public_key` — identical bytes as the Ed25519
-    /// prekey signature, signed instead with the hybrid key.
+    /// Canonical X3DH sign message, now obtained from core (centralized construction).
     private static func x3dhSignMessage(suiteId: UInt8, publicKey: Data) -> [UInt8] {
-        var message = Data(x3dhPrologue.utf8)
-        message.append(contentsOf: [0x00, suiteId])
-        message.append(publicKey)
-        return [UInt8](message)
+        return CryptoManager.shared.buildX3dhSignMessage(suiteId: suiteId, publicKey: publicKey)
     }
 
     /// True once the hybrid identity key + cross-signature have been published to the server.
@@ -184,12 +177,13 @@ enum HybridIdentityService {
 
     /// Hybrid (ML-DSA) signature over a classic SPK public key (suite 0x01). Used by SPK
     /// rotation to send the hybrid signature atomically with the rotated key.
+    /// Message + sign now routed via core helpers.
     static func hybridSPKSignature(spkPublic: Data) throws -> Data {
-        try CryptoManager.shared.signHybrid(x3dhSignMessage(suiteId: 0x01, publicKey: spkPublic))
+        try CryptoManager.shared.signHybridPrekey(suiteId: 0x01, publicKey: spkPublic)
     }
 
     /// Hybrid (ML-DSA) signature over a Kyber SPK public key (suite 0x10).
     static func hybridKyberSPKSignature(kyberPublic: Data) throws -> Data {
-        try CryptoManager.shared.signHybrid(x3dhSignMessage(suiteId: 0x10, publicKey: kyberPublic))
+        try CryptoManager.shared.signHybridPrekey(suiteId: 0x10, publicKey: kyberPublic)
     }
 }

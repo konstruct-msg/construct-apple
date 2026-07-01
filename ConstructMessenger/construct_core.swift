@@ -1278,6 +1278,14 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func signBundleData(bundleDataJson: [UInt8]) throws  -> [UInt8]
     
+    // Hybrid helpers added for centralization (core now owns hybrid sig key + message building)
+    func ensureHybridSignatureKey() throws  -> [UInt8]
+    func hybridSignaturePublicKey()  -> [UInt8]?
+    func signHybrid(message: [UInt8]) throws  -> [UInt8]
+    func buildX3dhSignMessage(suiteId: UInt8, publicKey: [UInt8])  -> [UInt8]
+    func buildHybridIdentityBindMessage(hybridPublicKey: [UInt8])  -> [UInt8]
+    func signHybridPrekey(suiteId: UInt8, publicKey: [UInt8]) throws  -> [UInt8]
+    
 }
 /**
  * Top-level orchestration facade.

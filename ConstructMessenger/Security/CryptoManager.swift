@@ -443,10 +443,11 @@ class CryptoManager {
 
     // MARK: - Hybrid PQ Identity Signatures (Ed25519 + ML-DSA-65)
     //
-    // These wrap the stateless `hybrid*` free functions from construct-core. They do
-    // NOT touch orchestratorCore, so no coreLock is needed. The 2016-byte hybrid
-    // private key lives in Keychain (WhenUnlockedThisDeviceOnly) and is wiped by
-    // deleteAllCryptoKeys()/deleteAllKeys() (account deletion, duress, local reset).
+    // These wrap the stateless `hybrid*` free functions from construct-core for the
+    // primitive operations. The hybrid signature private key is now owned by the
+    // Rust core (KeyManager + CFE private keys export/import) for centralization.
+    // The "when to generate / sign SPK / publish" orchestration policy remains in
+    // Swift (HybridIdentityService) per the integration plan; the crypto lives in core.
     //
     // Client and server share the SAME implementation (RustCrypto ml-dsa, seed-based),
     // so every format is byte-identical and signatures cross-verify:
@@ -456,8 +457,23 @@ class CryptoManager {
 
     /// Returns the device hybrid identity public key (1984 bytes), generating and
     /// persisting a fresh hybrid keypair on first use.
+    ///
+    /// Prefers the core (OrchestratorCore) when available — the hybrid key is now
+    /// owned inside the Rust KeyManager + CFE.
     @discardableResult
     func ensureHybridIdentityPublicKey() throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+
+        if let core = orchestratorCore {
+            let pub = try core.ensureHybridSignatureKey()
+            // During transition we still keep a copy in keychain for older paths.
+            // Full cutover (point 2/5) will remove the separate keychain item.
+            _ = KeychainManager.shared.saveHybridSigPrivateKey(Data(pub)) // best-effort
+            return Data(pub)
+        }
+
+        // Legacy / bootstrap path (no core yet)
         if let stored = KeychainManager.shared.loadHybridSigPrivateKey() {
             return Data(try hybridPublicKeyFromPrivate(privateKey: [UInt8](stored)))
         }
@@ -497,6 +513,36 @@ class CryptoManager {
     /// Ed25519 and ML-DSA-65 components must validate. Stateless.
     func verifyHybrid(publicKey: [UInt8], message: [UInt8], signature: [UInt8]) throws -> Bool {
         return try hybridVerify(publicKey: publicKey, message: message, signature: signature)
+    }
+
+    // MARK: - Core-delegated hybrid helpers (point 1+2 of centralization)
+
+    /// Ask the core (when orchestrator is initialized) for the canonical X3DH prekey
+    /// sign message. Falls back to the same bytes for transition.
+    func buildX3dhSignMessage(suiteId: UInt8, publicKey: Data) -> [UInt8] {
+        if let core = orchestratorCore {
+            return core.buildX3dhSignMessage(suiteId: suiteId, publicKey: [UInt8](publicKey))
+        }
+        var m = Data("KonstruktX3DH-v1".utf8)
+        m.append(0x00)
+        m.append(suiteId)
+        m.append(publicKey)
+        return [UInt8](m)
+    }
+
+    func buildHybridIdentityBindMessage(hybridPublic: Data) -> [UInt8] {
+        if let core = orchestratorCore {
+            return core.buildHybridIdentityBindMessage(hybridPublicKey: [UInt8](hybridPublic))
+        }
+        var m = Data("KonstruktHybridId-v1".utf8)
+        m.append(hybridPublic)
+        return [UInt8](m)
+    }
+
+    /// High-level: produce a hybrid signature over a prekey using the core when possible.
+    func signHybridPrekey(suiteId: UInt8, publicKey: Data) throws -> Data {
+        let msg = buildX3dhSignMessage(suiteId: suiteId, publicKey: publicKey)
+        return try signHybrid(msg)
     }
 
     /// Apply a Kyber KEM shared secret to the named DR session.
