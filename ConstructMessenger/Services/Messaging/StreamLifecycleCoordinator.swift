@@ -32,7 +32,13 @@ final class StreamLifecycleCoordinator {
     private var observationTasks: [Task<Void, Never>] = []
     private var reconnectDebounceTask: Task<Void, Never>?
     private var backgroundDisconnectTask: Task<Void, Never>?
+    private var foregroundSettleTask: Task<Void, Never>?
     private var isStarted = false
+
+    /// Coalescing window for `appDidBecomeActive`. CallKit UI, Control Center and system alerts
+    /// emit bursts of active/inactive transitions (observed 3 in one second during an incoming
+    /// call); without this, each one re-ran VEIL startup + reconnect, thrashing the proxy.
+    private static let foregroundSettleDelay: Duration = .milliseconds(400)
 
     private static let backgroundGracePeriod: Duration = {
         #if os(macOS)
@@ -107,6 +113,8 @@ final class StreamLifecycleCoordinator {
         isStarted = false
         reconnectDebounceTask?.cancel()
         reconnectDebounceTask = nil
+        foregroundSettleTask?.cancel()
+        foregroundSettleTask = nil
         backgroundDisconnectTask?.cancel()
         backgroundDisconnectTask = nil
         observationTasks.forEach { $0.cancel() }
@@ -177,6 +185,28 @@ final class StreamLifecycleCoordinator {
                 self?.handleIncomingMessage(message)
             }
             self.sessionCoordinator.prewarmSessions(for: self.prewarmEligibleContactIds())
+        }
+    }
+
+    /// Runs the foreground-settle work once per burst of `appDidBecomeActive` events.
+    /// Each event reschedules the task; only the final one (after `foregroundSettleDelay` of
+    /// quiet) performs VEIL startup + a conditional reconnect + key health.
+    private func scheduleForegroundSettle() {
+        foregroundSettleTask?.cancel()
+        foregroundSettleTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.foregroundSettleDelay)
+            guard !Task.isCancelled, let self else { return }
+            await VeilProxyManager.shared.verifyAliveOrRestart()
+            await VeilProxyManager.shared.startIfEnabled()
+            if self.streamManager.isConnected {
+                Log.info("App became active — stream still alive, skipping reconnect", category: "StreamLifecycle")
+            } else if self.streamManager.isActivelyConnecting {
+                Log.info("App became active — stream is connecting, skipping forceReconnect", category: "StreamLifecycle")
+            } else {
+                Log.info("App became active — stream is down, reconnecting", category: "StreamLifecycle")
+                self.forceReconnect()
+            }
+            await self.checkKeyHealthInBackground()
         }
     }
 
@@ -298,19 +328,12 @@ final class StreamLifecycleCoordinator {
         let activeTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .appDidBecomeActive) {
                 guard let self else { continue }
+                // Cancel the pending background pause immediately — we're back, don't tear down.
                 self.backgroundDisconnectTask?.cancel()
                 self.backgroundDisconnectTask = nil
-                await VeilProxyManager.shared.verifyAliveOrRestart()
-                await VeilProxyManager.shared.startIfEnabled()
-                if self.streamManager.isConnected {
-                    Log.info("App became active — stream still alive, skipping reconnect", category: "StreamLifecycle")
-                } else if self.streamManager.isActivelyConnecting {
-                    Log.info("App became active — stream is connecting, skipping forceReconnect", category: "StreamLifecycle")
-                } else {
-                    Log.info("App became active — stream is down, reconnecting", category: "StreamLifecycle")
-                    self.forceReconnect()
-                }
-                await self.checkKeyHealthInBackground()
+                // Debounce the heavy foreground work (VEIL startup + reconnect + key health) so a
+                // burst of active/inactive flaps (CallKit, Control Center, alerts) runs it once.
+                self.scheduleForegroundSettle()
             }
         }
         observationTasks.append(activeTask)
