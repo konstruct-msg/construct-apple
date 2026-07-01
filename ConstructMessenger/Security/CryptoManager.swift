@@ -545,6 +545,22 @@ class CryptoManager {
         return try signHybrid(msg)
     }
 
+    /// Returns the hybrid signatures (if hybrid identity is published) over the
+    /// *current* classic and Kyber SPKs. This is the data the publish/rotation
+    /// paths need. Moving this here lifts logic from HybridIdentityService.
+    func currentHybridPrekeySignatures() -> (spk: Data?, kyber: Data?) {
+        // The flag is still in UserDefaults (app state), but the signing is core-routed.
+        guard HybridIdentityService.isHybridIdentityPublished else { return (nil, nil) }
+        let spk: Data? = (try? localBundlePublicKeys().signedPrekeyPublic).flatMap { pub in
+            try? signHybridPrekey(suiteId: 0x01, publicKey: pub)
+        }
+        // Kyber SPK is managed outside main KeyManager for now.
+        let kyber: Data? = (try? PQCKeyManager.shared.kyberSPKPublic()).flatMap { pub in
+            try? signHybridPrekey(suiteId: 0x10, publicKey: pub)
+        }
+        return (spk, kyber)
+    }
+
     /// Apply a Kyber KEM shared secret to the named DR session.
     func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws {
         coreLock.lock()
