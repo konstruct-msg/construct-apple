@@ -152,7 +152,15 @@ enum WirePayloadCoder {
 
         let kemCiphertext: Data? = kemLen > 0 ? data[headerSize ..< sealedBoxStart] : nil
 
-        let sealedBoxData = data[sealedBoxStart...]
+        // suite==3 may carry additive pq_ratchet (u8 type + u16 len + data) after kem; skip for content.
+        var contentStart = sealedBoxStart
+        if suiteId == 3 && data.count > contentStart + 3 {
+            let pqLen = Int(data[(contentStart + 1) ..< (contentStart + 3)]
+                .withUnsafeBytes { $0.loadUnaligned(as: UInt16.self) }
+                .littleEndian)
+            contentStart += 3 + pqLen
+        }
+        let sealedBoxData = data[contentStart...]
         let content = Data(sealedBoxData)
 
         return DecodedPayload(
