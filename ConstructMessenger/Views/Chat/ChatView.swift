@@ -45,7 +45,10 @@ struct ChatView: View {
     @State private var isSessionAtRisk = false
 
     @State private var containerWidth: CGFloat = 390
-    
+    /// Current height of the bottom composer (safeAreaInset). Tracked so we can re-pin the
+    /// scroll when it changes — see the composer's `.onGeometryChange` below.
+    @State private var composerHeight: CGFloat = 0
+
     private enum Layout {
         static let composerHorizontalPadding: CGFloat = 8
         static let composerBottomPadding: CGFloat = 8
@@ -290,6 +293,25 @@ struct ChatView: View {
                 .padding(.horizontal, Layout.composerHorizontalPadding)
                 .padding(.bottom, Layout.composerBottomPadding)
                 .background(Color.clear)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.height
+                } action: { _, newHeight in
+                    // When the composer grows (voice-recording bar, media preview + quality
+                    // chips, reply/edit bar) the ScrollView's bottom safe-area inset changes.
+                    // With .defaultScrollAnchor(.bottom) + LazyVStack this can leave the list
+                    // blank (content scrolled out of the valid range) until the next manual
+                    // scroll — the "chat goes black" symptom. Re-pin to bottom to force a valid
+                    // layout, but only when the user was already near the bottom so we don't
+                    // yank someone who is reading history.
+                    let changed = abs(newHeight - composerHeight) > 1
+                    composerHeight = newHeight
+                    if changed && scrollManager.shouldScrollToBottom {
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(60))
+                            scrollManager.scrollToBottom()
+                        }
+                    }
+                }
         }
         // Edge-swipe-back is handled natively by interactivePopGestureRecognizer
         // (see InteractiveSwipeBack.swift) — no manual DragGesture needed.
