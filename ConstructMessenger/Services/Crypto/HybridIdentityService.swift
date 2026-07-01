@@ -162,16 +162,4 @@ enum HybridIdentityService {
         UserDefaults.standard.set(true, forKey: publishedFlagKey)
         UserDefaults.standard.set(fingerprint(spkPublic), forKey: spkFingerprintKey)
     }
-
-    /// Hybrid (ML-DSA) signature over a classic SPK public key (suite 0x01). Used by SPK
-    /// rotation to send the hybrid signature atomically with the rotated key.
-    /// Message + sign now routed via core helpers.
-    static func hybridSPKSignature(spkPublic: Data) throws -> Data {
-        try CryptoManager.shared.signHybridPrekey(suiteId: 0x01, publicKey: spkPublic)
-    }
-
-    /// Hybrid (ML-DSA) signature over a Kyber SPK public key (suite 0x10).
-    static func hybridKyberSPKSignature(kyberPublic: Data) throws -> Data {
-        try CryptoManager.shared.signHybridPrekey(suiteId: 0x10, publicKey: kyberPublic)
-    }
 }
