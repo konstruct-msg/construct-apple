@@ -16,6 +16,7 @@ import CoreGraphics
 #endif
 import CryptoKit
 import UniformTypeIdentifiers
+import AVFoundation
 import GRPCCore
 
 /// Unified manager for all media operations
@@ -232,6 +233,118 @@ class MediaManager {
             compressed: false,
             blurhash: blurhash
         )
+    }
+
+    // MARK: - Video upload
+
+    /// Transcode a picked video to the requested quality, then encrypt + upload it.
+    /// Progress: transcode maps to 0…0.5, upload to 0.5…1.0, so the sender sees a moving
+    /// bar through the (otherwise silent) compression phase — the long part for big clips.
+    func uploadVideo(
+        _ attachment: MediaAttachment,
+        for recipientId: String,
+        onProgress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> MediaMessageData {
+        guard let sourceURL = attachment.videoURL else {
+            throw MediaUploadError.uploadFailed("Video attachment missing source URL")
+        }
+        Log.info("Uploading video for \(recipientId) (quality=\(attachment.videoQuality.rawValue))", category: "MediaManager")
+
+        let asset = AVURLAsset(url: sourceURL)
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString).appendingPathExtension("mp4")
+
+        let transcodedURL = try await Self.transcodeVideo(
+            asset: asset,
+            to: outputURL,
+            quality: attachment.videoQuality,
+            onProgress: onProgress.map { cb in { @Sendable v in cb(v * 0.5) } }
+        )
+        defer {
+            try? FileManager.default.removeItem(at: transcodedURL)
+            try? FileManager.default.removeItem(at: sourceURL)
+        }
+
+        let videoData = try Data(contentsOf: transcodedURL)
+        guard Int64(videoData.count) <= MessageSizeLimits.maxVideoBytes else {
+            throw MediaUploadError.fileTooLarge(videoData.count, Int(MessageSizeLimits.maxVideoBytes))
+        }
+
+        let uploadResult = try await Self.uploadWithRetry(
+            data: videoData,
+            mimeType: "video/mp4",
+            onProgress: onProgress.map { cb in { @Sendable v in cb(0.5 + v * 0.5) } }
+        )
+        Log.info("Video uploaded: \(uploadResult.mediaId) (\(videoData.count) bytes)", category: "MediaManager")
+        // Cache the plaintext so the SENDER can play their own upload without re-downloading.
+        cacheSentMedia(videoData, mediaId: uploadResult.mediaId)
+
+        let (width, height) = await Self.videoDisplayDimensions(AVURLAsset(url: transcodedURL))
+        let loadedDuration = (try? await asset.load(.duration))?.seconds
+        let duration = attachment.duration ?? loadedDuration
+        let thumbnail = attachment.displayImage.flatMap { try? MediaOptimizer.generateThumbnail(from: $0) }
+        let blurhash = attachment.displayImage.flatMap { BlurHash.encode($0) }
+
+        return MediaMessageData(
+            mediaId: uploadResult.mediaId,
+            mediaUrl: uploadResult.mediaUrl,
+            mediaKey: uploadResult.encryptionKey,
+            mediaType: "video/mp4",
+            size: uploadResult.encryptedSize,
+            width: width,
+            height: height,
+            duration: duration,
+            thumbnail: thumbnail,
+            hash: uploadResult.hash,
+            filename: nil,
+            compressed: attachment.videoQuality != .original,
+            blurhash: blurhash
+        )
+    }
+
+    /// Export `asset` to `outputURL` at the given quality. `.original` uses passthrough
+    /// (container remux only). Reports export progress via `onProgress` (0…1).
+    private static func transcodeVideo(
+        asset: AVURLAsset,
+        to outputURL: URL,
+        quality: VideoQuality,
+        onProgress: (@Sendable (Double) -> Void)?
+    ) async throws -> URL {
+        try? FileManager.default.removeItem(at: outputURL)
+
+        // Fall back to passthrough if the requested preset isn't compatible with the source.
+        let compatible = await AVAssetExportSession.compatibility(ofExportPreset: quality.exportPreset, with: asset, outputFileType: .mp4)
+        let preset = compatible ? quality.exportPreset : AVAssetExportPreset1280x720
+
+        guard let export = AVAssetExportSession(asset: asset, presetName: preset) else {
+            throw MediaUploadError.uploadFailed("Cannot create video export session")
+        }
+
+        let progressTask: Task<Void, Never>? = onProgress.map { cb in
+            Task {
+                for await state in export.states(updateInterval: 0.3) {
+                    if case .exporting(let progress) = state {
+                        cb(progress.fractionCompleted)
+                    }
+                }
+            }
+        }
+        defer { progressTask?.cancel() }
+
+        try await export.export(to: outputURL, as: .mp4)
+        onProgress?(1.0)
+        return outputURL
+    }
+
+    /// Orientation-corrected display dimensions of a video's first video track.
+    private static func videoDisplayDimensions(_ asset: AVURLAsset) async -> (Int?, Int?) {
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+              let size = try? await track.load(.naturalSize),
+              let transform = try? await track.load(.preferredTransform) else {
+            return (nil, nil)
+        }
+        let applied = size.applying(transform)
+        return (Int(abs(applied.width)), Int(abs(applied.height)))
     }
 
     /// Persist the full plaintext of a just-sent media item under its `mediaId`, into the

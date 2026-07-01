@@ -505,6 +505,9 @@
 "uploading" = "Загрузка…";
 "loading" = "Загрузка...";
 "send_original_quality" = "Оригинал";
+"quality_label" = "Качество";
+"quality_compressed" = "Сжатое";
+"quality_original" = "Оригинал";
 "failed_to_load" = "Не удалось загрузить";
 "shared_profile" = "Профиль отправлен";
 

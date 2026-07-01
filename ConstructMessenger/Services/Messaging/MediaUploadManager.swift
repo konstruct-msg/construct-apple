@@ -76,8 +76,15 @@ class MediaUploadManager {
                                 }
                             }
                         }
-                        let data = try await MediaManager.shared.uploadImage(
-                            attachment, for: recipientId, onProgress: itemProgress)
+                        let data: MediaMessageData
+                        switch attachment.kind {
+                        case .video:
+                            data = try await MediaManager.shared.uploadVideo(
+                                attachment, for: recipientId, onProgress: itemProgress)
+                        case .image:
+                            data = try await MediaManager.shared.uploadImage(
+                                attachment, for: recipientId, onProgress: itemProgress)
+                        }
                         return (itemIndex, data)
                     }
                 }

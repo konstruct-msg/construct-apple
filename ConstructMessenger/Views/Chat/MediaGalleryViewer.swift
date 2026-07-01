@@ -5,6 +5,7 @@
 
 import SwiftUI
 import Combine
+import AVKit
 #if os(iOS)
 import Photos
 #else
@@ -69,19 +70,23 @@ struct MediaGalleryViewer: View {
 
     @State private var dismissOffset: CGFloat = 0
 
-    /// Expand each message into per-item entries, skipping non-image media (video etc.)
+    /// Expand each message into per-item entries. Images and videos are shown; audio is skipped.
     private var entries: [GalleryEntry] {
         messages.flatMap { msg -> [GalleryEntry] in
             guard let mc = parseMediaContent(from: msg.displayText), !mc.mediaItems.isEmpty else {
                 return [GalleryEntry(id: "\(msg.id)_0", message: msg, itemIndex: 0, mediaItem: [:])]
             }
             return mc.mediaItems.enumerated().compactMap { idx, item in
-                // Skip video/audio items — gallery shows images only
+                // Show images + videos; skip audio (no visual page for it).
                 if let mimeType = item["mediaType"] as? String,
-                   !mimeType.hasPrefix("image/") { return nil }
+                   !mimeType.hasPrefix("image/"), !mimeType.hasPrefix("video/") { return nil }
                 return GalleryEntry(id: "\(msg.id)_\(idx)", message: msg, itemIndex: idx, mediaItem: item)
             }
         }.filter { !$0.mediaItem.isEmpty || parseMediaContent(from: $0.message.displayText) == nil }
+    }
+
+    private static func isVideoEntry(_ entry: GalleryEntry) -> Bool {
+        (entry.mediaItem["mediaType"] as? String)?.hasPrefix("video/") == true
     }
 
     init(messages: [Message], initialMessageId: String, isPresented: Binding<Bool>) {
@@ -101,13 +106,25 @@ struct MediaGalleryViewer: View {
 
             TabView(selection: $currentEntryId) {
                 ForEach(entries) { entry in
-                    MediaGalleryPage(
-                        message: entry.message,
-                        itemIndex: entry.itemIndex,
-                        mediaItem: entry.mediaItem,
-                        dismissOffset: $dismissOffset,
-                        onDismiss: performDismiss
-                    )
+                    Group {
+                        if Self.isVideoEntry(entry) {
+                            GalleryVideoPage(
+                                message: entry.message,
+                                itemIndex: entry.itemIndex,
+                                mediaItem: entry.mediaItem,
+                                dismissOffset: $dismissOffset,
+                                onDismiss: performDismiss
+                            )
+                        } else {
+                            MediaGalleryPage(
+                                message: entry.message,
+                                itemIndex: entry.itemIndex,
+                                mediaItem: entry.mediaItem,
+                                dismissOffset: $dismissOffset,
+                                onDismiss: performDismiss
+                            )
+                        }
+                    }
                     .tag(entry.id)
                 }
             }
@@ -297,9 +314,13 @@ struct MediaGalleryPage: View {
                         // so TabView owns horizontal paging when not zoomed and the pan
                         // beats paging when zoomed.
                         .highPriorityGesture(panGesture, including: scale > 1.0 ? .all : .none)
-                        // Vertical drag-to-dismiss, simultaneous so it never blocks paging;
-                        // no-ops while zoomed or when the drag is horizontal-dominant.
-                        .simultaneousGesture(dismissGesture)
+                        // Vertical drag-to-dismiss (disabled while zoomed). The latched modifier
+                        // avoids the old jitter where TabView reclaimed the drag mid-swipe.
+                        .modifier(DragToDismiss(
+                            dismissOffset: $dismissOffset,
+                            isEnabled: scale <= 1.0,
+                            onDismiss: onDismiss
+                        ))
                         .onTapGesture(count: 2) { toggleZoom() }
                 } else if isLoading {
                     ProgressView()
@@ -348,28 +369,6 @@ struct MediaGalleryPage: View {
                 } else {
                     offset = .zero
                     lastOffset = .zero
-                }
-            }
-    }
-
-    /// Downward drag-to-dismiss, active only when not zoomed and the gesture is
-    /// vertical-dominant — so horizontal swipes still page the TabView.
-    private var dismissGesture: some Gesture {
-        DragGesture(minimumDistance: 15)
-            .onChanged { value in
-                guard scale <= 1.0,
-                      value.translation.height > 0,
-                      abs(value.translation.height) > abs(value.translation.width) else { return }
-                dismissOffset = value.translation.height
-            }
-            .onEnded { _ in
-                guard scale <= 1.0 else { return }
-                if dismissOffset > 100 {
-                    onDismiss()
-                } else {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        dismissOffset = 0
-                    }
                 }
             }
     }
@@ -440,6 +439,150 @@ struct MediaGalleryPage: View {
                 }
             } catch {
                 await MainActor.run { isLoading = false }
+            }
+        }
+    }
+}
+
+// MARK: - Drag-to-dismiss (shared, latched)
+
+/// Downward drag-to-dismiss for a gallery page. Once a drag is recognised as clearly
+/// vertical it *latches* and keeps following the finger, so the enclosing paging `TabView`
+/// can't reclaim the gesture mid-swipe (the cause of the old sideways jitter). Horizontal
+/// swipes never engage it, so paging stays smooth.
+private struct DragToDismiss: ViewModifier {
+    @Binding var dismissOffset: CGFloat
+    let isEnabled: Bool
+    let onDismiss: () -> Void
+
+    @State private var active = false
+
+    func body(content: Content) -> some View {
+        content.simultaneousGesture(
+            DragGesture(minimumDistance: 12)
+                .onChanged { value in
+                    guard isEnabled else { return }
+                    if !active {
+                        guard value.translation.height > 6,
+                              value.translation.height > abs(value.translation.width) * 1.6 else { return }
+                        active = true
+                    }
+                    dismissOffset = max(0, value.translation.height)
+                }
+                .onEnded { _ in
+                    defer { active = false }
+                    guard isEnabled else { return }
+                    if dismissOffset > 100 {
+                        onDismiss()
+                    } else {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            dismissOffset = 0
+                        }
+                    }
+                }
+        )
+    }
+}
+
+// MARK: - Gallery Video Page
+
+/// Full-screen video playback page. Downloads + decrypts the clip to a temp file (AVPlayer
+/// needs a URL), showing download progress, then autoplays with native transport controls.
+struct GalleryVideoPage: View {
+    let message: Message
+    let itemIndex: Int
+    let mediaItem: [String: Any]
+    @Binding var dismissOffset: CGFloat
+    let onDismiss: () -> Void
+
+    @State private var player: AVPlayer?
+    @State private var tempURL: URL?
+    @State private var isLoading = false
+    @State private var progress: Double = 0
+    @State private var failed = false
+
+    var body: some View {
+        guard !message.isDeleted, message.managedObjectContext != nil else {
+            return AnyView(Color.black)
+        }
+        return AnyView(
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if let player {
+                    VideoPlayer(player: player)
+                        .ignoresSafeArea()
+                } else if failed {
+                    Button { load(forceRetry: true) } label: {
+                        VStack(spacing: 10) {
+                            Image(systemName: "arrow.clockwise").font(.system(size: 28))
+                            Text(LocalizedStringKey("retry")).font(CTFont.regular(13))
+                        }
+                        .foregroundColor(.white.opacity(0.85))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    VStack(spacing: 12) {
+                        ProgressView().tint(.white).scaleEffect(1.3)
+                        if progress > 0 {
+                            Text("\(Int(progress * 100))%")
+                                .font(CTFont.regular(13)).foregroundColor(.white.opacity(0.8)).monospacedDigit()
+                        }
+                    }
+                }
+            }
+            .modifier(DragToDismiss(dismissOffset: $dismissOffset, isEnabled: true, onDismiss: onDismiss))
+            .onAppear { load() }
+            .onDisappear {
+                player?.pause()
+                if let tempURL { try? FileManager.default.removeItem(at: tempURL) }
+            }
+        )
+    }
+
+    private func load(forceRetry: Bool = false) {
+        guard player == nil, !isLoading || forceRetry else { return }
+        failed = false
+        progress = 0
+
+        let item = mediaItem.isEmpty
+            ? (parseMediaContent(from: message.displayText)?.mediaItems.indices.contains(itemIndex) == true
+               ? parseMediaContent(from: message.displayText)!.mediaItems[itemIndex]
+               : [:])
+            : mediaItem
+
+        guard let mediaId = item["mediaId"] as? String,
+              let mediaUrl = item["mediaUrl"] as? String,
+              let mediaKeyStr = item["mediaKey"] as? String,
+              let mediaKey = Data(base64Encoded: mediaKeyStr) else {
+            failed = true
+            return
+        }
+        isLoading = true
+
+        let total = Double((item["size"] as? Int) ?? 0)
+        let onProgress: @Sendable (Int64) -> Void = { received in
+            guard total > 0 else { return }
+            let frac = min(0.99, Double(received) / total)
+            Task { @MainActor in progress = frac }
+        }
+
+        Task {
+            do {
+                let data = try await MediaManager.shared.downloadAndDecryptMedia(
+                    mediaId: mediaId, mediaUrl: mediaUrl, mediaKey: mediaKey, onProgress: onProgress)
+                let url = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString).appendingPathExtension("mp4")
+                try data.write(to: url)
+                await MainActor.run {
+                    let p = AVPlayer(url: url)
+                    tempURL = url
+                    player = p
+                    isLoading = false
+                    p.play()
+                }
+            } catch {
+                Log.error("Gallery video load failed: \(error)", category: "MediaGalleryViewer")
+                await MainActor.run { isLoading = false; failed = true }
             }
         }
     }

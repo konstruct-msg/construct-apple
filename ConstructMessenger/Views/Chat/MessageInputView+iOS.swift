@@ -34,6 +34,8 @@ struct IOSMessageInputView: View {
     @State private var showMicPermissionAlert = false
     /// Per-user preference: send photos at original quality (no recompression).
     @AppStorage("composer.sendOriginalPhotos") private var sendOriginal = false
+    /// Per-user preference: video send quality (720 / 1080 / original).
+    @AppStorage("composer.videoQuality") private var videoQualityRaw = VideoQuality.p1080.rawValue
 
     var body: some View {
         VStack(spacing: 0) {
@@ -93,7 +95,7 @@ struct IOSMessageInputView: View {
                 images: attachments.selectedAttachments.compactMap { $0.displayImage },
                 onRemove: removePhoto
             )
-            qualityToggle
+            qualitySelector
         }
         if !attachments.selectedFileURLs.isEmpty {
             MessageFilePreviewBar(
@@ -130,21 +132,58 @@ struct IOSMessageInputView: View {
         }
     }
 
-    /// Compress / original-quality toggle, shown above the composer when photos are attached.
-    private var qualityToggle: some View {
-        Button { sendOriginal.toggle() } label: {
-            HStack(spacing: 6) {
-                Image(systemName: sendOriginal ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 13))
-                Text(LocalizedStringKey("send_original_quality"))
-                    .font(CTFont.regular(12))
+    private var hasVideoAttachment: Bool {
+        attachments.selectedAttachments.contains { $0.kind == .video }
+    }
+
+    private var selectedVideoQuality: VideoQuality {
+        VideoQuality(rawValue: videoQualityRaw) ?? .p1080
+    }
+
+    /// Quality selector shown above the composer when media is attached. Adapts to content:
+    /// videos get 720 / 1080 / Original; photos keep the binary Compressed / Original choice.
+    /// Chip controls (not a tiny checkbox) so the tap targets are comfortable.
+    private var qualitySelector: some View {
+        HStack(spacing: 8) {
+            Text(LocalizedStringKey("quality_label"))
+                .font(CTFont.regular(12))
+                .foregroundColor(Color.CT.textDim)
+            Spacer(minLength: 8)
+            if hasVideoAttachment {
+                qualityChip(title: VideoQuality.p720.shortLabel, selected: selectedVideoQuality == .p720) {
+                    videoQualityRaw = VideoQuality.p720.rawValue
+                }
+                qualityChip(title: VideoQuality.p1080.shortLabel, selected: selectedVideoQuality == .p1080) {
+                    videoQualityRaw = VideoQuality.p1080.rawValue
+                }
+                qualityChip(title: VideoQuality.original.shortLabel, selected: selectedVideoQuality == .original) {
+                    videoQualityRaw = VideoQuality.original.rawValue
+                }
+            } else {
+                qualityChip(title: NSLocalizedString("quality_compressed", comment: "Compressed media quality"),
+                            selected: !sendOriginal) { sendOriginal = false }
+                qualityChip(title: NSLocalizedString("quality_original", comment: "Original media quality"),
+                            selected: sendOriginal) { sendOriginal = true }
             }
-            .foregroundColor(sendOriginal ? Color.CT.accent : Color.CT.textDim)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 6)
+    }
+
+    private func qualityChip(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(CTFont.medium(12))
+                .foregroundColor(selected ? Color.CT.bg : Color.CT.text)
+                .padding(.horizontal, 14)
+                .frame(height: 34)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(selected ? Color.CT.accent : Color.CT.text.opacity(0.08))
+                )
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 14)
-        .padding(.bottom, 4)
+        .animation(.easeOut(duration: 0.15), value: selected)
     }
 
     private var inputRow: some View {
@@ -179,7 +218,7 @@ struct IOSMessageInputView: View {
             Button(LocalizedStringKey("files")) { showFilePicker = true }
             Button(LocalizedStringKey("cancel"), role: .cancel) {}
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos, maxSelectionCount: 99, matching: .images)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos, maxSelectionCount: 99, matching: .any(of: [.images, .videos]))
         .sheet(isPresented: $showCameraPicker) {
             CameraPickerView { image in
                 attachments.appendDroppedImages([image])
@@ -205,9 +244,18 @@ struct IOSMessageInputView: View {
     }
 
     private func sendMessage() {
-        let quality: MediaQuality = sendOriginal ? .original : .compressed
+        // Photos: the binary Compressed/Original switch. In a mixed batch the video 720/1080
+        // choices map images to compressed, "Original" maps them to original.
+        let imageQuality: MediaQuality = {
+            if hasVideoAttachment { return selectedVideoQuality == .original ? .original : .compressed }
+            return sendOriginal ? .original : .compressed
+        }()
+        let videoQuality = selectedVideoQuality
         let preparedAttachments = attachments.selectedAttachments.map { att -> MediaAttachment in
-            var a = att; a.quality = quality; return a
+            var a = att
+            a.quality = imageQuality
+            a.videoQuality = videoQuality
+            return a
         }
         onSend(preparedAttachments, attachments.selectedFileURLs)
         selectedPhotos.removeAll()

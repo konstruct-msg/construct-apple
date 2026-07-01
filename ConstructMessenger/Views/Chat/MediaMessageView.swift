@@ -76,9 +76,15 @@ private struct SingleMediaCell: View {
             : mediaContent.media
     }
 
+    private var isVideo: Bool {
+        (itemDict["mediaType"] as? String)?.hasPrefix("video/") == true
+    }
+
     var body: some View {
         Group {
-            if let thumbnail = thumbnailImage {
+            if isVideo {
+                videoCell
+            } else if let thumbnail = thumbnailImage {
                 let isUploading = isPlaceholder && message.deliveryStatus == .sending
                 Image(platformImage: thumbnail)
                     .resizable()
@@ -102,7 +108,47 @@ private struct SingleMediaCell: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: thumbnailImage != nil)
-        .onAppear { loadThumbnail() }
+        .onAppear { if isVideo { loadVideoPoster() } else { loadThumbnail() } }
+    }
+
+    /// Video bubble: poster (sender) or blurhash preview (receiver) + play + duration.
+    /// Never downloads the full video — playback happens on tap in the gallery.
+    private var videoCell: some View {
+        let poster = thumbnailImage ?? blurPreview
+        let isUploading = isPlaceholder && message.deliveryStatus == .sending
+        return ZStack {
+            if let poster {
+                Image(platformImage: poster)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 260, maxHeight: 320)
+            } else {
+                Rectangle().fill(Color.CT.bgMsg)
+                    .frame(width: previewSize.width, height: previewSize.height)
+            }
+            if !isUploading { videoPlayGlyph }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(alignment: .bottomLeading) {
+            if !isUploading, let d = itemDict["duration"] as? Double, d > 0 { durationBadge(d) }
+        }
+        .overlay(alignment: .bottom) { if isUploading { uploadingBadge } }
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
+        )
+        .onTapGesture { if !isPlaceholder { onTap() } }
+    }
+
+    private func loadVideoPoster() {
+        if blurPreview == nil, let bh = itemDict["blurhash"] as? String, !bh.isEmpty {
+            blurPreview = BlurHash.decode(bh, size: CGSize(width: 32, height: 32))
+        }
+        if thumbnailImage == nil,
+           let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
+           let img = PlatformImage(data: data) {
+            thumbnailImage = img
+        }
     }
 
     // MARK: Placeholder views
@@ -129,6 +175,23 @@ private struct SingleMediaCell: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .padding(.bottom, 8)
         .animation(.easeOut(duration: 0.2), value: progress)
+    }
+
+    private var videoPlayGlyph: some View {
+        Image(systemName: "play.fill")
+            .font(.system(size: 22))
+            .foregroundColor(.white)
+            .frame(width: 54, height: 54)
+            .background(.black.opacity(0.45), in: Circle())
+    }
+
+    private func durationBadge(_ seconds: Double) -> some View {
+        Text(formatMediaDuration(seconds))
+            .font(CTFont.regular(11)).foregroundColor(.white).monospacedDigit()
+            .padding(.horizontal, 6).padding(.vertical, 3)
+            .background(.black.opacity(0.55))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .padding(8)
     }
 
     private var loadingPlaceholder: some View {
@@ -422,10 +485,16 @@ private struct GridCell: View {
         mediaContent.mediaItems.indices.contains(itemIndex) ? mediaContent.mediaItems[itemIndex] : [:]
     }
 
+    private var isVideo: Bool {
+        (itemDict["mediaType"] as? String)?.hasPrefix("video/") == true
+    }
+
     var body: some View {
         ZStack {
             if let img = thumbnailImage {
                 Image(platformImage: img).resizable().scaledToFill()
+            } else if isVideo, let preview = blurPreview {
+                Image(platformImage: preview).resizable().scaledToFill()
             } else {
                 if isLoading {
                     loadingPlaceholder
@@ -434,13 +503,22 @@ private struct GridCell: View {
                 }
             }
 
+            let isUploading = isPlaceholder && message.deliveryStatus == .sending
+            if isVideo && !isUploading {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.white)
+                    .frame(width: 38, height: 38)
+                    .background(.black.opacity(0.45), in: Circle())
+            }
+
             if extraCount > 0 {
                 Color.black.opacity(0.5)
                 Text("+\(extraCount)")
                     .font(.title2.weight(.semibold)).foregroundColor(.white)
             }
 
-            if isPlaceholder && message.deliveryStatus == .sending {
+            if isUploading {
                 Color.black.opacity(0.35)
                 let progress = MediaUploadProgressTracker.shared.value(for: message.id)
                 if let progress, progress > 0 {
@@ -454,13 +532,26 @@ private struct GridCell: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            if loadFailed {
+            if isVideo {
+                if !isPlaceholder { onTap() }
+            } else if loadFailed {
                 loadThumbnail(forceRetry: true)
             } else if !isPlaceholder, thumbnailImage != nil {
                 onTap()
             }
         }
-        .onAppear { loadThumbnail() }
+        .onAppear { if isVideo { loadVideoPoster() } else { loadThumbnail() } }
+    }
+
+    private func loadVideoPoster() {
+        if blurPreview == nil, let bh = itemDict["blurhash"] as? String, !bh.isEmpty {
+            blurPreview = BlurHash.decode(bh, size: CGSize(width: 32, height: 32))
+        }
+        if thumbnailImage == nil,
+           let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
+           let img = PlatformImage(data: data) {
+            thumbnailImage = img
+        }
     }
 
     @ViewBuilder
@@ -596,6 +687,12 @@ private struct GridCell: View {
 private func isMediaMissingError(_ error: Error) -> Bool {
     guard let rpcError = error as? RPCError else { return false }
     return rpcError.code == .notFound
+}
+
+/// "m:ss" for a media duration.
+func formatMediaDuration(_ seconds: Double) -> String {
+    let total = Int(seconds.rounded())
+    return String(format: "%d:%02d", total / 60, total % 60)
 }
 
 // MARK: - Liquid Glass helper

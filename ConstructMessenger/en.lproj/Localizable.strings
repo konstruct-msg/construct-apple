@@ -504,6 +504,9 @@
 "uploading" = "Uploading…";
 "loading" = "Loading...";
 "send_original_quality" = "Original quality";
+"quality_label" = "Quality";
+"quality_compressed" = "Compressed";
+"quality_original" = "Original";
 "failed_to_load" = "Failed to load";
 "shared_profile" = "Shared profile";
 
