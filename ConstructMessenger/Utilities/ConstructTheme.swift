@@ -444,12 +444,13 @@ struct CTSearchBar: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
-        .background(Color.CT.outMsgBg)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.CT.noise, lineWidth: 0.5)
-        )
+        .background(.ultraThinMaterial)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(.white.opacity(0.15), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 10)
     }
 }
 
