@@ -25,11 +25,25 @@ class MediaUploadManager {
     ///   - recipientId: ID of the recipient user
     /// - Returns: MediaUploadResult with content and thumbnails
     /// - Throws: MediaUploadError if upload fails
+    /// Aggregates per-item upload fractions into one overall album fraction.
+    private actor ProgressAggregator {
+        private var fractions: [Double]
+        init(count: Int) { fractions = Array(repeating: 0, count: max(count, 1)) }
+        func update(index: Int, fraction: Double) -> Double {
+            if fractions.indices.contains(index) { fractions[index] = fraction }
+            return fractions.reduce(0, +) / Double(fractions.count)
+        }
+    }
+
+    /// - Parameter onProgress: overall album upload fraction (0.0…1.0), reported as items
+    ///   upload concurrently. Called off the main actor — marshal before touching UI.
     func uploadMediaAndBuildContent(
         attachments: [MediaAttachment],
         caption: String,
-        recipientId: String
+        recipientId: String,
+        onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> MediaUploadResult {
+        let aggregator = onProgress != nil ? ProgressAggregator(count: attachments.count) : nil
         // Local thumbnails for the sender placeholder (per item, in order).
         let thumbnails: [Data] = attachments.compactMap { att in
             att.displayImage.flatMap { MediaManager.shared.generateThumbnail(from: $0) }
@@ -52,9 +66,19 @@ class MediaUploadManager {
                 of: (Int, MediaMessageData).self
             ) { group in
                 for (offset, attachment) in batch.enumerated() {
+                    let itemIndex = base + offset
                     group.addTask {
-                        let data = try await MediaManager.shared.uploadImage(attachment, for: recipientId)
-                        return (base + offset, data)
+                        let itemProgress: (@Sendable (Double) -> Void)? = aggregator.map { agg in
+                            { @Sendable fraction in
+                                Task {
+                                    let overall = await agg.update(index: itemIndex, fraction: fraction)
+                                    onProgress?(overall)
+                                }
+                            }
+                        }
+                        let data = try await MediaManager.shared.uploadImage(
+                            attachment, for: recipientId, onProgress: itemProgress)
+                        return (itemIndex, data)
                     }
                 }
                 var acc: [(Int, MediaMessageData)] = []

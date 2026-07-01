@@ -151,10 +151,14 @@ class MediaManager {
     ///   - image: UIImage to upload
     ///   - recipientId: User ID to encrypt media key for
     /// - Returns: Media metadata for message content
-    func uploadImage(_ attachment: MediaAttachment, for recipientId: String) async throws -> MediaMessageData {
+    func uploadImage(
+        _ attachment: MediaAttachment,
+        for recipientId: String,
+        onProgress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> MediaMessageData {
         // Original-quality: upload the source bytes untouched (preserve HEIC/PNG + mime).
         if attachment.quality == .original {
-            return try await uploadOriginalImage(attachment, for: recipientId)
+            return try await uploadOriginalImage(attachment, for: recipientId, onProgress: onProgress)
         }
 
         Log.info("Uploading image for recipient: \(recipientId) (compressed)", category: "MediaManager")
@@ -164,7 +168,7 @@ class MediaManager {
         let optimized = try MediaOptimizer.optimizeImage(image)
 
         // Upload with 1 automatic retry on stream failure
-        let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType)
+        let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType, onProgress: onProgress)
         Log.info("Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         // Cache the full plaintext locally so the SENDER sees full quality (bubble +
         // gallery) without re-downloading their own upload.
@@ -194,13 +198,17 @@ class MediaManager {
     /// Upload the original source bytes untouched (no JPEG re-encode), preserving the
     /// real mime (HEIC/PNG/JPEG). A small JPEG thumbnail + pixel dimensions are still
     /// derived from the display image so bubbles render before the full download.
-    private func uploadOriginalImage(_ attachment: MediaAttachment, for recipientId: String) async throws -> MediaMessageData {
+    private func uploadOriginalImage(
+        _ attachment: MediaAttachment,
+        for recipientId: String,
+        onProgress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> MediaMessageData {
         let data = attachment.originalData
         Log.info("Uploading ORIGINAL image for recipient: \(recipientId) (mime=\(attachment.mimeType), \(data.count) bytes)", category: "MediaManager")
         guard Int64(data.count) <= MessageSizeLimits.maxImageBytes else {
             throw MediaUploadError.fileTooLarge(data.count, Int(MessageSizeLimits.maxImageBytes))
         }
-        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType)
+        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType, onProgress: onProgress)
         Log.info("Original image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         // Cache the full original locally so the SENDER sees full quality offline.
         cacheSentMedia(data, mediaId: uploadResult.mediaId)
@@ -251,12 +259,17 @@ class MediaManager {
     /// Uploads data with up to 2 automatic retries on transient gRPC/VEIL stream failures.
     /// Checks MediaSendCache first — identical plaintext within the 30-minute TTL window
     /// skips re-encryption and re-upload entirely.
-    static func uploadWithRetry(data: Data, mimeType: String) async throws -> MediaServiceClient.UploadedMedia {
+    static func uploadWithRetry(
+        data: Data,
+        mimeType: String,
+        onProgress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> MediaServiceClient.UploadedMedia {
         // Cache hit: same plaintext already uploaded recently → reuse mediaId + AES key.
         // Safe: the key is carried inside the DR-encrypted message payload, so each
         // recipient still gets an independent encrypted envelope.
         if let cached = await MediaSendCache.shared.cachedUpload(for: data) {
             Log.info("Media send cache hit — reusing \(cached.mediaId)", category: "MediaManager")
+            onProgress?(1.0)
             return cached
         }
 
@@ -275,7 +288,8 @@ class MediaManager {
                 if let ns = delay {
                     try await Task.sleep(nanoseconds: ns)
                 }
-                let result = try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType)
+                let result = try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType, onProgress: onProgress)
+                onProgress?(1.0)
                 await MediaSendCache.shared.storeUpload(result, for: data)
                 return result
             } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {

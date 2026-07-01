@@ -107,15 +107,28 @@ private struct SingleMediaCell: View {
 
     // MARK: Placeholder views
 
+    @ViewBuilder
     private var uploadingBadge: some View {
-        HStack(spacing: 5) {
-            ProgressView().scaleEffect(0.75).tint(.white)
-            Text(LocalizedStringKey("uploading"))
-                .font(CTFont.regular(11)).foregroundColor(.white)
+        let progress = MediaUploadProgressTracker.shared.value(for: message.id)
+        HStack(spacing: 6) {
+            if let progress, progress > 0 {
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+                    .tint(.white)
+                    .frame(width: 90)
+                Text("\(Int(progress * 100))%")
+                    .font(CTFont.regular(11)).foregroundColor(.white).monospacedDigit()
+            } else {
+                ProgressView().scaleEffect(0.75).tint(.white)
+                Text(LocalizedStringKey("uploading"))
+                    .font(CTFont.regular(11)).foregroundColor(.white)
+            }
         }
         .padding(.horizontal, 8).padding(.vertical, 4)
         .background(.black.opacity(0.55))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
         .padding(.bottom, 8)
+        .animation(.easeOut(duration: 0.2), value: progress)
     }
 
     private var loadingPlaceholder: some View {
@@ -428,8 +441,15 @@ private struct GridCell: View {
             }
 
             if isPlaceholder && message.deliveryStatus == .sending {
-                Color.black.opacity(0.3)
-                ProgressView().tint(.white)
+                Color.black.opacity(0.35)
+                let progress = MediaUploadProgressTracker.shared.value(for: message.id)
+                if let progress, progress > 0 {
+                    Text("\(Int(progress * 100))%")
+                        .font(CTFont.regular(12)).foregroundColor(.white).monospacedDigit()
+                        .animation(.easeOut(duration: 0.2), value: progress)
+                } else {
+                    ProgressView().tint(.white)
+                }
             }
         }
         .contentShape(Rectangle())

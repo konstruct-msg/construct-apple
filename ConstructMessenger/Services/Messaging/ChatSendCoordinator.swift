@@ -515,6 +515,7 @@ final class ChatSendCoordinator {
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
             attachments: attachments, fileURLs: [], caption: caption, replyTo: replyTo)
         viewModel?.isSending = true
+        MediaUploadProgressTracker.shared.set(0, for: placeholderId)
         Log.info("Uploading \(attachments.count) image(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
         Task { [weak self] in
             guard let self else { return }
@@ -522,8 +523,12 @@ final class ChatSendCoordinator {
                 let result = try await mediaUploadManager.uploadMediaAndBuildContent(
                     attachments: attachments,
                     caption: caption,
-                    recipientId: recipientId
+                    recipientId: recipientId,
+                    onProgress: { fraction in
+                        Task { @MainActor in MediaUploadProgressTracker.shared.set(fraction, for: placeholderId) }
+                    }
                 )
+                MediaUploadProgressTracker.shared.clear(placeholderId)
                 pendingMediaUploads.removeValue(forKey: placeholderId)
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
                 // Binary wire: send the album as a protobuf `.mediaAlbum` MessageContent.
@@ -544,6 +549,7 @@ final class ChatSendCoordinator {
                 )
             } catch {
                 Log.error("Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
+                MediaUploadProgressTracker.shared.clear(placeholderId)
                 updateMessageStatus(messageId: placeholderId, status: .failed)
                 ErrorRouter.shared.report(
                     AppError.mediaUploadFailed(error.localizedDescription),

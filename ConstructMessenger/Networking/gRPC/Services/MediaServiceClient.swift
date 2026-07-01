@@ -88,7 +88,14 @@ extension MediaServiceClient {
 
     // MARK: - High-Level: Upload Data
 
-    func uploadData(_ data: Data, mimeType: String = "application/octet-stream") async throws -> UploadedMedia {
+    /// - Parameter onProgress: called with cumulative upload fraction (0.0…1.0) as chunks
+    ///   are written to the stream, for real send-progress UI. Best-effort; may be called
+    ///   from a background task, so marshal to the main actor in the handler if updating UI.
+    func uploadData(
+        _ data: Data,
+        mimeType: String = "application/octet-stream",
+        onProgress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> UploadedMedia {
         // 1. Generate encryption key
         var keyBytes = [UInt8](repeating: 0, count: 32)
         guard SecRandomCopyBytes(kSecRandomDefault, keyBytes.count, &keyBytes) == errSecSuccess else {
@@ -134,6 +141,7 @@ extension MediaServiceClient {
             let uploadRequest = StreamingClientRequest<Shared_Proto_Services_V1_UploadMediaRequest>(
                 metadata: [],
                 producer: { writer in
+                    let totalBytes = capturedEncryptedData.count
                     for i in 0..<totalChunks {
                         let start = i * chunkSize
                         let end = min(start + chunkSize, capturedEncryptedData.count)
@@ -142,9 +150,14 @@ extension MediaServiceClient {
                         req.chunk = capturedEncryptedData.subdata(in: start..<end)
                         req.chunkNumber = Int32(i)
                         req.isLast = (i == totalChunks - 1)
-                        req.totalSize = Int64(capturedEncryptedData.count)
+                        req.totalSize = Int64(totalBytes)
                         req.fileHash = fileHash
                         try await writer.write(req)
+                        if let onProgress, totalBytes > 0 {
+                            // Cap streamed-bytes fraction at 0.95 — the final 5% covers the
+                            // server's assemble + ack round-trip after the last chunk.
+                            onProgress(min(0.95, Double(end) / Double(totalBytes)))
+                        }
                     }
                 }
             )
