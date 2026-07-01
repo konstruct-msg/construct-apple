@@ -411,6 +411,15 @@ public struct Shared_Proto_Services_V1_PreKeyBundle: @unchecked Sendable {
   /// Clears the value of `kyberPreKeyHybridSignature`. Subsequent reads from it will return its default value.
   public mutating func clearKyberPreKeyHybridSignature() {_uniqueStorage()._kyberPreKeyHybridSignature = nil}
 
+  /// Supports SuiteID::PQ_RATCHET (3) for sparse continuous post-quantum ratchet.
+  /// When true, initiators that also support it may open new sessions with suite 3
+  /// (self-sustaining PQ material, no further OTPK consumption after the first message).
+  /// Additive capability flag (see PQ_RATCHET_AND_OTPK_ELIMINATION_SPEC).
+  public var supportsPqRatchet: Bool {
+    get {_storage._supportsPqRatchet}
+    set {_uniqueStorage()._supportsPqRatchet = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1158,7 +1167,7 @@ extension Shared_Proto_Services_V1_KtInclusionProof: SwiftProtobuf.Message, Swif
 
 extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PreKeyBundle"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registration_id\0\u{3}identity_key\0\u{3}signed_pre_key\0\u{3}signed_pre_key_id\0\u{3}signed_pre_key_signature\0\u{3}one_time_pre_key\0\u{3}one_time_pre_key_id\0\u{3}crypto_suite\0\u{3}generated_at\0\u{3}kyber_pre_key\0\u{3}kyber_pre_key_id\0\u{3}kyber_pre_key_signature\0\u{3}kyber_one_time_pre_key\0\u{3}kyber_one_time_pre_key_id\0\u{3}spk_uploaded_at\0\u{3}spk_rotation_epoch\0\u{3}kyber_spk_uploaded_at\0\u{3}kyber_spk_rotation_epoch\0\u{3}bundle_signature\0\u{3}hybrid_identity_key\0\u{3}hybrid_identity_signature\0\u{3}signed_pre_key_hybrid_signature\0\u{3}kyber_pre_key_hybrid_signature\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registration_id\0\u{3}identity_key\0\u{3}signed_pre_key\0\u{3}signed_pre_key_id\0\u{3}signed_pre_key_signature\0\u{3}one_time_pre_key\0\u{3}one_time_pre_key_id\0\u{3}crypto_suite\0\u{3}generated_at\0\u{3}kyber_pre_key\0\u{3}kyber_pre_key_id\0\u{3}kyber_pre_key_signature\0\u{3}kyber_one_time_pre_key\0\u{3}kyber_one_time_pre_key_id\0\u{3}spk_uploaded_at\0\u{3}spk_rotation_epoch\0\u{3}kyber_spk_uploaded_at\0\u{3}kyber_spk_rotation_epoch\0\u{3}bundle_signature\0\u{3}hybrid_identity_key\0\u{3}hybrid_identity_signature\0\u{3}signed_pre_key_hybrid_signature\0\u{3}kyber_pre_key_hybrid_signature\0\u{3}supports_pq_ratchet\0")
 
   fileprivate class _StorageClass {
     var _registrationID: UInt32 = 0
@@ -1184,6 +1193,7 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
     var _hybridIdentitySignature: Data? = nil
     var _signedPreKeyHybridSignature: Data? = nil
     var _kyberPreKeyHybridSignature: Data? = nil
+    var _supportsPqRatchet: Bool = false
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -1217,6 +1227,7 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
       _hybridIdentitySignature = source._hybridIdentitySignature
       _signedPreKeyHybridSignature = source._signedPreKeyHybridSignature
       _kyberPreKeyHybridSignature = source._kyberPreKeyHybridSignature
+      _supportsPqRatchet = source._supportsPqRatchet
     }
   }
 
@@ -1258,6 +1269,7 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
         case 21: try { try decoder.decodeSingularBytesField(value: &_storage._hybridIdentitySignature) }()
         case 22: try { try decoder.decodeSingularBytesField(value: &_storage._signedPreKeyHybridSignature) }()
         case 23: try { try decoder.decodeSingularBytesField(value: &_storage._kyberPreKeyHybridSignature) }()
+        case 24: try { try decoder.decodeSingularBoolField(value: &_storage._supportsPqRatchet) }()
         default: break
         }
       }
@@ -1339,6 +1351,9 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
       try { if let v = _storage._kyberPreKeyHybridSignature {
         try visitor.visitSingularBytesField(value: v, fieldNumber: 23)
       } }()
+      if _storage._supportsPqRatchet != false {
+        try visitor.visitSingularBoolField(value: _storage._supportsPqRatchet, fieldNumber: 24)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1371,6 +1386,7 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
         if _storage._hybridIdentitySignature != rhs_storage._hybridIdentitySignature {return false}
         if _storage._signedPreKeyHybridSignature != rhs_storage._signedPreKeyHybridSignature {return false}
         if _storage._kyberPreKeyHybridSignature != rhs_storage._kyberPreKeyHybridSignature {return false}
+        if _storage._supportsPqRatchet != rhs_storage._supportsPqRatchet {return false}
         return true
       }
       if !storagesAreEqual {return false}
