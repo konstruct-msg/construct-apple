@@ -17,10 +17,10 @@ struct ChatNavBarView: View {
     let onToggleSearch: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 16) {
             Button(action: onBack) {
                 Image(systemName: "chevron.backward.circle.fill")
-                    .font(.system(size: 22))
+                    .font(.system(size: 28))
                     .foregroundColor(Color.CT.accent)
             }
 
@@ -62,13 +62,13 @@ struct ChatNavBarView: View {
                     }
                     Button(action: onStartCall) {
                         Image(systemName: "phone")
-                            .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
+                            .font(.system(size: 24, weight: .medium))
                             .foregroundColor(Color.CT.accent)
                     }
                 }
                 Button(action: onToggleSearch) {
                     Image(systemName: isSearchActive ? "xmark" : "magnifyingglass")
-                        .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                        .font(.system(size: 24, weight: .medium))
                         .foregroundColor(Color.CT.accent)
                 }
             }
