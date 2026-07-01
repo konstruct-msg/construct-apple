@@ -465,18 +465,10 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
 
-        if let core = orchestratorCore {
-            // Migration: ensure the legacy keychain hybrid key is known.
-            // Full import into core-owned CFE will happen after bindings regeneration + rebuild.
-            if let oldPriv = KeychainManager.shared.loadHybridSigPrivateKey(), !oldPriv.isEmpty {
-                _ = KeychainManager.shared.saveHybridSigPrivateKey(oldPriv) // ensure present
-                // On next core persist the hybrid will be in state if ensure was called through core.
-            }
-
-            let pub = try core.ensureHybridSignatureKey()
-            // During transition keep keychain copy; will be cleaned in full cutover.
-            _ = KeychainManager.shared.saveHybridSigPrivateKey(Data(pub))
-            return Data(pub)
+        if orchestratorCore != nil {
+            // TODO after full regeneration + rebuild: 
+            //   if let pub = try? core.ensureHybridSignatureKey() { ... use core }
+            // For now use legacy path (core will own after cutover).
         }
 
         // Legacy / bootstrap path (no core yet)
@@ -526,9 +518,8 @@ class CryptoManager {
     /// Ask the core (when orchestrator is initialized) for the canonical X3DH prekey
     /// sign message. Falls back to the same bytes for transition.
     func buildX3dhSignMessage(suiteId: UInt8, publicKey: Data) -> [UInt8] {
-        if let core = orchestratorCore {
-            return core.buildX3dhSignMessage(suiteId: suiteId, publicKey: [UInt8](publicKey))
-        }
+        // Core provides the canonical implementation (after bindings/lib rebuild).
+        // Current generated binding does not expose it yet, so use the same bytes.
         var m = Data("KonstruktX3DH-v1".utf8)
         m.append(0x00)
         m.append(suiteId)
@@ -537,9 +528,6 @@ class CryptoManager {
     }
 
     func buildHybridIdentityBindMessage(hybridPublic: Data) -> [UInt8] {
-        if let core = orchestratorCore {
-            return core.buildHybridIdentityBindMessage(hybridPublicKey: [UInt8](hybridPublic))
-        }
         var m = Data("KonstruktHybridId-v1".utf8)
         m.append(hybridPublic)
         return [UInt8](m)
@@ -554,6 +542,7 @@ class CryptoManager {
     /// Returns the hybrid signatures (if hybrid identity is published) over the
     /// *current* classic and Kyber SPKs. This is the data the publish/rotation
     /// paths need. Moving this here lifts logic from HybridIdentityService.
+    @MainActor
     func currentHybridPrekeySignatures() -> (spk: Data?, kyber: Data?) {
         // The flag is still in UserDefaults (app state), but the signing is core-routed.
         guard HybridIdentityService.isHybridIdentityPublished else { return (nil, nil) }
