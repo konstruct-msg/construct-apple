@@ -93,12 +93,15 @@ class ConnectionStatusManager {
         return connectionStatus.text(localized: true, phase: connectingPhase)
     }
 
+    /// Subtitle for the in-chat nav bar. Intentionally minimal: the chat must not surface
+    /// transport churn (VEIL re-probes, transient reconnects). We show the chat-relevant E2EE
+    /// "encrypting" phase, and — only for a genuine, sustained outage — a coarse "no connection".
+    /// The transient `.connecting` state is deliberately NOT shown here; full transport detail
+    /// (VEIL relay, probe phase, cooldown) lives in Network Settings for users who opt in.
     func navigationStatusSubtitle(isInitializingSession: Bool) -> String? {
         if isInitializingSession {
             return NSLocalizedString("status_encrypting", comment: "")
-        } else if connectionStatus == .connecting {
-            return NSLocalizedString("status_connecting", comment: "")
-        } else if !isConnected {
+        } else if connectionStatus == .disconnected {
             return NSLocalizedString("status_no_connection", comment: "")
         }
         return nil
@@ -141,19 +144,20 @@ class ConnectionStatusManager {
         let newStatus: ConnectionStatus
         if !reachable {
             newStatus = .disconnected
+        } else if hasRecentRpc {
+            // A successful RPC within the grace window proves the underlying transport is
+            // fundamentally working. Transient FSM re-probes — VEIL local-proxy restarts
+            // (`staleLocalProxy`), a single direct failure, cooldown ticks — must NOT flap the
+            // user-facing status to "Connecting…". This is the whole point of the grace window
+            // (see `connectedGraceWindow`); honour it for EVERY reachable state, not just the
+            // steady ones. Only a genuine sustained outage (no RPC for 90s) surfaces below.
+            newStatus = .connected
         } else {
             switch mirrorState {
             case .offline:
                 newStatus = .disconnected
-            case .direct(let fails):
-                if fails == 0 {
-                    newStatus = hasRecentRpc ? .connected : .connecting
-                } else {
-                    newStatus = .connecting
-                }
-            case .veilActive:
-                newStatus = hasRecentRpc ? .connected : .connecting
-            case .veilProbing, .veilCooldown:
+            default:
+                // Reachable, but no recent successful RPC → genuinely (re)connecting.
                 newStatus = .connecting
             }
         }
