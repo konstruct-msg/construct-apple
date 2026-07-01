@@ -19,6 +19,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         Log.info("Application did finish launching")
 
+        // Bootstrap the foreground-state tracker now (at launch, while active) so its lifecycle
+        // observers are registered before the first background transition. The transport layer
+        // reads it off-main to suppress futile VEIL restarts while suspended (see AppActivityState).
+        _ = AppActivityState.shared
+
         // Register UserDefaults defaults — only applies when key has never been set.
         // This makes push notifications and background fetch ON for new installs.
         UserDefaults.standard.register(defaults: [

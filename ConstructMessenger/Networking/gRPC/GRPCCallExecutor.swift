@@ -99,12 +99,21 @@ final class GRPCCallExecutor: Sendable {
                 } else {
                     target = .direct(.h2)
                 }
-                await TransportRouter.shared.send(.rpcFailed(kind: kind, via: target, foreground: true))
+                // Pass the REAL foreground state. The FSM's rotate/escalate guards
+                // (reduceActive / reduceDirect) intentionally ignore background failures: iOS
+                // suspends the Rust VEIL runtime in the background and reclaims its local socket,
+                // so a `staleLocalProxy` there is expected and restarting the proxy would just
+                // churn (spin up a session that gets re-suspended seconds later). Hardcoding
+                // `true` here defeated that guard; use the tracker instead.
+                let isForeground = AppActivityState.shared.isForeground
+                await TransportRouter.shared.send(.rpcFailed(kind: kind, via: target, foreground: isForeground))
 
                 // On staleLocalProxy the FSM emits effects to rebuild VEIL; let the next
                 // for-iteration use the freshly set port (or fall back to direct if rebuild failed).
+                // Backgrounded, the FSM won't rebuild, so retrying the dead port is pointless —
+                // bail out and let the caller (e.g. background fetch) fail gracefully.
                 if kind == .staleLocalProxy {
-                    continue
+                    if isForeground { continue } else { throw error }
                 }
 
                 // Auth retry on first attempt — only if no transport failure was already handled.
@@ -126,14 +135,14 @@ final class GRPCCallExecutor: Sendable {
                 if usingVEIL, case .transportFailure(let reason) = authRetryResult {
                     let refreshKind = RPCFailureClassifier.classifyVEILReason(reason)
                     await TransportRouter.shared.send(
-                        .rpcFailed(kind: refreshKind, via: target, foreground: true)
+                        .rpcFailed(kind: refreshKind, via: target, foreground: isForeground)
                     )
                 }
 
                 // Auth rejection through an untrusted VEIL relay: rotate via FSM; tokens NOT wiped.
                 if case .suspectRejection = authRetryResult {
                     await TransportRouter.shared.send(
-                        .rpcFailed(kind: .tlsFingerprintBlocked, via: target, foreground: true)
+                        .rpcFailed(kind: .tlsFingerprintBlocked, via: target, foreground: isForeground)
                     )
                     continue
                 }
