@@ -167,8 +167,9 @@ final class PreKeyRotationService {
         // rotation would fail): in that case fall back to the post-rotation publish below. `try?`
         // so a signing hiccup degrades to the old publish path rather than failing rotation.
         let canSignHybrid = await HybridIdentityService.isHybridIdentityPublished
-        let spkHybridSig = canSignHybrid ? (try? await HybridIdentityService.hybridSPKSignature(spkPublic: classicPubData)) : nil
-        let kyberHybridSig = canSignHybrid ? (try? await HybridIdentityService.hybridKyberSPKSignature(kyberPublic: kyberInMemory.publicKey)) : nil
+        // Use the core-routed prekey hybrid signer (message format centralized in core).
+        let spkHybridSig = canSignHybrid ? (try? CryptoManager.shared.signHybridPrekey(suiteId: 0x01, publicKey: classicPubData)) : nil
+        let kyberHybridSig = canSignHybrid ? (try? CryptoManager.shared.signHybridPrekey(suiteId: 0x10, publicKey: kyberInMemory.publicKey)) : nil
         let atomicHybridSent = spkHybridSig != nil && kyberHybridSig != nil
 
         // ── Phase 2: single atomic RPC ───────────────────────────────────────
