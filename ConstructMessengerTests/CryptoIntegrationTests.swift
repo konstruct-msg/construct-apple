@@ -39,7 +39,7 @@ final class CryptoIntegrationTests: XCTestCase {
                 suiteId: recipientBundle.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
                 spkUploadedAt: 0, spkRotationEpoch: 0,
                 kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
+                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
             )
             let sessionId = try core.initSession(contactId: contactId, recipientBundle: bundle)
             sessions[contactId] = sessionId
@@ -63,7 +63,7 @@ final class CryptoIntegrationTests: XCTestCase {
                 suiteId: senderBundle.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
                 spkUploadedAt: 0, spkRotationEpoch: 0,
                 kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
+                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
             )
             let firstMsg = BinaryFirstMessage(
                 ephemeralPublicKey: [UInt8](firstMessage.ephemeralPublicKey),

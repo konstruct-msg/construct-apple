@@ -147,6 +147,9 @@ struct PublicKeyBundleData: Codable {
     var spkRotationEpoch: UInt32      // Monotonic counter for SPK rotations
     var kyberSpkUploadedAt: UInt64    // Same for Kyber SPK (0 = not provided)
     var kyberSpkRotationEpoch: UInt32 // Same for Kyber SPK (0 = not provided)
+    // Peer supports SuiteID::PQ_RATCHET (3) — sparse continuous PQ ratchet.
+    // Optional so cached JSON written before this field still decodes (nil = false).
+    var supportsPqRatchet: Bool?
 }
 
 /// Bundle for a single device of a user — returned by GetPreKeyBundles (multi-device).

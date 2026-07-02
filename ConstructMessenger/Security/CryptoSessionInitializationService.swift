@@ -21,6 +21,7 @@ final class CryptoSessionInitializationService {
         spkRotationEpoch: UInt32 = 0,
         kyberSpkUploadedAt: UInt64 = 0,
         kyberSpkRotationEpoch: UInt32 = 0,
+        supportsPqRatchet: Bool = false,
         allowStale: Bool = false,
         core: OrchestratorCore?,
         archiveSession: (String, ArchiveReason) -> Void,
@@ -58,7 +59,8 @@ final class CryptoSessionInitializationService {
             kyberSpkRotationEpoch: kyberSpkRotationEpoch,
             kyberPreKeyPublic: kyberPreKeyPublic.map { [UInt8]($0) },
             kyberOneTimePrekeyPublic: kyberOneTimePreKeyPublic.map { [UInt8]($0) },
-            kyberOneTimePrekeyId: kyberOneTimePreKeyId
+            kyberOneTimePrekeyId: kyberOneTimePreKeyId,
+            supportsPqRatchet: supportsPqRatchet
         )
 
         do {
@@ -147,7 +149,10 @@ final class CryptoSessionInitializationService {
             kyberSpkRotationEpoch: kyberSpkRotationEpoch,
             kyberPreKeyPublic: nil,
             kyberOneTimePrekeyPublic: nil,
-            kyberOneTimePrekeyId: nil
+            kyberOneTimePrekeyId: nil,
+            // Receiving path: the responder adopts the suite from the first
+            // message's wire header, so the capability flag is irrelevant here.
+            supportsPqRatchet: false
         )
 
         let firstMsg = BinaryFirstMessage(

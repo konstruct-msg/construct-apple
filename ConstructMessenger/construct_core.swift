@@ -1172,6 +1172,10 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws 
     
+    func buildHybridIdentityBindMessage(hybridPublicKey: [UInt8])  -> [UInt8]
+    
+    func buildX3dhSignMessage(suiteId: UInt8, publicKey: [UInt8])  -> [UInt8]
+    
     func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8]) throws  -> DecryptedMessageResult
     
     /**
@@ -1181,6 +1185,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func decryptOfflineBatch(messages: [OfflineBatchMessage])  -> [OfflineBatchResult]
     
     func encryptMessage(contactId: String, plaintext: Data) throws  -> EncryptedMessageComponents
+    
+    func ensureHybridSignatureKey() throws  -> [UInt8]
     
     /**
      * Export the PQContributionManager state as a CFE binary blob.
@@ -1240,6 +1246,10 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      */
     func healingCanHeal(msgNumber: UInt32)  -> Bool
     
+    func hybridSignaturePublicKey()  -> [UInt8]?
+    
+    func importHybridSignaturePrivateKey(privBytes: [UInt8]) throws 
+    
     /**
      * Restore the PQContributionManager state from a CFE blob.
      */
@@ -1278,14 +1288,10 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func signBundleData(bundleDataJson: [UInt8]) throws  -> [UInt8]
     
-    // Hybrid (from updated UDL after regen)
-    func ensureHybridSignatureKey() throws  -> [UInt8]
-    func hybridSignaturePublicKey()  -> [UInt8]?
     func signHybrid(message: [UInt8]) throws  -> [UInt8]
-    func buildX3dhSignMessage(suiteId: UInt8, publicKey: [UInt8])  -> [UInt8]
-    func buildHybridIdentityBindMessage(hybridPublicKey: [UInt8])  -> [UInt8]
+    
     func signHybridPrekey(suiteId: UInt8, publicKey: [UInt8]) throws  -> [UInt8]
-    func importHybridSignaturePrivateKey(privBytes: [UInt8]) throws 
+    
 }
 /**
  * Top-level orchestration facade.
@@ -1377,6 +1383,25 @@ open func applyPqContribution(contactId: String, kemSharedSecret: [UInt8])throws
 }
 }
     
+open func buildHybridIdentityBindMessage(hybridPublicKey: [UInt8]) -> [UInt8]  {
+    return try!  FfiConverterSequenceUInt8.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_build_hybrid_identity_bind_message(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt8.lower(hybridPublicKey),$0
+    )
+})
+}
+    
+open func buildX3dhSignMessage(suiteId: UInt8, publicKey: [UInt8]) -> [UInt8]  {
+    return try!  FfiConverterSequenceUInt8.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_build_x3dh_sign_message(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt8.lower(suiteId),
+        FfiConverterSequenceUInt8.lower(publicKey),$0
+    )
+})
+}
+    
 open func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8])throws  -> DecryptedMessageResult  {
     return try  FfiConverterTypeDecryptedMessageResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_decrypt_message(
@@ -1408,6 +1433,14 @@ open func encryptMessage(contactId: String, plaintext: Data)throws  -> Encrypted
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterData.lower(plaintext),$0
+    )
+})
+}
+    
+open func ensureHybridSignatureKey()throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_ensure_hybrid_signature_key(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -1567,6 +1600,22 @@ open func healingCanHeal(msgNumber: UInt32) -> Bool  {
 })
 }
     
+open func hybridSignaturePublicKey() -> [UInt8]?  {
+    return try!  FfiConverterOptionSequenceUInt8.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_hybrid_signature_public_key(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func importHybridSignaturePrivateKey(privBytes: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_import_hybrid_signature_private_key(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt8.lower(privBytes),$0
+    )
+}
+}
+    
     /**
      * Restore the PQContributionManager state from a CFE blob.
      */
@@ -1701,28 +1750,24 @@ open func signBundleData(bundleDataJson: [UInt8])throws  -> [UInt8]  {
     )
 })
 }
-
-// Hybrid signature methods (added by regen of UDL; shims provide transition until full)
-open func ensureHybridSignatureKey() throws -> [UInt8] {
-    let pair = try hybridSignatureKeygen()
-    return pair.publicKey
+    
+open func signHybrid(message: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_sign_hybrid(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt8.lower(message),$0
+    )
+})
 }
-open func hybridSignaturePublicKey() -> [UInt8]? { return nil }
-open func signHybrid(message: [UInt8]) throws -> [UInt8] {
-    return Array(try CryptoManager.shared.signHybrid(message))
-}
-open func buildX3dhSignMessage(suiteId: UInt8, publicKey: [UInt8]) -> [UInt8] {
-    var m = Data("KonstruktX3DH-v1".utf8); m.append(0x00); m.append(suiteId); m.append(contentsOf: publicKey); return Array(m)
-}
-open func buildHybridIdentityBindMessage(hybridPublicKey: [UInt8]) -> [UInt8] {
-    var m = Data("KonstruktHybridId-v1".utf8); m.append(contentsOf: hybridPublicKey); return Array(m)
-}
-open func signHybridPrekey(suiteId: UInt8, publicKey: [UInt8]) throws -> [UInt8] {
-    let msg = buildX3dhSignMessage(suiteId: suiteId, publicKey: publicKey)
-    return Array(try CryptoManager.shared.signHybrid(msg))
-}
-open func importHybridSignaturePrivateKey(privBytes: [UInt8]) throws {
-    _ = KeychainManager.shared.saveHybridSigPrivateKey(Data(privBytes))
+    
+open func signHybridPrekey(suiteId: UInt8, publicKey: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_sign_hybrid_prekey(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt8.lower(suiteId),
+        FfiConverterSequenceUInt8.lower(publicKey),$0
+    )
+})
 }
     
 
@@ -2761,10 +2806,11 @@ public struct BinaryKeyBundle: Equatable, Hashable {
     public var kyberPreKeyPublic: [UInt8]?
     public var kyberOneTimePrekeyPublic: [UInt8]?
     public var kyberOneTimePrekeyId: UInt32?
+    public var supportsPqRatchet: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16, oneTimePrekeyPublic: [UInt8]?, oneTimePrekeyId: UInt32?, spkUploadedAt: UInt64, spkRotationEpoch: UInt32, kyberSpkUploadedAt: UInt64, kyberSpkRotationEpoch: UInt32, kyberPreKeyPublic: [UInt8]?, kyberOneTimePrekeyPublic: [UInt8]?, kyberOneTimePrekeyId: UInt32?) {
+    public init(identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16, oneTimePrekeyPublic: [UInt8]?, oneTimePrekeyId: UInt32?, spkUploadedAt: UInt64, spkRotationEpoch: UInt32, kyberSpkUploadedAt: UInt64, kyberSpkRotationEpoch: UInt32, kyberPreKeyPublic: [UInt8]?, kyberOneTimePrekeyPublic: [UInt8]?, kyberOneTimePrekeyId: UInt32?, supportsPqRatchet: Bool) {
         self.identityPublic = identityPublic
         self.signedPrekeyPublic = signedPrekeyPublic
         self.signature = signature
@@ -2779,6 +2825,7 @@ public struct BinaryKeyBundle: Equatable, Hashable {
         self.kyberPreKeyPublic = kyberPreKeyPublic
         self.kyberOneTimePrekeyPublic = kyberOneTimePrekeyPublic
         self.kyberOneTimePrekeyId = kyberOneTimePrekeyId
+        self.supportsPqRatchet = supportsPqRatchet
     }
 
     
@@ -2808,7 +2855,8 @@ public struct FfiConverterTypeBinaryKeyBundle: FfiConverterRustBuffer {
                 kyberSpkRotationEpoch: FfiConverterUInt32.read(from: &buf), 
                 kyberPreKeyPublic: FfiConverterOptionSequenceUInt8.read(from: &buf), 
                 kyberOneTimePrekeyPublic: FfiConverterOptionSequenceUInt8.read(from: &buf), 
-                kyberOneTimePrekeyId: FfiConverterOptionUInt32.read(from: &buf)
+                kyberOneTimePrekeyId: FfiConverterOptionUInt32.read(from: &buf), 
+                supportsPqRatchet: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -2827,6 +2875,7 @@ public struct FfiConverterTypeBinaryKeyBundle: FfiConverterRustBuffer {
         FfiConverterOptionSequenceUInt8.write(value.kyberPreKeyPublic, into: &buf)
         FfiConverterOptionSequenceUInt8.write(value.kyberOneTimePrekeyPublic, into: &buf)
         FfiConverterOptionUInt32.write(value.kyberOneTimePrekeyId, into: &buf)
+        FfiConverterBool.write(value.supportsPqRatchet, into: &buf)
     }
 }
 
@@ -6475,6 +6524,12 @@ public func srSealRecoveryBundle(vaultKey: [UInt8], bundle: SrRecoveryBundle)thr
     )
 })
 }
+public func supportsPqRatchet() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_supports_pq_ratchet($0
+    )
+})
+}
 /**
  * Verify that a PlatformBridge implementation correctly round-trips a
  * save → load through the platform secure store.
@@ -6659,6 +6714,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_sr_seal_recovery_bundle() != 62781) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_supports_pq_ratchet() != 5109) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_test_platform_bridge_roundtrip() != 58358) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -6758,6 +6816,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_apply_pq_contribution() != 43446) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_build_hybrid_identity_bind_message() != 61991) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_build_x3dh_sign_message() != 50237) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_message() != 56464) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -6765,6 +6829,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_encrypt_message() != 55888) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_ensure_hybrid_signature_key() != 6511) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_export_kyber_session_state() != 39459) {
@@ -6812,6 +6879,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_healing_can_heal() != 20996) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_hybrid_signature_public_key() != 51840) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_import_hybrid_signature_private_key() != 32195) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_import_kyber_session_state() != 41061) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -6852,6 +6925,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_sign_bundle_data() != 20046) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_sign_hybrid() != 37336) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_sign_hybrid_prekey() != 15369) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_rustackstore_cache_len() != 41894) {

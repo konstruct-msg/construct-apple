@@ -44,7 +44,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
                 suiteId: b.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
                 spkUploadedAt: 0, spkRotationEpoch: 0,
                 kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
+                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
             )
         }
 
@@ -127,7 +127,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
                 suiteId: recipientBundle.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
                 spkUploadedAt: now - spkAgeDays * 86_400, spkRotationEpoch: 0,
                 kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
+                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
             )
             if allowStale {
                 _ = try core.initSessionAllowingStale(contactId: contactId, recipientBundle: bundle)

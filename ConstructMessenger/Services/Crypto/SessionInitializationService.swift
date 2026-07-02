@@ -129,6 +129,7 @@ class SessionInitializationService {
                 spkRotationEpoch: bundle.spkRotationEpoch,
                 kyberSpkUploadedAt: bundle.kyberSpkUploadedAt,
                 kyberSpkRotationEpoch: bundle.kyberSpkRotationEpoch,
+                supportsPqRatchet: bundle.supportsPqRatchet ?? false,
                 allowStale: allowStale
             )
             PerformanceMetrics.shared.end(.sessionInitStart, endEvent: .sessionInitEnd, label: String(userId.prefix(8)))

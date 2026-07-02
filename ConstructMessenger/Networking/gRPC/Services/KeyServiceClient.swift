@@ -150,7 +150,8 @@ final class KeyServiceClient: Sendable {
                     spkUploadedAt: b.spkUploadedAt > 0 ? UInt64(b.spkUploadedAt) : (b.generatedAt > 0 ? UInt64(b.generatedAt) : 0),
                     spkRotationEpoch: b.spkRotationEpoch,
                     kyberSpkUploadedAt: b.hasKyberSpkUploadedAt ? UInt64(b.kyberSpkUploadedAt) : 0,
-                    kyberSpkRotationEpoch: b.hasKyberSpkRotationEpoch ? b.kyberSpkRotationEpoch : 0
+                    kyberSpkRotationEpoch: b.hasKyberSpkRotationEpoch ? b.kyberSpkRotationEpoch : 0,
+                    supportsPqRatchet: b.supportsPqRatchet
                 )
                 return DeviceBundleData(deviceId: deviceBundle.deviceID, bundle: bundle, platform: deviceBundle.platform)
             }
@@ -299,7 +300,8 @@ final class KeyServiceClient: Sendable {
                 spkUploadedAt: bundle.spkUploadedAt > 0 ? UInt64(bundle.spkUploadedAt) : (bundle.generatedAt > 0 ? UInt64(bundle.generatedAt) : 0),
                 spkRotationEpoch: bundle.spkRotationEpoch,
                 kyberSpkUploadedAt: bundle.hasKyberSpkUploadedAt ? UInt64(bundle.kyberSpkUploadedAt) : 0,
-                kyberSpkRotationEpoch: bundle.hasKyberSpkRotationEpoch ? bundle.kyberSpkRotationEpoch : 0
+                kyberSpkRotationEpoch: bundle.hasKyberSpkRotationEpoch ? bundle.kyberSpkRotationEpoch : 0,
+                supportsPqRatchet: bundle.supportsPqRatchet
             )
         }
     }
@@ -391,6 +393,13 @@ final class KeyServiceClient: Sendable {
             if let kyberHybridSig = kyberSignedPreKeyHybridSignature {
                 request.kyberSignedPreKeyHybridSignature = kyberHybridSig
             }
+
+            // Advertise this build's sparse-PQ-ratchet capability (SuiteID 3).
+            // The server persists it (migration 063) and returns it in
+            // PreKeyBundle so peers can negotiate suite-3 sessions.
+            #if os(iOS)
+            request.supportsPqRatchet = supportsPqRatchet()
+            #endif
 
             let response = try await keyClient.uploadPreKeys(
                 request: .init(message: request)

@@ -49,7 +49,7 @@ private final class SessionPeer {
             suiteId: b.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
             spkUploadedAt: 0, spkRotationEpoch: 0,
             kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-            kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
+            kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
         )
     }
 
