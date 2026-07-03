@@ -70,6 +70,10 @@ private struct SingleMediaCell: View {
     @State private var hasReceivedBytes = false
     @State private var blurPreview: PlatformImage?
 
+    /// Matches the album grid's outer radius (`MediaGridView`) so single and multi-item
+    /// media round identically.
+    private let cornerRadius: CGFloat = 10
+
     private var itemDict: [String: Any] {
         mediaContent.mediaItems.indices.contains(itemIndex)
             ? mediaContent.mediaItems[itemIndex]
@@ -107,6 +111,9 @@ private struct SingleMediaCell: View {
                 emptyPlaceholder
             }
         }
+        // Outer clip so every state — photo, video poster, loading/error/empty placeholder —
+        // rounds identically to the album grid, regardless of which branch renders.
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .animation(.easeInOut(duration: 0.25), value: thumbnailImage != nil)
         .onAppear { if isVideo { loadVideoPoster() } else { loadThumbnail() } }
     }
@@ -132,7 +139,10 @@ private struct SingleMediaCell: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(alignment: .bottomLeading) {
-            if !isUploading, let d = itemDict["duration"] as? Double, d > 0 { durationBadge(d) }
+            if !isUploading, let d = itemDict["duration"] as? Double, d > 0 {
+                durationBadge(d)
+                    .padding(.leading, 8)
+            }
         }
         .overlay(alignment: .bottom) { if isUploading { uploadingBadge } }
         .overlay(
@@ -192,7 +202,7 @@ private struct SingleMediaCell: View {
             .font(CTFont.regular(11)).foregroundColor(.white).monospacedDigit()
             .padding(.horizontal, 6).padding(.vertical, 3)
             .background(.black.opacity(0.55))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(Capsule())
             .padding(8)
     }
 

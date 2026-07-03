@@ -53,6 +53,9 @@ struct ChatView: View {
         static let composerHorizontalPadding: CGFloat = 8
         static let composerBottomPadding: CGFloat = 8
         static let messageBottomClearance: CGFloat = 12
+        /// Extra band below the status-bar safe area (≈ nav capsule height + margin) covered
+        /// by the top scrim so scrolling text blurs/fades before it reaches the clock & signal.
+        static let topScrimUnderSafeArea: CGFloat = CTLayout.navBarHeight + 24
     }
     
     // ❌ REMOVED: Scroll-related @State variables (moved to ChatScrollManager)
@@ -191,6 +194,18 @@ struct ChatView: View {
                     scrollManager.registerProxy(proxy)
                     LocalNotificationManager.shared.clearBadge()
                     scrollManager.hasScrolledToBottom = true
+                    // .defaultScrollAnchor(.bottom) alone occasionally lands the initial
+                    // layout out of range (composer inset applied after first content pass),
+                    // leaving the list blank until a scroll event — the "opens empty then
+                    // scrolls in from nowhere" symptom. Force a valid bottom offset once the
+                    // first content pass has rendered. Non-animated so it never flashes in.
+                    if !renderedMessages.isEmpty {
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(60))
+                            guard scrollManager.shouldScrollToBottom else { return }
+                            scrollManager.scrollToBottom(animated: false)
+                        }
+                    }
                 }
                 .onChange(of: viewModel.messages.count) { _, count in
                     if AppConstants.enableDebugLogging {
@@ -266,6 +281,49 @@ struct ChatView: View {
                 }
             }
 
+            // Top scrim behind the floating nav capsule so scrolling text doesn't collide with the
+            // status bar (clock / signal / battery). Two stacked gradient layers:
+            //   1. Progressive blur (bottom): a material frost — which blurs the scroll content
+            //      behind it — masked by a top→bottom gradient so the blur fades out lower down.
+            //   2. Colour fade (top): a Color.CT.bg → transparent gradient that recolours the grey
+            //      frost into the adaptive theme background (black in dark, light base in light) and
+            //      fades to clear. Sitting ON TOP of the blur, it kills the frost's greyness while
+            //      the blur still softens the text peeking through in the transition band.
+            GeometryReader { geo in
+                ZStack {
+//                    Rectangle()
+//                        .fill(.ultraThinMaterial)
+//                        .mask(
+//                            LinearGradient(
+//                                stops: [
+//                                    .init(color: .black.opacity(0.95), location: 0),
+//                                    .init(color: .black.opacity(0.55), location: 0.55),
+//                                    .init(color: .clear, location: 1)
+//                                ],
+//                                startPoint: .top,
+//                                endPoint: .bottom
+//                            )
+//                        )
+
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color.CT.bg, location: 0),
+                                    .init(color: Color.CT.bg.opacity(0.65), location: 0.55),
+                                    .init(color: Color.CT.bg.opacity(0), location: 1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
+                .frame(height: geo.safeAreaInsets.top + Layout.topScrimUnderSafeArea)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .ignoresSafeArea(edges: .top)
+            }
+            .allowsHitTesting(false)
+
             // === Floating capsule glass panels (Apple capsulization) ===
             // Top: nav + banners (capsule style)
             VStack(spacing: 8) {
@@ -303,12 +361,20 @@ struct ChatView: View {
                     // scroll — the "chat goes black" symptom. Re-pin to bottom to force a valid
                     // layout, but only when the user was already near the bottom so we don't
                     // yank someone who is reading history.
+                    //
+                    // The re-pin is NON-animated: an animated scroll interpolates the offset
+                    // while the inset is still animating, which keeps the de-materialization
+                    // window open (the black flash). The media preview also loads thumbnails
+                    // asynchronously, so its height settles in several steps — we pin on this
+                    // event and once more after a short delay to catch the final height.
                     let changed = abs(newHeight - composerHeight) > 1
                     composerHeight = newHeight
                     if changed && scrollManager.shouldScrollToBottom {
+                        scrollManager.scrollToBottom(animated: false)
                         Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(60))
-                            scrollManager.scrollToBottom()
+                            try? await Task.sleep(for: .milliseconds(120))
+                            guard scrollManager.shouldScrollToBottom else { return }
+                            scrollManager.scrollToBottom(animated: false)
                         }
                     }
                 }

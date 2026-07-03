@@ -149,6 +149,7 @@ struct IOSMessageInputView: View {
                 .font(CTFont.regular(12))
                 .foregroundColor(Color.CT.textDim)
             Spacer(minLength: 8)
+            
             if hasVideoAttachment {
                 qualityChip(title: VideoQuality.p720.shortLabel, selected: selectedVideoQuality == .p720) {
                     videoQualityRaw = VideoQuality.p720.rawValue
@@ -167,7 +168,7 @@ struct IOSMessageInputView: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.bottom, 6)
+        .padding(.vertical, 8)
     }
 
     private func qualityChip(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -176,10 +177,10 @@ struct IOSMessageInputView: View {
                 .font(CTFont.medium(12))
                 .foregroundColor(selected ? Color.CT.bg : Color.CT.text)
                 .padding(.horizontal, 14)
-                .frame(height: 34)
+                .frame(height: 48)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(selected ? Color.CT.accent : Color.CT.text.opacity(0.08))
+                        .fill(selected ? Color.CT.accent : Color.CT.bgMsg)
                 )
         }
         .buttonStyle(.plain)
