@@ -119,7 +119,7 @@ private struct ConstructServerWellKnown: Decodable {
     let bundleVerificationKey: String?
 
     enum CodingKeys: String, CodingKey {
-        case version, ice, signature
+        case version, ice, veil, signature
         case signedAt = "signed_at"
         case bundleSigningKey = "bundle_signing_key"
         case bundleVerificationKey = "bundle_verification_key"
@@ -142,7 +142,13 @@ private struct ConstructServerWellKnown: Decodable {
         } else {
             signedAt = nil
         }
-        veil                 = try c.decodeIfPresent(VEILSection.self, forKey: .ice)
+        // Current manifests (sign_relay_manifest.py) use "veil"; "ice" is the
+        // pre-rename legacy key — accept both.
+        if let v = try c.decodeIfPresent(VEILSection.self, forKey: .veil) {
+            veil = v
+        } else {
+            veil = try c.decodeIfPresent(VEILSection.self, forKey: .ice)
+        }
         signature            = try c.decodeIfPresent(String.self,     forKey: .signature)
         bundleSigningKey     = try c.decodeIfPresent(String.self,     forKey: .bundleSigningKey)
         bundleVerificationKey = try c.decodeIfPresent(String.self,    forKey: .bundleVerificationKey)
@@ -228,16 +234,26 @@ actor VeilCertFetcher {
                             return nil
                         }
                         let parsed = try JSONDecoder().decode(ConstructServerWellKnown.self, from: data)
-                        guard let relays = parsed.veil?.relays, !relays.isEmpty else { return nil }
+
+                        // Persist the bundle-signing key BEFORE the relay guard: stealth
+                        // sender-certificate verification and prekey-bundle/KT checks depend
+                        // on it, and the manifest may legitimately ship without a relay list
+                        // (veil-front relay is hardcoded, tickets arrive out-of-band).
+                        let keyB64 = parsed.bundleSigningKey ?? parsed.bundleVerificationKey
+                        if let keyB64 = keyB64,
+                           let keyData = Data(base64Encoded: keyB64),
+                           keyData.count == 32 {
+                            UserDefaults.standard.set(keyData, forKey: Self.cachedBundleSigningKeyKey)
+                        }
+
+                        guard let relays = parsed.veil?.relays, !relays.isEmpty else {
+                            Log.info("Manifest via \(url.host ?? "?") verified — no relay list (bundle key cached)", category: "VEIL")
+                            return nil
+                        }
 
                         // Persist to UserDefaults — safe from any task since UserDefaults is thread-safe
                         if let encoded = try? JSONEncoder().encode(relays) {
                             UserDefaults.standard.set(encoded, forKey: Self.cachedRelayInfosKey)
-                        }
-                        let keyB64 = parsed.bundleSigningKey ?? parsed.bundleVerificationKey
-                        if let keyB64 = keyB64,
-                           let keyData = Data(base64Encoded: keyB64) {
-                            UserDefaults.standard.set(keyData, forKey: Self.cachedBundleSigningKeyKey)
                         }
                         let addressList = relays.map(\.addressWithPort)
                         UserDefaults.standard.set(addressList, forKey: VEILConfig.cachedRelayListKey)
