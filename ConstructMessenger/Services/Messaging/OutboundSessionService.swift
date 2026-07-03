@@ -218,16 +218,21 @@ final class OutboundSessionService {
                     Log.error("E2E receipt: seal failed, sending without stealth: \(error)", category: "OutboundSession")
                 }
             }
-            _ = try await MessagingServiceClient.shared.sendMessage(
-                messageId: receiptId,
-                recipientId: contactId,
-                senderId: myId,
-                conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
-                encryptedPayload: wirePayload,
-                timestamp: UInt64(Date().timeIntervalSince1970),
-                contentType: .deliveryReceipt,
-                sealedInnerBytes: sealedInner
-            )
+            if let sealedInner, FeatureFlags.sealedSenderUnauthenticatedTransport {
+                // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
+                _ = try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: sealedInner)
+            } else {
+                _ = try await MessagingServiceClient.shared.sendMessage(
+                    messageId: receiptId,
+                    recipientId: contactId,
+                    senderId: myId,
+                    conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
+                    encryptedPayload: wirePayload,
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    contentType: .deliveryReceipt,
+                    sealedInnerBytes: sealedInner
+                )
+            }
             Log.info("E2E receipt sent: \(messageIds.count) msg(s) → \(contactId.prefix(8))…", category: "OutboundSession")
         } catch {
             Log.error("E2E receipt failed to \(contactId.prefix(8))…: \(error.localizedDescription)", category: "OutboundSession")

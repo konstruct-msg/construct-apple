@@ -148,10 +148,12 @@ enum SessionReducer {
 
     /// Whether a received END_SESSION pre-dates our established session and should be discarded.
     ///
-    /// Known limitation (Phase 3 target): `establishedAt` is in-memory only today, so it is `nil`
-    /// right after launch — and this returns `false` (cannot filter), which lets a re-delivered
-    /// old END_SESSION reset a healthy session. Persisting establishment time fixes that; until
-    /// then this is the decision device logs are instrumented around.
+    /// `establishedAt` is now persisted per-peer in the Keychain (see
+    /// `SessionCoordinator.apply` / `KeychainManager.saveSessionEstablishedAt`) and restored on
+    /// launch, so this can filter a re-delivered old END_SESSION even right after a cold start —
+    /// the case that used to tear down a healthy restored session and trigger SESSION_RESET_INIT
+    /// churn. `nil` only remains for sessions established by a build predating that persistence
+    /// (one-time gap, resolved on their next re-establishment); there this returns `false`.
     static func isEndSessionStale(establishedAt: UInt64?, timestamp: UInt64, fudgeSeconds: UInt64) -> Bool {
         guard let establishedAt else { return false }
         return timestamp + fudgeSeconds < establishedAt

@@ -30,8 +30,9 @@ class ConnectionStatusManager {
     /// Current connection status. Derived; do not assign from outside.
     private(set) var connectionStatus: ConnectionStatus = .unknown
 
-    /// Short diagnostic string for the "Connecting…" phase, e.g. "VEIL probe 2".
+    /// Short diagnostic string for the "Connecting…" phase, e.g. "VEIL probe".
     /// Derived from the current FSM state; nil when `.connected` or `.disconnected`.
+    /// Intentionally coarse — never contains the relay host/address (see `phaseLabel`).
     private(set) var connectingPhase: String?
 
     /// True when the stream is intentionally paused (app in background).
@@ -96,8 +97,9 @@ class ConnectionStatusManager {
     /// Subtitle for the in-chat nav bar. Intentionally minimal: the chat must not surface
     /// transport churn (VEIL re-probes, transient reconnects). We show the chat-relevant E2EE
     /// "encrypting" phase, and — only for a genuine, sustained outage — a coarse "no connection".
-    /// The transient `.connecting` state is deliberately NOT shown here; full transport detail
-    /// (VEIL relay, probe phase, cooldown) lives in Network Settings for users who opt in.
+    /// The transient `.connecting` state is deliberately NOT shown here; coarse transport phase
+    /// (probe / cooldown, without the relay address) lives in Network Settings, and full raw
+    /// detail (including the relay host) only in the dev TransportDiagnosticsView.
     func navigationStatusSubtitle(isInitializingSession: Bool) -> String? {
         if isInitializingSession {
             return NSLocalizedString("status_encrypting", comment: "")
@@ -184,8 +186,11 @@ class ConnectionStatusManager {
             return nil
         case .veilProbing:
             return "VEIL probe"
-        case .veilActive(let relay, _, _):
-            return "VEIL \(relay)"
+        case .veilActive:
+            // Never surface the relay host/address in user-facing status. The relay endpoint
+            // is an internal transport detail; exposing it leaks which bridge the user is on.
+            // Raw relay detail remains only in the dev TransportDiagnosticsView.
+            return "VEIL"
         case .veilCooldown(let until):
             let secs = max(0, Int(until.timeIntervalSinceNow))
             return "VEIL cooldown (\(secs)s)"

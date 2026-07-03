@@ -126,7 +126,15 @@ final class ChatSendCoordinator {
             return
         }
 
-        if SessionConfirmationTracker.shared.isPending(recipientId) {
+        // Buffer only plain-text sends while awaiting RESPONDER session_ready. The buffer is a
+        // text-only Core Data stub: its sole recoverable payload is `decryptedContent`, and the
+        // confirmation flush (`MessageRetryManager.reencryptAndSend`) explicitly refuses `.media`.
+        // Media/file sends have no content yet at buffer time (the JSON is produced by the upload),
+        // so buffering them here would persist an empty stub — an un-retryable "message unavailable"
+        // bubble with the attachments silently dropped. Let them flow to sendMediaMessage/
+        // sendFileMessage instead: the upload latency naturally covers the confirmation window, and
+        // that path persists correct display content plus a resendable wire payload.
+        if SessionConfirmationTracker.shared.isPending(recipientId), attachments.isEmpty, fileURLs.isEmpty {
             let bufferedId = UUID().uuidString
             let stub = ChatMessage(
                 id: bufferedId,

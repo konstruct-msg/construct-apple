@@ -69,18 +69,30 @@ class ChatScrollManager {
     }
     
     /// Scroll to bottom of chat
-    /// - Parameter messageId: Optional specific message ID to scroll to (defaults to "bottom")
-    func scrollToBottom(messageId: String = "bottom") {
+    /// - Parameters:
+    ///   - messageId: Optional specific message ID to scroll to (defaults to "bottom")
+    ///   - animated: Animate the scroll. Pass `false` for *corrective* re-pins
+    ///     (composer-height changes, first appear). An animated scroll interpolates the
+    ///     content offset while the `safeAreaInset` composer is *also* animating its height,
+    ///     which can drive the offset outside the valid range and de-materialize the
+    ///     `LazyVStack` — the "chat goes black / empty" flash. A non-animated `scrollTo`
+    ///     lands a valid offset in a single layout pass and forces the visible cells to
+    ///     re-materialize immediately.
+    func scrollToBottom(messageId: String = "bottom", animated: Bool = true) {
         guard let proxy = proxy else {
             return
         }
-        
-        withAnimation(.easeOut(duration: 0.3)) {
+
+        if animated {
+            withAnimation(.easeOut(duration: 0.3)) {
+                proxy.scrollTo(messageId, anchor: .bottom)
+            }
+        } else {
             proxy.scrollTo(messageId, anchor: .bottom)
         }
-        
+
         hasScrolledToBottom = true
-        Log.debug("Scrolled to bottom (messageId: \(messageId))", category: "ChatScrollManager")
+        Log.debug("Scrolled to bottom (messageId: \(messageId), animated: \(animated))", category: "ChatScrollManager")
     }
     
     /// Scroll to a specific message

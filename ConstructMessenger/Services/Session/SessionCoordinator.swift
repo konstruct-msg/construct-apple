@@ -82,6 +82,19 @@ final class SessionCoordinator: MessageRouterDelegate {
         assertMainThread()
         let (newPhase, effects) = SessionReducer.reduce(sessionPhases[userId], on: event)
         sessionPhases[userId] = newPhase
+        // Mirror the establishment timestamp into the Keychain so the END_SESSION stale-check
+        // survives restart (the in-memory phase map is empty after launch even though the Rust
+        // core restored live sessions). `.active` persists the time; a teardown to `nil` clears
+        // it; `.initializing` leaves any existing value untouched (a re-key over a live session
+        // must not drop its establishment time — a terminal failure will clear it via `nil`).
+        switch newPhase {
+        case .active(let at):
+            KeychainManager.shared.saveSessionEstablishedAt(at, for: userId)
+        case .none:
+            KeychainManager.shared.deleteSessionEstablishedAt(for: userId)
+        case .initializing:
+            break
+        }
         return effects
     }
 
@@ -136,7 +149,10 @@ final class SessionCoordinator: MessageRouterDelegate {
     private func establishedAt(for userId: String) -> UInt64? {
         assertMainThread()
         if case .active(let t) = sessionPhases[userId] { return t }
-        return nil
+        // No in-memory phase (typical right after launch: the Rust core restored the session
+        // from CFE but this map starts empty). Fall back to the persisted timestamp so the
+        // END_SESSION stale-check can still filter a re-delivered old END_SESSION.
+        return KeychainManager.shared.loadSessionEstablishedAt(for: userId)
     }
 
     // MARK: - Injected references

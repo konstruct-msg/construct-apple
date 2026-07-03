@@ -17,7 +17,12 @@ struct AuthInterceptor: ClientInterceptor {
         "RegisterDevice",
         "AuthenticateDevice",
         "RefreshToken",
-        "CheckUsernameAvailability"
+        "CheckUsernameAvailability",
+        // Stealth sealed-sender v2 Phase 2: genuinely sent over a separate
+        // no-interceptor channel (GRPCChannelManager.acquireSealedPersistentClient),
+        // but listed here too as defence-in-depth in case it's ever invoked
+        // over the authenticated channel by mistake.
+        "SendSealedMessage"
     ]
 
     func intercept<Input: Sendable, Output: Sendable>(

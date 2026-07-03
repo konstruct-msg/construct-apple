@@ -249,6 +249,13 @@ struct FeatureFlags {
     static let enablePushNotifications = false // Пока не реализовано
     static let maxMessageRetryAttempts = 3
 
+    /// Stealth-sealed-sender-v2 Phase 2: route sealed sends over the new unauthenticated
+    /// `SendSealedMessage` RPC / separate gRPC channel instead of the legacy
+    /// sealed-over-`SendMessage` path. **Default off** — flip only once the server RPC
+    /// is deployed fleet-wide and this path has been validated (see
+    /// construct-docs/decisions/stealth-sealed-sender-v2-always-on.md Phase 2).
+    static let sealedSenderUnauthenticatedTransport = false
+
     // For Desktop we now use the direct iOS path (CryptoManager + gRPC-Swift) per Strategy B.
     // Engine send path is disabled for Desktop (engine paused for this surface).
     static let useEngineForSend = false

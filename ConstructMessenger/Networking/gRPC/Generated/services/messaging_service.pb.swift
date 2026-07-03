@@ -616,6 +616,42 @@ public struct Shared_Proto_Services_V1_SendMessageRequest: Sendable {
   fileprivate var _attemptID: String? = nil
 }
 
+/// SendSealedMessageRequest - stealth-sealed-sender-v2 Phase 2.
+/// Deliberately carries nothing but the sealed envelope + attempt correlation ID —
+/// no sender, no conversation_id, no content_type on the wire.
+public struct Shared_Proto_Services_V1_SendSealedMessageRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sealedSender: Shared_Proto_Core_V1_SealedSenderEnvelope {
+    get {_sealedSender ?? Shared_Proto_Core_V1_SealedSenderEnvelope()}
+    set {_sealedSender = newValue}
+  }
+  /// Returns true if `sealedSender` has been explicitly set.
+  public var hasSealedSender: Bool {self._sealedSender != nil}
+  /// Clears the value of `sealedSender`. Subsequent reads from it will return its default value.
+  public mutating func clearSealedSender() {self._sealedSender = nil}
+
+  /// Client-assigned attempt ID echoed in the response (same purpose as
+  /// SendMessageRequest.attempt_id).
+  public var attemptID: String {
+    get {_attemptID ?? String()}
+    set {_attemptID = newValue}
+  }
+  /// Returns true if `attemptID` has been explicitly set.
+  public var hasAttemptID: Bool {self._attemptID != nil}
+  /// Clears the value of `attemptID`. Subsequent reads from it will return its default value.
+  public mutating func clearAttemptID() {self._attemptID = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _sealedSender: Shared_Proto_Core_V1_SealedSenderEnvelope? = nil
+  fileprivate var _attemptID: String? = nil
+}
+
 /// RateLimitChallenge - Proof-of-Work challenge issued on soft rate-limit breach.
 /// Client must solve this challenge before retrying the send.
 /// difficulty: 4 = x1.5 limit, 6 = x3 limit, 8 = x5+ limit
@@ -1656,6 +1692,45 @@ extension Shared_Proto_Services_V1_SendMessageRequest: SwiftProtobuf.Message, Sw
   public static func ==(lhs: Shared_Proto_Services_V1_SendMessageRequest, rhs: Shared_Proto_Services_V1_SendMessageRequest) -> Bool {
     if lhs._message != rhs._message {return false}
     if lhs._idempotencyKey != rhs._idempotencyKey {return false}
+    if lhs._attemptID != rhs._attemptID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_SendSealedMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SendSealedMessageRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sealed_sender\0\u{3}attempt_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._sealedSender) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._attemptID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._sealedSender {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._attemptID {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_SendSealedMessageRequest, rhs: Shared_Proto_Services_V1_SendSealedMessageRequest) -> Bool {
+    if lhs._sealedSender != rhs._sealedSender {return false}
     if lhs._attemptID != rhs._attemptID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

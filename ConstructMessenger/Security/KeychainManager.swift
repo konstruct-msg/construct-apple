@@ -586,6 +586,36 @@ class KeychainManager {
         delete(forKey: sessionAtRiskKey(for: userId))
     }
 
+    // MARK: - Session Establishment Time (per-peer)
+    // Unix-seconds timestamp of when the current live session with a peer was established.
+    // Persisted so it survives app restart: on launch the Rust core restores live sessions
+    // from CFE but the in-memory SessionReducer phase map starts empty, leaving `establishedAt`
+    // nil — which makes the END_SESSION stale-check unable to filter a re-delivered old
+    // END_SESSION and tears down a healthy session (the SESSION_RESET_INIT churn). Backing it
+    // with Keychain (AfterFirstUnlock, so it is readable during a locked background push
+    // decrypt — the INVARIANT for crypto-lifecycle state) lets the stale-check work post-launch.
+    // Cleared when the session is torn down.
+
+    private func sessionEstablishedAtKey(for userId: String) -> String {
+        "construct.session.establishedAt.\(userId)"
+    }
+
+    func saveSessionEstablishedAt(_ timestamp: UInt64, for userId: String) {
+        var value = timestamp
+        let data = Data(bytes: &value, count: MemoryLayout<UInt64>.size)
+        _ = save(data, forKey: sessionEstablishedAtKey(for: userId), accessible: kSecAttrAccessibleAfterFirstUnlock)
+    }
+
+    func loadSessionEstablishedAt(for userId: String) -> UInt64? {
+        guard let data = load(forKey: sessionEstablishedAtKey(for: userId)),
+              data.count == MemoryLayout<UInt64>.size else { return nil }
+        return data.withUnsafeBytes { $0.loadUnaligned(as: UInt64.self) }
+    }
+
+    func deleteSessionEstablishedAt(for userId: String) {
+        delete(forKey: sessionEstablishedAtKey(for: userId))
+    }
+
     // MARK: - Contact Request Mappings
     //
     // Stores requestId → toUserId so User A can create a contact after acceptance.

@@ -155,6 +155,16 @@ final class GRPCChannelManager: Sendable {
     private nonisolated(unsafe) var _overrideProxyPort: UInt16? = nil
     private let _overrideProxyPortLock = NSLock()
 
+    // Sealed-sender (stealth-sealed-sender-v2 Phase 2) persistent connection — same
+    // H2 transport and VEIL/direct routing as `_conn`, but built with NO AuthInterceptor.
+    // A genuinely separate HTTP/2 connection, not just a header omission on the shared
+    // one — the point is the server (or a network observer) cannot correlate this
+    // socket with the authenticated session. Kept in lockstep with `_conn`'s routing
+    // key: invalidated wherever `_conn` is invalidated.
+    private nonisolated(unsafe) var _sealedConn: PersistentConn?
+    private nonisolated(unsafe) var _sealedConnGeneration: UInt64 = 0
+    private let _sealedConnLock = NSLock()
+
     private func routingKey() -> String {
         if let veilPort = veilProxyPort() { return "ice:\(veilPort)" }
         return "direct:\(currentHost):\(currentPort)"
@@ -237,6 +247,7 @@ final class GRPCChannelManager: Sendable {
         _connLock.unlock()
         guard didInvalidate else { return }
         Log.debug("Persistent gRPC connection invalidated (routing: \(oldKey) → \(newKey), gen=\(_connLock.withLock { _connGeneration }))", category: "GRPCChannel")
+        invalidateSealedPersistentClient()
 #if canImport(Network)
         invalidateH3Connection()
 #endif
@@ -268,6 +279,7 @@ final class GRPCChannelManager: Sendable {
         _connLock.unlock()
         guard didInvalidate else { return }
         Log.debug("Persistent gRPC connection invalidated (gen=\(_connGeneration))", category: "GRPCChannel")
+        invalidateSealedPersistentClient()
         // H3 is only valid on the direct path. Any routing change that kills H2 also kills H3.
 #if canImport(Network)
         invalidateH3Connection()
@@ -362,6 +374,102 @@ final class GRPCChannelManager: Sendable {
             transport: transport,
             interceptors: [AuthInterceptor()]
         )
+    }
+
+    // MARK: - Sealed-sender channel (stealth-sealed-sender-v2 Phase 2)
+    //
+    // Same VEIL/direct routing decision as makeClient(), but built with NO
+    // AuthInterceptor and kept as a separate persistent HTTP/2 connection —
+    // reusing the authenticated connection would let the server (or a network
+    // observer) correlate the "anonymous" stream with the signed-in session via
+    // the TCP/TLS connection itself, even with no auth headers on the RPC.
+    // Plain H2 only for now — no H3/engine-QUIC variant.
+
+    /// Creates a new unauthenticated `GRPCClient` for sealed-sender sends.
+    /// Caller is responsible for running the client via `runConnections()` in a Task.
+    func makeSealedClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
+        if let veilPort = veilProxyPort() {
+            let logicalAuthority = currentHost
+            let transport = try HTTP2ClientTransport.TransportServices(
+                target: .ipv4(address: "127.0.0.1", port: Int(veilPort)),
+                transportSecurity: .plaintext,
+                config: .defaults {
+                    $0.http2.authority = logicalAuthority
+                    $0.connection = .init(
+                        maxIdleTime: .seconds(NetworkTiming.GRPC.maxIdleTimeSeconds),
+                        keepalive: .init(
+                            time: .seconds(NetworkTiming.GRPC.keepaliveTimeVEILSeconds),
+                            timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutVEILSeconds),
+                            allowWithoutCalls: true
+                        )
+                    )
+                }
+            )
+            return GRPCClient(transport: transport, interceptors: [])
+        }
+
+        let host = currentHost
+        let port = currentPort
+        let transport = try HTTP2ClientTransport.TransportServices(
+            target: .dns(host: host, port: port),
+            transportSecurity: .tls,
+            config: .defaults {
+                $0.connection = .init(
+                    maxIdleTime: .seconds(NetworkTiming.GRPC.maxIdleTimeSeconds),
+                    keepalive: .init(
+                        time: .seconds(NetworkTiming.GRPC.keepaliveTimeDirectSeconds),
+                        timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutSeconds),
+                        allowWithoutCalls: true
+                    )
+                )
+            }
+        )
+        return GRPCClient(transport: transport, interceptors: [])
+    }
+
+    /// Returns a reusable persistent unauthenticated client for sealed-sender sends,
+    /// creating/replacing it when routing changes. Mirrors `acquirePersistentClient()`.
+    func acquireSealedPersistentClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
+        _sealedConnLock.lock()
+        defer { _sealedConnLock.unlock() }
+
+        let key = routingKey()
+        if let conn = _sealedConn, conn.key == key, !conn.task.isCancelled {
+            return conn.client
+        }
+
+        _sealedConn?.client.beginGracefulShutdown()
+        _sealedConn = nil
+        _sealedConnGeneration &+= 1
+        let gen = _sealedConnGeneration
+
+        let client = try makeSealedClient()
+        let task = Task.detached { [weak self, gen] in
+            guard let self else { return }
+            let valid = self._sealedConnLock.withLock { self._sealedConnGeneration == gen }
+            guard valid else { return }
+            do {
+                try await client.runConnections()
+            } catch is CancellationError {
+                // Normal shutdown.
+            } catch {
+                Log.error("Sealed persistent gRPC connection closed: \(error)", category: "GRPCChannel")
+                self.invalidateSealedPersistentClient()
+            }
+        }
+        _sealedConn = PersistentConn(client: client, task: task, key: key)
+        Log.debug("Sealed persistent gRPC connection created (key=\(key) gen=\(gen))", category: "GRPCChannel")
+        return client
+    }
+
+    /// Invalidates the sealed-sender persistent connection so the next RPC gets a fresh one.
+    func invalidateSealedPersistentClient() {
+        _sealedConnLock.lock()
+        defer { _sealedConnLock.unlock() }
+        guard _sealedConn != nil else { return }
+        _sealedConn?.client.beginGracefulShutdown()
+        _sealedConn = nil
+        _sealedConnGeneration &+= 1
     }
 
 #if canImport(Network)
@@ -580,6 +688,48 @@ final class GRPCChannelManager: Sendable {
             invalidatesConnectionOnFailure: invalidatesConnectionOnFailure,
             operation
         )
+    }
+
+    /// Execute a gRPC operation on the unauthenticated sealed-sender channel
+    /// (stealth-sealed-sender-v2 Phase 2).
+    ///
+    /// Deliberately simpler than `performRPC`/`GRPCCallExecutor`: there is no auth to
+    /// refresh on this channel, and VEIL-aware relay rotation is left to the message
+    /// layer above (sends already retry there). On a transport failure the sealed
+    /// connection is invalidated and the operation is retried once with a fresh client;
+    /// a second failure propagates to the caller.
+    func performSealedRPC<Result: Sendable>(
+        timeout: TimeInterval? = nil,
+        _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.TransportServices>) async throws -> Result
+    ) async throws -> Result {
+        var lastError: Error?
+        for attempt in 0..<2 {
+            let client = try acquireSealedPersistentClient()
+            do {
+                if let timeout {
+                    let opTask = Task<Result, Error> { try await operation(client) }
+                    let capSleep = Task<Void, Error> { try await Task.sleep(for: .seconds(timeout)) }
+                    Task { _ = try? await opTask.value; capSleep.cancel() }
+                    do {
+                        try await withTaskCancellationHandler {
+                            try await capSleep.value
+                        } onCancel: { capSleep.cancel() }
+                        opTask.cancel()
+                        throw GRPCClientError.clientSideTimeout
+                    } catch is CancellationError {
+                        if Task.isCancelled { opTask.cancel(); throw CancellationError() }
+                    }
+                    return try await opTask.value
+                } else {
+                    return try await operation(client)
+                }
+            } catch {
+                lastError = error
+                invalidateSealedPersistentClient()
+                if attempt == 1 { throw error }
+            }
+        }
+        throw lastError ?? NetworkError.connectionFailed
     }
 }
 

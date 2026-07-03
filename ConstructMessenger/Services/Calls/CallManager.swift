@@ -1051,17 +1051,22 @@ final class CallManager: CallUIManaging {
                         let sealedInnerBytes = await buildSealedForCallSignalIfNeeded(recipient: to, payload: payload)
 
                         do {
-                            _ = try await MessagingServiceClient.shared.sendMessage(
-                                messageId: msgId,
-                                recipientId: to,
-                                senderId: currentUserId,
-                                conversationId: "",
-                                encryptedPayload: payload,
-                                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                                senderDeviceId: Self.currentDeviceId(),
-                                contentType: .callSignal,
-                                sealedInnerBytes: sealedInnerBytes
-                            )
+                            if let sealedInnerBytes, FeatureFlags.sealedSenderUnauthenticatedTransport {
+                                // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
+                                _ = try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: sealedInnerBytes)
+                            } else {
+                                _ = try await MessagingServiceClient.shared.sendMessage(
+                                    messageId: msgId,
+                                    recipientId: to,
+                                    senderId: currentUserId,
+                                    conversationId: "",
+                                    encryptedPayload: payload,
+                                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                                    senderDeviceId: Self.currentDeviceId(),
+                                    contentType: .callSignal,
+                                    sealedInnerBytes: sealedInnerBytes
+                                )
+                            }
                             let sealedNote = sealedInnerBytes != nil ? " [STEALTH]" : ""
                             Log.info("WebRTCSignal sent via Rust E2EE\(sealedNote) to=\(to.prefix(8))… callId=\(callId.prefix(8))…", category: "Calls")
                         } catch {

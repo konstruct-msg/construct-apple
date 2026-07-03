@@ -143,6 +143,68 @@ final class MessagingServiceClient: Sendable {
         }
     }
 
+    // MARK: - Send Sealed Message (stealth-sealed-sender-v2 Phase 2)
+
+    /// Sends a sealed-sender message over the unauthenticated sealed channel via the
+    /// new `SendSealedMessage` RPC — no outer `Envelope`, no sender/conversation_id/
+    /// content_type on the wire. Gated by `FeatureFlags.sealedSenderUnauthenticatedTransport`;
+    /// callers should fall back to `sendMessage(sealedInnerBytes:)` when the flag is off.
+    func sendSealedMessage(sealedInner: Data) async throws -> SendMessageResponse {
+        #if canImport(UIKit)
+        let bgTaskId = await MainActor.run { UIApplication.shared.beginBackgroundTask(withName: "send-sealed-msg-rpc") { } }
+        defer { Task { @MainActor in UIApplication.shared.endBackgroundTask(bgTaskId) } }
+        #endif
+        return try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
+            let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
+
+            var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
+            sealedEnvelope.sealedInner = sealedInner
+
+            let attemptId = UUID().uuidString.lowercased()
+
+            var request = Shared_Proto_Services_V1_SendSealedMessageRequest()
+            request.sealedSender = sealedEnvelope
+            request.attemptID = attemptId
+
+            Log.debug("sendSealedMessage RPC → attemptId=\(attemptId) payloadBytes=\(sealedInner.count)", category: "MessagingServiceClient")
+
+            let response = try await msgClient.sendSealedMessage(request: .init(message: request))
+
+            let errorCodeRaw = response.error.errorCode
+            let retryAfterMs = response.error.hasRetryAfterMs ? response.error.retryAfterMs : 0
+            let echoedAttemptId = response.hasAttemptID ? response.attemptID : attemptId
+
+            let status: String
+            let retryable: Bool
+            let errorCodeStr: String
+            if response.success {
+                status = "sent"
+                retryable = true
+                errorCodeStr = ""
+                Log.info("sendSealedMessage sent attemptId=\(echoedAttemptId) messageId=\(response.messageID)", category: "MessagingServiceClient")
+            } else if errorCodeRaw == .rateLimit {
+                status = "failed"
+                retryable = true
+                errorCodeStr = "rateLimit"
+                Log.error("sendSealedMessage rate limited — attemptId=\(echoedAttemptId) retryAfterMs=\(retryAfterMs)", category: "MessagingServiceClient")
+            } else {
+                status = "failed"
+                retryable = response.error.retryable
+                errorCodeStr = errorCodeRaw == .unspecified ? "" : "\(errorCodeRaw)"
+                Log.error("sendSealedMessage failed — attemptId=\(echoedAttemptId) errorCode=\(errorCodeRaw) retryable=\(retryable)", category: "MessagingServiceClient")
+            }
+
+            return SendMessageResponse(
+                messageId: response.messageID,
+                status: status,
+                retryable: retryable,
+                errorCode: errorCodeStr,
+                retryAfterMs: retryAfterMs,
+                attemptId: echoedAttemptId
+            )
+        }
+    }
+
     // MARK: - Send End Session (replaces MessagingAPI.sendEndSession)
 
     func sendEndSession(to recipientId: String, reason: String? = nil) async throws -> EndSessionResponse {

@@ -55,15 +55,21 @@ final class ChunkedMessageSender {
                 }
             }
 
-            let response = try await MessagingServiceClient.shared.sendMessage(
-                messageId: chunkMessageId,
-                recipientId: recipientId,
-                senderId: senderId,
-                conversationId: conversationId,
-                encryptedPayload: encryptedPayload,
-                timestamp: timestamp,
-                sealedInnerBytes: sealedInner
-            )
+            let response: SendMessageResponse
+            if let sealedInner, FeatureFlags.sealedSenderUnauthenticatedTransport {
+                // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
+                response = try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: sealedInner)
+            } else {
+                response = try await MessagingServiceClient.shared.sendMessage(
+                    messageId: chunkMessageId,
+                    recipientId: recipientId,
+                    senderId: senderId,
+                    conversationId: conversationId,
+                    encryptedPayload: encryptedPayload,
+                    timestamp: timestamp,
+                    sealedInnerBytes: sealedInner
+                )
+            }
             responses.append(response)
 
             if index < plan.payloads.count - 1 {
