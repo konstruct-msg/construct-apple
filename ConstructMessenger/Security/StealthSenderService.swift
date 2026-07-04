@@ -11,6 +11,7 @@
 //
 
 import Foundation
+import CoreData
 import CryptoKit
 import SwiftProtobuf
 import Observation
@@ -170,6 +171,49 @@ final class StealthSenderService {
         return ok ? .vouched(.signature) : .unvouched(.badSignature)
     }
 
+    #if DEBUG
+    /// Test seam: overrides the KT-verified-identity lookup so unit tests exercise the KT
+    /// cross-check without a Core Data stack. `nil` (default) uses the real `User` store.
+    var ktLookupOverrideForTesting: ((String) -> (key: Data, status: KTStatus)?)?
+    #endif
+
+    /// The recipient's locally stored, previously-KT-verified identity key for `userId`
+    /// (plus its status), read from the `User` Core Data record. `nil` for a first contact
+    /// (no bundle fetched / verified yet). sealed-sender-resilience lever C source.
+    private func ktVerifiedIdentity(for userId: String) -> (key: Data, status: KTStatus)? {
+        #if DEBUG
+        if let override = ktLookupOverrideForTesting { return override(userId) }
+        #endif
+        let ctx = PersistenceController.shared.container.viewContext
+        let req = User.fetchRequest()
+        req.predicate = NSPredicate(format: "id == %@", userId)
+        req.fetchLimit = 1
+        guard let user = try? ctx.fetch(req).first, let key = user.knownIdentityKey else { return nil }
+        return (key, user.ktStatus)
+    }
+
+    /// The full attestation verdict for an unsealed certificate. Never gates delivery —
+    /// only labels trust. Ladder, strongest-first (sealed-sender-resilience §2 lever C):
+    ///  1. Expiry: an expired cert is `.unvouched(.expired)` regardless of KT match — the
+    ///     cert TTL bounds replay of an old sealed message (delivery still proceeds).
+    ///  2. KT: cert identity key == our KT-`.verified` `knownIdentityKey` for the sender →
+    ///     `.vouched(.kt)`, no bundle key involved at all. A `.keyChanged`/`.failed`/
+    ///     `.unverified` status does NOT vouch even on a key match (that is exactly the
+    ///     MITM-suspicion case KT exists to catch).
+    ///  3. Signature (lever B): fall back to the bundle-key check for a first contact.
+    func attest(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> SenderTrust {
+        let now = Int64(Date().timeIntervalSince1970)
+        if cert.expiresAt <= now { return .unvouched(.expired) }
+
+        if let kt = ktVerifiedIdentity(for: cert.senderUserID),
+           kt.status == .verified,
+           kt.key == cert.senderIdentityKey {
+            return .vouched(.kt)
+        }
+
+        return attestSignature(cert)
+    }
+
     static func buildCertPayload(userID: String, domain: String, ik: Data, deviceID: String, issued: Int64, expires: Int64) -> Data {
         var p = Data()
         p.append(contentsOf: userID.utf8)
@@ -218,18 +262,11 @@ final class StealthSenderService {
             return nil
         }
 
-        // Attestation (never gates delivery — only tags trust): expiry first, then signature.
-        let trust: SenderTrust
-        let now = Int64(Date().timeIntervalSince1970)
-        if cert.expiresAt <= now {
-            trust = .unvouched(.expired)
-        } else {
-            trust = attestSignature(cert)
-        }
-
+        // Attestation (never gates delivery — only tags trust): expiry → KT → signature.
+        let trust = attest(cert)
         switch trust {
-        case .vouched:
-            Log.debug("Stealth: resolved sender \(cert.senderUserID.prefix(8))… (vouched)", category: "Stealth")
+        case .vouched(let basis):
+            Log.debug("Stealth: resolved sender \(cert.senderUserID.prefix(8))… (vouched via \(basis))", category: "Stealth")
         case .unvouched(let reason):
             Log.info("Stealth: resolved sender \(cert.senderUserID.prefix(8))… UNVOUCHED (\(reason)) — delivering via ratchet", category: "Stealth")
         }
@@ -302,10 +339,14 @@ enum StealthError: Error {
 
 // MARK: - sealed-sender-resilience trust model
 
-/// How a sealed sender's identity binding was attested. `.signature` is the current
-/// bundle-key check (lever B). `.kt` (Stage 2, lever C) is a local cross-check against
-/// the recipient's previously KT-verified identity key for that contact — added later.
+/// How a sealed sender's identity binding was attested.
+///  - `.kt` (lever C): the cert's identity key matches the recipient's locally stored,
+///    KT-`.verified` `knownIdentityKey` for that contact — the strongest verdict, with
+///    zero dependency on any bundle key / well-known / landing.
+///  - `.signature` (lever B): the cert's Ed25519 signature validated against a
+///    fetched-or-pinned bundle key. Fallback used for first contact (no local KT key yet).
 enum SenderVouchBasis: Equatable {
+    case kt
     case signature
 }
 
