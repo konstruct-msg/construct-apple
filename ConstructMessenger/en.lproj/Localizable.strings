@@ -541,6 +541,8 @@
 "diagnostics_size" = "Size";
 "diagnostics_share_logs" = "Share logs";
 "diagnostics_clear_logs" = "Clear logs";
+"diagnostics_stealth_override_title" = "Stealth sender (debug override)";
+"diagnostics_stealth_override_hint" = "Always on in Release. Turn off here to exercise the legacy identified-send path during development.";
 "diagnostics_force_spk_rotation" = "Force SPK Rotation";
 "diagnostics_reset_local_data_keychain" = "Reset local data & Keychain";
 "diagnostics_dev_tools_footer" = "Clears all Keychain keys, sessions, and UserDefaults. Use to test fresh initialization without reinstalling.";

@@ -23,6 +23,9 @@ struct DiagnosticsView: View {
     @State private var logText: String = ""
     @State private var logSize: String = ""
     @State private var push = PushNotificationManager.shared
+    #if DEBUG
+    @AppStorage("stealth_mode_enabled") private var stealthOverrideEnabled = true
+    #endif
     private var isPushPermissionGranted: Bool {
         push.authorizationStatus == .authorized || push.authorizationStatus == .provisional
     }
@@ -99,6 +102,19 @@ struct DiagnosticsView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         CTSettingsSectionHeader(title: NSLocalizedString("DEVELOPER", comment: ""), color: .orange)
                         CTSectionGroup {
+                            Toggle(isOn: $stealthOverrideEnabled) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(LocalizedStringKey("diagnostics_stealth_override_title"))
+                                        .font(CTFont.regular(14))
+                                        .foregroundStyle(.orange)
+                                    Text(LocalizedStringKey("diagnostics_stealth_override_hint"))
+                                        .font(CTFont.regular(11))
+                                        .foregroundStyle(Color.CT.textDim)
+                                }
+                            }
+                            .tint(.orange)
+                            .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, SettingsLayout.rowVerticalPadding)
                             ConstructActionRow(systemImage: "arrow.clockwise", title: LocalizedStringKey("diagnostics_force_spk_rotation"), role: .secondary) {
                                 Task {
                                     await PreKeyRotationService.shared.forceRotate()

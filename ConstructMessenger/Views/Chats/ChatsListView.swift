@@ -9,6 +9,10 @@ import Combine
 import CoreData
 
 struct ChatsListView: View {
+    private enum Layout {
+        static let topScrimUnderSafeArea: CGFloat = CTLayout.navBarHeight + 24
+    }
+
     @Environment(\.managedObjectContext) private var viewContext
 
     @FetchRequest
@@ -35,6 +39,25 @@ struct ChatsListView: View {
             ZStack {
                 // Main list content - full height so it can scroll under floating capsules
                 chatList(chats: renderedChats)
+
+                GeometryReader { geo in
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color.CT.bg, location: 0),
+                                    .init(color: Color.CT.bg.opacity(0.65), location: 0.55),
+                                    .init(color: Color.CT.bg.opacity(0), location: 1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(height: geo.safeAreaInsets.top + Layout.topScrimUnderSafeArea)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .ignoresSafeArea(edges: .top)
+                }
+                .allowsHitTesting(false)
 
                 // Top floating area: nav + independent search capsule
                 VStack(spacing: 0) {

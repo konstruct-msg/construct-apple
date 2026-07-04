@@ -38,6 +38,24 @@ final class MediaImageCache {
     func image(for messageId: String) -> PlatformImage? { image(for: messageId, at: 0) }
 }
 
+@Observable
+final class MediaVideoCache {
+    static let shared = MediaVideoCache()
+    private init() {}
+
+    private(set) var urls: [String: URL] = [:]
+
+    private static func key(_ messageId: String, _ index: Int) -> String { "\(messageId)_\(index)" }
+
+    func store(_ url: URL, for messageId: String, at index: Int = 0) {
+        urls[Self.key(messageId, index)] = url
+    }
+
+    func url(for messageId: String, at index: Int = 0) -> URL? {
+        urls[Self.key(messageId, index)]
+    }
+}
+
 // MARK: - Parse Helper
 
 // MARK: - Gallery Presenter Token
@@ -537,7 +555,6 @@ struct GalleryVideoPage: View {
             .onAppear { load() }
             .onDisappear {
                 player?.pause()
-                if let tempURL { try? FileManager.default.removeItem(at: tempURL) }
             }
         )
     }
@@ -546,6 +563,14 @@ struct GalleryVideoPage: View {
         guard player == nil, !isLoading || forceRetry else { return }
         failed = false
         progress = 0
+
+        if let cachedURL = MediaVideoCache.shared.url(for: message.id, at: itemIndex) {
+            let cachedPlayer = AVPlayer(url: cachedURL)
+            tempURL = cachedURL
+            player = cachedPlayer
+            cachedPlayer.play()
+            return
+        }
 
         let item = mediaItem.isEmpty
             ? (parseMediaContent(from: message.displayText)?.mediaItems.indices.contains(itemIndex) == true
@@ -578,6 +603,7 @@ struct GalleryVideoPage: View {
                 try data.write(to: url)
                 await MainActor.run {
                     let p = AVPlayer(url: url)
+                    MediaVideoCache.shared.store(url, for: message.id, at: itemIndex)
                     tempURL = url
                     player = p
                     isLoading = false
@@ -594,7 +620,7 @@ struct GalleryVideoPage: View {
     /// Derive a real first-frame poster from the downloaded clip so the bubble stops showing
     /// the blurry blurhash. Cached in-memory (live refresh) + persisted (survives relaunch).
     /// No-op if a poster already exists (e.g. the sender's own upload).
-    private static func cacheFirstFramePoster(from url: URL, messageId: String, itemIndex: Int) async {
+    static func cacheFirstFramePoster(from url: URL, messageId: String, itemIndex: Int) async {
         let hasPoster = await MainActor.run {
             MediaImageCache.shared.image(for: messageId, at: itemIndex) != nil
                 || MediaManager.shared.retrieveThumbnail(for: messageId, at: itemIndex) != nil

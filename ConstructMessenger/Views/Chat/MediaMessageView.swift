@@ -9,6 +9,12 @@ import SwiftUI
 import Combine
 import GRPCCore
 
+private enum MediaPreviewLayout {
+    static let singleWidth: CGFloat = 260
+    static let singleAspectRatio: CGFloat = 5.0 / 4.0
+    static let singleHeight: CGFloat = singleWidth / singleAspectRatio
+}
+
 struct MediaMessageView: View {
     let mediaContent: MediaMessageContent
     let message: Message
@@ -69,6 +75,9 @@ private struct SingleMediaCell: View {
     @State private var downloadProgress: Double = 0
     @State private var hasReceivedBytes = false
     @State private var blurPreview: PlatformImage?
+    @State private var downloadedVideoURL: URL?
+    @State private var isDownloadingVideo = false
+    @State private var videoDownloadProgress: Double = 0
 
     /// Matches the album grid's outer radius (`MediaGridView`) so single and multi-item
     /// media round identically.
@@ -92,8 +101,9 @@ private struct SingleMediaCell: View {
                 let isUploading = isPlaceholder && message.deliveryStatus == .sending
                 Image(platformImage: thumbnail)
                     .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: 260, maxHeight: 320)
+                    .scaledToFill()
+                    .frame(width: MediaPreviewLayout.singleWidth, height: MediaPreviewLayout.singleHeight)
+                    .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay(alignment: .bottom) {
                         if isUploading { uploadingBadge }
@@ -115,27 +125,33 @@ private struct SingleMediaCell: View {
         // rounds identically to the album grid, regardless of which branch renders.
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .animation(.easeInOut(duration: 0.25), value: thumbnailImage != nil)
-        .onAppear { if isVideo { loadVideoPoster() } else { loadThumbnail() } }
+        .onAppear {
+            if isVideo {
+                syncCachedVideoURL()
+                loadVideoPoster()
+            } else {
+                loadThumbnail()
+            }
+        }
     }
 
     /// Video bubble: poster (sender) or blurhash preview (receiver) + play + duration.
     /// Never downloads the full video — playback happens on tap in the gallery.
     private var videoCell: some View {
-        // Prefer a real first-frame poster (cached after the clip is downloaded) over the
-        // blurhash. MediaImageCache is observed, so the bubble swaps live once it's ready.
         let poster = MediaImageCache.shared.image(for: message.id, at: itemIndex) ?? thumbnailImage ?? blurPreview
         let isUploading = isPlaceholder && message.deliveryStatus == .sending
         return ZStack {
             if let poster {
                 Image(platformImage: poster)
                     .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: 260, maxHeight: 320)
+                    .scaledToFill()
+                    .frame(width: MediaPreviewLayout.singleWidth, height: MediaPreviewLayout.singleHeight)
+                    .clipped()
             } else {
                 Rectangle().fill(Color.CT.bgMsg)
-                    .frame(width: previewSize.width, height: previewSize.height)
+                    .frame(width: MediaPreviewLayout.singleWidth, height: MediaPreviewLayout.singleHeight)
             }
-            if !isUploading { videoPlayGlyph }
+            if !isUploading { videoOverlayGlyph }
         }
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(alignment: .bottomLeading) {
@@ -149,7 +165,14 @@ private struct SingleMediaCell: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
         )
-        .onTapGesture { if !isPlaceholder { onTap() } }
+        .onTapGesture {
+            guard !isPlaceholder else { return }
+            if downloadedVideoURL != nil {
+                onTap()
+            } else {
+                startVideoDownloadAndOpen()
+            }
+        }
     }
 
     private func loadVideoPoster() {
@@ -161,6 +184,10 @@ private struct SingleMediaCell: View {
            let img = PlatformImage(data: data) {
             thumbnailImage = img
         }
+    }
+
+    private func syncCachedVideoURL() {
+        downloadedVideoURL = MediaVideoCache.shared.url(for: message.id, at: itemIndex)
     }
 
     // MARK: Placeholder views
@@ -189,12 +216,42 @@ private struct SingleMediaCell: View {
         .animation(.easeOut(duration: 0.2), value: progress)
     }
 
-    private var videoPlayGlyph: some View {
-        Image(systemName: "play.fill")
-            .font(.system(size: 22))
-            .foregroundColor(.white)
-            .frame(width: 54, height: 54)
-            .background(.black.opacity(0.45), in: Circle())
+    @ViewBuilder
+    private var videoOverlayGlyph: some View {
+        if isDownloadingVideo {
+            VStack(spacing: 6) {
+                if videoDownloadProgress > 0 {
+                    ProgressView(value: videoDownloadProgress)
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                        .scaleEffect(1.1)
+                } else {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(1.1)
+                }
+                if videoDownloadProgress > 0 {
+                    Text("\(Int(videoDownloadProgress * 100))%")
+                        .font(CTFont.regular(11))
+                        .foregroundColor(.white)
+                        .monospacedDigit()
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
+        } else if downloadedVideoURL != nil {
+            Image(systemName: "play.fill")
+                .font(.system(size: 22))
+                .foregroundColor(.white)
+                .frame(width: 54, height: 54)
+                .background(.black.opacity(0.45), in: Circle())
+        } else {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 30))
+                .foregroundColor(.white)
+                .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
+        }
     }
 
     private func durationBadge(_ seconds: Double) -> some View {
@@ -238,21 +295,13 @@ private struct SingleMediaCell: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
-    /// Display size for the loading preview, from the descriptor's pixel dimensions
-    /// (so the blurred preview matches the final image's shape), capped to the bubble.
     private var previewSize: CGSize {
-        let maxW: CGFloat = 260, maxH: CGFloat = 320
-        guard let w = (itemDict["width"] as? Int).map(CGFloat.init), w > 0,
-              let h = (itemDict["height"] as? Int).map(CGFloat.init), h > 0 else {
-            return CGSize(width: 200, height: 200)
-        }
-        let scale = min(maxW / w, maxH / h, 1)
-        return CGSize(width: max(120, w * scale), height: max(120, h * scale))
+        CGSize(width: MediaPreviewLayout.singleWidth, height: MediaPreviewLayout.singleHeight)
     }
 
     private var errorPlaceholder: some View {
         Rectangle()
-            .fill(Color.CT.bgMsg).frame(width: 200, height: 200)
+            .fill(Color.CT.bgMsg).frame(width: previewSize.width, height: previewSize.height)
             .overlay {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -276,7 +325,7 @@ private struct SingleMediaCell: View {
 
     private var emptyPlaceholder: some View {
         Rectangle()
-            .fill(Color.CT.bgMsg).frame(width: 200, height: 200)
+            .fill(Color.CT.bgMsg).frame(width: previewSize.width, height: previewSize.height)
             .overlay {
                 Image(systemName: "photo")
                     .font(.system(size: 28))
@@ -364,6 +413,59 @@ private struct SingleMediaCell: View {
                     if thumbnailImage == nil { loadError = error.localizedDescription }
                     hasReceivedBytes = false
                     downloadProgress = 0
+                }
+            }
+        }
+    }
+
+    private func startVideoDownloadAndOpen() {
+        if let cachedURL = MediaVideoCache.shared.url(for: message.id, at: itemIndex) {
+            downloadedVideoURL = cachedURL
+            onTap()
+            return
+        }
+        guard !isDownloadingVideo else { return }
+        guard let mediaId = itemDict["mediaId"] as? String,
+              let mediaUrl = itemDict["mediaUrl"] as? String,
+              let mediaKeyStr = itemDict["mediaKey"] as? String,
+              let mediaKey = Data(base64Encoded: mediaKeyStr) else { return }
+
+        isDownloadingVideo = true
+        videoDownloadProgress = 0
+        let total = Double((itemDict["size"] as? Int) ?? 0)
+        let fileExtension = mediaFileExtension(for: itemDict["mediaType"] as? String)
+        let onProgress: @Sendable (Int64) -> Void = { received in
+            let fraction = total > 0 ? min(0.99, Double(received) / total) : 0
+            Task { @MainActor in
+                videoDownloadProgress = total > 0 ? fraction : 0
+            }
+        }
+
+        Task {
+            do {
+                let data = try await MediaManager.shared.downloadAndDecryptMedia(
+                    mediaId: mediaId,
+                    mediaUrl: mediaUrl,
+                    mediaKey: mediaKey,
+                    onProgress: onProgress
+                )
+                let url = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension(fileExtension)
+                try data.write(to: url)
+                await MainActor.run {
+                    MediaVideoCache.shared.store(url, for: message.id, at: itemIndex)
+                    downloadedVideoURL = url
+                    isDownloadingVideo = false
+                    videoDownloadProgress = 1
+                    onTap()
+                }
+                await GalleryVideoPage.cacheFirstFramePoster(from: url, messageId: message.id, itemIndex: itemIndex)
+            } catch {
+                Log.error("Video preload failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                await MainActor.run {
+                    isDownloadingVideo = false
+                    videoDownloadProgress = 0
                 }
             }
         }
@@ -492,6 +594,9 @@ private struct GridCell: View {
     @State private var hasReceivedBytes = false
     @State private var isMissingMedia = false
     @State private var blurPreview: PlatformImage?
+    @State private var downloadedVideoURL: URL?
+    @State private var isDownloadingVideo = false
+    @State private var videoDownloadProgress: Double = 0
 
     private var itemDict: [String: Any] {
         mediaContent.mediaItems.indices.contains(itemIndex) ? mediaContent.mediaItems[itemIndex] : [:]
@@ -517,11 +622,7 @@ private struct GridCell: View {
 
             let isUploading = isPlaceholder && message.deliveryStatus == .sending
             if isVideo && !isUploading {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white)
-                    .frame(width: 38, height: 38)
-                    .background(.black.opacity(0.45), in: Circle())
+                videoOverlayGlyph
             }
 
             if extraCount > 0 {
@@ -545,14 +646,26 @@ private struct GridCell: View {
         .contentShape(Rectangle())
         .onTapGesture {
             if isVideo {
-                if !isPlaceholder { onTap() }
+                guard !isPlaceholder else { return }
+                if downloadedVideoURL != nil {
+                    onTap()
+                } else {
+                    startVideoDownloadAndOpen()
+                }
             } else if loadFailed {
                 loadThumbnail(forceRetry: true)
             } else if !isPlaceholder, thumbnailImage != nil {
                 onTap()
             }
         }
-        .onAppear { if isVideo { loadVideoPoster() } else { loadThumbnail() } }
+        .onAppear {
+            if isVideo {
+                syncCachedVideoURL()
+                loadVideoPoster()
+            } else {
+                loadThumbnail()
+            }
+        }
     }
 
     private func loadVideoPoster() {
@@ -564,6 +677,10 @@ private struct GridCell: View {
            let img = PlatformImage(data: data) {
             thumbnailImage = img
         }
+    }
+
+    private func syncCachedVideoURL() {
+        downloadedVideoURL = MediaVideoCache.shared.url(for: message.id, at: itemIndex)
     }
 
     @ViewBuilder
@@ -596,6 +713,44 @@ private struct GridCell: View {
             }
             .padding(12)
             .ctGlassCircle()
+        }
+    }
+
+    @ViewBuilder
+    private var videoOverlayGlyph: some View {
+        if isDownloadingVideo {
+            VStack(spacing: 4) {
+                if videoDownloadProgress > 0 {
+                    ProgressView(value: videoDownloadProgress)
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                        .scaleEffect(0.9)
+                } else {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(0.9)
+                }
+                if videoDownloadProgress > 0 {
+                    Text("\(Int(videoDownloadProgress * 100))%")
+                        .font(CTFont.regular(10))
+                        .foregroundColor(.white)
+                        .monospacedDigit()
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
+        } else if downloadedVideoURL != nil {
+            Image(systemName: "play.fill")
+                .font(.system(size: 16))
+                .foregroundColor(.white)
+                .frame(width: 38, height: 38)
+                .background(.black.opacity(0.45), in: Circle())
+        } else {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 20))
+                .foregroundColor(.white)
+                .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
         }
     }
 
@@ -694,6 +849,59 @@ private struct GridCell: View {
             }
         }
     }
+
+    private func startVideoDownloadAndOpen() {
+        if let cachedURL = MediaVideoCache.shared.url(for: message.id, at: itemIndex) {
+            downloadedVideoURL = cachedURL
+            onTap()
+            return
+        }
+        guard !isDownloadingVideo else { return }
+        guard let mediaId = itemDict["mediaId"] as? String,
+              let mediaUrl = itemDict["mediaUrl"] as? String,
+              let mediaKeyStr = itemDict["mediaKey"] as? String,
+              let mediaKey = Data(base64Encoded: mediaKeyStr) else { return }
+
+        isDownloadingVideo = true
+        videoDownloadProgress = 0
+        let total = Double((itemDict["size"] as? Int) ?? 0)
+        let fileExtension = mediaFileExtension(for: itemDict["mediaType"] as? String)
+        let onProgress: @Sendable (Int64) -> Void = { received in
+            let fraction = total > 0 ? min(0.99, Double(received) / total) : 0
+            Task { @MainActor in
+                videoDownloadProgress = total > 0 ? fraction : 0
+            }
+        }
+
+        Task {
+            do {
+                let data = try await MediaManager.shared.downloadAndDecryptMedia(
+                    mediaId: mediaId,
+                    mediaUrl: mediaUrl,
+                    mediaKey: mediaKey,
+                    onProgress: onProgress
+                )
+                let url = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension(fileExtension)
+                try data.write(to: url)
+                await MainActor.run {
+                    MediaVideoCache.shared.store(url, for: message.id, at: itemIndex)
+                    downloadedVideoURL = url
+                    isDownloadingVideo = false
+                    videoDownloadProgress = 1
+                    onTap()
+                }
+                await GalleryVideoPage.cacheFirstFramePoster(from: url, messageId: message.id, itemIndex: itemIndex)
+            } catch {
+                Log.error("Grid video preload failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                await MainActor.run {
+                    isDownloadingVideo = false
+                    videoDownloadProgress = 0
+                }
+            }
+        }
+    }
 }
 
 private func isMediaMissingError(_ error: Error) -> Bool {
@@ -705,6 +913,17 @@ private func isMediaMissingError(_ error: Error) -> Bool {
 func formatMediaDuration(_ seconds: Double) -> String {
     let total = Int(seconds.rounded())
     return String(format: "%d:%02d", total / 60, total % 60)
+}
+
+private func mediaFileExtension(for mediaType: String?) -> String {
+    switch mediaType {
+    case "video/quicktime":
+        return "mov"
+    case let type? where type.hasPrefix("video/"):
+        return "mp4"
+    default:
+        return "mp4"
+    }
 }
 
 // MARK: - Liquid Glass helper

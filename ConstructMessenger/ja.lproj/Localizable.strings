@@ -509,6 +509,8 @@
 "diagnostics_size" = "サイズ";
 "diagnostics_share_logs" = "ログを共有";
 "diagnostics_clear_logs" = "ログを消去";
+"diagnostics_stealth_override_title" = "ステルス送信者（デバッグ用オーバーライド）";
+"diagnostics_stealth_override_hint" = "リリースビルドでは常に有効。開発中に従来の身元開示送信経路を試す場合はここで無効化します。";
 "diagnostics_force_spk_rotation" = "SPKローテーションを強制実行";
 "diagnostics_reset_local_data_keychain" = "ローカルデータとKeychainをリセット";
 "diagnostics_dev_tools_footer" = "Keychain内の全キー、セッション、UserDefaultsを削除します。再インストールせずに初期化フローをテストするために使用します。";
