@@ -690,6 +690,16 @@ class BackgroundFetchManager: NSObject {
             // BlindTokenService enforces 1-hour cooldown to respect server rate limit.
             await BlindTokenService.shared.replenish(count: 15)
 
+            // stealth-sealed-sender-v2 Phase 4: proactively renew the sender certificate
+            // ahead of its 24h expiry, now that sealed sending is always on and every
+            // message would otherwise pay a cache-miss network fetch on the hot path.
+            // getSenderCertificate() is itself a no-op when the cached cert still has
+            // more than 5 minutes of validity left. Gated on auth, same as SPK rotation
+            // below — no point attempting a network fetch without a valid session.
+            if GRPCAuthCache.shared.snapshot.token != nil {
+                _ = try? await StealthSenderService.shared.getSenderCertificate()
+            }
+
             // Session health audit: send heartbeats to contacts silent for 12+ hours,
             // then log a health summary for diagnostics. Mirrors the foreground path in
             // applicationWillEnterForeground — keeps sessions alive between launches.

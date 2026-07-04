@@ -1132,12 +1132,14 @@ final class CallManager: CallUIManaging {
             let sealed = try await StealthSenderService.buildSealedInner(
                 recipientUserId: recipient,
                 recipientIdentityKey: ik,
-                encryptedPayload: payload
+                encryptedPayload: payload,
+                contentType: .callSignal
             )
             Log.debug("STEALTH: built SealedInner for call signal (payload \(payload.count)b)", category: "Calls")
             return sealed
         } catch {
             Log.error("STEALTH: buildSealedInner failed for call signal to \(recipient.prefix(8))…: \(error)", category: "Calls")
+            PerformanceMetrics.shared.record(.stealthSealFailure, label: "callSignal")
             return nil
         }
     }

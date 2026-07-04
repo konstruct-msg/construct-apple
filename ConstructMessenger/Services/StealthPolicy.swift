@@ -48,8 +48,18 @@ final class StealthPolicy {
 
     // MARK: - Public queries
 
+    /// Always on (stealth-sealed-sender-v2 Phase 4). DEBUG builds keep a developer
+    /// override via the same UserDefaults key (surfaced in Diagnostics → Developer) so
+    /// the legacy identified-send path can still be exercised without recompiling;
+    /// Release builds have no way to disable it.
     var isEnabled: Bool {
-        UserDefaults.standard.bool(forKey: "stealth_mode_enabled")
+        #if DEBUG
+        UserDefaults.standard.object(forKey: "stealth_mode_enabled") == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: "stealth_mode_enabled")
+        #else
+        true
+        #endif
     }
 
     /// true  = per-message (consume token on every send)

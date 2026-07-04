@@ -48,10 +48,12 @@ final class ChunkedMessageSender {
                     sealedInner = try await StealthSenderService.buildSealedInner(
                         recipientUserId: recipientId,
                         recipientIdentityKey: recipientIK,
-                        encryptedPayload: encryptedPayload
+                        encryptedPayload: encryptedPayload,
+                        contentType: .e2EeSignal
                     )
                 } catch {
                     Log.error("STEALTH: seal failed, sending without stealth: \(error)", category: "ChunkedDelivery")
+                    PerformanceMetrics.shared.record(.stealthSealFailure, label: "chunked")
                 }
             }
 

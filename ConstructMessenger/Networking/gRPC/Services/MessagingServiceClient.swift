@@ -52,18 +52,21 @@ final class MessagingServiceClient: Sendable {
             var envelope = Shared_Proto_Core_V1_Envelope()
             envelope.messageID = messageId
             envelope.recipient = recipient
-            envelope.conversationID = conversationId
-            envelope.contentType = contentType
             envelope.encryptedPayload = encryptedPayload
             envelope.timestamp = Int64(timestamp)
 
             if let sealedInner = sealedInnerBytes, !sealedInner.isEmpty {
-                // STEALTH: do not populate sender — build SealedSenderEnvelope
+                // STEALTH (stealth-sealed-sender-v2 Phase 3): do not populate sender,
+                // conversation_id, or the real content_type on the outer envelope — the
+                // real content_type travels inside SealedInner (see StealthSenderService.
+                // buildSealedInner) and is recovered by the recipient after unsealing.
                 var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
                 sealedEnvelope.sealedInner = sealedInner
                 envelope.sealedSender = sealedEnvelope
             } else {
                 envelope.sender = sender
+                envelope.conversationID = conversationId
+                envelope.contentType = contentType
             }
 
             if let senderDeviceId, !senderDeviceId.isEmpty {

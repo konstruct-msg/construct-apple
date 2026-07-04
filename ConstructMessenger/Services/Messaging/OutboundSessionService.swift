@@ -212,10 +212,12 @@ final class OutboundSessionService {
                     sealedInner = try await StealthSenderService.buildSealedInner(
                         recipientUserId: contactId,
                         recipientIdentityKey: identityKey,
-                        encryptedPayload: wirePayload
+                        encryptedPayload: wirePayload,
+                        contentType: .deliveryReceipt
                     )
                 } catch {
                     Log.error("E2E receipt: seal failed, sending without stealth: \(error)", category: "OutboundSession")
+                    PerformanceMetrics.shared.record(.stealthSealFailure, label: "receipt")
                 }
             }
             if let sealedInner, FeatureFlags.sealedSenderUnauthenticatedTransport {
