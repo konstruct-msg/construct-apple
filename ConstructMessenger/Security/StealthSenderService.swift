@@ -29,12 +29,18 @@ final class StealthSenderService {
     // MARK: - Sender Certificate (from auth-service)
 
     /// Returns cached cert bytes, or fetches a fresh one from auth-service.
+    /// stealth-sealed-sender-v2 Phase 4: sealed sending is always on now, so this fetch
+    /// sits on every message's hot path once the cache expires — bounded retry with
+    /// backoff covers transient network failures instead of failing the send on the
+    /// first hiccup.
     func getSenderCertificate() async throws -> Data {
         // Return cached cert if still valid (with 5-min leeway)
         if let cached = loadCachedCert() {
             return cached
         }
-        let response = try await AuthServiceClient.shared.getSenderCertificate()
+        let response = try await withRetry(maxAttempts: 3, backoff: 0.5, label: "getSenderCertificate") {
+            try await AuthServiceClient.shared.getSenderCertificate()
+        }
         cacheCert(response.certificate, expiresAt: response.expiresAt)
         return response.certificate
     }
@@ -119,60 +125,59 @@ final class StealthSenderService {
         return try Shared_Proto_Core_V1_SenderCertificate(serializedBytes: certBytes)
     }
 
-    // MARK: - Verify
+    // MARK: - Verify / attest
 
-    /// Verifies the server Ed25519 signature on a SenderCertificate.
-    /// Uses the `bundle_*_key` (signing or verification) cached from /.well-known/construct-server.
-    /// Tries canonical formats (direct concat + BE i64 preferred per proto comment; fallbacks for rollout).
-    func verifyCert(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> Bool {
-        guard
-            let serverPubKeyData = UserDefaults.standard.data(forKey: VeilCertFetcher.cachedBundleSigningKeyKey),
-            !cert.serverSignature.isEmpty
-        else { return false }
-
-        let pubKey: Curve25519.Signing.PublicKey
-        do {
-            pubKey = try Curve25519.Signing.PublicKey(rawRepresentation: serverPubKeyData)
-        } catch {
-            Log.error("StealthSenderService: failed to create server pub key: \(error)", category: "Stealth")
-            return false
+    /// The trusted bundle-signing keys, in preference order: the key fetched from
+    /// `/.well-known/construct-server` (if present), followed by the build-time pins
+    /// (`VEILConfig.pinnedBundleSigningKeys`). sealed-sender-resilience lever B — the
+    /// pins guarantee a sealed receive can be attested even when the fetched key was
+    /// never cached (e.g. VEIL inactive, the 2026-07-05 incident) or after a rotation.
+    private func trustedBundleKeys() -> [Curve25519.Signing.PublicKey] {
+        var raw: [Data] = []
+        if let fetched = UserDefaults.standard.data(forKey: VeilCertFetcher.cachedBundleSigningKeyKey) {
+            raw.append(fetched)
         }
-
-        let variants: [Data] = [
-            // 0: direct concat, times as big-endian i64 bytes (preferred)
-            Self.buildCertPayload(userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey, deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt, asciiTimes: false, withColons: false),
-            // 1: direct + decimal ascii times (no colons)
-            Self.buildCertPayload(userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey, deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt, asciiTimes: true, withColons: false),
-            // 2: legacy with colons + ascii (previous client attempt)
-            Self.buildCertPayload(userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey, deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt, asciiTimes: true, withColons: true),
-        ]
-
-        for p in variants {
-            if pubKey.isValidSignature(cert.serverSignature, for: p) {
-                return true
-            }
+        for b64 in VEILConfig.pinnedBundleSigningKeys {
+            if let d = Data(base64Encoded: b64) { raw.append(d) }
         }
-        return false
+        #if DEBUG
+        raw.append(contentsOf: extraTrustedBundleKeysForTesting)
+        #endif
+        return raw.compactMap { try? Curve25519.Signing.PublicKey(rawRepresentation: $0) }
     }
 
-    private static func buildCertPayload(userID: String, domain: String, ik: Data, deviceID: String, issued: Int64, expires: Int64, asciiTimes: Bool, withColons: Bool) -> Data {
+    #if DEBUG
+    /// Test seam: additional trusted bundle keys (raw 32-byte) injected by unit tests to
+    /// exercise the pin/rotation path without shipping a private key for a real pin.
+    /// Empty in production paths.
+    var extraTrustedBundleKeysForTesting: [Data] = []
+    #endif
+
+    /// Checks the server Ed25519 signature on a SenderCertificate against every trusted
+    /// bundle key. Canonical (and only) payload format — stealth-sealed-sender-v2 Phase 3:
+    /// direct concatenation, no separators, issued_at/expires_at as big-endian i64 bytes.
+    /// Must match identity-service::get_sender_certificate's sign_payload exactly.
+    /// Returns a *reason* rather than a bare Bool so the caller can tell "no key to check
+    /// with" apart from "signature genuinely bad" (the old code conflated them, which is
+    /// why the 2026-07-05 nil-key failure was mislogged as `signature invalid`).
+    func attestSignature(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> SenderTrust {
+        guard !cert.serverSignature.isEmpty else { return .unvouched(.badSignature) }
+        let keys = trustedBundleKeys()
+        guard !keys.isEmpty else { return .unvouched(.noKey) }
+
+        let payload = Self.buildCertPayload(userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey, deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt)
+        let ok = keys.contains { $0.isValidSignature(cert.serverSignature, for: payload) }
+        return ok ? .vouched(.signature) : .unvouched(.badSignature)
+    }
+
+    static func buildCertPayload(userID: String, domain: String, ik: Data, deviceID: String, issued: Int64, expires: Int64) -> Data {
         var p = Data()
         p.append(contentsOf: userID.utf8)
-        if withColons { p.append(UInt8(ascii: ":")) }
         p.append(contentsOf: domain.utf8)
-        if withColons { p.append(UInt8(ascii: ":")) }
         p.append(ik)
-        if withColons { p.append(UInt8(ascii: ":")) }
         p.append(contentsOf: deviceID.utf8)
-        if withColons { p.append(UInt8(ascii: ":")) }
-        if asciiTimes {
-            p.append(contentsOf: String(issued).utf8)
-            if withColons { p.append(UInt8(ascii: ":")) }
-            p.append(contentsOf: String(expires).utf8)
-        } else {
-            p.append(bigEndian64(issued))
-            p.append(bigEndian64(expires))
-        }
+        p.append(bigEndian64(issued))
+        p.append(bigEndian64(expires))
         return p
     }
 
@@ -183,52 +188,73 @@ final class StealthSenderService {
 
     // MARK: - Resolve sender (receive path, full pipeline)
 
-    /// Decrypts SealedInner bytes to recover sender user ID.
-    /// Returns nil if decryption or verification fails (should trigger unseal error handling).
-    func resolveSender(sealedInnerBytes: Data) -> String? {
+    /// Decrypts SealedInner bytes to recover the sender user ID, the real content type
+    /// carried inside SealedInner (stealth-sealed-sender-v2 Phase 3 — the outer
+    /// Envelope.content_type is forced generic for sealed sends, so this is the only
+    /// place the recipient can recover whether this was a message/receipt/call signal),
+    /// and an attestation verdict.
+    ///
+    /// sealed-sender-resilience lever A: returns `nil` **only** when the sealed box
+    /// itself cannot be opened (no sender/payload recoverable). An expired or
+    /// unverifiable certificate is NOT a nil — the sender id and payload are already in
+    /// hand, so the caller delivers the message `.unvouched` through the normal ratchet
+    /// decrypt (which is the real authentication) instead of dropping it. The
+    /// certificate is anti-abuse/anonymity metadata, not the security root.
+    func resolveSender(sealedInnerBytes: Data) -> ResolvedSender? {
         guard let ourPrivKeyBytes = KeychainManager.shared.loadDeviceIdentityKey() else {
             Log.error("Stealth: no identity key in Keychain", category: "Stealth")
             return nil
         }
+        let cert: Shared_Proto_Core_V1_SenderCertificate
+        let contentType: UInt8
         do {
             let sealedInner = try Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInnerBytes)
             guard !sealedInner.senderCertCiphertext.isEmpty else { return nil }
-            let cert = try unsealSenderCert(sealedInner.senderCertCiphertext, ourIdentityPrivKeyBytes: ourPrivKeyBytes)
-
-            // Reject expired certificates
-            let now = Int64(Date().timeIntervalSince1970)
-            guard cert.expiresAt > now else {
-                Log.info("Stealth: received expired sender cert (expired \(cert.expiresAt - now)s ago)", category: "Stealth")
-                return nil
-            }
-
-            guard verifyCert(cert) else {
-                Log.error("Stealth: sender cert signature invalid for \(cert.senderUserID.prefix(8))…", category: "Stealth")
-                return nil
-            }
-
-            Log.debug("Stealth: resolved sender \(cert.senderUserID.prefix(8))…", category: "Stealth")
-            return cert.senderUserID
+            cert = try unsealSenderCert(sealedInner.senderCertCiphertext, ourIdentityPrivKeyBytes: ourPrivKeyBytes)
+            contentType = UInt8(sealedInner.contentType.rawValue)
         } catch {
+            // Unseal failed — genuinely unrecoverable (wrong key / corruption / not for us).
             Log.error("Stealth: unseal failed: \(error)", category: "Stealth")
             return nil
         }
+
+        // Attestation (never gates delivery — only tags trust): expiry first, then signature.
+        let trust: SenderTrust
+        let now = Int64(Date().timeIntervalSince1970)
+        if cert.expiresAt <= now {
+            trust = .unvouched(.expired)
+        } else {
+            trust = attestSignature(cert)
+        }
+
+        switch trust {
+        case .vouched:
+            Log.debug("Stealth: resolved sender \(cert.senderUserID.prefix(8))… (vouched)", category: "Stealth")
+        case .unvouched(let reason):
+            Log.info("Stealth: resolved sender \(cert.senderUserID.prefix(8))… UNVOUCHED (\(reason)) — delivering via ratchet", category: "Stealth")
+        }
+        return ResolvedSender(senderId: cert.senderUserID, contentType: contentType, trust: trust)
     }
 
     // MARK: - Build SealedInner for sending
 
     /// Builds SealedInner proto bytes for a sealed sender message.
+    /// `contentType` travels inside SealedInner (not the outer Envelope, which stays
+    /// generic for sealed sends) so the recipient can recover message/receipt/call-signal
+    /// kind after unsealing — stealth-sealed-sender-v2 Phase 3.
     func buildSealedInner(
         recipientUserId: String,
         certBytes: Data,
         recipientIdentityKey: Data,
-        encryptedPayload: Data
+        encryptedPayload: Data,
+        contentType: Shared_Proto_Core_V1_ContentType
     ) async throws -> Data {
         let sealedCert = try sealSenderCert(certBytes, recipientIdentityKey: recipientIdentityKey)
         var inner = Shared_Proto_Core_V1_SealedInner()
         inner.recipientUserID = recipientUserId
         inner.senderCertCiphertext = sealedCert
         inner.encryptedPayload = encryptedPayload
+        inner.contentType = contentType
         inner.deliveryTag = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
 
         // Ask StealthPolicy whether we should attach a token.
@@ -252,7 +278,8 @@ final class StealthSenderService {
     static func buildSealedInner(
         recipientUserId: String,
         recipientIdentityKey: Data,
-        encryptedPayload: Data
+        encryptedPayload: Data,
+        contentType: Shared_Proto_Core_V1_ContentType
     ) async throws -> Data {
         // getSenderCertificate is @MainActor async — call it directly (will hop automatically)
         let certBytes = try await StealthSenderService.shared.getSenderCertificate()
@@ -260,7 +287,8 @@ final class StealthSenderService {
             recipientUserId: recipientUserId,
             certBytes: certBytes,
             recipientIdentityKey: recipientIdentityKey,
-            encryptedPayload: encryptedPayload
+            encryptedPayload: encryptedPayload,
+            contentType: contentType
         )
     }
 }
@@ -270,4 +298,36 @@ enum StealthError: Error {
     case decryptionFailed
     case invalidCertificate
     case expired
+}
+
+// MARK: - sealed-sender-resilience trust model
+
+/// How a sealed sender's identity binding was attested. `.signature` is the current
+/// bundle-key check (lever B). `.kt` (Stage 2, lever C) is a local cross-check against
+/// the recipient's previously KT-verified identity key for that contact — added later.
+enum SenderVouchBasis: Equatable {
+    case signature
+}
+
+/// Why an attestation did not vouch. Delivery proceeds anyway (ratchet is the real
+/// auth); the reason is only for DEBUG telemetry and self-healing (a `.noKey`/`.badSignature`
+/// kicks a background bundle-key refresh).
+enum SenderVouchReason: Equatable {
+    case expired       // cert past its expires_at
+    case badSignature  // signature did not validate against any trusted bundle key
+    case noKey         // no usable bundle key at all (fetched nil AND pins unusable)
+}
+
+enum SenderTrust: Equatable {
+    case vouched(SenderVouchBasis)
+    case unvouched(SenderVouchReason)
+}
+
+/// Result of unsealing a ConstructSEALED message: the recovered sender + content type
+/// plus the attestation verdict. Returned by `StealthSenderService.resolveSender`;
+/// `nil` from that call means the box could not be opened at all.
+struct ResolvedSender: Equatable {
+    let senderId: String
+    let contentType: UInt8
+    let trust: SenderTrust
 }

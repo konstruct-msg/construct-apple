@@ -38,6 +38,30 @@ final class MessageRouter {
     private let chunkReassembler = ChunkedMessageReassembler.shared
     private var processingMessageIds: Set<String> = []
 
+    /// Message ids that already consumed their one unseal-failure redelivery
+    /// (sealed-sender-resilience lever A). First unseal failure defers (holds the
+    /// cursor → server re-delivers once); a second failure for the same id gives up and
+    /// drops. Bounded so a flood of undecryptable boxes can't grow it without limit.
+    private var unsealDeferredIds: [String] = []
+    private func consumeUnsealRetry(_ id: String) -> Bool {
+        if unsealDeferredIds.contains(id) { return false } // already retried → give up
+        unsealDeferredIds.append(id)
+        if unsealDeferredIds.count > 512 { unsealDeferredIds.removeFirst() }
+        return true // first failure → allow one redelivery
+    }
+
+    /// Refreshes the cached bundle-signing key off the hot path when a sealed message
+    /// arrived unvouched or unsealable — likely a missing/stale key. `fetchAndCacheRelayConfig`
+    /// caches the bundle key before the relay guard, so this works even when VEIL is inactive
+    /// (sealed-sender-resilience lever B: decoupled from the VEIL fetch). Debounced to at most
+    /// once a minute so a burst of such messages can't spam the network.
+    private var lastBundleKeyRefresh: Date = .distantPast
+    private func refreshBundleKeyIfStale() {
+        guard Date().timeIntervalSince(lastBundleKeyRefresh) > 60 else { return }
+        lastBundleKeyRefresh = Date()
+        Task { _ = await VeilCertFetcher.shared.fetchAndCacheRelayConfig() }
+    }
+
     // MARK: - Queue access for SessionCoordinator
 
     /// Drain and return all pending messages for `userId` (clears the queue as a side-effect).
@@ -83,35 +107,64 @@ final class MessageRouter {
         // `from` is empty for ConstructSEALED messages — decrypt to recover sender ID.
         var message = message
         if message.from.isEmpty && !message.sealedInnerData.isEmpty {
-            if let senderId = StealthSenderService.shared.resolveSender(sealedInnerBytes: message.sealedInnerData) {
-                message = ChatMessage(
-                    id: message.id,
-                    from: senderId,
-                    to: message.to.isEmpty ? currentUserId : message.to,
-                    messageType: message.messageType,
-                    ephemeralPublicKey: message.ephemeralPublicKey,
-                    messageNumber: message.messageNumber,
-                    content: message.content,
-                    suiteId: message.suiteId,
-                    timestamp: message.timestamp,
-                    oneTimePreKeyId: message.oneTimePreKeyId,
-                    editsMessageId: message.editsMessageId,
-                    kemCiphertext: message.kemCiphertext,
-                    contentType: message.contentType,
-                    kyberOtpkId: message.kyberOtpkId,
-                    senderDeviceId: message.senderDeviceId,
-                    conversationId: message.conversationId,
-                    replyToMessageId: message.replyToMessageId,
-                    rawPayload: message.rawPayload
-                    // sealedInnerData intentionally omitted — sender resolved
-                )
-                Log.debug("STEALTH: resolved sender → \(senderId.prefix(8))…", category: "MessageRouter")
-                if message.contentType == 12 {
-                    Log.debug("STEALTH: this was a sealed call signal", category: "MessageRouter")
+            guard let resolved = StealthSenderService.shared.resolveSender(sealedInnerBytes: message.sealedInnerData) else {
+                // Unseal itself failed — no sender/payload recoverable (sealed-sender-resilience
+                // lever A: this is the ONLY sealed drop). Give it one redelivery (a box that
+                // fails to open right after an identity-key rotation deserves a second chance)
+                // before dropping for good, instead of the old instant permanent loss.
+                PerformanceMetrics.shared.record(.stealthUnsealFailure, label: "routeIncomingMessage")
+                if consumeUnsealRetry(message.id) {
+                    Log.error("STEALTH: unseal failed for \(message.id.prefix(8))… — deferring for one redelivery", category: "MessageRouter")
+                    PerformanceMetrics.shared.record(.stealthUnsealDefer, label: "routeIncomingMessage")
+                    refreshBundleKeyIfStale()
+                    streamOutcome = .deferred
+                } else {
+                    Log.error("STEALTH: unseal failed again for \(message.id.prefix(8))… — dropping", category: "MessageRouter")
+                    streamOutcome = .durable
                 }
-            } else {
-                Log.error("STEALTH: could not resolve sender for message \(message.id.prefix(8))… — dropping", category: "MessageRouter")
                 return
+            }
+
+            // Unseal succeeded — sender + payload recovered. Attestation only tags trust;
+            // an unvouched sender is still delivered (the ratchet is the real auth) and
+            // self-heals the bundle-key cache for next time.
+            if case .unvouched(let reason) = resolved.trust {
+                Log.info("STEALTH: delivering UNVOUCHED sender \(resolved.senderId.prefix(8))… (\(reason))", category: "MessageRouter")
+                PerformanceMetrics.shared.record(.stealthUnvouchedDelivery, label: "\(reason)")
+                if reason != .expired {
+                    // .badSignature / .noKey most likely mean a missing/stale bundle key —
+                    // refresh it off the hot path so the next message re-vouches.
+                    refreshBundleKeyIfStale()
+                }
+            }
+
+            message = ChatMessage(
+                id: message.id,
+                from: resolved.senderId,
+                to: message.to.isEmpty ? currentUserId : message.to,
+                messageType: message.messageType,
+                ephemeralPublicKey: message.ephemeralPublicKey,
+                messageNumber: message.messageNumber,
+                content: message.content,
+                suiteId: message.suiteId,
+                timestamp: message.timestamp,
+                oneTimePreKeyId: message.oneTimePreKeyId,
+                editsMessageId: message.editsMessageId,
+                kemCiphertext: message.kemCiphertext,
+                // stealth-sealed-sender-v2 Phase 3: the outer envelope's content_type
+                // is forced generic for sealed sends — the real type only survives
+                // inside SealedInner, recovered by resolveSender above.
+                contentType: resolved.contentType,
+                kyberOtpkId: message.kyberOtpkId,
+                senderDeviceId: message.senderDeviceId,
+                conversationId: message.conversationId,
+                replyToMessageId: message.replyToMessageId,
+                rawPayload: message.rawPayload
+                // sealedInnerData intentionally omitted — sender resolved
+            )
+            Log.debug("STEALTH: resolved sender → \(resolved.senderId.prefix(8))…", category: "MessageRouter")
+            if message.contentType == 12 {
+                Log.debug("STEALTH: this was a sealed call signal", category: "MessageRouter")
             }
         }
 

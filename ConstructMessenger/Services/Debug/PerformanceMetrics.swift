@@ -48,6 +48,22 @@ enum MetricEvent: String {
     case callSetupEnd           = "call_setup_end"
     case callSignalOpenStart    = "call_signal_open_start"
     case callSignalOpenEnd      = "call_signal_open_end"
+
+    // Stealth sealed sender (stealth-sealed-sender-v2 Phase 4) — local DEBUG-only
+    // counters, never transmitted. Deliberately not production telemetry: a feature
+    // whose point is minimizing what the server observes about a user shouldn't grow
+    // a client→server monitoring channel as a side effect.
+    case stealthSealFailure     = "stealth_seal_failure"
+    case stealthUnsealFailure   = "stealth_unseal_failure"
+    // sealed-sender-resilience Stage 1: a sealed message whose sender we recovered
+    // (unseal ok) but could not attest (cert expired/invalid/no bundle key) — delivered
+    // anyway via the ratchet instead of dropped. `label` carries the reason.
+    case stealthUnvouchedDelivery = "stealth_unvouched_delivery"
+    // Unseal itself failed (no sender/payload recoverable): held for one redelivery
+    // before the eventual drop.
+    case stealthUnsealDefer     = "stealth_unseal_defer"
+    // (The send-side degraded-delivery downgrade is already counted by
+    // `stealthSealFailure` above — no separate event needed.)
 }
 
 #if DEBUG
