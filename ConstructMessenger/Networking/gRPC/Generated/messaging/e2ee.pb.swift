@@ -22,8 +22,8 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
 }
 
 /// SessionResetReason - Why session was reset
-public enum Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf.Enum, Swift.CaseIterable {
-  public typealias RawValue = Int
+enum Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf.Enum, Swift.CaseIterable {
+  typealias RawValue = Int
 
   /// Unspecified reason (must be 0)
   case unspecified // = 0
@@ -39,48 +39,59 @@ public enum Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf.Enum, Sw
 
   /// Device changed (new device, old session invalid)
   case deviceChanged // = 4
+
+  /// The sender, acting as RESPONDER, could not reproduce the 4-DH one-time-prekey that the
+  /// peer's last X3DH used (OTPK id not found / no longer backed by a private key). Carried
+  /// on a SessionControl END signal (see content.proto) to ask the initiator to re-init
+  /// WITHOUT a one-time prekey (3-DH), which is always reproducible from identity + signed
+  /// prekey; retrying 4-DH would loop as every re-fetched OTPK hits the same unbackable
+  /// state. See otpk-session-init-deadlock.
+  case otpkUnreproducible // = 5
   case UNRECOGNIZED(Int)
 
-  public init() {
+  init() {
     self = .unspecified
   }
 
-  public init?(rawValue: Int) {
+  init?(rawValue: Int) {
     switch rawValue {
     case 0: self = .unspecified
     case 1: self = .corruption
     case 2: self = .security
     case 3: self = .user
     case 4: self = .deviceChanged
+    case 5: self = .otpkUnreproducible
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
 
-  public var rawValue: Int {
+  var rawValue: Int {
     switch self {
     case .unspecified: return 0
     case .corruption: return 1
     case .security: return 2
     case .user: return 3
     case .deviceChanged: return 4
+    case .otpkUnreproducible: return 5
     case .UNRECOGNIZED(let i): return i
     }
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Shared_Proto_Messaging_V1_SessionResetReason] = [
+  static let allCases: [Shared_Proto_Messaging_V1_SessionResetReason] = [
     .unspecified,
     .corruption,
     .security,
     .user,
     .deviceChanged,
+    .otpkUnreproducible,
   ]
 
 }
 
 /// DecryptionErrorType - Type of decryption failure
-public enum Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf.Enum, Swift.CaseIterable {
-  public typealias RawValue = Int
+enum Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf.Enum, Swift.CaseIterable {
+  typealias RawValue = Int
 
   /// Unspecified error (must be 0)
   case unspecified // = 0
@@ -101,11 +112,11 @@ public enum Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf.Enum, S
   case invalidFormat // = 5
   case UNRECOGNIZED(Int)
 
-  public init() {
+  init() {
     self = .unspecified
   }
 
-  public init?(rawValue: Int) {
+  init?(rawValue: Int) {
     switch rawValue {
     case 0: self = .unspecified
     case 1: self = .macFailed
@@ -117,7 +128,7 @@ public enum Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf.Enum, S
     }
   }
 
-  public var rawValue: Int {
+  var rawValue: Int {
     switch self {
     case .unspecified: return 0
     case .macFailed: return 1
@@ -130,7 +141,7 @@ public enum Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf.Enum, S
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Shared_Proto_Messaging_V1_DecryptionErrorType] = [
+  static let allCases: [Shared_Proto_Messaging_V1_DecryptionErrorType] = [
     .unspecified,
     .macFailed,
     .tooOld,
@@ -142,123 +153,123 @@ public enum Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf.Enum, S
 }
 
 /// SignalMessage - Double Ratchet message (after session established)
-public struct Shared_Proto_Messaging_V1_SignalMessage: Sendable {
+struct Shared_Proto_Messaging_V1_SignalMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Protocol version (currently 3)
-  public var version: UInt32 = 0
+  var version: UInt32 = 0
 
   /// Sender's ratchet public key (X25519, 32 bytes)
   /// Used for DH ratchet step
-  public var ratchetKey: Data = Data()
+  var ratchetKey: Data = Data()
 
   /// Message counter (increments per message in chain)
-  public var counter: UInt32 = 0
+  var counter: UInt32 = 0
 
   /// Previous chain length (for out-of-order message handling)
-  public var previousCounter: UInt32 = 0
+  var previousCounter: UInt32 = 0
 
   /// Encrypted message body (AEAD ciphertext)
   /// ChaCha20-Poly1305 or AES-256-GCM
-  public var ciphertext: Data = Data()
+  var ciphertext: Data = Data()
 
   /// MAC (message authentication code)
   /// HMAC-SHA256 of (version || ratchet_key || counter || ciphertext)
-  public var mac: Data = Data()
+  var mac: Data = Data()
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 }
 
 /// PreKeySignalMessage - Initial message (X3DH handshake)
 /// Sent when no session exists between sender and recipient
-public struct Shared_Proto_Messaging_V1_PreKeySignalMessage: Sendable {
+struct Shared_Proto_Messaging_V1_PreKeySignalMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Protocol version (currently 3)
-  public var version: UInt32 = 0
+  var version: UInt32 = 0
 
   /// Registration ID (sender's device registration)
-  public var registrationID: UInt32 = 0
+  var registrationID: UInt32 = 0
 
   /// Pre-key ID (which one-time pre-key was used)
   /// Optional: may be null if signed pre-key only
-  public var preKeyID: UInt32 {
+  var preKeyID: UInt32 {
     get {_preKeyID ?? 0}
     set {_preKeyID = newValue}
   }
   /// Returns true if `preKeyID` has been explicitly set.
-  public var hasPreKeyID: Bool {self._preKeyID != nil}
+  var hasPreKeyID: Bool {self._preKeyID != nil}
   /// Clears the value of `preKeyID`. Subsequent reads from it will return its default value.
-  public mutating func clearPreKeyID() {self._preKeyID = nil}
+  mutating func clearPreKeyID() {self._preKeyID = nil}
 
   /// Signed pre-key ID (which signed pre-key was used)
-  public var signedPreKeyID: UInt32 = 0
+  var signedPreKeyID: UInt32 = 0
 
   /// Base key (sender's ephemeral public key, X25519)
-  public var baseKey: Data = Data()
+  var baseKey: Data = Data()
 
   /// Identity key (sender's long-term public key)
-  public var identityKey: Data = Data()
+  var identityKey: Data = Data()
 
   /// Embedded Signal message (first message in new session)
-  public var message: Shared_Proto_Messaging_V1_SignalMessage {
+  var message: Shared_Proto_Messaging_V1_SignalMessage {
     get {_message ?? Shared_Proto_Messaging_V1_SignalMessage()}
     set {_message = newValue}
   }
   /// Returns true if `message` has been explicitly set.
-  public var hasMessage: Bool {self._message != nil}
+  var hasMessage: Bool {self._message != nil}
   /// Clears the value of `message`. Subsequent reads from it will return its default value.
-  public mutating func clearMessage() {self._message = nil}
+  mutating func clearMessage() {self._message = nil}
 
   /// KEM ciphertext (ML-KEM-1024 Encaps output, exactly 1568 bytes)
-  public var kemCiphertext: Data {
+  var kemCiphertext: Data {
     get {_kemCiphertext ?? Data()}
     set {_kemCiphertext = newValue}
   }
   /// Returns true if `kemCiphertext` has been explicitly set.
-  public var hasKemCiphertext: Bool {self._kemCiphertext != nil}
+  var hasKemCiphertext: Bool {self._kemCiphertext != nil}
   /// Clears the value of `kemCiphertext`. Subsequent reads from it will return its default value.
-  public mutating func clearKemCiphertext() {self._kemCiphertext = nil}
+  mutating func clearKemCiphertext() {self._kemCiphertext = nil}
 
   /// Kyber signed pre-key ID used (matches PreKeyBundle.kyber_pre_key_id)
-  public var kyberPreKeyID: UInt32 {
+  var kyberPreKeyID: UInt32 {
     get {_kyberPreKeyID ?? 0}
     set {_kyberPreKeyID = newValue}
   }
   /// Returns true if `kyberPreKeyID` has been explicitly set.
-  public var hasKyberPreKeyID: Bool {self._kyberPreKeyID != nil}
+  var hasKyberPreKeyID: Bool {self._kyberPreKeyID != nil}
   /// Clears the value of `kyberPreKeyID`. Subsequent reads from it will return its default value.
-  public mutating func clearKyberPreKeyID() {self._kyberPreKeyID = nil}
+  mutating func clearKyberPreKeyID() {self._kyberPreKeyID = nil}
 
   /// KEM ciphertext from Kyber one-time pre-key (1568 bytes, if OTPK was used)
-  public var kyberOneTimeKemCiphertext: Data {
+  var kyberOneTimeKemCiphertext: Data {
     get {_kyberOneTimeKemCiphertext ?? Data()}
     set {_kyberOneTimeKemCiphertext = newValue}
   }
   /// Returns true if `kyberOneTimeKemCiphertext` has been explicitly set.
-  public var hasKyberOneTimeKemCiphertext: Bool {self._kyberOneTimeKemCiphertext != nil}
+  var hasKyberOneTimeKemCiphertext: Bool {self._kyberOneTimeKemCiphertext != nil}
   /// Clears the value of `kyberOneTimeKemCiphertext`. Subsequent reads from it will return its default value.
-  public mutating func clearKyberOneTimeKemCiphertext() {self._kyberOneTimeKemCiphertext = nil}
+  mutating func clearKyberOneTimeKemCiphertext() {self._kyberOneTimeKemCiphertext = nil}
 
   /// Kyber one-time pre-key ID used
-  public var kyberOneTimePreKeyID: UInt32 {
+  var kyberOneTimePreKeyID: UInt32 {
     get {_kyberOneTimePreKeyID ?? 0}
     set {_kyberOneTimePreKeyID = newValue}
   }
   /// Returns true if `kyberOneTimePreKeyID` has been explicitly set.
-  public var hasKyberOneTimePreKeyID: Bool {self._kyberOneTimePreKeyID != nil}
+  var hasKyberOneTimePreKeyID: Bool {self._kyberOneTimePreKeyID != nil}
   /// Clears the value of `kyberOneTimePreKeyID`. Subsequent reads from it will return its default value.
-  public mutating func clearKyberOneTimePreKeyID() {self._kyberOneTimePreKeyID = nil}
+  mutating func clearKyberOneTimePreKeyID() {self._kyberOneTimePreKeyID = nil}
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 
   fileprivate var _preKeyID: UInt32? = nil
   fileprivate var _message: Shared_Proto_Messaging_V1_SignalMessage? = nil
@@ -271,217 +282,217 @@ public struct Shared_Proto_Messaging_V1_PreKeySignalMessage: Sendable {
 /// SenderKeyMessage - Group message (Sender Key protocol)
 /// Used for efficient group messaging before MLS adoption
 /// Note: Will be deprecated in favor of MLS
-public struct Shared_Proto_Messaging_V1_SenderKeyMessage: Sendable {
+struct Shared_Proto_Messaging_V1_SenderKeyMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Protocol version (currently 3)
-  public var version: UInt32 = 0
+  var version: UInt32 = 0
 
   /// Distribution ID (identifies sender key distribution)
-  public var distributionID: Data = Data()
+  var distributionID: Data = Data()
 
   /// Chain ID (ratchet chain identifier)
-  public var chainID: UInt32 = 0
+  var chainID: UInt32 = 0
 
   /// Iteration (message counter within chain)
-  public var iteration: UInt32 = 0
+  var iteration: UInt32 = 0
 
   /// Encrypted message body
-  public var ciphertext: Data = Data()
+  var ciphertext: Data = Data()
 
   /// MAC (HMAC-SHA256)
-  public var mac: Data = Data()
+  var mac: Data = Data()
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 }
 
 /// SenderKeyDistributionMessage - Distribute sender key to group
 /// Sent when new member joins or sender key rotates
-public struct Shared_Proto_Messaging_V1_SenderKeyDistributionMessage: Sendable {
+struct Shared_Proto_Messaging_V1_SenderKeyDistributionMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Distribution ID (unique per sender per group)
-  public var distributionID: Data = Data()
+  var distributionID: Data = Data()
 
   /// Chain ID (starts at 0, increments on rotation)
-  public var chainID: UInt32 = 0
+  var chainID: UInt32 = 0
 
   /// Iteration (starts at 0, increments per message)
-  public var iteration: UInt32 = 0
+  var iteration: UInt32 = 0
 
   /// Chain key (seed for message key derivation)
-  public var chainKey: Data = Data()
+  var chainKey: Data = Data()
 
   /// Signing key (Ed25519 public key for signature verification)
-  public var signingKey: Data = Data()
+  var signingKey: Data = Data()
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 }
 
 /// SessionResetMessage - Reset E2EE session
 /// Sent when session corruption detected or security incident
-public struct Shared_Proto_Messaging_V1_SessionResetMessage: Sendable {
+struct Shared_Proto_Messaging_V1_SessionResetMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Reason for reset
-  public var reason: Shared_Proto_Messaging_V1_SessionResetReason = .unspecified
+  var reason: Shared_Proto_Messaging_V1_SessionResetReason = .unspecified
 
   /// Timestamp of reset request
-  public var resetTimestamp: Int64 = 0
+  var resetTimestamp: Int64 = 0
 
   /// Optional: new pre-key bundle (if initiating new session immediately)
-  public var newPreKeyBundle: Data {
+  var newPreKeyBundle: Data {
     get {_newPreKeyBundle ?? Data()}
     set {_newPreKeyBundle = newValue}
   }
   /// Returns true if `newPreKeyBundle` has been explicitly set.
-  public var hasNewPreKeyBundle: Bool {self._newPreKeyBundle != nil}
+  var hasNewPreKeyBundle: Bool {self._newPreKeyBundle != nil}
   /// Clears the value of `newPreKeyBundle`. Subsequent reads from it will return its default value.
-  public mutating func clearNewPreKeyBundle() {self._newPreKeyBundle = nil}
+  mutating func clearNewPreKeyBundle() {self._newPreKeyBundle = nil}
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 
   fileprivate var _newPreKeyBundle: Data? = nil
 }
 
 /// IdentityKeyChangeNotification - Alert when contact's identity key changes
 /// Security feature: prevents MITM attacks
-public struct Shared_Proto_Messaging_V1_IdentityKeyChangeNotification: Sendable {
+struct Shared_Proto_Messaging_V1_IdentityKeyChangeNotification: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// User whose identity key changed
-  public var userID: String = String()
+  var userID: String = String()
 
   /// Device whose identity key changed
-  public var deviceID: String = String()
+  var deviceID: String = String()
 
   /// Old identity key (for comparison)
-  public var oldIdentityKey: Data = Data()
+  var oldIdentityKey: Data = Data()
 
   /// New identity key (requires user verification)
-  public var newIdentityKey: Data = Data()
+  var newIdentityKey: Data = Data()
 
   /// Change timestamp
-  public var changedAt: Int64 = 0
+  var changedAt: Int64 = 0
 
   /// Reason for change (if known)
-  public var changeReason: String {
+  var changeReason: String {
     get {_changeReason ?? String()}
     set {_changeReason = newValue}
   }
   /// Returns true if `changeReason` has been explicitly set.
-  public var hasChangeReason: Bool {self._changeReason != nil}
+  var hasChangeReason: Bool {self._changeReason != nil}
   /// Clears the value of `changeReason`. Subsequent reads from it will return its default value.
-  public mutating func clearChangeReason() {self._changeReason = nil}
+  mutating func clearChangeReason() {self._changeReason = nil}
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 
   fileprivate var _changeReason: String? = nil
 }
 
 /// SafetyNumberChangeEvent - Safety number verification change
 /// Displayed to users for manual verification
-public struct Shared_Proto_Messaging_V1_SafetyNumberChangeEvent: Sendable {
+struct Shared_Proto_Messaging_V1_SafetyNumberChangeEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Conversation ID affected
-  public var conversationID: String = String()
+  var conversationID: String = String()
 
   /// User ID whose safety number changed
-  public var userID: String = String()
+  var userID: String = String()
 
   /// Old safety number (60-digit fingerprint)
-  public var oldSafetyNumber: String = String()
+  var oldSafetyNumber: String = String()
 
   /// New safety number (60-digit fingerprint)
-  public var newSafetyNumber: String = String()
+  var newSafetyNumber: String = String()
 
   /// Change timestamp
-  public var changedAt: Int64 = 0
+  var changedAt: Int64 = 0
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 }
 
 /// DecryptionErrorMessage - Failed to decrypt message
 /// Sent back to sender to request re-send or session reset
-public struct Shared_Proto_Messaging_V1_DecryptionErrorMessage: Sendable {
+struct Shared_Proto_Messaging_V1_DecryptionErrorMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Failed message ID
-  public var messageID: String = String()
+  var messageID: String = String()
 
   /// Error type
-  public var errorType: Shared_Proto_Messaging_V1_DecryptionErrorType = .unspecified
+  var errorType: Shared_Proto_Messaging_V1_DecryptionErrorType = .unspecified
 
   /// Error description (for debugging)
-  public var errorMessage: String = String()
+  var errorMessage: String = String()
 
   /// Timestamp when error occurred
-  public var errorTimestamp: Int64 = 0
+  var errorTimestamp: Int64 = 0
 
   /// Ratchet state snapshot (for debugging)
-  public var ratchetState: Shared_Proto_Messaging_V1_RatchetState {
+  var ratchetState: Shared_Proto_Messaging_V1_RatchetState {
     get {_ratchetState ?? Shared_Proto_Messaging_V1_RatchetState()}
     set {_ratchetState = newValue}
   }
   /// Returns true if `ratchetState` has been explicitly set.
-  public var hasRatchetState: Bool {self._ratchetState != nil}
+  var hasRatchetState: Bool {self._ratchetState != nil}
   /// Clears the value of `ratchetState`. Subsequent reads from it will return its default value.
-  public mutating func clearRatchetState() {self._ratchetState = nil}
+  mutating func clearRatchetState() {self._ratchetState = nil}
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 
   fileprivate var _ratchetState: Shared_Proto_Messaging_V1_RatchetState? = nil
 }
 
 /// RatchetState - Snapshot of Double Ratchet state (for debugging)
-public struct Shared_Proto_Messaging_V1_RatchetState: Sendable {
+struct Shared_Proto_Messaging_V1_RatchetState: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Sending chain counter
-  public var sendCounter: UInt32 = 0
+  var sendCounter: UInt32 = 0
 
   /// Receiving chain counter
-  public var recvCounter: UInt32 = 0
+  var recvCounter: UInt32 = 0
 
   /// Previous sending chain counter
-  public var prevSendCounter: UInt32 = 0
+  var prevSendCounter: UInt32 = 0
 
   /// Root key present? (boolean, don't expose actual key)
-  public var hasRootKey_p: Bool = false
+  var hasRootKey_p: Bool = false
 
   /// Chain key present? (boolean, don't expose actual key)
-  public var hasChainKey_p: Bool = false
+  var hasChainKey_p: Bool = false
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -489,18 +500,18 @@ public struct Shared_Proto_Messaging_V1_RatchetState: Sendable {
 fileprivate let _protobuf_package = "shared.proto.messaging.v1"
 
 extension Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SESSION_RESET_REASON_UNSPECIFIED\0\u{1}SESSION_RESET_REASON_CORRUPTION\0\u{1}SESSION_RESET_REASON_SECURITY\0\u{1}SESSION_RESET_REASON_USER\0\u{1}SESSION_RESET_REASON_DEVICE_CHANGED\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SESSION_RESET_REASON_UNSPECIFIED\0\u{1}SESSION_RESET_REASON_CORRUPTION\0\u{1}SESSION_RESET_REASON_SECURITY\0\u{1}SESSION_RESET_REASON_USER\0\u{1}SESSION_RESET_REASON_DEVICE_CHANGED\0\u{1}SESSION_RESET_REASON_OTPK_UNREPRODUCIBLE\0")
 }
 
 extension Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DECRYPTION_ERROR_TYPE_UNSPECIFIED\0\u{1}DECRYPTION_ERROR_TYPE_MAC_FAILED\0\u{1}DECRYPTION_ERROR_TYPE_TOO_OLD\0\u{1}DECRYPTION_ERROR_TYPE_DUPLICATE\0\u{1}DECRYPTION_ERROR_TYPE_NO_SESSION\0\u{1}DECRYPTION_ERROR_TYPE_INVALID_FORMAT\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DECRYPTION_ERROR_TYPE_UNSPECIFIED\0\u{1}DECRYPTION_ERROR_TYPE_MAC_FAILED\0\u{1}DECRYPTION_ERROR_TYPE_TOO_OLD\0\u{1}DECRYPTION_ERROR_TYPE_DUPLICATE\0\u{1}DECRYPTION_ERROR_TYPE_NO_SESSION\0\u{1}DECRYPTION_ERROR_TYPE_INVALID_FORMAT\0")
 }
 
 extension Shared_Proto_Messaging_V1_SignalMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".SignalMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}version\0\u{3}ratchet_key\0\u{1}counter\0\u{3}previous_counter\0\u{1}ciphertext\0\u{1}mac\0\u{c}\u{7}\u{9}")
+  static let protoMessageName: String = _protobuf_package + ".SignalMessage"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}version\0\u{3}ratchet_key\0\u{1}counter\0\u{3}previous_counter\0\u{1}ciphertext\0\u{1}mac\0\u{c}\u{7}\u{9}")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -517,7 +528,7 @@ extension Shared_Proto_Messaging_V1_SignalMessage: SwiftProtobuf.Message, SwiftP
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.version != 0 {
       try visitor.visitSingularUInt32Field(value: self.version, fieldNumber: 1)
     }
@@ -539,7 +550,7 @@ extension Shared_Proto_Messaging_V1_SignalMessage: SwiftProtobuf.Message, SwiftP
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Shared_Proto_Messaging_V1_SignalMessage, rhs: Shared_Proto_Messaging_V1_SignalMessage) -> Bool {
+  static func ==(lhs: Shared_Proto_Messaging_V1_SignalMessage, rhs: Shared_Proto_Messaging_V1_SignalMessage) -> Bool {
     if lhs.version != rhs.version {return false}
     if lhs.ratchetKey != rhs.ratchetKey {return false}
     if lhs.counter != rhs.counter {return false}
@@ -552,10 +563,10 @@ extension Shared_Proto_Messaging_V1_SignalMessage: SwiftProtobuf.Message, SwiftP
 }
 
 extension Shared_Proto_Messaging_V1_PreKeySignalMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".PreKeySignalMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}version\0\u{3}registration_id\0\u{3}pre_key_id\0\u{3}signed_pre_key_id\0\u{3}base_key\0\u{3}identity_key\0\u{1}message\0\u{3}kem_ciphertext\0\u{3}kyber_pre_key_id\0\u{3}kyber_one_time_kem_ciphertext\0\u{3}kyber_one_time_pre_key_id\0\u{c}\u{c}\u{4}")
+  static let protoMessageName: String = _protobuf_package + ".PreKeySignalMessage"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}version\0\u{3}registration_id\0\u{3}pre_key_id\0\u{3}signed_pre_key_id\0\u{3}base_key\0\u{3}identity_key\0\u{1}message\0\u{3}kem_ciphertext\0\u{3}kyber_pre_key_id\0\u{3}kyber_one_time_kem_ciphertext\0\u{3}kyber_one_time_pre_key_id\0\u{c}\u{c}\u{4}")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -577,7 +588,7 @@ extension Shared_Proto_Messaging_V1_PreKeySignalMessage: SwiftProtobuf.Message, 
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -618,7 +629,7 @@ extension Shared_Proto_Messaging_V1_PreKeySignalMessage: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Shared_Proto_Messaging_V1_PreKeySignalMessage, rhs: Shared_Proto_Messaging_V1_PreKeySignalMessage) -> Bool {
+  static func ==(lhs: Shared_Proto_Messaging_V1_PreKeySignalMessage, rhs: Shared_Proto_Messaging_V1_PreKeySignalMessage) -> Bool {
     if lhs.version != rhs.version {return false}
     if lhs.registrationID != rhs.registrationID {return false}
     if lhs._preKeyID != rhs._preKeyID {return false}
@@ -636,10 +647,10 @@ extension Shared_Proto_Messaging_V1_PreKeySignalMessage: SwiftProtobuf.Message, 
 }
 
 extension Shared_Proto_Messaging_V1_SenderKeyMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".SenderKeyMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}version\0\u{3}distribution_id\0\u{3}chain_id\0\u{1}iteration\0\u{1}ciphertext\0\u{1}mac\0\u{c}\u{7}\u{9}")
+  static let protoMessageName: String = _protobuf_package + ".SenderKeyMessage"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}version\0\u{3}distribution_id\0\u{3}chain_id\0\u{1}iteration\0\u{1}ciphertext\0\u{1}mac\0\u{c}\u{7}\u{9}")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -656,7 +667,7 @@ extension Shared_Proto_Messaging_V1_SenderKeyMessage: SwiftProtobuf.Message, Swi
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.version != 0 {
       try visitor.visitSingularUInt32Field(value: self.version, fieldNumber: 1)
     }
@@ -678,7 +689,7 @@ extension Shared_Proto_Messaging_V1_SenderKeyMessage: SwiftProtobuf.Message, Swi
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Shared_Proto_Messaging_V1_SenderKeyMessage, rhs: Shared_Proto_Messaging_V1_SenderKeyMessage) -> Bool {
+  static func ==(lhs: Shared_Proto_Messaging_V1_SenderKeyMessage, rhs: Shared_Proto_Messaging_V1_SenderKeyMessage) -> Bool {
     if lhs.version != rhs.version {return false}
     if lhs.distributionID != rhs.distributionID {return false}
     if lhs.chainID != rhs.chainID {return false}
@@ -691,10 +702,10 @@ extension Shared_Proto_Messaging_V1_SenderKeyMessage: SwiftProtobuf.Message, Swi
 }
 
 extension Shared_Proto_Messaging_V1_SenderKeyDistributionMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".SenderKeyDistributionMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}distribution_id\0\u{3}chain_id\0\u{1}iteration\0\u{3}chain_key\0\u{3}signing_key\0\u{c}\u{6}\u{a}")
+  static let protoMessageName: String = _protobuf_package + ".SenderKeyDistributionMessage"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}distribution_id\0\u{3}chain_id\0\u{1}iteration\0\u{3}chain_key\0\u{3}signing_key\0\u{c}\u{6}\u{a}")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -710,7 +721,7 @@ extension Shared_Proto_Messaging_V1_SenderKeyDistributionMessage: SwiftProtobuf.
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.distributionID.isEmpty {
       try visitor.visitSingularBytesField(value: self.distributionID, fieldNumber: 1)
     }
@@ -729,7 +740,7 @@ extension Shared_Proto_Messaging_V1_SenderKeyDistributionMessage: SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Shared_Proto_Messaging_V1_SenderKeyDistributionMessage, rhs: Shared_Proto_Messaging_V1_SenderKeyDistributionMessage) -> Bool {
+  static func ==(lhs: Shared_Proto_Messaging_V1_SenderKeyDistributionMessage, rhs: Shared_Proto_Messaging_V1_SenderKeyDistributionMessage) -> Bool {
     if lhs.distributionID != rhs.distributionID {return false}
     if lhs.chainID != rhs.chainID {return false}
     if lhs.iteration != rhs.iteration {return false}
@@ -741,10 +752,10 @@ extension Shared_Proto_Messaging_V1_SenderKeyDistributionMessage: SwiftProtobuf.
 }
 
 extension Shared_Proto_Messaging_V1_SessionResetMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".SessionResetMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}reason\0\u{3}reset_timestamp\0\u{3}new_pre_key_bundle\0\u{c}\u{4}\u{7}")
+  static let protoMessageName: String = _protobuf_package + ".SessionResetMessage"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}reason\0\u{3}reset_timestamp\0\u{3}new_pre_key_bundle\0\u{c}\u{4}\u{7}")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -758,7 +769,7 @@ extension Shared_Proto_Messaging_V1_SessionResetMessage: SwiftProtobuf.Message, 
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -775,7 +786,7 @@ extension Shared_Proto_Messaging_V1_SessionResetMessage: SwiftProtobuf.Message, 
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Shared_Proto_Messaging_V1_SessionResetMessage, rhs: Shared_Proto_Messaging_V1_SessionResetMessage) -> Bool {
+  static func ==(lhs: Shared_Proto_Messaging_V1_SessionResetMessage, rhs: Shared_Proto_Messaging_V1_SessionResetMessage) -> Bool {
     if lhs.reason != rhs.reason {return false}
     if lhs.resetTimestamp != rhs.resetTimestamp {return false}
     if lhs._newPreKeyBundle != rhs._newPreKeyBundle {return false}
@@ -785,10 +796,10 @@ extension Shared_Proto_Messaging_V1_SessionResetMessage: SwiftProtobuf.Message, 
 }
 
 extension Shared_Proto_Messaging_V1_IdentityKeyChangeNotification: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".IdentityKeyChangeNotification"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0\u{3}old_identity_key\0\u{3}new_identity_key\0\u{3}changed_at\0\u{3}change_reason\0\u{c}\u{7}\u{4}")
+  static let protoMessageName: String = _protobuf_package + ".IdentityKeyChangeNotification"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0\u{3}old_identity_key\0\u{3}new_identity_key\0\u{3}changed_at\0\u{3}change_reason\0\u{c}\u{7}\u{4}")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -805,7 +816,7 @@ extension Shared_Proto_Messaging_V1_IdentityKeyChangeNotification: SwiftProtobuf
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -831,7 +842,7 @@ extension Shared_Proto_Messaging_V1_IdentityKeyChangeNotification: SwiftProtobuf
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Shared_Proto_Messaging_V1_IdentityKeyChangeNotification, rhs: Shared_Proto_Messaging_V1_IdentityKeyChangeNotification) -> Bool {
+  static func ==(lhs: Shared_Proto_Messaging_V1_IdentityKeyChangeNotification, rhs: Shared_Proto_Messaging_V1_IdentityKeyChangeNotification) -> Bool {
     if lhs.userID != rhs.userID {return false}
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs.oldIdentityKey != rhs.oldIdentityKey {return false}
@@ -844,10 +855,10 @@ extension Shared_Proto_Messaging_V1_IdentityKeyChangeNotification: SwiftProtobuf
 }
 
 extension Shared_Proto_Messaging_V1_SafetyNumberChangeEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".SafetyNumberChangeEvent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_id\0\u{3}user_id\0\u{3}old_safety_number\0\u{3}new_safety_number\0\u{3}changed_at\0\u{c}\u{6}\u{5}")
+  static let protoMessageName: String = _protobuf_package + ".SafetyNumberChangeEvent"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_id\0\u{3}user_id\0\u{3}old_safety_number\0\u{3}new_safety_number\0\u{3}changed_at\0\u{c}\u{6}\u{5}")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -863,7 +874,7 @@ extension Shared_Proto_Messaging_V1_SafetyNumberChangeEvent: SwiftProtobuf.Messa
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.conversationID.isEmpty {
       try visitor.visitSingularStringField(value: self.conversationID, fieldNumber: 1)
     }
@@ -882,7 +893,7 @@ extension Shared_Proto_Messaging_V1_SafetyNumberChangeEvent: SwiftProtobuf.Messa
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Shared_Proto_Messaging_V1_SafetyNumberChangeEvent, rhs: Shared_Proto_Messaging_V1_SafetyNumberChangeEvent) -> Bool {
+  static func ==(lhs: Shared_Proto_Messaging_V1_SafetyNumberChangeEvent, rhs: Shared_Proto_Messaging_V1_SafetyNumberChangeEvent) -> Bool {
     if lhs.conversationID != rhs.conversationID {return false}
     if lhs.userID != rhs.userID {return false}
     if lhs.oldSafetyNumber != rhs.oldSafetyNumber {return false}
@@ -894,10 +905,10 @@ extension Shared_Proto_Messaging_V1_SafetyNumberChangeEvent: SwiftProtobuf.Messa
 }
 
 extension Shared_Proto_Messaging_V1_DecryptionErrorMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".DecryptionErrorMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}error_type\0\u{3}error_message\0\u{3}error_timestamp\0\u{3}ratchet_state\0\u{c}\u{6}\u{5}")
+  static let protoMessageName: String = _protobuf_package + ".DecryptionErrorMessage"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}error_type\0\u{3}error_message\0\u{3}error_timestamp\0\u{3}ratchet_state\0\u{c}\u{6}\u{5}")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -913,7 +924,7 @@ extension Shared_Proto_Messaging_V1_DecryptionErrorMessage: SwiftProtobuf.Messag
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -936,7 +947,7 @@ extension Shared_Proto_Messaging_V1_DecryptionErrorMessage: SwiftProtobuf.Messag
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Shared_Proto_Messaging_V1_DecryptionErrorMessage, rhs: Shared_Proto_Messaging_V1_DecryptionErrorMessage) -> Bool {
+  static func ==(lhs: Shared_Proto_Messaging_V1_DecryptionErrorMessage, rhs: Shared_Proto_Messaging_V1_DecryptionErrorMessage) -> Bool {
     if lhs.messageID != rhs.messageID {return false}
     if lhs.errorType != rhs.errorType {return false}
     if lhs.errorMessage != rhs.errorMessage {return false}
@@ -948,10 +959,10 @@ extension Shared_Proto_Messaging_V1_DecryptionErrorMessage: SwiftProtobuf.Messag
 }
 
 extension Shared_Proto_Messaging_V1_RatchetState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".RatchetState"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}send_counter\0\u{3}recv_counter\0\u{3}prev_send_counter\0\u{3}has_root_key\0\u{3}has_chain_key\0\u{c}\u{6}\u{5}")
+  static let protoMessageName: String = _protobuf_package + ".RatchetState"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}send_counter\0\u{3}recv_counter\0\u{3}prev_send_counter\0\u{3}has_root_key\0\u{3}has_chain_key\0\u{c}\u{6}\u{5}")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -967,7 +978,7 @@ extension Shared_Proto_Messaging_V1_RatchetState: SwiftProtobuf.Message, SwiftPr
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.sendCounter != 0 {
       try visitor.visitSingularUInt32Field(value: self.sendCounter, fieldNumber: 1)
     }
@@ -986,7 +997,7 @@ extension Shared_Proto_Messaging_V1_RatchetState: SwiftProtobuf.Message, SwiftPr
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Shared_Proto_Messaging_V1_RatchetState, rhs: Shared_Proto_Messaging_V1_RatchetState) -> Bool {
+  static func ==(lhs: Shared_Proto_Messaging_V1_RatchetState, rhs: Shared_Proto_Messaging_V1_RatchetState) -> Bool {
     if lhs.sendCounter != rhs.sendCounter {return false}
     if lhs.recvCounter != rhs.recvCounter {return false}
     if lhs.prevSendCounter != rhs.prevSendCounter {return false}

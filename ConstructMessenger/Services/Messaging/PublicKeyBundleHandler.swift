@@ -179,6 +179,17 @@ class PublicKeyBundleHandler {
             do {
                 try context.saveOrThrow(category: "PublicKeyBundleHandler")
                 Log.info("Successfully saved decrypted pending message", category: "PublicKeyBundleHandler")
+                // Dedup: mark the handshake message processed so a server redelivery
+                // (stream-cursor race after reconnect) never re-triggers session init.
+                // The X3DH OTPK is consumed by THIS init — a re-init from the same msg0
+                // can only fail with "OTPK not found" and spuriously start the heal path.
+                // Marked only after the successful save above: if persisting failed, we
+                // WANT the redelivery to retry. Three layers, same as the CFE path:
+                // Rust orchestrator cache (persists with the next state save), Swift
+                // in-memory cache, Core Data (survives restart).
+                CryptoManager.shared.markAckProcessedInOrchestrator(messageId: message.id)
+                PersistentACKStore.shared.preemptACK(message.id)
+                PersistentACKStore.shared.markProcessed(message.id, senderId: data.userId, in: context)
                 return true
             } catch {
                 Log.error("Failed to persist decrypted pending message for \(data.userId.prefix(8))…: \(error)", category: "PublicKeyBundleHandler")
@@ -190,6 +201,15 @@ class PublicKeyBundleHandler {
             let initDuration = Date().timeIntervalSince(initStartTime)
             Log.error("Session initialization failed: \(message)", category: "PublicKeyBundleHandler")
             Log.error("SESSION_STATE[init_receiving_failed]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s, error=SessionInitializationFailed", category: "SessionInit")
+            // OTPK-unreproducible: the sender used a 4-DH one-time-prekey we no longer hold, so
+            // this handshake is permanently undecryptable and re-fetching the bundle would hand
+            // the sender another OTPK that hits the same state (the deadlock). Flag the peer so
+            // the END_SESSION we send asks them to re-init WITHOUT an OTPK (3-DH). The Rust core
+            // message is "OTPK id=… not found — sender used 4-DH but we cannot reproduce it".
+            if message.contains("cannot reproduce") {
+                Log.info("SESSION_STATE[otpk_unreproducible]: \(data.userId.prefix(8))… — will request 3-DH re-init via END_SESSION", category: "SessionInit")
+                SessionReinitHintStore.shared.recordResponderOtpkUnreproducible(for: data.userId)
+            }
             // Check if our keys match what the server serves — desync would explain AEAD failure
             Task { await PreKeyRotationService.shared.verifyAndRepairKeyConsistency() }
             return false

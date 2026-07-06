@@ -36,7 +36,7 @@ class ChatsViewModel {
             forName: .contactRequestAccepted, object: nil, queue: nil
         ) { _ in
             Task { @MainActor in
-                ChatsViewModel.sharedStreamLifecycle.forceReconnect()
+                ChatsViewModel.sharedStreamLifecycle.reconnectIfSubscriptionsChanged()
             }
         }
     }()
@@ -118,7 +118,7 @@ class ChatsViewModel {
 
     func startChat(with user: PublicUserInfo) -> Chat? {
         let chat = chatManagementService.startChat(with: user)
-        streamLifecycle.forceReconnect()
+        streamLifecycle.reconnectIfSubscriptionsChanged()
         if !CryptoManager.shared.hasSession(for: user.id) {
             CryptoManager.shared.clearArchivedSessions(for: user.id)
             SessionLifecycleController.shared.prewarmSessions(for: [user.id])
@@ -140,7 +140,7 @@ class ChatsViewModel {
 
     func pruneContact(userId: String) {
         chatManagementService.pruneContact(userId: userId)
-        streamLifecycle.forceReconnect()
+        streamLifecycle.reconnectIfSubscriptionsChanged()
     }
 
     func openOrCreateChat(with user: User) {
@@ -178,6 +178,6 @@ class ChatsViewModel {
             }
         }
         chatManagementService.deleteChat(chat)
-        streamLifecycle.forceReconnect()
+        streamLifecycle.reconnectIfSubscriptionsChanged()
     }
 }

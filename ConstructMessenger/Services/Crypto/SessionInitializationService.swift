@@ -112,8 +112,19 @@ class SessionInitializationService {
             suiteId: String(bundle.suiteId)
         )
 
-        let otpkPublic = bundle.oneTimePreKeyPublic
-        let otpkId = bundle.oneTimePreKeyId
+        var otpkPublic = bundle.oneTimePreKeyPublic
+        var otpkId = bundle.oneTimePreKeyId
+
+        // 3-DH re-init: a prior END_SESSION from this peer signalled it could not reproduce our
+        // 4-DH one-time-prekey (otpk-session-init-deadlock lever L2). Drop the classic OTPK and
+        // do 3-DH, which the responder can always reproduce from identity + signed prekey —
+        // instead of handing it another OTPK it will also reject and looping. Consumed once; a
+        // later clean init uses 4-DH again. (The Kyber OTPK is a separate store and is left as-is.)
+        if SessionReinitHintStore.shared.consumeThreeDHReinit(for: userId) {
+            Log.info("SESSION_STATE[force_3dh_reinit]: \(userId.prefix(8))… — dropping one-time-prekey, using 3-DH", category: "SessionInit")
+            otpkPublic = Data()
+            otpkId = 0
+        }
 
         do {
             PerformanceMetrics.shared.start(.sessionInitStart, label: String(userId.prefix(8)))

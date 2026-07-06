@@ -215,7 +215,12 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// path). For every *other* caller (a "must-send" path) we run a shadow comparison: what
     /// would the rate limiter have decided here? This measures Phase-2b risk without changing
     /// behaviour — the send always proceeds.
-    func sendEndSession(to userId: String, reason: String = "manual_reset", rateLimited: Bool = false) async throws {
+    func sendEndSession(
+        to userId: String,
+        reason: String = "manual_reset",
+        rateLimited: Bool = false,
+        resetReason: Shared_Proto_Messaging_V1_SessionResetReason = .unspecified
+    ) async throws {
         if !rateLimited {
             let candidate = SessionReducer.shouldSendEndSession(
                 lastSentAt: shadowEndSessionSentAt[userId], now: Date(), cooldown: endSessionCooldown
@@ -225,9 +230,9 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
         shadowEndSessionSentAt[userId] = Date()
 
-        Log.info("Sending END_SESSION to \(userId): \(reason)", category: "ChatsViewModel")
+        Log.info("Sending END_SESSION to \(userId): \(reason)\(resetReason != .unspecified ? " [hint=\(resetReason)]" : "")", category: "ChatsViewModel")
         do {
-            let response = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: reason)
+            let response = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: reason, resetReason: resetReason)
             Log.info("END_SESSION sent successfully: \(response.messageId)", category: "ChatsViewModel")
         } catch {
             Log.error("Failed to send END_SESSION: \(error)", category: "ChatsViewModel")
@@ -638,10 +643,18 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
                 // init failed → reset phase to absent + clear the pending queue, via the reducer.
                 perform(apply(.initFailed, for: userId), for: userId)
+                // If the init failed because we couldn't reproduce the sender's OTPK, ask them
+                // (via the typed END_SESSION reason) to re-init WITHOUT one — 3-DH is always
+                // reproducible, so this breaks the 4-DH retry loop instead of perpetuating it.
+                let otpkUnreproducible = SessionReinitHintStore.shared.consumeResponderOtpkUnreproducible(for: userId)
                 Task { [weak self] in
                     guard let self else { return }
                     do {
-                        try await self.sendEndSession(to: userId, reason: "session_init_failed")
+                        try await self.sendEndSession(
+                            to: userId,
+                            reason: otpkUnreproducible ? "session_init_failed_otpk_unreproducible" : "session_init_failed",
+                            resetReason: otpkUnreproducible ? .otpkUnreproducible : .unspecified
+                        )
                     } catch {
                         Log.error("SESSION_STATE[init_failed_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                     }
@@ -709,8 +722,13 @@ final class SessionCoordinator: MessageRouterDelegate {
                     PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
                     perform([.clearQueuedMessages], for: userId)
                     SessionHealingService.shared.clearQueue(for: userId, in: context)
+                    let otpkUnreproducible = SessionReinitHintStore.shared.consumeResponderOtpkUnreproducible(for: userId)
                     do {
-                        try await sendEndSession(to: userId, reason: "heal_exhausted")
+                        try await sendEndSession(
+                            to: userId,
+                            reason: otpkUnreproducible ? "heal_exhausted_otpk_unreproducible" : "heal_exhausted",
+                            resetReason: otpkUnreproducible ? .otpkUnreproducible : .unspecified
+                        )
                     } catch {
                         Log.error("SESSION_STATE[heal_exhausted_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                     }

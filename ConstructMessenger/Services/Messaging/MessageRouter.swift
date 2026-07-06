@@ -259,6 +259,17 @@ final class MessageRouter {
         // 3. Check if this is an END_SESSION control message
         if message.isEndSession {
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            // Typed reason hint (if the sender is new enough to attach a SessionControl payload):
+            // .otpkUnreproducible means the peer, as our RESPONDER, could not reproduce the 4-DH
+            // OTPK our last X3DH used. Re-initiating with another OTPK would loop, so mark the peer
+            // to force a 3-DH re-init (no OTPK) on our next session init. Legacy END_SESSION carries
+            // a 16-byte sentinel that simply won't decode → no hint, default behaviour preserved.
+            if !message.rawPayload.isEmpty,
+               let control = try? Shared_Proto_Messaging_V1_SessionControl(serializedBytes: message.rawPayload),
+               control.reason == .otpkUnreproducible {
+                Log.info("END_SESSION from \(otherUserId.prefix(8))… hints OTPK-unreproducible — forcing 3-DH re-init", category: "MessageRouter")
+                SessionReinitHintStore.shared.requestThreeDHReinit(for: otherUserId)
+            }
             Log.info("Received END_SESSION from \(otherUserId)", category: "MessageRouter")
             handleEndSession(from: otherUserId, messageTimestamp: message.timestamp, in: context)
             delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
@@ -878,6 +889,17 @@ final class MessageRouter {
         isNewChat: Bool,
         in context: NSManagedObjectContext
     ) -> StreamCursorTracker.Outcome {
+        // Dedup redelivered handshakes: a msg0 that already completed session init once
+        // (receipt raced the server's stream cursor on reconnect) must never re-init —
+        // its X3DH OTPK was consumed by the first init, so a re-init can only fail with
+        // "OTPK not found" and spuriously kick off the 3-DH heal cycle. Re-ACK and move on.
+        if PersistentACKStore.shared.isProcessed(message.id, in: context) {
+            Log.info("SESSION_STATE[first_message_dedup]: \(message.id.prefix(8))… from \(userId.prefix(8))… already processed — re-ACKing, skipping re-init", category: "SessionInit")
+            delegate?.messageRouter(self, needsReceipt: [message.id], to: userId, status: .delivered)
+            if isNewChat { context.delete(chat) }
+            return .durable
+        }
+
         // Queue disposition comes from the pure SessionReducer, fed by the authoritative facts
         // we hold here: no Rust session exists (this method is only reached when !hasSession),
         // and whether init is already underway (something already queued for this peer).

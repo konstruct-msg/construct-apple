@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftProtobuf
 
 /// Decodes session-handshake control signals from an incoming message, recognising both
 /// the typed wire form (Envelope `content_type` + `SessionControl` payload) and the legacy
