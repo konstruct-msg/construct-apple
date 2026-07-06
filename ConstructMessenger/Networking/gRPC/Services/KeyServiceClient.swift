@@ -317,25 +317,32 @@ final class KeyServiceClient: Sendable {
         }
     }
 
-    /// Map proto CryptoSuite enum → numeric suite ID used by CryptoCore.
+    /// Map proto CryptoSuite enum → the core's SuiteID (suite_id.rs):
+    /// 1 = CLASSIC (X25519+ChaCha20), 2 = PQ_HYBRID (X25519+ML-KEM-768, ML-DSA-65),
+    /// 3 = PQ_RATCHET — NEVER produced from a bundle: suite 3 is negotiated
+    /// per-session from the supports_pq_ratchet capability, not declared as the
+    /// bundle's crypto suite. (The old mapping sent hybrid bundles to 3, which
+    /// now means the sparse PQ ratchet — a different protocol entirely.)
     private static func parseSuiteId(_ cryptoSuite: Shared_Proto_Core_V1_CryptoSuite) -> UInt16 {
         switch cryptoSuite {
         case .classicX25519Chacha20: return 1
-        case .classicX25519Aes256:   return 2
-        case .hybridKyber1024X25519: return 3
-        case .hybridKyber768X25519:  return 3
+        // The core has no AES-256 provider — treat as classic rather than
+        // accidentally selecting the ML-KEM hybrid provider (core suite 2).
+        case .classicX25519Aes256:   return 1
+        case .hybridKyber1024X25519: return 2
+        case .hybridKyber768X25519:  return 2
         default:                     return 1
         }
     }
 
-    /// Map proto crypto_suite string → numeric suite ID used by CryptoCore.
+    /// Map proto crypto_suite string → the core's SuiteID (see enum overload above).
     /// Server returns named strings ("X25519_CHACHA20") per proto spec; also
     /// accepts legacy numeric strings ("1") from older server versions.
     private static func parseSuiteId(_ cryptoSuite: String) -> UInt16 {
         switch cryptoSuite {
         case "X25519_CHACHA20", "Curve25519+ChaCha20": return 1
-        case "X25519_AES256", "Curve25519+AES256":    return 2
-        case "KYBER_HYBRID":                           return 3
+        case "X25519_AES256", "Curve25519+AES256":    return 1
+        case "KYBER_HYBRID":                           return 2
         default:
             return UInt16(cryptoSuite) ?? 1
         }

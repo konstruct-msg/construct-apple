@@ -403,6 +403,18 @@ class CryptoManager {
         orchestratorCore?.ackMarkProcessed(messageId: messageId)
     }
 
+    /// The NEGOTIATED crypto suite of the live session with `userId` — read from the
+    /// Rust core (authoritative; suite 3 is negotiated, the bundle only ever says 1/2).
+    /// Falls back to the Keychain copy when the session isn't loaded into the core yet.
+    /// Returns 0 when no session is known at all.
+    func sessionSuiteId(for userId: String) -> UInt16 {
+        coreLock.lock()
+        let coreSuite = orchestratorCore?.getSessionSuiteId(contactId: userId) ?? 0
+        coreLock.unlock()
+        if coreSuite > 0 { return coreSuite }
+        return KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0
+    }
+
     // MARK: - Orchestrator Event Bridge
 
     /// Single, serialized entry point for all `OrchestratorCore.handleEvent` calls.

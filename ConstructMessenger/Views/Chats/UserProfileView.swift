@@ -14,11 +14,15 @@
 import SwiftUI
 import CoreData
 
-/// Maps a numeric suite ID (as stored in UserDefaults) to a human-readable name.
+/// Human-readable name of the session's NEGOTIATED crypto suite. Must stay in
+/// lockstep with `SuiteID` in construct-core `crypto/suite_id.rs` — the previous
+/// hardcode here claimed Kyber for suite 1 (plain classic) and didn't know
+/// suite 3 at all.
 private func cryptoSuiteName(suiteId: Int) -> String {
     switch suiteId {
-    case 1: return "X25519 + Kyber768"
-    case 2: return "X25519 + Kyber1024"
+    case 1: return "X25519 · ChaCha20-Poly1305"
+    case 2: return "PQ Hybrid · X25519+ML-KEM-768 · ML-DSA-65"
+    case 3: return "X25519 · ChaCha20-Poly1305 · PQ Ratchet (ML-KEM-768)"
     default: return "Suite \(suiteId)"
     }
 }
@@ -456,11 +460,21 @@ struct UserProfileView: View {
 
     private func refreshSessionSecurityState() {
         let sessionExists = SessionLifecycleController.shared.hasActiveSession(for: user.id)
-        let suiteId = Int(KeychainManager.shared.loadSessionSuiteId(userId: user.id) ?? 0)
+        // Real negotiated suite from the Rust core (Keychain only as fallback) —
+        // suite 3 is negotiated per-session and never appears in the peer's bundle.
+        let suiteId = Int(CryptoManager.shared.sessionSuiteId(for: user.id))
         hasSession = sessionExists
-        sessionSuiteLabel = sessionExists && suiteId > 0
-            ? cryptoSuiteName(suiteId: suiteId)
-            : NSLocalizedString("session_crypto_no_session", comment: "")
+        if sessionExists && suiteId > 0 {
+            var label = cryptoSuiteName(suiteId: suiteId)
+            // PQXDH handshake strengthening failed for this session (Kyber decaps
+            // error) — the session is classical-only even if keys were offered.
+            if KeychainManager.shared.loadPQXDHDowngradeFlag(for: user.id) {
+                label += " · PQXDH degraded"
+            }
+            sessionSuiteLabel = label
+        } else {
+            sessionSuiteLabel = NSLocalizedString("session_crypto_no_session", comment: "")
+        }
     }
 
     private func handleShareToggle(_ share: Bool) {
