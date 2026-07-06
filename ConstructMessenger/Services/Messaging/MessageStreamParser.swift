@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import SwiftProtobuf
 
 enum MessageStreamParser {
     /// Convert a raw gRPC MessageStreamResponse into a typed StreamEvent.
@@ -38,12 +39,14 @@ enum MessageStreamParser {
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
-                    suiteId: 1,
+                    suiteId: decoded.suiteId,
                     timestamp: UInt64(envelope.timestamp),
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
                     contentType: 24,
                     kyberOtpkId: decoded.kyberOtpkId,
+                    pqMessageEpoch: decoded.pqMessageEpoch,
+                    pqRatchetField: decoded.pqRatchetField,
                     rawPayload: envelope.encryptedPayload
                 ), cursor: cursor)
             }
@@ -67,7 +70,11 @@ enum MessageStreamParser {
                     suiteId: 1,
                     timestamp: UInt64(envelope.timestamp),
                     kemCiphertext: Data(),
-                    kyberOtpkId: 0
+                    kyberOtpkId: 0,
+                    // Preserve the raw payload so the END_SESSION handler can read a typed
+                    // SessionControl reason hint (e.g. .otpkUnreproducible → 3-DH re-init).
+                    // Legacy senders put a 16-byte sentinel here, which simply won't decode.
+                    rawPayload: envelope.encryptedPayload
                 ), cursor: cursor)
             }
             // SENDER_SYNC: copy of own outgoing message — decrypt with per-device session
@@ -85,11 +92,13 @@ enum MessageStreamParser {
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
-                    suiteId: 1,
+                    suiteId: decoded.suiteId,
                     timestamp: UInt64(envelope.timestamp),
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
                     kyberOtpkId: decoded.kyberOtpkId,
+                    pqMessageEpoch: decoded.pqMessageEpoch,
+                    pqRatchetField: decoded.pqRatchetField,
                     senderDeviceId: envelope.senderDevice.deviceID,
                     conversationId: envelope.conversationID
                 ), cursor: cursor)
@@ -144,13 +153,15 @@ enum MessageStreamParser {
                 ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                 messageNumber: decoded.messageNumber,
                 content: decoded.content,
-                suiteId: 1,
+                suiteId: decoded.suiteId,
                 timestamp: UInt64(envelope.timestamp),
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 editsMessageId: envelope.editsMessageID,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
                 contentType: UInt8(envelope.contentType.rawValue),
                 kyberOtpkId: decoded.kyberOtpkId,
+                pqMessageEpoch: decoded.pqMessageEpoch,
+                pqRatchetField: decoded.pqRatchetField,
                 senderDeviceId: envelope.senderDevice.deviceID,
                 conversationId: envelope.conversationID,
                 rawPayload: wirePayload,

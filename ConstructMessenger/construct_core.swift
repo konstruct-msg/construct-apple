@@ -615,7 +615,7 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
      */
     func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws 
     
-    func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8]) throws  -> DecryptedMessageResult
+    func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) throws  -> DecryptedMessageResult
     
     func encryptMessage(sessionId: String, plaintext: String) throws  -> EncryptedMessageComponents
     
@@ -739,14 +739,17 @@ open func applyPqContribution(contactId: String, kemSharedSecret: [UInt8])throws
 }
 }
     
-open func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8])throws  -> DecryptedMessageResult  {
+open func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8])throws  -> DecryptedMessageResult  {
     return try  FfiConverterTypeDecryptedMessageResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_decrypt_message(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(sessionId),
         FfiConverterSequenceUInt8.lower(ephemeralPublicKey),
         FfiConverterUInt32.lower(messageNumber),
-        FfiConverterSequenceUInt8.lower(content),$0
+        FfiConverterSequenceUInt8.lower(content),
+        FfiConverterUInt16.lower(suiteId),
+        FfiConverterUInt32.lower(pqMessageEpoch),
+        FfiConverterSequenceUInt8.lower(pqRatchetField),$0
     )
 })
 }
@@ -1176,7 +1179,7 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func buildX3dhSignMessage(suiteId: UInt8, publicKey: [UInt8])  -> [UInt8]
     
-    func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8]) throws  -> DecryptedMessageResult
+    func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) throws  -> DecryptedMessageResult
     
     /**
      * Batch offline decrypt — single mutex acquisition for the whole batch.
@@ -1402,14 +1405,17 @@ open func buildX3dhSignMessage(suiteId: UInt8, publicKey: [UInt8]) -> [UInt8]  {
 })
 }
     
-open func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8])throws  -> DecryptedMessageResult  {
+open func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8])throws  -> DecryptedMessageResult  {
     return try  FfiConverterTypeDecryptedMessageResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_decrypt_message(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterSequenceUInt8.lower(ephemeralPublicKey),
         FfiConverterUInt32.lower(messageNumber),
-        FfiConverterSequenceUInt8.lower(content),$0
+        FfiConverterSequenceUInt8.lower(content),
+        FfiConverterUInt16.lower(suiteId),
+        FfiConverterUInt32.lower(pqMessageEpoch),
+        FfiConverterSequenceUInt8.lower(pqRatchetField),$0
     )
 })
 }
@@ -2732,14 +2738,20 @@ public struct BinaryFirstMessage: Equatable, Hashable {
     public var messageNumber: UInt32
     public var content: [UInt8]
     public var oneTimePrekeyId: UInt32
+    public var suiteId: UInt16
+    public var pqMessageEpoch: UInt32
+    public var pqRatchetField: [UInt8]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32) {
+    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32, suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) {
         self.ephemeralPublicKey = ephemeralPublicKey
         self.messageNumber = messageNumber
         self.content = content
         self.oneTimePrekeyId = oneTimePrekeyId
+        self.suiteId = suiteId
+        self.pqMessageEpoch = pqMessageEpoch
+        self.pqRatchetField = pqRatchetField
     }
 
     
@@ -2759,7 +2771,10 @@ public struct FfiConverterTypeBinaryFirstMessage: FfiConverterRustBuffer {
                 ephemeralPublicKey: FfiConverterSequenceUInt8.read(from: &buf), 
                 messageNumber: FfiConverterUInt32.read(from: &buf), 
                 content: FfiConverterSequenceUInt8.read(from: &buf), 
-                oneTimePrekeyId: FfiConverterUInt32.read(from: &buf)
+                oneTimePrekeyId: FfiConverterUInt32.read(from: &buf), 
+                suiteId: FfiConverterUInt16.read(from: &buf), 
+                pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
+                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf)
         )
     }
 
@@ -2768,6 +2783,9 @@ public struct FfiConverterTypeBinaryFirstMessage: FfiConverterRustBuffer {
         FfiConverterUInt32.write(value.messageNumber, into: &buf)
         FfiConverterSequenceUInt8.write(value.content, into: &buf)
         FfiConverterUInt32.write(value.oneTimePrekeyId, into: &buf)
+        FfiConverterUInt16.write(value.suiteId, into: &buf)
+        FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
+        FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
     }
 }
 
@@ -3025,15 +3043,21 @@ public struct EncryptedMessageComponents: Equatable, Hashable {
     public var content: [UInt8]
     public var oneTimePrekeyId: UInt32
     public var storageKey: [UInt8]
+    public var suiteId: UInt16
+    public var pqMessageEpoch: UInt32
+    public var pqRatchetField: [UInt8]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32, storageKey: [UInt8]) {
+    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32, storageKey: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) {
         self.ephemeralPublicKey = ephemeralPublicKey
         self.messageNumber = messageNumber
         self.content = content
         self.oneTimePrekeyId = oneTimePrekeyId
         self.storageKey = storageKey
+        self.suiteId = suiteId
+        self.pqMessageEpoch = pqMessageEpoch
+        self.pqRatchetField = pqRatchetField
     }
 
     
@@ -3054,7 +3078,10 @@ public struct FfiConverterTypeEncryptedMessageComponents: FfiConverterRustBuffer
                 messageNumber: FfiConverterUInt32.read(from: &buf), 
                 content: FfiConverterSequenceUInt8.read(from: &buf), 
                 oneTimePrekeyId: FfiConverterUInt32.read(from: &buf), 
-                storageKey: FfiConverterSequenceUInt8.read(from: &buf)
+                storageKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                suiteId: FfiConverterUInt16.read(from: &buf), 
+                pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
+                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf)
         )
     }
 
@@ -3064,6 +3091,9 @@ public struct FfiConverterTypeEncryptedMessageComponents: FfiConverterRustBuffer
         FfiConverterSequenceUInt8.write(value.content, into: &buf)
         FfiConverterUInt32.write(value.oneTimePrekeyId, into: &buf)
         FfiConverterSequenceUInt8.write(value.storageKey, into: &buf)
+        FfiConverterUInt16.write(value.suiteId, into: &buf)
+        FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
+        FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
     }
 }
 
@@ -3692,15 +3722,21 @@ public struct OfflineBatchMessage: Equatable, Hashable {
     public var ephemeralPublicKey: [UInt8]
     public var messageNumber: UInt32
     public var content: [UInt8]
+    public var suiteId: UInt16
+    public var pqMessageEpoch: UInt32
+    public var pqRatchetField: [UInt8]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8]) {
+    public init(id: String, contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) {
         self.id = id
         self.contactId = contactId
         self.ephemeralPublicKey = ephemeralPublicKey
         self.messageNumber = messageNumber
         self.content = content
+        self.suiteId = suiteId
+        self.pqMessageEpoch = pqMessageEpoch
+        self.pqRatchetField = pqRatchetField
     }
 
     
@@ -3721,7 +3757,10 @@ public struct FfiConverterTypeOfflineBatchMessage: FfiConverterRustBuffer {
                 contactId: FfiConverterString.read(from: &buf), 
                 ephemeralPublicKey: FfiConverterSequenceUInt8.read(from: &buf), 
                 messageNumber: FfiConverterUInt32.read(from: &buf), 
-                content: FfiConverterSequenceUInt8.read(from: &buf)
+                content: FfiConverterSequenceUInt8.read(from: &buf), 
+                suiteId: FfiConverterUInt16.read(from: &buf), 
+                pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
+                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf)
         )
     }
 
@@ -3731,6 +3770,9 @@ public struct FfiConverterTypeOfflineBatchMessage: FfiConverterRustBuffer {
         FfiConverterSequenceUInt8.write(value.ephemeralPublicKey, into: &buf)
         FfiConverterUInt32.write(value.messageNumber, into: &buf)
         FfiConverterSequenceUInt8.write(value.content, into: &buf)
+        FfiConverterUInt16.write(value.suiteId, into: &buf)
+        FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
+        FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
     }
 }
 
@@ -4533,6 +4575,90 @@ public func FfiConverterTypeTimingConfig_lift(_ buf: RustBuffer) throws -> Timin
 #endif
 public func FfiConverterTypeTimingConfig_lower(_ value: TimingConfig) -> RustBuffer {
     return FfiConverterTypeTimingConfig.lower(value)
+}
+
+
+public struct WirePayload: Equatable, Hashable {
+    public var dhPublicKey: [UInt8]
+    public var messageNumber: UInt32
+    public var oneTimePrekeyId: UInt32
+    public var kyberOtpkId: UInt32
+    public var previousChainLength: UInt32
+    public var suiteId: UInt16
+    public var kemCiphertext: [UInt8]?
+    public var sealedBox: [UInt8]
+    public var pqMessageEpoch: UInt32
+    public var pqRatchetField: [UInt8]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(dhPublicKey: [UInt8], messageNumber: UInt32, oneTimePrekeyId: UInt32, kyberOtpkId: UInt32, previousChainLength: UInt32, suiteId: UInt16, kemCiphertext: [UInt8]?, sealedBox: [UInt8], pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) {
+        self.dhPublicKey = dhPublicKey
+        self.messageNumber = messageNumber
+        self.oneTimePrekeyId = oneTimePrekeyId
+        self.kyberOtpkId = kyberOtpkId
+        self.previousChainLength = previousChainLength
+        self.suiteId = suiteId
+        self.kemCiphertext = kemCiphertext
+        self.sealedBox = sealedBox
+        self.pqMessageEpoch = pqMessageEpoch
+        self.pqRatchetField = pqRatchetField
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension WirePayload: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWirePayload: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WirePayload {
+        return
+            try WirePayload(
+                dhPublicKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                messageNumber: FfiConverterUInt32.read(from: &buf), 
+                oneTimePrekeyId: FfiConverterUInt32.read(from: &buf), 
+                kyberOtpkId: FfiConverterUInt32.read(from: &buf), 
+                previousChainLength: FfiConverterUInt32.read(from: &buf), 
+                suiteId: FfiConverterUInt16.read(from: &buf), 
+                kemCiphertext: FfiConverterOptionSequenceUInt8.read(from: &buf), 
+                sealedBox: FfiConverterSequenceUInt8.read(from: &buf), 
+                pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
+                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: WirePayload, into buf: inout [UInt8]) {
+        FfiConverterSequenceUInt8.write(value.dhPublicKey, into: &buf)
+        FfiConverterUInt32.write(value.messageNumber, into: &buf)
+        FfiConverterUInt32.write(value.oneTimePrekeyId, into: &buf)
+        FfiConverterUInt32.write(value.kyberOtpkId, into: &buf)
+        FfiConverterUInt32.write(value.previousChainLength, into: &buf)
+        FfiConverterUInt16.write(value.suiteId, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.kemCiphertext, into: &buf)
+        FfiConverterSequenceUInt8.write(value.sealedBox, into: &buf)
+        FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
+        FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWirePayload_lift(_ buf: RustBuffer) throws -> WirePayload {
+    return try FfiConverterTypeWirePayload.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWirePayload_lower(_ value: WirePayload) -> RustBuffer {
+    return FfiConverterTypeWirePayload.lower(value)
 }
 
 // Note that we don't yet support `indirect` for enums.
@@ -6425,6 +6551,20 @@ public func ppFinalizeToken(evaluatedBytes: [UInt8], blindFactorBytes: [UInt8], 
 })
 }
 /**
+ * Seal a finalized 32-byte token to the server's X25519 token-encryption
+ * key (token_encryption_key from /.well-known/construct-server) so relay
+ * operators cannot read spent tokens. Returns
+ * ephemeral_pub(32) || nonce(12) || ciphertext || tag(16).
+ */
+public func ppSealTokenBytes(token: [UInt8], serverEncryptionKey: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_pp_seal_token_bytes(
+        FfiConverterSequenceUInt8.lower(token),
+        FfiConverterSequenceUInt8.lower(serverEncryptionKey),$0
+    )
+})
+}
+/**
  * Verify the evaluated point is a valid Ristretto255 curve point.
  * server_pubkey_bytes is reserved for future DLEQ batch proof verification.
  * Returns false if evaluated_bytes cannot be decompressed.
@@ -6450,6 +6590,54 @@ public func recommendedSendDelayMs(isHighPriority: Bool, batteryLevel: Float) ->
     uniffi_construct_core_fn_func_recommended_send_delay_ms(
         FfiConverterBool.lower(isHighPriority),
         FfiConverterFloat.lower(batteryLevel),$0
+    )
+})
+}
+/**
+ * Seal serialized SenderCertificate bytes to the recipient's X25519
+ * identity public key (32 bytes). Returns the sealed box:
+ * ephemeral_pub(32) || nonce(12) || ciphertext || tag(16).
+ * Bit-compatible with the iOS CryptoKit implementation.
+ */
+public func sealedSealSenderCert(certBytes: [UInt8], recipientIdentityKey: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_sealed_seal_sender_cert(
+        FfiConverterSequenceUInt8.lower(certBytes),
+        FfiConverterSequenceUInt8.lower(recipientIdentityKey),$0
+    )
+})
+}
+/**
+ * Open a sealed sender box with our X25519 identity private key
+ * (32 bytes). Returns the serialized SenderCertificate bytes — the caller
+ * parses the proto and then calls sealed_verify_sender_cert.
+ */
+public func sealedUnsealSenderCert(sealedBox: [UInt8], ourIdentityPriv: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_sealed_unseal_sender_cert(
+        FfiConverterSequenceUInt8.lower(sealedBox),
+        FfiConverterSequenceUInt8.lower(ourIdentityPriv),$0
+    )
+})
+}
+/**
+ * Verify the server Ed25519 signature over a SenderCertificate's fields
+ * (variant-0 payload: user_id || domain || identity_key || device_id ||
+ * BE64(issued_at) || BE64(expires_at) — no separators).
+ * server_verifying_key is the 32-byte bundle verification key from
+ * /.well-known/construct-server. Returns false on any malformed input.
+ */
+public func sealedVerifySenderCert(userId: String, domain: String, identityKey: [UInt8], deviceId: String, issuedAt: Int64, expiresAt: Int64, signature: [UInt8], serverVerifyingKey: [UInt8]) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_sealed_verify_sender_cert(
+        FfiConverterString.lower(userId),
+        FfiConverterString.lower(domain),
+        FfiConverterSequenceUInt8.lower(identityKey),
+        FfiConverterString.lower(deviceId),
+        FfiConverterInt64.lower(issuedAt),
+        FfiConverterInt64.lower(expiresAt),
+        FfiConverterSequenceUInt8.lower(signature),
+        FfiConverterSequenceUInt8.lower(serverVerifyingKey),$0
     )
 })
 }
@@ -6578,6 +6766,20 @@ public func verifyRecoverySignature(publicKey: [UInt8], message: String, signatu
     )
 })
 }
+public func wirePayloadPack(payload: WirePayload)throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_wire_payload_pack(
+        FfiConverterTypeWirePayload_lower(payload),$0
+    )
+})
+}
+public func wirePayloadUnpack(data: [UInt8])throws  -> WirePayload  {
+    return try  FfiConverterTypeWirePayload_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_wire_payload_unpack(
+        FfiConverterSequenceUInt8.lower(data),$0
+    )
+})
+}
 
 private enum InitializationResult {
     case ok
@@ -6684,6 +6886,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_pp_finalize_token() != 38839) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_pp_seal_token_bytes() != 51612) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_pp_verify_client() != 14654) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -6691,6 +6896,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_recommended_send_delay_ms() != 24315) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_sealed_seal_sender_cert() != 11670) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_sealed_unseal_sender_cert() != 57873) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_sealed_verify_sender_cert() != 7421) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sign_invite_data() != 47259) {
@@ -6732,10 +6946,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_verify_recovery_signature() != 1269) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_wire_payload_pack() != 2511) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_wire_payload_unpack() != 35590) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_classiccryptocore_apply_pq_contribution() != 13706) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_decrypt_message() != 16045) {
+    if (uniffi_construct_core_checksum_method_classiccryptocore_decrypt_message() != 12341) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_encrypt_message() != 45977) {
@@ -6822,7 +7042,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_build_x3dh_sign_message() != 50237) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_message() != 56464) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_message() != 9863) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_offline_batch() != 51852) {

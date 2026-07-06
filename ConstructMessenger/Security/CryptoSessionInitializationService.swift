@@ -67,8 +67,12 @@ final class CryptoSessionInitializationService {
             let sessionId = allowStale
                 ? try core.initSessionAllowingStale(contactId: userId, recipientBundle: bundle)
                 : try core.initSession(contactId: userId, recipientBundle: bundle)
-            KeychainManager.shared.saveSessionSuiteId(userId: userId, suiteId: suiteID)
+            // Persist the NEGOTIATED suite (suite 3 when both sides support the PQ
+            // ratchet), not the bundle's crypto suite — the bundle only ever says 1/2.
+            let negotiatedSuite = core.getSessionSuiteId(contactId: userId)
+            KeychainManager.shared.saveSessionSuiteId(userId: userId, suiteId: negotiatedSuite > 0 ? negotiatedSuite : suiteID)
             saveSession(userId)
+            Log.info("SESSION_STATE[suite_negotiated]: peer=\(userId.prefix(8))…, bundleSuite=\(suiteID), supportsPqRatchet=\(supportsPqRatchet), negotiated=\(negotiatedSuite)", category: "SessionInit")
             Log.info("INITIATOR session created\(allowStale ? " (degraded/at-risk)" : ""): \(sessionId.prefix(16))...", category: "CryptoManager")
         } catch CryptoError.PeerSpkStale(let message) {
             let ageSecs: UInt64
@@ -159,7 +163,13 @@ final class CryptoSessionInitializationService {
             ephemeralPublicKey: [UInt8](firstMessage.ephemeralPublicKey),
             messageNumber: firstMessage.messageNumber,
             content: [UInt8](sealedBox),
-            oneTimePrekeyId: firstMessage.oneTimePreKeyId
+            oneTimePrekeyId: firstMessage.oneTimePreKeyId,
+            // Suite the INITIATOR encrypted with, taken from the wire header — the
+            // responder must adopt it to rebuild the exact AEAD associated data
+            // (suite 3 appends a pq_message_epoch tag). Dropping these was the outage.
+            suiteId: firstMessage.suiteId,
+            pqMessageEpoch: firstMessage.pqMessageEpoch,
+            pqRatchetField: [UInt8](firstMessage.pqRatchetField)
         )
 
         do {

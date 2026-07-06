@@ -121,6 +121,10 @@ final class KeyServiceClient: Sendable {
                 ) {
                 case .verified:
                     Log.info("Hybrid PQ bundle verified for device \(deviceBundle.deviceID)", category: "HybridPQ")
+                case .degraded(let reason):
+                    // Authentic hybrid identity, SPK-level attestation unavailable — keep the device
+                    // and proceed via classic X3DH rather than dropping it (peer SPK desync).
+                    Log.fault("Hybrid PQ DEGRADED for device \(deviceBundle.deviceID): \(reason) — keeping device via classic X3DH", category: "HybridPQ")
                 case .absent:
                     break
                 case .failed(let reason):
@@ -272,6 +276,11 @@ final class KeyServiceClient: Sendable {
             switch hybridOutcome {
             case .verified:
                 Log.info("Hybrid PQ bundle verified for device \(response.deviceID)", category: "HybridPQ")
+            case .degraded(let reason):
+                // Hybrid identity is authentic (cross-sig valid) but the SPK-level hybrid
+                // attestation is unavailable — proceed via classic X3DH rather than hard-block a
+                // desynced peer. The classic Ed25519 SPK signature is still enforced by the core.
+                Log.fault("Hybrid PQ DEGRADED for device \(response.deviceID): \(reason) — proceeding via classic X3DH (PQ SPK attestation unavailable; likely peer SPK desync)", category: "HybridPQ")
             case .absent:
                 if hybridDowngrade {
                     Log.error("Hybrid PQ DOWNGRADE for device \(response.deviceID): peer was hybrid-capable, bundle now Ed25519-only", category: "HybridPQ")
@@ -281,6 +290,8 @@ final class KeyServiceClient: Sendable {
                 Log.error("Hybrid PQ bundle REJECTED for device \(response.deviceID): \(reason)", category: "HybridPQ")
                 throw HybridBundleVerificationError(reason: reason)
             }
+
+            Log.info("SESSION_STATE[bundle_capabilities]: userId=\(userId.prefix(8))…, device=\(response.deviceID.prefix(8))…, supportsPqRatchet=\(bundle.supportsPqRatchet)", category: "SessionInit")
 
             return PublicKeyBundleData(
                 userId: userId,
@@ -404,8 +415,22 @@ final class KeyServiceClient: Sendable {
             let response = try await keyClient.uploadPreKeys(
                 request: .init(message: request)
             )
+            // Remember what capability the server now holds — the replenishment
+            // service compares against this to force a re-upload when a build
+            // flips supportsPqRatchet() while the server OTPK count is healthy.
+            #if os(iOS)
+            UserDefaults.standard.set(request.supportsPqRatchet, forKey: Self.advertisedPqRatchetKey)
+            #endif
             return (classicCount: response.preKeyCount, kyberCount: response.kyberPreKeyCount)
         }
+    }
+
+    /// Last `supports_pq_ratchet` value successfully uploaded to the server
+    /// (nil = never uploaded / unknown, e.g. after an app-data reset).
+    static let advertisedPqRatchetKey = "keyservice.advertisedPqRatchet"
+
+    static var lastAdvertisedPqRatchet: Bool? {
+        UserDefaults.standard.object(forKey: advertisedPqRatchetKey) as? Bool
     }
 
     // MARK: - Get Pre-Key Count
@@ -581,8 +606,11 @@ final class KeyServiceClient: Sendable {
             let identityChanged = user.knownIdentityKey != nil && user.knownIdentityKey != identityKey
 
             switch outcome {
-            case .verified:
-                // Pin hybrid capability to this identity.
+            case .verified, .degraded:
+                // Pin hybrid capability to this identity. `.degraded` still presents an authentic
+                // (cross-signed) hybrid identity key — the peer IS hybrid-capable, only its SPK-level
+                // attestation is momentarily unavailable — so it must still count against a later
+                // true downgrade to Ed25519-only.
                 user.hybridCapable = true
                 user.knownIdentityKey = identityKey
             case .absent:

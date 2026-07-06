@@ -306,7 +306,14 @@ class CryptoManager {
                     try newCore.importOneTimePrekeys(data: [UInt8](otpksData))
                     Log.debug("Imported OTPKs on core reload (\(newCore.oneTimePrekeyCount()) keys)", category: "CryptoManager")
                 } catch {
-                    Log.error("Failed to import OTPKs on core reload: \(error)", category: "CryptoManager")
+                    // CFE decode of the persisted OTPK blob failed → the core's private OTPK
+                    // store comes up EMPTY while the server still holds OTPKs whose private keys
+                    // we just lost. Left silent, this desyncs local↔server and every inbound X3DH
+                    // that used one of those OTPKs fails ("OTPK id not found"), driving the
+                    // session-init reset storm (see otpk-session-init-deadlock). Force a single
+                    // consistent replace-all on the next upload so counter/store/server reconverge.
+                    Log.fault("Failed to import OTPKs on core reload — forcing full OTPK replacement: \(error)", category: "CryptoManager")
+                    needsFullOtpkReplacement = true
                 }
             }
             PQCKeyManager.loadCFESnapshot(into: newCore)
@@ -742,7 +749,11 @@ class CryptoManager {
                     try newCore.importOneTimePrekeys(data: [UInt8](otpksData))
                     Log.debug("Imported OTPKs into OrchestratorCore (\(newCore.oneTimePrekeyCount()) keys)", category: "CryptoManager")
                 } catch {
-                    Log.error("Failed to import OTPKs into OrchestratorCore: \(error)", category: "CryptoManager")
+                    // See reloadCoreFromKeychain: a silent empty OTPK store + high next_otpk_id +
+                    // stale server keys is the seed of the session-init reset storm. Force a single
+                    // consistent replace-all instead of swallowing the failure.
+                    Log.fault("Failed to import OTPKs into OrchestratorCore — forcing full OTPK replacement: \(error)", category: "CryptoManager")
+                    needsFullOtpkReplacement = true
                 }
             } else {
                 Log.info("No OTPKs found in Keychain — key_manager will have empty OTPK store", category: "CryptoManager")
@@ -1023,7 +1034,10 @@ class CryptoManager {
                 contactId: message.from,
                 ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                 messageNumber: message.messageNumber,
-                content: [UInt8](contentForDecrypt)
+                content: [UInt8](contentForDecrypt),
+                suiteId: message.suiteId,
+                pqMessageEpoch: message.pqMessageEpoch,
+                pqRatchetField: [UInt8](message.pqRatchetField)
             )
             saveSessionToKeychain(for: message.from)
             Log.info("BG decrypt OK \(message.id.prefix(8))… msgNum=\(message.messageNumber) (\(result.plaintext.count) bytes)", category: "CryptoManager")
@@ -1066,7 +1080,10 @@ class CryptoManager {
                 contactId: msg.from,
                 ephemeralPublicKey: [UInt8](msg.ephemeralPublicKey),
                 messageNumber: msg.messageNumber,
-                content: [UInt8](MessagePadding.unpadCiphertext(msg.content))
+                content: [UInt8](MessagePadding.unpadCiphertext(msg.content)),
+                suiteId: msg.suiteId,
+                pqMessageEpoch: msg.pqMessageEpoch,
+                pqRatchetField: [UInt8](msg.pqRatchetField)
             )
         }
 
@@ -1103,7 +1120,14 @@ class CryptoManager {
         contactId: String,
         ephemeralPublicKey: Data,
         messageNumber: UInt32,
-        content: Data
+        content: Data,
+        // The call-signal V2 frame does not yet carry these — it only supports
+        // classic (suite 1) sessions. TODO: extend the frame to carry suite_id /
+        // pq_message_epoch / pq_ratchet_field so call signals work over suite-3
+        // sessions (same fix as WirePayload; tracked separately).
+        suiteId: UInt16 = 1,
+        pqMessageEpoch: UInt32 = 0,
+        pqRatchetField: Data = Data()
     ) throws -> String {
         coreLock.lock()
         defer { coreLock.unlock() }
@@ -1127,7 +1151,10 @@ class CryptoManager {
             contactId: contactId,
             ephemeralPublicKey: [UInt8](ephemeralPublicKey),
             messageNumber: messageNumber,
-            content: [UInt8](contentForDecrypt)
+            content: [UInt8](contentForDecrypt),
+            suiteId: suiteId,
+            pqMessageEpoch: pqMessageEpoch,
+            pqRatchetField: [UInt8](pqRatchetField)
         )
         saveSessionToKeychain(for: contactId)
         return String(data: Data(result.plaintext), encoding: .utf8) ?? ""

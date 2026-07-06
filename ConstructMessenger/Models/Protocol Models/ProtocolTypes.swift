@@ -44,6 +44,14 @@ struct ChatMessage: Codable, Identifiable {
     /// Only meaningful when messageNumber == 0 and kemCiphertext is non-empty.
     var kyberOtpkId: UInt32 = 0
 
+    /// Suite-3 (PQ_RATCHET) per-message PQ epoch tag from the wire header (0 otherwise).
+    /// Must be threaded into `decryptMessage`/`initReceivingSession` so the responder
+    /// rebuilds the exact AEAD associated data — dropping it caused the suite-3 outage.
+    var pqMessageEpoch: UInt32 = 0
+
+    /// Suite-3 sparse PQ-ratchet field from the wire header, serialized (empty = none).
+    var pqRatchetField: Data = Data()
+
     /// Device ID of the sending device (populated from envelope.senderDevice.deviceID).
     /// Used for per-device session key derivation (contactId = userId:deviceId).
     var senderDeviceId: String = ""
@@ -92,6 +100,7 @@ extension ChatMessage {
     private enum CodingKeys: String, CodingKey {
         case id, from, to, messageType, ephemeralPublicKey, messageNumber, content, suiteId
         case timestamp, oneTimePreKeyId, editsMessageId, kemCiphertext, kyberOtpkId
+        case pqMessageEpoch, pqRatchetField
         case senderDeviceId, conversationId, replyToMessageId, rawPayload
     }
 
@@ -110,6 +119,8 @@ extension ChatMessage {
         editsMessageId = (try? c.decodeIfPresent(String.self, forKey: .editsMessageId)) ?? ""
         kemCiphertext = (try? c.decodeIfPresent(Data.self, forKey: .kemCiphertext)) ?? Data()
         kyberOtpkId = (try? c.decodeIfPresent(UInt32.self, forKey: .kyberOtpkId)) ?? 0
+        pqMessageEpoch = (try? c.decodeIfPresent(UInt32.self, forKey: .pqMessageEpoch)) ?? 0
+        pqRatchetField = (try? c.decodeIfPresent(Data.self, forKey: .pqRatchetField)) ?? Data()
         senderDeviceId = (try? c.decodeIfPresent(String.self, forKey: .senderDeviceId)) ?? ""
         conversationId = (try? c.decodeIfPresent(String.self, forKey: .conversationId)) ?? ""
         replyToMessageId = (try? c.decodeIfPresent(String.self, forKey: .replyToMessageId)) ?? ""

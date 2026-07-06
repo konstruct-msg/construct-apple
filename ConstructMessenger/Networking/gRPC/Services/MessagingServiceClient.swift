@@ -8,6 +8,7 @@
 import Foundation
 import GRPCCore
 import GRPCNIOTransportHTTP2
+import SwiftProtobuf
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -210,7 +211,19 @@ final class MessagingServiceClient: Sendable {
 
     // MARK: - Send End Session (replaces MessagingAPI.sendEndSession)
 
-    func sendEndSession(to recipientId: String, reason: String? = nil) async throws -> EndSessionResponse {
+    /// - Parameter resetReason: optional machine-readable recovery hint carried in the
+    ///   END_SESSION payload as a typed `SessionControl{op: .end, reason}`. When set (≠
+    ///   `.unspecified`), it tells the peer HOW to re-initialise — notably
+    ///   `.otpkUnreproducible`, which asks the initiator to re-init WITHOUT a one-time
+    ///   prekey (3-DH) instead of looping 4-DH. When `.unspecified`, the legacy 16-byte
+    ///   sentinel payload is sent so pre-`reason` peers are unaffected. The serialized
+    ///   SessionControl stays < WirePayloadCoder.headerSize so the receiver's payload-size
+    ///   END_SESSION heuristic still fires even if the server strips content_type.
+    func sendEndSession(
+        to recipientId: String,
+        reason: String? = nil,
+        resetReason: Shared_Proto_Messaging_V1_SessionResetReason = .unspecified
+    ) async throws -> EndSessionResponse {
         let myUserId = await MainActor.run { AuthSessionManager.shared.currentUserId } ?? ""
         return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
@@ -229,8 +242,18 @@ final class MessagingServiceClient: Sendable {
             envelope.recipient = recipient
             envelope.contentType = .sessionReset
             envelope.timestamp = Int64(Date().timeIntervalSince1970)
-            // Always populate encrypted_payload — server validates it is non-empty.
-            envelope.encryptedPayload = Data(count: 16)
+            // Carry a typed reason hint when one is set; otherwise keep the legacy 16-byte
+            // sentinel (server validates the payload is non-empty either way).
+            if resetReason != .unspecified {
+                var control = Shared_Proto_Messaging_V1_SessionControl()
+                control.op = .end
+                control.reason = resetReason
+                // No nonce: END_SESSION dedup is by message id/timestamp, and omitting it
+                // keeps the payload tiny (< headerSize) for the receiver's size heuristic.
+                envelope.encryptedPayload = (try? control.serializedData()).flatMap { $0.isEmpty ? nil : $0 } ?? Data(count: 16)
+            } else {
+                envelope.encryptedPayload = Data(count: 16)
+            }
 
             var request = Shared_Proto_Services_V1_SendMessageRequest()
             request.message = envelope
@@ -300,12 +323,14 @@ final class MessagingServiceClient: Sendable {
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
-                    suiteId: 1,
+                    suiteId: decoded.suiteId,
                     timestamp: UInt64(msg.timestamp),
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
                     contentType: 24,
                     kyberOtpkId: decoded.kyberOtpkId,
+                    pqMessageEpoch: decoded.pqMessageEpoch,
+                    pqRatchetField: decoded.pqRatchetField,
                     rawPayload: msg.encryptedPayload
                 )
             }
@@ -347,11 +372,13 @@ final class MessagingServiceClient: Sendable {
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
-                    suiteId: 1,
+                    suiteId: decoded.suiteId,
                     timestamp: UInt64(msg.timestamp),
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
                     kyberOtpkId: decoded.kyberOtpkId,
+                    pqMessageEpoch: decoded.pqMessageEpoch,
+                    pqRatchetField: decoded.pqRatchetField,
                     senderDeviceId: "",
                     conversationId: ""
                 )
@@ -396,12 +423,14 @@ final class MessagingServiceClient: Sendable {
                 ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                 messageNumber: decoded.messageNumber,
                 content: decoded.content,
-                suiteId: 1,
+                suiteId: decoded.suiteId,
                 timestamp: UInt64(msg.timestamp),
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
                 contentType: UInt8(msg.contentType.rawValue),
                 kyberOtpkId: decoded.kyberOtpkId,
+                pqMessageEpoch: decoded.pqMessageEpoch,
+                pqRatchetField: decoded.pqRatchetField,
                 senderDeviceId: "",
                 conversationId: "",
                 rawPayload: wirePayload,

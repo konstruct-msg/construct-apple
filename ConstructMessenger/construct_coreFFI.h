@@ -324,7 +324,7 @@ void uniffi_construct_core_fn_method_classiccryptocore_apply_pq_contribution(uin
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_DECRYPT_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_DECRYPT_MESSAGE
-RustBuffer uniffi_construct_core_fn_method_classiccryptocore_decrypt_message(uint64_t ptr, RustBuffer session_id, RustBuffer ephemeral_public_key, uint32_t message_number, RustBuffer content, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_construct_core_fn_method_classiccryptocore_decrypt_message(uint64_t ptr, RustBuffer session_id, RustBuffer ephemeral_public_key, uint32_t message_number, RustBuffer content, uint16_t suite_id, uint32_t pq_message_epoch, RustBuffer pq_ratchet_field, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_ENCRYPT_MESSAGE
@@ -494,7 +494,7 @@ RustBuffer uniffi_construct_core_fn_method_orchestratorcore_build_x3dh_sign_mess
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_DECRYPT_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_DECRYPT_MESSAGE
-RustBuffer uniffi_construct_core_fn_method_orchestratorcore_decrypt_message(uint64_t ptr, RustBuffer contact_id, RustBuffer ephemeral_public_key, uint32_t message_number, RustBuffer content, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_construct_core_fn_method_orchestratorcore_decrypt_message(uint64_t ptr, RustBuffer contact_id, RustBuffer ephemeral_public_key, uint32_t message_number, RustBuffer content, uint16_t suite_id, uint32_t pq_message_epoch, RustBuffer pq_ratchet_field, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_DECRYPT_OFFLINE_BATCH
@@ -1025,6 +1025,11 @@ RustBuffer uniffi_construct_core_fn_func_pp_blind_token(RustBuffer nonce, RustCa
 RustBuffer uniffi_construct_core_fn_func_pp_finalize_token(RustBuffer evaluated_bytes, RustBuffer blind_factor_bytes, RustBuffer nonce, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_SEAL_TOKEN_BYTES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_SEAL_TOKEN_BYTES
+RustBuffer uniffi_construct_core_fn_func_pp_seal_token_bytes(RustBuffer token, RustBuffer server_encryption_key, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_VERIFY_CLIENT
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_VERIFY_CLIENT
 int8_t uniffi_construct_core_fn_func_pp_verify_client(RustBuffer evaluated_bytes, RustBuffer nonce, RustBuffer server_pubkey_bytes, RustCallStatus *_Nonnull out_status
@@ -1038,6 +1043,21 @@ uint64_t uniffi_construct_core_fn_func_random_send_delay_ms(uint64_t max_delay_m
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RECOMMENDED_SEND_DELAY_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RECOMMENDED_SEND_DELAY_MS
 uint64_t uniffi_construct_core_fn_func_recommended_send_delay_ms(int8_t is_high_priority, float battery_level, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEALED_SEAL_SENDER_CERT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEALED_SEAL_SENDER_CERT
+RustBuffer uniffi_construct_core_fn_func_sealed_seal_sender_cert(RustBuffer cert_bytes, RustBuffer recipient_identity_key, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEALED_UNSEAL_SENDER_CERT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEALED_UNSEAL_SENDER_CERT
+RustBuffer uniffi_construct_core_fn_func_sealed_unseal_sender_cert(RustBuffer sealed_box, RustBuffer our_identity_priv, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEALED_VERIFY_SENDER_CERT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEALED_VERIFY_SENDER_CERT
+int8_t uniffi_construct_core_fn_func_sealed_verify_sender_cert(RustBuffer user_id, RustBuffer domain, RustBuffer identity_key, RustBuffer device_id, int64_t issued_at, int64_t expires_at, RustBuffer signature, RustBuffer server_verifying_key, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SIGN_INVITE_DATA
@@ -1105,6 +1125,16 @@ int8_t uniffi_construct_core_fn_func_verify_pow(RustBuffer challenge, RustBuffer
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_RECOVERY_SIGNATURE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_RECOVERY_SIGNATURE
 int8_t uniffi_construct_core_fn_func_verify_recovery_signature(RustBuffer public_key, RustBuffer message, RustBuffer signature, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_WIRE_PAYLOAD_PACK
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_WIRE_PAYLOAD_PACK
+RustBuffer uniffi_construct_core_fn_func_wire_payload_pack(RustBuffer payload, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_WIRE_PAYLOAD_UNPACK
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_WIRE_PAYLOAD_UNPACK
+RustBuffer uniffi_construct_core_fn_func_wire_payload_unpack(RustBuffer data, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUSTBUFFER_ALLOC
@@ -1547,6 +1577,12 @@ uint16_t uniffi_construct_core_checksum_func_pp_finalize_token(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_SEAL_TOKEN_BYTES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_SEAL_TOKEN_BYTES
+uint16_t uniffi_construct_core_checksum_func_pp_seal_token_bytes(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_VERIFY_CLIENT
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_VERIFY_CLIENT
 uint16_t uniffi_construct_core_checksum_func_pp_verify_client(void
@@ -1562,6 +1598,24 @@ uint16_t uniffi_construct_core_checksum_func_random_send_delay_ms(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RECOMMENDED_SEND_DELAY_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RECOMMENDED_SEND_DELAY_MS
 uint16_t uniffi_construct_core_checksum_func_recommended_send_delay_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEALED_SEAL_SENDER_CERT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEALED_SEAL_SENDER_CERT
+uint16_t uniffi_construct_core_checksum_func_sealed_seal_sender_cert(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEALED_UNSEAL_SENDER_CERT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEALED_UNSEAL_SENDER_CERT
+uint16_t uniffi_construct_core_checksum_func_sealed_unseal_sender_cert(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEALED_VERIFY_SENDER_CERT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEALED_VERIFY_SENDER_CERT
+uint16_t uniffi_construct_core_checksum_func_sealed_verify_sender_cert(void
     
 );
 #endif
@@ -1640,6 +1694,18 @@ uint16_t uniffi_construct_core_checksum_func_verify_pow(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_RECOVERY_SIGNATURE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_RECOVERY_SIGNATURE
 uint16_t uniffi_construct_core_checksum_func_verify_recovery_signature(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_WIRE_PAYLOAD_PACK
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_WIRE_PAYLOAD_PACK
+uint16_t uniffi_construct_core_checksum_func_wire_payload_pack(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_WIRE_PAYLOAD_UNPACK
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_WIRE_PAYLOAD_UNPACK
+uint16_t uniffi_construct_core_checksum_func_wire_payload_unpack(void
     
 );
 #endif

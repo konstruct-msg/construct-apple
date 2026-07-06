@@ -220,7 +220,10 @@ extension CryptoManager {
                     contactId: message.from,
                     ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                     messageNumber: message.messageNumber,
-                    content: contentBytes
+                    content: contentBytes,
+                    suiteId: message.suiteId,
+                    pqMessageEpoch: message.pqMessageEpoch,
+                    pqRatchetField: [UInt8](message.pqRatchetField)
                 )
 
                 Log.info("Decrypted with archived session #\(index) (archived at: \(archive.archivedAt))", category: "CryptoManager")

@@ -16,6 +16,8 @@ final class MessageCryptoService {
         let suiteId: UInt16
         let oneTimePreKeyId: UInt32  // OTPK key_id used in X3DH (0 = no OTPK)
         let storageKey: Data         // 32-byte random key — store in MessageKeyStore keyed by message_id
+        let pqMessageEpoch: UInt32   // suite-3 per-message PQ epoch tag (0 otherwise)
+        let pqRatchetField: Data     // suite-3 sparse PQ field, serialized (empty = none)
     }
 
     struct DecryptResult {
@@ -91,9 +93,13 @@ final class MessageCryptoService {
                 ephemeralPublicKey: Data(rustComponents.ephemeralPublicKey),
                 messageNumber: rustComponents.messageNumber,
                 content: MessagePadding.padCiphertext(rawContent),
-                suiteId: suiteId,
+                // Use the suite the core actually encrypted with (authoritative
+                // per-message value), not the separately-looked-up session suite.
+                suiteId: rustComponents.suiteId,
                 oneTimePreKeyId: rustComponents.oneTimePrekeyId,
-                storageKey: Data(rustComponents.storageKey)
+                storageKey: Data(rustComponents.storageKey),
+                pqMessageEpoch: rustComponents.pqMessageEpoch,
+                pqRatchetField: Data(rustComponents.pqRatchetField)
             )
 
             #if DEBUG
@@ -140,7 +146,10 @@ final class MessageCryptoService {
                 contactId: contactId,
                 ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                 messageNumber: message.messageNumber,
-                content: [UInt8](contentForDecrypt)
+                content: [UInt8](contentForDecrypt),
+                suiteId: message.suiteId,
+                pqMessageEpoch: message.pqMessageEpoch,
+                pqRatchetField: [UInt8](message.pqRatchetField)
             )
             saveSession(contactId)
             return DecryptResult(plaintext: Data(result.plaintext), storageKey: Data(result.storageKey))

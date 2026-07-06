@@ -117,6 +117,20 @@ enum OtpkReplenishmentService {
             let effective = max(recommendedMin, lowWaterMark)
             Log.debug("OTPK server count: \(serverCount) / recommended min: \(effective) [\(source)]", category: "OTPK")
 
+            // Capability re-advertisement: supports_pq_ratchet reaches the server ONLY
+            // inside uploadPreKeys. When a build flips the capability (suite-3 rollout),
+            // a device with a healthy server count would otherwise never re-upload —
+            // peers keep fetching the stale flag and negotiate classic forever.
+            #if os(iOS)
+            let advertised = supportsPqRatchet()
+            if KeyServiceClient.lastAdvertisedPqRatchet != advertised {
+                let was = KeyServiceClient.lastAdvertisedPqRatchet.map(String.init) ?? "unknown"
+                Log.info("OTPK capability changed (supportsPqRatchet \(was) → \(advertised)) — forcing upload to re-advertise [\(source)]", category: "OTPK")
+                try await generateAndUpload(count: lowWaterMark, deviceId: deviceId)
+                return
+            }
+            #endif
+
             guard serverCount < effective else { return }
 
             let uploadCount = max(lowWaterMark, effective - serverCount)
