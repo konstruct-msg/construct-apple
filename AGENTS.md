@@ -92,15 +92,6 @@ cat *.log | ./tools/squash_logs.py
 ./tools/project_index ~/Code/construct-server   # index another repo
 ```
 
-### Token impact
-| Tool | When to use | Savings |
-|------|------------|:------:|
-| `squash_file` | Before reading ANY .swift/.rs/.kt file | −36% |
-| `squash_file --outline` | When you only need the API surface | −90% |
-| `squash_build` | After every `xcodebuild` command | −95% |
-| `squash_logs.py` | Before analyzing any log output | −30% |
-| `project_index` | First step when exploring unfamiliar code | −100% vs grep |
-
 ## Build Commands
 
 ### Prerequisites
