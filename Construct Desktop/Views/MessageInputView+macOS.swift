@@ -14,6 +14,7 @@ import Combine
 struct DesktopMessageInputView: View {
     @Binding var text: String
     @Binding var droppedImages: [PlatformImage]
+    @Binding var droppedFileURLs: [URL]
     let isSending: Bool
     let replyingTo: Message?
     let quoteOverride: String?
@@ -59,6 +60,11 @@ struct DesktopMessageInputView: View {
         .onChange(of: droppedImages) { _, newImages in
             attachments.appendDroppedImages(newImages)
             droppedImages.removeAll()
+        }
+        .onChange(of: droppedFileURLs) { _, urls in
+            guard !urls.isEmpty else { return }
+            attachments.handlePickedFiles(urls)
+            droppedFileURLs.removeAll()
         }
         .fileImporter(
             isPresented: $showFilePicker,
@@ -279,6 +285,7 @@ struct DesktopMessageInputView: View {
         DesktopMessageInputView(
             text: $text,
             droppedImages: $dropped,
+            droppedFileURLs: .constant([]),
             isSending: false,
             replyingTo: nil,
             quoteOverride: nil,
@@ -301,6 +308,7 @@ struct DesktopMessageInputView: View {
         DesktopMessageInputView(
             text: $text,
             droppedImages: $dropped,
+            droppedFileURLs: .constant([]),
             isSending: false,
             replyingTo: nil,
             quoteOverride: nil,

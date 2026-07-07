@@ -13,6 +13,7 @@ import UniformTypeIdentifiers
 
 struct DesktopChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @Environment(ChatsViewModel.self) private var chatsViewModel
     @State private var viewModel: ChatViewModel
     @State private var scrollManager = ChatScrollManager()
     private var connectionManager = ConnectionStatusManager.shared
@@ -30,6 +31,7 @@ struct DesktopChatView: View {
     @State private var galleryStartItem: GalleryStartItem?
 
     @State private var chatDropImages: [PlatformImage] = []
+    @State private var chatDropFileURLs: [URL] = []
     @State private var isChatDropTargeted = false
 
     @State private var floodGuard = IncomingFloodGuard.shared
@@ -250,6 +252,16 @@ struct DesktopChatView: View {
                     )
                 )
             }
+            .onChange(of: chatsViewModel.pendingDroppedImage) { _, image in
+                guard let image else { return }
+                chatDropImages.append(image)
+                chatsViewModel.pendingDroppedImage = nil
+            }
+            .onChange(of: chatsViewModel.pendingDroppedFileURL) { _, url in
+                guard let url else { return }
+                chatDropFileURLs.append(url)
+                chatsViewModel.pendingDroppedFileURL = nil
+            }
             .onAppear {
                 guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
                 markChatAsRead()
@@ -363,6 +375,7 @@ struct DesktopChatView: View {
         MessageInputView(
             text: $messageText,
             droppedImages: $chatDropImages,
+            droppedFileURLs: $chatDropFileURLs,
             isSending: viewModel.isSending,
             replyingTo: replyingTo,
             quoteOverride: replyQuoteText,
@@ -616,12 +629,15 @@ struct DesktopChatView: View {
             } else if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
                 provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
                     guard let data = item as? Data,
-                          let url = URL(dataRepresentation: data, relativeTo: nil),
-                          url.startAccessingSecurityScopedResource() else { return }
-                    defer { url.stopAccessingSecurityScopedResource() }
-                    guard let imgData = try? Data(contentsOf: url),
-                          let image = PlatformImage(data: imgData) else { return }
-                    DispatchQueue.main.async { chatDropImages.append(image) }
+                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                    DispatchQueue.main.async {
+                        if let imgData = try? Data(contentsOf: url),
+                           let image = PlatformImage(data: imgData) {
+                            chatDropImages.append(image)
+                        } else {
+                            chatDropFileURLs.append(url)
+                        }
+                    }
                 }
                 handled = true
             }

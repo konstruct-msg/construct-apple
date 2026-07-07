@@ -12,6 +12,7 @@ struct DesktopSettingsView: View {
 
     enum Section: String, CaseIterable, Identifiable {
         case account        = "IDENTITY"
+        case devices        = "REPLICAS"
         case appearance     = "APPEARANCE"
         case general        = "GENERAL"
         case security       = "SECURITY"
@@ -61,6 +62,7 @@ struct DesktopSettingsView: View {
             Group {
                 switch selected {
                 case .account:       DesktopAccountSettingsTab()
+                case .devices:       DesktopDevicesSettingsTab()
                 case .appearance:    DesktopAppearanceSettingsTab()
                 case .general:       DesktopGeneralSettingsTab()
                 case .security:      DesktopSecuritySettingsTab()
@@ -106,6 +108,7 @@ struct DesktopSettingsView: View {
 
 private struct DesktopAccountSettingsTab: View {
     @Environment(AuthViewModel.self) private var authViewModel
+    @Environment(AccountRecoveryViewModel.self) private var recoveryVM
     @State private var showSignOutConfirm = false
 
     var body: some View {
@@ -142,6 +145,14 @@ private struct DesktopAccountSettingsTab: View {
         } message: {
             Text(NSLocalizedString("sign_out_confirm_message", comment: ""))
         }
+    }
+}
+
+// MARK: - Replicas (linked devices)
+
+private struct DesktopDevicesSettingsTab: View {
+    var body: some View {
+        DevicesView(showNavBar: false)
     }
 }
 
@@ -288,6 +299,8 @@ private struct DesktopAppearanceSettingsTab: View {
 // MARK: - Security
 
 private struct DesktopSecuritySettingsTab: View {
+    @Environment(AccountRecoveryViewModel.self) private var recoveryVM
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -305,6 +318,7 @@ private struct DesktopSecuritySettingsTab: View {
                 CTSep(style: .thick)
 
                 DesktopSecurityView()
+                    .environment(recoveryVM)
 
                 Spacer()
             }
