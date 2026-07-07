@@ -660,6 +660,25 @@ class CryptoManager {
         return orchestratorCore?.pruneOneTimePrekeysBelow(minKeepId: minKeepId) ?? 0
     }
 
+    /// Store the ML-KEM-768 SPK in the core key-state (serialized via coreLock).
+    /// Commit-after-confirm: call only once the server confirmed the public upload,
+    /// then `persistCoreState()` — the key persists inside the private-keys CFE blob.
+    /// Returns false when the core is not initialized.
+    func setKyberSpk(keyId: UInt32, secretKey: Data, publicKey: Data) -> Bool {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { return false }
+        core.setKyberSpk(keyId: keyId, secretKey: [UInt8](secretKey), publicKey: [UInt8](publicKey))
+        return true
+    }
+
+    /// The ML-KEM-768 SPK held in the core key-state, or nil if none committed yet.
+    func kyberSpk() -> KyberSpkRecord? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.kyberSpk()
+    }
+
     /// Export a session's wire bytes (for session init completed notification).
     func exportSession(contactId: String) throws -> [UInt8] {
         coreLock.lock()

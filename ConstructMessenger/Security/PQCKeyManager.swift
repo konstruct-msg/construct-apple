@@ -36,11 +36,37 @@ final class PQCKeyManager {
     // Keychain key for the bundled CFE snapshot of all deferred contributions.
     private static let kyberSessionStateCFEKey = "construct.kyber_session_state"
 
-    // MARK: - Keychain Keys
+    // MARK: - Legacy Keychain Keys (pre-Phase-2 standalone triple; migrated into the core)
 
     private let kyberSPKPublicKey = "construct.kyber.spk.public"
     private let kyberSPKSecretKey = "construct.kyber.spk.secret"
     private let kyberSPKIdKey     = "construct.kyber.spk.id"
+
+    // MARK: - Core-owned Kyber SPK (key-store consolidation Phase 2)
+
+    /// The Kyber SPK from the CORE key-state, folding in the legacy standalone Keychain
+    /// triple on first access. The core copy persists atomically with the private-keys
+    /// CFE blob — the standalone triple synced independently of the core snapshot, which
+    /// is how the local Kyber private drifted from the served public with zero visible
+    /// desync (the build-497 blocker). See key-store-consolidation (Phase 2).
+    private func coreKyberSpk() -> KyberSpkRecord? {
+        if let spk = CryptoManager.shared.kyberSpk() { return spk }
+        // Legacy migration: fold the standalone triple into the core key-state, then
+        // delete it. On any failure keep the triple and retry on the next access.
+        guard let pub = KeychainManager.shared.loadData(forKey: kyberSPKPublicKey),
+              let sec = KeychainManager.shared.loadData(forKey: kyberSPKSecretKey) else { return nil }
+        let keyId = KeychainManager.shared.loadData(forKey: kyberSPKIdKey)?.toUInt32() ?? 1
+        guard CryptoManager.shared.setKyberSpk(keyId: keyId, secretKey: sec, publicKey: pub),
+              CryptoManager.shared.persistCoreState() else {
+            // Core not up yet (or Keychain write failed) — serve the legacy values as-is.
+            return KyberSpkRecord(keyId: keyId, publicKey: [UInt8](pub), secretKey: [UInt8](sec))
+        }
+        KeychainManager.shared.deleteData(forKey: kyberSPKPublicKey)
+        KeychainManager.shared.deleteData(forKey: kyberSPKSecretKey)
+        KeychainManager.shared.deleteData(forKey: kyberSPKIdKey)
+        Log.info("PQC: migrated Kyber SPK (keyId=\(keyId)) from standalone Keychain triple into core key-state", category: "PQC")
+        return CryptoManager.shared.kyberSpk()
+    }
 
     // MARK: - Two-phase Kyber SPK generation (for atomic rotation)
     //
@@ -65,45 +91,45 @@ final class PQCKeyManager {
         return (publicKey: pubKeyData, secretKey: secKeyData, keyId: keyId)
     }
 
-    /// Phase 2: Commit a previously-generated in-memory Kyber SPK to Keychain.
+    /// Phase 2: Commit a previously-generated in-memory Kyber SPK to the core key-state.
     ///
-    /// Call ONLY after the server has confirmed the rotation RPC succeeded.
+    /// Call ONLY after the server has confirmed the rotation RPC succeeded. The key is
+    /// stored in the core and persisted inside the private-keys CFE blob — atomically
+    /// with the identity/SPK material, never as a standalone store that can desync.
     func commitKyberSPK(publicKey: Data, secretKey: Data, keyId: UInt32) throws {
-        guard KeychainManager.shared.saveData(publicKey, forKey: kyberSPKPublicKey),
-              KeychainManager.shared.saveData(secretKey, forKey: kyberSPKSecretKey),
-              KeychainManager.shared.saveData(Data(withUInt32: keyId), forKey: kyberSPKIdKey) else {
+        guard CryptoManager.shared.setKyberSpk(keyId: keyId, secretKey: secretKey, publicKey: publicKey),
+              CryptoManager.shared.persistCoreState() else {
             throw PQCError.keychainSaveFailed
         }
-        Log.info("PQC: Committed rotated Kyber SPK to Keychain, keyId=\(keyId)", category: "PQC")
+        // Remove any legacy standalone triple — the core copy is authoritative now.
+        KeychainManager.shared.deleteData(forKey: kyberSPKPublicKey)
+        KeychainManager.shared.deleteData(forKey: kyberSPKSecretKey)
+        KeychainManager.shared.deleteData(forKey: kyberSPKIdKey)
+        Log.info("PQC: Committed rotated Kyber SPK to core key-state, keyId=\(keyId)", category: "PQC")
     }
 
-    // MARK: - Retrieval
+    // MARK: - Retrieval (core key-state, with lazy legacy-triple migration)
 
     /// Retrieve the stored Kyber SPK public key for upload.
     func kyberSPKPublic() throws -> Data {
-        guard let data = KeychainManager.shared.loadData(forKey: kyberSPKPublicKey) else {
-            throw PQCError.keyNotFound
-        }
-        return data
+        guard let spk = coreKyberSpk() else { throw PQCError.keyNotFound }
+        return Data(spk.publicKey)
     }
 
     /// Retrieve the stored Kyber SPK secret key for decapsulation.
     func kyberSPKSecret() throws -> Data {
-        guard let data = KeychainManager.shared.loadData(forKey: kyberSPKSecretKey) else {
-            throw PQCError.keyNotFound
-        }
-        return data
+        guard let spk = coreKyberSpk() else { throw PQCError.keyNotFound }
+        return Data(spk.secretKey)
     }
 
     /// Retrieve the stored Kyber SPK key ID.
     func kyberSPKId() -> UInt32 {
-        guard let data = KeychainManager.shared.loadData(forKey: kyberSPKIdKey) else { return 1 }
-        return data.toUInt32() ?? 1
+        coreKyberSpk()?.keyId ?? 1
     }
 
-    /// Returns true if a Kyber SPK is already stored in Keychain.
+    /// Returns true if a Kyber SPK is already committed (core state or legacy triple).
     var hasStoredKey: Bool {
-        KeychainManager.shared.loadData(forKey: kyberSPKPublicKey) != nil
+        coreKyberSpk() != nil
     }
 
     // MARK: - One-time migration for existing users

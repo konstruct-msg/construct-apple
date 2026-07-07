@@ -1285,6 +1285,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func initSessionAllowingStale(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
     
+    func kyberSpk()  -> KyberSpkRecord?
+    
     func oneTimePrekeyCount()  -> UInt32
     
     func prekeysAvailableCount()  -> UInt32
@@ -1299,6 +1301,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func removeSession(contactId: String)  -> Bool
     
     func rotateSignedPrekey() throws  -> RotatedSpkBundle
+    
+    func setKyberSpk(keyId: UInt32, secretKey: [UInt8], publicKey: [UInt8]) 
     
     func setLocalUserId(userId: String) 
     
@@ -1707,6 +1711,14 @@ open func initSessionAllowingStale(contactId: String, recipientBundle: BinaryKey
 })
 }
     
+open func kyberSpk() -> KyberSpkRecord?  {
+    return try!  FfiConverterOptionTypeKyberSpkRecord.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_kyber_spk(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
 open func oneTimePrekeyCount() -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_one_time_prekey_count(
@@ -1760,6 +1772,16 @@ open func rotateSignedPrekey()throws  -> RotatedSpkBundle  {
             self.uniffiCloneHandle(),$0
     )
 })
+}
+    
+open func setKyberSpk(keyId: UInt32, secretKey: [UInt8], publicKey: [UInt8])  {try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_set_kyber_spk(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(keyId),
+        FfiConverterSequenceUInt8.lower(secretKey),
+        FfiConverterSequenceUInt8.lower(publicKey),$0
+    )
+}
 }
     
 open func setLocalUserId(userId: String)  {try! rustCall() {
@@ -3496,6 +3518,67 @@ public func FfiConverterTypeInviteSignature_lift(_ buf: RustBuffer) throws -> In
 #endif
 public func FfiConverterTypeInviteSignature_lower(_ value: InviteSignature) -> RustBuffer {
     return FfiConverterTypeInviteSignature.lower(value)
+}
+
+
+/**
+ * ML-KEM-768 signed prekey held in the core key-state (PQXDH KEM leg).
+ * Persisted atomically inside the private-keys CFE blob — replaces the
+ * standalone platform Keychain triple (key-store consolidation Phase 2).
+ */
+public struct KyberSpkRecord: Equatable, Hashable {
+    public var keyId: UInt32
+    public var publicKey: [UInt8]
+    public var secretKey: [UInt8]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(keyId: UInt32, publicKey: [UInt8], secretKey: [UInt8]) {
+        self.keyId = keyId
+        self.publicKey = publicKey
+        self.secretKey = secretKey
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension KyberSpkRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKyberSpkRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KyberSpkRecord {
+        return
+            try KyberSpkRecord(
+                keyId: FfiConverterUInt32.read(from: &buf), 
+                publicKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                secretKey: FfiConverterSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: KyberSpkRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.keyId, into: &buf)
+        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
+        FfiConverterSequenceUInt8.write(value.secretKey, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKyberSpkRecord_lift(_ buf: RustBuffer) throws -> KyberSpkRecord {
+    return try FfiConverterTypeKyberSpkRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKyberSpkRecord_lower(_ value: KyberSpkRecord) -> RustBuffer {
+    return FfiConverterTypeKyberSpkRecord.lower(value)
 }
 
 
@@ -6080,6 +6163,30 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeKyberSpkRecord: FfiConverterRustBuffer {
+    typealias SwiftType = KyberSpkRecord?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeKyberSpkRecord.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeKyberSpkRecord.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeSessionHealthReport: FfiConverterRustBuffer {
     typealias SwiftType = SessionHealthReport?
 
@@ -7151,6 +7258,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_init_session_allowing_stale() != 35577) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_kyber_spk() != 239) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_one_time_prekey_count() != 21478) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7167,6 +7277,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_rotate_signed_prekey() != 11331) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_set_kyber_spk() != 35729) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_set_local_user_id() != 22865) {
