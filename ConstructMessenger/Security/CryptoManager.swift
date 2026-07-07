@@ -651,6 +651,15 @@ class CryptoManager {
         return orchestratorCore?.oneTimePrekeyCount() ?? 0
     }
 
+    /// Prune OTPK private keys with id below `minKeepId`; returns the number removed.
+    /// Only valid right after a successful replace-all upload, when the server set is
+    /// known to be exactly the new batch — see `OtpkReplenishmentService`.
+    func pruneOneTimePrekeys(below minKeepId: UInt32) -> UInt32 {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.pruneOneTimePrekeysBelow(minKeepId: minKeepId) ?? 0
+    }
+
     /// Export a session's wire bytes (for session init completed notification).
     func exportSession(contactId: String) throws -> [UInt8] {
         coreLock.lock()

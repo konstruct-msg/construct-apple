@@ -21,6 +21,11 @@ enum OtpkReplenishmentService {
     static let replenishBatchSize: UInt32 = 50
     /// Minimum seconds between replenishment calls (race condition dedup).
     private static let cooldownSeconds: TimeInterval = 60
+    /// After a replace-all upload, keep this many IDs below the new batch for first
+    /// messages already in flight (the server soft-expires replaced keys with a 48h
+    /// grace; anything older can never be referenced again). Everything below is pruned
+    /// so the persisted OTPK blob stays bounded instead of hoarding every key ever made.
+    private static let pruneGraceWindow: UInt32 = 200
     private nonisolated(unsafe) static var isReplenishing = false
     private nonisolated(unsafe) static var lastReplenishDate: Date?
 
@@ -57,6 +62,19 @@ enum OtpkReplenishmentService {
         Log.info("OTPK upload (\(mode)): \(pairs.count) keys for device \(deviceId.prefix(8))...", category: "OTPK")
         if replaceExisting {
             CryptoManager.shared.clearNeedsFullOtpkReplacement()
+            // Convergence point: the server now holds exactly the batch we just uploaded.
+            // Prune local privates below (new batch − grace window) so the persisted blob
+            // stays bounded — devices were hoarding 800–2000 keys (60–150 KB Keychain items
+            // rewritten on every replenish), which is both dead weight and the prime suspect
+            // for the historical OTPK-blob corruption.
+            if let minNewId = pairs.map(\.keyId).min() {
+                let cutoff = minNewId > pruneGraceWindow ? minNewId - pruneGraceWindow : 0
+                let pruned = CryptoManager.shared.pruneOneTimePrekeys(below: cutoff)
+                if pruned > 0 {
+                    Log.info("OTPK pruned \(pruned) stale local keys below id \(cutoff) (\(CryptoManager.shared.oneTimePrekeyCount()) remain)", category: "OTPK")
+                    persistOtpks()
+                }
+            }
         }
         return pairs.count
     }

@@ -660,6 +660,8 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
     func prekeysAvailableCount()  -> UInt32
     
+    func pruneOneTimePrekeysBelow(minKeepId: UInt32)  -> UInt32
+    
     func removeSession(contactId: String)  -> Bool
     
     /**
@@ -907,6 +909,15 @@ open func prekeysAvailableCount() -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
     uniffi_construct_core_fn_method_classiccryptocore_prekeys_available_count(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func pruneOneTimePrekeysBelow(minKeepId: UInt32) -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_classiccryptocore_prune_one_time_prekeys_below(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(minKeepId),$0
     )
 })
 }
@@ -1277,6 +1288,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func oneTimePrekeyCount()  -> UInt32
     
     func prekeysAvailableCount()  -> UInt32
+    
+    func pruneOneTimePrekeysBelow(minKeepId: UInt32)  -> UInt32
     
     /**
      * Register a KEM shared secret as a deferred contribution.
@@ -1706,6 +1719,15 @@ open func prekeysAvailableCount() -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_prekeys_available_count(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func pruneOneTimePrekeysBelow(minKeepId: UInt32) -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_prune_one_time_prekeys_below(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(minKeepId),$0
     )
 })
 }
@@ -7009,6 +7031,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_prekeys_available_count() != 23711) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_prune_one_time_prekeys_below() != 49180) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_classiccryptocore_remove_session() != 11481) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7130,6 +7155,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_prekeys_available_count() != 33104) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_prune_one_time_prekeys_below() != 26303) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_register_pq_deferred() != 43713) {
