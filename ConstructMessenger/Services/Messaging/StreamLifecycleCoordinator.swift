@@ -149,10 +149,19 @@ final class StreamLifecycleCoordinator {
         if !hasPerformedStartupOtpkCheck {
             hasPerformedStartupOtpkCheck = true
             Task { [weak self] in
-                guard self != nil else { return }
+                guard let self else { return }
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                 guard !deviceId.isEmpty else { return }
                 let crypto = CryptoManager.shared
+                guard crypto.orchestratorCore != nil else {
+                    // Core not up yet (device may still be locked — protected data
+                    // unavailable). oneTimePrekeyCount() would read 0 from the nil core
+                    // and spuriously trigger the replace-all fallback below. Re-arm the
+                    // one-shot check so the next stream start re-runs it after core init.
+                    Log.info("Startup OTPK check deferred — core not initialized yet", category: "OTPK")
+                    self.hasPerformedStartupOtpkCheck = false
+                    return
+                }
                 if crypto.wasRestoredFromKeychain, crypto.oneTimePrekeyCount() == 0 {
                     Log.info("Core restored but no local OTPKs — replacing all server OTPKs (fallback sync)", category: "OTPK")
                     do {
