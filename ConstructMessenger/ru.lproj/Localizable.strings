@@ -626,8 +626,8 @@
 "synapses_empty_title" = "Пока нет связей";
 "synapses_empty_subtitle" = "Люди с которыми вы общаетесь будут здесь, даже если вы удалили переписку.";
 "synapses_open_chat" = "Открыть чат";
-"synapses_prune_title" = "Отрезать синапс?";
-"synapses_prune_action" = "Отрезать";
+"synapses_prune_title" = "Удалить синапс?";
+"synapses_prune_action" = "Удалить";
 "synapses_prune_message" = "Это навсегда удалит %@ из ваших синапсов и удалит переписку.";
 
 // MARK: - Connection Status Indicator

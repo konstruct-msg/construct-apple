@@ -2,6 +2,7 @@ import Foundation
 import CoreData
 import os.log
 import GRPCCore
+import SwiftProtobuf
 
 /// Manages message retry logic for failed and queued messages
 @MainActor

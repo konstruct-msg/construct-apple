@@ -84,27 +84,42 @@ actor TransportRouter {
             now: now
         )
         let oldState = state
-        state = outcome.state
+        var nextState = outcome.state
+        var effects = outcome.effects
+
+        // Auto mode: direct-path success while VEIL is active means VEIL was a false
+        // positive (typically H3-only failures on an otherwise healthy network).
+        if case .auto = modeForEvent,
+           case .veilActive = oldState,
+           case .rpcSucceeded(let via, _) = event,
+           !via.isVEIL {
+            nextState = .direct(consecutiveFails: 0)
+            if !effects.contains(.requestProxyStop) { effects.append(.requestProxyStop) }
+            if !effects.contains(.setVeilPort(nil)) { effects.append(.setVeilPort(nil)) }
+            Log.info("Transport: auto de-escalation — direct path confirmed, stopping VEIL", category: "Transport")
+        }
+
+        state = nextState
 
         let entry = TransitionLogEntry(
             at: now,
             from: oldState,
-            to: outcome.state,
+            to: nextState,
             event: event.shortLabel,
             cause: "",
-            effects: outcome.effects.map(\.shortLabel)
+            effects: effects.map(\.shortLabel)
         )
         appendToLog(entry)
         Log.info("Transport: \(entry.oneLine)", category: "Transport")
-        await uiEffector.publish(state: outcome.state, event: event, transition: entry)
+        await uiEffector.publish(state: nextState, event: event, transition: entry)
 
         // Apply the synchronous effects first so the channel reflects the new state
         // before any external observer (e.g. the next RPC) reads it.
-        await applySync(outcome.effects)
+        await applySync(effects)
 
         // Asynchronous follow-ups. A proxy-start request triggers an async dance with
         // the proxy effector; we feed the outcome back into the router via `send`.
-        if outcome.effects.contains(.requestProxyStart) {
+        if effects.contains(.requestProxyStart) {
             let outcomeEvent = await proxyEffector.start()
             await send(outcomeEvent)
         }

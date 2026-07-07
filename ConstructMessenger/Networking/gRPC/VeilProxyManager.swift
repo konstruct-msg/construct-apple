@@ -223,11 +223,10 @@ final class VeilProxyManager: ObservableObject {
         }
     }
 
-    /// Start with the stored relay (called at app launch).
-    /// In `.on` mode: starts VEIL immediately.
-    /// Start VEIL if mode is .on (always-on). Delegates actual proxy lifecycle to
-    /// ConnectionLoop — this method only ensures VEIL mode is migrated and stored.
-    func startIfEnabled() async {
+    /// Start or refresh VEIL when the transport layer actually needs it.
+    /// In `.auto` mode this is a no-op on a healthy direct path — avoids spinning up
+    /// the local proxy (and its CPU cost) on every foreground transition.
+    func startIfNeeded() async {
         migrateToModeIfNeeded()
         guard mode != .off else {
             Log.info("VEIL startup skipped — mode is off", category: "VEIL")
@@ -236,6 +235,13 @@ final class VeilProxyManager: ObservableObject {
         guard KeychainManager.shared.isDeviceRegistered() else {
             Log.info("VEIL startup skipped — device not registered", category: "VEIL")
             return
+        }
+        if mode == .auto {
+            let snap = await TransportRouter.shared.snapshot()
+            guard snap.state.prefersVEIL else {
+                Log.debug("VEIL startup skipped — auto mode on direct path", category: "VEIL")
+                return
+            }
         }
         // ConnectionLoop handles proxy lifecycle. iOS is veil-front-only (SPKI pin +
         // per-user ticket); the obfs4 bridge cert is not used, so we no longer fetch it
@@ -248,6 +254,11 @@ final class VeilProxyManager: ObservableObject {
         VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
         // Ticket B1: bootstrap/renew the key-bound capability over the same channel.
         VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
+    }
+
+    /// Legacy name — forwards to `startIfNeeded()`.
+    func startIfEnabled() async {
+        await startIfNeeded()
     }
 
     /// Called on app foreground to verify the VEIL proxy process is actually alive.

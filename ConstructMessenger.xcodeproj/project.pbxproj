@@ -17,6 +17,7 @@
 		BF3DE8742F62C2000058C1AA /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8732F62C2000058C1AA /* GRPCProtobuf */; };
 		BF3DE8762F62C2000058C1AA /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8752F62C2000058C1AA /* GRPCNIOTransportHTTP2 */; };
 		BF3DE8782F62C2000058C1AA /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8772F62C2000058C1AA /* SwiftProtobuf */; };
+		BF3DE8792F62C2000058C1AA /* ConstructTransport.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = FC6F98B0C3691C35F17194D3 /* ConstructTransport.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		BF7098D12F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
 		BF7098D22F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
 		BFCB6D932F7C4C4800C59B83 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = BFCB6D922F7C4C4800C59B83 /* WebRTC */; };
@@ -97,7 +98,6 @@
 				Views/Security/DuressPinSetupView.swift,
 				Views/Security/PinDisableView.swift,
 				Views/Security/PinSetupView.swift,
-				Views/Security/RecoverySetupView.swift,
 				Views/Settings/AccountSettingsView.swift,
 				Views/Settings/BackgroundFetchSettingsView.swift,
 				Views/Settings/ContactQRCodeView.swift,
@@ -172,6 +172,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BF3DE8702F62C2000058C1AA /* ConstructCore.xcframework in Frameworks */,
+				BF3DE8792F62C2000058C1AA /* ConstructTransport.xcframework in Frameworks */,
 				BF3DE8722F62C2000058C1AA /* GRPCCore in Frameworks */,
 				BF3DE8742F62C2000058C1AA /* GRPCProtobuf in Frameworks */,
 				BF3DE8762F62C2000058C1AA /* GRPCNIOTransportHTTP2 in Frameworks */,
@@ -594,7 +595,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 494;
+				CURRENT_PROJECT_VERSION = 504;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -779,7 +780,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 494;
+				CURRENT_PROJECT_VERSION = 504;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -835,7 +836,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 494;
+				CURRENT_PROJECT_VERSION = 504;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -890,7 +891,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
@@ -908,6 +909,7 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/ConstructMessenger";
 				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Konstruct needs access to your camera to scan QR codes and add contacts.";
@@ -924,7 +926,7 @@
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)";
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(PROJECT_DIR)/ConstructMessenger";
 				SWIFT_OBJC_BRIDGING_HEADER = "ConstructMessenger/ConstructMessenger-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.7;
@@ -939,7 +941,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
@@ -957,6 +959,7 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/ConstructMessenger";
 				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Konstruct needs access to your camera to scan QR codes and add contacts.";
@@ -973,7 +976,7 @@
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)";
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(PROJECT_DIR)/ConstructMessenger";
 				SWIFT_OBJC_BRIDGING_HEADER = "ConstructMessenger/ConstructMessenger-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.7;
@@ -988,7 +991,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
@@ -1006,6 +1009,7 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/ConstructMessenger";
 				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Konstruct needs access to your camera to scan QR codes and add contacts.";
@@ -1022,7 +1026,7 @@
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)";
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(PROJECT_DIR)/ConstructMessenger";
 				SWIFT_OBJC_BRIDGING_HEADER = "ConstructMessenger/ConstructMessenger-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.7;

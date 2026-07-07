@@ -10,6 +10,7 @@
 
 // UniFFI generated C header (provides FFI functions for Rust integration)
 #import "construct_coreFFI.h"
+#import "construct_transportFFI.h"
 
 // VEIL (construct-veil) — obfs4 traffic obfuscation proxy
 // Symbols are compiled into libconstruct_core.a

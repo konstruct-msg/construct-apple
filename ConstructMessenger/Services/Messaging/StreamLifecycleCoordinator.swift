@@ -34,6 +34,10 @@ final class StreamLifecycleCoordinator {
     private var backgroundDisconnectTask: Task<Void, Never>?
     private var foregroundSettleTask: Task<Void, Never>?
     private var isStarted = false
+    /// Subscription set at the last completed reconnect — skip redundant teardowns.
+    private var lastReconnectSubscriptionSet: Set<String> = []
+    /// Coalescing window for bursty reconnect triggers (prune + END_SESSION + push).
+    private static let reconnectDebounceDelay: Duration = .seconds(2)
 
     /// Coalescing window for `appDidBecomeActive`. CallKit UI, Control Center and system alerts
     /// emit bursts of active/inactive transitions (observed 3 in one second during an incoming
@@ -77,7 +81,7 @@ final class StreamLifecycleCoordinator {
     func addEphemeralSubscription(for userId: String) -> Bool {
         guard ephemeralSubscriptionUserIds.insert(userId).inserted else { return false }
         Log.info("Ephemeral stream subscription added for \(userId.prefix(8))… (pending END_SESSION INITIATOR)", category: "StreamLifecycle")
-        forceReconnect()
+        reconnectIfSubscriptionsChanged(force: true)
         return true
     }
 
@@ -171,17 +175,40 @@ final class StreamLifecycleCoordinator {
         streamManager.disconnect()
     }
 
-    func forceReconnect() {
+    /// Reconnect only when the subscription set changed or the stream is down.
+    /// Bursty triggers (prune + END_SESSION + silent push) coalesce into one reconnect.
+    func reconnectIfSubscriptionsChanged(force: Bool = false) {
         guard AuthSessionManager.shared.sessionToken != nil else {
-            Log.debug("No session — skipping forceReconnect", category: "StreamLifecycle")
+            Log.debug("No session — skipping reconnect", category: "StreamLifecycle")
             return
         }
+        let ids = currentConversationIds()
+        let idSet = Set(ids)
+        if !force,
+           streamManager.isConnected,
+           idSet == lastReconnectSubscriptionSet {
+            Log.debug(
+                "Reconnect skipped — subscriptions unchanged (\(idSet.count)), stream live",
+                category: "StreamLifecycle"
+            )
+            return
+        }
+        scheduleReconnect()
+    }
+
+    func forceReconnect() {
+        reconnectIfSubscriptionsChanged(force: true)
+    }
+
+    private func scheduleReconnect() {
         reconnectDebounceTask?.cancel()
         reconnectDebounceTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
+            try? await Task.sleep(for: Self.reconnectDebounceDelay)
             guard !Task.isCancelled, let self else { return }
+            let ids = self.currentConversationIds()
+            self.lastReconnectSubscriptionSet = Set(ids)
             self.wireStreamCallbacks()
-            self.streamManager.forceReconnect(contactUserIds: self.currentConversationIds()) { [weak self] message in
+            self.streamManager.forceReconnect(contactUserIds: ids) { [weak self] message in
                 self?.handleIncomingMessage(message)
             }
             self.sessionCoordinator.prewarmSessions(for: self.prewarmEligibleContactIds())
@@ -197,8 +224,18 @@ final class StreamLifecycleCoordinator {
             try? await Task.sleep(for: Self.foregroundSettleDelay)
             guard !Task.isCancelled, let self else { return }
             await VeilProxyManager.shared.verifyAliveOrRestart()
-            await VeilProxyManager.shared.startIfEnabled()
-            if self.streamManager.isConnected {
+            await VeilProxyManager.shared.startIfNeeded()
+            if self.streamManager.isPaused {
+                Log.info("App became active — stream was paused, resuming", category: "StreamLifecycle")
+                self.wireStreamCallbacks()
+                let ids = self.currentConversationIds()
+                self.streamManager.resume { [weak self] message in
+                    self?.handleIncomingMessage(message)
+                }
+                if ids.isEmpty {
+                    Log.debug("Resume used cached subscriptions — CoreData ids empty", category: "StreamLifecycle")
+                }
+            } else if self.streamManager.isConnected {
                 Log.info("App became active — stream still alive, skipping reconnect", category: "StreamLifecycle")
             } else if self.streamManager.isActivelyConnecting {
                 Log.info("App became active — stream is connecting, skipping forceReconnect", category: "StreamLifecycle")
@@ -349,12 +386,13 @@ final class StreamLifecycleCoordinator {
                     GRPCChannelManager.shared.invalidatePersistentClient()
                     continue
                 }
-                Log.info("Network interface changed — restarting stream and ICE proxy", category: "StreamLifecycle")
+                Log.info("Network interface changed — scheduling coalesced routing reconnect", category: "StreamLifecycle")
+                self.streamManager.resetDegradedModeOnNetworkChange()
                 Task { @MainActor in
                     await VeilProxyManager.shared.verifyAliveOrRestart()
-                    await VeilProxyManager.shared.startIfEnabled()
+                    await VeilProxyManager.shared.startIfNeeded()
                 }
-                self.forceReconnect()
+                self.streamManager.scheduleReconnectAfterRoutingChange(reason: "networkPathChanged")
             }
         }
         observationTasks.append(pathTask)

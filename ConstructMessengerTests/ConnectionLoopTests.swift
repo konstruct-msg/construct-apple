@@ -166,6 +166,26 @@ final class ConnectionLoopTests: XCTestCase {
         XCTAssertEqual(proxyStartCalls, 0)
     }
 
+    func testTransportRouter_AutoDeescalatesWhenDirectSucceedsUnderVEIL() async {
+        VeilProxyStore.saveMode(.auto)
+
+        let proxy = MockProxyEffector(startEvent: .proxyStarted(relay: "relay.example:443", port: 49262, restarted: false))
+        let router = TransportRouter(
+            config: .default,
+            proxyEffector: proxy,
+            channelEffector: MockChannelEffector(),
+            uiEffector: MockUIEffector()
+        )
+
+        await router.send(.rpcFailed(kind: .transportUnknown, via: .direct(.h2), foreground: true))
+        await router.send(.rpcFailed(kind: .transportUnknown, via: .direct(.h2), foreground: true))
+        await router.send(.rpcSucceeded(via: .direct(.h2), latencyMs: 50))
+
+        let snapshot = await router.snapshot()
+        XCTAssertEqual(snapshot.state, .direct(consecutiveFails: 0))
+        XCTAssertEqual(await proxy.stopCalls(), 1)
+    }
+
     func testTransportRouter_AutoCensored_StaysDirectUntilRealFailure() async {
         VeilProxyStore.saveMode(.auto)
 
@@ -191,15 +211,22 @@ final class ConnectionLoopTests: XCTestCase {
 
 private actor MockProxyEffector: ProxyEffector {
     private var starts = 0
+    private var stops = 0
+    private let startEvent: TransportEvent
+
+    init(startEvent: TransportEvent = .proxyStartFailed(relay: nil, reason: "unexpected")) {
+        self.startEvent = startEvent
+    }
 
     func start() async -> TransportEvent {
         starts += 1
-        return .proxyStartFailed(relay: nil, reason: "unexpected")
+        return startEvent
     }
 
-    func stop() async {}
+    func stop() async { stops += 1 }
     func updateRelays(_ relays: [VeilRelay]) async { _ = relays }
     func startCalls() -> Int { starts }
+    func stopCalls() -> Int { stops }
 }
 
 private actor MockChannelEffector: ChannelEffector {

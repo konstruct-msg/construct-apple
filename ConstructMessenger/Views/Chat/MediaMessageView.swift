@@ -9,10 +9,36 @@ import SwiftUI
 import Combine
 import GRPCCore
 
+/// Single-item bubble sizing: preserve real orientation, clamp extreme aspect ratios
+/// (Telegram/Signal-style — panoramas and tall screenshots don't dominate the stream).
 private enum MediaPreviewLayout {
-    static let singleWidth: CGFloat = 260
-    static let singleAspectRatio: CGFloat = 5.0 / 4.0
-    static let singleHeight: CGFloat = singleWidth / singleAspectRatio
+    static let maxWidth: CGFloat = 260
+    /// Portrait limit — no taller than 2:3 (w/h ≥ 2/3).
+    static let minAspectRatio: CGFloat = 2.0 / 3.0
+    /// Landscape limit — no wider than 3:2 (w/h ≤ 3/2).
+    static let maxAspectRatio: CGFloat = 3.0 / 2.0
+    static let defaultAspectRatio: CGFloat = 3.0 / 4.0
+
+    static func clampedAspectRatio(width: CGFloat, height: CGFloat) -> CGFloat {
+        guard width > 0, height > 0 else { return defaultAspectRatio }
+        let ratio = width / height
+        return min(max(ratio, minAspectRatio), maxAspectRatio)
+    }
+
+    static func aspectRatio(for item: [String: Any], image: PlatformImage? = nil) -> CGFloat {
+        if let w = item["width"] as? Int, let h = item["height"] as? Int, w > 0, h > 0 {
+            return clampedAspectRatio(width: CGFloat(w), height: CGFloat(h))
+        }
+        if let image, image.size.width > 0, image.size.height > 0 {
+            return clampedAspectRatio(width: image.size.width, height: image.size.height)
+        }
+        return defaultAspectRatio
+    }
+
+    static func previewSize(for item: [String: Any], image: PlatformImage? = nil) -> CGSize {
+        let aspect = aspectRatio(for: item, image: image)
+        return CGSize(width: maxWidth, height: maxWidth / aspect)
+    }
 }
 
 struct MediaMessageView: View {
@@ -93,6 +119,13 @@ private struct SingleMediaCell: View {
         (itemDict["mediaType"] as? String)?.hasPrefix("video/") == true
     }
 
+    private var previewSize: CGSize {
+        MediaPreviewLayout.previewSize(
+            for: itemDict,
+            image: thumbnailImage ?? blurPreview
+        )
+    }
+
     var body: some View {
         Group {
             if isVideo {
@@ -102,7 +135,7 @@ private struct SingleMediaCell: View {
                 Image(platformImage: thumbnail)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: MediaPreviewLayout.singleWidth, height: MediaPreviewLayout.singleHeight)
+                    .frame(width: previewSize.width, height: previewSize.height)
                     .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay(alignment: .bottom) {
@@ -145,11 +178,11 @@ private struct SingleMediaCell: View {
                 Image(platformImage: poster)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: MediaPreviewLayout.singleWidth, height: MediaPreviewLayout.singleHeight)
+                    .frame(width: previewSize.width, height: previewSize.height)
                     .clipped()
             } else {
                 Rectangle().fill(Color.CT.bgMsg)
-                    .frame(width: MediaPreviewLayout.singleWidth, height: MediaPreviewLayout.singleHeight)
+                    .frame(width: previewSize.width, height: previewSize.height)
             }
             if !isUploading { videoOverlayGlyph }
         }
@@ -177,7 +210,7 @@ private struct SingleMediaCell: View {
 
     private func loadVideoPoster() {
         if blurPreview == nil, let bh = itemDict["blurhash"] as? String, !bh.isEmpty {
-            blurPreview = BlurHash.decode(bh, size: CGSize(width: 32, height: 32))
+            blurPreview = decodeBlurPreview(bh)
         }
         if thumbnailImage == nil,
            let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
@@ -295,8 +328,14 @@ private struct SingleMediaCell: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
-    private var previewSize: CGSize {
-        CGSize(width: MediaPreviewLayout.singleWidth, height: MediaPreviewLayout.singleHeight)
+    private func decodeBlurPreview(_ hash: String) -> PlatformImage? {
+        let size = previewSize
+        let maxEdge: CGFloat = 32
+        let scale = maxEdge / max(size.width, size.height)
+        return BlurHash.decode(
+            hash,
+            size: CGSize(width: max(1, size.width * scale), height: max(1, size.height * scale))
+        )
     }
 
     private var errorPlaceholder: some View {
@@ -345,7 +384,7 @@ private struct SingleMediaCell: View {
 
         // Decode the transmitted BlurHash into a blurred preview shown while downloading.
         if blurPreview == nil, let bh = itemDict["blurhash"] as? String, !bh.isEmpty {
-            blurPreview = BlurHash.decode(bh, size: CGSize(width: 32, height: 32))
+            blurPreview = decodeBlurPreview(bh)
         }
 
         // Fast first paint from a locally-stored thumbnail (placeholder / sent), then

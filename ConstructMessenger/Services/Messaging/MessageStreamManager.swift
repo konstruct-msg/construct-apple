@@ -61,9 +61,7 @@ final class MessageStreamManager {
             if let obs = serverChangedObserver {
                 NotificationCenter.default.removeObserver(obs)
             }
-            if let obs = networkPathChangedObserver {
-                NotificationCenter.default.removeObserver(obs)
-            }
+            routingReconnectDebounce?.cancel()
         }
     }
 
@@ -104,7 +102,9 @@ final class MessageStreamManager {
     /// broken (DPI dropped UDP after handshake) and force fallback to H2.
     var firstServerEventReceived: Bool = false
     private var serverChangedObserver: NSObjectProtocol?
-    private var networkPathChangedObserver: NSObjectProtocol?
+    /// Coalesces bursty routing events (`grpcServerChanged`, network path) into one reconnect.
+    private var routingReconnectDebounce: Task<Void, Never>?
+    private static let routingReconnectDebounceDelay: Duration = .seconds(2)
     private var retryCount = 0
     private let maxRetryDelay: TimeInterval = NetworkTiming.Stream.maxRetryDelay
     /// When `true`, the next `openStream()` call uses H2 direct instead of H3.
@@ -192,26 +192,51 @@ final class MessageStreamManager {
         return Date().timeIntervalSince(start) >= degradedModeThreshold
     }
 
-    /// Called on network path change — resets degraded state and forces an immediate
-    /// stream reconnect. Without the forced reconnect, the stream can stay bound to the
-    /// old (dead) connection for up to a full heartbeat-watchdog interval (~90s).
-    func onNetworkPathChanged() {
+    /// Clears prolonged-offline backoff state when the network interface changes.
+    /// Reconnect is owned by `scheduleReconnectAfterRoutingChange` (StreamLifecycle + grpcServerChanged).
+    func resetDegradedModeOnNetworkChange() {
         continuousFailureStreakStart = nil
         isInDegradedMode = false
-        // No stream running — degraded-mode clear is all that's needed.
+        Log.debug("Network path — cleared degraded-mode window", category: "MessageStream")
+    }
+
+    /// Single entry for routing-driven reconnects. Bursts (network flap + VEIL port + invalidate)
+    /// coalesce into one teardown after `routingReconnectDebounceDelay`.
+    func scheduleReconnectAfterRoutingChange(reason: String) {
+        routingReconnectDebounce?.cancel()
+        routingReconnectDebounce = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.routingReconnectDebounceDelay)
+            guard !Task.isCancelled, let self else { return }
+            self.performRoutingReconnect(reason: reason)
+        }
+        Log.debug("Routing reconnect coalesced — reason=\(reason)", category: "MessageStream")
+    }
+
+    private func performRoutingReconnect(reason: String) {
+        routingReconnectDebounce = nil
+        guard !isPaused else {
+            Log.debug("Routing reconnect skipped — stream paused (reason=\(reason))", category: "MessageStream")
+            return
+        }
+        guard let cb = onMessageReceived else {
+            Log.debug("Routing reconnect skipped — no message callback (reason=\(reason))", category: "MessageStream")
+            return
+        }
         guard streamTask != nil || isConnected else {
-            Log.info("Network path changed — cleared degraded mode (no active stream)", category: "MessageStream")
+            Log.debug("Routing reconnect skipped — no active stream (reason=\(reason))", category: "MessageStream")
             return
         }
         let ids = subscriptionUserIds
-        let cb = onMessageReceived
-        guard let cb else {
-            Log.info("Network path changed — no callback, not forcing reconnect", category: "MessageStream")
+        guard !ids.isEmpty || subscriptionUserIds.isEmpty else {
+            Log.debug(
+                "Routing reconnect skipped — empty ids would clear \(subscriptionUserIds.count) subscriptions (reason=\(reason))",
+                category: "MessageStream"
+            )
             return
         }
-        Log.info("Network path changed — forcing stream reconnect", category: "MessageStream")
-        forceDisconnect(reason: "networkPathChanged")
-        connect(contactUserIds: ids, onMessageReceived: cb)
+        Log.info("Routing reconnect executing — reason=\(reason)", category: "MessageStream")
+        forceDisconnect(reason: reason)
+        connect(contactUserIds: ids, trigger: reason, onMessageReceived: cb)
     }
 
     // MARK: - Public API
@@ -255,33 +280,17 @@ final class MessageStreamManager {
             return
         }
 
-        // Reconnect when server config changes
+        // Reconnect when gRPC routing changes (VEIL port, custom server). Network path
+        // reconnects are scheduled by StreamLifecycleCoordinator — both funnel here.
         if serverChangedObserver == nil {
             serverChangedObserver = NotificationCenter.default.addObserver(
                 forName: .grpcServerChanged,
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                guard let self else { return }
-                Log.info("gRPC server changed — reconnecting stream", category: "MessageStream")
                 Task { @MainActor in
-                    let ids = self.subscriptionUserIds
-                    let cb = self.onMessageReceived
-                    self.forceDisconnect(reason: "serverChanged")
-                    if let cb { self.connect(contactUserIds: ids, trigger: "serverChanged", onMessageReceived: cb) }
+                    self?.scheduleReconnectAfterRoutingChange(reason: "serverChanged")
                 }
-            }
-        }
-
-        // Force stream reconnect on network path change. Guarded so repeated `connect()`
-        // calls don't stack observers.
-        if networkPathChangedObserver == nil {
-            networkPathChangedObserver = NotificationCenter.default.addObserver(
-                forName: .networkPathChanged,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor in self?.onNetworkPathChanged() }
             }
         }
 
@@ -375,6 +384,8 @@ final class MessageStreamManager {
     }
 
     func disconnect() {
+        routingReconnectDebounce?.cancel()
+        routingReconnectDebounce = nil
         if let obs = serverChangedObserver {
             NotificationCenter.default.removeObserver(obs)
             serverChangedObserver = nil
@@ -413,6 +424,10 @@ final class MessageStreamManager {
         isPaused = true
         ConnectionStatusManager.shared.markStreamPaused()
         disconnect()
+        // Experimental engine-QUIC keeps a Rust runConnections() task alive independently of
+        // the H2 stream; without this it can spin for tens of minutes after background pause
+        // (observed: QUIC TimedOut at foreground while channel stayed open → sustained CPU).
+        GRPCChannelManager.shared.invalidateEngineQuicConnection()
         Log.info("MessageStream paused", category: "MessageStream")
     }
 
@@ -632,7 +647,11 @@ final class MessageStreamManager {
                         ? .veil(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
                                relay: routerSnapshot.state.currentRelay ?? "")
                         : .direct(.h2)
-                    await TransportRouter.shared.send(.rpcFailed(kind: kind, via: failTarget, foreground: true))
+                    await reportStreamTransportFailureIfNeeded(
+                        kind: kind,
+                        via: failTarget,
+                        routingKeyAtLoopStart: routingKeyAtLoopStart
+                    )
                     if lastStreamTransportWasH3 {
                         consecutiveH3OpenFailures += 1
                         Log.info("H3 open failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold)", category: "MessageStream")
@@ -664,7 +683,11 @@ final class MessageStreamManager {
                     ? .veil(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
                            relay: routerSnapshot.state.currentRelay ?? "")
                     : .direct(.h2)
-                await TransportRouter.shared.send(.rpcFailed(kind: kind, via: failTarget, foreground: true))
+                await reportStreamTransportFailureIfNeeded(
+                    kind: kind,
+                    via: failTarget,
+                    routingKeyAtLoopStart: routingKeyAtLoopStart
+                )
                 if lastStreamTransportWasH3 {
                     consecutiveH3OpenFailures += 1
                     Log.info("H3 failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold)", category: "MessageStream")
@@ -835,5 +858,22 @@ final class MessageStreamManager {
         Log.info("Heartbeat timeout (\(Int(elapsed))s) — restarting MessageStream", category: "MessageStream")
         guard let cb = onMessageReceived else { return }
         forceReconnect(contactUserIds: subscriptionUserIds, onMessageReceived: cb)
+    }
+
+    /// Experimental QUIC/H3 stream failures are not evidence of DPI — do not feed them
+    /// into the transport FSM or auto mode will spuriously start the VEIL proxy.
+    private func reportStreamTransportFailureIfNeeded(
+        kind: RPCFailureKind,
+        via: TransportTarget,
+        routingKeyAtLoopStart: String
+    ) async {
+        if lastStreamTransportWasH3 || routingKeyAtLoopStart.hasPrefix("engine-quic:") {
+            Log.debug(
+                "Stream transport failure not reported to router — experimental H3/QUIC path (kind=\(kind))",
+                category: "MessageStream"
+            )
+            return
+        }
+        await TransportRouter.shared.send(.rpcFailed(kind: kind, via: via, foreground: true))
     }
 }

@@ -318,7 +318,9 @@ private struct QuizWordField: View {
                 )
             )
             .autocorrectionDisabled()
+            #if os(iOS)
             .textInputAutocapitalization(.never)
+            #endif
             .font(CTFont.regular(13))
             .foregroundColor(Color.CT.text)
             .padding(10)
