@@ -69,6 +69,25 @@ enum HybridIdentityService {
         // Up to date only when we've published AND the SPK hasn't rotated since.
         if published, let current, current == recorded { return }
 
+        // Reconcile the SPK with the server BEFORE signing a hybrid signature over it. The hybrid
+        // SPK signature below is computed over our LOCAL SPK; if that SPK never reached the server
+        // (a prior rotation RPC failed — e.g. on a censored transport), publishing it yields a
+        // self-inconsistent server bundle {new hybrid_key, sig over an SPK the server doesn't have}
+        // that every peer rejects as "SPK hybrid signature invalid" and that can't self-heal — the
+        // build-496 SPK↔hybrid deadlock. verifyAndRepairKeyConsistency() force-rotates to a fresh
+        // SPK that lands on the server when it finds a desync, and that rotation re-attaches the
+        // hybrid signatures over the now-synced SPK — so we may already be done afterwards. (If it
+        // can't reach the server it assumes consistent and returns true; the server NULLs a
+        // non-verifying SPK signature and peers degrade to classic X3DH, and next launch retries.)
+        // See otpk-session-init-deadlock.
+        let spkConsistent = await PreKeyRotationService.shared.verifyAndRepairKeyConsistency()
+        if !spkConsistent {
+            let healed = UserDefaults.standard.bool(forKey: publishedFlagKey)
+            let healedFp = try? currentSpkFingerprint()
+            let healedRecorded = UserDefaults.standard.string(forKey: spkFingerprintKey)
+            if healed, let healedFp, healedFp == healedRecorded { return }
+        }
+
         var attempt = 0
         while true {
             if Task.isCancelled { return }

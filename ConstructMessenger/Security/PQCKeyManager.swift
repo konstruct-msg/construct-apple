@@ -42,33 +42,13 @@ final class PQCKeyManager {
     private let kyberSPKSecretKey = "construct.kyber.spk.secret"
     private let kyberSPKIdKey     = "construct.kyber.spk.id"
 
-    // MARK: - Key Generation
-
-    /// Generate and store a new ML-KEM-768 Signed Pre-Key.
-    ///
-    /// Called during registration or when rotating keys. Stores both public and
-    /// secret keys in Keychain. Returns the public key bytes and assigned key ID
-    /// ready for upload.
-    ///
-    /// - Parameter keyId: Key ID to assign (should be monotonically increasing)
-    /// - Returns: `(publicKey: Data, keyId: UInt32)` for uploading to server
-    @discardableResult
-    func generateAndStoreKyberSPK(keyId: UInt32 = 1) throws -> (publicKey: Data, keyId: UInt32) {
-        let keyPair = try mlkem768Keygen()
-        let pubKeyData = Data(keyPair.publicKey)
-        let secKeyData = Data(keyPair.secretKey)
-
-        guard KeychainManager.shared.saveData(pubKeyData, forKey: kyberSPKPublicKey),
-              KeychainManager.shared.saveData(secKeyData, forKey: kyberSPKSecretKey),
-              KeychainManager.shared.saveData(Data(withUInt32: keyId), forKey: kyberSPKIdKey) else {
-            throw PQCError.keychainSaveFailed
-        }
-
-        Log.info("PQC: Generated ML-KEM-768 Kyber SPK, keyId=\(keyId), pk=\(pubKeyData.count)B", category: "PQC")
-        return (publicKey: pubKeyData, keyId: keyId)
-    }
-
     // MARK: - Two-phase Kyber SPK generation (for atomic rotation)
+    //
+    // The Kyber SPK is ALWAYS published two-phase: generate in memory → upload → commit to
+    // Keychain only after the server confirms. The former `generateAndStoreKyberSPK` (which wrote
+    // the private key to Keychain BEFORE the upload) was removed — a failed upload on a censored
+    // transport left the local private key ahead of the server public, a permanent PQXDH desync.
+    // See key-store-consolidation-and-server-authority (Phase 1).
 
     /// Phase 1: Generate a new Kyber SPK in memory WITHOUT writing to Keychain.
     ///
@@ -138,51 +118,50 @@ final class PQCKeyManager {
     /// On network failure the flag is NOT set, so the next launch will retry automatically.
     static func migrateIfNeeded(deviceId: String) async {
         guard !UserDefaults.standard.bool(forKey: migrationDoneKey) else { return }
+        guard CryptoManager.shared.orchestratorCore != nil else { return }
 
-        // Attempt 0: generate key in Keychain + upload
-        do {
-            guard CryptoManager.shared.orchestratorCore != nil else { return }
-            let spkId = shared.kyberSPKId()
-            let (spkPublicKey, _) = try shared.generateAndStoreKyberSPK(keyId: spkId)
-            let spkSig = try signKyberKey(publicKey: spkPublicKey)
-            _ = try await generateAndUploadKyberOtpks(
-                count: 20,
-                deviceId: deviceId,
-                kyberSignedPreKey: (keyId: spkId, publicKey: spkPublicKey, signature: spkSig)
-            )
-            UserDefaults.standard.set(true, forKey: migrationDoneKey)
-            Log.info("PQC: Kyber SPK migration complete", category: "PQC")
+        // Two-phase: hold the Kyber SPK in memory and commit to Keychain ONLY after the server
+        // confirms the upload. NEVER `generateAndStoreKyberSPK` (write-before-confirm): a failed
+        // upload on a censored transport would leave the local private key ahead of the server
+        // public — a permanent PQXDH desync — and re-generating on every launch churns it further.
+        // Reuse an already-committed key if one exists; otherwise generate a single in-memory key
+        // and reuse it across all retries. See key-store-consolidation-and-server-authority (P1).
+        let spk: (publicKey: Data, secretKey: Data, keyId: UInt32)
+        let alreadyCommitted: Bool
+        if shared.hasStoredKey, let pub = try? shared.kyberSPKPublic(), let sec = try? shared.kyberSPKSecret() {
+            spk = (publicKey: pub, secretKey: sec, keyId: shared.kyberSPKId())
+            alreadyCommitted = true
+        } else if let generated = try? shared.generateKyberSPKInMemory() {
+            spk = generated
+            alreadyCommitted = false
+        } else {
+            Log.error("PQC: Kyber SPK migration — key generation failed (will retry next launch)", category: "PQC")
             return
-        } catch {
-            guard let rpcError = error as? RPCError, rpcError.code == .unavailable else {
-                Log.error("PQC: Kyber SPK migration failed (will retry next launch): \(error)", category: "PQC")
-                return
-            }
-            Log.info("PQC: Kyber SPK upload unavailable — will retry (key already in Keychain)", category: "PQC")
         }
 
-        // Attempts 1-2: key is already stored, retry upload with fresh OTPKs
-        // (uploadKyberSPK alone is rejected by server — pre_keys/kyber_pre_keys must not both be empty)
-        guard CryptoManager.shared.orchestratorCore != nil else { return }
-        for attempt in 1...2 {
-            let delay = Double(attempt) * 2.0
-            try? await Task.sleep(for: .seconds(delay))
+        for attempt in 0...2 {
+            if attempt > 0 { try? await Task.sleep(for: .seconds(Double(attempt) * 2.0)) }
             do {
-                let spkId = shared.kyberSPKId()
-                let spkPublicKey = try shared.kyberSPKPublic()
-                let spkSig = try signKyberKey(publicKey: spkPublicKey)
+                let spkSig = try signKyberKey(publicKey: spk.publicKey)
                 _ = try await generateAndUploadKyberOtpks(
                     count: 20,
                     deviceId: deviceId,
-                    kyberSignedPreKey: (keyId: spkId, publicKey: spkPublicKey, signature: spkSig)
+                    kyberSignedPreKey: (keyId: spk.keyId, publicKey: spk.publicKey, signature: spkSig)
                 )
+                // Server confirmed — NOW commit the private key (idempotent if already stored).
+                if !alreadyCommitted {
+                    try shared.commitKyberSPK(publicKey: spk.publicKey, secretKey: spk.secretKey, keyId: spk.keyId)
+                }
                 UserDefaults.standard.set(true, forKey: migrationDoneKey)
-                Log.info("PQC: Kyber SPK migration complete (retry \(attempt))", category: "PQC")
+                Log.info("PQC: Kyber SPK migration complete\(attempt > 0 ? " (retry \(attempt))" : "")", category: "PQC")
                 return
             } catch {
-                if attempt == 2 {
-                    Log.error("PQC: Kyber SPK migration failed after retries (will retry next launch): \(error)", category: "PQC")
+                let transient = (error as? RPCError)?.code == .unavailable
+                if !transient || attempt == 2 {
+                    Log.error("PQC: Kyber SPK migration failed (will retry next launch): \(error)", category: "PQC")
+                    return
                 }
+                Log.info("PQC: Kyber SPK upload unavailable — will retry (key in memory, not yet committed)", category: "PQC")
             }
         }
     }
@@ -190,22 +169,34 @@ final class PQCKeyManager {
     /// Generate, sign and upload Kyber SPK to the key server.
     ///
     /// Called at registration (new users) and by `migrateIfNeeded` (existing users).
+    /// Two-phase: the private key is committed to Keychain ONLY after the server confirms the
+    /// upload, so a failed upload can never leave the local private key ahead of the server public.
     static func uploadKyberSPK(deviceId: String) async throws {
         guard CryptoManager.shared.orchestratorCore != nil else {
             throw PQCError.coreNotInitialized
         }
 
-        let keyId = shared.kyberSPKId()
-        let (publicKey, _) = try shared.generateAndStoreKyberSPK(keyId: keyId)
+        // Reuse an already-committed key if present; otherwise generate in memory (uncommitted).
+        let spk: (publicKey: Data, secretKey: Data, keyId: UInt32)
+        let alreadyCommitted: Bool
+        if shared.hasStoredKey {
+            spk = (publicKey: try shared.kyberSPKPublic(), secretKey: try shared.kyberSPKSecret(), keyId: shared.kyberSPKId())
+            alreadyCommitted = true
+        } else {
+            spk = try shared.generateKyberSPKInMemory()
+            alreadyCommitted = false
+        }
 
-        // Sign the public key with correct prologue
-        let sigData = try signKyberKey(publicKey: publicKey)
-
+        let sigData = try signKyberKey(publicKey: spk.publicKey)
         _ = try await KeyServiceClient.shared.uploadPreKeys(
             deviceId: deviceId,
-            kyberSignedPreKey: (keyId: keyId, publicKey: publicKey, signature: sigData)
+            kyberSignedPreKey: (keyId: spk.keyId, publicKey: spk.publicKey, signature: sigData)
         )
-        Log.info("PQC: Kyber SPK uploaded (keyId=\(keyId), pk=\(publicKey.count)B)", category: "PQC")
+        // Server confirmed — commit only now.
+        if !alreadyCommitted {
+            try shared.commitKyberSPK(publicKey: spk.publicKey, secretKey: spk.secretKey, keyId: spk.keyId)
+        }
+        Log.info("PQC: Kyber SPK uploaded (keyId=\(spk.keyId), pk=\(spk.publicKey.count)B)", category: "PQC")
     }
 
     // MARK: - Kyber Key Signing
