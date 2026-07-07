@@ -658,7 +658,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     } catch {
                         Log.error("SESSION_STATE[init_failed_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                     }
-                    await self.uploadFreshOtpks(reason: "init_failed")
+                    await self.replenishOtpksAfterFailure(reason: "init_failed")
                 }
             }
         } catch {
@@ -732,7 +732,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     } catch {
                         Log.error("SESSION_STATE[heal_exhausted_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                     }
-                    await uploadFreshOtpks(reason: "heal_exhausted")
+                    await replenishOtpksAfterFailure(reason: "heal_exhausted")
                 }
                 // Otherwise leave HealingMessage in CoreData; next reconnect retries.
             }
@@ -791,20 +791,14 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
     }
 
-    /// Upload a fresh batch of OTPKs after session-init or heal failure.
-    private func uploadFreshOtpks(reason: String) async {
+    /// Replenish OTPKs after session-init or heal failure — append-only, guarded by
+    /// low-water + cooldown inside the service. Force-replacing here (the old behavior)
+    /// wiped keys that peers' in-flight inits still referenced, making the desync
+    /// self-sustaining; see `OtpkReplenishmentService.replenishAfterInitFailure`.
+    private func replenishOtpksAfterFailure(reason: String) async {
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
         guard !deviceId.isEmpty else { return }
-        Log.info("Force-uploading \(OtpkReplenishmentService.replenishBatchSize) fresh OTPKs (\(reason))", category: "OTPK")
-        do {
-            try await OtpkReplenishmentService.generateAndUpload(
-                count: OtpkReplenishmentService.replenishBatchSize,
-                deviceId: deviceId,
-                replaceExisting: true
-            )
-        } catch {
-            Log.error("Failed to upload fresh OTPKs (\(reason)): \(error)", category: "OTPK")
-        }
+        await OtpkReplenishmentService.replenishAfterInitFailure(deviceId: deviceId, reason: reason)
     }
 
     /// Start a repeating timer that evicts expired entries from cooldown dicts.

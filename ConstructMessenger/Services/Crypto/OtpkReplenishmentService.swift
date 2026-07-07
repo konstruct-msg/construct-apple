@@ -17,7 +17,7 @@ enum OtpkReplenishmentService {
 
     /// Minimum number of OTPKs to keep on the server. Replenish if below this.
     static let lowWaterMark: UInt32 = 20
-    /// Default batch for force-replace uploads (registration, session-init failure).
+    /// Default batch for force-replace uploads (registration, fresh-orchestrator reset).
     static let replenishBatchSize: UInt32 = 50
     /// Minimum seconds between replenishment calls (race condition dedup).
     private static let cooldownSeconds: TimeInterval = 60
@@ -91,6 +91,23 @@ enum OtpkReplenishmentService {
             return
         }
         await replenishInternal(deviceId: deviceId, source: "push")
+    }
+
+    /// Called after RESPONDER session-init failure or heal exhaustion. At most an
+    /// append replenish, guarded by the server low-water mark and the shared cooldown.
+    ///
+    /// Never force-replace here: a failed init usually means OTPK *desync*, not
+    /// depletion, and wiping the server set destroys keys that peers' in-flight inits
+    /// still reference — every such init then fails too, triggering another wipe
+    /// (the replace-all OTPK storm that made desync deadlocks unrecoverable).
+    /// Recovery from a truly unreproducible OTPK is the typed END_SESSION reason
+    /// (`.otpkUnreproducible` → peer re-inits via 3-DH), not a key wipe.
+    static func replenishAfterInitFailure(deviceId: String, reason: String) async {
+        if let last = lastReplenishDate, Date().timeIntervalSince(last) < cooldownSeconds {
+            Log.info("OTPK replenish (\(reason)) skipped — cooldown active (\(Int(cooldownSeconds))s)", category: "OTPK")
+            return
+        }
+        await replenishInternal(deviceId: deviceId, source: reason)
     }
 
     private static func replenishInternal(deviceId: String, source: String) async {
