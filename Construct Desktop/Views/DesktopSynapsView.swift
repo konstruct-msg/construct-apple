@@ -35,6 +35,14 @@ struct DesktopSynapsView: View {
     @State private var canvasScale:    CGFloat = 1.0
     @State private var canvasOffset:   CGSize  = .zero
 
+    // Contact requests (parity with iOS SynapsView)
+    @State private var contactRequestsVM: ContactRequestsViewModel? = nil
+    @State private var selectedRequest: ContactRequestsViewModel.IncomingRequest? = nil
+    @State private var isRefreshingContactRequests = false
+    @State private var lastContactRequestsRefresh: Date = .distantPast
+
+    private static let contactRequestsRefreshInterval: TimeInterval = 8
+
     private var filtered: [User] {
         guard !searchText.isEmpty else { return Array(contacts) }
         let q = searchText.lowercased()
@@ -48,6 +56,11 @@ struct DesktopSynapsView: View {
         VStack(spacing: 0) {
             synapsToolbar
             Rectangle().fill(Color.CT.noise).frame(height: 1)
+
+            if let vm = contactRequestsVM, !vm.incomingRequests.isEmpty, searchText.isEmpty {
+                requestsSection(vm: vm)
+                Rectangle().fill(Color.CT.noise).frame(height: 1)
+            }
 
             GeometryReader { geo in
                 ZStack {
@@ -85,6 +98,46 @@ struct DesktopSynapsView: View {
             }
         }
         .background(Color.CT.bg)
+        .task {
+            let vm = contactRequestsVM ?? ContactRequestsViewModel(viewContext: context)
+            contactRequestsVM = vm
+            await refreshContactRequests(vm: vm, reason: "synaps_appear")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
+            guard let vm = contactRequestsVM else { return }
+            Task { await refreshContactRequests(vm: vm, reason: "app_active") }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .contactRequestAccepted)) { _ in
+            Task {
+                let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
+                guard let userId = pendingIds.first,
+                      let uuid = UUID(uuidString: userId) else { return }
+                let req = NSFetchRequest<User>(entityName: "User")
+                req.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+                req.fetchLimit = 1
+                if let user = try? context.fetch(req).first {
+                    await MainActor.run {
+                        chatsViewModel.openOrCreateChat(with: user)
+                        onSwitchToChats?()
+                    }
+                }
+            }
+        }
+        .sheet(item: $selectedRequest) { request in
+            if let vm = contactRequestsVM {
+                ContactRequestSheet(
+                    request: request,
+                    onAccept: {
+                        let user = try await vm.accept(request: request, context: context)
+                        chatsViewModel.openOrCreateChat(with: user)
+                        onSwitchToChats?()
+                    },
+                    onDeclineBlock: { try await vm.declineAndBlock(requestId: request.id) },
+                    onSpamBlock: { try await vm.reportSpamAndBlock(requestId: request.id) }
+                )
+                .frame(minWidth: 400, minHeight: 280)
+            }
+        }
         .onChange(of: searchText) { _, _ in
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 canvasOffset = .zero
@@ -104,6 +157,90 @@ struct DesktopSynapsView: View {
                 Text(String(format: NSLocalizedString("synaps_prune_message", comment: ""), name))
             }
         }
+    }
+
+    // MARK: - Contact requests
+
+    @MainActor
+    private func refreshContactRequests(
+        vm: ContactRequestsViewModel,
+        reason: String
+    ) async {
+        guard !isRefreshingContactRequests else {
+            Log.debug("Skipping contact request refresh (\(reason)) — already in progress", category: "DesktopSynapsView")
+            return
+        }
+        let sinceLast = Date().timeIntervalSince(lastContactRequestsRefresh)
+        guard sinceLast >= Self.contactRequestsRefreshInterval else {
+            Log.debug("Skipping contact request refresh (\(reason)) — throttled (\(Int(sinceLast))s ago)", category: "DesktopSynapsView")
+            return
+        }
+        isRefreshingContactRequests = true
+        lastContactRequestsRefresh = Date()
+        defer { isRefreshingContactRequests = false }
+
+        Log.info("Refreshing contact requests (\(reason))", category: "DesktopSynapsView")
+        await vm.load()
+
+        let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
+        let pendingUser: User? = pendingIds.first.flatMap { userId in
+            guard let uuid = UUID(uuidString: userId) else { return nil }
+            let req = NSFetchRequest<User>(entityName: "User")
+            req.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+            req.fetchLimit = 1
+            return try? context.fetch(req).first
+        }
+
+        let accepted = await vm.checkAcceptedRequests(context: context)
+        if let first = accepted.first ?? pendingUser {
+            chatsViewModel.openOrCreateChat(with: first)
+            onSwitchToChats?()
+        }
+    }
+
+    @ViewBuilder
+    private func requestsSection(vm: ContactRequestsViewModel) -> some View {
+        VStack(spacing: 0) {
+            CTSettingsSectionHeader(title: NSLocalizedString("contact_requests_section", comment: ""))
+            Rectangle().fill(Color.CT.noise).frame(height: 1)
+
+            ForEach(vm.incomingRequests) { request in
+                Button {
+                    selectedRequest = request
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Color.CT.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let name = request.displayName, !name.isEmpty {
+                                Text(name)
+                                    .font(CTFont.regular(13))
+                                    .foregroundStyle(Color.CT.text)
+                            } else if let username = request.username, !username.isEmpty {
+                                Text("@\(username)")
+                                    .font(CTFont.regular(13))
+                                    .foregroundStyle(Color.CT.text)
+                            } else {
+                                Text(DisplayNameGenerator.generate(from: request.fromUserId))
+                                    .font(CTFont.regular(13))
+                                    .foregroundStyle(Color.CT.textDim)
+                            }
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.CT.textDim)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                }
+                .buttonStyle(.plain)
+
+                Rectangle().fill(Color.CT.noise).frame(height: 1).padding(.horizontal, 14)
+            }
+        }
+        .background(Color.CT.bg)
     }
 
     // MARK: - Column toolbar
