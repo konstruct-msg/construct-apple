@@ -427,7 +427,10 @@ final class MessageStreamManager {
         // Experimental engine-QUIC keeps a Rust runConnections() task alive independently of
         // the H2 stream; without this it can spin for tens of minutes after background pause
         // (observed: QUIC TimedOut at foreground while channel stayed open → sustained CPU).
+        // Engine-QUIC channel APIs are iOS-only today (GRPCChannelManager #if os(iOS)).
+        #if os(iOS)
         GRPCChannelManager.shared.invalidateEngineQuicConnection()
+        #endif
         Log.info("MessageStream paused", category: "MessageStream")
     }
 

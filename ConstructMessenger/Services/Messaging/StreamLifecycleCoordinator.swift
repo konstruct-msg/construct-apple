@@ -145,7 +145,6 @@ final class StreamLifecycleCoordinator {
         streamManager.connect(contactUserIds: ids, trigger: "startMessageStream(\(reason))") { [weak self] message in
             self?.handleIncomingMessage(message)
         }
-        #if !os(macOS)
         if !hasPerformedStartupOtpkCheck {
             hasPerformedStartupOtpkCheck = true
             Task { [weak self] in
@@ -162,6 +161,9 @@ final class StreamLifecycleCoordinator {
                     self.hasPerformedStartupOtpkCheck = false
                     return
                 }
+                #if os(macOS)
+                Log.debug("Startup key health check (Desktop Strategy B — direct core path)", category: "OTPK")
+                #endif
                 if crypto.wasRestoredFromKeychain, crypto.oneTimePrekeyCount() == 0 {
                     Log.info("Core restored but no local OTPKs — replacing all server OTPKs (fallback sync)", category: "OTPK")
                     do {
@@ -177,7 +179,6 @@ final class StreamLifecycleCoordinator {
                 AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
             }
         }
-        #endif
     }
 
     func stopMessageStream() {
@@ -299,7 +300,6 @@ final class StreamLifecycleCoordinator {
         let didJustConnect = lastPolledStatus != .connected && state.status == .connected
         lastPolledStatus = state.status
 
-        #if !os(macOS)
         if didJustConnect && PreKeyRotationService.shared.hasPendingRetry {
             Task {
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
@@ -308,7 +308,6 @@ final class StreamLifecycleCoordinator {
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             }
         }
-        #endif
 
         if state.hasToken && state.status != ConnectionStatusManager.ConnectionStatus.disconnected {
             if state.pushEnabled {
@@ -500,7 +499,6 @@ final class StreamLifecycleCoordinator {
     // MARK: - Key health
 
     private func checkKeyHealthInBackground() async {
-        #if !os(macOS)
         let now = Date().timeIntervalSince1970
         guard now - lastForegroundKeyCheckAt >= Self.foregroundKeyCheckCooldownSeconds else {
             Log.debug("Key health check skipped — cooldown active", category: "OTPK")
@@ -510,9 +508,11 @@ final class StreamLifecycleCoordinator {
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
         guard !deviceId.isEmpty else { return }
         lastForegroundKeyCheckAt = now
+        #if os(macOS)
+        Log.debug("Foreground key health check (OTPK + SPK)", category: "OTPK")
+        #endif
         await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
         await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
-        #endif
     }
 
     // MARK: - Contact helpers

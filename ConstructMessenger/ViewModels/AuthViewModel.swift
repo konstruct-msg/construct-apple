@@ -211,14 +211,14 @@ class AuthViewModel {
             scheduleTokenRefresh()
             CryptoManager.shared.setLocalUserId(userId)
             loadUserFromCoreData(userId: userId)
-            #if !os(macOS)
-            // Engine manages SPK rotation on macOS.
             Task { [weak self] in
                 guard self != nil else { return }
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+                #if os(macOS)
+                Log.debug("Post-auth SPK rotation check (Desktop direct core path)", category: "SPKRotation")
+                #endif
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             }
-            #endif
             Task { [weak self] in
                 guard self != nil else { return }
                 await ServerKeyManager.shared.prefetch()
