@@ -24,7 +24,8 @@ construct-messenger/
 │   ├── Services/                # Session, messaging, healing, crypto orchestration
 │   ├── Networking/gRPC/         # gRPC channel + generated protobuf Swift files
 │   ├── en.lproj/                # English strings
-│   └── ru.lproj/                # Russian strings
+│   ├── ru.lproj/                # Russian strings
+│   └── ja.lproj/                # Japanese strings 
 ├── ConstructCore.xcframework/   # Built Rust crypto core (NOT in git — see Build Commands)
 ├── ConstructEngine.xcframework/ # Built Rust transport engine (NOT in git — see Build Commands)
 ├── build_crypto_lib.sh          # Script to rebuild construct-core
@@ -38,53 +39,7 @@ The Rust VEIL proxy (obfuscation layer) lives at: `~/Code/construct-veil`
 
 ---
 
-## Token Efficiency Tools
-
-These tools compress project data for LLM consumption. **Always use them before
-reading files, analyzing build output, or exploring the codebase.** They never
-modify originals — all output goes to stdout.
-
-### Decision flow: which tool when?
-
-```
-Need to read a source file?
-  ├─ Full understanding needed  → ./tools/squash_file file.swift
-  ├─ Just the API surface        → ./tools/squash_file --outline file.swift
-  └─ Only imports + top types    → ./tools/squash_file --imports file.swift
-
-Ran a build and got output?
-  └─ Always filter first:        xcodebuild ... 2>&1 | ./tools/squash_build
-
-Have logs to analyze?
-  ├─ From a file:                ./tools/squash_logs.py app.log
-  └─ From clipboard:             ./tools/squash_logs.py --clip --copy
-
-Exploring an unfamiliar area?
-  └─ Start here:                 ./tools/project_index
-```
-
-### Tool reference
-
-**squash_file** — strip comments, imports, blanks, MARK annotations from source.
-```bash
-./tools/squash_file ConstructMessenger/Networking/gRPC/ICE/ConnectionLoop.swift
-./tools/squash_file --outline ConstructMessenger/Security/CryptoManager.swift
-./tools/squash_file --imports ConstructMessenger/ViewModels/ChatViewModel.swift
-# Also works from stdin:
-cat file.swift | ./tools/squash_file
-```
-
-**squash_build** — keep only errors + first warning per file from xcodebuild.
-```bash
-xcodebuild -scheme ConstructMessenger -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' build 2>&1 | ./tools/squash_build
-```
-
-**squash_logs.py** — compress logs: relative timestamps, emoji→markers, dedup, bucket heartbeats.
-```bash
-./tools/squash_logs.py ~/Downloads/construct-logs.txt
-./tools/squash_logs.py --clip --copy
-cat *.log | ./tools/squash_logs.py
-```
+### Tools
 
 **project_index** — one-line-per-file map of the entire project.
 ```bash
@@ -92,15 +47,13 @@ cat *.log | ./tools/squash_logs.py
 ./tools/project_index ~/Code/construct-server   # index another repo
 ```
 
-## Build Commands
-
 ### Prerequisites
 
 All three Rust crates must be cloned alongside this repo:
 ```
 ~/Code/
 ├── construct-core/        # Cryptographic core (X3DH, Double Ratchet, Kyber, etc.)
-├── construct-engine/      # QUIC/H3/gRPC transport engine
+├── construct-transport/      # QUIC/H3/gRPC transport engine
 ├── construct-veil/        # obfs4/WebTunnel obfuscation proxy (DPI evasion). Was construct-ice.
 └── construct-messenger/   # This repo — iOS/macOS SwiftUI app
 ```
@@ -115,9 +68,9 @@ You MUST build the Rust libraries before Xcode can compile the app.
 cd ~/Code/construct-messenger
 ./build_crypto_lib.sh --all          # iOS + Simulator + macOS in one go
 
-# 2. Build construct-engine (transport) — produces ConstructEngine.xcframework
-cd ~/Code/construct-engine
-./build_engine.sh
+# 2. Build construct-transport — produces ConstructTransport.xcframework
+cd ~/Code/construct-messenger/
+./build_transport_lib.sh
 
 # 3. Build the iOS app (simulator)
 cd ~/Code/construct-messenger
@@ -133,9 +86,6 @@ xcodebuild -scheme ConstructMessenger \
 
 # Rebuild crypto for everything iOS-side (device + simulator)
 ./build_crypto_lib.sh --ios --sim
-
-# Rebuild engine (all platforms)
-cd ~/Code/construct-engine && ./build_engine.sh
 
 # Clean Xcode build folder before next build
 # Xcode: ⌘⇧K  or  Product → Clean Build Folder
