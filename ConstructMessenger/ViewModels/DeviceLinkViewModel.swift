@@ -173,6 +173,14 @@ final class DeviceLinkViewModel {
             let pubkeyEncoded = pubkeyB64.addingPercentEncoding(withAllowedCharacters: queryValueAllowed) ?? pubkeyB64
             let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(pubkeyEncoded)&name=\(encoded)&platform=\(platform)"
 
+            try await AuthServiceClient.shared.submitJoinRequest(
+                deviceId: deviceId,
+                bundle: bundle,
+                deviceName: name,
+                platform: platform
+            )
+            Log.info("Join request submitted to server — deviceId=\(deviceId.prefix(8))…", category: "DeviceLink")
+
             joinRequestQRContent = url
             isWaitingForApproval = true
             startPollingForApproval(pendingId: deviceId)
@@ -259,6 +267,7 @@ final class DeviceLinkViewModel {
             Log.info("Approved join request for '\(name)' (id=\(pendingId.prefix(8))…)", category: "DeviceLink")
         } catch {
             errorMessage = localizedError(error)
+            Log.error("approveJoinRequest failed: \(error)", category: "DeviceLink")
         }
     }
 

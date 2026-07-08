@@ -18,6 +18,10 @@ struct AuthInterceptor: ClientInterceptor {
         "AuthenticateDevice",
         "RefreshToken",
         "CheckUsernameAvailability",
+        // DeviceLinkService (Flow A + Flow B) — no JWT on the linking device yet.
+        "ConfirmDeviceLink",
+        "SubmitJoinRequest",
+        "CheckJoinRequestStatus",
         // Stealth sealed-sender v2 Phase 2: genuinely sent over a separate
         // no-interceptor channel (GRPCChannelManager.acquireSealedPersistentClient),
         // but listed here too as defence-in-depth in case it's ever invoked

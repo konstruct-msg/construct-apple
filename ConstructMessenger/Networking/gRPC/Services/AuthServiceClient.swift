@@ -358,7 +358,31 @@ final class AuthServiceClient: Sendable {
         }
     }
 
-    // MARK: - Device Join Request (new device initiates; existing device approves)
+    // MARK: - Device Join Request (Flow B: Desktop submits; phone approves)
+
+    /// Desktop/TUI registers its join request on the server before showing the QR.
+    /// Unauthenticated — pending_device_id is the auth handle for polling.
+    func submitJoinRequest(
+        deviceId: String,
+        bundle: RegistrationBundleFields,
+        deviceName: String,
+        platform: String
+    ) async throws {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.confirmDeviceLink, allowAuthRetry: false) { grpcClient in
+            let linkClient = Shared_Proto_Services_V1_DeviceLinkService.Client(wrapping: grpcClient)
+
+            var payload = Shared_Proto_Services_V1_JoinRequestPayload()
+            payload.pendingDeviceID = deviceId
+            payload.identityPublicB64 = Data(bundle.identityPublic).base64EncodedString()
+            payload.verifyingKeyB64 = Data(bundle.verifyingKey).base64EncodedString()
+            payload.signedPrekeyPublicB64 = Data(bundle.signedPrekeyPublic).base64EncodedString()
+            payload.signedPrekeySignatureB64 = Data(bundle.signature).base64EncodedString()
+            payload.deviceName = deviceName
+            payload.platform = platform
+
+            _ = try await linkClient.submitJoinRequest(request: .init(message: payload))
+        }
+    }
 
     /// Called by the phone when it scans the TUI's "link-to-me" QR and the user confirms.
     /// Sends `ApproveJoinRequest` to the server; the server issues tokens and stores them
