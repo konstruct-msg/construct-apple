@@ -23,6 +23,10 @@ struct Construct_DesktopApp: App {
     @State private var commandBridge = DesktopCommandBridge()
 
     init() {
+        // Foreground-state tracker — transport layer reads this to suppress futile VEIL
+        // restarts while the app is inactive (mirrors iOS AppDelegate bootstrap).
+        _ = AppActivityState.shared
+
         // Set UNUserNotificationCenterDelegate for macOS so foreground notifications
         // show as banners. On iOS this is handled by PushNotificationManager.
         UNUserNotificationCenter.current().delegate = LocalNotificationManager.shared
@@ -45,8 +49,15 @@ struct Construct_DesktopApp: App {
                 .environment(deepLinkHandler)
                 .environment(\.commandBridge, commandBridge)
                 .task {
+                    if PreviewDetector.isRunningInPreview { return }
+
                     NSApp.appearance = NSAppearance(named: .darkAqua)
-                    chatsViewModel.setContext(PersistenceController.shared.container.viewContext)
+                    let viewContext = PersistenceController.shared.container.viewContext
+                    chatsViewModel.setContext(viewContext)
+
+                    MediaManager.shared.evictOldFiles()
+                    StorageMigrationService.shared.migrateIfNeeded(context: viewContext)
+                    Log.debug("Desktop launch bootstrap — storage migration complete", category: "Desktop")
 
                     // Direct path (Strategy B): construct-core (UniFFI) + gRPC-Swift + VEIL from core.
                     // Engine layer is paused for Desktop.
@@ -56,6 +67,8 @@ struct Construct_DesktopApp: App {
                     if authViewModel.isAuthenticated,
                        let deviceId = KeychainManager.shared.loadDeviceID() {
                         await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
+                        await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
+                        Log.debug("Desktop launch bootstrap — PQC + hybrid identity checks complete", category: "Desktop")
                     }
                     _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
 

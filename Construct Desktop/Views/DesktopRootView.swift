@@ -37,9 +37,11 @@ struct DesktopRootView: View {
     var body: some View {
         Group {
             if authViewModel.hasRegisteredDeviceKeys == nil {
-                ProgressView("Loading…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if authViewModel.hasRegisteredDeviceKeys == true {
+                SplashView()
+            } else if authViewModel.deviceKeysUnavailable {
+                KeysRecoveryView()
+                    .environment(authViewModel)
+            } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
                 mainContent
             } else {
                 OnboardingView()
@@ -49,10 +51,36 @@ struct DesktopRootView: View {
                     }
             }
         }
+        .errorToast()
         .preferredColorScheme(appTheme.colorScheme)
         .onAppear {
             authViewModel.refreshDeviceKeyState()
+            chatsViewModel.setContext(viewContext)
             wireCommandBridge()
+            handleDeepLink(deepLinkHandler.deepLink)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .appWillEnterForeground)) { _ in
+            if AuthSessionManager.shared.sessionToken == nil || !AuthSessionManager.shared.isSessionValid
+                || !CryptoManager.shared.isInitialized {
+                Log.info("Desktop returning to foreground — restoring session (token missing, expired, or crypto uninitialised)", category: "Auth")
+                authViewModel.restoreSession()
+            }
+
+            if AuthSessionManager.shared.isSessionValid,
+               StealthPolicy.shared.isEnabled,
+               TokenWalletService.shared.balance < 10 {
+                Task {
+                    await BlindTokenService.shared.bootstrapInitialBatch()
+                }
+            }
+        }
+        .onChange(of: deepLinkHandler.deepLink) { _, newDeepLink in
+            handleDeepLink(newDeepLink)
+        }
+        .onOpenURL { url in
+            Log.info("DesktopRootView: Received URL via onOpenURL: \(url.absoluteString)", category: "DeepLink")
+            let result = deepLinkHandler.handleURL(url)
+            Log.info("DesktopRootView: Deep link handling result: \(result)", category: "DeepLink")
         }
         .onReceive(NotificationCenter.default.publisher(for: .desktopShowAddContact)) { _ in
             showAddContact = true
@@ -83,6 +111,10 @@ struct DesktopRootView: View {
             guard let id = chatsViewModel.chatToOpen else { return }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(id, forType: .string)
+        }
+        commandBridge.onSyncMessages    = {
+            Log.info("Manual message sync (⌘R)", category: "Desktop")
+            Task { await BackgroundFetchManager.shared.fetchPendingMessages() }
         }
     }
 
@@ -286,6 +318,32 @@ struct DesktopRootView: View {
         req.predicate = NSPredicate(format: "id == %@", id)
         req.fetchLimit = 1
         return try? viewContext.fetch(req).first
+    }
+
+    // MARK: - Deep links
+
+    private func handleDeepLink(_ deepLink: DeepLinkType?) {
+        Log.debug("DesktopRootView: Deep link changed: \(String(describing: deepLink))", category: "DeepLink")
+        if case .contact(let contactInfo) = deepLink {
+            Log.info("DesktopRootView: Creating chat for userId: \(contactInfo.userId)", category: "DeepLink")
+            let publicUserInfo = PublicUserInfo(
+                id: contactInfo.userId,
+                username: contactInfo.username,
+                avatarUrl: nil,
+                bio: nil,
+                deviceId: contactInfo.deviceId
+            )
+            if let chat = chatsViewModel.startChat(with: publicUserInfo) {
+                chatsViewModel.chatToOpen = chat.id
+            } else {
+                Log.error("DesktopRootView: Failed to create chat for userId: \(contactInfo.userId)", category: "DeepLink")
+            }
+            deepLinkHandler.deepLink = nil
+        } else if case .openChat(let chatId) = deepLink {
+            Log.info("DesktopRootView: Opening chat from deep link: \(chatId)", category: "DeepLink")
+            chatsViewModel.chatToOpen = chatId
+            deepLinkHandler.deepLink = nil
+        }
     }
 }
 
