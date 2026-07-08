@@ -704,6 +704,10 @@ class CryptoManager {
         // Delete all individual keys and ALL sessions
         KeychainManager.shared.deleteAllKeys()
 
+        // MLS store is signed by the identity key being deleted — a fresh identity
+        // can never operate the old groups, so drop the snapshot with the keys.
+        MlsStoreManager.shared.reset()
+
         Log.info("All cryptographic keys and sessions deleted from Keychain", category: "CryptoManager")
         Log.info("On next app launch, fresh cryptographic keys will be generated", category: "CryptoManager")
     }

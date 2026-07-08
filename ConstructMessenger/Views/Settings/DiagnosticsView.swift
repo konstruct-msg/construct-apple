@@ -305,6 +305,7 @@ struct DiagnosticsView: View {
         KeychainManager.shared.deleteAllKeys()       // identity_key, signing_key, crypto_private_keys_json, sessions
         KeychainManager.shared.deleteDeviceKeys()    // deviceId, deviceSigningKey, deviceIdentityKey
         KeychainManager.shared.deleteOtpks()     // crypto_otpks (OTPK bundle)
+        KeychainManager.shared.deleteMlsStore()  // mls_store (MLS group store snapshot)
         KeychainManager.shared.deleteSessionToken()
         KeychainManager.shared.deleteRefreshToken()
 

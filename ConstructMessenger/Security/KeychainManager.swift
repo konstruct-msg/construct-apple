@@ -323,6 +323,25 @@ class KeychainManager {
     func deleteOtpks() {
         delete(forKey: "crypto_otpks")
     }
+
+    // MARK: - MLS group store persistence
+
+    /// Save the whole-device MLS store snapshot (CFE binary, msg_type 0x44).
+    @discardableResult
+    func saveMlsStore(_ data: Data) -> Bool {
+        return save(data, forKey: "mls_store", accessible: Self.cryptoKeyAccessible)
+    }
+
+    /// Load raw MLS store bytes (CFE binary).
+    func loadMlsStoreData() -> Data? {
+        load(forKey: "mls_store")
+    }
+
+    /// Delete the MLS store snapshot. Destroys membership in every group —
+    /// only valid as part of a full account/key wipe.
+    func deleteMlsStore() {
+        delete(forKey: "mls_store")
+    }
     func saveCustomServerURL(_ url: String) {
         guard let data = url.data(using: .utf8) else { return }
         // Use kSecAttrAccessibleAfterFirstUnlock to allow access after device unlock

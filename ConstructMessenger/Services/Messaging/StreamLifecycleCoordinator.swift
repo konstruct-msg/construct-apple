@@ -176,6 +176,7 @@ final class StreamLifecycleCoordinator {
                     await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
                 }
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+                await MlsKeyPackageService.replenishIfNeeded(deviceId: deviceId)
                 AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
             }
         }
