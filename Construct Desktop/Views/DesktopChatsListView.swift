@@ -122,6 +122,10 @@ struct DesktopChatsListView: View {
                 }
             }
         }
+        .refreshable {
+            Log.info("Manual message sync (pull-to-refresh)", category: "DesktopChatsListView")
+            await BackgroundFetchManager.shared.fetchPendingMessages()
+        }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Color.CT.bg)

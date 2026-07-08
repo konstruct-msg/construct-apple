@@ -18,6 +18,7 @@
 //    ⌘,          — open Settings
 //    ⌘W          — close front window (macOS standard)
 //    ⌘⇧C         — copy node ID of active chat
+//    ⌘R          — sync pending messages (manual fetch)
 //
 
 import SwiftUI
@@ -54,6 +55,13 @@ struct ConstructCommands: Commands {
                 bridge.globalSearch()
             }
             .keyboardShortcut("f", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Sync Messages") {
+                bridge.syncMessages()
+            }
+            .keyboardShortcut("r", modifiers: .command)
         }
 
         // Navigate menu (TUI-style)
@@ -126,6 +134,7 @@ final class DesktopCommandBridge {
     var onBack:            (() -> Void)?
     var onCopyNodeId:      (() -> Void)?
     var onShowSecurity:    (() -> Void)?
+    var onSyncMessages:    (() -> Void)?
 
     func newConversation() { onNewConversation?() }
     func addContact()      { onAddContact?() }
@@ -137,6 +146,7 @@ final class DesktopCommandBridge {
     func back()            { onBack?() }
     func copyNodeId()      { onCopyNodeId?() }
     func showSecurity()    { onShowSecurity?() }
+    func syncMessages()    { onSyncMessages?() }
 }
 
 // MARK: - Environment key for bridge
