@@ -138,6 +138,7 @@ class ProfileSharingManager {
         do {
             try context.save()
             Log.info("Profile data updated for user \(userId): displayName=\(profileData.displayName)", category: "ProfileSharingManager")
+            Log.debug("Chat list row should refresh — User.displayName/avatarData changed", category: "ProfileSharingManager")
         } catch {
             Log.error("Failed to save profile data: \(error)", category: "ProfileSharingManager")
         }
