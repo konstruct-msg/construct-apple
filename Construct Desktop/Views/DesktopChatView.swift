@@ -36,6 +36,7 @@ struct DesktopChatView: View {
 
     @State private var floodGuard = IncomingFloodGuard.shared
     @State private var contactKTStatus: KTStatus = .unverified
+    @State private var isSessionAtRisk = false
     @State private var containerWidth: CGFloat = 800
 
     init(chat: Chat, context: NSManagedObjectContext) {
@@ -194,6 +195,7 @@ struct DesktopChatView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 8)   // flush or minimal top so the glass panel sits at the very top of the chat pane
                 floodBurstBanner
+                atRiskBanner
 
                 deleteButtonBar
                 
@@ -262,11 +264,18 @@ struct DesktopChatView: View {
                 chatDropFileURLs.append(url)
                 chatsViewModel.pendingDroppedFileURL = nil
             }
+            .onChange(of: viewModel.isInitializingSession) { _, _ in refreshSessionAtRiskState() }
+            .onReceive(NotificationCenter.default.publisher(for: .sessionAtRiskChanged)) { note in
+                if (note.userInfo?["userId"] as? String) == viewModel.chat.otherUser?.id {
+                    refreshSessionAtRiskState()
+                }
+            }
             .onAppear {
                 guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
                 markChatAsRead()
                 viewModel.onViewAppear()
                 loadContactKTStatus()
+                refreshSessionAtRiskState()
                 if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
                     _ = try? CryptoManager.shared.handleOrchestratorEvent(
                         .activeChatChanged(contactId: contactId, isActive: true),
@@ -301,6 +310,18 @@ struct DesktopChatView: View {
     }
 
     // MARK: - View Components
+
+    private var atRiskBanner: some View {
+        ChatAtRiskBannerView(isVisible: isSessionAtRisk)
+    }
+
+    private func refreshSessionAtRiskState() {
+        guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else {
+            isSessionAtRisk = false
+            return
+        }
+        isSessionAtRisk = KeychainManager.shared.loadSessionAtRiskFlag(for: contactId)
+    }
 
     @ViewBuilder
     private var floodBurstBanner: some View {
@@ -461,21 +482,20 @@ struct DesktopChatView: View {
         HStack(spacing: 10) {
             // No back button — navigation is controlled by NavigationSplitView sidebar
 
-            Button { showingUserProfile = true } label: {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text((viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: "")).uppercased())
+            if let user = viewModel.chat.otherUser {
+                DesktopChatNavTitleButton(
+                    user: user,
+                    subtitle: navigationStatusSubtitle,
+                    onOpenProfile: { showingUserProfile = true }
+                )
+            } else {
+                Button { showingUserProfile = true } label: {
+                    Text(NSLocalizedString("chat", comment: "").uppercased())
                         .font(CTFont.bold(13))
                         .foregroundColor(Color.CT.text)
-                    if let subtitle = navigationStatusSubtitle {
-                        Text(subtitle)
-                            .font(CTFont.regular(10))
-                            .foregroundColor(Color.CT.accentDim)
-                            .transition(.opacity)
-                    }
                 }
-                .animation(.easeInOut(duration: 0.25), value: navigationStatusSubtitle)
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
             ktBadge
 
@@ -643,6 +663,32 @@ struct DesktopChatView: View {
             }
         }
         return handled
+    }
+}
+
+// MARK: - Nav title (observes User for profile-share updates)
+
+private struct DesktopChatNavTitleButton: View {
+    @ObservedObject var user: User
+    let subtitle: String?
+    let onOpenProfile: () -> Void
+
+    var body: some View {
+        Button(action: onOpenProfile) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(user.resolvedDisplayName.uppercased())
+                    .font(CTFont.bold(13))
+                    .foregroundColor(Color.CT.text)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(CTFont.regular(10))
+                        .foregroundColor(Color.CT.accentDim)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: subtitle)
+        }
+        .buttonStyle(.plain)
     }
 }
 
