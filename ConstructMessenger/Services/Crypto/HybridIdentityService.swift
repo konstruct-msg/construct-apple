@@ -181,4 +181,14 @@ enum HybridIdentityService {
         UserDefaults.standard.set(true, forKey: publishedFlagKey)
         UserDefaults.standard.set(fingerprint(spkPublic), forKey: spkFingerprintKey)
     }
+
+    /// Clear the "hybrid identity published" flags. MUST be called when the device switches to a
+    /// fresh identity (device link / re-link) — otherwise the new device inherits the *previous*
+    /// identity's published=true flag and prematurely attaches hybrid SPK signatures during
+    /// rotation, which the server rejects with "device has no hybrid identity key" (the new
+    /// identity has no hybrid key published yet).
+    nonisolated static func resetPublishState() {
+        UserDefaults.standard.removeObject(forKey: publishedFlagKey)
+        UserDefaults.standard.removeObject(forKey: spkFingerprintKey)
+    }
 }

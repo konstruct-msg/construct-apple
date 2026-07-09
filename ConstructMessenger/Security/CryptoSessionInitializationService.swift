@@ -221,6 +221,16 @@ final class CryptoSessionInitializationService {
             Log.error("Rust core initReceivingSession failed: \(error)", category: "CryptoManager")
             Log.error("Error type: \(type(of: error))", category: "CryptoManager")
             Log.error("userId: \(userId)", category: "CryptoManager")
+            // Preserve the OTPK-unreproducible signal BEFORE the specific Rust message is dropped by
+            // the generic rethrow below. The SessionCoordinator init-failure path only sees
+            // `CryptoManagerError.sessionInitializationFailed` (message lost), so without this it
+            // sends a plain END_SESSION and the sender loops 4-DH forever. Recording the hint here
+            // (mirroring PublicKeyBundleHandler) lets SessionCoordinator ask the peer to re-init via
+            // 3-DH instead. See device-link crypto storm postmortem.
+            if "\(error)".contains("cannot reproduce") {
+                Log.info("SESSION_STATE[otpk_unreproducible]: \(userId.prefix(8))… — will request 3-DH re-init via END_SESSION", category: "SessionInit")
+                SessionReinitHintStore.shared.recordResponderOtpkUnreproducible(for: userId)
+            }
             throw CryptoManagerError.sessionInitializationFailed
         }
     }

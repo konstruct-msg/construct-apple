@@ -689,6 +689,32 @@ class CryptoManager {
 
     // MARK: - Key Management
 
+    /// Wipes orchestrator coordination state and E2EE session archives before generating
+    /// fresh device-link keys. Does not delete registration private keys (CFE).
+    func prepareForDeviceLink() {
+        orchestratorCore = nil
+        _bootstrapCore = nil
+        hasRestoredSessions = false
+        KeychainManager.shared.deleteData(forKey: Self.orchestratorStateCFEKey)
+        KeychainManager.shared.deleteAllE2EESessions()
+        KeychainManager.shared.deleteOtpks()
+        // The new identity hasn't published a hybrid PQ key yet — drop the previous identity's
+        // published flag so SPK rotation doesn't attach a hybrid signature the server can't verify.
+        HybridIdentityService.resetPublishState()
+        Log.info("Prepared clean crypto state for device link", category: "CryptoManager")
+    }
+
+    /// Clears persisted orchestrator state so a newly linked device does not inherit
+    /// ACK/healing/session metadata from a previous identity on this machine.
+    func resetOrchestratorStateForDeviceLink() {
+        orchestratorCore = nil
+        _bootstrapCore = nil
+        hasRestoredSessions = false
+        KeychainManager.shared.deleteData(forKey: Self.orchestratorStateCFEKey)
+        KeychainManager.shared.deleteAllE2EESessions()
+        Log.info("Reset orchestrator state for fresh device link", category: "CryptoManager")
+    }
+
     /// Delete all saved cryptographic keys and sessions (e.g., on account deletion)
     /// After calling this, the app will generate fresh keys on next registration
     func deleteAllCryptoKeys() {
