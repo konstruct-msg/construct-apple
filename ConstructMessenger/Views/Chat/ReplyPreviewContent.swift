@@ -24,6 +24,7 @@ struct ReplyPreviewContent: View {
     @State private var thumbnail: PlatformImage? = nil
 
     private var mediaContent: MediaMessageContent? { parseMediaContent(from: content) }
+    private var firstMediaItem: [String: Any]? { mediaContent?.mediaItems.first ?? mediaContent?.media }
 
     private var fileContent: FileMessageContent? {
         guard let c = content,
@@ -42,7 +43,7 @@ struct ReplyPreviewContent: View {
                     .foregroundColor(Color.CT.textDim)
                     .lineLimit(1)
             }
-            .onAppear { loadThumbnail() }
+            .onAppear { loadThumbnailIfNeeded() }
         } else if let fc = fileContent {
             HStack(spacing: 6) {
                 Text(fileAscii(for: fc.files.first?.mediaType))
@@ -86,7 +87,7 @@ struct ReplyPreviewContent: View {
     private var mediaCaptionLabel: String {
         let caption = mediaContent?.caption ?? ""
         if !caption.isEmpty { return caption }
-        let mediaType = mediaContent?.media["mediaType"] as? String ?? ""
+        let mediaType = firstMediaItem?["mediaType"] as? String ?? ""
         if mediaType.hasPrefix("video/") {
             return NSLocalizedString("video", comment: "")
         }
@@ -105,10 +106,69 @@ struct ReplyPreviewContent: View {
     @available(*, unavailable)
     private func fileIcon(for mimeType: String?) -> String { "" }
 
-    private func loadThumbnail() {
-        guard let id = messageId,
-              let data = MediaManager.shared.retrieveThumbnail(for: id),
-              let img = PlatformImage.platformImage(data: data) else { return }
-        thumbnail = img
+    private func loadThumbnailIfNeeded() {
+        guard thumbnail == nil else { return }
+        Task { await loadThumbnail() }
+    }
+
+    @MainActor
+    private func loadThumbnail() async {
+        if let img = cachedThumbnailImage() {
+            thumbnail = img
+            return
+        }
+
+        guard let item = firstMediaItem,
+              let mediaId = item["mediaId"] as? String,
+              let mediaUrl = item["mediaUrl"] as? String,
+              let mediaKeyStr = item["mediaKey"] as? String,
+              let mediaKey = Data(base64Encoded: mediaKeyStr),
+              let id = messageId
+        else { return }
+
+        do {
+            let data = try await MediaManager.shared.downloadAndDecryptMedia(
+                mediaId: mediaId,
+                mediaUrl: mediaUrl,
+                mediaKey: mediaKey
+            )
+
+            let mediaType = (item["mediaType"] as? String ?? "").lowercased()
+            if mediaType.hasPrefix("video/") {
+                let tempURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("reply-preview-\(mediaId).mp4")
+                try? data.write(to: tempURL, options: .atomic)
+                guard let posterData = try? await MediaOptimizer.generateVideoThumbnail(from: tempURL),
+                      let poster = PlatformImage(data: posterData) else { return }
+                MediaManager.shared.storeThumbnail(posterData, for: id)
+                MediaImageCache.shared.store(poster, for: id)
+                thumbnail = poster
+                return
+            }
+
+            guard let image = PlatformImage(data: data) else { return }
+            let preview = MediaManager.shared.generateThumbnailImage(from: image, maxSize: thumbnailSize * 3)
+            if let previewData = MediaManager.shared.generateThumbnail(from: preview, maxSize: thumbnailSize * 3) {
+                MediaManager.shared.storeThumbnail(previewData, for: id)
+            }
+            MediaImageCache.shared.store(preview, for: id)
+            thumbnail = preview
+        } catch {
+            Log.debug("Reply preview thumbnail load failed: \(error)", category: "ReplyPreview")
+        }
+    }
+
+    @MainActor
+    private func cachedThumbnailImage() -> PlatformImage? {
+        if let id = messageId,
+           let data = MediaManager.shared.retrieveThumbnail(for: id),
+           let img = PlatformImage.platformImage(data: data) {
+            return img
+        }
+        if let id = messageId,
+           let cached = MediaImageCache.shared.image(for: id) {
+            return cached
+        }
+        return nil
     }
 }

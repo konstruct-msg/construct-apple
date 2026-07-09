@@ -23,6 +23,7 @@ struct ChatsListView: View {
     @State private var navigationPath = NavigationPath()
     @State private var showingDrafts = false
     @State private var searchQuery = ""
+    @State private var listRevision = 0
 
     init() {
         let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
@@ -103,6 +104,12 @@ struct ChatsListView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
                     guard notificationContainsChatChanges(note) else { return }
+                    listRevision &+= 1
+                    updateTotalUnreadCount()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { note in
+                    guard notificationContainsChatChanges(note) else { return }
+                    listRevision &+= 1
                     updateTotalUnreadCount()
             }
         }
@@ -192,6 +199,7 @@ struct ChatsListView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
         }
+        .id(listRevision)
         .refreshable {
             await BackgroundFetchManager.shared.fetchPendingMessages()
         }
@@ -222,7 +230,10 @@ struct ChatsListView: View {
         let keys = [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey]
         for key in keys {
             guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
-            if objects.contains(where: { $0.entity.name == "Chat" }) {
+            if objects.contains(where: { entity in
+                let name = entity.entity.name
+                return name == "Chat" || name == "Message"
+            }) {
                 return true
             }
         }

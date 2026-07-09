@@ -37,6 +37,7 @@ enum MediaWireCodec {
             m.mimeType = item.mediaType
             m.mediaType = protoMediaType(for: item.mediaType)
             if let filename = item.filename { m.filename = filename }
+            if let thumbnail = item.thumbnail, !thumbnail.isEmpty { m.thumbnail = thumbnail }
             if let w = item.width, let h = item.height, w > 0, h > 0 {
                 var dims = Shared_Proto_Messaging_V1_MediaDimensions()
                 dims.width = UInt32(w)
@@ -132,6 +133,16 @@ enum MediaWireCodec {
         guard let data = try? JSONSerialization.data(withJSONObject: obj),
               let json = String(data: data, encoding: .utf8) else { return nil }
         return json
+    }
+
+    @MainActor
+    static func storeThumbnails(
+        from album: Shared_Proto_Messaging_V1_MediaAlbumMessage,
+        for messageId: String
+    ) {
+        for (index, item) in album.items.enumerated() where item.hasThumbnail && !item.thumbnail.isEmpty {
+            MediaManager.shared.storeThumbnail(item.thumbnail, for: messageId, at: index)
+        }
     }
 
     // MARK: - Helpers
