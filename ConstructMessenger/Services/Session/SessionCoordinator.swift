@@ -1071,11 +1071,14 @@ final class SessionCoordinator: MessageRouterDelegate {
         // Handles KNST-framed protobuf (real user messages as X3DH init carrier),
         // raw protobuf (single-message delivery), and UTF-8 control strings (pings).
         let plaintext: String
+        let e2eMessageId: String?
         switch initMessageReassembler.process(data: decryptedBytes) {
-        case .assembled(let text, _):
+        case .assembled(let text, _, let e2eId, _):
             plaintext = text
+            e2eMessageId = e2eId
         case .legacy(let text):
             plaintext = text
+            e2eMessageId = nil
         case .profile(let profileData):
             // A profile share arrived as the session's first message — render it as a profile,
             // never persist a placeholder string.
@@ -1085,6 +1088,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             return
         case .edit:
             plaintext = ""
+            e2eMessageId = nil
         case .incomplete:
             Log.debug("Session-init message is a partial chunk — will be reassembled later", category: "SessionCoordinator")
             return
@@ -1157,18 +1161,22 @@ final class SessionCoordinator: MessageRouterDelegate {
             return
         }
 
+        // Canonical row id: sender's E2E id from the KNST header when present (see
+        // MessageRouter.saveMessage — the server reassigns envelope ids on the sealed path).
+        let canonicalId = (e2eMessageId ?? messageData.id).lowercased()
         let fetchRequest = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", messageData.id)
+        fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", canonicalId)
+        fetchRequest.fetchLimit = 1
 
         if let existing = try? context.fetch(fetchRequest).first {
-            if !existing.hasDecryptedContent {
+            if existing.fromUserId == messageData.from, !existing.hasDecryptedContent {
                 existing.applyStoredEncryption(plaintext: plaintext, contactId: messageData.from)
             }
             return
         }
 
         let message = Message(context: context)
-        message.id = messageData.id
+        message.id = canonicalId
         message.fromUserId = messageData.from
         message.toUserId = messageData.to
         message.timestamp = Date(timeIntervalSince1970: TimeInterval(messageData.timestamp))

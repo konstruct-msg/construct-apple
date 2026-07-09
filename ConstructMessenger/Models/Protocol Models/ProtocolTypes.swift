@@ -30,9 +30,6 @@ struct ChatMessage: Codable, Identifiable {
     /// Only meaningful when messageNumber == 0 (X3DH handshake message).
     var oneTimePreKeyId: UInt32 = 0
 
-    /// If non-empty, this message is an edit to an existing message with this ID.
-    var editsMessageId: String = ""
-
     /// ML-KEM-768 KEM ciphertext for PQXDH (empty = classic X3DH only).
     /// Only present when messageNumber == 0 (first message / session initiation).
     var kemCiphertext: Data = Data()
@@ -99,7 +96,7 @@ struct ChatMessage: Codable, Identifiable {
 extension ChatMessage {
     private enum CodingKeys: String, CodingKey {
         case id, from, to, messageType, ephemeralPublicKey, messageNumber, content, suiteId
-        case timestamp, oneTimePreKeyId, editsMessageId, kemCiphertext, kyberOtpkId
+        case timestamp, oneTimePreKeyId, kemCiphertext, kyberOtpkId
         case pqMessageEpoch, pqRatchetField
         case senderDeviceId, conversationId, replyToMessageId, rawPayload
     }
@@ -116,7 +113,6 @@ extension ChatMessage {
         suiteId = (try? c.decodeIfPresent(UInt16.self, forKey: .suiteId)) ?? 0
         timestamp = (try? c.decodeIfPresent(UInt64.self, forKey: .timestamp)) ?? 0
         oneTimePreKeyId = (try? c.decodeIfPresent(UInt32.self, forKey: .oneTimePreKeyId)) ?? 0
-        editsMessageId = (try? c.decodeIfPresent(String.self, forKey: .editsMessageId)) ?? ""
         kemCiphertext = (try? c.decodeIfPresent(Data.self, forKey: .kemCiphertext)) ?? Data()
         kyberOtpkId = (try? c.decodeIfPresent(UInt32.self, forKey: .kyberOtpkId)) ?? 0
         pqMessageEpoch = (try? c.decodeIfPresent(UInt32.self, forKey: .pqMessageEpoch)) ?? 0

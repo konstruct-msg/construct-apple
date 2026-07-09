@@ -408,11 +408,12 @@ class MessageRetryManager {
             return .failed
         }
 
-        // Drop any orphaned ciphertext, then re-chunk under a FRESH wire UUID. The local payload
-        // store and delivery tracking stay keyed by the original baseMessageId (UI continuity);
-        // only the wire-level chunk ids are new.
+        // Drop any orphaned ciphertext, then re-chunk under the ORIGINAL message UUID. The KNST
+        // header id is the message's end-to-end identity (recipient stores the row under it), so
+        // reusing it makes retries idempotent on the recipient and keeps edit/receipt references
+        // valid. Wire-level chunk envelope ids are still fresh (server-assigned on sealed path).
         OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
-        let plan = ChunkedMessageSender.shared.buildPlan(plaintext: plaintext, messageId: UUID())
+        let plan = ChunkedMessageSender.shared.buildPlan(plaintext: plaintext, messageId: UUID(uuidString: messageId) ?? UUID())
         guard !plan.payloads.isEmpty else {
             Log.error("reencryptAndSend: empty chunk plan for \(messageId.prefix(8))…", category: "MessageRetryManager")
             return .failed

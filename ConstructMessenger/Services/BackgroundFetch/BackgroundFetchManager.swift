@@ -433,6 +433,7 @@ class BackgroundFetchManager: NSObject {
                 let legacyPrefixBytes = Data(ChunkedMessageCodec.legacyPrefix.utf8)
                 let binaryMagic = Data([0x4B, 0x4E, 0x53, 0x54]) // "KNST"
                 var assembled: String? = nil
+                var assembledE2EId: String? = nil
                 var assembledProfile: Data? = nil
                 var modernEditTarget: String? = nil
                 var modernEditText: String? = nil
@@ -440,7 +441,9 @@ class BackgroundFetchManager: NSObject {
                    dc.starts(with: binaryMagic) || dc.starts(with: legacyPrefixBytes) {
                     DispatchQueue.main.sync {
                         switch ChunkedMessageReassembler.shared.process(data: dc) {
-                        case .assembled(let text, _): assembled = text
+                        case .assembled(let text, _, let e2eId, _):
+                            assembled = text
+                            assembledE2EId = e2eId
                         case .legacy(let text):        assembled = text
                         case .profile(let data):       assembledProfile = data
                         case .edit(let target, let nt, _):
@@ -469,10 +472,11 @@ class BackgroundFetchManager: NSObject {
                 let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) } ?? ""
 
                 // Modern edit via MessageContent.edit (stealth/sealed path, and any direct chunked edit).
-                // Target lives inside the content (not the top-level editsMessageId envelope field used by legacy edit).
+                // The target message id travels inside the encrypted content, never a wire-envelope field.
                 if let targetID = modernEditTarget, let newT = modernEditText, !newT.isEmpty {
                     let fr = Message.fetchRequest()
-                    fr.predicate = NSPredicate(format: "id == %@", targetID)
+                    // Scoped to the author: a peer may only edit messages it sent us.
+                    fr.predicate = NSPredicate(format: "id ==[c] %@ AND fromUserId == %@", targetID, item.messageData.from)
                     fr.fetchLimit = 1
                     if let original = try? backgroundContext.fetch(fr).first {
                         let contentToStore: String
@@ -493,24 +497,9 @@ class BackgroundFetchManager: NSObject {
                     continue
                 }
 
-                // Edit: update the original message in place instead of saving a new row.
-                // editsMessageId is a wire-envelope field, so this is independent of content.
-                if !item.messageData.editsMessageId.isEmpty {
-                    let editsId = item.messageData.editsMessageId
-                    let fr = Message.fetchRequest()
-                    fr.predicate = NSPredicate(format: "id == %@", editsId)
-                    fr.fetchLimit = 1
-                    if let original = try? backgroundContext.fetch(fr).first {
-                        original.applyStoredEncryption(plaintext: decryptedString, contactId: item.messageData.from)
-                        original.isEdited = true
-                        original.editedAt = Date(timeIntervalSince1970: TimeInterval(item.messageData.timestamp))
-                        Log.info("BG fetch: applied edit to \(editsId.prefix(8))…", category: "BackgroundFetch")
-                    } else {
-                        Log.error("BG fetch: original message to edit not found: \(editsId.prefix(8))…", category: "BackgroundFetch")
-                    }
-                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
-                    continue
-                }
+                // Legacy envelope-level edits (envelope.edits_message_id) are removed: the
+                // field is reserved server-side. Edits arrive only as MessageContent.edit,
+                // handled by the modern-edit branch above.
 
                 // Profile share: defer application to the main actor (post-merge). Supports binary wire (no JSON) + legacy.
                 if let dc = decryptedContent, ProfileShareData.fromBinaryData(dc) != nil ||
@@ -523,9 +512,23 @@ class BackgroundFetchManager: NSObject {
                 // Persist ACK to Core Data (durable across restarts).
                 PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
 
+                // Canonical row id: sender's E2E id from the KNST header when present (see
+                // MessageRouter.saveMessage — the server reassigns envelope ids on the sealed
+                // path, and edits/receipts/replies reference the sender's id).
+                let canonicalId = (assembledE2EId ?? item.messageData.id).lowercased()
+                let dedupFetch = Message.fetchRequest()
+                dedupFetch.predicate = NSPredicate(format: "id ==[c] %@", canonicalId)
+                dedupFetch.fetchLimit = 1
+                if let existing = try? backgroundContext.fetch(dedupFetch).first {
+                    if existing.fromUserId == item.messageData.from, !existing.hasDecryptedContent {
+                        existing.applyStoredEncryption(plaintext: decryptedString, contactId: item.messageData.from)
+                    }
+                    continue  // already stored (live stream or an earlier delivery of the same message)
+                }
+
                 // Create Message entity.
                 let message = Message(context: backgroundContext)
-                message.id = item.messageData.id
+                message.id = canonicalId
                 message.fromUserId = item.messageData.from
                 message.toUserId = item.messageData.to
                 message.contentType = .regular

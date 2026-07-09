@@ -478,10 +478,14 @@ final class StreamLifecycleCoordinator {
 
     private func handleDeliveryReceipts(_ messageIds: [String]) {
         guard let context = viewContext else { return }
+        // Server receipts reference the server-assigned wire id, which differs from the
+        // local row id on the sealed-sender path — translate before the fetch.
+        // (E2E receipts from the peer already carry the canonical E2E id.)
+        let localIds = messageIds.map { ServerMessageIdMap.shared.localId(for: $0) }
         context.perform {
-            for messageId in messageIds {
+            for messageId in localIds {
                 let fetchRequest = Message.fetchRequest()
-                fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
+                fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", messageId)
                 guard let message = try? context.fetch(fetchRequest).first,
                       message.isSentByMe else { continue }
                 guard message.deliveryStatus != .delivered else { continue }

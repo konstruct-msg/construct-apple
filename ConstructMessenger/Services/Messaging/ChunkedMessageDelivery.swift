@@ -134,7 +134,7 @@ final class ChunkedMessageReassembler {
         cleanupExpired()
         if parsed.totalChunks == 1 {
             let trimmed = parsed.payload.prefix(parsed.plaintextLength)
-            return decodeAssembled(Data(trimmed))
+            return decodeAssembled(Data(trimmed), e2eMessageId: Self.e2eId(from: parsed.messageId))
         }
         if parsed.totalChunks > ChunkedDeliveryConfig.maxChunks {
             return .invalid("total_chunks exceeds max")
@@ -158,18 +158,25 @@ final class ChunkedMessageReassembler {
         guard entry.plaintextLength <= assembled.count else {
             return .invalid("Plaintext length exceeds assembled size")
         }
-        return decodeAssembled(Data(assembled.prefix(entry.plaintextLength)))
+        return decodeAssembled(Data(assembled.prefix(entry.plaintextLength)), e2eMessageId: Self.e2eId(from: parsed.messageId))
     }
 
-    private func decodeAssembled(_ data: Data) -> ChunkedMessageResult {
+    /// Normalize a KNST-header UUID to the row-id format (lowercased). Rejects the all-zero
+    /// UUID that `toUUIDBytes()` yields for malformed headers.
+    private static func e2eId(from uuid: UUID) -> String? {
+        let id = uuid.uuidString.lowercased()
+        return id == "00000000-0000-0000-0000-000000000000" ? nil : id
+    }
+
+    private func decodeAssembled(_ data: Data, e2eMessageId: String?) -> ChunkedMessageResult {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
             if case .edit(let editMsg) = content.content {
                 return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: editMsg.newMedia)
             }
-            let (text, quoted) = extract(content)
-            return .assembled(text: text, quoted: quoted)
+            let (text, quoted, mediaAlbum) = extract(content)
+            return .assembled(text: text, quoted: quoted, e2eMessageId: e2eMessageId, mediaAlbum: mediaAlbum)
         }
         // Binary profile share before the UTF-8 fallback — it's a more specific, structured format,
         // and must surface as a profile (not a "__PROFILE_BINARY__" placeholder string).
@@ -177,7 +184,9 @@ final class ChunkedMessageReassembler {
             return .profile(data)
         }
         if let text = String(data: data, encoding: .utf8) {
-            return text.isEmpty ? .invalid("empty plaintext") : .assembled(text: text, quoted: nil)
+            return text.isEmpty
+                ? .invalid("empty plaintext")
+                : .assembled(text: text, quoted: nil, e2eMessageId: e2eMessageId, mediaAlbum: nil)
         }
         return .invalid("non-decodable binary (\(data.count) bytes)")
     }
@@ -190,8 +199,8 @@ final class ChunkedMessageReassembler {
             if case .edit(let editMsg) = content.content {
                 return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: editMsg.newMedia)
             }
-            let (text, quoted) = extract(content)
-            return .assembled(text: text, quoted: quoted)
+            let (text, quoted, mediaAlbum) = extract(content)
+            return .assembled(text: text, quoted: quoted, e2eMessageId: nil, mediaAlbum: mediaAlbum)
         }
         // Binary profile share (new format, no JSON) — check before the UTF-8 fallback so it
         // surfaces as a profile, not a "__PROFILE_BINARY__" placeholder text message.
@@ -206,16 +215,16 @@ final class ChunkedMessageReassembler {
     }
 
     private func extract(_ content: Shared_Proto_Messaging_V1_MessageContent)
-        -> (String, Shared_Proto_Messaging_V1_QuotedMessage?)
+        -> (String, Shared_Proto_Messaging_V1_QuotedMessage?, Shared_Proto_Messaging_V1_MediaAlbumMessage?)
     {
         switch content.content {
         case .text(let msg):
-            return (msg.text, msg.hasQuoted ? msg.quoted : nil)
+            return (msg.text, msg.hasQuoted ? msg.quoted : nil, nil)
         case .mediaAlbum(let album):
             // Binary media → re-serialize to the local media JSON the views parse.
-            return (MediaWireCodec.mediaJSON(from: album) ?? "", album.hasQuoted ? album.quoted : nil)
+            return (MediaWireCodec.mediaJSON(from: album) ?? "", album.hasQuoted ? album.quoted : nil, album)
         default:
-            return ("", nil)
+            return ("", nil, nil)
         }
     }
 
@@ -247,7 +256,7 @@ final class ChunkedMessageReassembler {
             guard let text = String(data: trimmed, encoding: .utf8) else {
                 return .invalid("Failed to decode plaintext")
             }
-            return .assembled(text: text, quoted: nil)
+            return .assembled(text: text, quoted: nil, e2eMessageId: Self.e2eId(from: parsed.messageId), mediaAlbum: nil)
         }
 
         if parsed.totalChunks > ChunkedDeliveryConfig.maxChunks {
@@ -286,7 +295,7 @@ final class ChunkedMessageReassembler {
         guard let text = String(data: trimmed, encoding: .utf8) else {
             return .invalid("Failed to decode assembled plaintext")
         }
-        return .assembled(text: text, quoted: nil)
+        return .assembled(text: text, quoted: nil, e2eMessageId: Self.e2eId(from: parsed.messageId), mediaAlbum: nil)
     }
 
     private func cleanupExpired() {
@@ -298,7 +307,16 @@ final class ChunkedMessageReassembler {
 enum ChunkedMessageResult {
     /// Successfully decoded message (KNST chunked or direct proto).
     /// `quoted` is non-nil when the sender embedded a reply reference in the proto plaintext.
-    case assembled(text: String, quoted: Shared_Proto_Messaging_V1_QuotedMessage?)
+    /// `e2eMessageId` is the sender's message id from the encrypted KNST header — the canonical
+    /// end-to-end identity of the message. It must be used as the stored row id so that
+    /// cross-device references (edits, E2E receipts, reply targets) keep working when the
+    /// server reassigns envelope ids on the sealed-sender path. nil for legacy/raw payloads.
+    case assembled(
+        text: String,
+        quoted: Shared_Proto_Messaging_V1_QuotedMessage?,
+        e2eMessageId: String?,
+        mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage?
+    )
     /// Non-KNST data decoded as plain UTF-8 (session control strings, legacy messages).
     case legacy(String)
     /// Assembled binary profile-share payload (raw bytes; decode with `ProfileShareData.fromBinaryData`).
