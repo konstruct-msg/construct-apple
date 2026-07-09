@@ -230,8 +230,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > EditMessage - Edit existing message (FUTURE - append-only revisions)
-        /// > Not implemented yet - reserved for future append-only edit chain
+        /// > DEPRECATED: EditMessage relied on a server-visible message id reference.
+        /// > Edits are now sent as regular E2EE messages with MessageContent.edit inside
+        /// > the encrypted payload. Kept as a stub returning UNIMPLEMENTED for old clients.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_EditMessageRequest` message.
@@ -254,8 +255,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > AddReaction - Add emoji reaction to message
-        /// > Encrypted: reaction is E2EE, server only sees message_id
+        /// > DEPRECATED: Reactions are sent as regular E2EE messages with
+        /// > MessageContent.reaction inside the encrypted payload. The server must not
+        /// > see which message is being reacted to. Kept as stubs returning UNIMPLEMENTED.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_AddReactionRequest` message.
@@ -278,7 +280,8 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > RemoveReaction - Remove reaction from message
+        /// > DEPRECATED: removal is handled by MessageContent.reaction with
+        /// > ReactionAction.REMOVE.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_RemoveReactionRequest` message.
@@ -480,8 +483,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > EditMessage - Edit existing message (FUTURE - append-only revisions)
-        /// > Not implemented yet - reserved for future append-only edit chain
+        /// > DEPRECATED: EditMessage relied on a server-visible message id reference.
+        /// > Edits are now sent as regular E2EE messages with MessageContent.edit inside
+        /// > the encrypted payload. Kept as a stub returning UNIMPLEMENTED for old clients.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_EditMessageRequest` message.
@@ -515,8 +519,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > AddReaction - Add emoji reaction to message
-        /// > Encrypted: reaction is E2EE, server only sees message_id
+        /// > DEPRECATED: Reactions are sent as regular E2EE messages with
+        /// > MessageContent.reaction inside the encrypted payload. The server must not
+        /// > see which message is being reacted to. Kept as stubs returning UNIMPLEMENTED.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_AddReactionRequest` message.
@@ -550,7 +555,8 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > RemoveReaction - Remove reaction from message
+        /// > DEPRECATED: removal is handled by MessageContent.reaction with
+        /// > ReactionAction.REMOVE.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_RemoveReactionRequest` message.
@@ -753,8 +759,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > EditMessage - Edit existing message (FUTURE - append-only revisions)
-    /// > Not implemented yet - reserved for future append-only edit chain
+    /// > DEPRECATED: EditMessage relied on a server-visible message id reference.
+    /// > Edits are now sent as regular E2EE messages with MessageContent.edit inside
+    /// > the encrypted payload. Kept as a stub returning UNIMPLEMENTED for old clients.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_EditMessageRequest` message.
@@ -783,8 +790,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > AddReaction - Add emoji reaction to message
-    /// > Encrypted: reaction is E2EE, server only sees message_id
+    /// > DEPRECATED: Reactions are sent as regular E2EE messages with
+    /// > MessageContent.reaction inside the encrypted payload. The server must not
+    /// > see which message is being reacted to. Kept as stubs returning UNIMPLEMENTED.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_AddReactionRequest` message.
@@ -813,7 +821,8 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > RemoveReaction - Remove reaction from message
+    /// > DEPRECATED: removal is handled by MessageContent.reaction with
+    /// > ReactionAction.REMOVE.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_RemoveReactionRequest` message.
@@ -1013,8 +1022,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > EditMessage - Edit existing message (FUTURE - append-only revisions)
-    /// > Not implemented yet - reserved for future append-only edit chain
+    /// > DEPRECATED: EditMessage relied on a server-visible message id reference.
+    /// > Edits are now sent as regular E2EE messages with MessageContent.edit inside
+    /// > the encrypted payload. Kept as a stub returning UNIMPLEMENTED for old clients.
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -1047,8 +1057,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > AddReaction - Add emoji reaction to message
-    /// > Encrypted: reaction is E2EE, server only sees message_id
+    /// > DEPRECATED: Reactions are sent as regular E2EE messages with
+    /// > MessageContent.reaction inside the encrypted payload. The server must not
+    /// > see which message is being reacted to. Kept as stubs returning UNIMPLEMENTED.
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -1081,7 +1092,8 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > RemoveReaction - Remove reaction from message
+    /// > DEPRECATED: removal is handled by MessageContent.reaction with
+    /// > ReactionAction.REMOVE.
     ///
     /// - Parameters:
     ///   - message: request message to send.
