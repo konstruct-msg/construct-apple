@@ -30,6 +30,7 @@ struct ChatsSplitView: View {
     @State private var showingQRScanner = false
     @State private var activeTab: SidebarTab = .chats
     @State private var showingDrafts = false
+    @State private var listRevision = 0
 
     private enum SidebarTab { case chats, settings }
 
@@ -102,6 +103,14 @@ struct ChatsSplitView: View {
         }
         .onAppear {
             chatsViewModel.setContext(viewContext)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
+            guard notificationContainsChatChanges(note) else { return }
+            listRevision &+= 1
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { note in
+            guard notificationContainsChatChanges(note) else { return }
+            listRevision &+= 1
         }
         .onChange(of: chatsViewModel.chatToOpen) { _, chatId in
             if let chatId {
@@ -193,6 +202,7 @@ struct ChatsSplitView: View {
             }
             .onDelete(perform: deleteChatsAtOffsets)
         }
+        .id(listRevision)
         .refreshable {
             #if os(iOS)
             await BackgroundFetchManager.shared.fetchPendingMessages()
@@ -243,6 +253,20 @@ struct ChatsSplitView: View {
     private func toggleMarkUnread(_ chat: Chat) {
         chat.unreadCount = chat.unreadCount > 0 ? 0 : 1
         try? viewContext.save()
+    }
+
+    private func notificationContainsChatChanges(_ note: Notification) -> Bool {
+        let keys = [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey]
+        for key in keys {
+            guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
+            if objects.contains(where: { entity in
+                let name = entity.entity.name
+                return name == "Chat" || name == "Message"
+            }) {
+                return true
+            }
+        }
+        return false
     }
 
     private func handleScannedContact(_ urlString: String) {

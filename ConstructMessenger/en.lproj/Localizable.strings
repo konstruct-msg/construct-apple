@@ -904,9 +904,11 @@
 "history_sync_send_title" = "Transfer History";
 "history_sync_receive_title" = "Receive History";
 "history_sync_offer_title" = "Transfer Message History?";
-"history_sync_offer_message" = "Do you want to receive your message history from a nearby device? Make sure both devices are on the same WiFi network.";
+"history_sync_offer_message" = "Receive your message history from the phone that just approved this device? Both devices must be on the same Wi‑Fi — no code entry needed.";
 "history_sync_offer_yes" = "Receive History";
 "history_sync_offer_skip" = "Skip";
+"history_sync_auto_connecting" = "Connecting to your phone…";
+"history_sync_auto_sending" = "Sending history to your computer…";
 "history_sync_user_mismatch" = "History transfer failed: this history belongs to a different account.";
 "call_error_not_contacts" = "Cannot call this node. Make sure you are mutual contacts.";
 "call_error_busy" = "You're already in a call.";

@@ -16,6 +16,8 @@ struct SendBackupNearbyView: View {
     }
 
     var mode: Mode = .backup
+    /// When set (post–device-link history sync), sender uses the shared PIN — no display step.
+    var autoPairingPIN: String? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var context
@@ -62,7 +64,14 @@ struct SendBackupNearbyView: View {
                 case .idle, .preparing:
                     preparingView
                 case .advertising:
-                    advertisingView
+                    if autoPairingPIN != nil {
+                        statusView(
+                            symbol: "[→]",
+                            label: NSLocalizedString("history_sync_auto_sending", comment: "")
+                        )
+                    } else {
+                        advertisingView
+                    }
                 case .browsing, .handshaking:
                     statusView(
                         symbol: "[↔]",
@@ -210,7 +219,7 @@ struct SendBackupNearbyView: View {
             let userId = mode == .historySync ? KeychainManager.shared.loadUserID() : nil
             let payload = try await LocalBackupService.shared.buildTransferPayload(context: context, userId: userId)
             let transferType: NearbyTransferService.TransferType = mode == .historySync ? .historySync : .backup
-            service.startSending(payload: payload, type: transferType)
+            service.startSending(payload: payload, type: transferType, fixedPIN: autoPairingPIN)
         } catch {
             errorMessage = error.localizedDescription
             showError = true

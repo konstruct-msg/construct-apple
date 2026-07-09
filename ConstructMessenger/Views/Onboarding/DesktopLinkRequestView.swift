@@ -22,8 +22,7 @@ struct DesktopLinkRequestView: View {
 
     @State private var vm = DeviceLinkViewModel()
     @State private var showError = false
-    @State private var showHistorySyncOffer = false
-    @State private var showReceiveHistorySync = false
+
 
     var body: some View {
         NavigationStack {
@@ -54,24 +53,9 @@ struct DesktopLinkRequestView: View {
             guard completed else { return }
             let userId = KeychainManager.shared.loadUserID() ?? ""
             authViewModel.finalizeDeviceRegistration(userId: userId, username: nil)
-            // Ensure direct core (OrchestratorCore) is initialized for Desktop (Strategy B)
-            CryptoManager.shared.setLocalUserId(userId)
-            showHistorySyncOffer = true
-        }
-        // MARK: History sync offer
-        .alert(NSLocalizedString("history_sync_offer_title", comment: ""), isPresented: $showHistorySyncOffer) {
-            Button(NSLocalizedString("history_sync_offer_yes", comment: "")) {
-                showReceiveHistorySync = true
-            }
-            Button(NSLocalizedString("history_sync_offer_skip", comment: ""), role: .cancel) {
-                dismiss()
-            }
-        } message: {
-            Text(NSLocalizedString("history_sync_offer_message", comment: ""))
-        }
-        .sheet(isPresented: $showReceiveHistorySync) {
-            ReceiveBackupNearbyView(mode: .historySync)
-                .onDisappear { dismiss() }
+            authViewModel.linkedJoinPendingDeviceId = vm.linkedPendingDeviceId
+            authViewModel.pendingHistorySyncOffer = true
+            dismiss()
         }
     }
 

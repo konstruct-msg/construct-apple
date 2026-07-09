@@ -914,9 +914,11 @@
 "history_sync_send_title" = "Передать историю";
 "history_sync_receive_title" = "Получить историю";
 "history_sync_offer_title" = "Перенести историю сообщений?";
-"history_sync_offer_message" = "Хотите получить историю сообщений с другого устройства? Убедитесь, что оба устройства в одной сети WiFi.";
+"history_sync_offer_message" = "Получить историю с телефона, который только что одобрил этот компьютер? Оба устройства должны быть в одной сети Wi‑Fi — код вводить не нужно.";
 "history_sync_offer_yes" = "Получить историю";
 "history_sync_offer_skip" = "Пропустить";
+"history_sync_auto_connecting" = "Подключение к телефону…";
+"history_sync_auto_sending" = "Отправка истории на компьютер…";
 "history_sync_user_mismatch" = "Ошибка переноса истории: история принадлежит другому аккаунту.";
 "call_error_not_contacts" = "Нельзя позвонить этому ноду. Убедитесь, что вы являетесь взаимными контактами.";
 "call_error_busy" = "Вы уже в звонке.";

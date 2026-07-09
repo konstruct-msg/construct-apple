@@ -21,9 +21,10 @@ struct DeviceLinkScanView: View {
 
     @State private var vm = DeviceLinkViewModel()
     @State private var showError = false
-    @State private var showApprovalSuccess = false
     @State private var showHistorySyncOffer = false
     @State private var showReceiveHistorySync = false
+    @State private var showSendHistorySync = false
+    @State private var historySyncPIN: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -109,15 +110,18 @@ struct DeviceLinkScanView: View {
             ReceiveBackupNearbyView(mode: .historySync)
                 .onDisappear { dismiss() }
         }
-        // MARK: Phone approved a laptop's join request
+        // MARK: Phone approved a laptop's join request — auto-start history send
         .onChange(of: vm.approvalGranted) { _, granted in
-            guard granted else { return }
-            showApprovalSuccess = true
+            guard granted,
+                  let pendingId = vm.approvedJoinPendingId,
+                  let userId = KeychainManager.shared.loadUserID() else { return }
+            historySyncPIN = HistorySyncPairing.pin(pendingDeviceId: pendingId, userId: userId)
+            showSendHistorySync = true
         }
-        .alert(LocalizedStringKey("device_link_approved_title"), isPresented: $showApprovalSuccess) {
-            Button(LocalizedStringKey("ok"), role: .cancel) { dismiss() }
-        } message: {
-            Text(LocalizedStringKey("device_link_approved_message"))
+        .sheet(isPresented: $showSendHistorySync) {
+            SendBackupNearbyView(mode: .historySync, autoPairingPIN: historySyncPIN)
+                .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+                .onDisappear { dismiss() }
         }
     }
 

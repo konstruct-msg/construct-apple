@@ -30,6 +30,11 @@ class AuthViewModel {
     /// would otherwise trigger auth re-attempts every few seconds).
     var isRegistrationInProgress = false
 
+    /// Set after Flow B device link on Desktop; survives navigation away from onboarding sheet.
+    var pendingHistorySyncOffer = false
+    /// Flow B desktop: pending_device_id used to derive the history-sync pairing PIN.
+    var linkedJoinPendingDeviceId: String? = nil
+
     func refreshDeviceKeyState() {
         // If already authenticated, don't re-read Keychain — it may be temporarily
         // inaccessible (WhenUnlockedThisDeviceOnly items while device is locked via

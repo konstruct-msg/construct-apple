@@ -15,11 +15,14 @@ struct ReceiveBackupNearbyView: View {
     }
 
     var mode: Mode = .backup
+    /// When set (post–device-link history sync), receiver auto-connects — no PIN entry.
+    var autoPairingPIN: String? = nil
 
     @Environment(\.dismiss) private var dismiss
 
     @State private var service = NearbyTransferService()
     @State private var pinInput = ""
+    @State private var didAutoStart = false
     @State private var showRestartAlert = false
     @State private var isStaging = false
     @State private var stagingError: String?
@@ -44,6 +47,12 @@ struct ReceiveBackupNearbyView: View {
             }
         }
         .onDisappear { service.cancel() }
+        .task {
+            guard !didAutoStart, let pin = autoPairingPIN, !pin.isEmpty else { return }
+            didAutoStart = true
+            pinInput = pin
+            service.startReceiving(pin: pin)
+        }
         .alert(NSLocalizedString("backup_restore_required_title", comment: ""), isPresented: $showRestartAlert) {
             Button(NSLocalizedString("ok", comment: ""), role: .cancel) { dismiss() }
         } message: {
@@ -65,7 +74,14 @@ struct ReceiveBackupNearbyView: View {
             LazyVStack(spacing: 24) {
                 switch service.transferState {
                 case .idle:
-                    pinEntryView
+                    if autoPairingPIN != nil {
+                        statusView(
+                            symbol: "[…]",
+                            label: NSLocalizedString("history_sync_auto_connecting", comment: "")
+                        )
+                    } else {
+                        pinEntryView
+                    }
                 case .browsing:
                     statusView(
                         symbol: "[?]",

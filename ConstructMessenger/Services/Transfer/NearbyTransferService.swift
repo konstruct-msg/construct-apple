@@ -103,11 +103,12 @@ final class NearbyTransferService {
 
     // MARK: - Public API
 
-    func startSending(payload: Data, type: TransferType) {
+    /// - Parameter fixedPIN: When set (e.g. post–device-link history sync), both peers use the same PIN.
+    func startSending(payload: Data, type: TransferType, fixedPIN: String? = nil) {
         guard case .idle = transferState else { return }
         transferState = .preparing
         progress = 0
-        let generatedPIN = generatePIN()
+        let generatedPIN = fixedPIN ?? generatePIN()
         pin = generatedPIN
 
         transferTask = Task {

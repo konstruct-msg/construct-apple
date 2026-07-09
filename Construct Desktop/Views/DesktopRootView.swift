@@ -31,8 +31,16 @@ struct DesktopRootView: View {
     @State private var showAddContact = false
     @State private var sidebarMode: SidebarMode = .chats
     @State private var callManager = CallManager.shared
+    @State private var showReceiveHistorySync = false
 
     private enum SidebarMode { case chats, synaps }
+
+    private var historySyncPairingPIN: String? {
+        guard let pendingId = authViewModel.linkedJoinPendingDeviceId,
+              let userId = authViewModel.currentUserId ?? KeychainManager.shared.loadUserID(),
+              !pendingId.isEmpty, !userId.isEmpty else { return nil }
+        return HistorySyncPairing.pin(pendingDeviceId: pendingId, userId: userId)
+    }
 
     var body: some View {
         Group {
@@ -87,6 +95,29 @@ struct DesktopRootView: View {
         }
         .onChange(of: chatsViewModel.totalUnreadCount) { _, count in
             NSApplication.shared.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
+        }
+        .alert(
+            NSLocalizedString("history_sync_offer_title", comment: ""),
+            isPresented: Binding(
+                get: { authViewModel.pendingHistorySyncOffer },
+                set: { if !$0 { authViewModel.pendingHistorySyncOffer = false } }
+            )
+        ) {
+            Button(NSLocalizedString("history_sync_offer_yes", comment: "")) {
+                authViewModel.pendingHistorySyncOffer = false
+                showReceiveHistorySync = true
+            }
+            Button(NSLocalizedString("history_sync_offer_skip", comment: ""), role: .cancel) {
+                authViewModel.pendingHistorySyncOffer = false
+            }
+        } message: {
+            Text(NSLocalizedString("history_sync_offer_message", comment: ""))
+        }
+        .sheet(isPresented: $showReceiveHistorySync) {
+            ReceiveBackupNearbyView(
+                mode: .historySync,
+                autoPairingPIN: historySyncPairingPIN
+            )
         }
     }
 
