@@ -23,7 +23,6 @@ struct DevicesView: View {
     @State private var errorMessage: String? = nil
     @State private var showingQRSheet = false
     @State private var showingScanner = false
-    @State private var showSendHistorySync = false
     @State private var deviceToRevoke: AuthServiceClient.LinkedDevice? = nil
     @State private var showRevokeConfirm = false
     @State private var showSignOutConfirm = false
@@ -91,30 +90,24 @@ struct DevicesView: View {
                     // MARK: - Link / Approve
                     VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
                         CTSectionGroup {
-                            ConstructButtonRow(systemImage: "plus.circle", title: LocalizedStringKey("link_new_device")) {
+                            #if os(iOS)
+                            // Primary: open the camera to scan the QR shown on the other device.
+                            ConstructButtonRow(systemImage: "qrcode.viewfinder", title: LocalizedStringKey("link_new_device")) {
+                                showingScanner = true
+                            }
+                            ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
+                            // Secondary: show this device's QR (camera-broken fallback / other device scans us).
+                            ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("device_link_show_qr")) {
                                 showingQRSheet = true
                             }
-                            #if os(iOS)
-                            ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
-                            ConstructButtonRow(systemImage: "qrcode.viewfinder", title: LocalizedStringKey("device_scan_to_approve")) {
-                                showingScanner = true
+                            #else
+                            // macOS has no camera — the only path is showing this device's QR.
+                            ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("link_new_device")) {
+                                showingQRSheet = true
                             }
                             #endif
                         }
                         Text(LocalizedStringKey("linked_devices_hint"))
-                            .font(CTFont.regular(12))
-                            .foregroundStyle(Color.CT.textDim)
-                            .settingsSectionHintInsets()
-                    }
-
-                    // MARK: - History Transfer
-                    VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
-                        CTSectionGroup {
-                            ConstructButtonRow(systemImage: "arrow.right.arrow.left", title: LocalizedStringKey("transfer_history_row")) {
-                                showSendHistorySync = true
-                            }
-                        }
-                        Text(LocalizedStringKey("transfer_history_hint"))
                             .font(CTFont.regular(12))
                             .foregroundStyle(Color.CT.textDim)
                             .settingsSectionHintInsets()
@@ -159,10 +152,6 @@ struct DevicesView: View {
 
         // MARK: Sheets
         .sheet(isPresented: $showingQRSheet) { DeviceLinkQRSheet() }
-        .sheet(isPresented: $showSendHistorySync) {
-            SendBackupNearbyView(mode: .historySync)
-                .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
-        }
         #if os(iOS)
         .sheet(isPresented: $showingScanner) { DeviceLinkScanView() }
         #endif

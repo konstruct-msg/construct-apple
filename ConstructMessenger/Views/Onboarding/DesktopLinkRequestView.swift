@@ -49,13 +49,12 @@ struct DesktopLinkRequestView: View {
             }
         }
         .onChange(of: vm.errorMessage) { _, msg in showError = msg != nil }
-        .onChange(of: vm.linkCompleted) { _, completed in
-            guard completed else { return }
-            let userId = KeychainManager.shared.loadUserID() ?? ""
-            authViewModel.finalizeDeviceRegistration(userId: userId, username: nil)
-            authViewModel.linkedJoinPendingDeviceId = vm.linkedPendingDeviceId
-            authViewModel.pendingHistorySyncOffer = true
-            dismiss()
+        .onChange(of: vm.linkOutcome) { _, outcome in
+            guard let outcome else { return }
+            Task {
+                await authViewModel.completeDeviceLink(outcome)
+                dismiss()
+            }
         }
     }
 

@@ -30,10 +30,8 @@ class AuthViewModel {
     /// would otherwise trigger auth re-attempts every few seconds).
     var isRegistrationInProgress = false
 
-    /// Set after Flow B device link on Desktop; survives navigation away from onboarding sheet.
-    var pendingHistorySyncOffer = false
-    /// Flow B desktop: pending_device_id used to derive the history-sync pairing PIN.
-    var linkedJoinPendingDeviceId: String? = nil
+    /// Drives post-link history sync UI (receive on desktop, send on phone).
+    var deviceLinkPhase: DeviceLinkPhase = .idle
 
     func refreshDeviceKeyState() {
         // If already authenticated, don't re-read Keychain — it may be temporarily
@@ -362,12 +360,15 @@ class AuthViewModel {
             // Transient network errors, timeouts, or server outages must NOT delete keys —
             // that would permanently log out the user on a bad Wi-Fi reconnect.
             let description = "\(error)"
+            let lower = description.lowercased()
             let isDeviceRejected = description.contains("unauthenticated")
                 || description.contains("permission_denied")
                 || description.contains("UNAUTHENTICATED")
                 || description.contains("PERMISSION_DENIED")
                 || description.contains("error 16")   // gRPC UNAUTHENTICATED
                 || description.contains("error 7")    // gRPC PERMISSION_DENIED
+                || lower.contains("device is inactive")
+                || lower.contains("device inactive")
 
             if isDeviceRejected {
                 // If we have a pending registration bundle, the keys were saved before
@@ -381,7 +382,9 @@ class AuthViewModel {
                         hasRegisteredDeviceKeys = false
                     } else {
                         Log.error("🗑️ Server rejected device (401/403) — clearing keys to show onboarding", category: "Auth")
+                        CryptoManager.shared.deleteAllCryptoKeys()
                         KeychainManager.shared.deleteDeviceKeys()
+                        KeychainManager.shared.deleteOtpks()
                         hasRegisteredDeviceKeys = false
                     }
                 }
@@ -468,8 +471,65 @@ class AuthViewModel {
     func finalizeDeviceRegistration(userId: String, username: String?) {
         currentUserId = userId
         isAuthenticated = true
+        hasRegisteredDeviceKeys = true
         scheduleTokenRefresh()
         loadUserFromCoreData(userId: userId, username: username)
+    }
+
+    /// Unified post-link bootstrap for Flow A (confirm) and Flow B (join request / approve).
+    func completeDeviceLink(_ outcome: DeviceLinkOutcome) async {
+        Log.info("completeDeviceLink role=\(outcome.role) deviceId=\(outcome.deviceId.prefix(8))…", category: "DeviceLink")
+
+        currentUserId = outcome.userId
+        isAuthenticated = true
+        hasRegisteredDeviceKeys = true
+        scheduleTokenRefresh()
+
+        if outcome.role == .linkedNewDevice, !CryptoManager.shared.isInitialized {
+            CryptoManager.shared.resetOrchestratorStateForDeviceLink()
+            CryptoManager.shared.setLocalUserId(outcome.userId)
+        }
+
+        await refreshUserProfileFromServer(userId: outcome.userId)
+        loadUserFromCoreData(userId: outcome.userId)
+
+        let deviceId = KeychainManager.shared.loadDeviceID() ?? outcome.deviceId
+        Task {
+            await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+        }
+        Task {
+            await ServerKeyManager.shared.prefetch()
+        }
+
+        switch outcome.role {
+        case .linkedNewDevice:
+            #if os(macOS)
+            let pendingId = outcome.pendingDeviceId ?? outcome.deviceId
+            deviceLinkPhase = .historySyncReceive(pendingDeviceId: pendingId)
+            #else
+            deviceLinkPhase = .historySyncReceive(pendingDeviceId: outcome.deviceId)
+            #endif
+        case .approvedJoinRequest:
+            #if os(iOS)
+            if let pendingId = outcome.pendingDeviceId {
+                deviceLinkPhase = .historySyncSend(pendingDeviceId: pendingId)
+            }
+            #endif
+        }
+    }
+
+    func clearDeviceLinkPhase() {
+        deviceLinkPhase = .idle
+    }
+
+    private func refreshUserProfileFromServer(userId: String) async {
+        do {
+            let profile = try await UserServiceClient.shared.getUserProfile(userId: userId)
+            let username = profile.username.isEmpty ? nil : profile.username
+            loadUserFromCoreData(userId: userId, username: username)
+        } catch {
+            Log.debug("Profile fetch after device link failed (non-fatal): \(error)", category: "DeviceLink")
+        }
     }
 
     /// Handles the critical case where the user is authenticated (has a session token) but
@@ -539,37 +599,41 @@ class AuthViewModel {
     func logout() {
         Task { [weak self] in
             guard let self else { return }
-            await SessionLifecycleController.shared.sendEndSessionToAllContacts(reason: "logout")
-            Log.info("END_SESSION sent to all contacts on logout", category: "Auth")
-            
-            // 1. Logout via gRPC
             if AuthSessionManager.shared.sessionToken != nil {
+                await SessionLifecycleController.shared.sendEndSessionToAllContacts(reason: "logout")
+                Log.info("END_SESSION sent to all contacts on logout", category: "Auth")
                 do {
                     try await AuthServiceClient.shared.logout()
                 } catch {
                     Log.error("Logout API call failed: \(error.localizedDescription)", category: "Auth")
-                    // Continue with local logout even if API call fails
                 }
             }
-            
             await MainActor.run {
-                self.cancelTimeouts()
-                AuthSessionManager.shared.clearSession()
-                UserDefaults.standard.removeObject(forKey: "recovery_is_setup")
-                UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
-                KeychainManager.shared.deleteAllContactRequestMappings()
-                UserDefaults.standard.removeObject(forKey: "cr_pending_nav_user_ids")
-
-                // Note: We keep the username in Keychain for convenience on next login
-                // If you want to clear it, uncomment the line below:
-                // KeychainManager.shared.deleteLastUsername()
-
-                self.isAuthenticated = false
-                self.currentUserId = nil
-                self.currentUser = nil  // REFACTOR Phase 1.2
+                self.performLocalSignOut()
             }
             await MediaSendCache.shared.clear()
         }
+    }
+
+    /// Wipes local session + device identity so ContentView routes back to onboarding.
+    /// Safe to call when the server logout RPC is unavailable (revoked/inactive device).
+    func performLocalSignOut() {
+        cancelTimeouts()
+        MessageStreamManager.shared.disconnect()
+        AuthSessionManager.shared.clearSession()
+        CryptoManager.shared.deleteAllCryptoKeys()
+        KeychainManager.shared.deleteDeviceKeys()
+        KeychainManager.shared.deleteAllContactRequestMappings()
+        UserDefaults.standard.removeObject(forKey: "recovery_is_setup")
+        UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
+        UserDefaults.standard.removeObject(forKey: "cr_pending_nav_user_ids")
+        deviceLinkPhase = .idle
+        deviceKeysUnavailable = false
+        isAuthenticated = false
+        currentUserId = nil
+        currentUser = nil
+        hasRegisteredDeviceKeys = false
+        Log.info("Local sign-out complete — routing to onboarding", category: "Auth")
     }
 
     /// Signs out of ALL devices simultaneously (invalidates all refresh tokens server-side),
@@ -586,13 +650,7 @@ class AuthViewModel {
                 }
             }
             await MainActor.run {
-                self.cancelTimeouts()
-                AuthSessionManager.shared.clearSession()
-                UserDefaults.standard.removeObject(forKey: "recovery_is_setup")
-                UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
-                self.isAuthenticated = false
-                self.currentUserId = nil
-                self.currentUser = nil
+                self.performLocalSignOut()
             }
         }
     }

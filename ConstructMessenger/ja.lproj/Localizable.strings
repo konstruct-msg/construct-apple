@@ -268,6 +268,7 @@
 "linked_devices_hint" = "複数のレプリカで同じアイデンティティを同時に使用します。";
 "linked_devices_coming_soon" = "追加レプリカの連携は、今後のアップデートで利用可能になる予定です。";
 "link_new_device" = "新しいレプリカを連携";
+"device_link_show_qr" = "QRコードを表示";
 "transfer_history_row" = "近くのデバイスに履歴を転送";
 "transfer_history_hint" = "同じWiFiネットワーク上のデバイスにメッセージ履歴を送信します。";
 "this_device" = "このレプリカ";
@@ -867,6 +868,10 @@
 "history_sync_offer_message" = "近くのデバイスからメッセージ履歴を受信しますか？両方のデバイスが同じWiFiネットワーク上にあることを確認してください。";
 "history_sync_offer_yes" = "履歴を受信";
 "history_sync_offer_skip" = "スキップ";
+"history_sync_send_offer_title" = "メッセージ履歴を同期しますか？";
+"history_sync_send_offer_message" = "メッセージ履歴を新しいデバイスに送信しますか？両方のデバイスが同じWi‑Fiネットワーク上にある必要があります — コードは不要です。";
+"history_sync_send_offer_yes" = "履歴を同期";
+"history_sync_send_offer_skip" = "スキップ";
 "history_sync_user_mismatch" = "履歴の転送に失敗しました：この履歴は別のアイデンティティのものです。";
 "call_error_not_contacts" = "このノードに発信できません。お互いをノードとして追加していることを確認してください。";
 "call_error_peer_offline" = "ノードがオフラインです。後でもう一度お試しください。";

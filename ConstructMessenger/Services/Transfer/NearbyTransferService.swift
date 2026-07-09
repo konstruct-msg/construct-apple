@@ -247,9 +247,18 @@ final class NearbyTransferService {
                 }
             }
             browser.stateUpdateHandler = { state in
-                if case .failed(let error) = state, !flag.done {
+                guard !flag.done else { return }
+                switch state {
+                case .failed(let error):
                     flag.done = true
                     cont.resume(throwing: error)
+                case .cancelled:
+                    // cancel() tears the browser down (e.g. the receive sheet was dismissed).
+                    // Resume so the awaiting Task unwinds instead of leaking its continuation.
+                    flag.done = true
+                    cont.resume(throwing: CancellationError())
+                default:
+                    break
                 }
             }
             browser.start(queue: queue)

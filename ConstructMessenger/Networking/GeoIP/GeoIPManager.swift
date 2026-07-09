@@ -20,6 +20,18 @@ actor GeoIPManager {
 
     static let shared = GeoIPManager()
 
+    /// GeoIP is disabled until multi-relay infrastructure is deployed. With a single
+    /// veil-front relay, region-based relay selection is a no-op and the censorship
+    /// signal doesn't gate connections (auto-mode is direct-first), so shipping the
+    /// ~20 MB GeoLite2 databases in the bundle earns nothing. When disabled, `region`
+    /// returns `.unknown` and `resolve()` short-circuits (no STUN, no mmdb lookup) so
+    /// every consumer falls back to the timezone heuristic exactly as before.
+    ///
+    /// Re-enable when multiple relays exist: set this `true`, re-add
+    /// `GeoLite2-Country.mmdb` / `GeoLite2-ASN.mmdb` to the target's Resources, and
+    /// restore the `fetch_geoip.sh` build phase (see scripts/fetch_geoip.sh).
+    static let isEnabled = false
+
     // ISO 3166-1 alpha-2 codes of countries with documented DPI / gRPC blocking.
     private static let censoredCountries: Set<String> = [
         "RU",  // Russia
@@ -48,6 +60,7 @@ actor GeoIPManager {
 
     /// Returns the most recently resolved region. `.unknown` if resolve() has not completed yet.
     nonisolated var region: GeoIPRegion {
+        guard Self.isEnabled else { return .unknown }
         // Read from UserDefaults directly — safe without actor isolation
         guard let raw = UserDefaults.standard.string(forKey: Self.cacheKey),
               let r = GeoIPRegion(rawValue: raw) else { return .unknown }
@@ -60,6 +73,10 @@ actor GeoIPManager {
     /// Callers may await this to get the result synchronously.
     @discardableResult
     func resolve() async -> GeoIPRegion {
+        guard Self.isEnabled else { return .unknown }
+        #if os(macOS)
+        return .unknown
+        #else
         if resolvedRegion != .unknown { return resolvedRegion }
         if resolving { return resolvedRegion }
         resolving = true
@@ -70,13 +87,18 @@ actor GeoIPManager {
         UserDefaults.standard.set(result.rawValue, forKey: Self.cacheKey)
         Log.info("GeoIP resolved: \(result.rawValue)", category: "GeoIP")
         return result
+        #endif
     }
 
     /// Discards the cached result and re-resolves. Call on network-path changes.
     func invalidate() {
+        #if os(macOS)
+        return
+        #else
         resolvedRegion = .unknown
         UserDefaults.standard.removeObject(forKey: Self.cacheKey)
         UserDefaults.standard.removeObject(forKey: Self.cacheIPKey)
+        #endif
     }
 
     // MARK: - Private

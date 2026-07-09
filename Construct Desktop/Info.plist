@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Local-network / Bonjour access for peer-to-peer history transfer over Wi‑Fi
+	  (NearbyTransferService, service type _construct-transfer._tcp).
+	  On macOS 15+ (Local Network Privacy) NWBrowser/NWListener require both the
+	  usage description AND the declared Bonjour service type, otherwise discovery
+	  silently returns nothing. GENERATE_INFOPLIST_FILE=YES merges the standard
+	  generated keys on top of this seed.
+	-->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Konstruct uses the local network to transfer your message history to a newly linked device over Wi‑Fi.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_construct-transfer._tcp</string>
+	</array>
+</dict>
+</plist>

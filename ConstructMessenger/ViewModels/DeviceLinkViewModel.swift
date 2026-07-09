@@ -27,8 +27,8 @@ final class DeviceLinkViewModel {
     // MARK: - State (Device B)
 
     var isLinking: Bool = false
-    /// Set to true on successful link completion (triggers navigation).
-    var linkCompleted: Bool = false
+    /// Set when link handshake completes — views forward to AuthViewModel.completeDeviceLink.
+    var linkOutcome: DeviceLinkOutcome? = nil
 
     // MARK: - Shared error state
 
@@ -43,12 +43,8 @@ final class DeviceLinkViewModel {
     var isWaitingForApproval: Bool = false
     /// Set by the phone when it scans a "link-to-me" QR — triggers confirmation dialog in the view.
     var pendingApproval: PendingApprovalInfo? = nil
-    /// True when the phone has successfully approved a join request (phone side only).
-    var approvalGranted: Bool = false
     /// Flow B: pending_device_id the phone just approved (for auto history-sync pairing).
     private(set) var approvedJoinPendingId: String? = nil
-    /// Flow B: desktop's pending_device_id after link (for auto history-sync pairing).
-    var linkedPendingDeviceId: String? { joinDeviceId }
 
     struct PendingApprovalInfo {
         let deviceName: String
@@ -115,7 +111,8 @@ final class DeviceLinkViewModel {
         defer { isLinking = false }
 
         do {
-            // 1. Generate fresh keys for this new device
+            CryptoManager.shared.prepareForDeviceLink()
+            KeychainManager.shared.deleteDeviceKeys()
             let (deviceId, bundle, signingKey, identityKey) = try CryptoManager.shared.generateRegistrationBundle()
             persistDeviceKeys(deviceId: deviceId, signingKey: signingKey, identityKey: identityKey)
 
@@ -137,7 +134,12 @@ final class DeviceLinkViewModel {
 
             Log.info("Device B: link confirmed — userId=\(result.userId.prefix(8))…", category: "DeviceLink")
 
-            await finishLink(result: result, deviceId: deviceId)
+            await finishLink(
+                result: result,
+                deviceId: deviceId,
+                role: .linkedNewDevice,
+                pendingDeviceId: nil
+            )
 
         } catch {
             errorMessage = localizedError(error)
@@ -157,6 +159,8 @@ final class DeviceLinkViewModel {
         joinRequestQRContent = nil
         defer { isGenerating = false }
         do {
+            CryptoManager.shared.prepareForDeviceLink()
+            KeychainManager.shared.deleteDeviceKeys()
             let (deviceId, bundle, signingKey, identityKey) = try CryptoManager.shared.generateRegistrationBundle()
             joinDeviceId = deviceId
             joinSigningKey = signingKey
@@ -210,7 +214,12 @@ final class DeviceLinkViewModel {
                             self.persistDeviceKeys(deviceId: deviceId, signingKey: signingKey, identityKey: identityKey)
                         }
                         self.isWaitingForApproval = false
-                        await self.finishLink(result: result, deviceId: deviceId)
+                        await self.finishLink(
+                            result: result,
+                            deviceId: deviceId,
+                            role: .linkedNewDevice,
+                            pendingDeviceId: pendingId
+                        )
                         break
                     }
                 } catch DeviceLinkError.rejected {
@@ -226,7 +235,7 @@ final class DeviceLinkViewModel {
                     Log.debug("checkDeviceLinkStatus polling: \(error)", category: "DeviceLink")
                 }
             }
-            if !self.linkCompleted {
+            if self.linkOutcome == nil {
                 self.isWaitingForApproval = false
             }
         }
@@ -257,7 +266,14 @@ final class DeviceLinkViewModel {
                 newDevicePlatform: platform
             )
             approvedJoinPendingId = pendingId
-            approvalGranted = true
+            if let userId = KeychainManager.shared.loadUserID() {
+                linkOutcome = DeviceLinkOutcome(
+                    role: .approvedJoinRequest,
+                    userId: userId,
+                    deviceId: KeychainManager.shared.loadDeviceID() ?? "",
+                    pendingDeviceId: pendingId
+                )
+            }
             Log.info("Approved join request for '\(name)' (id=\(pendingId.prefix(8))…)", category: "DeviceLink")
         } catch {
             errorMessage = localizedError(error)
@@ -282,7 +298,12 @@ final class DeviceLinkViewModel {
     }
 
     /// Persists session tokens (with expiry + GRPC cache sync), initializes crypto, uploads OTPKs.
-    private func finishLink(result: AuthServiceClient.ConfirmLinkResult, deviceId: String) async {
+    private func finishLink(
+        result: AuthServiceClient.ConfirmLinkResult,
+        deviceId: String,
+        role: DeviceLinkOutcome.Role,
+        pendingDeviceId: String?
+    ) async {
         let expiresIn = max(Int(result.expiresAt - Int64(Date().timeIntervalSince1970)), 0)
 
         AuthSessionManager.shared.saveTokens(
@@ -293,9 +314,17 @@ final class DeviceLinkViewModel {
         )
         VeilProxyManager.shared.configureFromServer(cert: result.veilBridgeCert ?? "")
 
+        CryptoManager.shared.resetOrchestratorStateForDeviceLink()
         CryptoManager.shared.setLocalUserId(result.userId)
         await uploadPreKeysAfterLink(deviceId: deviceId)
-        linkCompleted = true
+        PreKeyRotationService.shared.recordSpkUpload()
+
+        linkOutcome = DeviceLinkOutcome(
+            role: role,
+            userId: result.userId,
+            deviceId: deviceId,
+            pendingDeviceId: pendingDeviceId
+        )
     }
 
     private func uploadPreKeysAfterLink(deviceId: String) async {

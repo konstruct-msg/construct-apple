@@ -346,6 +346,7 @@
 "linked_devices_hint" = "Используйте аккаунт одновременно на нескольких устройствах.";
 "linked_devices_coming_soon" = "Привязка дополнительных устройств появится в одном из следующих обновлений.";
 "link_new_device" = "Привязать устройство";
+"device_link_show_qr" = "Показать QR-код";
 "transfer_history_row" = "Передать историю на соседнее устройство";
 "transfer_history_hint" = "Отправьте историю сообщений на устройство в той же сети WiFi.";
 "this_device" = "Это устройство";
@@ -917,6 +918,10 @@
 "history_sync_offer_message" = "Получить историю с телефона, который только что одобрил этот компьютер? Оба устройства должны быть в одной сети Wi‑Fi — код вводить не нужно.";
 "history_sync_offer_yes" = "Получить историю";
 "history_sync_offer_skip" = "Пропустить";
+"history_sync_send_offer_title" = "Синхронизировать историю сообщений?";
+"history_sync_send_offer_message" = "Отправить историю сообщений на новое устройство? Оба устройства должны быть в одной сети Wi‑Fi — коды вводить не нужно.";
+"history_sync_send_offer_yes" = "Синхронизировать";
+"history_sync_send_offer_skip" = "Пропустить";
 "history_sync_auto_connecting" = "Подключение к телефону…";
 "history_sync_auto_sending" = "Отправка истории на компьютер…";
 "history_sync_user_mismatch" = "Ошибка переноса истории: история принадлежит другому аккаунту.";
