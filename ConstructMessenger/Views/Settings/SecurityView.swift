@@ -25,8 +25,15 @@ struct SecurityView: View {
     @State private var lockdown = LockdownManager.shared
     @State private var tokenWallet = TokenWalletService.shared
 
-    @AppStorage("stealth_mode_enabled") private var stealthEnabled = false
     @AppStorage("stealth_per_message") private var stealthPerMessage = false
+
+    /// Binding adapter so we can drive CTModeSelector (like the VEIL tri-state) from the existing Bool storage.
+    private var stealthScope: Binding<StealthScope> {
+        Binding(
+            get: { StealthScope.from(isPerMessage: stealthPerMessage) },
+            set: { newScope in stealthPerMessage = newScope.isPerMessage }
+        )
+    }
 
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
@@ -35,7 +42,11 @@ struct SecurityView: View {
                 title: NSLocalizedString("security", comment: ""),
                 showBack: true,
                 backAction: { dismiss() }
-            )
+            ) {
+                EmptyView()
+            } trailing: {
+                EmptyView()
+            }
             ScrollView {
             LazyVStack(spacing: 0) {
 
@@ -223,105 +234,72 @@ struct SecurityView: View {
                 CTSep()
 
                 // MARK: - Stealth
+                // stealth-sealed-sender-v2 Phase 4: always on (StealthPolicy.isEnabled),
+                // no user-facing toggle. Reflects StealthPolicy.shared.isEnabled directly
+                // so a DEBUG developer override (Diagnostics → Developer) shows correctly.
                 HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                    CTRowIcon(sf: stealthEnabled ? "eye.slash.fill" : "lock.fill", color: stealthEnabled ? Color.CT.accent : Color.CT.textDim)
+                    CTRowIcon(sf: "eye.slash.fill", color: StealthPolicy.shared.isEnabled ? Color.CT.accent : Color.CT.textDim)
                     VStack(alignment: .leading, spacing: SecuritySettingsLayout.lockStatusSpacing) {
                         Text(LocalizedStringKey("stealth_toggle_title"))
                             .font(CTFont.regular(13))
                             .foregroundStyle(Color.CT.text)
-                        if stealthEnabled {
-                            Text(LocalizedStringKey("stealth_toggle_active_hint"))
-                                .font(CTFont.regular(11))
-                                .foregroundStyle(Color.CT.accent.opacity(0.8))
-                        }
+                        Text(LocalizedStringKey(StealthPolicy.shared.isEnabled ? "stealth_toggle_active_hint" : "stealth_hint"))
+                            .font(CTFont.regular(11))
+                            .foregroundStyle(StealthPolicy.shared.isEnabled ? Color.CT.accent.opacity(0.8) : Color.CT.textDim)
                     }
                     Spacer()
-                    Toggle("", isOn: $stealthEnabled)
-                        .labelsHidden()
-                        .tint(Color.CT.accent)
                 }
                 .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
 
+                Rectangle()
+                    .fill(Color.CT.noise.opacity(SecuritySettingsLayout.separatorOpacity))
+                    .frame(height: 1)
+                    .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
+
+                // Scope selector — normal CTModeSelector (same as VEIL off/auto/on).
+                CTModeSelector(
+                    selection: stealthScope,
+                    options: StealthScope.allCases,
+                    labels: [
+                        .perStream: NSLocalizedString("stealth_scope_stream_short", comment: ""),
+                        .perMessage: NSLocalizedString("stealth_scope_message_short", comment: "")
+                    ],
+                    width: .infinity
+                )
+                .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
+                .padding(.vertical, SecuritySettingsLayout.compactRowVerticalPadding)
+
+                // Dynamic one-line hint for the chosen scope (matches the previous per-choice hints).
+                let scopeHintKey = stealthPerMessage ? "stealth_scope_message_hint" : "stealth_scope_stream_hint"
                 securityHintText(
-                    LocalizedStringKey("stealth_hint"),
+                    LocalizedStringKey(scopeHintKey),
                     color: Color.CT.textDim,
                     top: SecuritySettingsLayout.hintCompactTopPadding
                 )
 
-                if stealthEnabled {
-                    Rectangle()
-                        .fill(Color.CT.noise.opacity(SecuritySettingsLayout.separatorOpacity))
-                        .frame(height: 1)
-                        .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
+                Rectangle()
+                    .fill(Color.CT.noise.opacity(SecuritySettingsLayout.separatorOpacity))
+                    .frame(height: 1)
+                    .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
 
-                    // Per-stream (default) vs per-message
-                    Button {
-                        stealthPerMessage = false
-                    } label: {
-                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                            CTRowIcon(stealthPerMessage ? "[ ]" : "[•]", color: stealthPerMessage ? Color.CT.textDim : Color.CT.accent)
-                            VStack(alignment: .leading, spacing: SecuritySettingsLayout.lockStatusSpacing) {
-                                Text(LocalizedStringKey("stealth_scope_stream"))
-                                    .font(CTFont.regular(13))
-                                    .foregroundStyle(Color.CT.text)
-                                Text(LocalizedStringKey("stealth_scope_stream_hint"))
-                                    .font(CTFont.regular(11))
-                                    .foregroundStyle(Color.CT.textDim)
-                            }
-                            Spacer()
-                        }
-                        .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
-                    }
-                    .buttonStyle(.plain)
-
-                    Rectangle()
-                        .fill(Color.CT.noise.opacity(SecuritySettingsLayout.separatorOpacity))
-                        .frame(height: 1)
-                        .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
-
-                    Button {
-                        stealthPerMessage = true
-                    } label: {
-                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                            CTRowIcon(stealthPerMessage ? "[•]" : "[ ]", color: stealthPerMessage ? Color.CT.accent : Color.CT.textDim)
-                            VStack(alignment: .leading, spacing: SecuritySettingsLayout.lockStatusSpacing) {
-                                Text(LocalizedStringKey("stealth_scope_message"))
-                                    .font(CTFont.regular(13))
-                                    .foregroundStyle(Color.CT.text)
-                                Text(LocalizedStringKey("stealth_scope_message_hint"))
-                                    .font(CTFont.regular(11))
-                                    .foregroundStyle(Color.CT.textDim)
-                            }
-                            Spacer()
-                        }
-                        .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
-                    }
-                    .buttonStyle(.plain)
-
-                    Rectangle()
-                        .fill(Color.CT.noise.opacity(SecuritySettingsLayout.separatorOpacity))
-                        .frame(height: 1)
-                        .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
-
-                    // Token wallet balance
-                    HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                        CTRowIcon("[T]", color: tokenWallet.balance > 0 ? Color.CT.accent : Color.CT.textDim)
-                        Text(LocalizedStringKey("stealth_token_wallet"))
-                            .font(CTFont.regular(13))
-                            .foregroundStyle(Color.CT.textDim)
-                        Spacer()
-                        Text(String(format: NSLocalizedString("stealth_token_count", comment: ""), tokenWallet.balance))
-                            .font(CTFont.regular(12))
-                            .foregroundStyle(tokenWallet.balance > 0 ? Color.CT.accent : Color.CT.textDim.opacity(0.6))
-                    }
-                    .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
-
-                    securityHintText(
-                        LocalizedStringKey("stealth_token_wallet_hint"),
-                        color: Color.CT.textDim.opacity(SecuritySettingsLayout.hintDisabledOpacity),
-                        top: SecuritySettingsLayout.hintCompactTopPadding
-                    )
+                // Token wallet balance
+                HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                    CTRowIcon("[T]", color: tokenWallet.balance > 0 ? Color.CT.accent : Color.CT.textDim)
+                    Text(LocalizedStringKey("stealth_token_wallet"))
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.textDim)
+                    Spacer()
+                    Text(String(format: NSLocalizedString("stealth_token_count", comment: ""), tokenWallet.balance))
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(tokenWallet.balance > 0 ? Color.CT.accent : Color.CT.textDim.opacity(0.6))
                 }
+                .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
+
+                securityHintText(
+                    LocalizedStringKey("stealth_token_wallet_hint"),
+                    color: Color.CT.textDim.opacity(SecuritySettingsLayout.hintDisabledOpacity),
+                    top: SecuritySettingsLayout.hintCompactTopPadding
+                )
 
                 CTSep()
 
@@ -496,6 +474,12 @@ private struct KTStatusSection: View {
         return NSLocalizedString("kt_no_data", comment: "")
     }
 
+    private var statusBadge: CTStatus {
+        if failureCount > 0 { return .warning }
+        if verifiedCount > 0 { return .ok }
+        return .unknown
+    }
+
     private var statusColor: Color {
         if failureCount > 0 { return Color.CT.danger }
         if verifiedCount > 0 { return Color.CT.accent }
@@ -511,6 +495,7 @@ private struct KTStatusSection: View {
                 .font(CTFont.regular(13))
                 .foregroundStyle(Color.CT.text)
             Spacer()
+            CTStatusBadge(status: statusBadge, size: 12)
             Text(statusText)
                 .font(CTFont.regular(11))
                 .foregroundStyle(statusColor)

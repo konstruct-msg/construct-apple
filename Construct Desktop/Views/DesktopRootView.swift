@@ -31,15 +31,25 @@ struct DesktopRootView: View {
     @State private var showAddContact = false
     @State private var sidebarMode: SidebarMode = .chats
     @State private var callManager = CallManager.shared
+    @State private var showReceiveHistorySync = false
 
     private enum SidebarMode { case chats, synaps }
+
+    private var historySyncPairingPIN: String? {
+        guard let pendingId = authViewModel.linkedJoinPendingDeviceId,
+              let userId = authViewModel.currentUserId ?? KeychainManager.shared.loadUserID(),
+              !pendingId.isEmpty, !userId.isEmpty else { return nil }
+        return HistorySyncPairing.pin(pendingDeviceId: pendingId, userId: userId)
+    }
 
     var body: some View {
         Group {
             if authViewModel.hasRegisteredDeviceKeys == nil {
-                ProgressView("Loading…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if authViewModel.hasRegisteredDeviceKeys == true {
+                SplashView()
+            } else if authViewModel.deviceKeysUnavailable {
+                KeysRecoveryView()
+                    .environment(authViewModel)
+            } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
                 mainContent
             } else {
                 OnboardingView()
@@ -49,16 +59,65 @@ struct DesktopRootView: View {
                     }
             }
         }
+        .errorToast()
         .preferredColorScheme(appTheme.colorScheme)
         .onAppear {
             authViewModel.refreshDeviceKeyState()
+            chatsViewModel.setContext(viewContext)
             wireCommandBridge()
+            handleDeepLink(deepLinkHandler.deepLink)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .appWillEnterForeground)) { _ in
+            if AuthSessionManager.shared.sessionToken == nil || !AuthSessionManager.shared.isSessionValid
+                || !CryptoManager.shared.isInitialized {
+                Log.info("Desktop returning to foreground — restoring session (token missing, expired, or crypto uninitialised)", category: "Auth")
+                authViewModel.restoreSession()
+            }
+
+            if AuthSessionManager.shared.isSessionValid,
+               StealthPolicy.shared.isEnabled,
+               TokenWalletService.shared.balance < 10 {
+                Task {
+                    await BlindTokenService.shared.bootstrapInitialBatch()
+                }
+            }
+        }
+        .onChange(of: deepLinkHandler.deepLink) { _, newDeepLink in
+            handleDeepLink(newDeepLink)
+        }
+        .onOpenURL { url in
+            Log.info("DesktopRootView: Received URL via onOpenURL: \(url.absoluteString)", category: "DeepLink")
+            let result = deepLinkHandler.handleURL(url)
+            Log.info("DesktopRootView: Deep link handling result: \(result)", category: "DeepLink")
         }
         .onReceive(NotificationCenter.default.publisher(for: .desktopShowAddContact)) { _ in
             showAddContact = true
         }
         .onChange(of: chatsViewModel.totalUnreadCount) { _, count in
             NSApplication.shared.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
+        }
+        .alert(
+            NSLocalizedString("history_sync_offer_title", comment: ""),
+            isPresented: Binding(
+                get: { authViewModel.pendingHistorySyncOffer },
+                set: { if !$0 { authViewModel.pendingHistorySyncOffer = false } }
+            )
+        ) {
+            Button(NSLocalizedString("history_sync_offer_yes", comment: "")) {
+                authViewModel.pendingHistorySyncOffer = false
+                showReceiveHistorySync = true
+            }
+            Button(NSLocalizedString("history_sync_offer_skip", comment: ""), role: .cancel) {
+                authViewModel.pendingHistorySyncOffer = false
+            }
+        } message: {
+            Text(NSLocalizedString("history_sync_offer_message", comment: ""))
+        }
+        .sheet(isPresented: $showReceiveHistorySync) {
+            ReceiveBackupNearbyView(
+                mode: .historySync,
+                autoPairingPIN: historySyncPairingPIN
+            )
         }
     }
 
@@ -84,12 +143,16 @@ struct DesktopRootView: View {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(id, forType: .string)
         }
+        commandBridge.onSyncMessages    = {
+            Log.info("Manual message sync (⌘R)", category: "Desktop")
+            Task { await BackgroundFetchManager.shared.fetchPendingMessages() }
+        }
     }
 
     // MARK: - Main split view (authenticated)
 
     private var mainContent: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        let splitView = NavigationSplitView(columnVisibility: $columnVisibility) {
             // Sidebar: mode toggle + chats list (synaps takes detail pane instead)
             VStack(spacing: 0) {
                 sidebarModeBar
@@ -114,7 +177,8 @@ struct DesktopRootView: View {
                 .environment(\.managedObjectContext, viewContext)
             } else if let chatId = chatsViewModel.chatToOpen,
                let chat = fetchChat(id: chatId) {
-                DesktopChatView(chat: chat, context: viewContext, sessionCoordinator: chatsViewModel.sessionCoordinator)
+                DesktopChatView(chat: chat, context: viewContext)
+                    .ignoresSafeArea(.container, edges: .top) // ensure custom glass nav is flush to the top of the split detail column
                     .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
                         handleDrop(providers: providers, into: chat)
                     }
@@ -123,49 +187,51 @@ struct DesktopRootView: View {
                     .onDrop(of: [.fileURL], isTargeted: nil) { _ in false }
             }
         }
-        .frame(minWidth: 700, minHeight: 480)
-        .onChange(of: sidebarMode) { _, mode in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                columnVisibility = mode == .synaps ? .detailOnly : .all
+
+        let decorated = splitView
+            .frame(minWidth: 700, minHeight: 480)
+            .onChange(of: sidebarMode) { _, mode in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    columnVisibility = mode == .synaps ? .detailOnly : .all
+                }
             }
-        }
-        // Incoming call banner — bottom-center
-        .overlay(alignment: .bottom) {
-            if CallsFeature.isEnabled, case .incoming(let session) = callManager.state {
-                DesktopIncomingCallView(session: session)
+            // Incoming call banner — bottom-center
+            .overlay(alignment: .bottom) {
+                if CallsFeature.isEnabled, case .incoming(let session) = callManager.state {
+                    DesktopIncomingCallView(session: session)
+                        .zIndex(100)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isIncomingState)
+                }
+            }
+            // In-call controls strip — bottom-right
+            .overlay(alignment: .bottomTrailing) {
+                if CallsFeature.isEnabled, isActiveOrConnecting, let session = activeCallSession {
+                    DesktopInCallView(
+                        session: session,
+                        isConnecting: isConnectingState,
+                        endReason: callEndReason
+                    )
                     .zIndex(100)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isIncomingState)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isActiveOrConnecting)
+                }
             }
-        }
-        // In-call controls strip — bottom-right
-        .overlay(alignment: .bottomTrailing) {
-            if CallsFeature.isEnabled, isActiveOrConnecting, let session = activeCallSession {
-                DesktopInCallView(
-                    session: session,
-                    isConnecting: isConnectingState,
-                    endReason: callEndReason
-                )
-                .zIndex(100)
-                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isActiveOrConnecting)
+            // Add Contact sheet (⌘⌥N)
+            .sheet(isPresented: $showAddContact) {
+                DesktopAddContactView()
+                    .environment(authViewModel)
+                    .environment(deepLinkHandler)
             }
-        }
-        // Add Contact sheet (⌘⌥N)
-        .sheet(isPresented: $showAddContact) {
-            DesktopAddContactView()
-                .environment(authViewModel)
-                .environment(deepLinkHandler)
-        }
-        // New Chat sheet (⌘N)
-        .sheet(isPresented: Binding(
-            get: { chatsViewModel.showNewChat },
-            set: { chatsViewModel.showNewChat = $0 }
-        )) {
-            NewChatView(chatsViewModel: chatsViewModel)
-                .environment(\.managedObjectContext, viewContext)
-                .frame(minWidth: 400, minHeight: 300)
-        }
-        // No custom toolbar items — window title bar is hidden via .windowStyle(.hiddenTitleBar)
-        // [QR] button lives in the sidebar mode bar below.
+            // New Chat sheet (⌘N)
+            .sheet(isPresented: Binding(
+                get: { chatsViewModel.showNewChat },
+                set: { chatsViewModel.showNewChat = $0 }
+            )) {
+                NewChatView(chatsViewModel: chatsViewModel)
+                    .environment(\.managedObjectContext, viewContext)
+                    .frame(minWidth: 400, minHeight: 300)
+            }
+
+        return decorated
     }
 
     // MARK: - Call state helpers
@@ -189,7 +255,7 @@ struct DesktopRootView: View {
         }
     }
 
-    private var activeCallSession: CallManager.CallSession? {
+    private var activeCallSession: CallSession? {
         switch callManager.state {
         case .dialing(let s), .active(let s), .connecting(let s), .ringing(let s): return s
         case .ended(let s, _): return s
@@ -197,7 +263,7 @@ struct DesktopRootView: View {
         }
     }
 
-    private var callEndReason: CallManager.EndReason? {
+    private var callEndReason: CallEndReason? {
         if case .ended(_, let reason) = callManager.state { return reason }
         return nil
     }
@@ -208,7 +274,7 @@ struct DesktopRootView: View {
         HStack(spacing: 0) {
             sidebarTab(label: "CHATS", mode: .chats)
             Rectangle().fill(Color.CT.noise).frame(width: 1)
-            sidebarTab(label: "SYNAPS", mode: .synaps)
+            sidebarTab(label: "SYNAPSES", mode: .synaps)
 
             Spacer()
 
@@ -217,7 +283,7 @@ struct DesktopRootView: View {
                 showAddContact = true
             } label: {
                 Image(systemName: "qrcode.viewfinder")
-                    .font(.system(size: 13, weight: .regular))
+                    .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 10)
             }
@@ -283,6 +349,32 @@ struct DesktopRootView: View {
         req.predicate = NSPredicate(format: "id == %@", id)
         req.fetchLimit = 1
         return try? viewContext.fetch(req).first
+    }
+
+    // MARK: - Deep links
+
+    private func handleDeepLink(_ deepLink: DeepLinkType?) {
+        Log.debug("DesktopRootView: Deep link changed: \(String(describing: deepLink))", category: "DeepLink")
+        if case .contact(let contactInfo) = deepLink {
+            Log.info("DesktopRootView: Creating chat for userId: \(contactInfo.userId)", category: "DeepLink")
+            let publicUserInfo = PublicUserInfo(
+                id: contactInfo.userId,
+                username: contactInfo.username,
+                avatarUrl: nil,
+                bio: nil,
+                deviceId: contactInfo.deviceId
+            )
+            if let chat = chatsViewModel.startChat(with: publicUserInfo) {
+                chatsViewModel.chatToOpen = chat.id
+            } else {
+                Log.error("DesktopRootView: Failed to create chat for userId: \(contactInfo.userId)", category: "DeepLink")
+            }
+            deepLinkHandler.deepLink = nil
+        } else if case .openChat(let chatId) = deepLink {
+            Log.info("DesktopRootView: Opening chat from deep link: \(chatId)", category: "DeepLink")
+            chatsViewModel.chatToOpen = chatId
+            deepLinkHandler.deepLink = nil
+        }
     }
 }
 

@@ -53,6 +53,11 @@ struct SynapsView: View {
     @State private var selectedRequest: ContactRequestsViewModel.IncomingRequest? = nil
     @State private var contactMetricsByUser: [String: ContactMetrics] = [:]
     @State private var isRefreshingContactRequests = false
+    @State private var lastContactRequestsRefresh: Date = .distantPast
+
+    /// Minimum gap between contact-request refreshes. Guards against RPC chatter
+    /// from rapid tab re-entries (native TabView re-runs `.task` on every appear).
+    private static let contactRequestsRefreshInterval: TimeInterval = 8
 
     private var filtered: [User] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -63,43 +68,57 @@ struct SynapsView: View {
     var body: some View {
         let filteredContacts = filtered
         NavigationStack {
-            VStack(spacing: 0) {
-                synapsNavBar
-                synapsSearchBar
-                if !searchText.isEmpty, filteredContacts.isEmpty {
-                    remoteSearchCard
-                }
-                if let vm = contactRequestsVM, !vm.incomingRequests.isEmpty, searchText.isEmpty {
-                    requestsSection(vm: vm)
-                }
-                GeometryReader { geo in
-                    ZStack {
-                        CTMatrixBackground().ignoresSafeArea()
+            ZStack {
+                // Main content - full, padded top for floating search capsule
+                VStack(spacing: 0) {
+                    if !searchText.isEmpty, filteredContacts.isEmpty {
+                        remoteSearchCard
+                            .padding(.top, 8)
+                    }
+                    if let vm = contactRequestsVM, !vm.incomingRequests.isEmpty, searchText.isEmpty {
+                        requestsSection(vm: vm)
+                            .padding(.top, 8)
+                    }
+                    GeometryReader { geo in
+                        ZStack {
+                            CTMatrixBackground().ignoresSafeArea()
 
-                        if contacts.isEmpty {
-                            emptyState
-                        } else {
-                            ZoomableCloud(
-                                scale:    $canvasScale,
-                                offset:   $canvasOffset,
-                                minScale: 0.20,
-                                maxScale: 3.0
-                            ) {
-                                HoneycombCloud(
-                                    contacts:     filteredContacts,
-                                    metricsByUser: contactMetricsByUser,
-                                    selected:     $selectedContact,
-                                    canvasScale:  canvasScale,
-                                    canvasOffset: canvasOffset,
-                                    screenSize:   geo.size
-                                )
+                            if contacts.isEmpty {
+                                emptyState
+                            } else {
+                                ZoomableCloud(
+                                    scale:    $canvasScale,
+                                    offset:   $canvasOffset,
+                                    minScale: 0.20,
+                                    maxScale: 3.0
+                                ) {
+                                    HoneycombCloud(
+                                        contacts:     filteredContacts,
+                                        metricsByUser: contactMetricsByUser,
+                                        selected:     $selectedContact,
+                                        canvasScale:  canvasScale,
+                                        canvasOffset: canvasOffset,
+                                        screenSize:   geo.size
+                                    )
+                                }
                             }
                         }
-                    }
-                    .onAppear {
-                        canvasScale = fitScale(contacts: Array(contacts), screenSize: geo.size)
+                        .padding(.bottom, 72) // for floating tab capsule
+                        .onAppear {
+                            canvasScale = fitScale(contacts: Array(contacts), screenSize: geo.size)
+                        }
                     }
                 }
+
+                // Floating independent search capsule (and keep nav above)
+                VStack(spacing: 0) {
+                    synapsNavBar
+                    synapsSearchBar
+                        .padding(.horizontal, 12)
+                        .padding(.top, 4)
+                    Spacer(minLength: 0)
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
             }
             .ctBackground()
             .onAppear {
@@ -129,13 +148,13 @@ struct SynapsView: View {
                 rebuildContactMetrics()
             }
             .task {
-                let vm = ContactRequestsViewModel(viewContext: context)
+                // Native TabView fires `.task` on every appear (i.e. each time this
+                // tab is selected) and cancels it on disappear — so this is also the
+                // "tab re-entered" refresh. No separate onChange(selectedTab) trigger
+                // is needed; refreshContactRequests throttles rapid re-entries.
+                let vm = contactRequestsVM ?? ContactRequestsViewModel(viewContext: context)
                 contactRequestsVM = vm
-                await refreshContactRequests(vm: vm, reason: "initial_task")
-            }
-            .onChange(of: chatsViewModel.selectedTab) { _, newTab in
-                guard newTab == 1, let vm = contactRequestsVM else { return }
-                Task { await refreshContactRequests(vm: vm, reason: "tab_selected") }
+                await refreshContactRequests(vm: vm, reason: "tab_appear")
             }
             .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
                 guard chatsViewModel.selectedTab == 1, let vm = contactRequestsVM else { return }
@@ -278,7 +297,13 @@ struct SynapsView: View {
             Log.debug("Skipping contact request refresh (\(reason)) — already in progress", category: "SynapsView")
             return
         }
+        let sinceLast = Date().timeIntervalSince(lastContactRequestsRefresh)
+        guard sinceLast >= Self.contactRequestsRefreshInterval else {
+            Log.debug("Skipping contact request refresh (\(reason)) — throttled (\(Int(sinceLast))s ago)", category: "SynapsView")
+            return
+        }
         isRefreshingContactRequests = true
+        lastContactRequestsRefresh = Date()
         defer { isRefreshingContactRequests = false }
 
         Log.info("Refreshing contact requests (\(reason))", category: "SynapsView")
@@ -304,7 +329,7 @@ struct SynapsView: View {
     private var synapsNavBar: some View {
         HStack(spacing: 10) {
             Text(NSLocalizedString("synapses", comment: "").uppercased())
-                .font(CTFont.bold(13))
+                .font(CTFont.bold(14))
                 .foregroundColor(Color.CT.text)
                 .tracking(4)
             Spacer()
@@ -660,10 +685,8 @@ private struct ContactCircle: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                Circle().fill(accentColor.opacity(0.18))
-                Text(initials)
-                    .font(CTFont.bold(effectiveSize * 0.26))
-                    .foregroundStyle(accentColor)
+                Circle().fill(accentColor.opacity(0.12))
+                IdenticonView(seed: user.id)
             }
         }
         .frame(width: effectiveSize, height: effectiveSize)
@@ -730,18 +753,6 @@ private struct ContactCircle: View {
     private var accentColor: Color { .hexagonAccent(for: user.id) }
     private var borderColor: Color {
         user.isBlocked ? Color.red.opacity(0.55) : Color.CT.textDim.opacity(0.5)
-    }
-
-    private var initials: String {
-        let words = user.displayName
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .components(separatedBy: .whitespaces)
-            .filter { !$0.isEmpty }
-        switch words.count {
-        case 0:  return "?"
-        case 1:  return String(words[0].prefix(2)).uppercased()
-        default: return (String(words[0].prefix(1)) + String(words[1].prefix(1))).uppercased()
-        }
     }
 }
 

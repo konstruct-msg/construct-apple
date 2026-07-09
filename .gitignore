@@ -74,6 +74,7 @@ venv/
 .mypy_cache/
 
 ConstructEngine.xcframework/**/*.a
+ConstructTransport.xcframework/**/*.a
 screenshots/
 
 # ── GeoIP databases ───────────────────────────────────────────────────────────

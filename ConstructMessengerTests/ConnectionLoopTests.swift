@@ -126,6 +126,23 @@ final class ConnectionLoopTests: XCTestCase {
         XCTAssertTrue(outcome.effects.contains(.requestProxyStart))
     }
 
+    /// Regression: a proxy that finishes starting AFTER we are on the direct path (e.g. an
+    /// obfs4 handshake that was in flight when the user turned VEIL OFF, completing ~200ms
+    /// later) must NOT re-activate VEIL. The reducer rejects the stale proxyStarted and tears
+    /// the stray proxy down, so OFF stays OFF.
+    func testTransportReducer_StaleProxyStartedWhileDirect_DoesNotReactivateVEIL() {
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 0),
+            event: .proxyStarted(relay: "relay.example:443", port: 49262, restarted: false),
+            config: .default,
+            now: Date()
+        )
+
+        XCTAssertEqual(outcome.state, .direct(consecutiveFails: 0))
+        XCTAssertTrue(outcome.effects.contains(.requestProxyStop))
+        XCTAssertFalse(outcome.effects.contains(.invalidateGRPCClient))
+    }
+
     // MARK: - Router (async, with mock effectors)
 
     func testTransportRouter_ModeOff_DirectFailuresNeverStartVEIL() async {
@@ -147,6 +164,26 @@ final class ConnectionLoopTests: XCTestCase {
         let proxyStartCalls = await proxy.startCalls()
         XCTAssertEqual(snapshot.state, .direct(consecutiveFails: 2))
         XCTAssertEqual(proxyStartCalls, 0)
+    }
+
+    func testTransportRouter_AutoDeescalatesWhenDirectSucceedsUnderVEIL() async {
+        VeilProxyStore.saveMode(.auto)
+
+        let proxy = MockProxyEffector(startEvent: .proxyStarted(relay: "relay.example:443", port: 49262, restarted: false))
+        let router = TransportRouter(
+            config: .default,
+            proxyEffector: proxy,
+            channelEffector: MockChannelEffector(),
+            uiEffector: MockUIEffector()
+        )
+
+        await router.send(.rpcFailed(kind: .transportUnknown, via: .direct(.h2), foreground: true))
+        await router.send(.rpcFailed(kind: .transportUnknown, via: .direct(.h2), foreground: true))
+        await router.send(.rpcSucceeded(via: .direct(.h2), latencyMs: 50))
+
+        let snapshot = await router.snapshot()
+        XCTAssertEqual(snapshot.state, .direct(consecutiveFails: 0))
+        XCTAssertEqual(await proxy.stopCalls(), 1)
     }
 
     func testTransportRouter_AutoCensored_StaysDirectUntilRealFailure() async {
@@ -174,15 +211,22 @@ final class ConnectionLoopTests: XCTestCase {
 
 private actor MockProxyEffector: ProxyEffector {
     private var starts = 0
+    private var stops = 0
+    private let startEvent: TransportEvent
+
+    init(startEvent: TransportEvent = .proxyStartFailed(relay: nil, reason: "unexpected")) {
+        self.startEvent = startEvent
+    }
 
     func start() async -> TransportEvent {
         starts += 1
-        return .proxyStartFailed(relay: nil, reason: "unexpected")
+        return startEvent
     }
 
-    func stop() async {}
+    func stop() async { stops += 1 }
     func updateRelays(_ relays: [VeilRelay]) async { _ = relays }
     func startCalls() -> Int { starts }
+    func stopCalls() -> Int { stops }
 }
 
 private actor MockChannelEffector: ChannelEffector {

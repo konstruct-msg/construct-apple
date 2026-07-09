@@ -509,6 +509,8 @@
 "diagnostics_size" = "サイズ";
 "diagnostics_share_logs" = "ログを共有";
 "diagnostics_clear_logs" = "ログを消去";
+"diagnostics_stealth_override_title" = "ステルス送信者（デバッグ用オーバーライド）";
+"diagnostics_stealth_override_hint" = "リリースビルドでは常に有効。開発中に従来の身元開示送信経路を試す場合はここで無効化します。";
 "diagnostics_force_spk_rotation" = "SPKローテーションを強制実行";
 "diagnostics_reset_local_data_keychain" = "ローカルデータとKeychainをリセット";
 "diagnostics_dev_tools_footer" = "Keychain内の全キー、セッション、UserDefaultsを削除します。再インストールせずに初期化フローをテストするために使用します。";
@@ -615,7 +617,14 @@
 "calls_recents" = "履歴";
 "calls_clear" = "消去";
 "calls_clear_confirm" = "すべての着信履歴を消去しますか？";
+"calls_filter_all" = "すべて";
+"calls_filter_missed" = "不在着信";
 "calls_empty" = "通話履歴はありません";
+"calls_empty_missed" = "不在着信はありません";
+"calls_section_today" = "今日";
+"calls_section_yesterday" = "昨日";
+"calls_section_earlier" = "最近";
+"calls_section_older" = "以前";
 "call_outgoing" = "発信";
 "call_incoming" = "着信";
 "call_missed" = "不在着信";
@@ -734,6 +743,10 @@
 "stealth_scope_stream_hint" = "アクティブなストリームごとに1日1つのトークン";
 "stealth_scope_message" = "メッセージごと";
 "stealth_scope_message_hint" = "メッセージごとに1つのトークン — 最大限の非連結性";
+
+// Short labels for CTModeSelector
+"stealth_scope_stream_short" = "ストリーム";
+"stealth_scope_message_short" = "メッセージ";
 "stealth_token_wallet" = "トークンウォレット";
 "stealth_token_wallet_pending" = "[まだアクティブではありません]";
 "stealth_token_count" = "%d個のトークン";

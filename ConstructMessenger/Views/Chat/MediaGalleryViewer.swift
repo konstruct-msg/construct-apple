@@ -4,6 +4,8 @@
 //
 
 import SwiftUI
+import Combine
+import AVKit
 #if os(iOS)
 import Photos
 #else
@@ -34,6 +36,24 @@ final class MediaImageCache {
     // Legacy single-image accessor kept for callers that don't need index
     func store(_ image: PlatformImage, for messageId: String) { store(image, for: messageId, at: 0) }
     func image(for messageId: String) -> PlatformImage? { image(for: messageId, at: 0) }
+}
+
+@Observable
+final class MediaVideoCache {
+    static let shared = MediaVideoCache()
+    private init() {}
+
+    private(set) var urls: [String: URL] = [:]
+
+    private static func key(_ messageId: String, _ index: Int) -> String { "\(messageId)_\(index)" }
+
+    func store(_ url: URL, for messageId: String, at index: Int = 0) {
+        urls[Self.key(messageId, index)] = url
+    }
+
+    func url(for messageId: String, at index: Int = 0) -> URL? {
+        urls[Self.key(messageId, index)]
+    }
 }
 
 // MARK: - Parse Helper
@@ -68,19 +88,23 @@ struct MediaGalleryViewer: View {
 
     @State private var dismissOffset: CGFloat = 0
 
-    /// Expand each message into per-item entries, skipping non-image media (video etc.)
+    /// Expand each message into per-item entries. Images and videos are shown; audio is skipped.
     private var entries: [GalleryEntry] {
         messages.flatMap { msg -> [GalleryEntry] in
             guard let mc = parseMediaContent(from: msg.displayText), !mc.mediaItems.isEmpty else {
                 return [GalleryEntry(id: "\(msg.id)_0", message: msg, itemIndex: 0, mediaItem: [:])]
             }
             return mc.mediaItems.enumerated().compactMap { idx, item in
-                // Skip video/audio items — gallery shows images only
+                // Show images + videos; skip audio (no visual page for it).
                 if let mimeType = item["mediaType"] as? String,
-                   !mimeType.hasPrefix("image/") { return nil }
+                   !mimeType.hasPrefix("image/"), !mimeType.hasPrefix("video/") { return nil }
                 return GalleryEntry(id: "\(msg.id)_\(idx)", message: msg, itemIndex: idx, mediaItem: item)
             }
         }.filter { !$0.mediaItem.isEmpty || parseMediaContent(from: $0.message.displayText) == nil }
+    }
+
+    private static func isVideoEntry(_ entry: GalleryEntry) -> Bool {
+        (entry.mediaItem["mediaType"] as? String)?.hasPrefix("video/") == true
     }
 
     init(messages: [Message], initialMessageId: String, isPresented: Binding<Bool>) {
@@ -100,8 +124,26 @@ struct MediaGalleryViewer: View {
 
             TabView(selection: $currentEntryId) {
                 ForEach(entries) { entry in
-                    MediaGalleryPage(message: entry.message, itemIndex: entry.itemIndex, mediaItem: entry.mediaItem)
-                        .tag(entry.id)
+                    Group {
+                        if Self.isVideoEntry(entry) {
+                            GalleryVideoPage(
+                                message: entry.message,
+                                itemIndex: entry.itemIndex,
+                                mediaItem: entry.mediaItem,
+                                dismissOffset: $dismissOffset,
+                                onDismiss: performDismiss
+                            )
+                        } else {
+                            MediaGalleryPage(
+                                message: entry.message,
+                                itemIndex: entry.itemIndex,
+                                mediaItem: entry.mediaItem,
+                                dismissOffset: $dismissOffset,
+                                onDismiss: performDismiss
+                            )
+                        }
+                    }
+                    .tag(entry.id)
                 }
             }
             #if os(iOS)
@@ -130,16 +172,14 @@ struct MediaGalleryViewer: View {
 
                 Spacer()
 
-                Button { saveCurrentImage() } label: {
-                    Image(systemName: saveStatusIcon)
-                        .font(CTFont.regular(16))
-                        .foregroundColor(saveStatusColor)
+                Button { shareCurrentImage() } label: {
+                    Image(systemName: "ellipsis.circle.fill")
+                        .font(CTFont.regular(20))
+                        .foregroundColor(.white.opacity(0.9))
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                         .lineLimit(1).fixedSize()
-                        .animation(.easeInOut(duration: 0.2), value: saveStatus)
                 }
-                .disabled(saveStatus == .saving)
             }
             .padding(.horizontal, 16)
             .padding(.top, 56)
@@ -155,40 +195,31 @@ struct MediaGalleryViewer: View {
         }
         .offset(y: dismissOffset)
         .opacity(Double(1.0 - dismissOffset / 350))
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 15)
-                .onChanged { value in
-                    guard value.translation.height > 0,
-                          abs(value.translation.height) > abs(value.translation.width) else { return }
-                    dismissOffset = value.translation.height
-                }
-                .onEnded { value in
-                    if dismissOffset > 100 {
-                        withAnimation(.easeOut(duration: 0.22)) {
-                            #if canImport(UIKit)
-                            dismissOffset = UIScreen.main.bounds.height
-                            #else
-                            dismissOffset = NSScreen.main?.frame.height ?? 600
-                            #endif
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                            isPresented = false
-                        }
-                    } else {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            dismissOffset = 0
-                        }
-                    }
-                }
-        )
+        // Drag-to-dismiss is driven per-page (only when not zoomed, vertical-dominant) so
+        // it never competes with TabView horizontal paging or pinch-pan. See MediaGalleryPage.
+    }
+
+    /// Animate the whole gallery off-screen, then dismiss. Called by a page's
+    /// drag-to-dismiss once the threshold is crossed.
+    private func performDismiss() {
+        withAnimation(.easeOut(duration: 0.22)) {
+            #if canImport(UIKit)
+            dismissOffset = UIScreen.main.bounds.height
+            #else
+            dismissOffset = NSScreen.main?.frame.height ?? 600
+            #endif
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            isPresented = false
+        }
     }
     
     private var saveStatusIcon: String {
             switch saveStatus {
             case .idle:    return "arrow.down.circle.fill"
             case .saving:  return "arrow.down.circle.fill"
-            case .saved:   return "checkmark.circle"
-            case .failed:  return "exclamationmark.circle"
+            case .saved:   return "checkmark.circle.fill"
+            case .failed:  return "exclamationmark.circle.fill"
             }
         }
 
@@ -202,6 +233,7 @@ struct MediaGalleryViewer: View {
 
     private func saveCurrentImage() {
         guard let entry = entries.first(where: { $0.id == currentEntryId }),
+              !Self.isVideoEntry(entry),
               let img = MediaImageCache.shared.image(for: entry.message.id, at: entry.itemIndex) else { return }
         saveStatus = .saving
 
@@ -243,6 +275,24 @@ struct MediaGalleryViewer: View {
             saveStatus = .idle
         }
     }
+
+    private func shareCurrentImage() {
+        guard let entry = entries.first(where: { $0.id == currentEntryId }),
+              !Self.isVideoEntry(entry),
+              let img = MediaImageCache.shared.image(for: entry.message.id, at: entry.itemIndex) else { return }
+
+#if canImport(UIKit)
+        let av = UIActivityViewController(activityItems: [img], applicationActivities: nil)
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+            var top = root
+            while let presented = top.presentedViewController {
+                top = presented
+            }
+            top.present(av, animated: true)
+        }
+#endif
+    }
 }
 
 // MARK: - Gallery Page
@@ -251,6 +301,10 @@ struct MediaGalleryPage: View {
     let message: Message
     let itemIndex: Int
     let mediaItem: [String: Any]
+    /// Shared with the gallery container — drives the drag-to-dismiss offset/opacity.
+    @Binding var dismissOffset: CGFloat
+    /// Called once a downward drag crosses the dismiss threshold.
+    let onDismiss: () -> Void
 
     @State private var image: PlatformImage?
     @State private var isLoading = false
@@ -276,7 +330,17 @@ struct MediaGalleryPage: View {
                         .scaleEffect(scale)
                         .offset(offset)
                         .gesture(magnificationGesture)
-                        .simultaneousGesture(dragGesture)
+                        // Pan only exists while zoomed (mask .none disables it at scale 1),
+                        // so TabView owns horizontal paging when not zoomed and the pan
+                        // beats paging when zoomed.
+                        .highPriorityGesture(panGesture, including: scale > 1.0 ? .all : .none)
+                        // Vertical drag-to-dismiss (disabled while zoomed). The latched modifier
+                        // avoids the old jitter where TabView reclaimed the drag mid-swipe.
+                        .modifier(DragToDismiss(
+                            dismissOffset: $dismissOffset,
+                            isEnabled: scale <= 1.0,
+                            onDismiss: onDismiss
+                        ))
                         .onTapGesture(count: 2) { toggleZoom() }
                 } else if isLoading {
                     ProgressView()
@@ -309,7 +373,8 @@ struct MediaGalleryPage: View {
             }
     }
 
-    private var dragGesture: some Gesture {
+    /// Pan the zoomed image. Only attached (via gesture mask) while `scale > 1`.
+    private var panGesture: some Gesture {
         DragGesture()
             .onChanged { value in
                 guard scale > 1.0 else { return }
@@ -395,6 +460,177 @@ struct MediaGalleryPage: View {
             } catch {
                 await MainActor.run { isLoading = false }
             }
+        }
+    }
+}
+
+// MARK: - Drag-to-dismiss (shared)
+
+/// Downward drag-to-dismiss for a gallery page, coexisting with the paging `TabView`.
+///
+/// Two things make this behave:
+/// - **`.global` coordinate space.** The gallery moves its whole hierarchy by
+///   `dismissOffset` while dragging. Reading `translation` in the default `.local` space
+///   then measures against a view that is itself moving → a feedback loop that reads as the
+///   image juddering up/down when you slow or hold the finger. Global space is fixed to the
+///   screen, so translation is stable.
+/// - **`minimumDistance: 20` + directional guard + `.simultaneousGesture`.** Only a clearly
+///   vertical-downward drag drives dismissal; horizontal drags fall through untouched so the
+///   TabView still owns paging.
+private struct DragToDismiss: ViewModifier {
+    @Binding var dismissOffset: CGFloat
+    let isEnabled: Bool
+    let onDismiss: () -> Void
+
+    func body(content: Content) -> some View {
+        content.simultaneousGesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .global)
+                .onChanged { value in
+                    guard isEnabled,
+                          value.translation.height > 0,
+                          abs(value.translation.height) > abs(value.translation.width) else { return }
+                    dismissOffset = value.translation.height
+                }
+                .onEnded { _ in
+                    guard isEnabled else { return }
+                    if dismissOffset > 120 {
+                        onDismiss()
+                    } else {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            dismissOffset = 0
+                        }
+                    }
+                }
+        )
+    }
+}
+
+// MARK: - Gallery Video Page
+
+/// Full-screen video playback page. Downloads + decrypts the clip to a temp file (AVPlayer
+/// needs a URL), showing download progress, then autoplays with native transport controls.
+struct GalleryVideoPage: View {
+    let message: Message
+    let itemIndex: Int
+    let mediaItem: [String: Any]
+    @Binding var dismissOffset: CGFloat
+    let onDismiss: () -> Void
+
+    @State private var player: AVPlayer?
+    @State private var tempURL: URL?
+    @State private var isLoading = false
+    @State private var progress: Double = 0
+    @State private var failed = false
+
+    var body: some View {
+        guard !message.isDeleted, message.managedObjectContext != nil else {
+            return AnyView(Color.black)
+        }
+        return AnyView(
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if let player {
+                    VideoPlayer(player: player)
+                        .ignoresSafeArea()
+                } else if failed {
+                    Button { load(forceRetry: true) } label: {
+                        VStack(spacing: 10) {
+                            Image(systemName: "arrow.clockwise").font(.system(size: 28))
+                            Text(LocalizedStringKey("retry")).font(CTFont.regular(13))
+                        }
+                        .foregroundColor(.white.opacity(0.85))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    VStack(spacing: 12) {
+                        ProgressView().tint(.white).scaleEffect(1.3)
+                        if progress > 0 {
+                            Text("\(Int(progress * 100))%")
+                                .font(CTFont.regular(13)).foregroundColor(.white.opacity(0.8)).monospacedDigit()
+                        }
+                    }
+                }
+            }
+            .modifier(DragToDismiss(dismissOffset: $dismissOffset, isEnabled: true, onDismiss: onDismiss))
+            .onAppear { load() }
+            .onDisappear {
+                player?.pause()
+            }
+        )
+    }
+
+    private func load(forceRetry: Bool = false) {
+        guard player == nil, !isLoading || forceRetry else { return }
+        failed = false
+        progress = 0
+
+        if let cachedURL = MediaVideoCache.shared.url(for: message.id, at: itemIndex) {
+            let cachedPlayer = AVPlayer(url: cachedURL)
+            tempURL = cachedURL
+            player = cachedPlayer
+            cachedPlayer.play()
+            return
+        }
+
+        let item = mediaItem.isEmpty
+            ? (parseMediaContent(from: message.displayText)?.mediaItems.indices.contains(itemIndex) == true
+               ? parseMediaContent(from: message.displayText)!.mediaItems[itemIndex]
+               : [:])
+            : mediaItem
+
+        guard let mediaId = item["mediaId"] as? String,
+              let mediaUrl = item["mediaUrl"] as? String,
+              let mediaKeyStr = item["mediaKey"] as? String,
+              let mediaKey = Data(base64Encoded: mediaKeyStr) else {
+            failed = true
+            return
+        }
+        isLoading = true
+
+        let total = Double((item["size"] as? Int) ?? 0)
+        let onProgress: @Sendable (Int64) -> Void = { received in
+            guard total > 0 else { return }
+            let frac = min(0.99, Double(received) / total)
+            Task { @MainActor in progress = frac }
+        }
+
+        Task {
+            do {
+                let data = try await MediaManager.shared.downloadAndDecryptMedia(
+                    mediaId: mediaId, mediaUrl: mediaUrl, mediaKey: mediaKey, onProgress: onProgress)
+                let url = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString).appendingPathExtension("mp4")
+                try data.write(to: url)
+                await MainActor.run {
+                    let p = AVPlayer(url: url)
+                    MediaVideoCache.shared.store(url, for: message.id, at: itemIndex)
+                    tempURL = url
+                    player = p
+                    isLoading = false
+                    p.play()
+                }
+                await Self.cacheFirstFramePoster(from: url, messageId: message.id, itemIndex: itemIndex)
+            } catch {
+                Log.error("Gallery video load failed: \(error)", category: "MediaGalleryViewer")
+                await MainActor.run { isLoading = false; failed = true }
+            }
+        }
+    }
+
+    /// Derive a real first-frame poster from the downloaded clip so the bubble stops showing
+    /// the blurry blurhash. Cached in-memory (live refresh) + persisted (survives relaunch).
+    /// No-op if a poster already exists (e.g. the sender's own upload).
+    static func cacheFirstFramePoster(from url: URL, messageId: String, itemIndex: Int) async {
+        let hasPoster = await MainActor.run {
+            MediaImageCache.shared.image(for: messageId, at: itemIndex) != nil
+                || MediaManager.shared.retrieveThumbnail(for: messageId, at: itemIndex) != nil
+        }
+        if hasPoster { return }
+        guard let posterData = try? await MediaOptimizer.generateVideoThumbnail(from: url),
+              let poster = PlatformImage(data: posterData) else { return }
+        await MainActor.run {
+            MediaImageCache.shared.store(poster, for: messageId, at: itemIndex)
+            MediaManager.shared.storeThumbnail(posterData, for: messageId, at: itemIndex)
         }
     }
 }

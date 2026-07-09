@@ -2,7 +2,8 @@
 //  STTSettingsSection.swift
 //  Construct Messenger
 //
-//  On-device transcription model management section for DataStorageSettingsView.
+//  On-device transcription settings (engine choice + Whisper models).
+//  Hosted in dedicated TranscriptionSettingsView (and Desktop tab).
 //
 
 import SwiftUI
@@ -27,6 +28,7 @@ struct STTSettingsSection: View {
     @AppStorage("stt_preferred_model") private var preferredModelRaw: String = WhisperModel.tiny.rawValue
     @AppStorage("stt_translate")       private var translateEnabled: Bool = false
     @AppStorage("stt_language")        private var transcriptionLanguage: String = "auto"
+    @AppStorage("stt_engine")          private var engineRaw: String = "auto"
     
     @State private var isDownloading: WhisperModel? = nil
     @State private var showDeleteConfirm: WhisperModel? = nil
@@ -34,6 +36,10 @@ struct STTSettingsSection: View {
 
     private var preferredModel: WhisperModel {
         WhisperModel(rawValue: preferredModelRaw) ?? .tiny
+    }
+
+    private var selectedEngine: TranscriptionEngine {
+        TranscriptionEngine(rawValue: engineRaw) ?? .auto
     }
 
     var body: some View {
@@ -50,6 +56,27 @@ struct STTSettingsSection: View {
                     Toggle("", isOn: $autoTranscribe)
                         .labelsHidden()
                         .tint(Color.CT.accent)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+
+                CTSep(style: .thin)
+
+                // Engine selection
+                HStack {
+                    Text(NSLocalizedString("stt_engine_label", comment: ""))
+                        .font(CTFont.regular(13))
+                        .foregroundColor(Color.CT.textDim)
+                    Spacer()
+                    Menu(selectedEngine.displayName) {
+                        ForEach(TranscriptionEngine.allCases, id: \.self) { engine in
+                            Button(engine.displayName) {
+                                engineRaw = engine.rawValue
+                            }
+                        }
+                    }
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.accent)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
@@ -80,17 +107,20 @@ struct STTSettingsSection: View {
 
                 CTSep(style: .thick)
 
-                // Total size on disk
-                let totalSize = modelManager.totalSizeOnDisk()
-                CTSettingsRow(
-                    label: NSLocalizedString("stt_models_on_disk", comment: ""),
-                    value: totalSize > 0 ? formatBytes(totalSize) : NSLocalizedString("stt_no_models", comment: "")
-                )
+                if selectedEngine != .apple {
+                    // Whisper-specific model management (hidden for pure Apple engine)
+                    // Total size on disk
+                    let totalSize = modelManager.totalSizeOnDisk()
+                    CTSettingsRow(
+                        label: NSLocalizedString("stt_models_on_disk", comment: ""),
+                        value: totalSize > 0 ? formatBytes(totalSize) : NSLocalizedString("stt_no_models", comment: "")
+                    )
 
-                // Per-model rows
-                ForEach(WhisperModel.allCases) { model in
-                    CTSep(style: .thin)
-                    modelRow(model)
+                    // Per-model rows
+                    ForEach(WhisperModel.allCases) { model in
+                        CTSep(style: .thin)
+                        modelRow(model)
+                    }
                 }
             }
 

@@ -19,6 +19,7 @@ import UIKit
 
 @MainActor
 final class StreamLifecycleCoordinator {
+    private static weak var activeCoordinator: StreamLifecycleCoordinator?
 
     // MARK: - Dependencies
 
@@ -31,6 +32,17 @@ final class StreamLifecycleCoordinator {
     private var observationTasks: [Task<Void, Never>] = []
     private var reconnectDebounceTask: Task<Void, Never>?
     private var backgroundDisconnectTask: Task<Void, Never>?
+    private var foregroundSettleTask: Task<Void, Never>?
+    private var isStarted = false
+    /// Subscription set at the last completed reconnect — skip redundant teardowns.
+    private var lastReconnectSubscriptionSet: Set<String> = []
+    /// Coalescing window for bursty reconnect triggers (prune + END_SESSION + push).
+    private static let reconnectDebounceDelay: Duration = .seconds(2)
+
+    /// Coalescing window for `appDidBecomeActive`. CallKit UI, Control Center and system alerts
+    /// emit bursts of active/inactive transitions (observed 3 in one second during an incoming
+    /// call); without this, each one re-ran VEIL startup + reconnect, thrashing the proxy.
+    private static let foregroundSettleDelay: Duration = .milliseconds(400)
 
     private static let backgroundGracePeriod: Duration = {
         #if os(macOS)
@@ -69,7 +81,7 @@ final class StreamLifecycleCoordinator {
     func addEphemeralSubscription(for userId: String) -> Bool {
         guard ephemeralSubscriptionUserIds.insert(userId).inserted else { return false }
         Log.info("Ephemeral stream subscription added for \(userId.prefix(8))… (pending END_SESSION INITIATOR)", category: "StreamLifecycle")
-        forceReconnect()
+        reconnectIfSubscriptionsChanged(force: true)
         return true
     }
 
@@ -87,19 +99,39 @@ final class StreamLifecycleCoordinator {
     }
 
     func start() {
+        if let active = Self.activeCoordinator, active !== self {
+            Log.info("StreamLifecycle start superseding previous coordinator instance", category: "StreamLifecycle")
+            active.stop()
+        }
+        guard !isStarted else {
+            Log.debug("StreamLifecycle start ignored — already started", category: "StreamLifecycle")
+            return
+        }
+        Self.activeCoordinator = self
+        isStarted = true
         setupSubscribers()
         setupAppLifecycleObservers()
     }
 
     func stop() {
+        isStarted = false
+        reconnectDebounceTask?.cancel()
+        reconnectDebounceTask = nil
+        foregroundSettleTask?.cancel()
+        foregroundSettleTask = nil
+        backgroundDisconnectTask?.cancel()
+        backgroundDisconnectTask = nil
         observationTasks.forEach { $0.cancel() }
         observationTasks.removeAll()
         streamManager.disconnect()
+        if Self.activeCoordinator === self {
+            Self.activeCoordinator = nil
+        }
     }
 
     // MARK: - Stream control
 
-    func startMessageStream() {
+    func startMessageStream(reason: String = "?") {
         guard !streamManager.isPaused else {
             Log.debug("Stream paused — skipping startMessageStream", category: "StreamLifecycle")
             return
@@ -109,23 +141,29 @@ final class StreamLifecycleCoordinator {
             Log.debug("startMessageStream — skipping empty ids (would clear \(streamManager.subscriptionUserIds.count) active subscriptions)", category: "StreamLifecycle")
             return
         }
-        if EngineAdapter.isSupported {
-            // On Desktop the engine owns the stream — iOS gRPC stack is inactive.
-            EngineAdapter.shared.dispatch(.openMessageStream(conversationIds: ids, sinceCursor: nil))
-        } else {
-            wireStreamCallbacks()
-            streamManager.connect(contactUserIds: ids) { [weak self] message in
-                self?.handleIncomingMessage(message)
-            }
+        wireStreamCallbacks()
+        streamManager.connect(contactUserIds: ids, trigger: "startMessageStream(\(reason))") { [weak self] message in
+            self?.handleIncomingMessage(message)
         }
-        #if !os(macOS)
         if !hasPerformedStartupOtpkCheck {
             hasPerformedStartupOtpkCheck = true
             Task { [weak self] in
-                guard self != nil else { return }
+                guard let self else { return }
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                 guard !deviceId.isEmpty else { return }
                 let crypto = CryptoManager.shared
+                guard crypto.orchestratorCore != nil else {
+                    // Core not up yet (device may still be locked — protected data
+                    // unavailable). oneTimePrekeyCount() would read 0 from the nil core
+                    // and spuriously trigger the replace-all fallback below. Re-arm the
+                    // one-shot check so the next stream start re-runs it after core init.
+                    Log.info("Startup OTPK check deferred — core not initialized yet", category: "OTPK")
+                    self.hasPerformedStartupOtpkCheck = false
+                    return
+                }
+                #if os(macOS)
+                Log.debug("Startup key health check (Desktop Strategy B — direct core path)", category: "OTPK")
+                #endif
                 if crypto.wasRestoredFromKeychain, crypto.oneTimePrekeyCount() == 0 {
                     Log.info("Core restored but no local OTPKs — replacing all server OTPKs (fallback sync)", category: "OTPK")
                     do {
@@ -138,35 +176,85 @@ final class StreamLifecycleCoordinator {
                     await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
                 }
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+                await MlsKeyPackageService.replenishIfNeeded(deviceId: deviceId)
                 AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
             }
         }
-        #endif
     }
 
     func stopMessageStream() {
         streamManager.disconnect()
     }
 
-    func forceReconnect() {
+    /// Reconnect only when the subscription set changed or the stream is down.
+    /// Bursty triggers (prune + END_SESSION + silent push) coalesce into one reconnect.
+    func reconnectIfSubscriptionsChanged(force: Bool = false) {
         guard AuthSessionManager.shared.sessionToken != nil else {
-            Log.debug("No session — skipping forceReconnect", category: "StreamLifecycle")
+            Log.debug("No session — skipping reconnect", category: "StreamLifecycle")
             return
         }
+        let ids = currentConversationIds()
+        let idSet = Set(ids)
+        if !force,
+           streamManager.isConnected,
+           idSet == lastReconnectSubscriptionSet {
+            Log.debug(
+                "Reconnect skipped — subscriptions unchanged (\(idSet.count)), stream live",
+                category: "StreamLifecycle"
+            )
+            return
+        }
+        scheduleReconnect()
+    }
+
+    func forceReconnect() {
+        reconnectIfSubscriptionsChanged(force: true)
+    }
+
+    private func scheduleReconnect() {
         reconnectDebounceTask?.cancel()
         reconnectDebounceTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
+            try? await Task.sleep(for: Self.reconnectDebounceDelay)
             guard !Task.isCancelled, let self else { return }
-            if EngineAdapter.isSupported {
-                let conversationIds = self.currentConversationIds()
-                EngineAdapter.shared.dispatch(.openMessageStream(conversationIds: conversationIds, sinceCursor: nil))
-            } else {
+            let ids = self.currentConversationIds()
+            self.lastReconnectSubscriptionSet = Set(ids)
+            self.wireStreamCallbacks()
+            self.streamManager.forceReconnect(contactUserIds: ids) { [weak self] message in
+                self?.handleIncomingMessage(message)
+            }
+            self.sessionCoordinator.prewarmSessions(for: self.prewarmEligibleContactIds())
+        }
+    }
+
+    /// Runs the foreground-settle work once per burst of `appDidBecomeActive` events.
+    /// Each event reschedules the task; only the final one (after `foregroundSettleDelay` of
+    /// quiet) performs VEIL startup + a conditional reconnect + key health.
+    private func scheduleForegroundSettle() {
+        foregroundSettleTask?.cancel()
+        foregroundSettleTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.foregroundSettleDelay)
+            guard !Task.isCancelled, let self else { return }
+            await VeilProxyManager.shared.verifyAliveOrRestart()
+            await VeilProxyManager.shared.startIfNeeded()
+            if self.streamManager.isPaused {
+                Log.info("App became active — stream was paused, resuming", category: "StreamLifecycle")
                 self.wireStreamCallbacks()
-                self.streamManager.forceReconnect(contactUserIds: self.currentConversationIds()) { [weak self] message in
+                let ids = self.currentConversationIds()
+                self.streamManager.resume { [weak self] message in
                     self?.handleIncomingMessage(message)
                 }
-                self.sessionCoordinator.prewarmSessions(for: self.prewarmEligibleContactIds())
+                if ids.isEmpty {
+                    Log.debug("Resume used cached subscriptions — CoreData ids empty", category: "StreamLifecycle")
+                }
+            } else if self.streamManager.isConnected {
+                Log.info("App became active — stream still alive, skipping reconnect", category: "StreamLifecycle")
+            } else if self.streamManager.isActivelyConnecting {
+                Log.info("App became active — stream is connecting, skipping forceReconnect", category: "StreamLifecycle")
+            } else {
+                Log.info("App became active — stream is down, reconnecting", category: "StreamLifecycle")
+                self.forceReconnect()
             }
+            await self.checkKeyHealthInBackground()
         }
     }
 
@@ -213,7 +301,6 @@ final class StreamLifecycleCoordinator {
         let didJustConnect = lastPolledStatus != .connected && state.status == .connected
         lastPolledStatus = state.status
 
-        #if !os(macOS)
         if didJustConnect && PreKeyRotationService.shared.hasPendingRetry {
             Task {
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
@@ -222,7 +309,6 @@ final class StreamLifecycleCoordinator {
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             }
         }
-        #endif
 
         if state.hasToken && state.status != ConnectionStatusManager.ConnectionStatus.disconnected {
             if state.pushEnabled {
@@ -233,12 +319,12 @@ final class StreamLifecycleCoordinator {
             if !pollingStateHadToken {
                 pollingStateHadToken = true
                 if streamManager.isActivelyConnecting || streamManager.isConnected {
-                    startMessageStream()
+                    startMessageStream(reason: "pollingFirstToken")
                 } else {
                     forceReconnect()
                 }
             } else {
-                startMessageStream()
+                startMessageStream(reason: "pollingStatusChange(\(state.status.text()))")
             }
         } else {
             pollingStateHadToken = false
@@ -288,19 +374,12 @@ final class StreamLifecycleCoordinator {
         let activeTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .appDidBecomeActive) {
                 guard let self else { continue }
+                // Cancel the pending background pause immediately — we're back, don't tear down.
                 self.backgroundDisconnectTask?.cancel()
                 self.backgroundDisconnectTask = nil
-                await VeilProxyManager.shared.verifyAliveOrRestart()
-                await VeilProxyManager.shared.startIfEnabled()
-                if self.streamManager.isConnected {
-                    Log.info("App became active — stream still alive, skipping reconnect", category: "StreamLifecycle")
-                } else if self.streamManager.isActivelyConnecting {
-                    Log.info("App became active — stream is connecting, skipping forceReconnect", category: "StreamLifecycle")
-                } else {
-                    Log.info("App became active — stream is down, reconnecting", category: "StreamLifecycle")
-                    self.forceReconnect()
-                }
-                await self.checkKeyHealthInBackground()
+                // Debounce the heavy foreground work (VEIL startup + reconnect + key health) so a
+                // burst of active/inactive flaps (CallKit, Control Center, alerts) runs it once.
+                self.scheduleForegroundSettle()
             }
         }
         observationTasks.append(activeTask)
@@ -316,12 +395,13 @@ final class StreamLifecycleCoordinator {
                     GRPCChannelManager.shared.invalidatePersistentClient()
                     continue
                 }
-                Log.info("Network interface changed — restarting stream and ICE proxy", category: "StreamLifecycle")
+                Log.info("Network interface changed — scheduling coalesced routing reconnect", category: "StreamLifecycle")
+                self.streamManager.resetDegradedModeOnNetworkChange()
                 Task { @MainActor in
                     await VeilProxyManager.shared.verifyAliveOrRestart()
-                    await VeilProxyManager.shared.startIfEnabled()
+                    await VeilProxyManager.shared.startIfNeeded()
                 }
-                self.forceReconnect()
+                self.streamManager.scheduleReconnectAfterRoutingChange(reason: "networkPathChanged")
             }
         }
         observationTasks.append(pathTask)
@@ -353,8 +433,19 @@ final class StreamLifecycleCoordinator {
                 }
                 guard !Task.isCancelled else { break }
                 if PushNotificationManager.shared.lastSilentPushDate != nil {
-                    Log.info("Silent push — reconnecting stream to fetch pending messages", category: "StreamLifecycle")
-                    self.forceReconnect()
+                    // A silent push that lands while the app is foreground with a LIVE stream is
+                    // redundant — the stream already delivered the message. Reconnecting here was
+                    // the residual churn driver (one full reconnect per incoming message; device
+                    // logs showed "Silent push — reconnecting stream" → forceReconnect on every
+                    // push). This mirrors the same guard on the BackgroundFetchManager path in
+                    // AppDelegate. When the stream is DOWN (or app backgrounded) we still
+                    // reconnect to fetch pending messages — that is the legitimate wake-up case.
+                    if UIApplication.shared.applicationState == .active, self.streamManager.isConnected {
+                        Log.info("Silent push — foreground stream live, skipping reconnect", category: "StreamLifecycle")
+                    } else {
+                        Log.info("Silent push — reconnecting stream to fetch pending messages", category: "StreamLifecycle")
+                        self.forceReconnect()
+                    }
                 }
                 #else
                 try? await Task.sleep(for: .seconds(60))
@@ -387,10 +478,14 @@ final class StreamLifecycleCoordinator {
 
     private func handleDeliveryReceipts(_ messageIds: [String]) {
         guard let context = viewContext else { return }
+        // Server receipts reference the server-assigned wire id, which differs from the
+        // local row id on the sealed-sender path — translate before the fetch.
+        // (E2E receipts from the peer already carry the canonical E2E id.)
+        let localIds = messageIds.map { ServerMessageIdMap.shared.localId(for: $0) }
         context.perform {
-            for messageId in messageIds {
+            for messageId in localIds {
                 let fetchRequest = Message.fetchRequest()
-                fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
+                fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", messageId)
                 guard let message = try? context.fetch(fetchRequest).first,
                       message.isSentByMe else { continue }
                 guard message.deliveryStatus != .delivered else { continue }
@@ -409,7 +504,6 @@ final class StreamLifecycleCoordinator {
     // MARK: - Key health
 
     private func checkKeyHealthInBackground() async {
-        #if !os(macOS)
         let now = Date().timeIntervalSince1970
         guard now - lastForegroundKeyCheckAt >= Self.foregroundKeyCheckCooldownSeconds else {
             Log.debug("Key health check skipped — cooldown active", category: "OTPK")
@@ -419,9 +513,11 @@ final class StreamLifecycleCoordinator {
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
         guard !deviceId.isEmpty else { return }
         lastForegroundKeyCheckAt = now
+        #if os(macOS)
+        Log.debug("Foreground key health check (OTPK + SPK)", category: "OTPK")
+        #endif
         await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
         await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
-        #endif
     }
 
     // MARK: - Contact helpers

@@ -249,15 +249,16 @@ struct FeatureFlags {
     static let enablePushNotifications = false // Пока не реализовано
     static let maxMessageRetryAttempts = 3
 
-    // Parallel-run flag: when true, outgoing messages are routed through ConstructEngine
-    // instead of (and not in addition to) the legacy OutboundMessagePipeline path.
-    // iOS: always false — UDP 443 blocked by OS until MASQUE is implemented.
-    // macOS Desktop: true — QUIC works, use engine as primary send path.
-    #if os(iOS)
+    /// Stealth-sealed-sender-v2 Phase 2: route sealed sends over the new unauthenticated
+    /// `SendSealedMessage` RPC / separate gRPC channel instead of the legacy
+    /// sealed-over-`SendMessage` path. **Default off** — flip only once the server RPC
+    /// is deployed fleet-wide and this path has been validated (see
+    /// construct-docs/decisions/stealth-sealed-sender-v2-always-on.md Phase 2).
+    static let sealedSenderUnauthenticatedTransport = false
+
+    // For Desktop we now use the direct iOS path (CryptoManager + gRPC-Swift) per Strategy B.
+    // Engine send path is disabled for Desktop (engine paused for this surface).
     static let useEngineForSend = false
-    #else
-    static let useEngineForSend = true
-    #endif
 
     /// HTTP/3 (QUIC) for gRPC streams on the direct path.
     ///
@@ -278,6 +279,115 @@ struct FeatureFlags {
     ///
     /// See `wiki/decisions/h3-disabled-on-ios.md` for the full context.
     static let h3Enabled: Bool = false
+
+    /// Experimental QUIC/HTTP-3 via the dedicated `construct-transport` Rust stack
+    /// (`QuicClientTransport`), routed through a native quinn+h3 gateway that bypasses
+    /// the Traefik QUIC↔h2c bridge that broke the old native Swift H3 path.
+    ///
+    /// **Default `true` (auto-on).** This is NOT the dormant Swift H3 stack (`h3Enabled`) —
+    /// it is the construct-transport QUIC path. When on, eligible RPCs use the engine QUIC
+    /// channel with a fast hard fallback to H2 at the router (handshake 3s / idle 10s; see
+    /// fast-fallback in construct-transport `tls.rs`). Auto-on is safe now that fallback is
+    /// fast: on networks where QUIC is blocked/throttled it drops to H2/VEIL in seconds, and
+    /// on networks where it works it's a win. The visible toggle is now a **kill-switch**
+    /// (will move to `#if DEBUG` once we're confident — UI polish step).
+    ///
+    /// See `decisions/quic-moderate-dpi-udp-obfuscation.md`.
+    ///
+    /// **Release: always `true` (forced).** QUIC is a production transport, on for everyone with a
+    /// fast hard fallback to H2 — there is no user kill-switch in release, and a stale stored value
+    /// from an older build can never disable it. **DEBUG:** `UserDefaults`-backed (default `true`),
+    /// so the DEBUG-only toggle in `NetworkSettingsView` can force it on/off for testing. Read fresh
+    /// on every stream open, so toggling + a stream reconnect switches transport live (DEBUG only).
+    /// `INTERNAL_TOOLS` is an opt-in compilation condition for internal TestFlight builds (which
+    /// are Release config but need the QUIC kill-switch visible). Define it in the app target's
+    /// Release Active Compilation Conditions for the internal round; remove it for the external
+    /// round so QUIC is force-on with no toggle.
+    static let engineQuicExperimentalKey = "ff.engineQuicExperimental"
+    static var engineQuicExperimental: Bool {
+        get {
+//            #if DEBUG
+            UserDefaults.standard.object(forKey: engineQuicExperimentalKey) as? Bool ?? true
+//            #else
+            //true  // forced on in external release — no kill-switch, stale stored value ignored
+//            #endif
+        }
+        set {
+//            #if DEBUG
+            UserDefaults.standard.set(newValue, forKey: engineQuicExperimentalKey)
+//            #endif
+        }
+    }
+
+    /// **Default `false` (plain QUIC).** Salamander-obfuscate the engine-QUIC datagrams.
+    /// Decided 2026-06-24 (see `decisions/quic-plain-vs-obfuscated.md`): QUIC is shipped as a
+    /// plain transport — a competitive feature that works well on uncensored networks. On the
+    /// blocked networks we care about the throttling is volumetric (sustained-UDP), which
+    /// Salamander does NOT defeat (it only resists fingerprint-based DPI); and a bundled static
+    /// PSK is weak against a targeted adversary anyway. So obfuscation is off by default and its
+    /// only justification (Phase B in-band PSK rotation) is dropped. The Salamander obf path
+    /// (`QuicObfPskStore`, `QuicGatewayConfig.bundledObfPsk`, Rust `connect_obfuscated`) stays
+    /// as a dormant DEBUG-only option for experimentation; the production gateway runs plain.
+    ///
+    /// **Release: always `false` (forced).** Production ships plain QUIC; obfuscation never runs in
+    /// release regardless of any stored value (the gateway is plain — obf datagrams would just be
+    /// dropped). **DEBUG:** `UserDefaults`-backed (default `false`) so the DEBUG-only toggle can
+    /// exercise the dormant Salamander path against a debug obf gateway.
+    static let engineQuicObfuscatedKey = "ff.engineQuicObfuscated"
+    static var engineQuicObfuscated: Bool {
+        get {
+            #if DEBUG
+            UserDefaults.standard.object(forKey: engineQuicObfuscatedKey) as? Bool ?? false
+            #else
+            false  // forced off in release — production gateway is plain
+            #endif
+        }
+        set {
+            #if DEBUG
+            UserDefaults.standard.set(newValue, forKey: engineQuicObfuscatedKey)
+            #endif
+        }
+    }
+
+    /// **Default `true` (S2 dual-send enabled 2026-06-30).** Phase S2 of the typed binary
+    /// session-control migration (`decisions/binary-control-message-format.md`).
+    ///
+    /// When `true`, session-handshake signals carry a typed Envelope `content_type`
+    /// (`CONTENT_TYPE_SESSION_PING = 25`, `CONTENT_TYPE_SESSION_READY = 26`) **in addition**
+    /// to the legacy `__session_ping_<UUID>__` / `__session_ready_<UUID>__` plaintext payload
+    /// (dual-send). New consumers (S1, already shipped) dispatch on the typed `content_type`;
+    /// old peers still read the magic string, so this is backward-compatible in both directions —
+    /// enabling it never breaks anyone, which is why the default is now `true`.
+    /// `content_type` is NOT part of the AEAD associated data, so the typed byte can never
+    /// cause a decrypt failure. Server fleet (S0) is deployed and understands 25/26.
+    /// `SESSION_RESET_INIT` (24) was already sent typed unconditionally.
+    ///
+    /// This flag does NOT drop the legacy string — the payload stays the magic string so old
+    /// peers keep working. Dropping the string and sending a pure binary `SessionControl`
+    /// payload is the later S3 step, gated separately by `binarySessionControlPayload`.
+    ///
+    /// Backed by `UserDefaults`, defaulting `true` when never set (a stored value — an explicit
+    /// toggle — is respected). Read fresh at each send, so it takes effect on the next handshake.
+    static let typedSessionControlKey = "ff.typedSessionControl"
+    static var typedSessionControl: Bool {
+        get { UserDefaults.standard.object(forKey: typedSessionControlKey) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: typedSessionControlKey) }
+    }
+
+    /// **Default `false`.** Phase S3 (destructive) of the typed session-control migration.
+    ///
+    /// When `true`, handshake producers send a pure binary `SessionControl{op, nonce}` as the
+    /// encrypted payload and **drop** the legacy magic string. This is only safe once the S1
+    /// typed consumer is fleet-wide: a peer on a pre-S1 build has no `content_type` dispatch and
+    /// reads the payload as a string — a binary payload would be unrecognised (silent handshake
+    /// loss → session desync). Keep `false` until adoption telemetry confirms pre-S1 peers are
+    /// negligible, then flip (ideally via staged/remote config). Independent of
+    /// `typedSessionControl`, which only controls the (backward-safe) typed `content_type`.
+    static let binarySessionControlPayloadKey = "ff.binarySessionControlPayload"
+    static var binarySessionControlPayload: Bool {
+        get { UserDefaults.standard.object(forKey: binarySessionControlPayloadKey) as? Bool ?? false }
+        set { UserDefaults.standard.set(newValue, forKey: binarySessionControlPayloadKey) }
+    }
 }
 
 // MARK: - Traffic Protection Configuration
@@ -426,42 +536,14 @@ struct VEILRelayRegion: Codable {
 
 // MARK: - VEIL Bridge Configuration
 struct VEILConfig {
-    /// Hardcoded fallback bridge cert used when Keychain is empty (first launch before login).
-    /// This is the server's public obfs4 identity — not a secret, safe to embed in binary.
-    /// Update this when the production server rotates its VEIL identity keypair.
-    static let hardcodedBridgeCert = "3J8A3lAtPb3R4+td9UVLuzggZeva+o8TDNVw4aHx8HWdvdYpS4gV6t8gmxbGMIQTB5eGJA"
-
     /// Primary VEIL endpoint: TLS 1.3 → obfs4 → gRPC (Amsterdam, via Traefik).
     /// Uses `ice.<grpcHost>:443` derived at runtime from GRPCChannelManager.currentHost.
+    /// Retired relays are tracked in `retiredRelayHosts` below (not as commented code).
 
-    // ── Relay 1: Moscow (Yandex Cloud) — REMOVED ────────────────────────────────
-    // IP 158.160.140.67 confirmed blocked by RU DPI: TCP RST on TLS ClientHello
-    // on both port 443 and 9443. Kept as comments for reference when a new RU
-    // relay is deployed with proper CDN fronting (Cloudflare or equivalent).
-    //
-    // static let mskRelayIP             = "158.160.140.67"
-    // static let mskRelaySNI            = "storage.yandexcloud.net"
-    // static let mskRelayPinnedSPKI     = "ce2bbfcac1fffab1f4f41ee540aee2dea92c523f7768264aeb87184bf8bfa723"
-    // static let mskRelayBridgeCert     = "IZKOsDNS5gld2g1PH4Uo4Yna/ltepGKpzDQTbSJll9OqzMin6yZaNx4gFbiLTvuGbABpcA"
-    // static let mskRelayAddress        = "\(mskRelayIP):443"
-    // static let mskRelayObfs4Address   = "\(mskRelayIP):9443"
-    // static let mskTURNAddress         = "turn:\(mskRelayIP):3478"
-    // static let mskSTUNAddress         = "stun:\(mskRelayIP):3478"
+    // The Amsterdam obfs4 relay (ice.ams.konstruct.cc) was retired — see retiredRelayHosts.
+    // The main gRPC server is still ams.konstruct.cc (direct path); only the relay is gone.
 
-    // ── Relay 2: Amsterdam co-located (ice.ams.konstruct.cc) ─────────────────
-    /// construct-relay running on the same VPS as the main server.
-    /// Upstream: ams.konstruct.cc:443 via internal Docker network.
-    static let amsRelayAddress    = "ice.ams.konstruct.cc:443"
-    static let amsRelaySNI        = "ice.ams.konstruct.cc"
-    static let amsRelayPinnedSPKI = "510d465a5c4736548e3386570ede6ba24600c4c9a2e369d24dde1ad7915eeebd"
-    /// Update when the relay container is recreated (new keypair in /data/relay.obfs4).
-    static let amsRelayBridgeCert = "voFt3ilLSKx2xYuZsjxOnXtHTktUE4EaExIYRG+Bh89frHzI5QVrBNvT41zdS7Maiu6gPA"
-
-    // ── SPB relay removed 2026-05-16 ─────────────────────────────────────────
-    // 45.135.233.5:52143 (VKCS SPb, s3.vkcs.cloud SNI) — IP blocked by RU DPI (TCP RST at TLS handshake).
-    // VPS deleted. Replaced by ruRelay below (2026-05-16).
-
-    // ── Relay 3: RU relay (api.divany-kresla.uk) ─────────────────────────────
+    // ── Relay: RU veil-front (api.divany-kresla.uk) — the sole VEIL relay ─────
     /// 2026-06-11: VPS repurposed as the **veil-front relay** (honest-front HTTPS +
     /// session-bound ticket auth). It terminates veil-TLS with its own Let's Encrypt
     /// cert and re-wraps gRPC over TLS to ams.konstruct.cc:443 (--backend-tls).
@@ -475,7 +557,6 @@ struct VEILConfig {
     static let ruRelayPinnedSPKI = "5621e47a745614de08efb054b01388f3bcf32c763ecf5f0aeaeb6b0785ff6861"
     /// Stale obfs4 keypair cert — kept only so the obfs4 probe has a bridge line; it
     /// fails fast (relay no longer speaks obfs4) and veil-front wins the race.
-    static let ruRelayBridgeCert = "zdfEJKLpy4nVo09zbd/5q3Yx02FyL7Tlr+5Aurww51IbYacIWIqbcTndB1UL+n2g68XBQw"
     // The veil-front ticket is per-user auth material — NOT hardcoded here. It is
     // imported out-of-band via a signed config blob (QR / konstruct://veil-config deep
     // link) into VeilTicketStore. See VeilTicketProvisioning.swift.
@@ -485,39 +566,60 @@ struct VEILConfig {
     /// Generated by: scripts/generate-signing-key.sh in construct-landing repo.
     static let relayConfigSigningKey = "8a0ee71cd95f86a9f6877211accefaff6bb97f3051b3b2141f1c71690b9a2dcf"
 
-    /// Per-relay obfs4 bridge certs, keyed by relay address (IP:port or host:port).
-    /// Used by makeRelay() to override the AMS cert for relays with their own obfs4 keypair.
-    static let hardcodedRelayCerts: [String: String] = [
-        amsRelayAddress: amsRelayBridgeCert,
-        ruRelayAddress:  ruRelayBridgeCert,
-        // mskRelayAddress: mskRelayBridgeCert,  // MSK relay removed — IP blocked by RU DPI
+    /// Ed25519 bundle-signing public keys pinned at build time (base64, 32 bytes each) —
+    /// the keys `identity-service` signs `SenderCertificate`s (and KT tree heads) with.
+    /// sealed-sender-resilience lever B: `StealthSenderService.verifyCert` accepts the
+    /// fetched-from-well-known key OR any of these pins, so a sealed receive no longer
+    /// depends on a live/side-effect fetch of the bundle key (the 2026-07-05 incident:
+    /// the key was only ever cached as a side effect of the VEIL relay fetch, so on a
+    /// non-VEIL device it was nil and every cert "failed verification").
+    ///
+    /// Ordered current-first. Rotation is flag-day-free: ship the next key here in an
+    /// app update ahead of the server flip, retire the old one after the fleet updates.
+    /// MUST track `BUNDLE_SIGNING_KEY` rotations — see
+    /// construct-docs/deployment/stealth-token-keys-runbook.md.
+    static let pinnedBundleSigningKeys: [String] = [
+        "kDGyaafEFExKTdB7MJXl4xYf0pFnxEg7bZJh7BDP9LI=",
     ]
+
+    /// Per-relay obfs4 bridge certs. Empty — obfs4 is retired (excluded from the probe race),
+    /// so no bridge certs are shipped. Kept as the lookup surface for `bridgeCertSync`.
+    static let hardcodedRelayCerts: [String: String] = [:]
+
+    /// Relays we have permanently retired (e.g. IP blocked by RU DPI). These are filtered
+    /// out of every relay source — including stale cached manifests a censored device can no
+    /// longer refresh — so the client never wastes a 30–40s VEIL probe + cooldown dialing a
+    /// relay that no longer exists. Matched by host, so any `:port` variant is caught.
+    static let retiredRelayHosts: Set<String> = [
+        "158.160.140.67",        // MSK relay — IP blocked by RU DPI (removed)
+        "45.135.233.5",          // SPb relay — IP blocked by RU DPI (removed 2026-05-16)
+        "ice.ams.konstruct.cc",  // AMS obfs4 relay — retired (obfs4 disabled); veil-front only now
+    ]
+
+    /// True if `address` (host or host:port) points at a retired relay (see `retiredRelayHosts`).
+    static func isRetiredRelay(_ address: String) -> Bool {
+        let parts = address.split(separator: ":")
+        let host = parts.count > 1 ? parts.dropLast().joined(separator: ":") : address
+        return retiredRelayHosts.contains(host)
+    }
 
     /// Hardcoded relay list used as a last resort when discovery is unavailable.
     /// Order matters: relays are probed concurrently but this sets tie-break priority.
     static let hardcodedRelayAddresses: [String] = [
-        amsRelayAddress,
         ruRelayAddress,
-        // mskRelayAddress,  // MSK relay removed — 158.160.140.67 blocked by RU DPI (TLS RST)
     ]
 
     /// TLS SNI overrides keyed by relay address string.
     /// Required for IP-based relays (IPs cannot be used as TLS SNI).
     /// Also used for domain-based relays that need explicit SPKI pinning.
     static let hardcodedRelaySNIs: [String: String] = [
-        amsRelayAddress: amsRelaySNI,
         ruRelayAddress:  ruRelaySNI,
-        // mskRelayAddress:      mskRelaySNI,    // MSK removed
-        // mskRelayObfs4Address: mskRelaySNI,    // MSK removed
     ]
 
     /// SPKI pins keyed by relay address. Looked up by makeRelay() for any relay
     /// that appears in hardcodedRelaySNIs.
     static let hardcodedRelaySPKIs: [String: String] = [
-        amsRelayAddress: amsRelayPinnedSPKI,
         ruRelayAddress:  ruRelayPinnedSPKI,
-        // mskRelayAddress:      mskRelayPinnedSPKI,    // MSK removed
-        // mskRelayObfs4Address: mskRelayPinnedSPKI,    // MSK removed
     ]
 
     /// UserDefaults key where the relay list fetched from the server is cached.
@@ -531,13 +633,10 @@ struct VEILConfig {
     /// When present, makeRelay() activates WebTunnel-first transport for that relay.
     /// Override via `.well-known/construct-server` `ice.relays[].wt_path` without a new build.
     static let hardcodedRelayWTPaths: [String: String] = [
-        amsRelayAddress: "/construct-ice",
         ruRelayAddress:  "/api/stream",
-        // mskRelayAddress: "/construct-ice",   // MSK removed
     ]
 
-    /// Companion obfs4-only ports for CDN-fronted relays.
-    // MSK relay removed — 9443 also RST by DPI
+    /// Companion obfs4-only ports for CDN-fronted relays. None currently.
     static let hardcodedRelayObfs4Companions: [String: String] = [:]
 
     /// Alternative TLS SNI values per relay address for WebTunnel domain-fronting rotation.
@@ -550,13 +649,10 @@ struct VEILConfig {
     /// Each rule maps a UTC offset range (hours, inclusive) to a preferred relay ordering.
     /// The first matching rule wins; unmatched → default ordering.
     ///
-    /// AMS first for everyone — it's always reachable globally.
-    /// SPb is secondary: useful for RU users blocked by TSPU, harmless for others (just a fallback).
-    /// RU-specific routing (SPb primary) is handled by the server OTA config via IP geolocation,
-    /// not by timezone heuristics — timezone is a poor proxy for DPI presence.
     /// Override via `.well-known/construct-server` `ice.relay_regions` without a new build.
+    /// Only one relay (veil-front) remains, so the region rule just prefers it everywhere.
     static let hardcodedRelayRegions: [VEILRelayRegion] = [
-        VEILRelayRegion(tzOffsetMin: -12, tzOffsetMax: 12, preferredRelays: [amsRelayAddress]),
+        VEILRelayRegion(tzOffsetMin: -12, tzOffsetMax: 12, preferredRelays: [ruRelayAddress]),
     ]
 }
 
@@ -613,4 +709,7 @@ extension Notification.Name {
     /// Posted when a contact's identity key changes since the last verified bundle.
     /// userInfo: ["userId": String]
     static let contactKeyChanged  = Notification.Name("constructContactKeyChanged")
+    /// Posted when a contact's at-risk (degraded-session) state changes — e.g. after an at-risk
+    /// session is auto-upgraded to a fresh one. userInfo: ["userId": String]
+    static let sessionAtRiskChanged = Notification.Name("constructSessionAtRiskChanged")
 }

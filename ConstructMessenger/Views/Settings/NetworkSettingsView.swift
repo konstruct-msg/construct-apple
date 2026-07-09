@@ -31,11 +31,21 @@ struct NetworkSettingsView: View {
     @State private var veilImportIsError = false
     /// Bumped after an import to refresh the configured-status row.
     @State private var veilTicketRefresh = 0
+//    #if DEBUG
+    @State private var engineQuicOn = FeatureFlags.engineQuicExperimental
+//    #endif
+    #if DEBUG
+    @State private var engineQuicObfOn = FeatureFlags.engineQuicObfuscated
+    #endif
 
     private var veilConfiguredRelay: String? {
         _ = veilTicketRefresh
         let addr = VEILConfig.ruRelayAddress
         return VeilTicketStore.ticket(for: addr) != nil ? addr : nil
+    }
+
+    private var hasVeilAccessConfigured: Bool {
+        veilConfiguredRelay != nil
     }
 
     var body: some View {
@@ -45,7 +55,11 @@ struct NetworkSettingsView: View {
                     title: NSLocalizedString("network", comment: ""),
                     showBack: true,
                     backAction: { dismiss() }
-                )
+                ) {
+                    EmptyView()
+                } trailing: {
+                    EmptyView()
+                }
             }
             ScrollView {
             LazyVStack(spacing: NetworkSettingsLayout.compactSectionSpacing) {
@@ -83,9 +97,24 @@ struct NetworkSettingsView: View {
                             : streamManager.activeTransport
                         let isLive = !streamManager.activeTransport.isEmpty
                         if !displayTransport.isEmpty {
-                            let isQUIC = displayTransport == "H3"
-                            Text(isQUIC ? NetworkSettingsLabels.quic : NetworkSettingsLabels.h2)
-                                .font(CTFont.regular(13))
+                            // "H3" = legacy native stack; "QUIC" = engine QUIC (construct-transport).
+                            let isQUIC = displayTransport == "H3" || displayTransport == "QUIC"
+                            // Lock when the live transport is obfuscated QUIC — at-a-glance proof
+                            // the direct traffic is DPI-obfuscated. Production ships plain QUIC, so
+                            // this only ever shows in DEBUG when obfuscation is explicitly enabled.
+                            #if DEBUG
+                            let obfuscated = isLive && isQUIC
+                                && FeatureFlags.engineQuicExperimental && FeatureFlags.engineQuicObfuscated
+                            #else
+                            let obfuscated = false
+                            #endif
+                            HStack(spacing: 4) {
+                                if obfuscated {
+                                    Image(systemName: "lock.fill").font(.system(size: 10))
+                                }
+                                Text(isQUIC ? NetworkSettingsLabels.quic : NetworkSettingsLabels.h2)
+                                    .font(CTFont.regular(13))
+                            }
                                 .foregroundColor(isLive
                                     ? (isQUIC ? Color.CT.accent : Color.CT.accentDim)
                                     : Color.CT.textDim)
@@ -133,11 +162,7 @@ struct NetworkSettingsView: View {
                     HStack {
                         Text(LocalizedStringKey("veil_title"))
                             .font(CTFont.regular(13))
-                            .foregroundColor(
-                                veilManager.hasCert
-                                ? Color.CT.textDim
-                                : Color.CT.textDim.opacity(NetworkSettingsLayout.statusDisabledOpacity)
-                            )
+                            .foregroundColor(Color.CT.textDim)
                         Spacer()
                         CTModeSelector(
                             selection: Binding(
@@ -163,12 +188,11 @@ struct NetworkSettingsView: View {
                                 .on:   NSLocalizedString("veil_mode_on", comment: "")
                             ]
                         )
-                        .disabled(!veilManager.hasCert)
                     }
                     .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                     .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
 
-                    if (veilManager.mode != .off || veilManager.isRunning) && veilManager.hasCert {
+                    if (veilManager.mode != .off || veilManager.isRunning) && hasVeilAccessConfigured {
                         if veilManager.isOnCooldown {
                             CTSep(style: .thin)
                             HStack {
@@ -219,6 +243,67 @@ struct NetworkSettingsView: View {
 
                 veilAccessSection
 
+                // QUIC/HTTP-3 transport (construct-transport). For the external release it is
+                // always-on and automatic (plain QUIC, falls back to H2 on failure) with no
+                // user-facing toggle — confirm it's live via the transport badge in the STATUS
+                // section above ("QUIC" when active, "H2" otherwise).
+                //
+                // The QUIC kill-switch below is visible in DEBUG and on internal TestFlight builds
+                // (INTERNAL_TOOLS) so we can A/B QUIC vs H2 across networks; it is compiled out for
+                // the external release. The Salamander obfuscation toggle stays DEBUG-only: the
+                // production gateway is plain, so enabling obf on a TestFlight build would just get
+                // datagrams dropped (invalid CID) and fall back to H2. Direct path only — ignored
+                // when VEIL is active.
+//                #if DEBUG
+                CTSettingsSectionHeader(title: "EXPERIMENTAL", color: .orange)
+                CTSectionGroup {
+                    Toggle(isOn: $engineQuicOn) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("QUIC / HTTP-3 transport")
+                                .font(CTFont.regular(14))
+                                .foregroundStyle(.orange)
+                            Text("Route the message stream over QUIC instead of H2. Watch the transport badge above to confirm.")
+                                .font(CTFont.regular(11))
+                                .foregroundStyle(Color.CT.textDim)
+                        }
+                    }
+                    .tint(.orange)
+                    .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                    .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
+                    .onChange(of: engineQuicOn) { _, newValue in
+                        FeatureFlags.engineQuicExperimental = newValue
+                        streamManager.reconnectForTransportChange()
+                    }
+
+                    #if DEBUG
+                    CTSep(style: .thin)
+
+                    // Salamander obfuscation of the QUIC datagrams (DPI-evasion). DEBUG-only —
+                    // needs a per-gateway PSK + an obf gateway; against the plain prod gateway it
+                    // stays plain / drops.
+                    Toggle(isOn: $engineQuicObfOn) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("QUIC obfuscation (Salamander)")
+                                .font(CTFont.regular(14))
+                                .foregroundStyle(.orange)
+                            Text("Obfuscate QUIC datagrams to evade DPI. Needs a provisioned gateway PSK; otherwise stays plain QUIC.")
+                                .font(CTFont.regular(11))
+                                .foregroundStyle(Color.CT.textDim)
+                        }
+                    }
+                    .tint(.orange)
+                    .disabled(!engineQuicOn)
+                    .opacity(engineQuicOn ? 1 : 0.4)
+                    .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                    .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
+                    .onChange(of: engineQuicObfOn) { _, newValue in
+                        FeatureFlags.engineQuicObfuscated = newValue
+                        streamManager.reconnectForTransportChange()
+                    }
+                    #endif
+                }
+//                #endif
+
                 #if DEBUG
                 // Debug-only: live FSM diagnostics. Every transport routing decision flows
                 // through one place; this screen is that place.
@@ -245,8 +330,8 @@ struct NetworkSettingsView: View {
                 #endif
 
                 // Footer — mode-specific
-                if !veilManager.hasCert {
-                    Text(LocalizedStringKey("veil_unavailable"))
+                if !hasVeilAccessConfigured {
+                    Text(LocalizedStringKey("veil_config_none"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -395,7 +480,20 @@ struct NetworkSettingsView: View {
 
     private var veilFooterKey: String {
         switch veilManager.mode {
-        case .off:  return "veil_footer_off"
+        case .off:
+            // Production ships plain QUIC, so VEIL off == genuinely no obfuscation: tell the truth.
+            // In DEBUG, obfuscated QUIC on the direct path IS DPI-evasion, so reflect the live
+            // transport when obf is explicitly enabled.
+            #if DEBUG
+            if FeatureFlags.engineQuicExperimental && FeatureFlags.engineQuicObfuscated {
+                let live = streamManager.activeTransport
+                // "QUIC"/"H3" live → obfuscated right now; otherwise on the H2 fallback/connecting.
+                return (live == "QUIC" || live == "H3")
+                    ? "veil_footer_off_obf_active"
+                    : "veil_footer_off_obf_fallback"
+            }
+            #endif
+            return "veil_footer_off"
         case .auto: return "veil_footer_auto"
         case .on:   return "veil_footer_on"
         }
@@ -418,7 +516,8 @@ struct NetworkSettingsView: View {
         case .unknown:      return "questionmark.circle.fill"
         }
     }
-
+    
+    // TODO: replace with standart SF Symbols
     private func pathASCII(_ path: TrafficPath) -> String {
         switch path {
         case .direct:          return "[→]"

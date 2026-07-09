@@ -645,13 +645,13 @@ struct CTTabBar: View {
 
     var body: some View {
         HStack {
-            ForEach(items.indices, id: \.self) { i in
+            ForEach(Array(items.enumerated()), id: \.offset) { pair in
                 Spacer()
-                Button(action: { selected = i }) {
-                    let sf = items[i].sfName
-                    Image(systemName: selected == i && !sf.hasSuffix(".fill") ? sf + ".fill" : sf)
+                Button(action: { selected = pair.offset }) {
+                    let sf = pair.element.sfName
+                    Image(systemName: selected == pair.offset && !sf.hasSuffix(".fill") ? sf + ".fill" : sf)
                         .font(.system(size: 20))
-                        .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
+                        .foregroundColor(selected == pair.offset ? Color.CT.accent : Color.CT.textDim)
                     
                 }
                 Spacer()

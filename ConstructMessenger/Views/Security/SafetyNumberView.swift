@@ -24,7 +24,11 @@ struct SafetyNumberView: View {
                 title: NSLocalizedString("safety_numbers", comment: ""),
                 showBack: true,
                 backAction: { dismiss() }
-            )
+            ) {
+                EmptyView()
+            } trailing: {
+                EmptyView()
+            }
             Rectangle().fill(Color.CT.noise).frame(height: 1)
 
             ScrollView(showsIndicators: false) {
@@ -72,8 +76,8 @@ struct SafetyNumberView: View {
 
     private var numberGrid: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
-            ForEach(formattedNumber.indices, id: \.self) { i in
-                Text(formattedNumber[i])
+            ForEach(formattedNumber, id: \.self) { chunk in
+                Text(chunk)
                     .font(CTFont.bold(16))
                     .foregroundStyle(Color.CT.text)
                     .frame(maxWidth: .infinity)

@@ -13,6 +13,8 @@ import UIKit
 
 struct DevicesView: View {
 
+    var showNavBar: Bool = true
+
     @Environment(AuthViewModel.self) private var authViewModel
     @Environment(\.dismiss) private var dismiss
 
@@ -31,11 +33,17 @@ struct DevicesView: View {
     var body: some View {
         let otherDevices = devices.filter { !$0.isCurrent }
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("linked_devices", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            )
+            if showNavBar {
+                CTNavBar(
+                    title: NSLocalizedString("linked_devices", comment: ""),
+                    showBack: true,
+                    backAction: { dismiss() }
+                ) {
+                    EmptyView()
+                } trailing: {
+                    EmptyView()
+                }
+            }
 
             ScrollView {
             LazyVStack(spacing: DevicesSettingsLayout.listSpacing) {

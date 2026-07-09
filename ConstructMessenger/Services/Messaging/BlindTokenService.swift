@@ -60,7 +60,36 @@ final class BlindTokenService {
             Log.info("BlindToken: replenished \(tokens.count) tokens (wallet=\(TokenWalletService.shared.balance))", category: "BlindToken")
         } catch {
             Log.error("BlindToken: replenishment failed — \(error)", category: "BlindToken")
+            // Set date on failure too so cooldown prevents log spam / rapid retries (e.g. "not configured").
+            lastReplenishDate = Date()
         }
+    }
+
+    /// Special bootstrap for the very first batch of stealth tokens.
+    /// - Called at registration and when user first enables Stealth.
+    /// - Bypasses the cooldown so the user gets an initial balance immediately.
+    /// - Only does work if the wallet is nearly empty.
+    /// - Normal top-ups continue to use `replenish()`.
+    func bootstrapInitialBatch() async {
+        guard !isReplenishing else {
+            Log.debug("BlindToken: bootstrap skipped (already replenishing)", category: "BlindToken")
+            return
+        }
+        if TokenWalletService.shared.balance >= 10 {
+            Log.debug("BlindToken: bootstrap skipped (wallet already has \(TokenWalletService.shared.balance) tokens)", category: "BlindToken")
+            return
+        }
+
+        if let last = lastReplenishDate, Date().timeIntervalSince(last) < Self.cooldown {
+            Log.debug("BlindToken: bootstrap cooldown active — skipping", category: "BlindToken")
+            return
+        }
+
+        // Force bypass of cooldown for the absolute first batch (only if no recent attempt).
+        lastReplenishDate = nil
+
+        Log.info("BlindToken: starting initial bootstrap batch", category: "BlindToken")
+        await replenish(count: Self.batchSize)
     }
 
     // MARK: - Core OPRF flow

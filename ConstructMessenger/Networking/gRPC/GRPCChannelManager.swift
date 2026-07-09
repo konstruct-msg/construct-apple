@@ -137,9 +137,33 @@ final class GRPCChannelManager: Sendable {
     }
 #endif
 
+    // Experimental engine-QUIC persistent connection (construct-transport Rust stack).
+    // Stored as Any? for the same #if-guard reason as the H3 box.
+    private nonisolated(unsafe) var _eqConnBox: Any? = nil
+    private nonisolated(unsafe) var _eqConnGeneration: UInt64 = 0
+    private let _eqConnLock = NSLock()
+
+#if os(iOS)
+    private struct PersistentConnEngineQuic: @unchecked Sendable {
+        let client: GRPCClient<QuicClientTransport>
+        let task:   Task<Void, Never>
+        let key:    String   // "engine-quic:<host>:<port>" — direct path only, never over VEIL
+    }
+#endif
+
     // Set by ConnectionLoop.prepare() via setDirectProxyPort(). veilProxyPort() returns this value.
     private nonisolated(unsafe) var _overrideProxyPort: UInt16? = nil
     private let _overrideProxyPortLock = NSLock()
+
+    // Sealed-sender (stealth-sealed-sender-v2 Phase 2) persistent connection — same
+    // H2 transport and VEIL/direct routing as `_conn`, but built with NO AuthInterceptor.
+    // A genuinely separate HTTP/2 connection, not just a header omission on the shared
+    // one — the point is the server (or a network observer) cannot correlate this
+    // socket with the authenticated session. Kept in lockstep with `_conn`'s routing
+    // key: invalidated wherever `_conn` is invalidated.
+    private nonisolated(unsafe) var _sealedConn: PersistentConn?
+    private nonisolated(unsafe) var _sealedConnGeneration: UInt64 = 0
+    private let _sealedConnLock = NSLock()
 
     private func routingKey() -> String {
         if let veilPort = veilProxyPort() { return "ice:\(veilPort)" }
@@ -223,6 +247,7 @@ final class GRPCChannelManager: Sendable {
         _connLock.unlock()
         guard didInvalidate else { return }
         Log.debug("Persistent gRPC connection invalidated (routing: \(oldKey) → \(newKey), gen=\(_connLock.withLock { _connGeneration }))", category: "GRPCChannel")
+        invalidateSealedPersistentClient()
 #if canImport(Network)
         invalidateH3Connection()
 #endif
@@ -254,6 +279,7 @@ final class GRPCChannelManager: Sendable {
         _connLock.unlock()
         guard didInvalidate else { return }
         Log.debug("Persistent gRPC connection invalidated (gen=\(_connGeneration))", category: "GRPCChannel")
+        invalidateSealedPersistentClient()
         // H3 is only valid on the direct path. Any routing change that kills H2 also kills H3.
 #if canImport(Network)
         invalidateH3Connection()
@@ -350,6 +376,102 @@ final class GRPCChannelManager: Sendable {
         )
     }
 
+    // MARK: - Sealed-sender channel (stealth-sealed-sender-v2 Phase 2)
+    //
+    // Same VEIL/direct routing decision as makeClient(), but built with NO
+    // AuthInterceptor and kept as a separate persistent HTTP/2 connection —
+    // reusing the authenticated connection would let the server (or a network
+    // observer) correlate the "anonymous" stream with the signed-in session via
+    // the TCP/TLS connection itself, even with no auth headers on the RPC.
+    // Plain H2 only for now — no H3/engine-QUIC variant.
+
+    /// Creates a new unauthenticated `GRPCClient` for sealed-sender sends.
+    /// Caller is responsible for running the client via `runConnections()` in a Task.
+    func makeSealedClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
+        if let veilPort = veilProxyPort() {
+            let logicalAuthority = currentHost
+            let transport = try HTTP2ClientTransport.TransportServices(
+                target: .ipv4(address: "127.0.0.1", port: Int(veilPort)),
+                transportSecurity: .plaintext,
+                config: .defaults {
+                    $0.http2.authority = logicalAuthority
+                    $0.connection = .init(
+                        maxIdleTime: .seconds(NetworkTiming.GRPC.maxIdleTimeSeconds),
+                        keepalive: .init(
+                            time: .seconds(NetworkTiming.GRPC.keepaliveTimeVEILSeconds),
+                            timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutVEILSeconds),
+                            allowWithoutCalls: true
+                        )
+                    )
+                }
+            )
+            return GRPCClient(transport: transport, interceptors: [])
+        }
+
+        let host = currentHost
+        let port = currentPort
+        let transport = try HTTP2ClientTransport.TransportServices(
+            target: .dns(host: host, port: port),
+            transportSecurity: .tls,
+            config: .defaults {
+                $0.connection = .init(
+                    maxIdleTime: .seconds(NetworkTiming.GRPC.maxIdleTimeSeconds),
+                    keepalive: .init(
+                        time: .seconds(NetworkTiming.GRPC.keepaliveTimeDirectSeconds),
+                        timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutSeconds),
+                        allowWithoutCalls: true
+                    )
+                )
+            }
+        )
+        return GRPCClient(transport: transport, interceptors: [])
+    }
+
+    /// Returns a reusable persistent unauthenticated client for sealed-sender sends,
+    /// creating/replacing it when routing changes. Mirrors `acquirePersistentClient()`.
+    func acquireSealedPersistentClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
+        _sealedConnLock.lock()
+        defer { _sealedConnLock.unlock() }
+
+        let key = routingKey()
+        if let conn = _sealedConn, conn.key == key, !conn.task.isCancelled {
+            return conn.client
+        }
+
+        _sealedConn?.client.beginGracefulShutdown()
+        _sealedConn = nil
+        _sealedConnGeneration &+= 1
+        let gen = _sealedConnGeneration
+
+        let client = try makeSealedClient()
+        let task = Task.detached { [weak self, gen] in
+            guard let self else { return }
+            let valid = self._sealedConnLock.withLock { self._sealedConnGeneration == gen }
+            guard valid else { return }
+            do {
+                try await client.runConnections()
+            } catch is CancellationError {
+                // Normal shutdown.
+            } catch {
+                Log.error("Sealed persistent gRPC connection closed: \(error)", category: "GRPCChannel")
+                self.invalidateSealedPersistentClient()
+            }
+        }
+        _sealedConn = PersistentConn(client: client, task: task, key: key)
+        Log.debug("Sealed persistent gRPC connection created (key=\(key) gen=\(gen))", category: "GRPCChannel")
+        return client
+    }
+
+    /// Invalidates the sealed-sender persistent connection so the next RPC gets a fresh one.
+    func invalidateSealedPersistentClient() {
+        _sealedConnLock.lock()
+        defer { _sealedConnLock.unlock() }
+        guard _sealedConn != nil else { return }
+        _sealedConn?.client.beginGracefulShutdown()
+        _sealedConn = nil
+        _sealedConnGeneration &+= 1
+    }
+
 #if canImport(Network)
     /// Creates a gRPC client using the HTTP/3 (QUIC/Network.framework) transport.
     /// Only called for direct-path connections — never over VEIL/obfs4 proxy.
@@ -432,6 +554,123 @@ final class GRPCChannelManager: Sendable {
     }
 #endif
 
+#if os(iOS)
+    /// Resolves the experimental engine-QUIC gateway config, or `nil` when the
+    /// experiment is off or the pinned gateway certificate is not bundled.
+    /// The gateway is the native quinn+h3 service (`quic.konstruct.cc:443`), separate
+    /// from the Envoy/Traefik H2 endpoint.
+    private func engineQuicConfig() -> QuicClientTransport.Config? {
+        guard FeatureFlags.engineQuicExperimental else { return nil }
+        let host = QuicGatewayConfig.host
+        let port = QuicGatewayConfig.port
+        // Self-signed gateway cert (DER), pinned. Bundled as `quic_gateway.der`.
+        guard let url = Bundle.main.url(forResource: "quic_gateway", withExtension: "der"),
+              let cert = try? Data(contentsOf: url) else {
+            Log.error("engine-QUIC enabled but quic_gateway.der is not bundled — cannot pin gateway cert", category: "GRPCChannel")
+            return nil
+        }
+        // Production ships PLAIN QUIC (decisions/quic-plain-vs-obfuscated.md): the gateway runs
+        // plain, so the client must too. Salamander obfuscation is a DEBUG-only experiment — even
+        // if a stale `engineQuicObfuscated=true` is left in UserDefaults from an older build, a
+        // release build never requests obf (it couldn't handshake the plain gateway anyway).
+        var obfPsk: Data?
+        #if DEBUG
+        if FeatureFlags.engineQuicObfuscated {
+            obfPsk = QuicObfPskStore.psk(for: host) ?? QuicGatewayConfig.bundledObfPsk
+            if obfPsk == nil {
+                Log.info("engine-QUIC obfuscation enabled but no Salamander PSK available for \(host) — using plain QUIC", category: "GRPCChannel")
+            }
+        }
+        #endif
+        return QuicClientTransport.Config(host: host, port: port, serverName: host, trustCert: cert, obfPsk: obfPsk)
+    }
+
+    /// Creates a gRPC client over the experimental engine-QUIC transport, or `nil`
+    /// when the experiment/cert is unavailable. Direct path only — never over VEIL.
+    func makeClientEngineQuic() -> GRPCClient<QuicClientTransport>? {
+        guard let config = engineQuicConfig() else { return nil }
+        Log.debug("gRPC creating engine-QUIC channel → \(config.host):\(config.port)", category: "gRPC")
+        let transport = QuicClientTransport(config: config)
+        return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
+    }
+
+    /// Returns (or lazily creates) the shared persistent engine-QUIC channel, or `nil`
+    /// when the experiment is off. Mirrors `acquireH3Channel()`; callers MUST fall back
+    /// to the H2 path (`acquirePersistentClient()`) on `nil` or on any RPC failure.
+    func acquireEngineQuicChannel() -> GRPCClient<QuicClientTransport>? {
+        _eqConnLock.lock()
+        defer { _eqConnLock.unlock() }
+
+        // Key includes obf-active state so toggling obfuscation (or provisioning a PSK)
+        // changes the identity → the stale connection is replaced on the next acquire.
+        // Mirrors engineQuicConfig(): obf is DEBUG-only, release is always plain.
+        #if DEBUG
+        let obfActive = FeatureFlags.engineQuicObfuscated
+            && (QuicObfPskStore.psk(for: QuicGatewayConfig.host) != nil || QuicGatewayConfig.bundledObfPsk != nil)
+        let obfSuffix = obfActive ? "obf" : "plain"
+        #else
+        let obfSuffix = "plain"
+        #endif
+        let key = "engine-quic:\(currentHost):\(currentPort):\(obfSuffix)"
+        if let conn = _eqConnBox as? PersistentConnEngineQuic, conn.key == key, !conn.task.isCancelled {
+            return conn.client
+        }
+
+        if let old = _eqConnBox as? PersistentConnEngineQuic {
+            old.client.beginGracefulShutdown()
+        }
+        _eqConnBox = nil
+        _eqConnGeneration &+= 1
+        let gen = _eqConnGeneration
+
+        guard let client = makeClientEngineQuic() else { return nil }
+        let task = Task.detached { [weak self, gen] in
+            guard let self else { return }
+            let valid = self._eqConnLock.withLock { self._eqConnGeneration == gen }
+            guard valid else {
+                Log.debug("engine-QUIC client gen=\(gen) already superseded — skipping runConnections()", category: "GRPCChannel")
+                return
+            }
+            do {
+                try await client.runConnections()
+            } catch is CancellationError {
+                // Normal shutdown.
+            } catch {
+                Log.error("engine-QUIC persistent connection closed: \(error)", category: "GRPCChannel")
+                self.invalidateEngineQuicConnection()
+            }
+        }
+        _eqConnBox = PersistentConnEngineQuic(client: client, task: task, key: key)
+        Log.debug("engine-QUIC persistent connection created (key=\(key) gen=\(gen))", category: "GRPCChannel")
+        return client
+    }
+
+    /// Gracefully shuts down the engine-QUIC persistent connection.
+    func invalidateEngineQuicConnection() {
+        _eqConnLock.lock()
+        defer { _eqConnLock.unlock() }
+        guard let conn = _eqConnBox as? PersistentConnEngineQuic else { return }
+        conn.client.beginGracefulShutdown()
+        _eqConnBox = nil
+        _eqConnGeneration &+= 1
+        Log.debug("engine-QUIC persistent connection invalidated (gen=\(_eqConnGeneration))", category: "GRPCChannel")
+    }
+
+    /// Force-cancels the engine-QUIC connection: cancels the runConnections() task and
+    /// begins graceful shutdown. Mirrors forceInvalidateH3Connection() for the silent-UDP
+    /// fast-failover path (a QUIC handshake that passed but is being dropped at the UDP layer).
+    func forceInvalidateEngineQuicConnection() {
+        _eqConnLock.lock()
+        defer { _eqConnLock.unlock() }
+        guard let conn = _eqConnBox as? PersistentConnEngineQuic else { return }
+        conn.task.cancel()
+        conn.client.beginGracefulShutdown()
+        _eqConnBox = nil
+        _eqConnGeneration &+= 1
+        Log.debug("engine-QUIC persistent connection force-invalidated (gen=\(_eqConnGeneration))", category: "GRPCChannel")
+    }
+#endif
+
     /// Execute a gRPC operation with automatic retry, auth refresh, and VEIL failover.
     /// Delegates to `GRPCCallExecutor` — all RPC policy logic lives there.
     func performRPC<Result: Sendable>(
@@ -449,6 +688,48 @@ final class GRPCChannelManager: Sendable {
             invalidatesConnectionOnFailure: invalidatesConnectionOnFailure,
             operation
         )
+    }
+
+    /// Execute a gRPC operation on the unauthenticated sealed-sender channel
+    /// (stealth-sealed-sender-v2 Phase 2).
+    ///
+    /// Deliberately simpler than `performRPC`/`GRPCCallExecutor`: there is no auth to
+    /// refresh on this channel, and VEIL-aware relay rotation is left to the message
+    /// layer above (sends already retry there). On a transport failure the sealed
+    /// connection is invalidated and the operation is retried once with a fresh client;
+    /// a second failure propagates to the caller.
+    func performSealedRPC<Result: Sendable>(
+        timeout: TimeInterval? = nil,
+        _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.TransportServices>) async throws -> Result
+    ) async throws -> Result {
+        var lastError: Error?
+        for attempt in 0..<2 {
+            let client = try acquireSealedPersistentClient()
+            do {
+                if let timeout {
+                    let opTask = Task<Result, Error> { try await operation(client) }
+                    let capSleep = Task<Void, Error> { try await Task.sleep(for: .seconds(timeout)) }
+                    Task { _ = try? await opTask.value; capSleep.cancel() }
+                    do {
+                        try await withTaskCancellationHandler {
+                            try await capSleep.value
+                        } onCancel: { capSleep.cancel() }
+                        opTask.cancel()
+                        throw GRPCClientError.clientSideTimeout
+                    } catch is CancellationError {
+                        if Task.isCancelled { opTask.cancel(); throw CancellationError() }
+                    }
+                    return try await opTask.value
+                } else {
+                    return try await operation(client)
+                }
+            } catch {
+                lastError = error
+                invalidateSealedPersistentClient()
+                if attempt == 1 { throw error }
+            }
+        }
+        throw lastError ?? NetworkError.connectionFailed
     }
 }
 

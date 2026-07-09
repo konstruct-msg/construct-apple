@@ -5,3 +5,10 @@ module construct_coreFFI {
     use "_Builtin_stdbool"
     use "_Builtin_stdint"
 }
+module construct_transportFFI {
+    header "construct_transportFFI.h"
+    export *
+    use "Darwin"
+    use "_Builtin_stdbool"
+    use "_Builtin_stdint"
+}

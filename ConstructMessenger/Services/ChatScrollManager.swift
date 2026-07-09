@@ -69,18 +69,30 @@ class ChatScrollManager {
     }
     
     /// Scroll to bottom of chat
-    /// - Parameter messageId: Optional specific message ID to scroll to (defaults to "bottom")
-    func scrollToBottom(messageId: String = "bottom") {
+    /// - Parameters:
+    ///   - messageId: Optional specific message ID to scroll to (defaults to "bottom")
+    ///   - animated: Animate the scroll. Pass `false` for *corrective* re-pins
+    ///     (composer-height changes, first appear). An animated scroll interpolates the
+    ///     content offset while the `safeAreaInset` composer is *also* animating its height,
+    ///     which can drive the offset outside the valid range and de-materialize the
+    ///     `LazyVStack` — the "chat goes black / empty" flash. A non-animated `scrollTo`
+    ///     lands a valid offset in a single layout pass and forces the visible cells to
+    ///     re-materialize immediately.
+    func scrollToBottom(messageId: String = "bottom", animated: Bool = true) {
         guard let proxy = proxy else {
             return
         }
-        
-        withAnimation(.easeOut(duration: 0.3)) {
+
+        if animated {
+            withAnimation(.easeOut(duration: 0.3)) {
+                proxy.scrollTo(messageId, anchor: .bottom)
+            }
+        } else {
             proxy.scrollTo(messageId, anchor: .bottom)
         }
-        
+
         hasScrolledToBottom = true
-        Log.debug("Scrolled to bottom (messageId: \(messageId))", category: "ChatScrollManager")
+        Log.debug("Scrolled to bottom (messageId: \(messageId), animated: \(animated))", category: "ChatScrollManager")
     }
     
     /// Scroll to a specific message
@@ -109,14 +121,22 @@ class ChatScrollManager {
     /// Automatically maintains `shouldScrollToBottom` so auto-scroll on new
     /// messages doesn't fight the user when they deliberately scroll up.
     func updateScrollOffset(_ offset: CGFloat) {
+        // Ignore offset updates while keyboard is animating — container height
+        // changes during animation produce spurious offset values.
+        if isKeyboardVisible {
+            scrollOffset = offset
+            return
+        }
+
         scrollOffset = offset
 
         if offset >= -60 {
             // User is at (or very near) the bottom — re-enable auto-scroll.
             shouldScrollToBottom = true
-        } else if offset < -160 {
-            // User has scrolled far enough up that they're reading history —
-            // disable auto-scroll so new arrivals don't yank them back down.
+        } else if offset < -60 {
+            // User has scrolled up — disable auto-scroll so new arrivals
+            // don't yank them back down. Single threshold avoids the
+            // -160…-60 gap where state would stay stale.
             shouldScrollToBottom = false
         }
     }
@@ -149,9 +169,15 @@ class ChatScrollManager {
             }
             .sink { [weak self] height in
                 self?.keyboardHeight = height
+                // Scroll to bottom when keyboard appears, but only if user was already near bottom.
+                // The shouldScrollToBottom flag is managed by updateScrollOffset based on
+                // actual scroll position before keyboard animation started.
                 Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .milliseconds(100))
-                    self?.scrollToBottom()
+                    try? await Task.sleep(for: .milliseconds(150))
+                    guard let self else { return }
+                    if self.shouldScrollToBottom {
+                        self.scrollToBottom()
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -160,6 +186,13 @@ class ChatScrollManager {
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
             .sink { [weak self] _ in
                 self?.keyboardHeight = 0
+                // After keyboard dismisses, re-enable auto-scroll since user
+                // is likely back at the input area.
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(100))
+                    self?.shouldScrollToBottom = true
+                    self?.scrollToBottom()
+                }
             }
             .store(in: &cancellables)
         #endif

@@ -16,16 +16,6 @@
 import Foundation
 import CoreData
 
-/// Formal session lifecycle state for a single peer contact.
-/// Used by `SessionCoordinator.sessionStates` to replace the ad-hoc
-/// `usersInitializingSession: Set<String>` + `sessionEstablishedAt: [String: UInt64]` pair.
-private enum ContactSessionState: Equatable {
-    /// Session init (X3DH, heal, key-sync, fallback) is in flight.
-    case initializing
-    /// Session is established. `establishedAt` is Unix seconds.
-    case active(establishedAt: UInt64)
-}
-
 @MainActor
 final class SessionCoordinator: MessageRouterDelegate {
 
@@ -44,6 +34,11 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Tracks when we last sent END_SESSION to each peer to prevent loop storms.
     private var endSessionSentAt: [String: Date] = [:]
     private let endSessionCooldown: TimeInterval = 30.0
+
+    /// Shadow-only mirror of *every* END_SESSION send (rate-limited AND must-send), used solely
+    /// to evaluate the Phase-2b cut-over question — "how often would the rate limiter suppress a
+    /// currently must-send END_SESSION?" — without touching live behaviour. Never gates a send.
+    private var shadowEndSessionSentAt: [String: Date] = [:]
 
     /// Tracks when we last attempted an automatic resend after receiving END_SESSION from a peer.
     /// Prevents resend loops when both sides reset simultaneously.
@@ -75,9 +70,52 @@ final class SessionCoordinator: MessageRouterDelegate {
     private var cooldownPurgeTimer: Timer?
     private let cooldownPurgeInterval: TimeInterval = 5 * 60 // every 5 minutes
 
-    /// Formal session state machine for each peer contact.
-    /// Replaces both `usersInitializingSession: Set<String>` and `sessionEstablishedAt: [String: UInt64]`.
-    private var sessionStates: [String: ContactSessionState] = [:]
+    /// Formal session state machine for each peer contact, backed by the pure `SessionReducer`.
+    /// Phase entries: `.initializing` / `.active(establishedAt:)`; absence (`nil`) == no session.
+    private var sessionPhases: [String: SessionReducer.Phase] = [:]
+
+    /// Run one reducer transition for `userId`, commit the new phase, and return its effects.
+    /// Phase 1 consumes only the phase result here (initializing/active markers); the queue
+    /// effects are exercised by tests and adopted by MessageRouter in a later phase.
+    @discardableResult
+    private func apply(_ event: SessionReducer.Event, for userId: String) -> [SessionReducer.Effect] {
+        assertMainThread()
+        let (newPhase, effects) = SessionReducer.reduce(sessionPhases[userId], on: event)
+        sessionPhases[userId] = newPhase
+        // Mirror the establishment timestamp into the Keychain so the END_SESSION stale-check
+        // survives restart (the in-memory phase map is empty after launch even though the Rust
+        // core restored live sessions). `.active` persists the time; a teardown to `nil` clears
+        // it; `.initializing` leaves any existing value untouched (a re-key over a live session
+        // must not drop its establishment time — a terminal failure will clear it via `nil`).
+        switch newPhase {
+        case .active(let at):
+            KeychainManager.shared.saveSessionEstablishedAt(at, for: userId)
+        case .none:
+            KeychainManager.shared.deleteSessionEstablishedAt(for: userId)
+        case .initializing:
+            break
+        }
+        return effects
+    }
+
+    /// Effector: perform the pending-queue effects the reducer emitted. The reducer decides
+    /// WHAT happens to the queue on each lifecycle transition; this carries out exactly the
+    /// existing drain (skipping the already-decrypted init carrier) / clear semantics.
+    /// `startInit`/`queueMessage`/`processMessage` are the incoming-message disposition and
+    /// are performed in MessageRouter, not here.
+    private func perform(_ effects: [SessionReducer.Effect], for userId: String, skippingFirst: Bool = false) {
+        assertMainThread()
+        for effect in effects {
+            switch effect {
+            case .drainQueuedMessages:
+                drainPendingQueue(for: userId, skippingFirst: skippingFirst)
+            case .clearQueuedMessages:
+                messageRouter.removePendingMessages(for: userId)
+            case .startInit, .queueMessage, .processMessage:
+                break
+            }
+        }
+    }
 
     private func assertMainThread(file: StaticString = #fileID, line: UInt = #line) {
         precondition(Thread.isMainThread, "SessionCoordinator state must be accessed on the main thread", file: file, line: line)
@@ -86,36 +124,35 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Returns true if a session init (or heal) is currently in progress for `userId`.
     private func isInitializing(_ userId: String) -> Bool {
         assertMainThread()
-        if case .initializing = sessionStates[userId] { return true }
+        if case .initializing = sessionPhases[userId] { return true }
         return false
     }
 
     /// Mark `userId` as initializing and return a `defer` block that clears the state.
     @discardableResult
     private func beginInit(_ userId: String) -> () -> Void {
-        assertMainThread()
-        sessionStates[userId] = .initializing
+        apply(.initStarted, for: userId)
         return { [weak self] in
-            self?.assertMainThread()
-            // Only clear if still in .initializing — don't clobber .active set by a success path.
-            if case .initializing = self?.sessionStates[userId] {
-                self?.sessionStates[userId] = nil
-            }
+            // `.initEnded` only clears the marker if still .initializing — it never clobbers
+            // an .active set by a success path that ran inside the same init scope.
+            self?.apply(.initEnded, for: userId)
         }
     }
 
     /// Mark `userId` as having an active session established right now.
     private func markActive(_ userId: String) {
-        assertMainThread()
-        sessionStates[userId] = .active(establishedAt: UInt64(Date().timeIntervalSince1970))
+        apply(.markActive(at: UInt64(Date().timeIntervalSince1970)), for: userId)
     }
 
     /// Return the timestamp (Unix seconds) when the active session for `userId` was established,
     /// or nil if there is no active session record.
     private func establishedAt(for userId: String) -> UInt64? {
         assertMainThread()
-        if case .active(let t) = sessionStates[userId] { return t }
-        return nil
+        if case .active(let t) = sessionPhases[userId] { return t }
+        // No in-memory phase (typical right after launch: the Rust core restored the session
+        // from CFE but this map starts empty). Fall back to the persisted timestamp so the
+        // END_SESSION stale-check can still filter a re-delivered old END_SESSION.
+        return KeychainManager.shared.loadSessionEstablishedAt(for: userId)
     }
 
     // MARK: - Injected references
@@ -158,7 +195,13 @@ final class SessionCoordinator: MessageRouterDelegate {
             defer { endInit() }
             do {
                 let bundle = try await publicKeyBundleHandler.fetchPublicKeyWithRetry(userId: userId)
-                try sessionInitService.initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
+                do {
+                    try sessionInitService.initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
+                } catch SessionError.peerSPKStale {
+                    // Peer's SPK is stale; degrade rather than leave the re-key broken.
+                    // The resulting session is flagged at-risk and healed if undecryptable.
+                    try sessionInitService.initializeSession(userId: userId, bundle: bundle, deleteExisting: true, allowStale: true)
+                }
                 Log.info("SESSION_STATE[key_sync_success]: session re-keyed for \(userId.prefix(8))…", category: "SessionInit")
             } catch {
                 Log.error("SESSION_STATE[key_sync_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
@@ -167,15 +210,29 @@ final class SessionCoordinator: MessageRouterDelegate {
     }
 
     /// Send END_SESSION to a peer and archive + clear the local session.
-    func sendEndSession(to userId: String, reason: String = "manual_reset") async throws {
-        Log.info("Sending END_SESSION to \(userId): \(reason)", category: "ChatsViewModel")
-        #if os(macOS)
-        // On Desktop the engine owns the session state — dispatch via engine.
-        EngineAdapter.shared.dispatch(.sendEndSession(contactId: userId))
-        Log.info("END_SESSION dispatched to engine for \(userId.prefix(8))…", category: "ChatsViewModel")
-        #else
+    ///
+    /// `rateLimited` marks calls that already passed the cooldown decision (the DR-diverge
+    /// path). For every *other* caller (a "must-send" path) we run a shadow comparison: what
+    /// would the rate limiter have decided here? This measures Phase-2b risk without changing
+    /// behaviour — the send always proceeds.
+    func sendEndSession(
+        to userId: String,
+        reason: String = "manual_reset",
+        rateLimited: Bool = false,
+        resetReason: Shared_Proto_Messaging_V1_SessionResetReason = .unspecified
+    ) async throws {
+        if !rateLimited {
+            let candidate = SessionReducer.shouldSendEndSession(
+                lastSentAt: shadowEndSessionSentAt[userId], now: Date(), cooldown: endSessionCooldown
+            )
+            // live = true (must-send paths always send today); candidate = the rate limiter's verdict.
+            ShadowCompare.decide("end_session_must_send", key: userId, live: true, candidate: candidate, context: reason)
+        }
+        shadowEndSessionSentAt[userId] = Date()
+
+        Log.info("Sending END_SESSION to \(userId): \(reason)\(resetReason != .unspecified ? " [hint=\(resetReason)]" : "")", category: "ChatsViewModel")
         do {
-            let response = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: reason)
+            let response = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: reason, resetReason: resetReason)
             Log.info("END_SESSION sent successfully: \(response.messageId)", category: "ChatsViewModel")
         } catch {
             Log.error("Failed to send END_SESSION: \(error)", category: "ChatsViewModel")
@@ -184,7 +241,32 @@ final class SessionCoordinator: MessageRouterDelegate {
         CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
         CryptoManager.shared.clearArchivedSessions(for: userId)
         Log.info("END_SESSION complete: session archived and cleared", category: "ChatsViewModel")
-        #endif
+    }
+
+    /// Single rate-limited END_SESSION entry point for storm-prone recovery paths
+    /// (DR-diverge). Suppresses repeats within `endSessionCooldown` per peer via the pure
+    /// `SessionReducer.shouldSendEndSession` decision, and records the attempt time.
+    /// Returns `true` iff a send was attempted (records + proceeds even if the network send
+    /// throws, matching the prior inline behaviour). Must-send paths — logout broadcast,
+    /// manual reset, terminal init/heal failures — call `sendEndSession` directly and are
+    /// intentionally not rate-limited.
+    @discardableResult
+    private func sendEndSessionRateLimited(to userId: String, reason: String) async -> Bool {
+        let now = Date()
+        guard SessionReducer.shouldSendEndSession(
+            lastSentAt: endSessionSentAt[userId], now: now, cooldown: endSessionCooldown
+        ) else {
+            Log.info("END_SESSION cooldown active for \(userId.prefix(8))…, skipping (\(reason))", category: "SessionCoordinator")
+            return false
+        }
+        endSessionSentAt[userId] = now
+        Log.info("Sending END_SESSION to \(userId.prefix(8))… (\(reason))", category: "SessionCoordinator")
+        do {
+            try await sendEndSession(to: userId, reason: reason, rateLimited: true)
+        } catch {
+            Log.error("Failed to send END_SESSION to \(userId.prefix(8))…: \(error)", category: "SessionCoordinator")
+        }
+        return true
     }
 
     /// Broadcast END_SESSION to all peers that have an active session (e.g., on logout).
@@ -194,8 +276,24 @@ final class SessionCoordinator: MessageRouterDelegate {
         let myId = AuthSessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return }
 
-        let toPrewarm = contactIds.filter {
-            DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: $0) && !CryptoManager.shared.hasSession(for: $0)
+        // Do not make any session-missing decisions before the crypto core is built and
+        // sessions have had a chance to restore from Keychain. While the core is nil,
+        // hasSession returns false for every contact — prewarming here would send a
+        // destructive END_SESSION + fresh re-init over a perfectly healthy session that
+        // simply hasn't been imported yet (startup race, esp. with delayed auth refresh).
+        // A later forceReconnect/network event re-triggers prewarm once the core is ready.
+        let coreReady = CryptoManager.shared.isCoreReady
+        guard coreReady else {
+            Log.info("Session prewarm deferred — crypto core not ready yet", category: "SessionInit")
+            return
+        }
+
+        let toPrewarm = contactIds.filter { peer in
+            SessionReducer.shouldPrewarm(
+                coreReady: coreReady,
+                isNaturalInitiator: DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: peer),
+                sessionExistsOrRestorable: CryptoManager.shared.hasOrRestoreSession(for: peer)
+            )
         }
         guard !toPrewarm.isEmpty else { return }
 
@@ -210,7 +308,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // also reaches this point sees the flag and skips — otherwise both tasks
                 // would slip past the guard, race through fetchBundle, and the second
                 // would delete the session just created by the first.
-                guard !CryptoManager.shared.hasSession(for: contactId),
+                guard !CryptoManager.shared.hasOrRestoreSession(for: contactId),
                       !self.isInitializing(contactId) else {
                     Log.info("Prewarm skipped — session exists or init in progress for \(contactId.prefix(8))…", category: "SessionInit")
                     continue
@@ -236,17 +334,17 @@ final class SessionCoordinator: MessageRouterDelegate {
 
                 await self.sessionInitService.initializeSessionProactively(
                     userId: contactId,
-                    onSuccess: { Log.info("Prewarm ✅ \(contactId.prefix(8))…", category: "SessionInit") },
-                    onFailure: { err in Log.info("Prewarm ❌ \(contactId.prefix(8))…: \(err.localizedDescription)", category: "SessionInit") }
+                    onSuccess: { Log.info("Prewarm \(contactId.prefix(8))…", category: "SessionInit") },
+                    onFailure: { err in Log.info("Prewarm \(contactId.prefix(8))…: \(err.localizedDescription)", category: "SessionInit") }
                 )
             }
         }
     }
 
     func sendEndSessionToAllContacts(reason: String = "logout") async {
-        Log.info("🔄 Sending END_SESSION to all contacts: \(reason)", category: "ChatsViewModel")
+        Log.info("Sending END_SESSION to all contacts: \(reason)", category: "ChatsViewModel")
         let sessionUserIds = CryptoManager.shared.getAllSessionUserIds()
-        Log.info("📋 Found \(sessionUserIds.count) active sessions", category: "ChatsViewModel")
+        Log.info("Found \(sessionUserIds.count) active sessions", category: "ChatsViewModel")
         var successCount = 0
         var failCount = 0
         for userId in sessionUserIds {
@@ -289,18 +387,10 @@ final class SessionCoordinator: MessageRouterDelegate {
     func messageRouter(_ router: MessageRouter, needsEndSession userId: String) {
         Task { [weak self] in
             guard let self else { return }
-            let now = Date()
-            if let lastSent = self.endSessionSentAt[userId],
-               now.timeIntervalSince(lastSent) < self.endSessionCooldown {
-                Log.info("END_SESSION cooldown active for \(userId.prefix(8))..., skipping", category: "SessionCoordinator")
+            // Cooldown gates the whole recovery sequence: if a recent END_SESSION is still in
+            // its window, skip both the send AND the reinit/fallback below (avoids storms).
+            guard await self.sendEndSessionRateLimited(to: userId, reason: "session_out_of_sync") else {
                 return
-            }
-            self.endSessionSentAt[userId] = now
-            Log.info("Sending END_SESSION to \(userId.prefix(8))... (session out of sync)", category: "SessionCoordinator")
-            do {
-                try await self.sendEndSession(to: userId, reason: "session_out_of_sync")
-            } catch {
-                Log.error("Failed to send END_SESSION to \(userId.prefix(8))...: \(error)", category: "SessionCoordinator")
             }
             let myId = AuthSessionManager.shared.currentUserId ?? ""
             guard !myId.isEmpty else { return }
@@ -326,16 +416,31 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
     }
 
+    /// Seconds of clock-skew tolerance when deciding whether an END_SESSION pre-dates our session.
+    private static let endSessionStaleFudge: UInt64 = 5
+
     func messageRouter(_ router: MessageRouter, isEndSessionStale userId: String, timestamp: UInt64) -> Bool {
-        guard let established = establishedAt(for: userId) else { return false }
-        return timestamp + 5 < established
+        let established = establishedAt(for: userId)
+        let stale = SessionReducer.isEndSessionStale(
+            establishedAt: established, timestamp: timestamp, fudgeSeconds: Self.endSessionStaleFudge
+        )
+        // Diagnostic for the post-launch reset hypothesis: `established == nil` means we have no
+        // in-memory establishment record, so we CANNOT filter a possibly-stale END_SESSION — and
+        // if a live Rust session exists, it is about to be torn down. Surface this in device logs.
+        if established == nil {
+            let hasLive = CryptoManager.shared.hasSession(for: userId)
+            Log.info("SESSION_STATE[end_session_stale_check]: \(userId.prefix(8))… ts=\(timestamp) established=nil hasLiveSession=\(hasLive) → not filtered\(hasLive ? " ⚠️ live session will be reset by a possibly-stale END_SESSION (no in-memory establishedAt)" : "")", category: "SessionInit")
+        } else {
+            Log.info("SESSION_STATE[end_session_stale_check]: \(userId.prefix(8))… ts=\(timestamp) established=\(established!) → \(stale ? "STALE (filtered)" : "fresh (acted on)")", category: "SessionInit")
+        }
+        return stale
     }
 
     func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64) {
         let myId = AuthSessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return }
         guard DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) else {
-            Log.info("🔇 END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER", category: "SessionInit")
+            Log.info("END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER", category: "SessionInit")
             startResponderFallback(for: userId)
             onEphemeralSubscriptionNeeded?(userId)
             return
@@ -380,6 +485,50 @@ final class SessionCoordinator: MessageRouterDelegate {
                 onSuccess: { },
                 onFailure: { err in
                     Log.error("SESSION_STATE[initiator_announce_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                }
+            )
+            await self.sendSessionResetInit(to: userId)
+            SessionConfirmationTracker.shared.markPending(userId)
+        }
+        startTieBreakWatchdog(for: userId)
+    }
+
+    /// Re-establish a session for a peer that has QUEUED OUTBOUND messages but no live session
+    /// (the "zombie session"): we are the natural RESPONDER for a purely-outbound peer, so
+    /// `prewarmSessions` (INITIATOR-only) never fires and no inbound traffic ever triggers a
+    /// RESPONDER init — the queued flush in `MessageRetryManager.sendQueuedMessages` would defer
+    /// forever waiting for a session that nothing creates.
+    ///
+    /// Forces the INITIATOR role and transmits SESSION_RESET_INIT, exactly like a tie-break win,
+    /// so the peer bootstraps its RESPONDER session and replies `session_ready`. That clears
+    /// `SessionConfirmationTracker.pending` and flushes the queue via `sendSessionQueuedMessages`
+    /// → `MessageRetryManager`, where the orphaned ciphertext (bound to the dead ratchet) has been
+    /// purged and the recoverable plaintext is re-encrypted under the fresh session.
+    ///
+    /// Guarded (`isCoreReady`, `!hasSession`, `!isInitializing` + `beginInit`) so repeated retry
+    /// ticks don't spawn parallel inits and we never tear down a healthy-but-not-yet-imported
+    /// session during the startup race.
+    func reestablishSessionForQueuedOutbound(to userId: String) {
+        assertMainThread()
+        guard CryptoManager.shared.isCoreReady else {
+            Log.info("reestablishSessionForQueuedOutbound: crypto core not ready — deferring for \(userId.prefix(8))…", category: "SessionInit")
+            return
+        }
+        guard !CryptoManager.shared.hasSession(for: userId) else { return }
+        guard !isInitializing(userId) else {
+            Log.debug("reestablishSessionForQueuedOutbound: init already in progress for \(userId.prefix(8))…", category: "SessionInit")
+            return
+        }
+        Log.info("SESSION_STATE[zombie_recover]: no session for purely-outbound peer \(userId.prefix(8))… with queued messages — forcing INITIATOR re-establish", category: "SessionInit")
+        let endInit = beginInit(userId)
+        Task { [weak self] in
+            guard let self else { endInit(); return }
+            defer { endInit() }
+            await self.sessionInitService.initializeSessionProactively(
+                userId: userId,
+                onSuccess: { },
+                onFailure: { err in
+                    Log.error("SESSION_STATE[zombie_recover_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                 }
             )
             await self.sendSessionResetInit(to: userId)
@@ -453,9 +602,11 @@ final class SessionCoordinator: MessageRouterDelegate {
                     let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                     await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
                 }
-                // Transition to .active — records establishment time for stale END_SESSION filtering.
-                markActive(userId)
-                drainPendingQueue(for: userId, skippingFirst: true)
+                // Transition to .active (records establishment time for stale END_SESSION
+                // filtering) and drain the pending queue — both via the reducer: .initSucceeded
+                // yields .active + a .drainQueuedMessages effect performed below.
+                perform(apply(.initSucceeded(at: UInt64(Date().timeIntervalSince1970)), for: userId),
+                        for: userId, skippingFirst: true)
                 // Re-send messages that were re-queued on prior END_SESSION receipt.
                 sendSessionQueuedMessages(for: userId)
                 // Phase 2 of two-phase handshake: notify INITIATOR that RESPONDER
@@ -465,6 +616,14 @@ final class SessionCoordinator: MessageRouterDelegate {
                     guard let self else { return }
                     await self.sendSessionReady(to: userId)
                 }
+            } else if !CryptoManager.shared.isInitialized {
+                // initReceivingSession failed because the crypto core isn't initialized
+                // (device woken by push while locked → key material unreadable). This is
+                // transient, NOT a broken session: do NOT ACK and do NOT send END_SESSION.
+                // Leave the message queued; it is retried once the device unlocks and the
+                // core is restored. Tearing the session down here is the locked-launch
+                // desync bug (see also the entry guard in MessageRouter.routeIncomingMessage).
+                Log.info("initReceivingSession deferred — core not initialized (device likely locked) for \(userId.prefix(8))… (no END_SESSION)", category: "SessionInit")
             } else {
                 // initReceivingSession failed — prekey exhausted or invalid.
                 Log.info("initReceivingSession failed — clearing queue, sending END_SESSION to \(userId.prefix(8))...", category: "SessionInit")
@@ -482,15 +641,24 @@ final class SessionCoordinator: MessageRouterDelegate {
                 if let context = viewContext {
                     PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
                 }
-                messageRouter.removePendingMessages(for: userId)
+                // init failed → reset phase to absent + clear the pending queue, via the reducer.
+                perform(apply(.initFailed, for: userId), for: userId)
+                // If the init failed because we couldn't reproduce the sender's OTPK, ask them
+                // (via the typed END_SESSION reason) to re-init WITHOUT one — 3-DH is always
+                // reproducible, so this breaks the 4-DH retry loop instead of perpetuating it.
+                let otpkUnreproducible = SessionReinitHintStore.shared.consumeResponderOtpkUnreproducible(for: userId)
                 Task { [weak self] in
                     guard let self else { return }
                     do {
-                        try await self.sendEndSession(to: userId, reason: "session_init_failed")
+                        try await self.sendEndSession(
+                            to: userId,
+                            reason: otpkUnreproducible ? "session_init_failed_otpk_unreproducible" : "session_init_failed",
+                            resetReason: otpkUnreproducible ? .otpkUnreproducible : .unspecified
+                        )
                     } catch {
                         Log.error("SESSION_STATE[init_failed_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                     }
-                    await self.uploadFreshOtpks(reason: "init_failed")
+                    await self.replenishOtpksAfterFailure(reason: "init_failed")
                 }
             }
         } catch {
@@ -540,7 +708,8 @@ final class SessionCoordinator: MessageRouterDelegate {
                 streamManager?.sendReceipt([failedMessage.id], to: userId, status: .delivered)
                 PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
 
-                drainPendingQueue(for: userId, skippingFirst: true)
+                // Heal does not reset establishment time (no markActive) — drain only.
+                perform([.drainQueuedMessages], for: userId, skippingFirst: true)
             } else {
                 Log.error("SESSION_STATE[heal_failed]: initReceivingSession still failing for \(userId.prefix(8))…", category: "SessionInit")
                 if !canContinue {
@@ -551,21 +720,26 @@ final class SessionCoordinator: MessageRouterDelegate {
                     // Permanently block re-processing of this message ID.
                     FailedInitMessageStore.shared.add(failedMessage.id)
                     PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
-                    messageRouter.removePendingMessages(for: userId)
+                    perform([.clearQueuedMessages], for: userId)
                     SessionHealingService.shared.clearQueue(for: userId, in: context)
+                    let otpkUnreproducible = SessionReinitHintStore.shared.consumeResponderOtpkUnreproducible(for: userId)
                     do {
-                        try await sendEndSession(to: userId, reason: "heal_exhausted")
+                        try await sendEndSession(
+                            to: userId,
+                            reason: otpkUnreproducible ? "heal_exhausted_otpk_unreproducible" : "heal_exhausted",
+                            resetReason: otpkUnreproducible ? .otpkUnreproducible : .unspecified
+                        )
                     } catch {
                         Log.error("SESSION_STATE[heal_exhausted_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                     }
-                    await uploadFreshOtpks(reason: "heal_exhausted")
+                    await replenishOtpksAfterFailure(reason: "heal_exhausted")
                 }
                 // Otherwise leave HealingMessage in CoreData; next reconnect retries.
             }
         } catch {
             Log.error("SESSION_STATE[heal_bundle_error]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
             if !canContinue {
-                messageRouter.removePendingMessages(for: userId)
+                perform([.clearQueuedMessages], for: userId)
                 SessionHealingService.shared.clearQueue(for: userId, in: context)
                 do {
                     try await sendEndSession(to: userId, reason: "heal_bundle_unreachable")
@@ -581,6 +755,12 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Drain the pending queue for a peer after session init / heal succeeds.
     private func drainPendingQueue(for userId: String, skippingFirst: Bool) {
         let queued = messageRouter.drainPendingMessages(for: userId)
+        // The init carrier (first queued message) was already decrypted during session init and
+        // is not re-routed below — resolve it explicitly so its deferred entry releases the
+        // stream-cursor watermark. Re-routed messages resolve themselves via routeIncomingMessage.
+        if skippingFirst, let first = queued.first {
+            StreamCursorTracker.shared.resolve(messageId: first.id)
+        }
         let toProcess = skippingFirst ? queued.dropFirst() : queued[...]
         guard !toProcess.isEmpty, let context = viewContext else { return }
         Log.info("Decrypting \(toProcess.count) queued message(s) for \(userId.prefix(8))...", category: "SessionInit")
@@ -611,20 +791,14 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
     }
 
-    /// Upload a fresh batch of OTPKs after session-init or heal failure.
-    private func uploadFreshOtpks(reason: String) async {
+    /// Replenish OTPKs after session-init or heal failure — append-only, guarded by
+    /// low-water + cooldown inside the service. Force-replacing here (the old behavior)
+    /// wiped keys that peers' in-flight inits still referenced, making the desync
+    /// self-sustaining; see `OtpkReplenishmentService.replenishAfterInitFailure`.
+    private func replenishOtpksAfterFailure(reason: String) async {
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
         guard !deviceId.isEmpty else { return }
-        Log.info("Force-uploading \(OtpkReplenishmentService.replenishBatchSize) fresh OTPKs (\(reason))", category: "OTPK")
-        do {
-            try await OtpkReplenishmentService.generateAndUpload(
-                count: OtpkReplenishmentService.replenishBatchSize,
-                deviceId: deviceId,
-                replaceExisting: true
-            )
-        } catch {
-            Log.error("Failed to upload fresh OTPKs (\(reason)): \(error)", category: "OTPK")
-        }
+        await OtpkReplenishmentService.replenishAfterInitFailure(deviceId: deviceId, reason: reason)
     }
 
     /// Start a repeating timer that evicts expired entries from cooldown dicts.
@@ -676,10 +850,6 @@ final class SessionCoordinator: MessageRouterDelegate {
     ///
     /// Falls back to the legacy two-step sequence if all attempts fail (backward compat).
     private func sendSessionResetInit(to userId: String) async {
-        #if os(macOS)
-        Log.info("SESSION_STATE[sri_engine]: dispatching InitSessionInitiator for \(userId.prefix(8))…", category: "SessionInit")
-        EngineAdapter.shared.dispatch(.initSessionInitiator(contactId: userId))
-        #else
         guard CryptoManager.shared.hasSession(for: userId) else {
             Log.info("SESSION_STATE[sri_skip]: no INITIATOR session for \(userId.prefix(8))…", category: "SessionInit")
             return
@@ -688,7 +858,7 @@ final class SessionCoordinator: MessageRouterDelegate {
 
         for attempt in 1...pingMaxAttempts {
             do {
-                let sriContent = "__session_reset_init_\(UUID().uuidString)__"
+                let nonce = UUID().uuidString
                 let sriId = UUID().uuidString.lowercased()
                 let _ = try await MessagingServiceClient.shared.sendMessage(
                     messageId: sriId,
@@ -696,7 +866,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     senderId: myId,
                     conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
                     encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
-                        plaintext: sriContent,
+                        payload: SessionControlCodec.encodePayload(op: .resetInit, nonce: nonce),
                         messageId: sriId,
                         recipientId: userId
                     ),
@@ -729,15 +899,9 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
             }
         }
-        #endif
     }
 
     private func sendSessionPing(to userId: String) async {
-        #if os(macOS)
-        // InitSessionInitiator (dispatched by sendSessionResetInit) already sent the first
-        // encrypted message — there is no separate ping step on the engine path.
-        _ = userId
-        #else
         guard CryptoManager.shared.hasSession(for: userId) else {
             Log.info("SESSION_STATE[tie_break_ping_skip]: no INITIATOR session for \(userId.prefix(8))…", category: "SessionInit")
             return
@@ -746,7 +910,7 @@ final class SessionCoordinator: MessageRouterDelegate {
 
         for attempt in 1...pingMaxAttempts {
             do {
-                let pingContent = "__session_ping_\(UUID().uuidString)__"
+                let nonce = UUID().uuidString
                 let pingId = UUID()
                 let pingMessageId = pingId.uuidString.lowercased()
                 let _ = try await MessagingServiceClient.shared.sendMessage(
@@ -755,11 +919,14 @@ final class SessionCoordinator: MessageRouterDelegate {
                     senderId: myId,
                     conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
                     encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
-                        plaintext: pingContent,
+                        payload: SessionControlCodec.encodePayload(op: .ping, nonce: nonce),
                         messageId: pingMessageId,
                         recipientId: userId
                     ),
-                    timestamp: UInt64(Date().timeIntervalSince1970)
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    // S2 dual-send: typed opcode for new consumers; the magic-string payload
+                    // above remains the fallback for peers that predate the typed dispatch.
+                    contentType: FeatureFlags.typedSessionControl ? .sessionPing : .e2EeSignal
                 )
                 Log.info("SESSION_STATE[tie_break_ping]: sent to \(userId.prefix(8))… (attempt \(attempt)) — loser can now init as RESPONDER", category: "SessionInit")
                 return
@@ -777,7 +944,6 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
             }
         }
-        #endif
     }
 
     // MARK: - Session ready signal (RESPONDER → INITIATOR, phase 2 of two-phase handshake)
@@ -793,7 +959,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
 
         do {
-            let readyContent = "__session_ready_\(UUID().uuidString)__"
+            let nonce = UUID().uuidString
             let readyMessageId = UUID().uuidString.lowercased()
             let _ = try await MessagingServiceClient.shared.sendMessage(
                 messageId: readyMessageId,
@@ -801,11 +967,14 @@ final class SessionCoordinator: MessageRouterDelegate {
                 senderId: myId,
                 conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
                 encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
-                    plaintext: readyContent,
+                    payload: SessionControlCodec.encodePayload(op: .ready, nonce: nonce),
                     messageId: readyMessageId,
                     recipientId: userId
                 ),
-                timestamp: UInt64(Date().timeIntervalSince1970)
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                // S2 dual-send: typed opcode for new consumers; the magic-string payload
+                // above remains the fallback for peers that predate the typed dispatch.
+                contentType: FeatureFlags.typedSessionControl ? .sessionReady : .e2EeSignal
             )
             Log.info("SESSION_STATE[session_ready_sent]: RESPONDER notified INITIATOR \(userId.prefix(8))…", category: "SessionInit")
         } catch {
@@ -878,8 +1047,8 @@ final class SessionCoordinator: MessageRouterDelegate {
                     defer { Task { @MainActor in endInit() } }
                     await self.sessionInitService.initializeSessionProactively(
                         userId: userId,
-                        onSuccess: { Log.info("RESPONDER fallback ✅ \(userId.prefix(8))…", category: "SessionInit") },
-                        onFailure: { err in Log.error("RESPONDER fallback ❌ \(userId.prefix(8))…: \(err.localizedDescription)", category: "SessionInit") }
+                        onSuccess: { Log.info("RESPONDER fallback \(userId.prefix(8))…", category: "SessionInit") },
+                        onFailure: { err in Log.error("RESPONDER fallback \(userId.prefix(8))…: \(err.localizedDescription)", category: "SessionInit") }
                     )
                 }
             }
@@ -902,17 +1071,60 @@ final class SessionCoordinator: MessageRouterDelegate {
         // Handles KNST-framed protobuf (real user messages as X3DH init carrier),
         // raw protobuf (single-message delivery), and UTF-8 control strings (pings).
         let plaintext: String
+        let e2eMessageId: String?
         switch initMessageReassembler.process(data: decryptedBytes) {
-        case .assembled(let text, _):
+        case .assembled(let text, _, let e2eId, _):
             plaintext = text
+            e2eMessageId = e2eId
         case .legacy(let text):
             plaintext = text
+            e2eMessageId = nil
+        case .profile(let profileData):
+            // A profile share arrived as the session's first message — render it as a profile,
+            // never persist a placeholder string.
+            if let profile = ProfileShareData.fromBinaryData(profileData) {
+                ProfileSharingManager.shared.handleProfileMessage(profile, from: messageData.from, in: context)
+            }
+            return
+        case .edit:
+            plaintext = ""
+            e2eMessageId = nil
         case .incomplete:
             Log.debug("Session-init message is a partial chunk — will be reassembled later", category: "SessionCoordinator")
             return
         case .invalid(let reason):
             Log.error("Session-init message envelope invalid: \(reason) — dropping", category: "SessionCoordinator")
             return
+        }
+
+        // Typed handshake control signals (content_type 24/25/26): dispatch by op before the
+        // plaintext-prefix fallback below. The X3DH init for these already ran in
+        // initReceivingSession; the decrypted inner is just a sentinel, so we never persist it.
+        // Legacy peers send these as magic strings — handled by the string checks that follow.
+        if let op = SessionControlCodec.op(forContentType: Int(messageData.contentType)) {
+            let peerId = messageData.from
+            switch op {
+            case .resetInit:
+                Log.info("SESSION_RESET_INIT payload discarded (not user-visible, content_type=24)", category: "SessionCoordinator")
+                cancelTieBreakWatchdog(for: peerId)
+                cancelResponderFallback(for: peerId)
+                return
+            case .ping:
+                Log.info("SESSION_STATE[ping_received]: session established as RESPONDER (ping discarded, content_type=25)", category: "SessionCoordinator")
+                cancelTieBreakWatchdog(for: peerId)
+                cancelResponderFallback(for: peerId)
+                return
+            case .ready:
+                Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed (content_type=26)", category: "SessionCoordinator")
+                cancelTieBreakWatchdog(for: peerId)
+                cancelResponderFallback(for: peerId)
+                markActive(peerId)
+                SessionConfirmationTracker.shared.markConfirmed(peerId)
+                sendSessionQueuedMessages(for: peerId)
+                return
+            case .end, .unspecified, .UNRECOGNIZED:
+                break  // fall through to normal handling
+            }
         }
 
         // Silently discard SESSION_RESET_INIT control payloads — they are sent as the X3DH
@@ -949,18 +1161,22 @@ final class SessionCoordinator: MessageRouterDelegate {
             return
         }
 
+        // Canonical row id: sender's E2E id from the KNST header when present (see
+        // MessageRouter.saveMessage — the server reassigns envelope ids on the sealed path).
+        let canonicalId = (e2eMessageId ?? messageData.id).lowercased()
         let fetchRequest = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", messageData.id)
+        fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", canonicalId)
+        fetchRequest.fetchLimit = 1
 
         if let existing = try? context.fetch(fetchRequest).first {
-            if !existing.hasDecryptedContent {
+            if existing.fromUserId == messageData.from, !existing.hasDecryptedContent {
                 existing.applyStoredEncryption(plaintext: plaintext, contactId: messageData.from)
             }
             return
         }
 
         let message = Message(context: context)
-        message.id = messageData.id
+        message.id = canonicalId
         message.fromUserId = messageData.from
         message.toUserId = messageData.to
         message.timestamp = Date(timeIntervalSince1970: TimeInterval(messageData.timestamp))

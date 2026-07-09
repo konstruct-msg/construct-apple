@@ -15,6 +15,17 @@ import Foundation
 /// Production implementation of `VeilProxyRuntime` via `libconstruct_core` C FFI.
 final class NativeVeilRuntime: VeilProxyRuntime {
 
+    /// Rust `MethodSet` uses an inverted bitmask: set bit = disable method, zero bit = allow it.
+    /// Mobile is veil-front-only, so every legacy method must be disabled here.
+    static let veilFrontOnlyDisabledMethodsBitmask: UInt32 =
+        (UInt32(1) << UInt32(VeilMethod.obfs4.rawValue))
+        | (UInt32(1) << UInt32(VeilMethod.webTunnel.rawValue))
+        | (UInt32(1) << UInt32(VeilMethod.masque.rawValue))
+
+    /// Methods allowed into the Rust happy-eyeballs probe race. **veil-front only**.
+    private static let allowedMethodsBitmask: UInt32 =
+        veilFrontOnlyDisabledMethodsBitmask
+
     // MARK: - Unified coordinator path
 
     func startUnified(
@@ -32,6 +43,10 @@ final class NativeVeilRuntime: VeilProxyRuntime {
         // relay actually carries a ticket. Empty string → Rust excludes
         // veil-front from the probe race (its ticket parse fails the probe).
         let veilFrontTicket = (VeilProxyStore.veilFrontEnabled ? relay.veilFrontTicket : nil) ?? ""
+        // Ticket B1: key-bound capability + device veil_sk, preferred by Rust over the
+        // bearer ticket above when both are present. Empty until bootstrap completes.
+        let capabilityV2 = (VeilProxyStore.veilFrontEnabled ? relay.veilCapabilityV2 : nil) ?? ""
+        let veilSkHex = (VeilProxyStore.veilFrontEnabled ? relay.veilSkHex : nil) ?? ""
 
         // Diagnose veil_start=-1 failures by logging what we hand to Rust.
         // Empty bundle/SPKI/SNI are the most common causes of fail-before-network
@@ -40,7 +55,7 @@ final class NativeVeilRuntime: VeilProxyRuntime {
             "VEIL FFI start → addr='\(address)' " +
             "bundle.len=\(bundle.count) sni='\(sni)' " +
             "spki.len=\(spki.count) spki.pfx=\(String(spki.prefix(12))) hostHeader='\(hostHeader)' wtPath='\(wtPath)' " +
-            "veilFrontTicket.len=\(veilFrontTicket.count) " +
+            "veilFrontTicket.len=\(veilFrontTicket.count) capabilityV2.len=\(capabilityV2.count) " +
             "fingerprint.len=\(fingerprint.count) scoresPath=\(scoresPath ?? "nil")",
             category: "VEIL"
         )
@@ -53,23 +68,29 @@ final class NativeVeilRuntime: VeilProxyRuntime {
                         hostHeader.withCString { hostPtr in
                             wtPath.withCString { wtPathPtr in
                                 veilFrontTicket.withCString { ticketPtr in
-                                    withScoresPath(scoresPath) { scoresPtr in
-                                        fingerprint.withUnsafeBytes { fpBuf -> Int32 in
-                                            let fpBase = fpBuf.bindMemory(to: UInt8.self).baseAddress
-                                            let req = VeilStartRequest(
-                                                relay_addr: addrPtr,
-                                                bundle: bundlePtr,
-                                                tls_sni: sniPtr,
-                                                spki_hex: spkiPtr,
-                                                host_header: hostPtr,
-                                                wt_base_path: wtPathPtr,
-                                                network_fingerprint: fpBase,
-                                                network_fingerprint_len: fingerprint.count,
-                                                allowed_methods: 0,         // 0 = all methods
-                                                scores_path: scoresPtr,
-                                                veil_front_ticket_b64: ticketPtr
-                                            )
-                                            return veil_start(req, &out)
+                                    capabilityV2.withCString { capV2Ptr in
+                                        veilSkHex.withCString { skPtr in
+                                            withScoresPath(scoresPath) { scoresPtr in
+                                                fingerprint.withUnsafeBytes { fpBuf -> Int32 in
+                                                    let fpBase = fpBuf.bindMemory(to: UInt8.self).baseAddress
+                                                    let req = VeilStartRequest(
+                                                        relay_addr: addrPtr,
+                                                        bundle: bundlePtr,
+                                                        tls_sni: sniPtr,
+                                                        spki_hex: spkiPtr,
+                                                        host_header: hostPtr,
+                                                        wt_base_path: wtPathPtr,
+                                                        network_fingerprint: fpBase,
+                                                        network_fingerprint_len: fingerprint.count,
+                                                        allowed_methods: Self.allowedMethodsBitmask,
+                                                        scores_path: scoresPtr,
+                                                        veil_front_ticket_b64: ticketPtr,
+                                                        veil_capability_v2_b64: capV2Ptr,
+                                                        veil_sk_hex: skPtr
+                                                    )
+                                                    return veil_start(req, &out)
+                                                }
+                                            }
                                         }
                                     }
                                 }

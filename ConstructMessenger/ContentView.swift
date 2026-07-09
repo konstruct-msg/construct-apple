@@ -64,6 +64,15 @@ struct ContentView: View {
                 Log.info("App returning to foreground — restoring session (token missing, expired, or crypto uninitialised)", category: "Auth")
                 authViewModel.restoreSession()
             }
+
+            // If stealth is on and wallet is low, ensure we have an initial/top-up batch.
+            if AuthSessionManager.shared.isSessionValid,
+               StealthPolicy.shared.isEnabled,
+               TokenWalletService.shared.balance < 10 {
+                Task {
+                    await BlindTokenService.shared.bootstrapInitialBatch()
+                }
+            }
         }
         .onChange(of: deepLinkHandler.deepLink) { _, newDeepLink in
             handleDeepLink(newDeepLink)

@@ -59,8 +59,21 @@ final class GRPCStreamTransport: StreamTransport {
             }
         )
 
+#if os(iOS)
+        // Experimental engine-QUIC (construct-transport Rust stack). Direct path only,
+        // gated by FeatureFlags.engineQuicExperimental. `acquireEngineQuicChannel()` returns
+        // nil when the flag is off or the pinned gateway cert is missing → fall through to
+        // the H3/H2 selection below (never a silent native-H3 attempt — see h3Enabled guard).
+        if !useH2Fallback, GRPCChannelManager.shared.veilProxyPort() == nil,
+           let eq = GRPCChannelManager.shared.acquireEngineQuicChannel() {
+            let client = Shared_Proto_Services_V1_MessagingService.Client(wrapping: eq)
+            try await runStream(client: client, request: request, events: events,
+                                metricsLabel: metricsLabel, label: "QUIC", onAccepted: onAccepted)
+            return
+        }
+#endif
 #if canImport(Network)
-        if !useH2Fallback, GRPCChannelManager.shared.veilProxyPort() == nil {
+        if !useH2Fallback, FeatureFlags.h3Enabled, GRPCChannelManager.shared.veilProxyPort() == nil {
             let h3 = GRPCChannelManager.shared.acquireH3Channel()
             let client = Shared_Proto_Services_V1_MessagingService.Client(wrapping: h3)
             try await runStream(client: client, request: request, events: events,
@@ -132,9 +145,18 @@ extension MessageStreamManager {
         //
         // Global H3 disable: `FeatureFlags.h3Enabled` short-circuits everything when H3 is
         // turned off project-wide (see flag's docs for the 2026-05-29 disable reason).
-        let useH2Fallback = !FeatureFlags.h3Enabled
+        // Experimental engine-QUIC (construct-transport Rust stack) reuses the H3 "fast UDP"
+        // slot: when on, it suppresses the H2-only short-circuit so the QUIC branch in
+        // GRPCStreamTransport.open() is reached. It shares the same silent-UDP failover and
+        // open-failure counter as native H3 (consecutiveH3OpenFailures / shouldFallbackToH2Direct).
+        let experimentalQuic = FeatureFlags.engineQuicExperimental
+        // Session cooldown: if the fast-UDP transport was flagged unhealthy (QUIC kept dying on
+        // this network), stay on H2 until the cooldown expires rather than re-trying QUIC.
+        let fastUdpInCooldown = (fastUdpUnhealthyUntil.map { $0 > Date() }) ?? false
+        let useH2Fallback = (!FeatureFlags.h3Enabled && !experimentalQuic)
             || shouldFallbackToH2Direct
             || consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold
+            || fastUdpInCooldown
         if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
             Log.info("H3 disabled — \(consecutiveH3OpenFailures) consecutive failures, using H2 direct", category: "MessageStream")
         }
@@ -156,8 +178,17 @@ extension MessageStreamManager {
         // Fall back to H2 when VEIL is active or when useH2Fallback is set
         // (previous H3 attempt timed out — trying H2 direct before escalating to VEIL).
         let transportLabel: String
-#if canImport(Network)
-        if !useH2Fallback, GRPCChannelManager.shared.veilProxyPort() == nil {
+        let directPath = GRPCChannelManager.shared.veilProxyPort() == nil
+#if os(iOS)
+        if !useH2Fallback, directPath, experimentalQuic {
+            transportLabel = "QUIC"
+        } else if !useH2Fallback, directPath, FeatureFlags.h3Enabled {
+            transportLabel = "H3"
+        } else {
+            transportLabel = "H2"
+        }
+#elseif canImport(Network)
+        if !useH2Fallback, directPath, FeatureFlags.h3Enabled {
             transportLabel = "H3"
         } else {
             transportLabel = "H2"
@@ -165,13 +196,18 @@ extension MessageStreamManager {
 #else
         transportLabel = "H2"
 #endif
-        lastStreamTransportWasH3 = (transportLabel == "H3")
+        // "QUIC" and "H3" are both fast-UDP transports for the silent-drop failover below.
+        lastStreamTransportWasH3 = (transportLabel == "H3" || transportLabel == "QUIC")
         Log.debug("openStream transport=\(transportLabel) → \(host):\(port)", category: "MessageStream")
 
         // Create outbound stream
         let (outboundStream, outboundCont) = AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.makeStream()
         self.outboundContinuation = outboundCont
         Log.info("MessageStream opening to \(host):\(port)", category: "MessageStream")
+
+        // Fresh connection: drop in-flight cursor tracking. The persisted cursor below is the
+        // source of truth for since_cursor; re-delivery from it re-tracks any un-advanced entries.
+        StreamCursorTracker.shared.reset()
 
         // Send initial subscribe — include last-known Redis stream cursor so the server
         // resumes from the correct position instead of re-reading from the beginning.
@@ -260,26 +296,31 @@ extension MessageStreamManager {
                 case .message(let msg, let cursor):
                     Log.debug("MessageStream received message from=\(msg.from) id=\(msg.id)", category: "MessageStream")
                     if let handler = self?.onMessageReceived {
+                        // Track BEFORE handling so the cursor only advances once the pipeline
+                        // reports a durable outcome (StreamCursorTracker.report inside
+                        // routeIncomingMessage). A queued (no-session) message stays deferred
+                        // and holds the watermark until it is drained or discarded.
+                        if let cursor { StreamCursorTracker.shared.track(messageId: msg.id, cursor: cursor) }
                         handler(msg)
-                        if let cursor { StreamCursorStore.save(cursor) }
                     } else {
                         Log.error("MessageStream has no onMessageReceived handler — not advancing cursor for \(msg.id.prefix(8))…", category: "MessageStream")
                     }
                 case .deliveryReceipt(let ids, let cursor):
                     Log.info("MessageStream receipt: \(ids.count) message(s) delivered → \(ids.joined(separator: ", "))", category: "MessageStream")
-                    if let handler = self?.onDeliveryReceipt {
-                        handler(ids)
-                        if let cursor { StreamCursorStore.save(cursor) }
-                    } else {
-                        Log.error("MessageStream has no delivery receipt handler — not advancing cursor", category: "MessageStream")
+                    self?.onDeliveryReceipt?(ids)
+                    // Receipts carry no recoverable user data and are handled synchronously —
+                    // resolve immediately, but still through the tracker so the receipt's cursor
+                    // can't leapfrog an earlier still-deferred message in the FIFO.
+                    if let cursor {
+                        StreamCursorTracker.shared.track(messageId: cursor, cursor: cursor)
+                        StreamCursorTracker.shared.resolve(messageId: cursor)
                     }
                 case .keySyncRequest(let userId, let cursor):
                     Log.info("KEY_SYNC received — re-keying session for \(userId.prefix(8))…", category: "MessageStream")
-                    if let handler = self?.onKeySyncReceived {
-                        handler(userId)
-                        if let cursor { StreamCursorStore.save(cursor) }
-                    } else {
-                        Log.error("MessageStream has no key-sync handler — not advancing cursor", category: "MessageStream")
+                    self?.onKeySyncReceived?(userId)
+                    if let cursor {
+                        StreamCursorTracker.shared.track(messageId: cursor, cursor: cursor)
+                        StreamCursorTracker.shared.resolve(messageId: cursor)
                     }
                 case .heartbeat:
                     // A heartbeat is NOT a Redis stream entry — it must never advance the
@@ -349,7 +390,19 @@ extension MessageStreamManager {
 
         // Fast VEIL failover for stream open: if the RPC isn't accepted quickly, we retry
         // through VEIL instead of waiting for long TCP/TLS timeouts on DPI-blocked networks.
-        let isH3Transport = lastStreamTransportWasH3
+        // "Fast UDP" = native H3 or experimental engine-QUIC; both share the silent-drop
+        // failover. isQuicTransport only picks which connection the force-invalidator tears down.
+        let isH3Transport = (transportLabel == "H3" || transportLabel == "QUIC")
+        let isQuicTransport = (transportLabel == "QUIC")
+        let invalidateFastUdpConnection: @Sendable () -> Void = {
+#if os(iOS)
+            if isQuicTransport {
+                GRPCChannelManager.shared.forceInvalidateEngineQuicConnection()
+                return
+            }
+#endif
+            GRPCChannelManager.shared.forceInvalidateH3Connection()
+        }
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in
                 // 1) Accepted watcher
@@ -393,7 +446,7 @@ extension MessageStreamManager {
                 if isH3Transport {
                     group.addTask {
                         try await Task.sleep(for: .seconds(NetworkTiming.GRPC.streamOpenAcceptTimeoutH3Hard))
-                        GRPCChannelManager.shared.forceInvalidateH3Connection()
+                        invalidateFastUdpConnection()
                         throw StreamAcceptTimeout()
                     }
                 }
@@ -419,7 +472,7 @@ extension MessageStreamManager {
                 // immediately.  beginGracefulShutdown() (used by invalidatePersistentClient) does
                 // not close a stuck QUIC handshake — task cancellation does.
                 if isH3Transport {
-                    GRPCChannelManager.shared.forceInvalidateH3Connection()
+                    invalidateFastUdpConnection()
                 }
                 // Always invalidate the persistent client on stream timeout.
                 // If the underlying TCP connection was RST'd (server keepalive timeout, NAT expiry,
@@ -461,7 +514,7 @@ extension MessageStreamManager {
                 // immediately; streamTask.cancel propagates to the gRPC client. The outer
                 // connectLoop sees a CancellationError and re-enters openStream with
                 // shouldFallbackToH2Direct=true, which routes to H2.
-                GRPCChannelManager.shared.forceInvalidateH3Connection()
+                invalidateFastUdpConnection()
                 streamTask.cancel()
             }
             defer { firstEventWatchdog.cancel() }

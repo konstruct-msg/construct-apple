@@ -35,36 +35,28 @@ in-progress Android client run the *same* audited crypto rather than reimplement
 
 ```
 +-------------------------------------------------------------+
-|                  SwiftUI client (iOS / macOS)               |
+|                  SwiftUI client (iOS / macOS Desktop)       |
 |   - @Observable view models    - Core Data persistence      |
 |   - CryptoManager: thin UniFFI wrapper over construct-core  |
-+--------------+------------------------------+---------------+
-               | UniFFI (iOS)                 | EngineAdapter (macOS)
-+--------------v------------+   +-------------v---------------+
-|   construct-core (Rust)   |   |   construct-engine (Rust)   |
-|   - X3DH + PQXDH          |   |   - QUIC / HTTP-3 / gRPC    |
-|   - Double Ratchet        |   |   - token & session mgmt    |
-|   - ML-KEM-768 (FIPS 203) |   |   - internal OrchestratorCore
-|   - Ed25519 + ML-DSA-65   |   +-------------+---------------+
-|   - crypto-agile suites   |                 | gRPC (H2 / H3-QUIC)
-+---------------------------+                 |  (optional VEIL tunnel)
-                                 +------------v----------------+
-                                 |   construct-veil (Rust)     |
-                                 |   obfs4 + WebTunnel PT      |
-                                 |   DPI evasion (opt-in)      |
-                                 +------------+----------------+
-                                 +------------v----------------+
-                                 |   Konstruct server (Rust)   |
-                                 |   behind Traefik            |
-                                 |   routing - key bundles     |
-                                 |   Redpanda bus - Redis      |
-                                 |     Streams offline mailbox |
-                                 |   NO access to plaintext    |
-                                 +-----------------------------+
++--------------v--------------------------------------------+
+|   construct-core (Rust) via UniFFI (direct path)           |
+|   - X3DH + PQXDH, Double Ratchet, ML-KEM-768, Ed25519+ML-DSA|
+|   - crypto-agile suites                                    |
++--------------+--------------------------------------------+
+               | gRPC (H2 primary; H3-QUIC experimental)
+               | + optional VEIL (obfs4/WebTunnel) for DPI evasion
+               v
++-------------------------------------------------------------+
+|   Konstruct server (Rust) behind Traefik                    |
+|   - key bundles, Redpanda Streams offline mailbox           |
+|   - NO access to plaintext                                  |
++-------------------------------------------------------------+
 ```
 
-iOS uses the direct UniFFI crypto path. macOS Desktop is migrating all crypto behind
-`EngineAdapter` → `construct-engine` (see `AGENTS.md` → *EngineAdapter*).
+Both iOS and macOS Desktop use the direct UniFFI + gRPC-Swift path
+(`CryptoManager` + `TransportRouter` + `VeilProxyManager`). The `construct-engine`
+/ `EngineAdapter` is paused (Strategy B) and not used on Desktop. See
+`construct-docs/decisions/macos-desktop-strategy.md`.
 
 ---
 
@@ -219,7 +211,7 @@ xcodebuild test -scheme ConstructMessenger \
 ### In progress / planned
 - [ ] Activate hybrid ML-DSA-65 identity signatures on the wire (with smooth migration for existing accounts)
 - [ ] Cluster (group) messaging
-- [ ] macOS Desktop: route all crypto through EngineAdapter (remove dual crypto path)
+- [x] macOS Desktop uses direct core + gRPC path (Strategy B; engine paused)
 - [ ] Android client
 - [ ] Japanese localization (共創)
 

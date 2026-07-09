@@ -29,7 +29,11 @@ struct BackgroundFetchSettingsView: View {
                 title: NSLocalizedString("background_fetch", comment: ""),
                 showBack: true,
                 backAction: { dismiss() }
-            )
+            ) {
+                EmptyView()
+            } trailing: {
+                EmptyView()
+            }
             ScrollView {
                 LazyVStack(spacing: 0) {
 
@@ -83,9 +87,7 @@ struct BackgroundFetchSettingsView: View {
                                 .font(CTFont.regular(13))
                                 .foregroundColor(Color.CT.textDim)
                             Spacer()
-                            Text(statusIcon)
-                                .font(CTFont.regular(13))
-                                .foregroundColor(statusColor)
+                            CTStatusBadge(status: statusBadge)
                             Text(statusText)
                                 .font(CTFont.regular(13))
                                 .foregroundColor(Color.CT.textDim)
@@ -219,14 +221,9 @@ struct BackgroundFetchSettingsView: View {
 
     // MARK: - Computed Properties
 
-    private var statusIcon: String {
-        if isLowPowerModeEnabled { return "[!]" }
-        return isEnabled ? "[ok]" : "[~]"
-    }
-
-    private var statusColor: Color {
-        if isLowPowerModeEnabled { return .orange }
-        return isEnabled ? Color.CT.accent : Color.CT.textDim
+    private var statusBadge: CTStatus {
+        if isLowPowerModeEnabled { return .warning }
+        return isEnabled ? .ok : .busy
     }
 
     private var statusText: LocalizedStringKey {

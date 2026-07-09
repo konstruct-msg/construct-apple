@@ -11,6 +11,7 @@
 //
 
 import Foundation
+import SwiftProtobuf
 
 @MainActor
 final class OutboundSessionService {
@@ -95,14 +96,32 @@ final class OutboundSessionService {
         )
     }
 
-    /// Encrypts a session control message (ping, END_SESSION, etc.) through the orchestrator.
+    /// Encrypts a session control message (ping, END_SESSION, sessionResetInit, etc.).
+    ///
+    /// These are deliberately sent WITHOUT stealth (even if global stealth is enabled).
+    /// They are protocol-level, not user content. See stealth scope decisions.
     func encryptSessionControl(
         plaintext: String,
         messageId: String,
         recipientId: String
     ) throws -> Data {
+        try encryptSessionControl(
+            payload: Data(plaintext.utf8),
+            messageId: messageId,
+            recipientId: recipientId
+        )
+    }
+
+    /// Binary variant for typed session-control payloads (serialized `SessionControl`, built by
+    /// `SessionControlCodec.encodePayload`). The control payload stays `Data` end-to-end — no
+    /// stringification across the crypto boundary.
+    func encryptSessionControl(
+        payload: Data,
+        messageId: String,
+        recipientId: String
+    ) throws -> Data {
         try encryptOutgoing(
-            plaintext: Data(plaintext.utf8),
+            plaintext: payload,
             messageId: messageId,
             recipientId: recipientId,
             contentType: 0
@@ -113,6 +132,10 @@ final class OutboundSessionService {
 
     /// Sends an encrypted heartbeat to `contactId` (content_type=13).
     /// A decrypt failure on the peer side triggers proactive session healing.
+    ///
+    /// IMPORTANT: Heartbeats deliberately never use Stealth/Sealed Sender,
+    /// even when global stealth mode is enabled (including per-stream).
+    /// See decision: decisions/stealth-heartbeat-exclusion.md
     func sendSessionHeartbeat(to contactId: String) async {
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
         guard CryptoManager.shared.hasSession(for: contactId) else {
@@ -121,6 +144,8 @@ final class OutboundSessionService {
         }
         let heartbeatId = UUID().uuidString.lowercased()
         do {
+            // Heartbeats intentionally do **not** use sealed sender.
+            // We never pass recipientIdentityKey here.
             let payload = try encryptOutgoing(
                 plaintext: Data("__heartbeat__".utf8),
                 messageId: heartbeatId,
@@ -182,27 +207,34 @@ final class OutboundSessionService {
                 contentType: 14
             )
             var sealedInner: Data? = nil
-            if let identityKey = recipientIdentityKey {
+            if let identityKey = recipientIdentityKey, StealthPolicy.shared.shouldUseSealedSender() {
                 do {
                     sealedInner = try await StealthSenderService.buildSealedInner(
                         recipientUserId: contactId,
                         recipientIdentityKey: identityKey,
-                        encryptedPayload: wirePayload
+                        encryptedPayload: wirePayload,
+                        contentType: .deliveryReceipt
                     )
                 } catch {
                     Log.error("E2E receipt: seal failed, sending without stealth: \(error)", category: "OutboundSession")
+                    PerformanceMetrics.shared.record(.stealthSealFailure, label: "receipt")
                 }
             }
-            _ = try await MessagingServiceClient.shared.sendMessage(
-                messageId: receiptId,
-                recipientId: contactId,
-                senderId: myId,
-                conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
-                encryptedPayload: wirePayload,
-                timestamp: UInt64(Date().timeIntervalSince1970),
-                contentType: .deliveryReceipt,
-                sealedInnerBytes: sealedInner
-            )
+            if let sealedInner, FeatureFlags.sealedSenderUnauthenticatedTransport {
+                // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
+                _ = try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: sealedInner)
+            } else {
+                _ = try await MessagingServiceClient.shared.sendMessage(
+                    messageId: receiptId,
+                    recipientId: contactId,
+                    senderId: myId,
+                    conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
+                    encryptedPayload: wirePayload,
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    contentType: .deliveryReceipt,
+                    sealedInnerBytes: sealedInner
+                )
+            }
             Log.info("E2E receipt sent: \(messageIds.count) msg(s) → \(contactId.prefix(8))…", category: "OutboundSession")
         } catch {
             Log.error("E2E receipt failed to \(contactId.prefix(8))…: \(error.localizedDescription)", category: "OutboundSession")

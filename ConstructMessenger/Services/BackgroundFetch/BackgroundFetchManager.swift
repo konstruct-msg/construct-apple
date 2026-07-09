@@ -403,7 +403,7 @@ class BackgroundFetchManager: NSObject {
             // operates on the viewContext). Routing these (and edits below) mirrors the live
             // stream's handleSpecialMessage; the batch path previously saved them as regular
             // rows, so profile updates and edits delivered via background fetch were never applied.
-            var deferredProfileMessages: [(from: String, content: String)] = []
+            var deferredProfileMessages: [(from: String, contentData: Data, legacyString: String?)] = []
 
             for item in eligible {
                 // Ephemeral control/signaling messages are NOT chat content: call signals (12),
@@ -432,13 +432,23 @@ class BackgroundFetchManager: NSObject {
                 // Chunk messages: feed KNST-prefixed payloads to ChunkedMessageReassembler.
                 let legacyPrefixBytes = Data(ChunkedMessageCodec.legacyPrefix.utf8)
                 let binaryMagic = Data([0x4B, 0x4E, 0x53, 0x54]) // "KNST"
+                var assembled: String? = nil
+                var assembledE2EId: String? = nil
+                var assembledProfile: Data? = nil
+                var modernEditTarget: String? = nil
+                var modernEditText: String? = nil
                 if let dc = decryptedContent,
                    dc.starts(with: binaryMagic) || dc.starts(with: legacyPrefixBytes) {
-                    var assembled: String? = nil
                     DispatchQueue.main.sync {
                         switch ChunkedMessageReassembler.shared.process(data: dc) {
-                        case .assembled(let text, _): assembled = text
+                        case .assembled(let text, _, let e2eId, _):
+                            assembled = text
+                            assembledE2EId = e2eId
                         case .legacy(let text):        assembled = text
+                        case .profile(let data):       assembledProfile = data
+                        case .edit(let target, let nt, _):
+                            modernEditTarget = target
+                            modernEditText = nt.text
                         case .incomplete, .invalid:    break
                         }
                     }
@@ -446,6 +456,13 @@ class BackgroundFetchManager: NSObject {
                     if let text = assembled {
                         Log.debug("Chunk assembled in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
                         decryptedContent = Data(text.utf8)
+                    } else if let profile = assembledProfile {
+                        // Reassembled binary profile share → surface as the raw profile bytes so the
+                        // profile-defer path below renders it as a profile, not a placeholder string.
+                        Log.debug("Chunk assembled profile in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
+                        decryptedContent = profile
+                    } else if modernEditTarget != nil {
+                        // Modern edit will be applied below; already ACK'd the chunk delivery.
                     } else {
                         Log.debug("Chunk fragment \(item.messageData.id.prefix(8)) ACK'd; waiting for remaining chunks", category: "BackgroundFetch")
                         continue
@@ -454,29 +471,40 @@ class BackgroundFetchManager: NSObject {
 
                 let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) } ?? ""
 
-                // Edit: update the original message in place instead of saving a new row.
-                // editsMessageId is a wire-envelope field, so this is independent of content.
-                if !item.messageData.editsMessageId.isEmpty {
-                    let editsId = item.messageData.editsMessageId
+                // Modern edit via MessageContent.edit (stealth/sealed path, and any direct chunked edit).
+                // The target message id travels inside the encrypted content, never a wire-envelope field.
+                if let targetID = modernEditTarget, let newT = modernEditText, !newT.isEmpty {
                     let fr = Message.fetchRequest()
-                    fr.predicate = NSPredicate(format: "id == %@", editsId)
+                    // Scoped to the author: a peer may only edit messages it sent us.
+                    fr.predicate = NSPredicate(format: "id ==[c] %@ AND fromUserId == %@", targetID, item.messageData.from)
                     fr.fetchLimit = 1
                     if let original = try? backgroundContext.fetch(fr).first {
-                        original.applyStoredEncryption(plaintext: decryptedString, contactId: item.messageData.from)
+                        let contentToStore: String
+                        if let rebuilt = MediaWireCodec.editedCaption(localJSON: original.decryptedContent, newCaption: newT)?.localJSON {
+                            contentToStore = rebuilt
+                        } else {
+                            contentToStore = newT
+                        }
+                        original.decryptedContent = contentToStore
                         original.isEdited = true
                         original.editedAt = Date(timeIntervalSince1970: TimeInterval(item.messageData.timestamp))
-                        Log.info("BG fetch: applied edit to \(editsId.prefix(8))…", category: "BackgroundFetch")
+                        Log.info("BG fetch: applied modern edit to \(targetID.prefix(8))…", category: "BackgroundFetch")
                     } else {
-                        Log.error("BG fetch: original message to edit not found: \(editsId.prefix(8))…", category: "BackgroundFetch")
+                        Log.error("BG fetch: original message to modern-edit not found: \(targetID.prefix(8))…", category: "BackgroundFetch")
                     }
+                    // ACK already performed for chunked deliveries; safe to re-mark (idempotent).
                     PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
                     continue
                 }
 
-                // Profile share: defer application to the main actor (post-merge). Cheap string
-                // pre-check avoids a per-message main-thread hop; parseProfileMessage re-validates.
-                if decryptedString.contains("\"type\":\"profile\"") {
-                    deferredProfileMessages.append((from: item.messageData.from, content: decryptedString))
+                // Legacy envelope-level edits (envelope.edits_message_id) are removed: the
+                // field is reserved server-side. Edits arrive only as MessageContent.edit,
+                // handled by the modern-edit branch above.
+
+                // Profile share: defer application to the main actor (post-merge). Supports binary wire (no JSON) + legacy.
+                if let dc = decryptedContent, ProfileShareData.fromBinaryData(dc) != nil ||
+                   decryptedString.contains("\"type\":\"profile\"") {
+                    deferredProfileMessages.append((from: item.messageData.from, contentData: dc ?? Data(), legacyString: decryptedString.isEmpty ? nil : decryptedString))
                     PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
                     continue
                 }
@@ -484,9 +512,23 @@ class BackgroundFetchManager: NSObject {
                 // Persist ACK to Core Data (durable across restarts).
                 PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
 
+                // Canonical row id: sender's E2E id from the KNST header when present (see
+                // MessageRouter.saveMessage — the server reassigns envelope ids on the sealed
+                // path, and edits/receipts/replies reference the sender's id).
+                let canonicalId = (assembledE2EId ?? item.messageData.id).lowercased()
+                let dedupFetch = Message.fetchRequest()
+                dedupFetch.predicate = NSPredicate(format: "id ==[c] %@", canonicalId)
+                dedupFetch.fetchLimit = 1
+                if let existing = try? backgroundContext.fetch(dedupFetch).first {
+                    if existing.fromUserId == item.messageData.from, !existing.hasDecryptedContent {
+                        existing.applyStoredEncryption(plaintext: decryptedString, contactId: item.messageData.from)
+                    }
+                    continue  // already stored (live stream or an earlier delivery of the same message)
+                }
+
                 // Create Message entity.
                 let message = Message(context: backgroundContext)
-                message.id = item.messageData.id
+                message.id = canonicalId
                 message.fromUserId = item.messageData.from
                 message.toUserId = item.messageData.to
                 message.contentType = .regular
@@ -537,7 +579,9 @@ class BackgroundFetchManager: NSObject {
                     // Apply profile shares from this batch now that the contact's User row is
                     // merged into viewContext. Mirrors the live stream's handleSpecialMessage.
                     for profile in deferredProfileMessages {
-                        if let parsed = ProfileSharingManager.shared.parseProfileMessage(profile.content) {
+                        let parsed = ProfileSharingManager.shared.parseProfileMessage(from: profile.contentData) ??
+                                     (profile.legacyString.flatMap { ProfileSharingManager.shared.parseProfileMessage($0) })
+                        if let parsed = parsed {
                             ProfileSharingManager.shared.handleProfileMessage(parsed, from: profile.from, in: context)
                         }
                     }
@@ -641,18 +685,43 @@ class BackgroundFetchManager: NSObject {
     
     /// Perform maintenance operations (cache cleanup, token minting, etc.)
     private func performMaintenance(completion: @escaping (Bool) -> Void) {
-        DispatchQueue.global().async {
-            Task { @MainActor in
-                // Replenish blind tokens during maintenance window (up to 15 per cycle).
-                // BlindTokenService enforces 1-hour cooldown to respect server rate limit.
-                await BlindTokenService.shared.replenish(count: 15)
+        // Run all maintenance inside one @MainActor Task and call `completion` only after it
+        // finishes, so the BGProcessingTask isn't marked complete (and the app suspended) before
+        // the async work actually runs.
+        Task { @MainActor in
+            // Replenish blind tokens during maintenance window (up to 15 per cycle).
+            // BlindTokenService enforces 1-hour cooldown to respect server rate limit.
+            await BlindTokenService.shared.replenish(count: 15)
 
-                // Session health audit: send heartbeats to contacts silent for 12+ hours,
-                // then log a health summary for diagnostics. Mirrors the foreground path in
-                // applicationWillEnterForeground — keeps sessions alive between launches.
-                await SessionActivityTracker.shared.sendStaleSessionHeartbeats()
-                SessionActivityTracker.shared.logSessionHealthSummary()
+            // stealth-sealed-sender-v2 Phase 4: proactively renew the sender certificate
+            // ahead of its 24h expiry, now that sealed sending is always on and every
+            // message would otherwise pay a cache-miss network fetch on the hot path.
+            // getSenderCertificate() is itself a no-op when the cached cert still has
+            // more than 5 minutes of validity left. Gated on auth, same as SPK rotation
+            // below — no point attempting a network fetch without a valid session.
+            if GRPCAuthCache.shared.snapshot.token != nil {
+                _ = try? await StealthSenderService.shared.getSenderCertificate()
             }
+
+            // Session health audit: send heartbeats to contacts silent for 12+ hours,
+            // then log a health summary for diagnostics. Mirrors the foreground path in
+            // applicationWillEnterForeground — keeps sessions alive between launches.
+            await SessionActivityTracker.shared.sendStaleSessionHeartbeats()
+            SessionActivityTracker.shared.logSessionHealthSummary()
+
+            // Stale-peer reachability Phase 3A: rotate the Signed Pre-Key in the background when it
+            // has aged past the rotation threshold, so a long-dormant device keeps a fresh SPK
+            // without needing a foreground launch. Otherwise its SPK goes stale and peers'
+            // new-session init degrades (at-risk) until the device is woken or next opened.
+            // `rotateIfNeeded` is a no-op when the SPK is still fresh and serialises/throttles
+            // internally; gated on auth + a ready crypto core so it stays silent when the app was
+            // launched into the background without them.
+            if GRPCAuthCache.shared.snapshot.token != nil,
+               CryptoManager.shared.isCoreReady,
+               let deviceId = KeychainManager.shared.loadDeviceID(), !deviceId.isEmpty {
+                await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+            }
+
             completion(true)
         }
     }

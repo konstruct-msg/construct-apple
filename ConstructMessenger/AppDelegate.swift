@@ -19,11 +19,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         Log.info("Application did finish launching")
 
+        // Bootstrap the foreground-state tracker now (at launch, while active) so its lifecycle
+        // observers are registered before the first background transition. The transport layer
+        // reads it off-main to suppress futile VEIL restarts while suspended (see AppActivityState).
+        _ = AppActivityState.shared
+
         // Register UserDefaults defaults — only applies when key has never been set.
         // This makes push notifications and background fetch ON for new installs.
         UserDefaults.standard.register(defaults: [
             "pushNotificationsEnabled": true,
             "backgroundFetchEnabled": true,
+            "stt_auto_transcribe": false,
+            "stt_engine": "auto",
         ])
 
         if PreviewDetector.isRunningInPreview {
@@ -55,6 +62,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ = VoIPPushManager.shared
         VoIPPushManager.shared.startIfEnabled()
         _ = CallManager.shared
+
+        // Touch STT service early. This forces WhisperModelManager init which now calls
+        // reconcileModels(). This recovers downloaded models that would otherwise look
+        // "missing" after an app update (stale absolute paths in UserDefaults, changed
+        // container layout, etc.).
+        _ = VoiceTranscriptionService.shared.isAvailable
 
         // NOTE: NetworkReachabilityManager and MessageQueueManager will be initialized
         // lazily when first accessed. This avoids potential circular dependencies
@@ -122,6 +135,64 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
+        if activityType == "republish_hybrid_prekeys" {
+            // Server detected our published bundle has a hybrid identity key but no SPK hybrid
+            // signature (a rotation whose separate hybrid publish failed). Re-publish now so peers
+            // stop hard-rejecting it ("SPK hybrid signature missing"). Force publish (not
+            // publishIfNeeded) since the server explicitly flagged the bundle as broken.
+            Task {
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        guard let deviceId = KeychainManager.shared.loadDeviceID() else {
+                            Log.error("Hybrid republish push: no deviceId in Keychain", category: "Push")
+                            return
+                        }
+                        do {
+                            try await HybridIdentityService.publish(deviceId: deviceId)
+                            Log.info("Hybrid republish push: re-published hybrid SPK signatures", category: "Push")
+                        } catch {
+                            Log.error("Hybrid republish push failed: \(error)", category: "Push")
+                        }
+                    }
+                    group.addTask { try? await Task.sleep(nanoseconds: 27_000_000_000) }
+                    await group.next()
+                    group.cancelAll()
+                }
+                completionHandler(.newData)
+            }
+            return
+        }
+
+        if activityType == "rotate_keys" {
+            // Stale-peer reachability Phase 3B: a peer fetched our pre-key bundle while our
+            // Signed Pre-Key was going stale, so the server woke us to refresh it (see
+            // backend/SPK_WAKE_PUSH_SERVER_SPEC.md). Rotate the SPK (no-op if already fresh —
+            // e.g. the background maintenance task, Phase 3A, beat us to it) and top up OTPKs so
+            // the peer's next bundle fetch gets a fresh bundle and its session init stops
+            // degrading to at-risk. Best-effort, bounded to the background push window.
+            //
+            // INERT until the server emits this activity_type — the SendKeyRotationWake RPC is
+            // not built yet (proposed in SPK_WAKE_PUSH_SERVER_SPEC.md). The marker contract is
+            // `activity_type = "rotate_keys"`, matching the other key-maintenance wakes above.
+            Task {
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        guard let deviceId = KeychainManager.shared.loadDeviceID() else {
+                            Log.error("Key-rotation wake: no deviceId in Keychain", category: "Push")
+                            return
+                        }
+                        await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+                        await OtpkReplenishmentService.replenishForPush(deviceId: deviceId)
+                    }
+                    group.addTask { try? await Task.sleep(nanoseconds: 27_000_000_000) }
+                    await group.next()
+                    group.cancelAll()
+                }
+                completionHandler(.newData)
+            }
+            return
+        }
+
         if activityType == "contact_request_accepted" {
             let requestId = construct?["conversation_id"] as? String
             Log.info("contact_request_accepted push — requestId: \(requestId ?? "nil")", category: "Push")
@@ -138,6 +209,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 }
                 completionHandler(.newData)
             }
+            return
+        }
+
+        // A new_message silent push that lands while the app is foregrounded with a LIVE
+        // MessageStream is redundant — the stream already delivered the message — and was the
+        // confirmed trigger of a reconnect storm: every incoming message produced a push, and
+        // the push-driven fetch churned the stream (~1 reconnect per message, transport-agnostic;
+        // device logs showed the push immediately preceding "Starting MessageStream connection"
+        // on every cycle). Silent pushes exist to wake a BACKGROUNDED app (or one whose stream is
+        // down) to fetch; in the foreground the stream handles it. Skip the fetch in that case.
+        let foregroundLiveStream = MainActor.assumeIsolated {
+            UIApplication.shared.applicationState == .active && MessageStreamManager.shared.isConnected
+        }
+        if foregroundLiveStream {
+            Log.info("Silent push (\(activityType ?? "?")) ignored — foreground MessageStream is live", category: "Push")
+            completionHandler(.noData)
             return
         }
 
@@ -248,6 +335,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Ensure background fetch is scheduled if enabled
         if BackgroundFetchConfig.shouldBeEnabled {
             BackgroundFetchManager.shared.scheduleBackgroundFetch()
+            // Stale-peer reachability Phase 3A: arm the maintenance BGProcessingTask (background
+            // SPK rotation + blind-token top-up + stale-session heartbeats). It was registered but
+            // never scheduled, so the maintenance cycle never actually ran.
+            BackgroundFetchManager.shared.scheduleMaintenanceTask()
         } else {
             BackgroundFetchManager.shared.cancelAllBackgroundTasks()
         }

@@ -12,6 +12,50 @@ class KeychainManager {
     static let shared = KeychainManager()
     private init() {}
 
+    /// Accessibility class for all crypto key material that must be readable during a
+    /// background, push-driven decrypt while the device is locked. `AfterFirstUnlock`
+    /// (not `WhenUnlocked`) is required: woken-while-locked is exactly when an incoming
+    /// message arrives and OrchestratorCore must be (re)built. `ThisDeviceOnly` keeps the
+    /// items non-exportable and out of iCloud backups. Matches session data / orchestrator
+    /// state, which already use this class. See `migrateCryptoKeysAccessibility()`.
+    static let cryptoKeyAccessible = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+
+    /// Every Keychain account holding crypto material gated behind `cryptoKeyAccessible`.
+    /// Used by the one-time accessibility migration for items created by older builds
+    /// under `WhenUnlockedThisDeviceOnly`.
+    private static let cryptoKeyAccounts: [String] = [
+        "deviceSigningKey", "deviceIdentityKey",
+        APIConstants.privateKeyKey,
+        "identity_key", "signed_prekey", "signing_key",
+        "hybrid_sig_private_key", "crypto_private_keys", "crypto_otpks"
+    ]
+
+    /// One-time migration of crypto key material from the legacy `WhenUnlockedThisDeviceOnly`
+    /// accessibility (unreadable while locked → `coreNotInitialized` on push wake → spurious
+    /// END_SESSION / session desync) to `AfterFirstUnlockThisDeviceOnly`. `SecItemUpdate`
+    /// cannot change `kSecAttrAccessible`, so each item is re-added. MUST be called while the
+    /// device is unlocked (foreground): a locked read returns nil and the item is left as-is,
+    /// so the flag is only set once every present item was actually re-added — otherwise it
+    /// retries on the next foreground launch.
+    func migrateCryptoKeysAccessibility() {
+        let flagKey = "construct.cryptoKeys.afu_migrated.v1"
+        guard !UserDefaults.standard.bool(forKey: flagKey) else { return }
+
+        var allResolved = true
+        for account in Self.cryptoKeyAccounts {
+            // Absent item: nothing to migrate (resolved). Present item: must re-add successfully.
+            guard load(forKey: account) != nil else { continue }
+            if !migrateAccessibility(forKey: account, to: Self.cryptoKeyAccessible) {
+                allResolved = false
+            }
+        }
+
+        if allResolved {
+            UserDefaults.standard.set(true, forKey: flagKey)
+            Log.info("Migrated crypto key Keychain accessibility → AfterFirstUnlock", category: "Keychain")
+        }
+    }
+
     // MARK: - Session Token
     func saveSessionToken(_ token: String) {
         guard let data = token.data(using: .utf8) else {
@@ -67,7 +111,7 @@ class KeychainManager {
     
     /// Save device signing key (Ed25519 private key, 32 bytes)
     func saveDeviceSigningKey(_ key: Data) {
-        let success = save(key, forKey: "deviceSigningKey", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+        let success = save(key, forKey: "deviceSigningKey", accessible: Self.cryptoKeyAccessible)
         if success {
             Log.info("Device signing key saved to Keychain", category: "Keychain")
         }
@@ -80,7 +124,7 @@ class KeychainManager {
     
     /// Save device identity key (for E2EE)
     func saveDeviceIdentityKey(_ key: Data) {
-        let success = save(key, forKey: "deviceIdentityKey", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+        let success = save(key, forKey: "deviceIdentityKey", accessible: Self.cryptoKeyAccessible)
         if success {
             Log.info("Device identity key saved to Keychain", category: "Keychain")
         }
@@ -193,7 +237,7 @@ class KeychainManager {
 
     // MARK: - Private Key
     func savePrivateKey(_ keyData: Data) {
-        let success = save(keyData, forKey: APIConstants.privateKeyKey, accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+        let success = save(keyData, forKey: APIConstants.privateKeyKey, accessible: Self.cryptoKeyAccessible)
         if !success {
             Log.error("Failed to save private key to Keychain", category: "Keychain")
         }
@@ -204,7 +248,7 @@ class KeychainManager {
     }
     
     func saveIdentityKey(_ data: Data) -> Bool {
-        return save(data, forKey: "identity_key", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+        return save(data, forKey: "identity_key", accessible: Self.cryptoKeyAccessible)
     }
     
     func loadIdentityKey() -> Data? {
@@ -213,7 +257,7 @@ class KeychainManager {
     
     // Signed prekey (X25519)
     func saveSignedPrekey(_ data: Data) -> Bool {
-        return save(data, forKey: "signed_prekey", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+        return save(data, forKey: "signed_prekey", accessible: Self.cryptoKeyAccessible)
     }
     
     func loadSignedPrekey() -> Data? {
@@ -222,7 +266,7 @@ class KeychainManager {
     
     // Signing key (Ed25519)
     func saveSigningKey(_ data: Data) -> Bool {
-        return save(data, forKey: "signing_key", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+        return save(data, forKey: "signing_key", accessible: Self.cryptoKeyAccessible)
     }
 
     func loadSigningKey() -> Data? {
@@ -233,7 +277,7 @@ class KeychainManager {
     // Local-only and never transmitted; the 1984-byte public key is derived on demand.
     @discardableResult
     func saveHybridSigPrivateKey(_ data: Data) -> Bool {
-        return save(data, forKey: "hybrid_sig_private_key", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+        return save(data, forKey: "hybrid_sig_private_key", accessible: Self.cryptoKeyAccessible)
     }
 
     func loadHybridSigPrivateKey() -> Data? {
@@ -249,7 +293,7 @@ class KeychainManager {
     /// Save private keys in CFE binary format.
     @discardableResult
     func savePrivateKeys(_ data: Data) -> Bool {
-        return save(data, forKey: "crypto_private_keys", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+        return save(data, forKey: "crypto_private_keys", accessible: Self.cryptoKeyAccessible)
     }
 
     /// Load raw private key bytes (CFE binary).
@@ -267,7 +311,7 @@ class KeychainManager {
     /// Save OTPKs in CFE binary format.
     @discardableResult
     func saveOtpks(_ data: Data) -> Bool {
-        return save(data, forKey: "crypto_otpks", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+        return save(data, forKey: "crypto_otpks", accessible: Self.cryptoKeyAccessible)
     }
 
     /// Load raw OTPK bytes (CFE binary).
@@ -278,6 +322,25 @@ class KeychainManager {
     /// Delete the OTPK set.
     func deleteOtpks() {
         delete(forKey: "crypto_otpks")
+    }
+
+    // MARK: - MLS group store persistence
+
+    /// Save the whole-device MLS store snapshot (CFE binary, msg_type 0x44).
+    @discardableResult
+    func saveMlsStore(_ data: Data) -> Bool {
+        return save(data, forKey: "mls_store", accessible: Self.cryptoKeyAccessible)
+    }
+
+    /// Load raw MLS store bytes (CFE binary).
+    func loadMlsStoreData() -> Data? {
+        load(forKey: "mls_store")
+    }
+
+    /// Delete the MLS store snapshot. Destroys membership in every group —
+    /// only valid as part of a full account/key wipe.
+    func deleteMlsStore() {
+        delete(forKey: "mls_store")
     }
     func saveCustomServerURL(_ url: String) {
         guard let data = url.data(using: .utf8) else { return }
@@ -513,6 +576,63 @@ class KeychainManager {
 
     func deletePQXDHDowngradeFlag(for userId: String) {
         delete(forKey: pqxdhDowngradedKey(for: userId))
+    }
+
+    // MARK: - At-Risk Session Flag (per-peer)
+    // Set when a session was established via DEGRADED init (peer's SPK was past the
+    // staleness limit — see the stale-peer-reachability decision). Such a session is
+    // authentic (identity key permanent, SPK signature verified) but should be re-keyed
+    // once the peer comes online and rotates. Drives a non-blocking UI hint and lets the
+    // next init prefer a fresh (non-degraded) handshake. Cleared on a clean re-init.
+
+    private func sessionAtRiskKey(for userId: String) -> String {
+        "construct.session.atRisk.\(userId)"
+    }
+
+    func saveSessionAtRiskFlag(for userId: String) {
+        var value: UInt8 = 1
+        let data = Data(bytes: &value, count: 1)
+        _ = save(data, forKey: sessionAtRiskKey(for: userId), accessible: kSecAttrAccessibleAfterFirstUnlock)
+    }
+
+    func loadSessionAtRiskFlag(for userId: String) -> Bool {
+        guard let data = load(forKey: sessionAtRiskKey(for: userId)),
+              data.count == 1 else { return false }
+        return data[0] != 0
+    }
+
+    func deleteSessionAtRiskFlag(for userId: String) {
+        delete(forKey: sessionAtRiskKey(for: userId))
+    }
+
+    // MARK: - Session Establishment Time (per-peer)
+    // Unix-seconds timestamp of when the current live session with a peer was established.
+    // Persisted so it survives app restart: on launch the Rust core restores live sessions
+    // from CFE but the in-memory SessionReducer phase map starts empty, leaving `establishedAt`
+    // nil — which makes the END_SESSION stale-check unable to filter a re-delivered old
+    // END_SESSION and tears down a healthy session (the SESSION_RESET_INIT churn). Backing it
+    // with Keychain (AfterFirstUnlock, so it is readable during a locked background push
+    // decrypt — the INVARIANT for crypto-lifecycle state) lets the stale-check work post-launch.
+    // Cleared when the session is torn down.
+
+    private func sessionEstablishedAtKey(for userId: String) -> String {
+        "construct.session.establishedAt.\(userId)"
+    }
+
+    func saveSessionEstablishedAt(_ timestamp: UInt64, for userId: String) {
+        var value = timestamp
+        let data = Data(bytes: &value, count: MemoryLayout<UInt64>.size)
+        _ = save(data, forKey: sessionEstablishedAtKey(for: userId), accessible: kSecAttrAccessibleAfterFirstUnlock)
+    }
+
+    func loadSessionEstablishedAt(for userId: String) -> UInt64? {
+        guard let data = load(forKey: sessionEstablishedAtKey(for: userId)),
+              data.count == MemoryLayout<UInt64>.size else { return nil }
+        return data.withUnsafeBytes { $0.loadUnaligned(as: UInt64.self) }
+    }
+
+    func deleteSessionEstablishedAt(for userId: String) {
+        delete(forKey: sessionEstablishedAtKey(for: userId))
     }
 
     // MARK: - Contact Request Mappings

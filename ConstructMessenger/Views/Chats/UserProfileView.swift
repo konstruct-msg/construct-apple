@@ -14,11 +14,15 @@
 import SwiftUI
 import CoreData
 
-/// Maps a numeric suite ID (as stored in UserDefaults) to a human-readable name.
+/// Human-readable name of the session's NEGOTIATED crypto suite. Must stay in
+/// lockstep with `SuiteID` in construct-core `crypto/suite_id.rs` — the previous
+/// hardcode here claimed Kyber for suite 1 (plain classic) and didn't know
+/// suite 3 at all.
 private func cryptoSuiteName(suiteId: Int) -> String {
     switch suiteId {
-    case 1: return "X25519 + Kyber768"
-    case 2: return "X25519 + Kyber1024"
+    case 1: return "X25519 · ChaCha20-Poly1305"
+    case 2: return "PQ Hybrid · X25519+ML-KEM-768 · ML-DSA-65"
+    case 3: return "X25519 · ChaCha20-Poly1305 · PQ Ratchet (ML-KEM-768)"
     default: return "Suite \(suiteId)"
     }
 }
@@ -48,9 +52,12 @@ struct UserProfileView: View {
     @State private var showingShareAlert = false
     @State private var shareAlertMessage = ""
     @State private var isSharingInProgress = false
+    @State private var showAvatarViewer = false
     @State private var showingSafetyNumbers = false
     @State private var hasSession = false
     @State private var sessionSuiteLabel = NSLocalizedString("session_crypto_no_session", comment: "")
+    @State private var showingLocalNameEditor = false
+    @State private var draftLocalName = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,7 +65,11 @@ struct UserProfileView: View {
                 title: NSLocalizedString("profile", comment: ""),
                 showBack: true,
                 backAction: { dismiss() }
-            )
+            ) {
+                EmptyView()
+            } trailing: {
+                EmptyView()
+            }
             flatDivider(thick: true)
 
             ScrollView(showsIndicators: false) {
@@ -127,6 +138,16 @@ struct UserProfileView: View {
                 theirDisplayName: user.resolvedDisplayName
             )
         }
+        .alert(LocalizedStringKey("local_name"), isPresented: $showingLocalNameEditor) {
+            TextField(NSLocalizedString("local_name_placeholder", comment: ""), text: $draftLocalName)
+            Button(LocalizedStringKey("save")) { saveLocalName() }
+            if !(user.localAlias ?? "").isEmpty {
+                Button(LocalizedStringKey("local_name_clear"), role: .destructive) { clearLocalName() }
+            }
+            Button(LocalizedStringKey("cancel"), role: .cancel) {}
+        } message: {
+            Text(LocalizedStringKey("local_name_footer"))
+        }
     }
 
     // MARK: - Avatar header
@@ -141,6 +162,9 @@ struct UserProfileView: View {
                 size: 96,
                 isActive: false
             )
+            // Tap to view the avatar full-screen (only when there is an image).
+            .contentShape(Rectangle())
+            .onTapGesture { if avatarImage != nil { showAvatarViewer = true } }
 
             if user.isBlocked {
                 Text("[ BLOCKED ]")
@@ -151,6 +175,11 @@ struct UserProfileView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
+        .sheet(isPresented: $showAvatarViewer) {
+            if let avatarImage {
+                FullScreenImageView(image: avatarImage, isPresented: $showAvatarViewer)
+            }
+        }
     }
 
     // MARK: - Identity section
@@ -172,6 +201,27 @@ struct UserProfileView: View {
                     .font(CTFont.regular(14))
                     .foregroundStyle(Color.CT.text)
             }
+            flatRowDivider()
+
+            // Local-only alias the user assigns. Never leaves the device; overrides the
+            // resolved display name everywhere (chat list, header, call screens).
+            Button {
+                draftLocalName = user.localAlias ?? ""
+                showingLocalNameEditor = true
+            } label: {
+                profileRow(label: NSLocalizedString("local_name", comment: "")) {
+                    HStack(spacing: 8) {
+                        let hasAlias = !(user.localAlias ?? "").isEmpty
+                        Text(hasAlias ? (user.localAlias ?? "") : NSLocalizedString("local_name_unset", comment: ""))
+                            .font(CTFont.regular(14))
+                            .foregroundStyle(hasAlias ? Color.CT.text : Color.CT.textDim)
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.CT.accent.opacity(0.7))
+                    }
+                }
+            }
+            .buttonStyle(.plain)
             flatRowDivider()
 
             profileRow(label: NSLocalizedString("user_id", comment: "")) {
@@ -410,11 +460,21 @@ struct UserProfileView: View {
 
     private func refreshSessionSecurityState() {
         let sessionExists = SessionLifecycleController.shared.hasActiveSession(for: user.id)
-        let suiteId = Int(KeychainManager.shared.loadSessionSuiteId(userId: user.id) ?? 0)
+        // Real negotiated suite from the Rust core (Keychain only as fallback) —
+        // suite 3 is negotiated per-session and never appears in the peer's bundle.
+        let suiteId = Int(CryptoManager.shared.sessionSuiteId(for: user.id))
         hasSession = sessionExists
-        sessionSuiteLabel = sessionExists && suiteId > 0
-            ? cryptoSuiteName(suiteId: suiteId)
-            : NSLocalizedString("session_crypto_no_session", comment: "")
+        if sessionExists && suiteId > 0 {
+            var label = cryptoSuiteName(suiteId: suiteId)
+            // PQXDH handshake strengthening failed for this session (Kyber decaps
+            // error) — the session is classical-only even if keys were offered.
+            if KeychainManager.shared.loadPQXDHDowngradeFlag(for: user.id) {
+                label += " · PQXDH degraded"
+            }
+            sessionSuiteLabel = label
+        } else {
+            sessionSuiteLabel = NSLocalizedString("session_crypto_no_session", comment: "")
+        }
     }
 
     private func handleShareToggle(_ share: Bool) {
@@ -442,6 +502,18 @@ struct UserProfileView: View {
 
     private func handleBlockToggle() {
         user.isBlocked.toggle()
+        viewContext.saveAndLog(category: "UserProfileView")
+    }
+
+    /// Persist the local alias. Empty/whitespace clears it (falls back to the resolved name).
+    private func saveLocalName() {
+        let trimmed = draftLocalName.trimmingCharacters(in: .whitespacesAndNewlines)
+        user.localAlias = trimmed.isEmpty ? nil : trimmed
+        viewContext.saveAndLog(category: "UserProfileView")
+    }
+
+    private func clearLocalName() {
+        user.localAlias = nil
         viewContext.saveAndLog(category: "UserProfileView")
     }
 }

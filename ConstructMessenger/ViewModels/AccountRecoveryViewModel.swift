@@ -74,8 +74,10 @@ final class AccountRecoveryViewModel {
     }
 
     var quizPassed: Bool {
-        quizIndices.allSatisfy { idx in
-            quizAnswers[idx]?.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !mnemonic.isEmpty, !quizIndices.isEmpty else { return false }
+        return quizIndices.allSatisfy { idx in
+            guard idx < mnemonic.count else { return false }
+            return quizAnswers[idx]?.trimmingCharacters(in: .whitespaces).lowercased()
                 == mnemonic[idx].lowercased()
         }
     }
@@ -106,18 +108,18 @@ final class AccountRecoveryViewModel {
             isSetup = true
             fingerprint = result.fingerprint
             UserDefaults.standard.set(true, forKey: Self.udKeyIsSetup)
-            mnemonic = []   // clear sensitive data
             setupStep = .done(fingerprint: result.fingerprint)
+            mnemonic = []   // clear sensitive data after switching away from display view
         } catch {
             setupStep = .failed(errorMessage(from: error))
         }
     }
 
     func resetSetup() {
+        setupStep = .idle
         mnemonic = []
         quizIndices = []
         quizAnswers = [:]
-        setupStep = .idle
     }
 
     // MARK: - Status check
@@ -243,7 +245,6 @@ final class AccountRecoveryViewModel {
                 )
             }
 
-            enteredWords = Array(repeating: "", count: 12)  // clear sensitive data
             // Force-rotate SPK after recovery: the server still holds the original
             // device's SPK (which may be stale). Upload a fresh SPK so peers can
             // init sessions without hitting the Rust 14-day staleness rejection.
@@ -255,15 +256,16 @@ final class AccountRecoveryViewModel {
                 )
             }
             recoverStep = .done
+            enteredWords = Array(repeating: "", count: 12)  // clear sensitive data after step change
         } catch {
             recoverStep = .failed(errorMessage(from: error))
         }
     }
 
     func resetRecover() {
+        recoverStep = .idle
         enteredWords = Array(repeating: "", count: 12)
         recoverIdentifier = ""
-        recoverStep = .idle
     }
 
     // MARK: - Helpers

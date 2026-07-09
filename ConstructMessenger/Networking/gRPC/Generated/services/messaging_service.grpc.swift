@@ -44,6 +44,18 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
                 method: "SendMessage"
             )
         }
+        /// Namespace for "SendSealedMessage" metadata.
+        public enum SendSealedMessage: Sendable {
+            /// Request type for "SendSealedMessage".
+            public typealias Input = Shared_Proto_Services_V1_SendSealedMessageRequest
+            /// Response type for "SendSealedMessage".
+            public typealias Output = Shared_Proto_Services_V1_SendMessageResponse
+            /// Descriptor for "SendSealedMessage".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
+                method: "SendSealedMessage"
+            )
+        }
         /// Namespace for "EditMessage" metadata.
         public enum EditMessage: Sendable {
             /// Request type for "EditMessage".
@@ -108,6 +120,7 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             MessageStream.descriptor,
             SendMessage.descriptor,
+            SendSealedMessage.descriptor,
             EditMessage.descriptor,
             AddReaction.descriptor,
             RemoveReaction.descriptor,
@@ -186,12 +199,40 @@ extension Shared_Proto_Services_V1_MessagingService {
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendMessageResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
+        /// Call the "SendSealedMessage" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SendSealedMessage - Stealth sealed-sender send (stealth-sealed-sender-v2 Phase 2).
+        /// > Carries ONLY the SealedSenderEnvelope — no outer Envelope, no sender/conversation_id/
+        /// > content_type. Server does NOT require authentication for this RPC; anti-abuse is
+        /// > Privacy Pass token redemption (see dispatch_sealed_sender) + per-IP rate limiting.
+        /// > Idempotency key = SealedInner.delivery_tag (already unique and replay-checked).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_SendSealedMessageRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_SendSealedMessageRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SendMessageResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func sendSealedMessage<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendSealedMessageRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SendSealedMessageRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SendMessageResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendMessageResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
         /// Call the "EditMessage" method.
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > EditMessage - Edit existing message (FUTURE - append-only revisions)
-        /// > Not implemented yet - reserved for future append-only edit chain
+        /// > DEPRECATED: EditMessage relied on a server-visible message id reference.
+        /// > Edits are now sent as regular E2EE messages with MessageContent.edit inside
+        /// > the encrypted payload. Kept as a stub returning UNIMPLEMENTED for old clients.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_EditMessageRequest` message.
@@ -214,8 +255,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > AddReaction - Add emoji reaction to message
-        /// > Encrypted: reaction is E2EE, server only sees message_id
+        /// > DEPRECATED: Reactions are sent as regular E2EE messages with
+        /// > MessageContent.reaction inside the encrypted payload. The server must not
+        /// > see which message is being reacted to. Kept as stubs returning UNIMPLEMENTED.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_AddReactionRequest` message.
@@ -238,7 +280,8 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > RemoveReaction - Remove reaction from message
+        /// > DEPRECATED: removal is handled by MessageContent.reaction with
+        /// > ReactionAction.REMOVE.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_RemoveReactionRequest` message.
@@ -398,12 +441,51 @@ extension Shared_Proto_Services_V1_MessagingService {
             )
         }
 
+        /// Call the "SendSealedMessage" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SendSealedMessage - Stealth sealed-sender send (stealth-sealed-sender-v2 Phase 2).
+        /// > Carries ONLY the SealedSenderEnvelope — no outer Envelope, no sender/conversation_id/
+        /// > content_type. Server does NOT require authentication for this RPC; anti-abuse is
+        /// > Privacy Pass token redemption (see dispatch_sealed_sender) + per-IP rate limiting.
+        /// > Idempotency key = SealedInner.delivery_tag (already unique and replay-checked).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_SendSealedMessageRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_SendSealedMessageRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SendMessageResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func sendSealedMessage<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendSealedMessageRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SendSealedMessageRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SendMessageResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendMessageResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_MessagingService.Method.SendSealedMessage.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "EditMessage" method.
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > EditMessage - Edit existing message (FUTURE - append-only revisions)
-        /// > Not implemented yet - reserved for future append-only edit chain
+        /// > DEPRECATED: EditMessage relied on a server-visible message id reference.
+        /// > Edits are now sent as regular E2EE messages with MessageContent.edit inside
+        /// > the encrypted payload. Kept as a stub returning UNIMPLEMENTED for old clients.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_EditMessageRequest` message.
@@ -437,8 +519,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > AddReaction - Add emoji reaction to message
-        /// > Encrypted: reaction is E2EE, server only sees message_id
+        /// > DEPRECATED: Reactions are sent as regular E2EE messages with
+        /// > MessageContent.reaction inside the encrypted payload. The server must not
+        /// > see which message is being reacted to. Kept as stubs returning UNIMPLEMENTED.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_AddReactionRequest` message.
@@ -472,7 +555,8 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > RemoveReaction - Remove reaction from message
+        /// > DEPRECATED: removal is handled by MessageContent.reaction with
+        /// > ReactionAction.REMOVE.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_RemoveReactionRequest` message.
@@ -638,12 +722,46 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
         )
     }
 
+    /// Call the "SendSealedMessage" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SendSealedMessage - Stealth sealed-sender send (stealth-sealed-sender-v2 Phase 2).
+    /// > Carries ONLY the SealedSenderEnvelope — no outer Envelope, no sender/conversation_id/
+    /// > content_type. Server does NOT require authentication for this RPC; anti-abuse is
+    /// > Privacy Pass token redemption (see dispatch_sealed_sender) + per-IP rate limiting.
+    /// > Idempotency key = SealedInner.delivery_tag (already unique and replay-checked).
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_SendSealedMessageRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func sendSealedMessage<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendSealedMessageRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendMessageResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.sendSealedMessage(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_SendSealedMessageRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_SendMessageResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "EditMessage" method.
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > EditMessage - Edit existing message (FUTURE - append-only revisions)
-    /// > Not implemented yet - reserved for future append-only edit chain
+    /// > DEPRECATED: EditMessage relied on a server-visible message id reference.
+    /// > Edits are now sent as regular E2EE messages with MessageContent.edit inside
+    /// > the encrypted payload. Kept as a stub returning UNIMPLEMENTED for old clients.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_EditMessageRequest` message.
@@ -672,8 +790,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > AddReaction - Add emoji reaction to message
-    /// > Encrypted: reaction is E2EE, server only sees message_id
+    /// > DEPRECATED: Reactions are sent as regular E2EE messages with
+    /// > MessageContent.reaction inside the encrypted payload. The server must not
+    /// > see which message is being reacted to. Kept as stubs returning UNIMPLEMENTED.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_AddReactionRequest` message.
@@ -702,7 +821,8 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > RemoveReaction - Remove reaction from message
+    /// > DEPRECATED: removal is handled by MessageContent.reaction with
+    /// > ReactionAction.REMOVE.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_RemoveReactionRequest` message.
@@ -861,12 +981,50 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
         )
     }
 
+    /// Call the "SendSealedMessage" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SendSealedMessage - Stealth sealed-sender send (stealth-sealed-sender-v2 Phase 2).
+    /// > Carries ONLY the SealedSenderEnvelope — no outer Envelope, no sender/conversation_id/
+    /// > content_type. Server does NOT require authentication for this RPC; anti-abuse is
+    /// > Privacy Pass token redemption (see dispatch_sealed_sender) + per-IP rate limiting.
+    /// > Idempotency key = SealedInner.delivery_tag (already unique and replay-checked).
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func sendSealedMessage<Result>(
+        _ message: Shared_Proto_Services_V1_SendSealedMessageRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendMessageResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendSealedMessageRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.sendSealedMessage(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "EditMessage" method.
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > EditMessage - Edit existing message (FUTURE - append-only revisions)
-    /// > Not implemented yet - reserved for future append-only edit chain
+    /// > DEPRECATED: EditMessage relied on a server-visible message id reference.
+    /// > Edits are now sent as regular E2EE messages with MessageContent.edit inside
+    /// > the encrypted payload. Kept as a stub returning UNIMPLEMENTED for old clients.
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -899,8 +1057,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > AddReaction - Add emoji reaction to message
-    /// > Encrypted: reaction is E2EE, server only sees message_id
+    /// > DEPRECATED: Reactions are sent as regular E2EE messages with
+    /// > MessageContent.reaction inside the encrypted payload. The server must not
+    /// > see which message is being reacted to. Kept as stubs returning UNIMPLEMENTED.
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -933,7 +1092,8 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > RemoveReaction - Remove reaction from message
+    /// > DEPRECATED: removal is handled by MessageContent.reaction with
+    /// > ReactionAction.REMOVE.
     ///
     /// - Parameters:
     ///   - message: request message to send.

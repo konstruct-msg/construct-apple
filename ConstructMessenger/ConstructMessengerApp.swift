@@ -63,6 +63,7 @@ struct Construct_MessengerApp: App {
                 if PreviewDetector.isRunningInPreview {
                     return
                 }
+                RuntimeDiagnostics.shared.start()
                 MediaManager.shared.evictOldFiles()
                 StorageMigrationService.shared.migrateIfNeeded(
                     context: rootContainer.viewContext
@@ -80,11 +81,8 @@ struct Construct_MessengerApp: App {
                     // Phase 1: lazily publish the hybrid PQ identity bundle (Ed25519 + ML-DSA-65).
                     await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
                 }
-                // FIXME(masque): iOS blocks raw UDP port 443 (owned by Network.framework).
-                // construct-engine's QUIC handshake times out immediately on iOS —
-                // the engine event loop never starts and every dispatch is a no-op.
-                // Re-enable once the MASQUE-over-TCP bridge is implemented.
-                // do { try EngineAdapter.shared.start() } catch { ... }
+                // Engine layer (construct-engine) is paused.
+                // Direct gRPC + construct-core path is used for both iOS and macOS Desktop (Strategy B).
             }
         }
     }
@@ -100,8 +98,10 @@ struct Construct_MessengerApp: App {
 
         // ── Tab bar ──────────────────────────────────────────────────────────
         let tabApp = UITabBarAppearance()
-        tabApp.configureWithOpaqueBackground()
-        tabApp.backgroundColor = UIColor(Color.CT.bg)
+        tabApp.configureWithTransparentBackground()
+        tabApp.backgroundColor = .clear
+        tabApp.backgroundEffect = nil
+        tabApp.shadowColor = .clear
         tabApp.stackedLayoutAppearance.selected.iconColor = accent
         tabApp.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: accent]
         tabApp.stackedLayoutAppearance.normal.iconColor  = dim

@@ -14,12 +14,36 @@ import UIKit
 @Observable
 @MainActor
 class ChatsViewModel {
+    private static let sharedStreamManager = MessageStreamManager.shared
+    private static let sharedStreamLifecycle: StreamLifecycleCoordinator = {
+        let controller = SessionLifecycleController.shared
+        let lifecycle = StreamLifecycleCoordinator(
+            streamManager: MessageStreamManager.shared,
+            sessionCoordinator: controller.coordinator
+        )
+        controller.configure(streamManager: MessageStreamManager.shared)
+        controller.onEphemeralSubscriptionNeeded = { [weak lifecycle] userId in
+            lifecycle?.addEphemeralSubscription(for: userId)
+        }
+        if !PreviewDetector.isRunningInPreview {
+            lifecycle.start()
+        }
+        return lifecycle
+    }()
+    private static let sharedContactAcceptedObserver: NSObjectProtocol? = {
+        guard !PreviewDetector.isRunningInPreview else { return nil }
+        return NotificationCenter.default.addObserver(
+            forName: .contactRequestAccepted, object: nil, queue: nil
+        ) { _ in
+            Task { @MainActor in
+                ChatsViewModel.sharedStreamLifecycle.reconnectIfSubscriptionsChanged()
+            }
+        }
+    }()
 
     // MARK: - UI state
 
     var chatToOpen: String?
-    var isInChat: Bool = false
-    var isInSettings: Bool = false
     var selectedTab: Int = 0
     var showNewChat: Bool = false
     var sidebarSearchFocused: Bool = false
@@ -32,9 +56,6 @@ class ChatsViewModel {
     private let streamManager: MessageStreamManager
     private let chatManagementService = ChatManagementService()
     private let streamLifecycle: StreamLifecycleCoordinator
-
-    /// Observer for `.contactRequestAccepted` — see init for rationale.
-    private var contactAcceptedObserver: NSObjectProtocol?
 
     // MARK: - Setup state
 
@@ -56,46 +77,14 @@ class ChatsViewModel {
     // MARK: - Init
 
     init() {
-        let sm = MessageStreamManager.shared
-        let controller = SessionLifecycleController.shared
-        let lifecycle = StreamLifecycleCoordinator(streamManager: sm, sessionCoordinator: controller.coordinator)
-
-        self.streamManager = sm
-        self.streamLifecycle = lifecycle
+        self.streamManager = Self.sharedStreamManager
+        self.streamLifecycle = Self.sharedStreamLifecycle
+        _ = Self.sharedContactAcceptedObserver
 
         self.lastMessageId = UserDefaults.standard.string(forKey: "construct.lastMessageId")
         if let restored = lastMessageId {
             Log.info("Restored lastMessageId from UserDefaults: \(restored)", category: "ChatsViewModel")
         }
-
-        controller.configure(streamManager: sm)
-
-        controller.onEphemeralSubscriptionNeeded = { [weak lifecycle] userId in
-            lifecycle?.addEphemeralSubscription(for: userId)
-        }
-
-        lifecycle.start()
-
-        // When a contact request is accepted (search → request → accept), a new
-        // contact appears but the message stream is still subscribed to the old
-        // contact set captured at connect time, so the server delivers none of
-        // the new contact's messages and no crypto session is prewarmed. The QR
-        // path avoids this because `startChat` calls forceReconnect; the
-        // contact-request path did not. Rebuild the subscription set (and prewarm)
-        // on acceptance from either side. Posted by ContactRequestService
-        // (sender reconcile) and ContactRequestsViewModel.accept (responder).
-        contactAcceptedObserver = NotificationCenter.default.addObserver(
-            forName: .contactRequestAccepted, object: nil, queue: nil
-        ) { [weak lifecycle] _ in
-            Task { @MainActor in lifecycle?.forceReconnect() }
-        }
-    }
-
-    isolated deinit {
-        if let obs = contactAcceptedObserver {
-            NotificationCenter.default.removeObserver(obs)
-        }
-        streamLifecycle.stop()
     }
 
     // MARK: - Context
@@ -129,7 +118,7 @@ class ChatsViewModel {
 
     func startChat(with user: PublicUserInfo) -> Chat? {
         let chat = chatManagementService.startChat(with: user)
-        streamLifecycle.forceReconnect()
+        streamLifecycle.reconnectIfSubscriptionsChanged()
         if !CryptoManager.shared.hasSession(for: user.id) {
             CryptoManager.shared.clearArchivedSessions(for: user.id)
             SessionLifecycleController.shared.prewarmSessions(for: [user.id])
@@ -151,7 +140,7 @@ class ChatsViewModel {
 
     func pruneContact(userId: String) {
         chatManagementService.pruneContact(userId: userId)
-        streamLifecycle.forceReconnect()
+        streamLifecycle.reconnectIfSubscriptionsChanged()
     }
 
     func openOrCreateChat(with user: User) {
@@ -189,6 +178,6 @@ class ChatsViewModel {
             }
         }
         chatManagementService.deleteChat(chat)
-        streamLifecycle.forceReconnect()
+        streamLifecycle.reconnectIfSubscriptionsChanged()
     }
 }

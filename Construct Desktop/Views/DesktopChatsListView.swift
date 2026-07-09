@@ -31,7 +31,7 @@ struct DesktopChatsListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            navBar
+//            navBar
             searchBar
             chatList
         }
@@ -66,30 +66,7 @@ struct DesktopChatsListView: View {
     // MARK: - Search Bar
 
     private var searchBar: some View {
-        TextField("", text: $searchQuery, prompt: Text(LocalizedStringKey("search_"))
-            .font(CTFont.regular(13))
-            .foregroundColor(Color.CT.textDim))
-            .textFieldStyle(.plain)
-            .font(CTFont.regular(13))
-            .foregroundColor(Color.CT.text)
-            .autocorrectionDisabled()
-            .tint(Color.CT.accent)
-            .padding(.leading, 10)
-            .padding(.trailing, 32)
-            .padding(.vertical, 7)
-            .overlay(alignment: .trailing) {
-                if !searchQuery.isEmpty {
-                    Button { searchQuery = "" } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.CT.textDim)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.trailing, 8)
-                }
-            }
-            .background(Color.CT.bgMsg, in: RoundedRectangle(cornerRadius: 8))
-            .overlay { RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 1) }
+        CTSearchBar(text: $searchQuery)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(Color.CT.bg)
@@ -144,6 +121,10 @@ struct DesktopChatsListView: View {
                     }
                 }
             }
+        }
+        .refreshable {
+            Log.info("Manual message sync (pull-to-refresh)", category: "DesktopChatsListView")
+            await BackgroundFetchManager.shared.fetchPendingMessages()
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)

@@ -13,6 +13,7 @@ import UniformTypeIdentifiers
 
 struct DesktopChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @Environment(ChatsViewModel.self) private var chatsViewModel
     @State private var viewModel: ChatViewModel
     @State private var scrollManager = ChatScrollManager()
     private var connectionManager = ConnectionStatusManager.shared
@@ -30,21 +31,20 @@ struct DesktopChatView: View {
     @State private var galleryStartItem: GalleryStartItem?
 
     @State private var chatDropImages: [PlatformImage] = []
+    @State private var chatDropFileURLs: [URL] = []
     @State private var isChatDropTargeted = false
 
     @State private var floodGuard = IncomingFloodGuard.shared
     @State private var contactKTStatus: KTStatus = .unverified
+    @State private var isSessionAtRisk = false
     @State private var containerWidth: CGFloat = 800
 
-    init(chat: Chat, context: NSManagedObjectContext, sessionCoordinator: SessionCoordinator) {
-        _viewModel = State(wrappedValue: ChatViewModel(chat: chat, context: context, sessionCoordinator: sessionCoordinator))
+    init(chat: Chat, context: NSManagedObjectContext) {
+        _viewModel = State(wrappedValue: ChatViewModel(chat: chat, context: context))
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            chatNavBar
-            floodBurstBanner
-
+        ZStack() {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -109,9 +109,19 @@ struct DesktopChatView: View {
                                 }
                             }
                         }
+                        // Bottom anchor for scrollToBottom
+                        Color.clear
+                            .frame(height: 1)
+                            .id("bottom")
                     }
-                    .padding()
+                    // Padding so latest messages stay visible above the floating glass input,
+                    // and top messages are not hidden under the glass nav bar.
+                    // Reduced because nav is now flush (0 top padding) at the pane top.
+                    .padding(.top, 70)
+                    .padding(.bottom, 130)
+                    .padding(.horizontal)
                 }
+                .background(Color.CT.bg) // base dark for the area under glass panels
                 .defaultScrollAnchor(.bottom)
                 .scrollDismissesKeyboard(.interactively)
                 .environment(\.containerWidth, containerWidth)
@@ -178,104 +188,147 @@ struct DesktopChatView: View {
                     }
                 }
             }
+        
+        
+            VStack(spacing: 10) {
+                chatNavBar
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)   // flush or minimal top so the glass panel sits at the very top of the chat pane
+                floodBurstBanner
+                atRiskBanner
 
-            deleteButtonBar
-            messageInputView
-        }
-        // macOS: deterministic size for NSSplitView constraint stability
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.CT.bg)
-        .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
-            handleChatDrop(providers: providers)
-        }
-        .overlay {
-            if isChatDropTargeted {
-                Rectangle()
-                    .strokeBorder(Color.CT.accent, lineWidth: 2)
-                    .background(Color.CT.accent.opacity(0.05))
-                    .overlay(
-                        Text(LocalizedStringKey("drop_to_attach"))
-                            .font(CTFont.regular(16))
-                            .foregroundColor(Color.CT.accent)
-                            .padding(16)
-                            .background(Color.CT.bgMsg)
-                            .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 1))
+                deleteButtonBar
+                
+                Spacer(minLength: 0)
+                
+                messageInputView
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
+            }
+            // macOS: deterministic size for NSSplitView constraint stability
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
+                handleChatDrop(providers: providers)
+            }
+            .overlay {
+                if isChatDropTargeted {
+                    Rectangle()
+                        .strokeBorder(Color.CT.accent, lineWidth: 2)
+                        .background(Color.CT.accent.opacity(0.05))
+                        .overlay(
+                            Text(LocalizedStringKey("drop_to_attach"))
+                                .font(CTFont.regular(16))
+                                .foregroundColor(Color.CT.accent)
+                                .padding(16)
+                                .background(Color.CT.bgMsg)
+                                .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 1))
+                        )
+                        .allowsHitTesting(false)
+                        .padding(8)
+                }
+            }
+            .overlay(alignment: .top, content: searchOverlay)
+            .sheet(isPresented: $showingUserProfile) {
+                if let user = viewModel.chat.otherUser {
+                    UserProfileView(user: user, showMessageButton: false)
+                        .environment(\.managedObjectContext, viewContext)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                }
+            }
+            .sheet(item: $quotingMessage) { msg in
+                QuoteSelectionSheet(message: msg) { selectedQuote in
+                    replyingTo = msg
+                    replyQuoteText = selectedQuote
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $galleryStartItem) { item in
+                MediaGalleryViewer(
+                    messages: mediaMessages,
+                    initialMessageId: item.id,
+                    isPresented: Binding(
+                        get: { galleryStartItem != nil },
+                        set: { if !$0 { galleryStartItem = nil } }
                     )
-                    .allowsHitTesting(false)
-                    .padding(8)
-            }
-        }
-        .overlay(alignment: .top, content: searchOverlay)
-        .sheet(isPresented: $showingUserProfile) {
-            if let user = viewModel.chat.otherUser {
-                UserProfileView(user: user, showMessageButton: false)
-                    .environment(\.managedObjectContext, viewContext)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
-        }
-        .sheet(item: $quotingMessage) { msg in
-            QuoteSelectionSheet(message: msg) { selectedQuote in
-                replyingTo = msg
-                replyQuoteText = selectedQuote
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(item: $galleryStartItem) { item in
-            MediaGalleryViewer(
-                messages: mediaMessages,
-                initialMessageId: item.id,
-                isPresented: Binding(
-                    get: { galleryStartItem != nil },
-                    set: { if !$0 { galleryStartItem = nil } }
-                )
-            )
-        }
-        .onAppear {
-            guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
-            markChatAsRead()
-            viewModel.onViewAppear()
-            loadContactKTStatus()
-            if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-                _ = try? CryptoManager.shared.handleOrchestratorEvent(
-                    .activeChatChanged(contactId: contactId, isActive: true),
-                    tag: "chat_active_true"
                 )
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .contactKeyChanged)) { note in
-            guard let changedId = note.userInfo?["userId"] as? String,
-                  changedId == viewModel.chat.otherUser?.id else { return }
-            loadContactKTStatus()
-        }
-        .onDisappear {
-            guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
-            if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-                _ = try? CryptoManager.shared.handleOrchestratorEvent(
-                    .activeChatChanged(contactId: contactId, isActive: false),
-                    tag: "chat_active_false"
-                )
+            .onChange(of: chatsViewModel.pendingDroppedImage) { _, image in
+                guard let image else { return }
+                chatDropImages.append(image)
+                chatsViewModel.pendingDroppedImage = nil
+            }
+            .onChange(of: chatsViewModel.pendingDroppedFileURL) { _, url in
+                guard let url else { return }
+                chatDropFileURLs.append(url)
+                chatsViewModel.pendingDroppedFileURL = nil
+            }
+            .onChange(of: viewModel.isInitializingSession) { _, _ in refreshSessionAtRiskState() }
+            .onReceive(NotificationCenter.default.publisher(for: .sessionAtRiskChanged)) { note in
+                if (note.userInfo?["userId"] as? String) == viewModel.chat.otherUser?.id {
+                    refreshSessionAtRiskState()
+                }
+            }
+            .onAppear {
+                guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
+                markChatAsRead()
+                viewModel.onViewAppear()
+                loadContactKTStatus()
+                refreshSessionAtRiskState()
+                if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
+                    _ = try? CryptoManager.shared.handleOrchestratorEvent(
+                        .activeChatChanged(contactId: contactId, isActive: true),
+                        tag: "chat_active_true"
+                    )
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .contactKeyChanged)) { note in
+                guard let changedId = note.userInfo?["userId"] as? String,
+                      changedId == viewModel.chat.otherUser?.id else { return }
+                loadContactKTStatus()
+            }
+            .onDisappear {
+                guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
+                if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
+                    _ = try? CryptoManager.shared.handleOrchestratorEvent(
+                        .activeChatChanged(contactId: contactId, isActive: false),
+                        tag: "chat_active_false"
+                    )
+                }
+            }
+            .alert(callManager.lastError ?? "", isPresented: Binding(
+                get: { callManager.lastError != nil },
+                set: { if !$0 { callManager.clearLastError() } }
+            )) {
+                Button(NSLocalizedString("ok", comment: ""), role: .cancel) {
+                    callManager.clearLastError()
+                }
             }
         }
-        .alert(callManager.lastError ?? "", isPresented: Binding(
-            get: { callManager.lastError != nil },
-            set: { if !$0 { callManager.clearLastError() } }
-        )) {
-            Button(NSLocalizedString("ok", comment: ""), role: .cancel) {
-                callManager.clearLastError()
-            }
-        }
+        .ignoresSafeArea(.container, edges: .top) // make glass nav flush to the very top edge of the NavigationSplitView detail
     }
 
     // MARK: - View Components
+
+    private var atRiskBanner: some View {
+        ChatAtRiskBannerView(isVisible: isSessionAtRisk)
+    }
+
+    private func refreshSessionAtRiskState() {
+        guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else {
+            isSessionAtRisk = false
+            return
+        }
+        isSessionAtRisk = KeychainManager.shared.loadSessionAtRiskFlag(for: contactId)
+    }
 
     @ViewBuilder
     private var floodBurstBanner: some View {
         let senderId = viewModel.chat.otherUser?.id ?? ""
         if floodGuard.suppressedSenders.contains(senderId) {
             HStack(spacing: 10) {
-                Text("[!]")
+                Image(systemName: "exclamationmark.triangle.fill")
                     .font(CTFont.regular(16))
                     .foregroundStyle(.orange)
 
@@ -340,14 +393,15 @@ struct DesktopChatView: View {
     }
 
     private var messageInputView: some View {
-        DesktopMessageInputView(
+        MessageInputView(
             text: $messageText,
             droppedImages: $chatDropImages,
+            droppedFileURLs: $chatDropFileURLs,
             isSending: viewModel.isSending,
             replyingTo: replyingTo,
             quoteOverride: replyQuoteText,
             editingMessage: viewModel.editingMessage,
-            onSend: { images, fileURLs in
+            onSend: { attachments, fileURLs in
                 if let editMsg = viewModel.editingMessage {
                     let safeToEdit = editMsg.deliveryStatus != .sending && editMsg.deliveryStatus != .queued
                     guard safeToEdit else {
@@ -360,7 +414,7 @@ struct DesktopChatView: View {
                 } else {
                     viewModel.sendMessage(
                         text: messageText,
-                        images: images,
+                        attachments: attachments,
                         fileURLs: fileURLs,
                         replyTo: replyingTo,
                         replyToContentOverride: replyQuoteText
@@ -428,21 +482,20 @@ struct DesktopChatView: View {
         HStack(spacing: 10) {
             // No back button — navigation is controlled by NavigationSplitView sidebar
 
-            Button { showingUserProfile = true } label: {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text((viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: "")).uppercased())
+            if let user = viewModel.chat.otherUser {
+                DesktopChatNavTitleButton(
+                    user: user,
+                    subtitle: navigationStatusSubtitle,
+                    onOpenProfile: { showingUserProfile = true }
+                )
+            } else {
+                Button { showingUserProfile = true } label: {
+                    Text(NSLocalizedString("chat", comment: "").uppercased())
                         .font(CTFont.bold(13))
                         .foregroundColor(Color.CT.text)
-                    if let subtitle = navigationStatusSubtitle {
-                        Text(subtitle)
-                            .font(CTFont.regular(10))
-                            .foregroundColor(Color.CT.accentDim)
-                            .transition(.opacity)
-                    }
                 }
-                .animation(.easeInOut(duration: 0.25), value: navigationStatusSubtitle)
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
             ktBadge
 
@@ -484,10 +537,13 @@ struct DesktopChatView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 19)
         .padding(.vertical, 10)
-        .background(Color.CT.bg)
-        .ctBorderBottom()
+        .background(.ultraThinMaterial)
+        .background(Color.CT.bg.opacity(0.35)) // slight dark tint for terminal readability
+        .clipShape(Capsule())
+        .ctNoiseBorder() // thin noise border on top of glass
+        .shadow(color: Color.black.opacity(0.2), radius: 8, y: 2)
     }
 
     @ViewBuilder private var ktBadge: some View {
@@ -518,52 +574,11 @@ struct DesktopChatView: View {
 
     @ViewBuilder
     private func searchOverlay() -> some View {
-        if isSearchActive {
-            VStack(spacing: 0) {
-                TextField(NSLocalizedString("search_messages", comment: ""), text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(CTFont.regular(14))
-                    .foregroundStyle(Color.CT.text)
-                    .tint(Color.CT.accent)
-                    .autocorrectionDisabled()
-                    .padding(.leading, 10)
-                    .padding(.trailing, 32)
-                    .padding(.vertical, 7)
-                    .overlay(alignment: .trailing) {
-                        Button {
-                            if searchText.isEmpty {
-                                withAnimation { isSearchActive = false }
-                            } else {
-                                searchText = ""
-                            }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundStyle(Color.CT.textDim)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 8)
-                    }
-                    .background(Color.CT.bgMsg, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay { RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 1) }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Color.CT.bg)
-
-                if !searchText.isEmpty {
-                    HStack {
-                        Text("[\(filteredMessages.count) results]")
-                            .font(CTFont.regular(12))
-                            .foregroundStyle(Color.CT.textDim)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 6)
-                    .background(Color.CT.bg)
-                }
-
-            }
-        }
+        ChatSearchOverlayView(
+            isSearchActive: $isSearchActive,
+            searchText: $searchText,
+            resultCount: filteredMessages.count
+        )
     }
 
     // MARK: - Computed Properties
@@ -634,17 +649,46 @@ struct DesktopChatView: View {
             } else if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
                 provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
                     guard let data = item as? Data,
-                          let url = URL(dataRepresentation: data, relativeTo: nil),
-                          url.startAccessingSecurityScopedResource() else { return }
-                    defer { url.stopAccessingSecurityScopedResource() }
-                    guard let imgData = try? Data(contentsOf: url),
-                          let image = PlatformImage(data: imgData) else { return }
-                    DispatchQueue.main.async { chatDropImages.append(image) }
+                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                    DispatchQueue.main.async {
+                        if let imgData = try? Data(contentsOf: url),
+                           let image = PlatformImage(data: imgData) {
+                            chatDropImages.append(image)
+                        } else {
+                            chatDropFileURLs.append(url)
+                        }
+                    }
                 }
                 handled = true
             }
         }
         return handled
+    }
+}
+
+// MARK: - Nav title (observes User for profile-share updates)
+
+private struct DesktopChatNavTitleButton: View {
+    @ObservedObject var user: User
+    let subtitle: String?
+    let onOpenProfile: () -> Void
+
+    var body: some View {
+        Button(action: onOpenProfile) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(user.resolvedDisplayName.uppercased())
+                    .font(CTFont.bold(13))
+                    .foregroundColor(Color.CT.text)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(CTFont.regular(10))
+                        .foregroundColor(Color.CT.accentDim)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: subtitle)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -656,12 +700,15 @@ struct DesktopChatView: View {
     let context = container.viewContext
     let user = PreviewHelpers.createSampleUser(context: context, username: "alice", displayName: "Alice")
     let chat = PreviewHelpers.createSampleChat(context: context, with: user)
-    _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "Hey, how's the build going?")
-    _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: true, text: "Compiling now, almost done")
-    _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "Nice, let me know when it's ready")
-    try? context.save()
-    return DesktopChatView(chat: chat, context: context, sessionCoordinator: SessionCoordinator())
+
+    let _ = {
+        _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "Hey, how's the build going?")
+        _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: true, text: "Compiling now, almost done")
+        _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "Nice, let me know when it's ready")
+    }()
+
+    DesktopChatView(chat: chat, context: context)
         .environment(\.managedObjectContext, context)
-        .frame(width: 700, height: 580)
+        .frame(width: 600, height: 500)
 }
 #endif

@@ -88,6 +88,19 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
   /// legacy two-step (END_SESSION → 200ms delay → session ping) tie-break path.
   /// Server treats this identically to E2EE_SIGNAL (opaque bytes, no inspection).
   case sessionResetInit // = 24
+
+  /// SESSION_PING — tie-break handshake nudge (INITIATOR → peer) that triggers the
+  /// RESPONDER's receiving-session init. Payload is a SessionControl (op=PING).
+  /// Replaces the legacy "__session_ping_<UUID>__" plaintext magic string so the
+  /// signal can never render as a chat bubble. Server forwards opaquely (treat
+  /// identically to E2EE_SIGNAL — opaque bytes, no inspection, payload preserved).
+  case sessionPing // = 25
+
+  /// SESSION_READY — phase 2 of the two-phase handshake (RESPONDER → INITIATOR),
+  /// sent after a successful initReceivingSession to confirm both sides match.
+  /// Payload is a SessionControl (op=READY). Replaces "__session_ready_<UUID>__".
+  /// Server forwards opaquely (treat identically to E2EE_SIGNAL).
+  case sessionReady // = 26
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -109,6 +122,8 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case 22: self = .keySync
     case 23: self = .senderSync
     case 24: self = .sessionResetInit
+    case 25: self = .sessionPing
+    case 26: self = .sessionReady
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -128,6 +143,8 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case .keySync: return 22
     case .senderSync: return 23
     case .sessionResetInit: return 24
+    case .sessionPing: return 25
+    case .sessionReady: return 26
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -147,6 +164,8 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     .keySync,
     .senderSync,
     .sessionResetInit,
+    .sessionPing,
+    .sessionReady,
   ]
 
 }
@@ -282,9 +301,13 @@ public struct Shared_Proto_Core_V1_Envelope: @unchecked Sendable {
     set {_uniqueStorage()._messageIDType = .groupMessageID(newValue)}
   }
 
-  /// Server timestamp (rounded to 5-second buckets for privacy)
-  /// Prevents server from learning precise message timing
-  /// For precise timestamps, see encrypted_metadata
+  /// Server timestamp (rounded to 5-second buckets for privacy).
+  /// Prevents server from learning precise message timing.
+  ///
+  /// SECURITY: this is transport metadata only. It is server-visible and
+  /// server-mutable; clients MUST NOT use it as the authoritative sent-time of
+  /// the message. The sender-generated timestamp lives inside the encrypted
+  /// payload and wins when present.
   public var timestamp: Int64 {
     get {_storage._timestamp}
     set {_uniqueStorage()._timestamp = newValue}
@@ -313,8 +336,14 @@ public struct Shared_Proto_Core_V1_Envelope: @unchecked Sendable {
     set {_uniqueStorage()._encryptedPayload = newValue}
   }
 
-  /// Conversation ID (1-to-1 or group)
-  /// Format: "direct:{user1}:{user2}" or "group:{group_id}"
+  /// DEPRECATED: conversation_id is server-visible metadata and is not populated
+  /// by the messaging service. It exists on the wire only for backward
+  /// compatibility with old clients.
+  ///
+  /// SECURITY: clients MUST NOT use this field for E2E semantics (identity,
+  /// reply/edit routing, or sender/recipient recovery). Any reference a device
+  /// makes to a peer's data must use a sender-generated id inside the encrypted
+  /// payload.
   public var conversationID: String {
     get {_storage._conversationID}
     set {_uniqueStorage()._conversationID = newValue}
@@ -356,16 +385,6 @@ public struct Shared_Proto_Core_V1_Envelope: @unchecked Sendable {
   public var hasEphemeralSeconds: Bool {_storage._ephemeralSeconds != nil}
   /// Clears the value of `ephemeralSeconds`. Subsequent reads from it will return its default value.
   public mutating func clearEphemeralSeconds() {_uniqueStorage()._ephemeralSeconds = nil}
-
-  /// Edit of message ID (for message editing)
-  public var editsMessageID: String {
-    get {_storage._editsMessageID ?? String()}
-    set {_uniqueStorage()._editsMessageID = newValue}
-  }
-  /// Returns true if `editsMessageID` has been explicitly set.
-  public var hasEditsMessageID: Bool {_storage._editsMessageID != nil}
-  /// Clears the value of `editsMessageID`. Subsequent reads from it will return its default value.
-  public mutating func clearEditsMessageID() {_uniqueStorage()._editsMessageID = nil}
 
   /// Reactions (emoji reactions to this message)
   public var reactions: [Shared_Proto_Core_V1_Reaction] {
@@ -486,12 +505,16 @@ public struct Shared_Proto_Core_V1_EncryptedMetadataContent: Sendable {
 }
 
 /// ClientMetadata - Optional client-provided metadata
+///
+/// SECURITY: every field here is visible to the server. These values are useful
+/// for tracing and debugging but must never drive E2E semantics.
 public struct Shared_Proto_Core_V1_ClientMetadata: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Client-generated timestamp (may differ from server_timestamp)
+  /// Client-generated timestamp (may differ from server_timestamp).
+  /// For tracing only; authoritative sent-time lives inside encrypted_payload.
   public var clientTimestamp: Int64 = 0
 
   /// Client version (for debugging)
@@ -678,6 +701,10 @@ public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
 
   /// Ed25519 signature by sender's home server
   /// Signs: sender_user_id || sender_domain || sender_identity_key || sender_device_id || issued_at || expires_at
+  /// Direct byte concatenation, no separators; issued_at/expires_at are raw big-endian
+  /// 8-byte integers (not ASCII). This is the only accepted format — pinned in
+  /// stealth-sealed-sender-v2 Phase 3 (identity-service::build_sender_cert_sign_payload,
+  /// iOS StealthSenderService.buildCertPayload).
   public var serverSignature: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -690,7 +717,7 @@ public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
 fileprivate let _protobuf_package = "shared.proto.core.v1"
 
 extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0")
 }
 
 extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {
@@ -699,7 +726,7 @@ extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProvidin
 
 extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Envelope"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sender\0\u{3}sender_device\0\u{1}recipient\0\u{3}recipient_device\0\u{3}content_type\0\u{3}message_id\0\u{1}timestamp\0\u{1}ttl\0\u{1}priority\0\u{3}encrypted_payload\0\u{3}conversation_id\0\u{3}server_metadata\0\u{3}client_metadata\0\u{3}forwarding_path\0\u{4}\u{2}ephemeral_seconds\0\u{4}\u{2}edits_message_id\0\u{1}reactions\0\u{1}mentions\0\u{3}group_message_id\0\u{4}(sealed_sender\0\u{c}\u{f}\u{1}\u{c}\u{11}\u{1}\u{c}\u{16}\u{1d}\u{c}3\u{a}\u{c}>\u{9}\u{c}G\u{1}\u{a}\u{c}Q\u{1}\u{14}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sender\0\u{3}sender_device\0\u{1}recipient\0\u{3}recipient_device\0\u{3}content_type\0\u{3}message_id\0\u{1}timestamp\0\u{1}ttl\0\u{1}priority\0\u{3}encrypted_payload\0\u{3}conversation_id\0\u{3}server_metadata\0\u{3}client_metadata\0\u{3}forwarding_path\0\u{4}\u{2}ephemeral_seconds\0\u{2}\u{3}reactions\0\u{1}mentions\0\u{3}group_message_id\0\u{4}(sealed_sender\0\u{b}edits_message_id\0\u{c}\u{f}\u{1}\u{c}\u{11}\u{1}\u{c}\u{12}\u{1}\u{c}\u{16}\u{1d}\u{c}3\u{a}\u{c}>\u{9}\u{c}G\u{1}\u{a}\u{c}Q\u{1}\u{14}")
 
   fileprivate class _StorageClass {
     var _sender: Shared_Proto_Core_V1_UserId? = nil
@@ -717,7 +744,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
     var _clientMetadata: Shared_Proto_Core_V1_ClientMetadata? = nil
     var _forwardingPath: [String] = []
     var _ephemeralSeconds: UInt32? = nil
-    var _editsMessageID: String? = nil
     var _reactions: [Shared_Proto_Core_V1_Reaction] = []
     var _mentions: [String] = []
     var _sealedSender: Shared_Proto_Core_V1_SealedSenderEnvelope? = nil
@@ -746,7 +772,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
       _clientMetadata = source._clientMetadata
       _forwardingPath = source._forwardingPath
       _ephemeralSeconds = source._ephemeralSeconds
-      _editsMessageID = source._editsMessageID
       _reactions = source._reactions
       _mentions = source._mentions
       _sealedSender = source._sealedSender
@@ -790,7 +815,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
         case 13: try { try decoder.decodeSingularMessageField(value: &_storage._clientMetadata) }()
         case 14: try { try decoder.decodeRepeatedStringField(value: &_storage._forwardingPath) }()
         case 16: try { try decoder.decodeSingularUInt32Field(value: &_storage._ephemeralSeconds) }()
-        case 18: try { try decoder.decodeSingularStringField(value: &_storage._editsMessageID) }()
         case 19: try { try decoder.decodeRepeatedMessageField(value: &_storage._reactions) }()
         case 20: try { try decoder.decodeRepeatedStringField(value: &_storage._mentions) }()
         case 21: try {
@@ -864,9 +888,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
       try { if let v = _storage._ephemeralSeconds {
         try visitor.visitSingularUInt32Field(value: v, fieldNumber: 16)
       } }()
-      try { if let v = _storage._editsMessageID {
-        try visitor.visitSingularStringField(value: v, fieldNumber: 18)
-      } }()
       if !_storage._reactions.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._reactions, fieldNumber: 19)
       }
@@ -903,7 +924,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
         if _storage._clientMetadata != rhs_storage._clientMetadata {return false}
         if _storage._forwardingPath != rhs_storage._forwardingPath {return false}
         if _storage._ephemeralSeconds != rhs_storage._ephemeralSeconds {return false}
-        if _storage._editsMessageID != rhs_storage._editsMessageID {return false}
         if _storage._reactions != rhs_storage._reactions {return false}
         if _storage._mentions != rhs_storage._mentions {return false}
         if _storage._sealedSender != rhs_storage._sealedSender {return false}

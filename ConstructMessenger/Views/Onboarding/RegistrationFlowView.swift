@@ -424,13 +424,25 @@ struct RegistrationFlowView: View {
                 Log.error("   OTPK upload failed (non-fatal): \(error)", category: "Registration")
             }
 
+            // 6.1 Bootstrap initial Stealth / Privacy Pass tokens (first batch).
+            // Runs detached after registration (right after PoW + keys).
+            // Uses special bootstrap path that bypasses cooldown.
+            Log.info("Bootstrapping initial stealth tokens (Privacy Pass)...", category: "Registration")
+            Task.detached(priority: .utility) {
+                await BlindTokenService.shared.bootstrapInitialBatch()
+            }
+
             // 6.5 Upload Kyber SPK + OTPKs in a single request (detached — survives view dismissal)
             Log.info("Uploading Kyber SPK + OTPKs (PQC)...", category: "Registration")
             do {
-                let spkId = PQCKeyManager.shared.kyberSPKId()
-                let (spkPublicKey, _) = try PQCKeyManager.shared.generateAndStoreKyberSPK(keyId: spkId)
-                let spkSig = try PQCKeyManager.signKyberKey(publicKey: spkPublicKey)
-                let spkTuple = (keyId: spkId, publicKey: spkPublicKey, signature: spkSig)
+                // Two-phase: generate the Kyber SPK in memory and commit to Keychain ONLY after the
+                // server confirms the upload — never write-before-confirm (would desync the local
+                // private key ahead of the server public on a failed upload). If the detached upload
+                // fails/never completes, the migration flag stays unset and migrateIfNeeded re-drives
+                // it next launch. See key-store-consolidation-and-server-authority (P1).
+                let spk = try PQCKeyManager.shared.generateKyberSPKInMemory()
+                let spkSig = try PQCKeyManager.signKyberKey(publicKey: spk.publicKey)
+                let spkTuple = (keyId: spk.keyId, publicKey: spk.publicKey, signature: spkSig)
                 let capturedDeviceId = deviceId
                 Task.detached(priority: .utility) {
                     do {
@@ -439,8 +451,9 @@ struct RegistrationFlowView: View {
                             deviceId: capturedDeviceId,
                             kyberSignedPreKey: spkTuple
                         )
+                        try PQCKeyManager.shared.commitKyberSPK(publicKey: spk.publicKey, secretKey: spk.secretKey, keyId: spk.keyId)
                         UserDefaults.standard.set(true, forKey: "pqcKyberSPKMigrationV1Done")
-                        Log.info("   Kyber SPK uploaded (keyId=\(spkId))", category: "Registration")
+                        Log.info("   Kyber SPK uploaded + committed (keyId=\(spk.keyId))", category: "Registration")
                         Log.info("   Kyber OTPKs on server: \(kyberCount)", category: "Registration")
                     } catch {
                         Log.error("   Kyber PQC upload failed (will retry on next launch): \(error)", category: "Registration")

@@ -22,8 +22,7 @@ struct DesktopLinkRequestView: View {
 
     @State private var vm = DeviceLinkViewModel()
     @State private var showError = false
-    @State private var showHistorySyncOffer = false
-    @State private var showReceiveHistorySync = false
+
 
     var body: some View {
         NavigationStack {
@@ -54,22 +53,9 @@ struct DesktopLinkRequestView: View {
             guard completed else { return }
             let userId = KeychainManager.shared.loadUserID() ?? ""
             authViewModel.finalizeDeviceRegistration(userId: userId, username: nil)
-            showHistorySyncOffer = true
-        }
-        // MARK: History sync offer
-        .alert(NSLocalizedString("history_sync_offer_title", comment: ""), isPresented: $showHistorySyncOffer) {
-            Button(NSLocalizedString("history_sync_offer_yes", comment: "")) {
-                showReceiveHistorySync = true
-            }
-            Button(NSLocalizedString("history_sync_offer_skip", comment: ""), role: .cancel) {
-                dismiss()
-            }
-        } message: {
-            Text(NSLocalizedString("history_sync_offer_message", comment: ""))
-        }
-        .sheet(isPresented: $showReceiveHistorySync) {
-            ReceiveBackupNearbyView(mode: .historySync)
-                .onDisappear { dismiss() }
+            authViewModel.linkedJoinPendingDeviceId = vm.linkedPendingDeviceId
+            authViewModel.pendingHistorySyncOffer = true
+            dismiss()
         }
     }
 
@@ -93,8 +79,8 @@ struct DesktopLinkRequestView: View {
         } else {
             // Error shown via alert — show a retry button as fallback
             VStack(spacing: 16) {
-                Text("[!]")
-                    .font(CTFont.bold(48))
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(CTFont.regular(48))
                     .foregroundStyle(.orange)
                     .lineLimit(1).fixedSize()
                 Button {
@@ -120,10 +106,13 @@ struct DesktopLinkRequestView: View {
         VStack(spacing: 28) {
             // Header
             VStack(spacing: 10) {
-                Text("[iOS]")
-                    .font(CTFont.bold(32))
+                Image(systemName: "iphone")
+                    .font(.system(size: 48, weight: .light))
                     .foregroundStyle(Color.CT.textDim)
-                    .lineLimit(1).fixedSize()
+                Text("SCAN ON YOUR PHONE")
+                    .font(CTFont.bold(14))
+                    .foregroundStyle(Color.CT.textDim)
+                    .tracking(1)
 
                 Text(LocalizedStringKey("device_link_request_instruction"))
                     .font(.title3.weight(.semibold))

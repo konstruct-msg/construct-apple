@@ -71,9 +71,14 @@ actor ServerKeyManager {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
 
-            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let serverSection = json["server"] as? [String: Any],
-                  let keyB64 = serverSection["token_encryption_key"] as? String,
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                Log.debug("ServerKeyManager: token_encryption_key missing or invalid in well-known", category: "Stealth")
+                return
+            }
+            let rootKey = json["token_encryption_key"] as? String
+            let serverSection = json["server"] as? [String: Any]
+            let serverKey = serverSection?["token_encryption_key"] as? String
+            guard let keyB64 = rootKey ?? serverKey,
                   let keyData = Data(base64Encoded: keyB64),
                   keyData.count == 32 else {
                 Log.debug("ServerKeyManager: token_encryption_key missing or invalid in well-known", category: "Stealth")

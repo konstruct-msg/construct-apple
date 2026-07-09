@@ -7,8 +7,10 @@
 //  When fetching a peer's pre-key bundle, if the hybrid PQ identity fields are present
 //  this verifies the full trust chain in Swift (the Rust core only knows the Ed25519
 //  path). Capability-gated: a peer WITHOUT hybrid fields is accepted unchanged
-//  (Ed25519-only). A peer WITH hybrid fields that fail verification is rejected — a
-//  present-but-invalid hybrid signature is a tampering signal, not a downgrade.
+//  (Ed25519-only). A peer whose hybrid IDENTITY cross-signature fails is rejected
+//  (identity tampering). A peer whose hybrid identity is authentic but whose SPK-level
+//  hybrid signature is missing/invalid is DEGRADED to classic X3DH (peer SPK desync), not
+//  rejected — see `.degraded` and otpk-session-init-deadlock (build 496 SPK↔hybrid).
 //
 //  Trust chain (see decisions/pq-signature-protocol-integration-plan.md):
 //    peer Ed25519 identity (verifying_key)
@@ -21,9 +23,12 @@ import CryptoKit
 
 enum HybridBundleVerifier {
     enum Outcome: Equatable {
-        case verified        // hybrid fields present and the whole chain validates
-        case absent          // no hybrid identity key → Ed25519-only peer (accepted)
-        case failed(String)  // hybrid fields present but verification failed (reject bundle)
+        case verified         // hybrid fields present and the whole chain validates
+        case absent           // no hybrid identity key → Ed25519-only peer (accepted)
+        case degraded(String) // hybrid IDENTITY authentic (cross-sig valid) but the SPK-level
+                              // hybrid attestation is missing/invalid — proceed via classic X3DH
+                              // with a warning instead of hard-blocking (peer SPK desync).
+        case failed(String)   // identity-level tampering (cross-signature invalid) → reject bundle
     }
 
     /// Domain prologue for the cross-signature — matches the server `HYBRID_ID_BIND_PROLOGUE`
@@ -64,9 +69,18 @@ enum HybridBundleVerifier {
             return .failed("cross-signature invalid")
         }
 
+        // The cross-signature above already authenticated the hybrid IDENTITY key against the
+        // peer's Ed25519 identity. The SPK-level hybrid signatures below are PQ defence-in-depth
+        // ON TOP of the classic Ed25519 SPK signature (which the Rust core still verifies during
+        // X3DH). If they are missing/invalid the peer's SPK is desynced from its hybrid identity
+        // (e.g. an SPK rotation whose RPC failed on a censored transport — build 496); that is NOT
+        // identity tampering. Hard-rejecting there makes a single desynced peer permanently
+        // unreachable, so we DEGRADE to classic X3DH with a warning instead. An attacker cannot
+        // exploit this: forging the SPK still requires forging the classic Ed25519 SPK signature.
+
         // 2. Hybrid signature over the classic SPK (suite 0x01).
         guard !signedPreKeyHybridSignature.isEmpty else {
-            return .failed("SPK hybrid signature missing")
+            return .degraded("SPK hybrid signature missing")
         }
         guard verifyHybridSig(
             hybridKey: hybridIdentityKey,
@@ -74,13 +88,13 @@ enum HybridBundleVerifier {
             publicKey: signedPreKey,
             signature: signedPreKeyHybridSignature
         ) else {
-            return .failed("SPK hybrid signature invalid")
+            return .degraded("SPK hybrid signature invalid")
         }
 
         // 3. Hybrid signature over the Kyber SPK (suite 0x10), only when one is present.
         if let kyberPK = kyberPreKey, !kyberPK.isEmpty {
             guard let kyberSig = kyberPreKeyHybridSignature, !kyberSig.isEmpty else {
-                return .failed("Kyber SPK present but hybrid signature missing")
+                return .degraded("Kyber SPK present but hybrid signature missing")
             }
             guard verifyHybridSig(
                 hybridKey: hybridIdentityKey,
@@ -88,7 +102,7 @@ enum HybridBundleVerifier {
                 publicKey: kyberPK,
                 signature: kyberSig
             ) else {
-                return .failed("Kyber SPK hybrid signature invalid")
+                return .degraded("Kyber SPK hybrid signature invalid")
             }
         }
 

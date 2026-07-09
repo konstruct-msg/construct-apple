@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import Combine
 
 // MARK: - Photo Preview Strip
 
@@ -23,24 +24,25 @@ struct MessagePhotoPreviewBar: View {
                             .resizable()
                             .scaledToFill()
                             .frame(width: 80, height: 80)
-                            .clipShape(Rectangle())
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
 
                         Button { onRemove(index) } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .font(CTFont.regular(11))
                                 .foregroundColor(Color.CT.text)
                                 .padding(4)
-                                .background(Color.black.opacity(0.6))
                                 .lineLimit(1).fixedSize()
                         }
-                        .offset(x: 4, y: -4)
                     }
                 }
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
         }
-        .background(Color.CT.bgMsg)
+        .background(.ultraThinMaterial, in: .rect(cornerRadius: 10))
+        .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(.white.opacity(0.15), lineWidth: 1))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }

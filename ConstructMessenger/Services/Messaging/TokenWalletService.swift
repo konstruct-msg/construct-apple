@@ -2,9 +2,11 @@
 //  TokenWalletService.swift
 //  Construct Messenger
 //
-//  Manages the STEALTH per-message token wallet.
-//  Tokens are BlindToken structs stored as JSON in the Keychain.
-//  Replenished via BlindTokenService (Privacy Pass OPRF); consumed 1-per-message.
+//  Manages the STEALTH token wallet (Privacy Pass blind tokens).
+//  Pure wallet: deposit, unconditional consume, balance.
+//
+//  All policy decisions (when to use sealed sender, when to spend a token)
+//  live in StealthPolicy.
 //
 
 import Foundation
@@ -46,7 +48,8 @@ final class TokenWalletService {
         Log.info("TokenWallet: deposited \(canAdd) blind tokens (balance=\(balance))", category: "TokenWallet")
     }
 
-    /// Consume one token. Returns the token bytes if successful, nil if wallet is empty.
+    /// Consume one token unconditionally.
+    /// StealthPolicy decides *when* to call this based on per-stream / per-message rules.
     @discardableResult
     func consumeToken() -> BlindToken? {
         var tokens = loadTokens()
@@ -63,7 +66,7 @@ final class TokenWalletService {
     /// Returns true if at least one token is available.
     var hasToken: Bool { balance > 0 }
 
-    // MARK: - Storage
+    // MARK: - Storage for tokens
 
     private func loadTokens() -> [BlindToken] {
         guard

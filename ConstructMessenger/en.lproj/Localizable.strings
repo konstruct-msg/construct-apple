@@ -89,6 +89,11 @@
 
 // MARK: - Settings -> Account
 "display_name" = "Display Name";
+"local_name" = "Local name";
+"local_name_unset" = "Not set";
+"local_name_placeholder" = "Enter a name";
+"local_name_clear" = "Clear";
+"local_name_footer" = "Visible only to you. The contact never sees it.";
 "show_my_qr_code" = "Show My QR Code";
 "share_contact" = "Share Contact";
 "share_contact_footer" = "Share your QR code or link to let others add you as a contact";
@@ -439,6 +444,8 @@
 "veil_mode_auto" = "auto";
 "veil_mode_on" = "on";
 "veil_footer_off" = "Traffic protection disabled. Direct connection only.";
+"veil_footer_off_obf_active" = "VEIL off — direct traffic is obfuscated via QUIC (Salamander).";
+"veil_footer_off_obf_fallback" = "VEIL off — QUIC obfuscation enabled; currently on H2 fallback (not obfuscated).";
 "veil_footer_auto" = "VEIL activates automatically when network blocking is detected.";
 "veil_footer_on" = "All traffic routed through VEIL relay.";
 "veil_auto_active" = "Auto-activated · direct blocked";
@@ -496,6 +503,10 @@
 // MARK: - Message States
 "uploading" = "Uploading…";
 "loading" = "Loading...";
+"send_original_quality" = "Original quality";
+"quality_label" = "Quality";
+"quality_compressed" = "Compressed";
+"quality_original" = "Original";
 "failed_to_load" = "Failed to load";
 "shared_profile" = "Shared profile";
 
@@ -530,6 +541,8 @@
 "diagnostics_size" = "Size";
 "diagnostics_share_logs" = "Share logs";
 "diagnostics_clear_logs" = "Clear logs";
+"diagnostics_stealth_override_title" = "Stealth sender (debug override)";
+"diagnostics_stealth_override_hint" = "Always on in Release. Turn off here to exercise the legacy identified-send path during development.";
 "diagnostics_force_spk_rotation" = "Force SPK Rotation";
 "diagnostics_reset_local_data_keychain" = "Reset local data & Keychain";
 "diagnostics_dev_tools_footer" = "Clears all Keychain keys, sessions, and UserDefaults. Use to test fresh initialization without reinstalling.";
@@ -595,6 +608,8 @@
 "flood_alert_body" = "Sent %d messages in a short time. Notifications suppressed.";
 "flood_banner_title" = "Too many messages";
 "flood_banner_subtitle" = "Notifications from this contact are paused. Review and decide.";
+"session_at_risk_title" = "Contact's keys aren't fresh";
+"session_at_risk_subtitle" = "They've been offline a while. Messages still send securely; keys refresh when they're back.";
 "lockdown_mode" = "Lockdown Mode";
 "lockdown_active_since" = "Active since %@";
 "lockdown_mode_hint" = "Only contacts added before activation receive notifications. New senders are silently saved — you can review them anytime.";
@@ -636,7 +651,14 @@
 "calls_recents" = "Recents";
 "calls_clear" = "Clear";
 "calls_clear_confirm" = "Clear all recent calls?";
+"calls_filter_all" = "All";
+"calls_filter_missed" = "Missed";
 "calls_empty" = "No recent calls";
+"calls_empty_missed" = "No missed calls";
+"calls_section_today" = "Today";
+"calls_section_yesterday" = "Yesterday";
+"calls_section_earlier" = "Earlier";
+"calls_section_older" = "Older";
 "call_outgoing" = "Outgoing";
 "call_incoming" = "Incoming";
 "call_missed" = "Missed";
@@ -724,8 +746,8 @@
 "searchable_confirm_action" = "enable";
 "searchable_no_username_hint" = "set a username first to enable search";
 "username_not_set" = "no username";
-"searchable_indicator" = "[⊙] searchable";
-"searchable_indicator_off" = "[ ] searchable";
+"searchable_indicator" = "searchable";
+"searchable_indicator_off" = "not searchable";
 "synapses_remote_result_header" = "found on construct";
 "synapses_searching" = "searching...";
 "synapses_not_found" = "not found";
@@ -762,17 +784,21 @@
 "stealth_scope_stream_hint" = "one token per active stream per day";
 "stealth_scope_message" = "per message";
 "stealth_scope_message_hint" = "one token per message — maximum unlinkability";
+
+// Short labels for the CTModeSelector (segmented) next to the stealth toggle.
+"stealth_scope_stream_short" = "stream";
+"stealth_scope_message_short" = "message";
 "stealth_token_wallet" = "token wallet";
 "stealth_token_wallet_pending" = "[not yet active]";
 "stealth_token_count" = "%d tokens";
-"stealth_token_wallet_hint" = "tokens are minted in the background while charging. requires privacy pass support on the construct.";
+"stealth_token_wallet_hint" = "first batch is minted on registration or when you enable Stealth. top-ups happen in background (best while charging). requires privacy pass support on the construct.";
 
 // Key Transparency
 "kt_section" = "key transparency";
 "kt_status" = "merkle log";
-"kt_verified" = "[✓] verified";
-"kt_warning" = "[!] warning";
-"kt_no_data" = "[–] no data";
+"kt_verified" = "verified";
+"kt_warning" = "warning";
+"kt_no_data" = "no data";
 "kt_hint" = "every identity key is permanently recorded in an append-only merkle log. tampering is cryptographically detectable.";
 "kt_failure_hint" = "key transparency verification failed — possible tampering detected.";
 "kt_last_failure_at" = "last failure: %@";
@@ -878,18 +904,15 @@
 "history_sync_send_title" = "Transfer History";
 "history_sync_receive_title" = "Receive History";
 "history_sync_offer_title" = "Transfer Message History?";
-"history_sync_offer_message" = "Do you want to receive your message history from a nearby device? Make sure both devices are on the same WiFi network.";
+"history_sync_offer_message" = "Receive your message history from the phone that just approved this device? Both devices must be on the same Wi‑Fi — no code entry needed.";
 "history_sync_offer_yes" = "Receive History";
 "history_sync_offer_skip" = "Skip";
+"history_sync_auto_connecting" = "Connecting to your phone…";
+"history_sync_auto_sending" = "Sending history to your computer…";
 "history_sync_user_mismatch" = "History transfer failed: this history belongs to a different account.";
 "call_error_not_contacts" = "Cannot call this node. Make sure you are mutual contacts.";
 "call_error_busy" = "You're already in a call.";
 "call_error_peer_offline" = "Node is offline. Try again later.";
-
-/* Tab bar labels */
-"tab_chats" = "MSG";
-"tab_synapses" = "SYN";
-"tab_settings" = "CFG";
 
 /* Engine background push notifications */
 "notification.new_message.title" = "New message";
@@ -919,6 +942,11 @@
 /* Desktop general settings */
 "message_section" = "Messages";
 
+/* Voice messages */
+"voice_section_title" = "Voice messages";
+"voice_continuous_playback" = "Play continuously";
+"voice_continuous_playback_footer" = "When several voice messages arrive in a row, play them one after another automatically until the last one finishes.";
+
 /* STT / Transcription */
 "stt_section_title" = "Transcription";
 "stt_auto_transcribe" = "Auto-transcribe voice messages";
@@ -939,6 +967,10 @@
 "stt_section_header" = "transcription";
 "stt_section_footer" = "Voice messages can be transcribed on-device. Models are downloaded once and never leave the phone.";
 "stt_retry_download" = "retry";
+"stt_engine_label" = "Engine";
+"stt_engine_auto" = "Auto";
+"stt_engine_whisper" = "Whisper";
+"stt_engine_apple" = "Apple Speech";
 "account_discard_changes_title" = "Discard changes?";
 "account_discard_changes_message" = "You have unsaved profile changes. Leave without saving?";
 "account_discard_changes_discard" = "Discard";

@@ -30,8 +30,9 @@ class ConnectionStatusManager {
     /// Current connection status. Derived; do not assign from outside.
     private(set) var connectionStatus: ConnectionStatus = .unknown
 
-    /// Short diagnostic string for the "Connecting…" phase, e.g. "VEIL probe 2".
+    /// Short diagnostic string for the "Connecting…" phase, e.g. "VEIL probe".
     /// Derived from the current FSM state; nil when `.connected` or `.disconnected`.
+    /// Intentionally coarse — never contains the relay host/address (see `phaseLabel`).
     private(set) var connectingPhase: String?
 
     /// True when the stream is intentionally paused (app in background).
@@ -93,12 +94,16 @@ class ConnectionStatusManager {
         return connectionStatus.text(localized: true, phase: connectingPhase)
     }
 
+    /// Subtitle for the in-chat nav bar. Intentionally minimal: the chat must not surface
+    /// transport churn (VEIL re-probes, transient reconnects). We show the chat-relevant E2EE
+    /// "encrypting" phase, and — only for a genuine, sustained outage — a coarse "no connection".
+    /// The transient `.connecting` state is deliberately NOT shown here; coarse transport phase
+    /// (probe / cooldown, without the relay address) lives in Network Settings, and full raw
+    /// detail (including the relay host) only in the dev TransportDiagnosticsView.
     func navigationStatusSubtitle(isInitializingSession: Bool) -> String? {
         if isInitializingSession {
             return NSLocalizedString("status_encrypting", comment: "")
-        } else if connectionStatus == .connecting {
-            return NSLocalizedString("status_connecting", comment: "")
-        } else if !isConnected {
+        } else if connectionStatus == .disconnected {
             return NSLocalizedString("status_no_connection", comment: "")
         }
         return nil
@@ -141,19 +146,20 @@ class ConnectionStatusManager {
         let newStatus: ConnectionStatus
         if !reachable {
             newStatus = .disconnected
+        } else if hasRecentRpc {
+            // A successful RPC within the grace window proves the underlying transport is
+            // fundamentally working. Transient FSM re-probes — VEIL local-proxy restarts
+            // (`staleLocalProxy`), a single direct failure, cooldown ticks — must NOT flap the
+            // user-facing status to "Connecting…". This is the whole point of the grace window
+            // (see `connectedGraceWindow`); honour it for EVERY reachable state, not just the
+            // steady ones. Only a genuine sustained outage (no RPC for 90s) surfaces below.
+            newStatus = .connected
         } else {
             switch mirrorState {
             case .offline:
                 newStatus = .disconnected
-            case .direct(let fails):
-                if fails == 0 {
-                    newStatus = hasRecentRpc ? .connected : .connecting
-                } else {
-                    newStatus = .connecting
-                }
-            case .veilActive:
-                newStatus = hasRecentRpc ? .connected : .connecting
-            case .veilProbing, .veilCooldown:
+            default:
+                // Reachable, but no recent successful RPC → genuinely (re)connecting.
                 newStatus = .connecting
             }
         }
@@ -180,8 +186,11 @@ class ConnectionStatusManager {
             return nil
         case .veilProbing:
             return "VEIL probe"
-        case .veilActive(let relay, _, _):
-            return "VEIL \(relay)"
+        case .veilActive:
+            // Never surface the relay host/address in user-facing status. The relay endpoint
+            // is an internal transport detail; exposing it leaks which bridge the user is on.
+            // Raw relay detail remains only in the dev TransportDiagnosticsView.
+            return "VEIL"
         case .veilCooldown(let until):
             let secs = max(0, Int(until.timeIntervalSinceNow))
             return "VEIL cooldown (\(secs)s)"

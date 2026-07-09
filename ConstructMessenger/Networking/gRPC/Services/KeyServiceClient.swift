@@ -121,6 +121,10 @@ final class KeyServiceClient: Sendable {
                 ) {
                 case .verified:
                     Log.info("Hybrid PQ bundle verified for device \(deviceBundle.deviceID)", category: "HybridPQ")
+                case .degraded(let reason):
+                    // Authentic hybrid identity, SPK-level attestation unavailable — keep the device
+                    // and proceed via classic X3DH rather than dropping it (peer SPK desync).
+                    Log.fault("Hybrid PQ DEGRADED for device \(deviceBundle.deviceID): \(reason) — keeping device via classic X3DH", category: "HybridPQ")
                 case .absent:
                     break
                 case .failed(let reason):
@@ -150,7 +154,8 @@ final class KeyServiceClient: Sendable {
                     spkUploadedAt: b.spkUploadedAt > 0 ? UInt64(b.spkUploadedAt) : (b.generatedAt > 0 ? UInt64(b.generatedAt) : 0),
                     spkRotationEpoch: b.spkRotationEpoch,
                     kyberSpkUploadedAt: b.hasKyberSpkUploadedAt ? UInt64(b.kyberSpkUploadedAt) : 0,
-                    kyberSpkRotationEpoch: b.hasKyberSpkRotationEpoch ? b.kyberSpkRotationEpoch : 0
+                    kyberSpkRotationEpoch: b.hasKyberSpkRotationEpoch ? b.kyberSpkRotationEpoch : 0,
+                    supportsPqRatchet: b.supportsPqRatchet
                 )
                 return DeviceBundleData(deviceId: deviceBundle.deviceID, bundle: bundle, platform: deviceBundle.platform)
             }
@@ -271,6 +276,11 @@ final class KeyServiceClient: Sendable {
             switch hybridOutcome {
             case .verified:
                 Log.info("Hybrid PQ bundle verified for device \(response.deviceID)", category: "HybridPQ")
+            case .degraded(let reason):
+                // Hybrid identity is authentic (cross-sig valid) but the SPK-level hybrid
+                // attestation is unavailable — proceed via classic X3DH rather than hard-block a
+                // desynced peer. The classic Ed25519 SPK signature is still enforced by the core.
+                Log.fault("Hybrid PQ DEGRADED for device \(response.deviceID): \(reason) — proceeding via classic X3DH (PQ SPK attestation unavailable; likely peer SPK desync)", category: "HybridPQ")
             case .absent:
                 if hybridDowngrade {
                     Log.error("Hybrid PQ DOWNGRADE for device \(response.deviceID): peer was hybrid-capable, bundle now Ed25519-only", category: "HybridPQ")
@@ -280,6 +290,8 @@ final class KeyServiceClient: Sendable {
                 Log.error("Hybrid PQ bundle REJECTED for device \(response.deviceID): \(reason)", category: "HybridPQ")
                 throw HybridBundleVerificationError(reason: reason)
             }
+
+            Log.info("SESSION_STATE[bundle_capabilities]: userId=\(userId.prefix(8))…, device=\(response.deviceID.prefix(8))…, supportsPqRatchet=\(bundle.supportsPqRatchet)", category: "SessionInit")
 
             return PublicKeyBundleData(
                 userId: userId,
@@ -299,30 +311,38 @@ final class KeyServiceClient: Sendable {
                 spkUploadedAt: bundle.spkUploadedAt > 0 ? UInt64(bundle.spkUploadedAt) : (bundle.generatedAt > 0 ? UInt64(bundle.generatedAt) : 0),
                 spkRotationEpoch: bundle.spkRotationEpoch,
                 kyberSpkUploadedAt: bundle.hasKyberSpkUploadedAt ? UInt64(bundle.kyberSpkUploadedAt) : 0,
-                kyberSpkRotationEpoch: bundle.hasKyberSpkRotationEpoch ? bundle.kyberSpkRotationEpoch : 0
+                kyberSpkRotationEpoch: bundle.hasKyberSpkRotationEpoch ? bundle.kyberSpkRotationEpoch : 0,
+                supportsPqRatchet: bundle.supportsPqRatchet
             )
         }
     }
 
-    /// Map proto CryptoSuite enum → numeric suite ID used by CryptoCore.
+    /// Map proto CryptoSuite enum → the core's SuiteID (suite_id.rs):
+    /// 1 = CLASSIC (X25519+ChaCha20), 2 = PQ_HYBRID (X25519+ML-KEM-768, ML-DSA-65),
+    /// 3 = PQ_RATCHET — NEVER produced from a bundle: suite 3 is negotiated
+    /// per-session from the supports_pq_ratchet capability, not declared as the
+    /// bundle's crypto suite. (The old mapping sent hybrid bundles to 3, which
+    /// now means the sparse PQ ratchet — a different protocol entirely.)
     private static func parseSuiteId(_ cryptoSuite: Shared_Proto_Core_V1_CryptoSuite) -> UInt16 {
         switch cryptoSuite {
         case .classicX25519Chacha20: return 1
-        case .classicX25519Aes256:   return 2
-        case .hybridKyber1024X25519: return 3
-        case .hybridKyber768X25519:  return 3
+        // The core has no AES-256 provider — treat as classic rather than
+        // accidentally selecting the ML-KEM hybrid provider (core suite 2).
+        case .classicX25519Aes256:   return 1
+        case .hybridKyber1024X25519: return 2
+        case .hybridKyber768X25519:  return 2
         default:                     return 1
         }
     }
 
-    /// Map proto crypto_suite string → numeric suite ID used by CryptoCore.
+    /// Map proto crypto_suite string → the core's SuiteID (see enum overload above).
     /// Server returns named strings ("X25519_CHACHA20") per proto spec; also
     /// accepts legacy numeric strings ("1") from older server versions.
     private static func parseSuiteId(_ cryptoSuite: String) -> UInt16 {
         switch cryptoSuite {
         case "X25519_CHACHA20", "Curve25519+ChaCha20": return 1
-        case "X25519_AES256", "Curve25519+AES256":    return 2
-        case "KYBER_HYBRID":                           return 3
+        case "X25519_AES256", "Curve25519+AES256":    return 1
+        case "KYBER_HYBRID":                           return 2
         default:
             return UInt16(cryptoSuite) ?? 1
         }
@@ -392,11 +412,32 @@ final class KeyServiceClient: Sendable {
                 request.kyberSignedPreKeyHybridSignature = kyberHybridSig
             }
 
+            // Advertise this build's sparse-PQ-ratchet capability (SuiteID 3).
+            // The server persists it (migration 063) and returns it in
+            // PreKeyBundle so peers can negotiate suite-3 sessions.
+            #if os(iOS)
+            request.supportsPqRatchet = supportsPqRatchet()
+            #endif
+
             let response = try await keyClient.uploadPreKeys(
                 request: .init(message: request)
             )
+            // Remember what capability the server now holds — the replenishment
+            // service compares against this to force a re-upload when a build
+            // flips supportsPqRatchet() while the server OTPK count is healthy.
+            #if os(iOS)
+            UserDefaults.standard.set(request.supportsPqRatchet, forKey: Self.advertisedPqRatchetKey)
+            #endif
             return (classicCount: response.preKeyCount, kyberCount: response.kyberPreKeyCount)
         }
+    }
+
+    /// Last `supports_pq_ratchet` value successfully uploaded to the server
+    /// (nil = never uploaded / unknown, e.g. after an app-data reset).
+    static let advertisedPqRatchetKey = "keyservice.advertisedPqRatchet"
+
+    static var lastAdvertisedPqRatchet: Bool? {
+        UserDefaults.standard.object(forKey: advertisedPqRatchetKey) as? Bool
     }
 
     // MARK: - Get Pre-Key Count
@@ -448,7 +489,12 @@ final class KeyServiceClient: Sendable {
         deviceId: String,
         newClassicKey: (keyId: UInt32, publicKey: Data, signature: Data),
         newKyberKey: (keyId: UInt32, publicKey: Data, signature: Data)? = nil,
-        reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason = .scheduled
+        reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason = .scheduled,
+        // Hybrid (ML-DSA) signatures over the new SPK / Kyber SPK. When provided the server stores
+        // them atomically with the rotation, so the published bundle never has a hybrid identity
+        // with an unsigned fresh SPK (the breakage that hard-rejects initiators).
+        signedPreKeyHybridSignature: Data? = nil,
+        kyberSignedPreKeyHybridSignature: Data? = nil
     ) async throws -> Shared_Proto_Services_V1_RotateSignedPreKeyResponse {
         try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.rotateSignedPreKey) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
@@ -462,6 +508,9 @@ final class KeyServiceClient: Sendable {
             request.deviceID = deviceId
             request.newSignedPreKey = signed
             request.reason = reason
+            if let spkHybrid = signedPreKeyHybridSignature, !spkHybrid.isEmpty {
+                request.signedPreKeyHybridSignature = spkHybrid
+            }
 
             if let kyberSpk = newKyberKey {
                 var kSigned = Shared_Proto_Services_V1_KyberSignedPreKeyUpload()
@@ -469,6 +518,9 @@ final class KeyServiceClient: Sendable {
                 kSigned.publicKey = kyberSpk.publicKey
                 kSigned.signature = kyberSpk.signature
                 request.newKyberSignedPreKey = kSigned
+                if let kyberHybrid = kyberSignedPreKeyHybridSignature, !kyberHybrid.isEmpty {
+                    request.kyberSignedPreKeyHybridSignature = kyberHybrid
+                }
             }
 
             return try await keyClient.rotateSignedPreKey(
@@ -561,8 +613,11 @@ final class KeyServiceClient: Sendable {
             let identityChanged = user.knownIdentityKey != nil && user.knownIdentityKey != identityKey
 
             switch outcome {
-            case .verified:
-                // Pin hybrid capability to this identity.
+            case .verified, .degraded:
+                // Pin hybrid capability to this identity. `.degraded` still presents an authentic
+                // (cross-signed) hybrid identity key — the peer IS hybrid-capable, only its SPK-level
+                // attestation is momentarily unavailable — so it must still count against a later
+                // true downgrade to Ed25519-only.
                 user.hybridCapable = true
                 user.knownIdentityKey = identityKey
             case .absent:

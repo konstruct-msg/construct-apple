@@ -17,18 +17,19 @@ struct ChatNavBarView: View {
     let onToggleSearch: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 16) {
             Button(action: onBack) {
                 Image(systemName: "chevron.backward.circle.fill")
-                    .font(.system(size: 22))
+                    .font(.system(size: 28))
                     .foregroundColor(Color.CT.accent)
             }
 
             Button(action: onOpenProfile) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title.uppercased())
-                        .font(CTFont.bold(13))
+                        .font(CTFont.bold(14))
                         .foregroundColor(Color.CT.text)
+                        .tracking(4)
                     if let subtitle {
                         Text(subtitle)
                             .font(CTFont.regular(10))
@@ -46,8 +47,8 @@ struct ChatNavBarView: View {
 
             if isEditMode {
                 Button(action: onDoneEdit) {
-                    Text("[done]")
-                        .font(CTFont.bold(13))
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(CTFont.regular(13))
                         .foregroundColor(Color.CT.accent)
                 }
             } else {
@@ -61,30 +62,30 @@ struct ChatNavBarView: View {
                     }
                     Button(action: onStartCall) {
                         Image(systemName: "phone")
-                            .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
+                            .font(.system(size: 24, weight: .medium))
                             .foregroundColor(Color.CT.accent)
                     }
                 }
                 Button(action: onToggleSearch) {
                     Image(systemName: isSearchActive ? "xmark" : "magnifyingglass")
-                        .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                        .font(.system(size: 24, weight: .medium))
                         .foregroundColor(Color.CT.accent)
                 }
             }
         }
         .padding(.horizontal, CTLayout.edgePad)
         .frame(height: CTLayout.navBarHeight)
-        .ctBorderBottom()
+        .glassCapsule(cornerRadius: 999) // full capsule for top nav bar
     }
 
     @ViewBuilder private var ktBadge: some View {
         switch contactKTStatus {
         case .verified:
-            Text("[✓]")
+            Image(systemName: "checkmark.circle.fill")
                 .font(CTFont.regular(11))
                 .foregroundColor(Color.CT.accent)
         case .keyChanged, .failed:
-            Text("[!]")
+            Image(systemName: "exclamationmark.circle.fill")
                 .font(CTFont.bold(11))
                 .foregroundColor(Color.CT.danger)
         case .unverified:

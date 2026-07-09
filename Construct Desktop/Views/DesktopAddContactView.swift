@@ -14,7 +14,7 @@
 
 import SwiftUI
 import AppKit
-import AVFoundation
+@preconcurrency import AVFoundation
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import Vision
@@ -548,19 +548,11 @@ private struct PasteTab: View {
                     .textFieldStyle(.plain)
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(DesktopTheme.textPrimary)
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(DesktopTheme.backgroundPanel)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .strokeBorder(
-                                        focused ? DesktopTheme.accent.opacity(0.6) : DesktopTheme.separator,
-                                        lineWidth: 1
-                                    )
-                            )
-                    )
                     .focused($focused)
+                    .ctInputChrome(
+                        .standard,
+                        strokeColor: focused ? Color.CT.accent.opacity(0.7) : Color.CT.noise
+                    )
                     .onSubmit { submit() }
             }
 
@@ -635,7 +627,12 @@ final class DesktopQRScanner: NSObject {
         output.metadataObjectTypes = requested.filter { supported.contains($0) }
 
         self.session = s
-        DispatchQueue.global(qos: .userInitiated).async { s.startRunning() }
+        // Start off-main as recommended; @preconcurrency import suppresses Sendable warning
+        // for AVCaptureSession (we know this use is safe).
+        let sessionToStart = s
+        DispatchQueue.global(qos: .userInitiated).async {
+            sessionToStart.startRunning()
+        }
     }
 
     func stop() {

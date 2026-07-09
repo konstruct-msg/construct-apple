@@ -39,7 +39,40 @@ final class StorageMigrationService {
 
         await bgContext.perform {
             self.migrateBatch(in: bgContext)
+            self.cleanupLeakedControlRows(in: bgContext)
         }
+    }
+
+    /// One-time cleanup of session-control payloads (`session_ready`, `session_ping`,
+    /// `binary_init`, …) that leaked into the transcript and were persisted *encrypted at
+    /// rest* (`contentKeyRef != nil`, `decryptedContent == nil`). The legacy `migrateBatch`
+    /// pass cannot see these — its predicate matches only unencrypted rows — so a delivery
+    /// like `session_ready_<UUID>` would render as a bubble forever. We decrypt `displayText`
+    /// for already-migrated, regular-typed rows and delete any control artifact.
+    /// Guarded by a UserDefaults flag so the (decrypt-per-row) scan runs only once.
+    nonisolated private func cleanupLeakedControlRows(in context: NSManagedObjectContext) {
+        let flagKey = "storage.controlArtifactCleanup.v1.done"
+        guard !UserDefaults.standard.bool(forKey: flagKey) else { return }
+
+        let fetchRequest = Message.fetchRequest()
+        // Encrypted-at-rest rows that the FRC currently treats as visible (contentTypeRaw == 0).
+        fetchRequest.predicate = NSPredicate(format: "contentKeyRef != nil AND contentTypeRaw == 0")
+        fetchRequest.fetchBatchSize = batchSize
+
+        guard let messages = try? context.fetch(fetchRequest), !messages.isEmpty else {
+            UserDefaults.standard.set(true, forKey: flagKey)
+            return
+        }
+
+        var deleted = 0
+        for message in messages where MessageContentType.isControlPayload(message.displayText) {
+            context.delete(message)
+            deleted += 1
+        }
+
+        if context.hasChanges { try? context.save() }
+        UserDefaults.standard.set(true, forKey: flagKey)
+        Log.info("Control-artifact cleanup: removed \(deleted) leaked session-control rows", category: "StorageMigration")
     }
 
     nonisolated private func migrateBatch(in context: NSManagedObjectContext) {

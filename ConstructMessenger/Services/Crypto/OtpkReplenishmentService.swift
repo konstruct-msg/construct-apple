@@ -17,10 +17,15 @@ enum OtpkReplenishmentService {
 
     /// Minimum number of OTPKs to keep on the server. Replenish if below this.
     static let lowWaterMark: UInt32 = 20
-    /// Default batch for force-replace uploads (registration, session-init failure).
+    /// Default batch for force-replace uploads (registration, fresh-orchestrator reset).
     static let replenishBatchSize: UInt32 = 50
     /// Minimum seconds between replenishment calls (race condition dedup).
     private static let cooldownSeconds: TimeInterval = 60
+    /// After a replace-all upload, keep this many IDs below the new batch for first
+    /// messages already in flight (the server soft-expires replaced keys with a 48h
+    /// grace; anything older can never be referenced again). Everything below is pruned
+    /// so the persisted OTPK blob stays bounded instead of hoarding every key ever made.
+    private static let pruneGraceWindow: UInt32 = 200
     private nonisolated(unsafe) static var isReplenishing = false
     private nonisolated(unsafe) static var lastReplenishDate: Date?
 
@@ -57,6 +62,19 @@ enum OtpkReplenishmentService {
         Log.info("OTPK upload (\(mode)): \(pairs.count) keys for device \(deviceId.prefix(8))...", category: "OTPK")
         if replaceExisting {
             CryptoManager.shared.clearNeedsFullOtpkReplacement()
+            // Convergence point: the server now holds exactly the batch we just uploaded.
+            // Prune local privates below (new batch − grace window) so the persisted blob
+            // stays bounded — devices were hoarding 800–2000 keys (60–150 KB Keychain items
+            // rewritten on every replenish), which is both dead weight and the prime suspect
+            // for the historical OTPK-blob corruption.
+            if let minNewId = pairs.map(\.keyId).min() {
+                let cutoff = minNewId > pruneGraceWindow ? minNewId - pruneGraceWindow : 0
+                let pruned = CryptoManager.shared.pruneOneTimePrekeys(below: cutoff)
+                if pruned > 0 {
+                    Log.info("OTPK pruned \(pruned) stale local keys below id \(cutoff) (\(CryptoManager.shared.oneTimePrekeyCount()) remain)", category: "OTPK")
+                    persistOtpks()
+                }
+            }
         }
         return pairs.count
     }
@@ -93,6 +111,23 @@ enum OtpkReplenishmentService {
         await replenishInternal(deviceId: deviceId, source: "push")
     }
 
+    /// Called after RESPONDER session-init failure or heal exhaustion. At most an
+    /// append replenish, guarded by the server low-water mark and the shared cooldown.
+    ///
+    /// Never force-replace here: a failed init usually means OTPK *desync*, not
+    /// depletion, and wiping the server set destroys keys that peers' in-flight inits
+    /// still reference — every such init then fails too, triggering another wipe
+    /// (the replace-all OTPK storm that made desync deadlocks unrecoverable).
+    /// Recovery from a truly unreproducible OTPK is the typed END_SESSION reason
+    /// (`.otpkUnreproducible` → peer re-inits via 3-DH), not a key wipe.
+    static func replenishAfterInitFailure(deviceId: String, reason: String) async {
+        if let last = lastReplenishDate, Date().timeIntervalSince(last) < cooldownSeconds {
+            Log.info("OTPK replenish (\(reason)) skipped — cooldown active (\(Int(cooldownSeconds))s)", category: "OTPK")
+            return
+        }
+        await replenishInternal(deviceId: deviceId, source: reason)
+    }
+
     private static func replenishInternal(deviceId: String, source: String) async {
         guard !isReplenishing else {
             Log.debug("OTPK replenishment already in progress, skipping (\(source))", category: "OTPK")
@@ -116,6 +151,20 @@ enum OtpkReplenishmentService {
             let (serverCount, recommendedMin) = try await KeyServiceClient.shared.getPreKeyCountFull(deviceId: deviceId)
             let effective = max(recommendedMin, lowWaterMark)
             Log.debug("OTPK server count: \(serverCount) / recommended min: \(effective) [\(source)]", category: "OTPK")
+
+            // Capability re-advertisement: supports_pq_ratchet reaches the server ONLY
+            // inside uploadPreKeys. When a build flips the capability (suite-3 rollout),
+            // a device with a healthy server count would otherwise never re-upload —
+            // peers keep fetching the stale flag and negotiate classic forever.
+            #if os(iOS)
+            let advertised = supportsPqRatchet()
+            if KeyServiceClient.lastAdvertisedPqRatchet != advertised {
+                let was = KeyServiceClient.lastAdvertisedPqRatchet.map(String.init) ?? "unknown"
+                Log.info("OTPK capability changed (supportsPqRatchet \(was) → \(advertised)) — forcing upload to re-advertise [\(source)]", category: "OTPK")
+                try await generateAndUpload(count: lowWaterMark, deviceId: deviceId)
+                return
+            }
+            #endif
 
             guard serverCount < effective else { return }
 

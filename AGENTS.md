@@ -24,7 +24,8 @@ construct-messenger/
 │   ├── Services/                # Session, messaging, healing, crypto orchestration
 │   ├── Networking/gRPC/         # gRPC channel + generated protobuf Swift files
 │   ├── en.lproj/                # English strings
-│   └── ru.lproj/                # Russian strings
+│   ├── ru.lproj/                # Russian strings
+│   └── ja.lproj/                # Japanese strings 
 ├── ConstructCore.xcframework/   # Built Rust crypto core (NOT in git — see Build Commands)
 ├── ConstructEngine.xcframework/ # Built Rust transport engine (NOT in git — see Build Commands)
 ├── build_crypto_lib.sh          # Script to rebuild construct-core
@@ -38,53 +39,7 @@ The Rust VEIL proxy (obfuscation layer) lives at: `~/Code/construct-veil`
 
 ---
 
-## Token Efficiency Tools
-
-These tools compress project data for LLM consumption. **Always use them before
-reading files, analyzing build output, or exploring the codebase.** They never
-modify originals — all output goes to stdout.
-
-### Decision flow: which tool when?
-
-```
-Need to read a source file?
-  ├─ Full understanding needed  → ./tools/squash_file file.swift
-  ├─ Just the API surface        → ./tools/squash_file --outline file.swift
-  └─ Only imports + top types    → ./tools/squash_file --imports file.swift
-
-Ran a build and got output?
-  └─ Always filter first:        xcodebuild ... 2>&1 | ./tools/squash_build
-
-Have logs to analyze?
-  ├─ From a file:                ./tools/squash_logs.py app.log
-  └─ From clipboard:             ./tools/squash_logs.py --clip --copy
-
-Exploring an unfamiliar area?
-  └─ Start here:                 ./tools/project_index
-```
-
-### Tool reference
-
-**squash_file** — strip comments, imports, blanks, MARK annotations from source.
-```bash
-./tools/squash_file ConstructMessenger/Networking/gRPC/ICE/ConnectionLoop.swift
-./tools/squash_file --outline ConstructMessenger/Security/CryptoManager.swift
-./tools/squash_file --imports ConstructMessenger/ViewModels/ChatViewModel.swift
-# Also works from stdin:
-cat file.swift | ./tools/squash_file
-```
-
-**squash_build** — keep only errors + first warning per file from xcodebuild.
-```bash
-xcodebuild -scheme ConstructMessenger -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' build 2>&1 | ./tools/squash_build
-```
-
-**squash_logs.py** — compress logs: relative timestamps, emoji→markers, dedup, bucket heartbeats.
-```bash
-./tools/squash_logs.py ~/Downloads/construct-logs.txt
-./tools/squash_logs.py --clip --copy
-cat *.log | ./tools/squash_logs.py
-```
+### Tools
 
 **project_index** — one-line-per-file map of the entire project.
 ```bash
@@ -92,40 +47,13 @@ cat *.log | ./tools/squash_logs.py
 ./tools/project_index ~/Code/construct-server   # index another repo
 ```
 
-### Expected workflow
-
-```bash
-# Before reading ANY file — strip noise
-./tools/squash_file path/to/File.swift
-
-# Before exploring a new directory — get the map
-./tools/project_index
-
-# After every build attempt — filter output
-xcodebuild ... 2>&1 | ./tools/squash_build
-
-# Before pasting logs into context
-./tools/squash_logs.py app.log
-```
-
-### Token impact
-| Tool | When to use | Savings |
-|------|------------|:------:|
-| `squash_file` | Before reading ANY .swift/.rs/.kt file | −36% |
-| `squash_file --outline` | When you only need the API surface | −90% |
-| `squash_build` | After every `xcodebuild` command | −95% |
-| `squash_logs.py` | Before analyzing any log output | −30% |
-| `project_index` | First step when exploring unfamiliar code | −100% vs grep |
-
-## Build Commands
-
 ### Prerequisites
 
 All three Rust crates must be cloned alongside this repo:
 ```
 ~/Code/
 ├── construct-core/        # Cryptographic core (X3DH, Double Ratchet, Kyber, etc.)
-├── construct-engine/      # QUIC/H3/gRPC transport engine
+├── construct-transport/      # QUIC/H3/gRPC transport engine
 ├── construct-veil/        # obfs4/WebTunnel obfuscation proxy (DPI evasion). Was construct-ice.
 └── construct-messenger/   # This repo — iOS/macOS SwiftUI app
 ```
@@ -140,9 +68,9 @@ You MUST build the Rust libraries before Xcode can compile the app.
 cd ~/Code/construct-messenger
 ./build_crypto_lib.sh --all          # iOS + Simulator + macOS in one go
 
-# 2. Build construct-engine (transport) — produces ConstructEngine.xcframework
-cd ~/Code/construct-engine
-./build_engine.sh
+# 2. Build construct-transport — produces ConstructTransport.xcframework
+cd ~/Code/construct-messenger/
+./build_transport_lib.sh
 
 # 3. Build the iOS app (simulator)
 cd ~/Code/construct-messenger
@@ -158,9 +86,6 @@ xcodebuild -scheme ConstructMessenger \
 
 # Rebuild crypto for everything iOS-side (device + simulator)
 ./build_crypto_lib.sh --ios --sim
-
-# Rebuild engine (all platforms)
-cd ~/Code/construct-engine && ./build_engine.sh
 
 # Clean Xcode build folder before next build
 # Xcode: ⌘⇧K  or  Product → Clean Build Folder
@@ -200,10 +125,18 @@ Construct uses a **hybrid design language**: the terminal / cyberpunk aesthetic 
 Apple's HIG conventions so that users intuitively understand how to interact with the interface.
 The goal is a **bespoke look** that does not clash with iOS / macOS platform norms.
 
-**Keep**: JetBrains Mono, `#090909` background, CT color palette, information density, ASCII
-decorative elements (noise, separators, `>` section headers, `✷`, bracket glyphs).  
+**Keep**: JetBrains Mono, `#090909` background, CT color palette, information density,
+*decorative* terminal chrome (noise, `-`/`=` separators, `>` prefixes, `✷`, hex avatars).  
 **Evolve**: touch affordances, icon legibility for interactive controls, bubble readability.  
 **Never**: sacrifice usability or clash visibly with iOS 26 / macOS guidelines.
+
+> **Terminal glyphs are decorative-only — not functional.** **State and affordance must read
+> instantly**, so `[ok] [err] [on] [off] [✓] [ ] [!] [~] [?]` and similar are replaced by SF
+> Symbols + semantic colour (`CTStatus` / `CTStatusBadge`) or native controls (`Toggle`, selection
+> `checkmark`). ASCII may remain only as unobtrusive *chrome* (separators, `>` prefix on
+> system messages / section headers, decorative `✷`). Migration to SF Symbols is ongoing — never
+> regress a converted control back to ASCII; remaining ASCII affordances (`[→]` rows, `[ BUTTON ]`
+> labels, `CTRowIcon("[x]")`) are pending conversion, not the target state.
 
 ### Tokens
 - Colors: `Color.CT.bg`, `Color.CT.text`, `Color.CT.accent`, `Color.CT.danger`, `Color.CT.noise`, `Color.CT.textDim`
@@ -216,10 +149,15 @@ decorative elements (noise, separators, `>` section headers, `✷`, bracket glyp
 - **SF Symbols** (`Image(systemName:)`): use for **all interactive controls** on both iOS and macOS —
   back/close buttons, action buttons, tab bar items, media controls, send, attach (`plus.circle`),
   mic, search, close (×). This rule applies to both platforms.
-- **`CTSymbol.*` ASCII glyphs**: use for **structural / decorative elements only** —
-  forward `[→]`, section headers (`> TITLE`), separators, status indicators, decorative symbols.
-  Do **not** use `CTSymbol.back` (`[←]`) or `CTSymbol.attach` (`[+]`) — these are replaced by SF Symbols.
-- Dividing line: *interactive tappable action?* → SF Symbol. *Terminal aesthetic chrome?* → CTSymbol.
+- **`CTSymbol.*` / ASCII glyphs**: use for **decorative chrome only** —
+  section headers (`> TITLE`), `-`/`=` separators, the `>` system-message prefix.
+  Do **not** use ASCII for **state or controls**: status → `CTStatusBadge` (SF Symbol + semantic
+  colour); selection → `checkmark`; on/off → `Toggle`. Do not use `[←]` / `[+]` / `[→]` for
+  back / attach / disclosure — those are SF Symbols (`chevron.*`, `plus.circle`).
+- Dividing line: *conveys state, or is a tappable action?* → SF Symbol / native control.
+  *Purely decorative terminal chrome?* → ASCII.
+- **Status**: `CTStatusBadge(status:)` with the `CTStatus` enum (`.ok .error .warning .on .off
+  .busy .unknown`) — never a `"[ok]"` / `"[err]"` text token. `CTSettingsRow(status:)` renders it.
 
 **Platform-specific SF Symbol conventions (iOS is primary, macOS follows):**
 - Back navigation: iOS → `chevron.backward.circle.fill` (size 22); macOS → `chevron.backward.circle` (size 18)
@@ -242,7 +180,7 @@ decorative elements (noise, separators, `>` section headers, `✷`, bracket glyp
 - **Dividers**: `Rectangle().fill(Color.CT.noise).frame(height: 1)` (full-width) or with `.padding(.horizontal, 20)` (between rows).
 - **Action rows**: trailing `[→]` / `CTSymbol.forward`, font `.regular(13)`.
 - **Developer/debug UI**: use `.orange` color for all dev-facing elements.
-- **Tab bar**: controlled by `ChatsViewModel.isInChat` and `ChatsViewModel.isInSettings`. Never hide/show it directly.
+- **Tab bar**: standard SwiftUI `TabView` (`MainTabView`). Hide it inside a conversation only via `.toolbar(.hidden, for: .tabBar)` on the `ChatView` destination — see *Tab bar (native `TabView`)* below.
 
 ### Components
 - `CTNavBar` — navigation bar with optional back `[←]` and trailing action
@@ -334,29 +272,30 @@ On failure: falls through to END_SESSION → full re-init.
 `RustHealingQueue` tracks attempts in Rust (persisted across restarts).
 
 **Keychain accessibility of session keys:**
-- `deviceSigningKey` / `deviceIdentityKey`: `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+- `deviceSigningKey` / `deviceIdentityKey`: `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (changed 2026-06-21 — see below). Together with `crypto_private_keys`, `crypto_otpks`, `identity_key`, `signed_prekey`, `signing_key`, `APIConstants.privateKeyKey` these are the keys needed to (re)build `OrchestratorCore`; use the `KeychainManager.cryptoKeyAccessible` constant for all of them.
+  The hybrid signature key (`hybrid_sig_private_key`) was migrated into the core CFE (`crypto_private_keys`); the separate item is only used temporarily for one-time import during the transition.
 - `deviceId`: `kSecAttrAccessibleAfterFirstUnlock`
 - Per-contact session data (`saveSessionData`): `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (needed for push-driven background decrypt)
-- **Double Ratchet orchestrator state** (`construct.orchestrator_state`): `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (changed 2026-06-09). It advances during background/locked push decrypt; the old `WhenUnlockedThisDeviceOnly` made the locked-device save fail → the advanced ratchet was lost → silent session desync on next launch. Any crypto state that must survive a background decrypt MUST use `AfterFirstUnlock*`, never `WhenUnlocked*`. (Session archives, PQC OTPK/SPK still use the generic `saveData` default `WhenUnlockedThisDeviceOnly` — same latent issue, not yet migrated.)
+- **Double Ratchet orchestrator state** (`construct.orchestrator_state`) + device/core crypto keys: `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. **INVARIANT**: any crypto state that must survive a background/locked push decrypt MUST use `AfterFirstUnlock*`, never `WhenUnlocked*` — otherwise a locked-device save/read fails → silent session desync or END_SESSION teardown of a healthy session. (Migration helper `KeychainManager.migrateCryptoKeysAccessibility()`. Session archives + PQC OTPK/SPK via generic `saveData` still use `WhenUnlockedThisDeviceOnly` — not yet migrated.) Companion guard: `MessageRouter.routeIncomingMessage` / `SessionCoordinator` DEFER (hold cursor, no ACK, no END_SESSION) when `!CryptoManager.shared.isInitialized`. Full postmortem: construct-docs `security/`.
 - Auth token: `kSecAttrAccessibleAfterFirstUnlock`
 
 **Auth guard**: if `isAuthenticated == true` in memory, skip Keychain re-read.
 Device keys are only deleted on gRPC UNAUTHENTICATED (16) or PERMISSION_DENIED (7) — never on network errors.
 
-### Tab bar visibility
-- `ChatsViewModel.isInChat: Bool` — set by `ChatsListView.onChange(of: navigationPath)`
-- `ChatsViewModel.isInSettings: Bool` — set by `SettingsView.onChange(of: navigationPath)`
-- `CTTabBar` renders only when both are `false`
-- `SettingsView` must receive `.environment(chatsViewModel)` from `MainTabView`
+### Tab bar (native `TabView`)
+The bottom navigation is the **standard SwiftUI `TabView`** (`MainTabView.callContent`,
+compact size class only — the regular/iPad branch uses `ChatsSplitView`). Icon-only tabs via
+`Image(systemName:)`; selected tint `Color.CT.accent`. (Replaced an old custom `CTTabBar` +
+`ZStack`/`visitedTabs` workaround — do **not** reintroduce that pattern.)
 
-### Tab rendering
-All tab views coexist in a `ZStack` with `opacity(0/1)` + `allowsHitTesting`.
-**iOS 26 fix**: tabs are gated by `@State private var visitedTabs: Set<Int>`.
-Tab content is only inserted into the ZStack after the first visit (`if visitedTabs.contains(n)`).
-This prevents iOS 26's `_ZStackLayout.sizeThatFits` from triggering `@FetchRequest.update()` on
-invisible tabs during layout. Tab 0 (ChatsListView) is always in the set at init.
-- `confirmationDialog` is blocked in ZStack hierarchy — use `.alert` instead
-- State is preserved across tab switches (intended)
+- Tab values match legacy indices: chats `0`, synaps `1`, calls `2` (only when
+  `CallsFeature.isEnabled`), settings `3`-or-`2` (`settingsTab` shifts with the calls tab).
+  `ChatsViewModel.selectedTab: Int` is the selection binding.
+- **Tab-bar hiding inside a conversation**: standard `.toolbar(.hidden, for: .tabBar)` on the
+  `ChatView` destination (the input bar replaces the tab bar). Sub-screens keep it visible.
+- There is **no more** `isInChat` / `isInSettings` state — do not reintroduce it.
+- If a per-tab `@FetchRequest` crash resurfaces on a new OS, fix by lazy-gating that tab's
+  content — not by returning to the ZStack. Prefer `.alert` over `confirmationDialog`.
 
 ### construct-engine and EngineAdapter (CRITICAL for macOS/Desktop work)
 
@@ -378,27 +317,23 @@ macOS (Construct Desktop target)  ← TARGET ARCHITECTURE
     └── PQ key management        ← TO DO (Phase 5)
 ```
 
-**Current state (technical debt)**: macOS Desktop still has a *second* path — it compiles
-the shared `CryptoManager.swift` / `MessageCryptoService.swift` / etc. which call
-`OrchestratorCore` directly via `ConstructCore.xcframework`. This is wrong — the goal is to
-route all crypto through `EngineAdapter` and remove `ConstructCore.xcframework` from the
-Desktop target entirely (saves ~83 MB binary, eliminates dual-state OrchestratorCore).
+**Current state (technical debt)**: macOS Desktop still has a *second* path — it compiles the
+shared `CryptoManager.swift` / `MessageCryptoService.swift` / etc. calling `OrchestratorCore`
+directly via `ConstructCore.xcframework`. Goal: route all crypto through `EngineAdapter` and remove
+`ConstructCore.xcframework` from the Desktop target (saves ~83 MB, kills dual-state OrchestratorCore).
 
 #### iOS keeps direct UniFFI path (intentional)
 
-iOS cannot run `construct-engine` with QUIC natively. The iOS direct path is production-stable.
+iOS cannot run `construct-engine` with QUIC natively; the iOS direct path is production-stable.
 Do NOT use `EngineAdapter` for crypto on iOS.
 
 #### Compiler guard pattern for crypto code
 
-When a service needs different crypto paths per platform:
+macOS Desktop now follows the direct iOS path (Strategy B). Guard only for iOS-only features
+(e.g. calls/WebRTC) or future engine-platforms:
 ```swift
-#if os(macOS)
-// Use engine for crypto
-engineHandle.dispatch(.encryptMessage(...))
-#else
-// Use OrchestratorCore directly (iOS path)
-cryptoManager.orchestratorCore?.encryptMessage(...)
+#if os(iOS) && canImport(WebRTC)   // iOS-only calls
+#else                              // Direct core path (iOS + macOS Desktop)
 #endif
 ```
 
@@ -455,28 +390,17 @@ CPU cost, allocation pressure, and potential encoding bugs at every message.
 3. **UniFFI boundary uses `Data` / `[UInt8]`.** All Swift ↔ Rust FFI calls pass binary
    data as `Data` (Swift) or `[UInt8]` (UniFFI-generated). Never stringify before
    crossing the boundary. Two patterns to watch:
-   - A UniFFI struct that exposes `String` fields holding base64 is a leak —
-     declare the UDL field as `sequence<u8>` instead. (Historical example:
-     `RegistrationBundleJson` returned base64 strings; replaced 2026-05-30 by
-     `RegistrationBundleFields` with raw byte fields.)
-   - `[UInt8](data)` / `Data(bytes)` Swift-side wrapping is the current
-     idiomatic UniFFI cost. Acceptable, but minimise — don't double-wrap.
+   - A UniFFI struct exposing `String` fields that hold base64 is a leak — declare the UDL field
+     as `sequence<u8>` instead.
+   - `[UInt8](data)` / `Data(bytes)` Swift-side wrapping is the current idiomatic UniFFI cost.
+     Acceptable, but minimise — don't double-wrap.
 
 4. **CFE binary format for session state.** Sessions persist as CFE envelopes
-   (`CfeSessionStateV1`) — 16-byte header + MessagePack payload via `rmp_serde`.
-   The legacy `CfeSessionJsonWrapperV1` (JSON wrapped in a CFE envelope) was
-   removed from production paths on 2026-05-30; it survives only in tests
-   that exercise import backwards-compatibility. New session fields go into the
-   binary CFE layer. Do not introduce JSON-bytes-into-Keychain anywhere on the
-   crypto pipeline — every `Action::SaveSessionToSecureStore` data field must
-   originate from `export_session_bytes_for` (CFE), never from
-   `export_session_json_for`.
-
-   Active paths producing the right CFE binary today:
-   - `encrypt` / `decrypt` / `decrypt_wire_payload` follow-up save
-   - `archive_session` snapshot
-   - `maybe_apply_pq_contribution` post-Kyber save
-   - `restore_latest_archive` round-trip
+   (`CfeSessionStateV1`) — 16-byte header + MessagePack payload via `rmp_serde`. New session fields
+   go into the binary CFE layer. Do not introduce JSON-bytes-into-Keychain anywhere on the crypto
+   pipeline — every `Action::SaveSessionToSecureStore` data field must originate from
+   `export_session_bytes_for` (CFE), never `export_session_json_for`. (`CfeSessionJsonWrapperV1` is
+   removed from production; survives only in backwards-compat import tests.)
 
 5. **`Codable` `Data` fields are fine.** Swift's `JSONEncoder`/`JSONDecoder` transparently
    base64-encodes `Data` values in JSON — this is acceptable for UserDefaults persistence
@@ -510,19 +434,12 @@ There are two separate user identity formats in this codebase. **Never mix them.
 | `ServerUserId` | `Utilities/UserIdentity.swift` | 36-char UUID with dashes `14f28d31-…` | Server-assigned at registration | All session addressing: `local_user_id`, `contact_id`, `conversation_id`, contact lists |
 | `CryptoDeviceId` | `Utilities/UserIdentity.swift` | 32-char hex `6f5e37ac…` | `deriveDeviceId(identityPublicKey)` | Multi-device linking, QR codes ONLY |
 
-### The AD bug (postmortem — fixed in commit that adds this section)
+### The AD bug (why this matters)
 
-`CryptoManager.cryptoLocalUserId` previously returned `loadDeviceID()` (32-hex CryptoDeviceId)
-instead of `_cachedUserId` (36-char ServerUserId). The Double Ratchet AD is:
-
-```
-ENCRYPT: AD_VERSION || local_user_id || contact_id || …
-DECRYPT: AD_VERSION || contact_id   || local_user_id || …
-```
-
-INITIATOR stored `local_user_id = "6f5e37ac…"` (32 hex).
-RESPONDER stored `contact_id    = "14f28d31-…"` (36 UUID).
-These never matched → permanent AEAD failure on every session, 100% reproducible.
+The Double Ratchet AD mixes `local_user_id` + `contact_id`. Mixing the two ID spaces (e.g.
+`cryptoLocalUserId` returning a 32-hex CryptoDeviceId instead of the 36-char ServerUserId) makes
+INITIATOR's and RESPONDER's AD never match → permanent AEAD failure on every session. (Full
+postmortem in construct-docs.)
 
 **Invariant to maintain**: Everything passed to the Rust session layer (`init_session`,
 `init_receiving_session`, `set_local_user_id`) MUST be a `ServerUserId`. The Rust

@@ -105,6 +105,12 @@ final class VeilProxyManager: ObservableObject {
                 .rpcSucceeded(via: .veil(port: 0, relay: address), latencyMs: Int(latency * 1000))
             )
         }
+        // VEIL is confirmed working — a good moment to renew the capability in-band
+        // before it expires (no-ops unless near expiry; rate-limited internally).
+        VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: address)
+        // Ticket B1: bootstrap/renew the key-bound capability over the same live
+        // tunnel (no-ops unless needed; rate-limited internally).
+        VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: address)
     }
 
 
@@ -197,7 +203,9 @@ final class VeilProxyManager: ObservableObject {
         if let stored = KeychainManager.shared.loadVEILBridgeCert(), !stored.isEmpty {
             return stored
         }
-        return VEILConfig.hardcodedBridgeCert
+        // obfs4 is retired — no hardcoded bridge cert. Empty bridge line is harmless
+        // since obfs4 is excluded from the probe race.
+        return ""
     }
 
     /// Rotates to the next available relay without re-fetching the certificate.
@@ -215,11 +223,10 @@ final class VeilProxyManager: ObservableObject {
         }
     }
 
-    /// Start with the stored relay (called at app launch).
-    /// In `.on` mode: starts VEIL immediately.
-    /// Start VEIL if mode is .on (always-on). Delegates actual proxy lifecycle to
-    /// ConnectionLoop — this method only ensures VEIL mode is migrated and stored.
-    func startIfEnabled() async {
+    /// Start or refresh VEIL when the transport layer actually needs it.
+    /// In `.auto` mode this is a no-op on a healthy direct path — avoids spinning up
+    /// the local proxy (and its CPU cost) on every foreground transition.
+    func startIfNeeded() async {
         migrateToModeIfNeeded()
         guard mode != .off else {
             Log.info("VEIL startup skipped — mode is off", category: "VEIL")
@@ -229,11 +236,29 @@ final class VeilProxyManager: ObservableObject {
             Log.info("VEIL startup skipped — device not registered", category: "VEIL")
             return
         }
+        if mode == .auto {
+            let snap = await TransportRouter.shared.snapshot()
+            guard snap.state.prefersVEIL else {
+                Log.debug("VEIL startup skipped — auto mode on direct path", category: "VEIL")
+                return
+            }
+        }
         // ConnectionLoop handles proxy lifecycle. iOS is veil-front-only (SPKI pin +
         // per-user ticket); the obfs4 bridge cert is not used, so we no longer fetch it
         // here — that fetch only added two 8s .well-known/ice-cert timeouts on censored
         // networks. The relay manifest is still refreshed for AMS relay retirement.
         await fetchConfigAndEvictIfRemoved()
+
+        // Renew the capability if it's near expiry. Works over whatever transport is
+        // up (in-band over VEIL when active); no-ops unless within the renewal window.
+        VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
+        // Ticket B1: bootstrap/renew the key-bound capability over the same channel.
+        VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
+    }
+
+    /// Legacy name — forwards to `startIfNeeded()`.
+    func startIfEnabled() async {
+        await startIfNeeded()
     }
 
     /// Called on app foreground to verify the VEIL proxy process is actually alive.

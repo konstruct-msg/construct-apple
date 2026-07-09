@@ -21,6 +21,97 @@ extension Color {
     }
 }
 
+// MARK: - Identicon
+
+/// Deterministic dot-matrix identicon generated from a stable seed (userId / UUID).
+/// 5×5 mirrored grid of dots — left half is hashed, right half mirrors it, giving a
+/// pleasant symmetric shape. Colour reuses `Color.hexagonAccent(for:)` so the pattern
+/// and the surrounding ring share one per-identity hue. Drawn in a single `Canvas`.
+struct IdenticonView: View {
+    let seed: String
+    var gridSize: Int = 5
+
+    /// How densely the grid fills, on a 0...15 scale (4 bits per cell).
+    ///
+    /// Each cell reads a 4-bit nibble of the hash (value `0...15`) and is filled when that
+    /// value is `>= densityThreshold`. So the threshold is the *minimum nibble that counts as
+    /// "on"* — lower = denser, higher = sparser:
+    ///   - `8`  → ~50% filled (the visual default, evenly balanced)
+    ///   - `6`  → ~62% filled (busier, more solid-looking dots)
+    ///   - `10` → ~37% filled (airier, more negative space)
+    ///
+    /// Why you'd ever touch this:
+    ///   1. **Legibility at a new size.** At larger avatar sizes a denser grid (lower value)
+    ///      can look richer; at very small sizes a sparser grid (higher value) avoids the dots
+    ///      merging into a blob. If we add a size noticeably different from today's 32–80pt,
+    ///      retune here rather than fighting it with dot radius.
+    ///   2. **Distinctiveness across the user base.** ~50% is the sweet spot for telling
+    ///      identities apart. If real-world avatars ever read as too uniform/noisy, nudge it.
+    ///   3. **Background contrast changes.** The dots sit on a 12%-accent tint; if that
+    ///      backdrop changes, density may need a tweak to keep the pattern readable.
+    /// It does *not* clamp the rare near-empty/near-full outcome — that would need a post-build
+    /// count check, not a threshold shift.
+    var densityThreshold: UInt64 = 8
+
+    private var accentColor: Color { .hexagonAccent(for: seed) }
+
+    /// 64-bit FNV-1a over the seed bytes. Distinct from the DJB2 hash used for colour,
+    /// so the pattern is not correlated with the hue.
+    private var patternHash: UInt64 {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in seed.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01b3
+        }
+        return hash
+    }
+
+    /// Symmetric on/off grid: only the left half (incl. centre column) is hashed,
+    /// the right half mirrors it. Each cell consumes a 4-bit nibble of the hash and is
+    /// filled when that nibble `>= densityThreshold` (see `densityThreshold` docs).
+    private var cells: [[Bool]] {
+        let cols = gridSize
+        let halfCols = (cols + 1) / 2
+        let hash = patternHash
+        var grid = Array(repeating: Array(repeating: false, count: cols), count: gridSize)
+        // 64 bits / 4-bit nibbles = 16 cells available; a 5×5 grid hashes 15 (3×5), fits.
+        var nibble = 0
+        for r in 0..<gridSize {
+            for c in 0..<halfCols {
+                let value = (hash >> UInt64((nibble % 16) * 4)) & 0xF
+                let on = value >= densityThreshold
+                grid[r][c] = on
+                grid[r][cols - 1 - c] = on
+                nibble += 1
+            }
+        }
+        return grid
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            // Inset so corner dots stay inside the circular clip.
+            let inset = side * 0.14
+            let cell = (side - inset * 2) / CGFloat(gridSize)
+            let dotRadius = cell * 0.34
+            let grid = cells
+            Canvas { ctx, _ in
+                for r in 0..<gridSize {
+                    for c in 0..<gridSize where grid[r][c] {
+                        let cx = inset + (CGFloat(c) + 0.5) * cell
+                        let cy = inset + (CGFloat(r) + 0.5) * cell
+                        let rect = CGRect(x: cx - dotRadius, y: cy - dotRadius,
+                                          width: dotRadius * 2, height: dotRadius * 2)
+                        ctx.fill(Path(ellipseIn: rect), with: .color(accentColor))
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
 // MARK: - AvatarView
 
 struct MainAvatarView: View {
@@ -38,18 +129,6 @@ struct MainAvatarView: View {
     // MARK: Derived
 
     private var accentColor: Color { .hexagonAccent(for: userId) }
-
-    private var initials: String {
-        let words = displayName
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .components(separatedBy: .whitespaces)
-            .filter { !$0.isEmpty }
-        switch words.count {
-        case 0:  return "?"
-        case 1:  return String(words[0].prefix(2)).uppercased()
-        default: return (String(words[0].prefix(1)) + String(words[1].prefix(1))).uppercased()
-        }
-    }
 
     // MARK: Body
 
@@ -69,11 +148,11 @@ struct MainAvatarView: View {
     @ViewBuilder
     private var hexagonContent: some View {
         ZStack {
-            // Fill layer — image or initials
+            // Fill layer — image or generated identicon
             if let image {
                 imageLayer(image)
             } else {
-                initialsLayer
+                identiconLayer
             }
 
             // Stroke ring
@@ -110,20 +189,17 @@ struct MainAvatarView: View {
         #endif
     }
 
-    // MARK: - Initials layer
+    // MARK: - Identicon layer
 
-    private var initialsLayer: some View {
+    private var identiconLayer: some View {
         ZStack {
             // Background — subtle tint of the accent color
             accentColor.opacity(0.12)
 
-            Text(initials)
-                .font(.system(size: size * 0.33, weight: .medium, design: .monospaced))
-                .foregroundStyle(accentColor)
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
+            IdenticonView(seed: userId)
         }
         .frame(width: size, height: size)
+        .accessibilityLabel(displayName.isEmpty ? Text(verbatim: userId) : Text(displayName))
     }
 
     // MARK: - Presence dot

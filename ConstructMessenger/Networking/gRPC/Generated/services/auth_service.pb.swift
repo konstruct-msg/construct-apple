@@ -272,6 +272,11 @@ public struct Shared_Proto_Services_V1_DevicePublicKeys: Sendable {
   /// Clears the value of `signedPrekeyHybridSignature`. Subsequent reads from it will return its default value.
   public mutating func clearSignedPrekeyHybridSignature() {self._signedPrekeyHybridSignature = nil}
 
+  /// Supports SuiteID::PQ_RATCHET (3) for sparse continuous post-quantum ratchet.
+  /// When true, other peers may open new sessions with suite 3 (self-sustaining PQ
+  /// material, no further OTPK consumption after the first message).
+  public var supportsPqRatchet: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -331,6 +336,29 @@ public struct Shared_Proto_Services_V1_RegisterDeviceRequest: Sendable {
   /// Clears the value of `powSolution`. Subsequent reads from it will return its default value.
   public mutating func clearPowSolution() {self._powSolution = nil}
 
+  /// Identity public key for global user identity (Epic E).
+  /// Used to derive route_id = SHA-256(identity_key_type || identity_public_key)
+  /// for DHT-based routing. Optional for backward compatibility.
+  public var identityPublicKey: Data {
+    get {_identityPublicKey ?? Data()}
+    set {_identityPublicKey = newValue}
+  }
+  /// Returns true if `identityPublicKey` has been explicitly set.
+  public var hasIdentityPublicKey: Bool {self._identityPublicKey != nil}
+  /// Clears the value of `identityPublicKey`. Subsequent reads from it will return its default value.
+  public mutating func clearIdentityPublicKey() {self._identityPublicKey = nil}
+
+  /// Key algorithm type: 1=Ed25519 (32 bytes), 2=ML-DSA-65 (1952 bytes),
+  /// 3=Hybrid Ed25519+ML-DSA (1984 bytes). Defaults to 1 (Ed25519).
+  public var identityKeyType: UInt32 {
+    get {_identityKeyType ?? 0}
+    set {_identityKeyType = newValue}
+  }
+  /// Returns true if `identityKeyType` has been explicitly set.
+  public var hasIdentityKeyType: Bool {self._identityKeyType != nil}
+  /// Clears the value of `identityKeyType`. Subsequent reads from it will return its default value.
+  public mutating func clearIdentityKeyType() {self._identityKeyType = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -338,6 +366,8 @@ public struct Shared_Proto_Services_V1_RegisterDeviceRequest: Sendable {
   fileprivate var _username: String? = nil
   fileprivate var _publicKeys: Shared_Proto_Services_V1_DevicePublicKeys? = nil
   fileprivate var _powSolution: Shared_Proto_Services_V1_PowSolution? = nil
+  fileprivate var _identityPublicKey: Data? = nil
+  fileprivate var _identityKeyType: UInt32? = nil
 }
 
 public struct Shared_Proto_Services_V1_AuthenticateDeviceRequest: Sendable {
@@ -1570,7 +1600,7 @@ extension Shared_Proto_Services_V1_GetPowChallengeResponse: SwiftProtobuf.Messag
 
 extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DevicePublicKeys"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}verifying_key\0\u{3}identity_public\0\u{3}signed_prekey_public\0\u{3}signed_prekey_signature\0\u{3}crypto_suite\0\u{3}hybrid_identity_key\0\u{3}hybrid_identity_signature\0\u{3}signed_prekey_hybrid_signature\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}verifying_key\0\u{3}identity_public\0\u{3}signed_prekey_public\0\u{3}signed_prekey_signature\0\u{3}crypto_suite\0\u{3}hybrid_identity_key\0\u{3}hybrid_identity_signature\0\u{3}signed_prekey_hybrid_signature\0\u{3}supports_pq_ratchet\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1586,6 +1616,7 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
       case 6: try { try decoder.decodeSingularBytesField(value: &self._hybridIdentityKey) }()
       case 7: try { try decoder.decodeSingularBytesField(value: &self._hybridIdentitySignature) }()
       case 8: try { try decoder.decodeSingularBytesField(value: &self._signedPrekeyHybridSignature) }()
+      case 9: try { try decoder.decodeSingularBoolField(value: &self.supportsPqRatchet) }()
       default: break
       }
     }
@@ -1620,6 +1651,9 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
     try { if let v = self._signedPrekeyHybridSignature {
       try visitor.visitSingularBytesField(value: v, fieldNumber: 8)
     } }()
+    if self.supportsPqRatchet != false {
+      try visitor.visitSingularBoolField(value: self.supportsPqRatchet, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1632,6 +1666,7 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
     if lhs._hybridIdentityKey != rhs._hybridIdentityKey {return false}
     if lhs._hybridIdentitySignature != rhs._hybridIdentitySignature {return false}
     if lhs._signedPrekeyHybridSignature != rhs._signedPrekeyHybridSignature {return false}
+    if lhs.supportsPqRatchet != rhs.supportsPqRatchet {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1679,7 +1714,7 @@ extension Shared_Proto_Services_V1_PowSolution: SwiftProtobuf.Message, SwiftProt
 
 extension Shared_Proto_Services_V1_RegisterDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RegisterDeviceRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}username\0\u{3}device_id\0\u{3}public_keys\0\u{3}pow_solution\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}username\0\u{3}device_id\0\u{3}public_keys\0\u{3}pow_solution\0\u{3}identity_public_key\0\u{3}identity_key_type\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1691,6 +1726,8 @@ extension Shared_Proto_Services_V1_RegisterDeviceRequest: SwiftProtobuf.Message,
       case 2: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._publicKeys) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._powSolution) }()
+      case 5: try { try decoder.decodeSingularBytesField(value: &self._identityPublicKey) }()
+      case 6: try { try decoder.decodeSingularUInt32Field(value: &self._identityKeyType) }()
       default: break
       }
     }
@@ -1713,6 +1750,12 @@ extension Shared_Proto_Services_V1_RegisterDeviceRequest: SwiftProtobuf.Message,
     try { if let v = self._powSolution {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     } }()
+    try { if let v = self._identityPublicKey {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 5)
+    } }()
+    try { if let v = self._identityKeyType {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 6)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1721,6 +1764,8 @@ extension Shared_Proto_Services_V1_RegisterDeviceRequest: SwiftProtobuf.Message,
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs._publicKeys != rhs._publicKeys {return false}
     if lhs._powSolution != rhs._powSolution {return false}
+    if lhs._identityPublicKey != rhs._identityPublicKey {return false}
+    if lhs._identityKeyType != rhs._identityKeyType {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

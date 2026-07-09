@@ -30,9 +30,6 @@ struct ChatMessage: Codable, Identifiable {
     /// Only meaningful when messageNumber == 0 (X3DH handshake message).
     var oneTimePreKeyId: UInt32 = 0
 
-    /// If non-empty, this message is an edit to an existing message with this ID.
-    var editsMessageId: String = ""
-
     /// ML-KEM-768 KEM ciphertext for PQXDH (empty = classic X3DH only).
     /// Only present when messageNumber == 0 (first message / session initiation).
     var kemCiphertext: Data = Data()
@@ -43,6 +40,14 @@ struct ChatMessage: Codable, Identifiable {
     /// Kyber OTPK key ID used by sender (0 = Kyber SPK was used, >0 = Kyber OTPK ID).
     /// Only meaningful when messageNumber == 0 and kemCiphertext is non-empty.
     var kyberOtpkId: UInt32 = 0
+
+    /// Suite-3 (PQ_RATCHET) per-message PQ epoch tag from the wire header (0 otherwise).
+    /// Must be threaded into `decryptMessage`/`initReceivingSession` so the responder
+    /// rebuilds the exact AEAD associated data — dropping it caused the suite-3 outage.
+    var pqMessageEpoch: UInt32 = 0
+
+    /// Suite-3 sparse PQ-ratchet field from the wire header, serialized (empty = none).
+    var pqRatchetField: Data = Data()
 
     /// Device ID of the sending device (populated from envelope.senderDevice.deviceID).
     /// Used for per-device session key derivation (contactId = userId:deviceId).
@@ -91,7 +96,8 @@ struct ChatMessage: Codable, Identifiable {
 extension ChatMessage {
     private enum CodingKeys: String, CodingKey {
         case id, from, to, messageType, ephemeralPublicKey, messageNumber, content, suiteId
-        case timestamp, oneTimePreKeyId, editsMessageId, kemCiphertext, kyberOtpkId
+        case timestamp, oneTimePreKeyId, kemCiphertext, kyberOtpkId
+        case pqMessageEpoch, pqRatchetField
         case senderDeviceId, conversationId, replyToMessageId, rawPayload
     }
 
@@ -107,9 +113,10 @@ extension ChatMessage {
         suiteId = (try? c.decodeIfPresent(UInt16.self, forKey: .suiteId)) ?? 0
         timestamp = (try? c.decodeIfPresent(UInt64.self, forKey: .timestamp)) ?? 0
         oneTimePreKeyId = (try? c.decodeIfPresent(UInt32.self, forKey: .oneTimePreKeyId)) ?? 0
-        editsMessageId = (try? c.decodeIfPresent(String.self, forKey: .editsMessageId)) ?? ""
         kemCiphertext = (try? c.decodeIfPresent(Data.self, forKey: .kemCiphertext)) ?? Data()
         kyberOtpkId = (try? c.decodeIfPresent(UInt32.self, forKey: .kyberOtpkId)) ?? 0
+        pqMessageEpoch = (try? c.decodeIfPresent(UInt32.self, forKey: .pqMessageEpoch)) ?? 0
+        pqRatchetField = (try? c.decodeIfPresent(Data.self, forKey: .pqRatchetField)) ?? Data()
         senderDeviceId = (try? c.decodeIfPresent(String.self, forKey: .senderDeviceId)) ?? ""
         conversationId = (try? c.decodeIfPresent(String.self, forKey: .conversationId)) ?? ""
         replyToMessageId = (try? c.decodeIfPresent(String.self, forKey: .replyToMessageId)) ?? ""
@@ -147,6 +154,9 @@ struct PublicKeyBundleData: Codable {
     var spkRotationEpoch: UInt32      // Monotonic counter for SPK rotations
     var kyberSpkUploadedAt: UInt64    // Same for Kyber SPK (0 = not provided)
     var kyberSpkRotationEpoch: UInt32 // Same for Kyber SPK (0 = not provided)
+    // Peer supports SuiteID::PQ_RATCHET (3) — sparse continuous PQ ratchet.
+    // Optional so cached JSON written before this field still decodes (nil = false).
+    var supportsPqRatchet: Bool?
 }
 
 /// Bundle for a single device of a user — returned by GetPreKeyBundles (multi-device).
@@ -221,5 +231,114 @@ struct ProfileShareData: Codable {
         case avatarMediaType
         case avatarData  // Deprecated
         case timestamp
+    }
+
+    // MARK: - Binary wire format (replaces JSON for modern sends)
+    // Versioned length-prefixed binary to comply with binary data pipeline.
+    // Legacy JSON support remains for old messages.
+
+    private static let binaryVersion: UInt8 = 0x01
+
+    func toBinaryData() -> Data {
+        var data = Data()
+        data.append(Self.binaryVersion)
+
+        func appendLenPrefixed(_ bytes: Data) {
+            var len = UInt16(bytes.count)
+            data.append(contentsOf: withUnsafeBytes(of: &len) { Array($0) }) // little endian for simplicity on wire
+            data.append(bytes)
+        }
+
+        func appendLenPrefixedString(_ s: String) {
+            let b = s.data(using: .utf8) ?? Data()
+            appendLenPrefixed(b)
+        }
+
+        func appendOptionalLenPrefixedString(_ s: String?) {
+            data.append(s != nil ? 1 : 0)
+            if let s = s { appendLenPrefixedString(s) }
+        }
+
+        func appendOptionalData(_ d: Data?) {
+            data.append(d != nil ? 1 : 0)
+            if let d = d {
+                var len = UInt16(d.count)
+                data.append(contentsOf: withUnsafeBytes(of: &len) { Array($0) })
+                data.append(d)
+            }
+        }
+
+        appendLenPrefixedString(displayName)
+        appendOptionalLenPrefixedString(avatarMediaId)
+        appendOptionalLenPrefixedString(avatarMediaUrl)
+        appendOptionalData(avatarMediaKey)
+        appendOptionalLenPrefixedString(avatarMediaType)
+
+        // timestamp as little endian Int64
+        var ts = timestamp
+        data.append(contentsOf: withUnsafeBytes(of: &ts) { Array($0) })
+
+        return data
+    }
+
+    static func fromBinaryData(_ data: Data) -> ProfileShareData? {
+        guard data.count > 1, data[0] == binaryVersion else { return nil }
+
+        var offset = 1
+
+        func readLenPrefixed() -> Data? {
+            guard offset + 2 <= data.count else { return nil }
+            let len = data.subdata(in: offset..<offset+2).withUnsafeBytes { $0.load(as: UInt16.self) }
+            offset += 2
+            guard offset + Int(len) <= data.count else { return nil }
+            let bytes = data.subdata(in: offset..<offset+Int(len))
+            offset += Int(len)
+            return bytes
+        }
+
+        func readLenPrefixedString() -> String? {
+            guard let b = readLenPrefixed() else { return nil }
+            return String(data: b, encoding: .utf8)
+        }
+
+        func readOptionalLenPrefixedString() -> String? {
+            guard offset < data.count else { return nil }
+            let has = data[offset]; offset += 1
+            guard has == 1 else { return nil }
+            return readLenPrefixedString()
+        }
+
+        func readOptionalData() -> Data? {
+            guard offset < data.count else { return nil }
+            let has = data[offset]; offset += 1
+            guard has == 1 else { return nil }
+            guard offset + 2 <= data.count else { return nil }
+            let len = data.subdata(in: offset..<offset+2).withUnsafeBytes { $0.load(as: UInt16.self) }
+            offset += 2
+            guard offset + Int(len) <= data.count else { return nil }
+            let d = data.subdata(in: offset..<offset+Int(len))
+            offset += Int(len)
+            return d
+        }
+
+        guard let displayName = readLenPrefixedString() else { return nil }
+        let avatarMediaId = readOptionalLenPrefixedString()
+        let avatarMediaUrl = readOptionalLenPrefixedString()
+        let avatarMediaKey = readOptionalData()
+        let avatarMediaType = readOptionalLenPrefixedString()
+
+        guard offset + 8 <= data.count else { return nil }
+        let tsData = data.subdata(in: offset..<offset+8)
+        let timestamp = tsData.withUnsafeBytes { $0.load(as: Int64.self) }
+        offset += 8
+
+        return ProfileShareData(
+            displayName: displayName,
+            avatarMediaId: avatarMediaId,
+            avatarMediaUrl: avatarMediaUrl,
+            avatarMediaKey: avatarMediaKey,
+            avatarMediaType: avatarMediaType,
+            timestamp: timestamp
+        )
     }
 }

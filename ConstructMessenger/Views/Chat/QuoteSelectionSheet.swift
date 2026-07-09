@@ -7,6 +7,7 @@
 //  taps "Quote & Reply" in the context menu.
 
 import SwiftUI
+import Combine
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -27,15 +28,20 @@ struct QuoteSelectionSheet: View {
             CTNavBar(
                 title: NSLocalizedString("select_quote", comment: ""),
                 showBack: false,
-                trailingSymbol: NSLocalizedString("reply_with_selection", comment: ""),
-                trailingColor: selectedText.isEmpty ? Color.CT.textDim : Color.CT.accent,
-                backAction: { dismiss() },
-                trailingAction: {
+                backAction: { dismiss() }
+            ) {
+                EmptyView()
+            } trailing: {
+                Button(NSLocalizedString("reply_with_selection", comment: "")) {
                     guard !selectedText.isEmpty else { return }
                     onConfirm(selectedText)
                     dismiss()
                 }
-            )
+                .font(CTFont.bold(13))
+                .foregroundColor(selectedText.isEmpty ? Color.CT.textDim : Color.CT.accent)
+                .disabled(selectedText.isEmpty)
+                .buttonStyle(.plain)
+            }
 
             VStack(alignment: .leading, spacing: 12) {
                 Text(NSLocalizedString("quote_selection_hint", comment: ""))

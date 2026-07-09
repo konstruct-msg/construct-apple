@@ -52,25 +52,11 @@ struct ChatSearchOverlayView: View {
     var body: some View {
         if isSearchActive {
             VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Text(">")
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.accent)
-
-                    TextField("search_messages", text: $searchText)
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.text)
-                        .tint(Color.CT.accent)
-                        #if os(iOS)
-                        .autocapitalization(.none)
-                        .submitLabel(.search)
-                        #endif
-                        .autocorrectionDisabled()
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color.CT.bgMsg)
-                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4)))
-
+                HStack(spacing: 10) {
+                    CTSearchBar(
+                        text: $searchText,
+                        placeholder: LocalizedStringKey("search_messages")
+                    )
                     Button {
                         withAnimation {
                             isSearchActive = false
@@ -78,9 +64,10 @@ struct ChatSearchOverlayView: View {
                         }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(CTFont.regular(14))
+                            .font(.system(size: 16, weight: .regular))
                             .foregroundStyle(Color.CT.accentDim)
                     }
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)

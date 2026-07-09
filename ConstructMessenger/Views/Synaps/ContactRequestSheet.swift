@@ -23,10 +23,17 @@ struct ContactRequestSheet: View {
         VStack(spacing: 0) {
             CTNavBar(
                 title: NSLocalizedString("contact_request_sheet_title", comment: ""),
-                showBack: false,
-                trailingSystemImage: "xmark",
-                trailingAction: { dismiss() }
-            )
+                showBack: false
+            ) {
+                EmptyView()
+            } trailing: {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18))
+                        .foregroundColor(Color.CT.accent)
+                }
+                .buttonStyle(.plain)
+            }
 
             Rectangle()
                 .fill(Color.CT.noise)

@@ -8,6 +8,7 @@
 import SwiftUI
 import CoreData
 import UniformTypeIdentifiers
+import Combine
 
 struct ChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -40,10 +41,22 @@ struct ChatView: View {
 
     // Key Transparency status for the contact in this chat
     @State private var contactKTStatus: KTStatus = .unverified
-    
-    // ✅ Swipe-to-dismiss gesture state (not scroll-related)
-    @GestureState private var dragState: CGFloat = 0
+    /// True when the session with this contact was established via a degraded (stale-SPK) init.
+    @State private var isSessionAtRisk = false
+
     @State private var containerWidth: CGFloat = 390
+    /// Current height of the bottom composer (safeAreaInset). Tracked so we can re-pin the
+    /// scroll when it changes — see the composer's `.onGeometryChange` below.
+    @State private var composerHeight: CGFloat = 0
+
+    private enum Layout {
+        static let composerHorizontalPadding: CGFloat = 8
+        static let composerBottomPadding: CGFloat = 8
+        static let messageBottomClearance: CGFloat = 12
+        /// Extra band below the status-bar safe area (≈ nav capsule height + margin) covered
+        /// by the top scrim so scrolling text blurs/fades before it reaches the clock & signal.
+        static let topScrimUnderSafeArea: CGFloat = CTLayout.navBarHeight + 24
+    }
     
     // ❌ REMOVED: Scroll-related @State variables (moved to ChatScrollManager)
     // - hasScrolledToBottom
@@ -59,12 +72,16 @@ struct ChatView: View {
     var body: some View {
         // Compute once per body pass to avoid repeated full-array filtering in render path.
         let renderedMessages = filteredMessages
-        VStack(spacing: 0) {
-            chatNavBar
 
-            // Flood-burst banner — shown when this chat's sender is burst-suppressed
-            floodBurstBanner
-            
+        // Floating capsule glass panels (top nav + bottom input) over scroll, following Apple's capsulization
+        ZStack {
+            // Full-bleed chat background so the floating input capsule sits over a continuous
+            // surface — without this the ScrollView's own background stops at the safe area and
+            // the bottom safe-area band renders with the window background, reading as an opaque
+            // strip under the capsule.
+            Color.CT.bg.ignoresSafeArea()
+
+            // Message list — base layer, scrolls underneath the floating capsules
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -143,9 +160,20 @@ struct ChatView: View {
                                 }
                             }
                         }
+                        // Breathing room below the last message once the composer itself is
+                        // installed via `safeAreaInset`.
+                        Color.clear
+                            .frame(height: Layout.messageBottomClearance)
+                        // Bottom anchor for scrollToBottom
+                        Color.clear
+                            .frame(height: 1)
+                            .id("bottom")
                     }
-                    .padding()
+                    // Top space for floating nav capsule (+ call mini-bar when a call is active).
+                    .padding(.top, 70 + callBarInset)
+                    .padding(.horizontal)
                 }
+                .background(Color.CT.bg) // base under glass
                 .defaultScrollAnchor(.bottom)
                 .scrollDismissesKeyboard(.interactively)
                 .environment(\.containerWidth, containerWidth)
@@ -166,6 +194,18 @@ struct ChatView: View {
                     scrollManager.registerProxy(proxy)
                     LocalNotificationManager.shared.clearBadge()
                     scrollManager.hasScrolledToBottom = true
+                    // .defaultScrollAnchor(.bottom) alone occasionally lands the initial
+                    // layout out of range (composer inset applied after first content pass),
+                    // leaving the list blank until a scroll event — the "opens empty then
+                    // scrolls in from nowhere" symptom. Force a valid bottom offset once the
+                    // first content pass has rendered. Non-animated so it never flashes in.
+                    if !renderedMessages.isEmpty {
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(60))
+                            guard scrollManager.shouldScrollToBottom else { return }
+                            scrollManager.scrollToBottom(animated: false)
+                        }
+                    }
                 }
                 .onChange(of: viewModel.messages.count) { _, count in
                     if AppConstants.enableDebugLogging {
@@ -179,11 +219,18 @@ struct ChatView: View {
                         let delay = ChatViewConstants.MessageDelay.mediaRender
                         Task { @MainActor in
                             try? await Task.sleep(for: .seconds(delay))
-                            if let lastMessage = filteredMessages.last {
-                                scrollManager.scrollToBottom(messageId: lastMessage.id)
-                            }
+                            // Use the virtual bottom anchor so the last real message ends up
+                            // visually above the composer inset.
+                            scrollManager.scrollToBottom()
                         }
                     }
+                }
+                .onChange(of: viewModel.voicePlaybackScrollTarget) { _, target in
+                    // Continuous voice playback advanced — bring the now-playing message
+                    // into view (centered), then clear the target so a later replay re-scrolls.
+                    guard let target else { return }
+                    scrollManager.scrollTo(messageId: target, anchor: .center)
+                    viewModel.voicePlaybackScrollTarget = nil
                 }
                 .onChange(of: searchText) { _, newValue in
                     // ✅ Scroll to first search result
@@ -196,9 +243,7 @@ struct ChatView: View {
                     } else if newValue.isEmpty {
                         // When search is cleared, scroll back to bottom
                         scrollManager.shouldScrollToBottom = true
-                        if let lastMessage = filteredMessages.last {
-                            scrollManager.scrollToBottom(messageId: lastMessage.id)
-                        }
+                        scrollManager.scrollToBottom()
                     }
                 }
                 .onChange(of: isSearchActive) { _, active in
@@ -212,9 +257,7 @@ struct ChatView: View {
                         // When search is dismissed, scroll back to bottom
                         searchText = ""
                         scrollManager.shouldScrollToBottom = true
-                        if let lastMessage = filteredMessages.last {
-                            scrollManager.scrollToBottom(messageId: lastMessage.id)
-                        }
+                        scrollManager.scrollToBottom()
                     }
                 }
                 .onChange(of: isEditMode) { _, editMode in
@@ -237,40 +280,107 @@ struct ChatView: View {
                     }
                 }
             }
-            
-            deleteButtonBar
-            
-            messageInputView
+
+            // Top scrim behind the floating nav capsule so scrolling text doesn't collide with the
+            // status bar (clock / signal / battery). Two stacked gradient layers:
+            //   1. Progressive blur (bottom): a material frost — which blurs the scroll content
+            //      behind it — masked by a top→bottom gradient so the blur fades out lower down.
+            //   2. Colour fade (top): a Color.CT.bg → transparent gradient that recolours the grey
+            //      frost into the adaptive theme background (black in dark, light base in light) and
+            //      fades to clear. Sitting ON TOP of the blur, it kills the frost's greyness while
+            //      the blur still softens the text peeking through in the transition band.
+            GeometryReader { geo in
+                ZStack {
+//                    Rectangle()
+//                        .fill(.ultraThinMaterial)
+//                        .mask(
+//                            LinearGradient(
+//                                stops: [
+//                                    .init(color: .black.opacity(0.95), location: 0),
+//                                    .init(color: .black.opacity(0.55), location: 0.55),
+//                                    .init(color: .clear, location: 1)
+//                                ],
+//                                startPoint: .top,
+//                                endPoint: .bottom
+//                            )
+//                        )
+
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color.CT.bg, location: 0),
+                                    .init(color: Color.CT.bg.opacity(0.65), location: 0.55),
+                                    .init(color: Color.CT.bg.opacity(0), location: 1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
+                .frame(height: geo.safeAreaInsets.top + Layout.topScrimUnderSafeArea)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .ignoresSafeArea(edges: .top)
+            }
+            .allowsHitTesting(false)
+
+            // === Floating capsule glass panels (Apple capsulization) ===
+            // Top: nav + banners (capsule style)
+            VStack(spacing: 8) {
+                chatNavBar
+                    .padding(.horizontal, 8)
+                    .padding(.top, 4 + callBarInset)
+
+                floodBurstBanner
+
+                atRiskBanner
+
+                deleteButtonBar
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+
         }
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         #endif
-        .gesture(
-            DragGesture(minimumDistance: 10)
-                .updating($dragState) { value, state, _ in
-                    // Only allow swipe from left edge (right swipe)
-                    if value.startLocation.x < 20 && value.translation.width > 0 {
-                        state = min(value.translation.width, containerWidth * ChatViewConstants.Gesture.maxDragRatio)
-                    }
-                }
-                .onEnded { value in
-                    // If swiped more than threshold, dismiss
-                    let threshold = max(
-                        ChatViewConstants.Gesture.dismissThreshold,
-                        containerWidth * ChatViewConstants.Gesture.dismissThresholdRatio
-                    )
-                    if value.translation.width > threshold && value.startLocation.x < 20 {
-                        withAnimation(.spring(
-                            response: ChatViewConstants.Gesture.dismissSpringResponse,
-                            dampingFraction: ChatViewConstants.Gesture.dismissSpringDamping
-                        )) {
-                            dismiss()
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            messageInputView
+                .padding(.horizontal, Layout.composerHorizontalPadding)
+                .padding(.bottom, Layout.composerBottomPadding)
+                .background(Color.clear)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.height
+                } action: { _, newHeight in
+                    // When the composer grows (voice-recording bar, media preview + quality
+                    // chips, reply/edit bar) the ScrollView's bottom safe-area inset changes.
+                    // With .defaultScrollAnchor(.bottom) + LazyVStack this can leave the list
+                    // blank (content scrolled out of the valid range) until the next manual
+                    // scroll — the "chat goes black" symptom. Re-pin to bottom to force a valid
+                    // layout, but only when the user was already near the bottom so we don't
+                    // yank someone who is reading history.
+                    //
+                    // The re-pin is NON-animated: an animated scroll interpolates the offset
+                    // while the inset is still animating, which keeps the de-materialization
+                    // window open (the black flash). The media preview also loads thumbnails
+                    // asynchronously, so its height settles in several steps — we pin on this
+                    // event and once more after a short delay to catch the final height.
+                    let changed = abs(newHeight - composerHeight) > 1
+                    composerHeight = newHeight
+                    if changed && scrollManager.shouldScrollToBottom {
+                        scrollManager.scrollToBottom(animated: false)
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(120))
+                            guard scrollManager.shouldScrollToBottom else { return }
+                            scrollManager.scrollToBottom(animated: false)
                         }
                     }
                 }
-        )
-        .offset(x: dragState)
+        }
+        // Edge-swipe-back is handled natively by interactivePopGestureRecognizer
+        // (see InteractiveSwipeBack.swift) — no manual DragGesture needed.
         .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
             handleChatDrop(providers: providers)
         }
@@ -305,6 +415,14 @@ struct ChatView: View {
         }
         .onAppear(perform: handleViewAppear)
         .onReceive(NotificationCenter.default.publisher(for: .contactKeyChanged), perform: handleContactKeyChanged)
+        // Session init/degrade happens during send; re-read the at-risk flag when it settles.
+        .onChange(of: viewModel.isInitializingSession) { _, _ in refreshSessionAtRiskState() }
+        // Posted when an at-risk session is auto-upgraded — refresh the banner so it disappears.
+        .onReceive(NotificationCenter.default.publisher(for: .sessionAtRiskChanged)) { note in
+            if (note.userInfo?["userId"] as? String) == viewModel.chat.otherUser?.id {
+                refreshSessionAtRiskState()
+            }
+        }
         .onDisappear(perform: handleViewDisappear)
         #if os(iOS)
         .fullScreenCover(item: $galleryStartItem) { item in
@@ -340,6 +458,20 @@ struct ChatView: View {
         )
     }
 
+    /// Informational banner shown when the session was established via degraded (stale-SPK) init.
+    private var atRiskBanner: some View {
+        ChatAtRiskBannerView(isVisible: isSessionAtRisk)
+    }
+
+    /// Refresh the at-risk state from the per-peer Keychain flag set by degraded init.
+    private func refreshSessionAtRiskState() {
+        guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else {
+            isSessionAtRisk = false
+            return
+        }
+        isSessionAtRisk = KeychainManager.shared.loadSessionAtRiskFlag(for: contactId)
+    }
+
     private var floodSenderId: String {
         viewModel.chat.otherUser?.id ?? ""
     }
@@ -371,21 +503,21 @@ struct ChatView: View {
     }
     
     private var messageInputView: some View {
-        MessageInputView(
+        IOSMessageInputView(
             text: $messageText,
             droppedImages: $chatDropImages,
             isSending: viewModel.isSending,
             replyingTo: replyingTo,
             quoteOverride: replyQuoteText,
             editingMessage: viewModel.editingMessage,
-            onSend: { images, fileURLs in
+            onSend: { attachments, fileURLs in
                 if let editMsg = viewModel.editingMessage {
                     viewModel.editMessage(editMsg, newText: messageText)
                     messageText = ""
                 } else {
                     viewModel.sendMessage(
                         text: messageText,
-                        images: images,
+                        attachments: attachments,
                         fileURLs: fileURLs,
                         replyTo: replyingTo,
                         replyToContentOverride: replyQuoteText
@@ -399,18 +531,22 @@ struct ChatView: View {
                     scrollManager.shouldScrollToBottom = true
 
                     // Scroll to bottom after sending (longer delay for media)
+                    // Use virtual bottom anchor so message is not placed under the input.
                     let sendDelay = ChatViewConstants.MessageDelay.scrollAfterSend
                     Task { @MainActor in
                         try? await Task.sleep(for: .seconds(sendDelay))
-                        if let lastMessage = filteredMessages.last {
-                            scrollManager.scrollToBottom(messageId: lastMessage.id)
-                        }
+                        scrollManager.scrollToBottom()
                     }
                 }
             },
             onSendVoice: { url, duration, waveform in
                 viewModel.sendVoiceMessage(url: url, duration: duration, waveform: waveform)
                 scrollManager.shouldScrollToBottom = true
+                // Scroll using virtual bottom to account for input height.
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(150))
+                    scrollManager.scrollToBottom()
+                }
             },
             onCancelReply: {
                 replyingTo = nil
@@ -427,18 +563,18 @@ struct ChatView: View {
             if scrollManager.shouldShowScrollToBottomButton && !isEditMode {
                 Button {
                     withAnimation(.easeOut(duration: 0.3)) {
-                        if let lastMessage = filteredMessages.last {
-                            scrollManager.scrollToBottom(messageId: lastMessage.id)
-                        }
+                        scrollManager.scrollToBottom() // virtual bottom respects dynamic input padding
                         scrollManager.shouldScrollToBottom = true
                     }
                 } label: {
-                    Image(systemName: "chevron.down.circle.fill")
-                        .font(.system(size: 25))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 24))
                         .foregroundColor(Color.CT.accent)
+                        .frame(width: 40, height: 40)
+                        .glassCapsule(cornerRadius: 999)
                 }
                 .padding(.trailing, 16)
-                .padding(.bottom, 160) // Above message input
+                .padding(.bottom, 100) // Lift well above the (variable height) input glass
                 .transition(.move(edge: .trailing).combined(with: .opacity))
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: scrollManager.shouldShowScrollToBottomButton)
             }
@@ -515,6 +651,18 @@ struct ChatView: View {
         }
     }
 
+    /// The InCallMiniBar (rendered at MainTabView level via `.safeAreaInset`) does not push the
+    /// pushed ChatView down — TabView doesn't propagate that inset into a NavigationStack
+    /// destination. So when a call is active/connecting (bar is showing), ChatView reserves the
+    /// bar's height itself to keep the floating nav capsule from sitting under it.
+    private var callBarInset: CGFloat {
+        guard CallsFeature.isEnabled, let state = callManager?.state else { return 0 }
+        switch state {
+        case .active, .connecting: return InCallMiniBar.barHeight
+        default: return 0
+        }
+    }
+
     private var navigationStatusSubtitle: String? {
         connectionManager.navigationStatusSubtitle(
             isInitializingSession: viewModel.isInitializingSession
@@ -550,7 +698,11 @@ struct ChatView: View {
     }
 
     private func handleViewAppear() {
-        guard !isPreviewRuntime else { return }
+        if isPreviewRuntime {
+            viewModel.onPreviewAppear()
+            loadContactKTStatus()
+            return
+        }
         // Restore an unsent draft saved when we last left this chat.
         if viewModel.editingMessage == nil, messageText.isEmpty {
             messageText = DraftStore.shared.draft(for: viewModel.chat.id)
@@ -558,7 +710,18 @@ struct ChatView: View {
         markChatAsRead()
         viewModel.onViewAppear()
         loadContactKTStatus()
+        refreshSessionAtRiskState()
+        // Phase 2: if this contact was reached via a degraded session and has since rotated
+        // their keys, opportunistically re-key to a fresh session (no-op otherwise).
+        if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
+            Task { await SessionInitializationService.shared.upgradeAtRiskSessionIfPeerFresh(userId: contactId) }
+        }
         setActiveChatState(isActive: true)
+        // Active chat owns continuous voice playback: advance to the next voice message
+        // (older → newer) when one finishes, if the setting is on.
+        AudioPlayerService.shared.onTrackFinished = { [weak viewModel] finishedMediaId in
+            viewModel?.playNextVoiceIfContinuous(after: finishedMediaId)
+        }
     }
 
     private func handleViewDisappear() {
@@ -569,6 +732,7 @@ struct ChatView: View {
             DraftStore.shared.save(messageText, for: viewModel.chat.id)
         }
         setActiveChatState(isActive: false)
+        AudioPlayerService.shared.onTrackFinished = nil
     }
 
     private func handleContactKeyChanged(_ note: Notification) {

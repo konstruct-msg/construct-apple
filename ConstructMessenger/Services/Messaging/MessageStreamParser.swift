@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import SwiftProtobuf
 
 enum MessageStreamParser {
     /// Convert a raw gRPC MessageStreamResponse into a typed StreamEvent.
@@ -38,12 +39,14 @@ enum MessageStreamParser {
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
-                    suiteId: 1,
+                    suiteId: decoded.suiteId,
                     timestamp: UInt64(envelope.timestamp),
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
                     contentType: 24,
                     kyberOtpkId: decoded.kyberOtpkId,
+                    pqMessageEpoch: decoded.pqMessageEpoch,
+                    pqRatchetField: decoded.pqRatchetField,
                     rawPayload: envelope.encryptedPayload
                 ), cursor: cursor)
             }
@@ -67,7 +70,11 @@ enum MessageStreamParser {
                     suiteId: 1,
                     timestamp: UInt64(envelope.timestamp),
                     kemCiphertext: Data(),
-                    kyberOtpkId: 0
+                    kyberOtpkId: 0,
+                    // Preserve the raw payload so the END_SESSION handler can read a typed
+                    // SessionControl reason hint (e.g. .otpkUnreproducible → 3-DH re-init).
+                    // Legacy senders put a 16-byte sentinel here, which simply won't decode.
+                    rawPayload: envelope.encryptedPayload
                 ), cursor: cursor)
             }
             // SENDER_SYNC: copy of own outgoing message — decrypt with per-device session
@@ -85,43 +92,55 @@ enum MessageStreamParser {
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
-                    suiteId: 1,
+                    suiteId: decoded.suiteId,
                     timestamp: UInt64(envelope.timestamp),
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
                     kyberOtpkId: decoded.kyberOtpkId,
+                    pqMessageEpoch: decoded.pqMessageEpoch,
+                    pqRatchetField: decoded.pqRatchetField,
                     senderDeviceId: envelope.senderDevice.deviceID,
                     conversationId: envelope.conversationID
                 ), cursor: cursor)
             }
             // Unpack wire payload blob into crypto components.
-            // STEALTH (sealed sender): SealedInner bytes can't be WirePayload-decoded here —
-            // MessageRouter resolves the sender and extracts the real payload.
+            // For STEALTH (sealed sender), the wire payload may be in the outer encryptedPayload
+            // or inside the SealedInner. We decode the appropriate wire data so that
+            // ChatMessage gets correct msgNum/ephemeral etc, and rawPayload is set for the
+            // orchestrator. The sender is resolved later in MessageRouter.
             let isSealed = envelope.hasSealedSender
             let sealedInnerBytes = isSealed ? envelope.sealedSender.sealedInner : Data()
             let senderUserId = isSealed ? "" : envelope.sender.userID
 
-            if isSealed {
-                return .message(ChatMessage(
-                    id: envelope.messageID,
-                    from: "",
-                    to: envelope.recipient.userID,
-                    messageType: "DIRECT_MESSAGE",
-                    ephemeralPublicKey: Data(),
-                    messageNumber: 0,
-                    content: Data(),
-                    suiteId: 1,
-                    timestamp: UInt64(envelope.timestamp),
-                    editsMessageId: envelope.editsMessageID,
-                    kemCiphertext: Data(),
-                    contentType: UInt8(envelope.contentType.rawValue),
-                    senderDeviceId: envelope.senderDevice.deviceID,
-                    conversationId: envelope.conversationID,
-                    sealedInnerData: sealedInnerBytes
-                ), cursor: cursor)
+            var wirePayload = envelope.encryptedPayload
+            if isSealed && wirePayload.isEmpty {
+                // Payload is carried inside the SealedInner for this delivery.
+                if let sealedProto = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInnerBytes),
+                   !sealedProto.encryptedPayload.isEmpty {
+                    wirePayload = sealedProto.encryptedPayload
+                }
             }
 
-            guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
+            guard let decoded = try? WirePayloadCoder.decode(wirePayload) else {
+                if isSealed {
+                    // Fallback for sealed when wire decode not possible: carry only sealed for resolution.
+                    return .message(ChatMessage(
+                        id: envelope.messageID,
+                        from: "",
+                        to: envelope.recipient.userID,
+                        messageType: "DIRECT_MESSAGE",
+                        ephemeralPublicKey: Data(),
+                        messageNumber: 0,
+                        content: Data(),
+                        suiteId: 1,
+                        timestamp: UInt64(envelope.timestamp),
+                        kemCiphertext: Data(),
+                        contentType: UInt8(envelope.contentType.rawValue),
+                        senderDeviceId: envelope.senderDevice.deviceID,
+                        conversationId: envelope.conversationID,
+                        sealedInnerData: sealedInnerBytes
+                    ), cursor: cursor)
+                }
                 Log.info("Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
                 return nil
             }
@@ -133,16 +152,18 @@ enum MessageStreamParser {
                 ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                 messageNumber: decoded.messageNumber,
                 content: decoded.content,
-                suiteId: 1,
+                suiteId: decoded.suiteId,
                 timestamp: UInt64(envelope.timestamp),
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
-                editsMessageId: envelope.editsMessageID,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
                 contentType: UInt8(envelope.contentType.rawValue),
                 kyberOtpkId: decoded.kyberOtpkId,
+                pqMessageEpoch: decoded.pqMessageEpoch,
+                pqRatchetField: decoded.pqRatchetField,
                 senderDeviceId: envelope.senderDevice.deviceID,
                 conversationId: envelope.conversationID,
-                rawPayload: envelope.encryptedPayload
+                rawPayload: wirePayload,
+                sealedInnerData: sealedInnerBytes
             )
             PerformanceMetrics.shared.messageEnvelopeArrived(messageId: envelope.messageID)
             return .message(msg, cursor: cursor)

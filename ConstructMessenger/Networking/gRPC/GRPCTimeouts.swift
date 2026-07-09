@@ -16,6 +16,9 @@ enum GRPCTimeouts {
     // Privacy Pass
     static let issueTokens: TimeInterval = NetworkTiming.GRPC.Timeouts.recovery
 
+    // VEIL capability renewal (in-band, short unary call)
+    static let issueVeilCapability: TimeInterval = NetworkTiming.GRPC.Timeouts.refreshToken
+
     // Device linking
     static let initiateDeviceLink: TimeInterval = NetworkTiming.GRPC.Timeouts.initiateDeviceLink
     static let confirmDeviceLink: TimeInterval = NetworkTiming.GRPC.Timeouts.confirmDeviceLink

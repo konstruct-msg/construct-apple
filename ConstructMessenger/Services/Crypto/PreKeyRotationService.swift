@@ -26,12 +26,12 @@ final class PreKeyRotationService {
     /// Used to detect SPK age independently from the rotation timer, so we can force-rotate
     /// before the Rust core's staleness limit rejects the bundle on the peer side.
     private static let spkUploadKey       = "construct.spk.uploadTimestamp"
-    /// Must be strictly less than SPK_MAX_AGE_SECS in the Rust core (currently 10 days).
-    /// 7 days = weekly rotation; gives a full rotation-period grace buffer before
-    /// the Rust peer-side check rejects the bundle as stale.
+    /// Weekly rotation. We rotate the client's OWN SPK far more aggressively (7 days) than the
+    /// peer-side staleness limit (`SPK_MAX_AGE_SECS`, now 30 days) requires — this is forward-secrecy
+    /// hygiene for our own outbound sessions, independent of how tolerant peers are of stale bundles.
     private static let rotationIntervalDays: Double = 7
-    /// Force rotation when the actual SPK age approaches the Rust staleness limit.
-    /// 8 days = 2-day safety margin before the Rust 10-day hard rejection.
+    /// Force rotation when the SPK age crosses this, even if the timer hasn't fired. Kept tight
+    /// (8 days, ~weekly) for FS hygiene; comfortably below the 30-day peer staleness limit.
     private static let spkMaxAgeDays: Double = 8
     /// Minimum interval between retry attempts when the stream was down during a previous try.
     /// Prevents hammering the server during rapid reconnect cycling.
@@ -130,7 +130,8 @@ final class PreKeyRotationService {
     ///  caused by a desync between the in-memory state and what the server serves.
     private func performAtomicRotation(
         deviceId: String,
-        reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason
+        reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason,
+        allowHybridSPKSignature: Bool = true
     ) async throws {
         guard CryptoManager.shared.orchestratorCore != nil else {
             throw PreKeyRotationError.cryptoCoreNotInitialized
@@ -160,6 +161,23 @@ final class PreKeyRotationService {
 
         Log.info("SPK rotation: classic keyId=\(classicKey.keyId) kyber keyId=\(kyberKey.keyId)", category: "SPKRotation")
 
+        // Hybrid (ML-DSA) signatures over the NEW keys, sent with the rotation so the server
+        // stores them ATOMICALLY — closing the window where a rotated-but-unsigned SPK makes peers
+        // reject the bundle ("SPK hybrid signature missing"). Only when the hybrid identity is
+        // already published (else the server has no hybrid identity key to verify against, and the
+        // rotation would fail): in that case fall back to the post-rotation publish below. `try?`
+        // so a signing hiccup degrades to the old publish path rather than failing rotation.
+        // `allowHybridSPKSignature == false` is the deadlock-breaker retry: rotate classic-only so
+        // the server verifies just the classic SPK signature (against our intact device identity)
+        // and re-syncs the SPK, then the post-rotation publish re-attaches the hybrid signature.
+        // Evaluate the await separately: it cannot live inside the `&&` autoclosure.
+        let hybridPublished = await HybridIdentityService.isHybridIdentityPublished
+        let canSignHybrid = allowHybridSPKSignature && hybridPublished
+        // Use the core-routed prekey hybrid signer (message format centralized in core).
+        let spkHybridSig = canSignHybrid ? (try? CryptoManager.shared.signHybridPrekey(suiteId: 0x01, publicKey: classicPubData)) : nil
+        let kyberHybridSig = canSignHybrid ? (try? CryptoManager.shared.signHybridPrekey(suiteId: 0x10, publicKey: kyberInMemory.publicKey)) : nil
+        let atomicHybridSent = spkHybridSig != nil && kyberHybridSig != nil
+
         // ── Phase 2: single atomic RPC ───────────────────────────────────────
 
         let response: Shared_Proto_Services_V1_RotateSignedPreKeyResponse
@@ -168,7 +186,9 @@ final class PreKeyRotationService {
                 deviceId: deviceId,
                 newClassicKey: classicKey,
                 newKyberKey: kyberKey,
-                reason: reason
+                reason: reason,
+                signedPreKeyHybridSignature: spkHybridSig,
+                kyberSignedPreKeyHybridSignature: kyberHybridSig
             )
         } catch {
             // RPC failed — roll back the in-memory Rust core to Keychain state.
@@ -176,6 +196,20 @@ final class PreKeyRotationService {
             // about, causing AEAD failures for all incoming session initiations.
             Log.error("SPK rotation RPC failed — rolling back Rust core: \(error)", category: "SPKRotation")
             CryptoManager.shared.reloadCoreFromKeychain()
+
+            // Deadlock-breaker: the server rejected the OPTIONAL hybrid SPK signature — it verifies
+            // that over its own stored SPK, which mismatches ours when the SPK is desynced (e.g. a
+            // prior rotation RPC failed). That mismatch also blocks the hybrid identity publish,
+            // which SPK rotation's hybrid check depends on — a cycle that never self-heals. The
+            // classic SPK signature needs no hybrid key and verifies against our (intact) device
+            // identity, so retry the rotation classic-only to re-sync the SPK; the post-rotation
+            // publish then re-attaches the hybrid signature over the now-synced SPK. Retry once.
+            // See otpk-session-init-deadlock (SPK↔hybrid deadlock).
+            if allowHybridSPKSignature && atomicHybridSent && Self.isHybridSPKSignatureRejection(error) {
+                Log.info("SPK rotation: hybrid SPK signature rejected by server — retrying classic-only to break the SPK↔hybrid deadlock", category: "SPKRotation")
+                try await performAtomicRotation(deviceId: deviceId, reason: reason, allowHybridSPKSignature: false)
+                return
+            }
             throw error
         }
 
@@ -204,21 +238,38 @@ final class PreKeyRotationService {
         let serverKyberKeyId = response.hasNewKyberKeyID ? response.newKyberKeyID : kyberKey.keyId
         Log.info("SPK rotation complete: classic keyId=\(classicKey.keyId) (server: \(response.newKeyID)), kyber keyId=\(serverKyberKeyId)", category: "SPKRotation")
 
-        // Rotation clears the hybrid prekey signatures server-side; re-attach them over
-        // the freshly-rotated SPK / Kyber SPK. Bounded retry to ride out a transient RPC
-        // failure (which previously left the bundle with a hybrid identity but no SPK
-        // hybrid signature → peers reject it with "SPK hybrid signature missing"). If it
-        // still fails, HybridIdentityService.publishIfNeeded() repairs it on the next
-        // launch: it detects the now-stale SPK fingerprint and re-publishes.
-        for attempt in 1...3 {
-            do {
-                try await HybridIdentityService.publish(deviceId: deviceId)
-                break
-            } catch {
-                Log.error("SPK rotation: hybrid signature re-attach failed (attempt \(attempt)/3, non-fatal): \(error.localizedDescription)", category: "SPKRotation")
-                if attempt < 3 { try? await Task.sleep(nanoseconds: 2_000_000_000) }
+        if atomicHybridSent {
+            // Hybrid signatures were stored atomically with the rotation — no separate publish
+            // needed and no window. Record the new SPK fingerprint so launch publishIfNeeded
+            // doesn't redundantly re-publish.
+            await HybridIdentityService.recordHybridPublished(spkPublic: classicPubData)
+            Log.info("SPK rotation: hybrid signatures stored atomically with rotation", category: "SPKRotation")
+        } else {
+            // Fallback (hybrid identity not yet published, or signing failed): re-attach the hybrid
+            // signatures over the freshly-rotated keys via a separate publish. Bounded retry; if it
+            // still fails, HybridIdentityService.publishIfNeeded() repairs it on the next launch
+            // (it detects the now-stale SPK fingerprint and re-publishes).
+            for attempt in 1...3 {
+                do {
+                    try await HybridIdentityService.publish(deviceId: deviceId)
+                    break
+                } catch {
+                    Log.error("SPK rotation: hybrid signature re-attach failed (attempt \(attempt)/3, non-fatal): \(error.localizedDescription)", category: "SPKRotation")
+                    if attempt < 3 { try? await Task.sleep(nanoseconds: 2_000_000_000) }
+                }
             }
         }
+    }
+
+    /// True when a rotation RPC failed specifically because the server could not verify the
+    /// (optional) hybrid SPK signature — the SPK↔hybrid deadlock signal. Matched on the server
+    /// message text ("SPK hybrid signature verification failed"), which reaches us in the RPCError.
+    /// Deliberately narrow: any other failure keeps the original rollback-and-throw behaviour.
+    private static func isHybridSPKSignatureRejection(_ error: Error) -> Bool {
+        // Match on the server's message text, carried in the transport error's description.
+        // `String(describing:)` avoids a hard dependency on GRPCCore's RPCError type here and
+        // works whether the thrown error is an RPCError or a wrapper around one.
+        String(describing: error).contains("SPK hybrid signature verification failed")
     }
 
     // MARK: - Schedule Helpers
@@ -299,8 +350,21 @@ final class PreKeyRotationService {
             let ikMatch  = localIk  == serverBundle.identityPublic
             let spkMatch = localSpk == serverBundle.signedPrekeyPublic
 
-            if ikMatch && spkMatch {
-                Log.info("Key consistency: identity and SPK match server", category: "SPKRotation")
+            // Kyber SPK — the PQXDH KEM leg. The X25519 checks above do NOT cover it: the hybrid
+            // suite's KEM is X25519-only and the ML-KEM contribution is a SEPARATE layer. A Kyber
+            // SPK desync (our local Kyber SPK private ≠ the Kyber SPK public the server serves)
+            // leaves identity/SPK matching yet makes EVERY PQXDH handshake AEAD-fail on the
+            // responder (the KEM secret diverges), with no visible desync — the build-497 blocker.
+            // Compare it too; "both absent" counts as matching (Ed25519-only / no PQ peer).
+            let localKyber = try? PQCKeyManager.shared.kyberSPKPublic()
+            let serverKyber = serverBundle.kyberPreKeyPublic
+            let kyberMatch: Bool = {
+                guard let localKyber, !localKyber.isEmpty else { return serverKyber?.isEmpty ?? true }
+                return localKyber == serverKyber
+            }()
+
+            if ikMatch && spkMatch && kyberMatch {
+                Log.info("Key consistency: identity, SPK and Kyber SPK match server", category: "SPKRotation")
                 return true
             }
 
@@ -311,11 +375,19 @@ final class PreKeyRotationService {
             }
             if !spkMatch {
                 Log.error("KEY DESYNC: signed_prekey LOCAL=\(hexPrefix(localSpk))… SERVER=\(hexPrefix(serverBundle.signedPrekeyPublic))…", category: "SPKRotation")
+            }
+            if !kyberMatch {
+                Log.error("KEY DESYNC: kyber_signed_prekey LOCAL=\(hexPrefix(localKyber ?? Data()))… SERVER=\(hexPrefix(serverKyber ?? Data()))…", category: "SPKRotation")
+            }
+
+            // Repair via atomic rotation — it rotates the classic AND Kyber SPK together, so it
+            // heals either desync. (An identity mismatch is NOT rotation-repairable; only logged.)
+            if !spkMatch || !kyberMatch {
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                 if !deviceId.isEmpty {
-                    Log.info("Key consistency: attempting SPK re-upload to repair desync…", category: "SPKRotation")
+                    Log.info("Key consistency: attempting SPK+Kyber re-upload to repair desync…", category: "SPKRotation")
                     try await forceRotate(deviceId: deviceId, reason: .security)
-                    Log.info("Key consistency: SPK re-upload complete", category: "SPKRotation")
+                    Log.info("Key consistency: SPK+Kyber re-upload complete", category: "SPKRotation")
                 }
             }
             return false

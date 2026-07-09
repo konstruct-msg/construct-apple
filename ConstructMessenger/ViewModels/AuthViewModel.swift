@@ -30,6 +30,11 @@ class AuthViewModel {
     /// would otherwise trigger auth re-attempts every few seconds).
     var isRegistrationInProgress = false
 
+    /// Set after Flow B device link on Desktop; survives navigation away from onboarding sheet.
+    var pendingHistorySyncOffer = false
+    /// Flow B desktop: pending_device_id used to derive the history-sync pairing PIN.
+    var linkedJoinPendingDeviceId: String? = nil
+
     func refreshDeviceKeyState() {
         // If already authenticated, don't re-read Keychain — it may be temporarily
         // inaccessible (WhenUnlockedThisDeviceOnly items while device is locked via
@@ -174,7 +179,13 @@ class AuthViewModel {
         defer { restoreInFlight = false }
 
         Log.info("restoreOrAuthenticateDevice() called")
-        
+
+        // One-time: migrate crypto key material to AfterFirstUnlock accessibility so a
+        // push-driven decrypt while the device is locked can read the keys and build
+        // OrchestratorCore (otherwise → coreNotInitialized → spurious END_SESSION/desync).
+        // Self-guards: a locked read is a no-op and retries on the next foreground launch.
+        KeychainManager.shared.migrateCryptoKeysAccessibility()
+
         // Step 1: Try to restore existing session token
         AuthSessionManager.shared.loadSessionToken()
 
@@ -183,7 +194,7 @@ class AuthViewModel {
         // Only touches userId — does NOT re-save tokens or overwrite session expiry.
         func recoverUserIdFromToken() -> String? {
             guard let token = AuthSessionManager.shared.sessionToken,
-                  let uid = JWTUtils.extractUserId(from: token),
+                  let uid = TokenUtils.extractUserId(from: token),
                   !uid.isEmpty else { return nil }
             AuthSessionManager.shared.updateUserId(uid)
             Log.info("[Auth] userId recovered from JWT sub claim and re-saved to Keychain: \(uid.prefix(8))...", category: "Auth")
@@ -205,14 +216,14 @@ class AuthViewModel {
             scheduleTokenRefresh()
             CryptoManager.shared.setLocalUserId(userId)
             loadUserFromCoreData(userId: userId)
-            #if !os(macOS)
-            // Engine manages SPK rotation on macOS.
             Task { [weak self] in
                 guard self != nil else { return }
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+                #if os(macOS)
+                Log.debug("Post-auth SPK rotation check (Desktop direct core path)", category: "SPKRotation")
+                #endif
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             }
-            #endif
             Task { [weak self] in
                 guard self != nil else { return }
                 await ServerKeyManager.shared.prefetch()

@@ -616,6 +616,42 @@ public struct Shared_Proto_Services_V1_SendMessageRequest: Sendable {
   fileprivate var _attemptID: String? = nil
 }
 
+/// SendSealedMessageRequest - stealth-sealed-sender-v2 Phase 2.
+/// Deliberately carries nothing but the sealed envelope + attempt correlation ID —
+/// no sender, no conversation_id, no content_type on the wire.
+public struct Shared_Proto_Services_V1_SendSealedMessageRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sealedSender: Shared_Proto_Core_V1_SealedSenderEnvelope {
+    get {_sealedSender ?? Shared_Proto_Core_V1_SealedSenderEnvelope()}
+    set {_sealedSender = newValue}
+  }
+  /// Returns true if `sealedSender` has been explicitly set.
+  public var hasSealedSender: Bool {self._sealedSender != nil}
+  /// Clears the value of `sealedSender`. Subsequent reads from it will return its default value.
+  public mutating func clearSealedSender() {self._sealedSender = nil}
+
+  /// Client-assigned attempt ID echoed in the response (same purpose as
+  /// SendMessageRequest.attempt_id).
+  public var attemptID: String {
+    get {_attemptID ?? String()}
+    set {_attemptID = newValue}
+  }
+  /// Returns true if `attemptID` has been explicitly set.
+  public var hasAttemptID: Bool {self._attemptID != nil}
+  /// Clears the value of `attemptID`. Subsequent reads from it will return its default value.
+  public mutating func clearAttemptID() {self._attemptID = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _sealedSender: Shared_Proto_Core_V1_SealedSenderEnvelope? = nil
+  fileprivate var _attemptID: String? = nil
+}
+
 /// RateLimitChallenge - Proof-of-Work challenge issued on soft rate-limit breach.
 /// Client must solve this challenge before retrying the send.
 /// difficulty: 4 = x1.5 limit, 6 = x3 limit, 8 = x5+ limit
@@ -697,22 +733,35 @@ public struct Shared_Proto_Services_V1_SendMessageResponse: Sendable {
 }
 
 /// EditMessageRequest - Edit message
+///
+/// DEPRECATED: the server no longer learns which message is being edited.
+/// Clients should send edits as regular E2EE messages with MessageContent.edit.
+///
+/// NOTE: This message was marked as deprecated in the .proto file.
 public struct Shared_Proto_Services_V1_EditMessageRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Message ID to edit
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var messageID: String = String()
 
   /// Conversation ID
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var conversationID: String = String()
 
   /// New content (encrypted)
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var newEncryptedContent: Data = Data()
 
   /// Recipient user ID — required for server-side routing.
   /// The server cannot infer this from the original message (no message DB).
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var recipientUserID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -721,18 +770,28 @@ public struct Shared_Proto_Services_V1_EditMessageRequest: Sendable {
 }
 
 /// EditMessageResponse - Edit confirmation
+///
+/// DEPRECATED: EditMessage is no longer implemented.
+///
+/// NOTE: This message was marked as deprecated in the .proto file.
 public struct Shared_Proto_Services_V1_EditMessageResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Success
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var success: Bool = false
 
   /// Edited timestamp
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var editedAt: Int64 = 0
 
   /// Edit count
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var editCount: UInt32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -741,23 +800,35 @@ public struct Shared_Proto_Services_V1_EditMessageResponse: Sendable {
 }
 
 /// AddReactionRequest - Add reaction to message
+///
+/// DEPRECATED: reactions are sent as encrypted MessageContent.reaction messages.
+///
+/// NOTE: This message was marked as deprecated in the .proto file.
 public struct Shared_Proto_Services_V1_AddReactionRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Message ID to react to
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var messageID: String = String()
 
   /// Conversation ID (for routing)
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var conversationID: String = String()
 
   /// Encrypted reaction (E2EE blob)
   /// Contains: emoji, timestamp, sender info
   /// Encrypted with conversation key
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var encryptedReaction: Data = Data()
 
   /// Reaction ID (client-generated UUID for deduplication)
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var reactionID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -766,21 +837,33 @@ public struct Shared_Proto_Services_V1_AddReactionRequest: Sendable {
 }
 
 /// AddReactionResponse - Reaction added confirmation
+///
+/// DEPRECATED: AddReaction is no longer implemented.
+///
+/// NOTE: This message was marked as deprecated in the .proto file.
 public struct Shared_Proto_Services_V1_AddReactionResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Success
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var success: Bool = false
 
   /// Server timestamp
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var reactedAt: Int64 = 0
 
   /// Reaction ID (echo back)
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var reactionID: String = String()
 
   /// Error if failed
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var error: Shared_Proto_Services_V1_MessageError {
     get {_error ?? Shared_Proto_Services_V1_MessageError()}
     set {_error = newValue}
@@ -798,18 +881,29 @@ public struct Shared_Proto_Services_V1_AddReactionResponse: Sendable {
 }
 
 /// RemoveReactionRequest - Remove reaction from message
+///
+/// DEPRECATED: removal is handled by MessageContent.reaction with
+/// ReactionAction.REMOVE.
+///
+/// NOTE: This message was marked as deprecated in the .proto file.
 public struct Shared_Proto_Services_V1_RemoveReactionRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Message ID
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var messageID: String = String()
 
   /// Conversation ID
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var conversationID: String = String()
 
   /// Reaction ID to remove
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var reactionID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -818,15 +912,23 @@ public struct Shared_Proto_Services_V1_RemoveReactionRequest: Sendable {
 }
 
 /// RemoveReactionResponse - Reaction removed confirmation
+///
+/// DEPRECATED: RemoveReaction is no longer implemented.
+///
+/// NOTE: This message was marked as deprecated in the .proto file.
 public struct Shared_Proto_Services_V1_RemoveReactionResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Success
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var success: Bool = false
 
   /// Removal timestamp
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var removedAt: Int64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -836,21 +938,34 @@ public struct Shared_Proto_Services_V1_RemoveReactionResponse: Sendable {
 
 /// ReactionEvent - Reaction notification (via MessageStream)
 /// Sent to other participants when someone reacts
+///
+/// DEPRECATED: reaction state is synchronized through regular E2EE messages;
+/// the server does not distribute reaction events.
+///
+/// NOTE: This message was marked as deprecated in the .proto file.
 public struct Shared_Proto_Services_V1_ReactionEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Reaction added or removed?
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var eventType: Shared_Proto_Services_V1_ReactionEventType = .unspecified
 
   /// Message ID that was reacted to
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var messageID: String = String()
 
   /// Conversation ID
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var conversationID: String = String()
 
   /// Encrypted reaction (for ADD events)
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var encryptedReaction: Data {
     get {_encryptedReaction ?? Data()}
     set {_encryptedReaction = newValue}
@@ -861,12 +976,18 @@ public struct Shared_Proto_Services_V1_ReactionEvent: Sendable {
   public mutating func clearEncryptedReaction() {self._encryptedReaction = nil}
 
   /// Reaction ID
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var reactionID: String = String()
 
   /// Event timestamp
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var timestamp: Int64 = 0
 
   /// Sender device ID (for multi-device sync)
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var senderDeviceID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -935,7 +1056,11 @@ public struct Shared_Proto_Services_V1_PendingMessage: Sendable {
   /// Server never reads this field.
   public var encryptedPayload: Data = Data()
 
-  /// Server-assigned receive timestamp (Unix seconds). Client ignores sender's timestamp.
+  /// Server-assigned receive timestamp (Unix seconds).
+  ///
+  /// SECURITY: this is transport ordering/cursor metadata only. The client MUST
+  /// NOT render it as the message sent-time. The authoritative timestamp lives
+  /// inside the encrypted payload and must be used for UI ordering when present.
   public var timestamp: Int64 = 0
 
   /// Content type — required for control messages (SESSION_RESET = 21, KEY_SYNC = 22).
@@ -1656,6 +1781,45 @@ extension Shared_Proto_Services_V1_SendMessageRequest: SwiftProtobuf.Message, Sw
   public static func ==(lhs: Shared_Proto_Services_V1_SendMessageRequest, rhs: Shared_Proto_Services_V1_SendMessageRequest) -> Bool {
     if lhs._message != rhs._message {return false}
     if lhs._idempotencyKey != rhs._idempotencyKey {return false}
+    if lhs._attemptID != rhs._attemptID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_SendSealedMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SendSealedMessageRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sealed_sender\0\u{3}attempt_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._sealedSender) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._attemptID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._sealedSender {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._attemptID {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_SendSealedMessageRequest, rhs: Shared_Proto_Services_V1_SendSealedMessageRequest) -> Bool {
+    if lhs._sealedSender != rhs._sealedSender {return false}
     if lhs._attemptID != rhs._attemptID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

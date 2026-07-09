@@ -11,6 +11,7 @@
 
 import Foundation
 import CoreData
+import SwiftProtobuf
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -37,6 +38,46 @@ final class MessageRouter {
     private let chunkReassembler = ChunkedMessageReassembler.shared
     private var processingMessageIds: Set<String> = []
 
+    /// Message ids that already consumed their one unseal-failure redelivery
+    /// (sealed-sender-resilience lever A). First unseal failure defers (holds the
+    /// cursor → server re-delivers once); a second failure for the same id gives up and
+    /// drops. Bounded so a flood of undecryptable boxes can't grow it without limit.
+    private var unsealDeferredIds: [String] = []
+    private func consumeUnsealRetry(_ id: String) -> Bool {
+        if unsealDeferredIds.contains(id) { return false } // already retried → give up
+        unsealDeferredIds.append(id)
+        if unsealDeferredIds.count > 512 { unsealDeferredIds.removeFirst() }
+        return true // first failure → allow one redelivery
+    }
+
+    /// Refreshes the cached bundle-signing key off the hot path when a sealed message
+    /// arrived unvouched or unsealable — likely a missing/stale key. `fetchAndCacheRelayConfig`
+    /// caches the bundle key before the relay guard, so this works even when VEIL is inactive
+    /// (sealed-sender-resilience lever B: decoupled from the VEIL fetch). Debounced to at most
+    /// once a minute so a burst of such messages can't spam the network.
+    private var lastBundleKeyRefresh: Date = .distantPast
+    private func refreshBundleKeyIfStale() {
+        guard Date().timeIntervalSince(lastBundleKeyRefresh) > 60 else { return }
+        lastBundleKeyRefresh = Date()
+        Task { _ = await VeilCertFetcher.shared.fetchAndCacheRelayConfig() }
+    }
+
+    /// Per-contact throttle for the "session out of sync" system message. A broken peer can
+    /// deliver a burst of mid-ratchet messages (msgNum>0 with no session), each of which would
+    /// otherwise insert a fresh system bubble AND ask the sender to restart — the visible storm.
+    /// Matches SessionCoordinator's END_SESSION cooldown (30s) so the notice and the restart
+    /// request fire together, at most once per window.
+    private var outOfSyncNoticeAt: [String: Date] = [:]
+    private static let outOfSyncNoticeCooldown: TimeInterval = 30.0
+    private func shouldEmitOutOfSyncNotice(for userId: String) -> Bool {
+        let now = Date()
+        if let last = outOfSyncNoticeAt[userId], now.timeIntervalSince(last) < Self.outOfSyncNoticeCooldown {
+            return false
+        }
+        outOfSyncNoticeAt[userId] = now
+        return true
+    }
+
     // MARK: - Queue access for SessionCoordinator
 
     /// Drain and return all pending messages for `userId` (clears the queue as a side-effect).
@@ -44,9 +85,14 @@ final class MessageRouter {
         pendingQueue.drain(for: userId)
     }
 
-    /// Clear pending messages for `userId` without returning them (e.g. after heal failure).
+    /// Clear pending messages for `userId` (e.g. after heal failure). This is a give-up:
+    /// resolve each discarded message in the cursor tracker so its held watermark is released
+    /// (we will never persist it; matches the pre-existing drop-and-advance behaviour).
     func removePendingMessages(for userId: String) {
-        pendingQueue.remove(for: userId)
+        let discarded = pendingQueue.drain(for: userId)
+        for msg in discarded {
+            StreamCursorTracker.shared.resolve(messageId: msg.id)
+        }
     }
 
     private func beginProcessing(_ messageId: String) -> Bool {
@@ -60,38 +106,80 @@ final class MessageRouter {
     // MARK: - Message Routing
     
     func routeIncomingMessage(_ message: ChatMessage, in context: NSManagedObjectContext) {
-        guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
+        // Stream-cursor disposition. Default `.durable` (message persisted / control handled /
+        // given up → safe to advance the resume cursor). A queued-for-session-init or transient
+        // terminal sets `.deferred` (hold the watermark); a duplicate/not-ready exit sets `.skip`
+        // (let the owning path resolve it). The defer reports exactly once on every exit path.
+        // Untracked ids (backfill, which carries no stream cursor) are no-ops in the tracker.
+        var streamOutcome: StreamCursorTracker.Outcome = .durable
+        defer { StreamCursorTracker.shared.report(messageId: message.id, streamOutcome) }
+
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
+            streamOutcome = .skip
+            return
+        }
 
         // STEALTH: resolve sender from sealed inner before any routing.
         // `from` is empty for ConstructSEALED messages — decrypt to recover sender ID.
         var message = message
         if message.from.isEmpty && !message.sealedInnerData.isEmpty {
-            if let senderId = StealthSenderService.shared.resolveSender(sealedInnerBytes: message.sealedInnerData) {
-                message = ChatMessage(
-                    id: message.id,
-                    from: senderId,
-                    to: message.to.isEmpty ? currentUserId : message.to,
-                    messageType: message.messageType,
-                    ephemeralPublicKey: message.ephemeralPublicKey,
-                    messageNumber: message.messageNumber,
-                    content: message.content,
-                    suiteId: message.suiteId,
-                    timestamp: message.timestamp,
-                    oneTimePreKeyId: message.oneTimePreKeyId,
-                    editsMessageId: message.editsMessageId,
-                    kemCiphertext: message.kemCiphertext,
-                    contentType: message.contentType,
-                    kyberOtpkId: message.kyberOtpkId,
-                    senderDeviceId: message.senderDeviceId,
-                    conversationId: message.conversationId,
-                    replyToMessageId: message.replyToMessageId,
-                    rawPayload: message.rawPayload
-                    // sealedInnerData intentionally omitted — sender resolved
-                )
-                Log.debug("STEALTH: resolved sender → \(senderId.prefix(8))…", category: "MessageRouter")
-            } else {
-                Log.error("STEALTH: could not resolve sender for message \(message.id.prefix(8))… — dropping", category: "MessageRouter")
+            guard let resolved = StealthSenderService.shared.resolveSender(sealedInnerBytes: message.sealedInnerData) else {
+                // Unseal itself failed — no sender/payload recoverable (sealed-sender-resilience
+                // lever A: this is the ONLY sealed drop). Give it one redelivery (a box that
+                // fails to open right after an identity-key rotation deserves a second chance)
+                // before dropping for good, instead of the old instant permanent loss.
+                PerformanceMetrics.shared.record(.stealthUnsealFailure, label: "routeIncomingMessage")
+                if consumeUnsealRetry(message.id) {
+                    Log.error("STEALTH: unseal failed for \(message.id.prefix(8))… — deferring for one redelivery", category: "MessageRouter")
+                    PerformanceMetrics.shared.record(.stealthUnsealDefer, label: "routeIncomingMessage")
+                    refreshBundleKeyIfStale()
+                    streamOutcome = .deferred
+                } else {
+                    Log.error("STEALTH: unseal failed again for \(message.id.prefix(8))… — dropping", category: "MessageRouter")
+                    streamOutcome = .durable
+                }
                 return
+            }
+
+            // Unseal succeeded — sender + payload recovered. Attestation only tags trust;
+            // an unvouched sender is still delivered (the ratchet is the real auth) and
+            // self-heals the bundle-key cache for next time.
+            if case .unvouched(let reason) = resolved.trust {
+                Log.info("STEALTH: delivering UNVOUCHED sender \(resolved.senderId.prefix(8))… (\(reason))", category: "MessageRouter")
+                PerformanceMetrics.shared.record(.stealthUnvouchedDelivery, label: "\(reason)")
+                if reason != .expired {
+                    // .badSignature / .noKey most likely mean a missing/stale bundle key —
+                    // refresh it off the hot path so the next message re-vouches.
+                    refreshBundleKeyIfStale()
+                }
+            }
+
+            message = ChatMessage(
+                id: message.id,
+                from: resolved.senderId,
+                to: message.to.isEmpty ? currentUserId : message.to,
+                messageType: message.messageType,
+                ephemeralPublicKey: message.ephemeralPublicKey,
+                messageNumber: message.messageNumber,
+                content: message.content,
+                suiteId: message.suiteId,
+                timestamp: message.timestamp,
+                oneTimePreKeyId: message.oneTimePreKeyId,
+                kemCiphertext: message.kemCiphertext,
+                // stealth-sealed-sender-v2 Phase 3: the outer envelope's content_type
+                // is forced generic for sealed sends — the real type only survives
+                // inside SealedInner, recovered by resolveSender above.
+                contentType: resolved.contentType,
+                kyberOtpkId: message.kyberOtpkId,
+                senderDeviceId: message.senderDeviceId,
+                conversationId: message.conversationId,
+                replyToMessageId: message.replyToMessageId,
+                rawPayload: message.rawPayload
+                // sealedInnerData intentionally omitted — sender resolved
+            )
+            Log.debug("STEALTH: resolved sender → \(resolved.senderId.prefix(8))…", category: "MessageRouter")
+            if message.contentType == 12 {
+                Log.debug("STEALTH: this was a sealed call signal", category: "MessageRouter")
             }
         }
 
@@ -99,10 +187,26 @@ final class MessageRouter {
 
         guard beginProcessing(message.id) else {
             Log.debug("Skipping in-flight duplicate \(message.id.prefix(8))…", category: "MessageRouter")
+            // The concurrent in-flight processing owns this message's cursor outcome.
+            streamOutcome = .skip
             return
         }
         defer { endProcessing(message.id) }
-        
+
+        // Locked-device guard. When the app is woken by a push while the screen is locked,
+        // the device key material (signing/identity/prekeys) can be unreadable, so
+        // OrchestratorCore never gets built (`coreNotInitialized`). We can neither decrypt
+        // nor init a session. DEFER: hold the stream cursor, do NOT ACK and do NOT send
+        // END_SESSION — the server re-delivers and we process once unlocked + core is ready.
+        // This is the fix for the "Encrypted session out of sync" desync: previously a
+        // locked-launch incoming with no session tore down a perfectly healthy session.
+        // Mirrors AuthViewModel's "defer recovery to foreground" behaviour.
+        if !CryptoManager.shared.isInitialized {
+            Log.info("Core not initialized (device likely locked) — deferring incoming \(message.id.prefix(8))… (no ACK, no END_SESSION)", category: "MessageRouter")
+            streamOutcome = .deferred
+            return
+        }
+
         #if DEBUG
         Log.debug("INCOMING message RAW from server:", category: "MessageRouter")
         Log.debug("   messageId: \(message.id)", category: "MessageRouter")
@@ -117,9 +221,6 @@ final class MessageRouter {
         let contentPreview = message.content.prefix(16).map { String(format: "%02x", $0) }.joined()
         Log.debug("   content preview: \(contentPreview)…", category: "MessageRouter")
         Log.debug("   isEndSession: \(message.isEndSession)", category: "MessageRouter")
-        if !message.editsMessageId.isEmpty {
-            Log.debug("   editsMessageId: \(message.editsMessageId)", category: "MessageRouter")
-        }
         #endif
         
         // 1. Skip if already processed — applies to ALL messages including END_SESSION.
@@ -170,6 +271,17 @@ final class MessageRouter {
         // 3. Check if this is an END_SESSION control message
         if message.isEndSession {
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            // Typed reason hint (if the sender is new enough to attach a SessionControl payload):
+            // .otpkUnreproducible means the peer, as our RESPONDER, could not reproduce the 4-DH
+            // OTPK our last X3DH used. Re-initiating with another OTPK would loop, so mark the peer
+            // to force a 3-DH re-init (no OTPK) on our next session init. Legacy END_SESSION carries
+            // a 16-byte sentinel that simply won't decode → no hint, default behaviour preserved.
+            if !message.rawPayload.isEmpty,
+               let control = try? Shared_Proto_Messaging_V1_SessionControl(serializedBytes: message.rawPayload),
+               control.reason == .otpkUnreproducible {
+                Log.info("END_SESSION from \(otherUserId.prefix(8))… hints OTPK-unreproducible — forcing 3-DH re-init", category: "MessageRouter")
+                SessionReinitHintStore.shared.requestThreeDHReinit(for: otherUserId)
+            }
             Log.info("Received END_SESSION from \(otherUserId)", category: "MessageRouter")
             handleEndSession(from: otherUserId, messageTimestamp: message.timestamp, in: context)
             delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
@@ -239,8 +351,10 @@ final class MessageRouter {
         Log.info("SESSION_STATE[incoming_message]: userId=\(otherUserId.prefix(8))..., hasSession=\(hasSession), messageId=\(message.id.prefix(8))...", category: "SessionInit")
         
         if !hasSession {
-            // First message from this user - need to initialize receiving session
-            handleFirstMessage(
+            // First message from this user - need to initialize receiving session.
+            // handleFirstMessage decides whether the message was queued (.deferred → hold the
+            // cursor until drained) or is a give-up (.durable → may advance).
+            streamOutcome = handleFirstMessage(
                 message,
                 from: otherUserId,
                 chat: chat,
@@ -276,6 +390,9 @@ final class MessageRouter {
             Log.error("OrchestratorCore still nil after reload — requesting END_SESSION from \(otherUserId.prefix(8))…", category: "MessageRouter")
             delegate?.messageRouter(self, needsEndSession: otherUserId)
             if isNewChat { context.delete(chat) }
+            // Transient (Keychain locked / core not loaded): don't advance — let the server
+            // re-deliver after the core recovers rather than acking an unprocessed message.
+            streamOutcome = .deferred
             return
         }
         guard let event = buildIncomingEvent(message: message, otherUserId: otherUserId) else {
@@ -333,6 +450,8 @@ final class MessageRouter {
             case .sessionHealNeeded(let contactId, let role):
                 handleRustHealDecision(role: role, contactId: contactId, message: message, in: context)
                 if isNewChat { context.delete(chat) }
+                // Queued for heal — hold the cursor until heal drains (success) or clears (give-up).
+                streamOutcome = .deferred
                 return
             case .sendEndSession(let contactId):
                 Log.info("SESSION_STATE[rust_end_session]: DR diverged for \(contactId.prefix(8))… — sending END_SESSION", category: "SessionInit")
@@ -347,6 +466,8 @@ final class MessageRouter {
                 Log.info("SESSION_STATE[rust_session_lost]: re-queuing \(message.id.prefix(8))… for \(userId.prefix(8))…", category: "SessionInit")
                 pendingQueue.enqueue(message, for: userId)
                 delegate?.messageRouter(self, needsPublicKeyBundle: userId, for: message)
+                // Re-queued for session re-establishment — hold the cursor until drained/cleared.
+                streamOutcome = .deferred
                 return
             default:
                 break
@@ -469,11 +590,88 @@ final class MessageRouter {
                     continue
                 }
 
+                // SESSION_PING (25) / SESSION_READY (26): typed handshake control signals.
+                // Dispatch on content_type before the reassembler so they never enter the
+                // renderable text pipeline. (RESET_INIT=24 is intentionally NOT handled here:
+                // it carries a real X3DH first-ratchet payload.) Legacy peers send these as
+                // magic-string plaintext — that fallback lives in handleResolvedMessage.
+                if let op = SessionControlCodec.op(forContentType: Int(message.contentType)),
+                   op == .ping || op == .ready {
+                    handleSessionControlSignal(op, for: message, from: otherUserId, chat: chat, in: context)
+                    continue
+                }
+
+                // Profile share: support binary wire (no JSON) + legacy. Detect on raw Data here.
+                if let profile = ProfileShareData.fromBinaryData(plaintext) {
+                    ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+                    continue
+                } else if let str = String(data: plaintext, encoding: .utf8),
+                          let profile = ProfileSharingManager.shared.parseProfileMessage(str) {
+                    ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+                    continue
+                }
+
                 switch chunkReassembler.process(data: plaintext) {
-                case .assembled(let text, let quoted):
-                    handleResolvedMessage(text, quotedMessage: quoted, for: message, from: otherUserId, chat: chat, in: context)
+                case .assembled(let text, let quoted, let e2eMessageId, let mediaAlbum):
+                    handleResolvedMessage(
+                        text,
+                        quotedMessage: quoted,
+                        mediaAlbum: mediaAlbum,
+                        e2eMessageId: e2eMessageId,
+                        for: message,
+                        from: otherUserId,
+                        chat: chat,
+                        in: context
+                    )
                 case .legacy(let text):
-                    handleResolvedMessage(text, quotedMessage: nil, for: message, from: otherUserId, chat: chat, in: context)
+                    handleResolvedMessage(
+                        text,
+                        quotedMessage: nil,
+                        mediaAlbum: nil,
+                        e2eMessageId: nil,
+                        for: message,
+                        from: otherUserId,
+                        chat: chat,
+                        in: context
+                    )
+                case .profile(let profileData):
+                    // Chunked binary profile share (large profiles with avatars arrive here, not via
+                    // the pre-reassembler check above). Render as a profile, never as text.
+                    if let profile = ProfileShareData.fromBinaryData(profileData) {
+                        ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
+                    }
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+                    continue
+                case .edit(let targetMessageID, let newText, _):
+                    // Modern edit from MessageContent.edit (newText carries caption for media too).
+                    // Scoped to the author: a peer may only edit messages it sent us.
+                    let fetch = Message.fetchRequest()
+                    fetch.predicate = NSPredicate(format: "id ==[c] %@ AND fromUserId == %@", targetMessageID, otherUserId)
+                    fetch.fetchLimit = 1
+                    if let original = try? context.fetch(fetch).first {
+                        let captionOrText = newText.text
+                        if !captionOrText.isEmpty {
+                            if let rebuilt = MediaWireCodec.editedCaption(localJSON: original.decryptedContent, newCaption: captionOrText)?.localJSON {
+                                original.decryptedContent = rebuilt
+                            } else {
+                                original.decryptedContent = captionOrText
+                            }
+                        }
+                        // Future: if newMedia populated, convert via MediaWireCodec + album wrapper here.
+                        original.isEdited = true
+                        original.editedAt = Date()
+                        Log.info("Applied modern edit to \(targetMessageID.prefix(8))… from \(otherUserId.prefix(8))…", category: "MessageRouter")
+                    } else {
+                        Log.error("Modern edit target not found: \(targetMessageID.prefix(8))… from \(otherUserId.prefix(8))… — edit dropped", category: "MessageRouter")
+                    }
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+                    continue
                 case .incomplete:
                     Log.debug("Chunked message incomplete, waiting for more chunks", category: "MessageRouter")
                 case .invalid(let reason):
@@ -485,9 +683,43 @@ final class MessageRouter {
     }
 
 
+    /// React to a session-handshake control signal (ping/ready) on an established session,
+    /// whether it arrived typed (content_type 25/26) or as a legacy plaintext magic string.
+    /// Never persists a Message row — these are for the protocol, not the transcript.
+    private func handleSessionControlSignal(
+        _ op: Shared_Proto_Messaging_V1_SessionOp,
+        for message: ChatMessage,
+        from otherUserId: String,
+        chat: Chat,
+        in context: NSManagedObjectContext
+    ) {
+        PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+        delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+
+        switch op {
+        case .ready:
+            Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(otherUserId.prefix(8))… confirmed session — discarding control signal", category: "MessageRouter")
+            // Mark session confirmed so ChatViewModel stops buffering outgoing messages.
+            SessionConfirmationTracker.shared.markConfirmed(otherUserId)
+            // Flush messages buffered while waiting for RESPONDER confirmation.
+            if let myId = AuthSessionManager.shared.currentUserId {
+                MessageRetryManager.shared.sendQueuedMessages(
+                    for: chat,
+                    recipientId: otherUserId,
+                    currentUserId: myId,
+                    context: context
+                )
+            }
+        default: // .ping (and any other non-ready signal routed here)
+            Log.info("SESSION_STATE[session_ping_received]: discarding session ping from \(otherUserId.prefix(8))…", category: "MessageRouter")
+        }
+    }
+
     private func handleResolvedMessage(
         _ decryptedContent: String,
         quotedMessage: Shared_Proto_Messaging_V1_QuotedMessage?,
+        mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage?,
+        e2eMessageId: String?,
         for message: ChatMessage,
         from otherUserId: String,
         chat: Chat,
@@ -503,10 +735,9 @@ final class MessageRouter {
 
         // Silently discard session establishment pings received on the normal message path.
         // These are sent after a tie-break win to trigger RESPONDER init on the peer.
+        // Legacy plaintext form; typed (content_type=25) form is handled before the reassembler.
         if decryptedContent.hasPrefix("__session_ping") && decryptedContent.hasSuffix("__") {
-            Log.info("SESSION_STATE[ping_received_normal_path]: discarding session ping", category: "MessageRouter")
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+            handleSessionControlSignal(.ping, for: message, from: otherUserId, chat: chat, in: context)
             return
         }
 
@@ -522,21 +753,9 @@ final class MessageRouter {
         // Silently discard two-phase handshake confirmation signals.
         // __session_ready_<UUID>__ is sent by the RESPONDER after initReceivingSession succeeds.
         // Also handle legacy format without __ markers (older client versions).
+        // Typed (content_type=26) form is handled before the reassembler.
         if decryptedContent.hasPrefix("__session_ready") || decryptedContent.hasPrefix("session_ready_") {
-            Log.info("SESSION_STATE[session_ready_rust_path]: RESPONDER \(otherUserId.prefix(8))… confirmed session — discarding control message", category: "MessageRouter")
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
-            // Mark session as confirmed so ChatViewModel stops buffering outgoing messages.
-            SessionConfirmationTracker.shared.markConfirmed(otherUserId)
-            // Flush messages that were buffered while waiting for RESPONDER confirmation.
-            if let myId = AuthSessionManager.shared.currentUserId {
-                MessageRetryManager.shared.sendQueuedMessages(
-                    for: chat,
-                    recipientId: otherUserId,
-                    currentUserId: myId,
-                    context: context
-                )
-            }
+            handleSessionControlSignal(.ready, for: message, from: otherUserId, chat: chat, in: context)
             return
         }
 
@@ -555,31 +774,22 @@ final class MessageRouter {
             return  // Special message handled, don't save as regular message
         }
 
-        // 5a. If this is an edit to an existing message — update it instead of saving a new one
-        if !message.editsMessageId.isEmpty {
-            let fetchRequest = Message.fetchRequest()
-            fetchRequest.predicate = NSPredicate(format: "id == %@", message.editsMessageId)
-            fetchRequest.fetchLimit = 1
-            do {
-                if let original = try context.fetch(fetchRequest).first {
-                    original.applyStoredEncryption(plaintext: decryptedContent, contactId: otherUserId)
-                    original.isEdited = true
-                    original.editedAt = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
-                    try context.saveOrThrow(category: "MessageRouter")
-                    Log.info("Edited message \(message.editsMessageId.prefix(8))…", category: "MessageRouter")
-                } else {
-                    Log.error("Cannot find original message to edit: \(message.editsMessageId)", category: "MessageRouter")
-                }
-                try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId, in: context)
-                delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
-            } catch {
-                Log.error("Failed to persist edited message \(message.id.prefix(8))…: \(error)", category: "MessageRouter")
-            }
-            return
-        }
+        // Legacy envelope-level edits (envelope.edits_message_id) are gone: the field is
+        // reserved server-side and edits now travel inside the encrypted payload as
+        // MessageContent.edit (handled in handleResolvedMessage's `.edit` case). No
+        // top-level edit branch here anymore.
 
+        // Canonical row id: the sender's E2E id from the encrypted KNST header when present,
+        // else the envelope id. The server reassigns envelope ids on the sealed-sender path,
+        // so only the E2E id lets the sender's cross-device references (edits, receipts,
+        // reply targets) resolve on our side. Transport-level ACKs stay on the envelope id.
+        let canonicalId: String
         do {
-            try saveMessage(for: chat, with: message, decryptedContent: decryptedContent, quotedMessage: quotedMessage, in: context)
+            canonicalId = try saveMessage(for: chat, with: message, decryptedContent: decryptedContent,
+                                          quotedMessage: quotedMessage, e2eMessageId: e2eMessageId, in: context)
+            if let mediaAlbum {
+                MediaWireCodec.storeThumbnails(from: mediaAlbum, for: canonicalId)
+            }
             try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId, in: context)
         } catch {
             Log.error("Failed to persist message \(message.id.prefix(8))…: \(error)", category: "MessageRouter")
@@ -592,9 +802,11 @@ final class MessageRouter {
         // 6b. Send E2E-encrypted delivery receipt back to sender.
         // This receipt is DR-encrypted so the server cannot correlate receipt→sender
         // even when stealth mode is active. Fires fire-and-forget; non-fatal if it fails.
-        let msgIdForReceipt = message.id
+        // Carries the canonical (E2E) id so the sender can match its own local row —
+        // the envelope id is server-reassigned on the sealed path and means nothing to the sender.
+        let msgIdForReceipt = canonicalId
         let identityKeyForReceipt: Data? = {
-            guard UserDefaults.standard.bool(forKey: "stealth_mode_enabled") else { return nil }
+            guard StealthPolicy.shared.shouldUseSealedSender() else { return nil }
             let req = User.fetchRequest()
             req.predicate = NSPredicate(format: "id == %@", otherUserId)
             req.fetchLimit = 1
@@ -696,21 +908,51 @@ final class MessageRouter {
     // MARK: - First Message Handling
     
     /// Handle first message from user (no session yet)
+    /// Returns the stream-cursor disposition for the message: `.deferred` when it is queued
+    /// (or already queued / dropped at the cap) and must hold the resume cursor until drained,
+    /// `.durable` when it is a give-up that the cursor may advance past.
+    @discardableResult
     private func handleFirstMessage(
         _ message: ChatMessage,
         from userId: String,
         chat: Chat,
         isNewChat: Bool,
-        in context: NSManagedObjectContext
-    ) {
-        let isFirstForUser = pendingQueue.count(for: userId) == 0
+        in context: NSManagedObjectContext,
+        forceReinit: Bool = false
+    ) -> StreamCursorTracker.Outcome {
+        // Dedup redelivered handshakes: a msg0 that already completed session init once
+        // (receipt raced the server's stream cursor on reconnect) must never re-init —
+        // its X3DH OTPK was consumed by the first init, so a re-init can only fail with
+        // "OTPK not found" and spuriously kick off the 3-DH heal cycle. Re-ACK and move on.
+        //
+        // `forceReinit` bypasses this: SESSION_RESET_INIT just archived the live session,
+        // so there is genuinely no session now. Skipping re-init because the reset-init's
+        // id was seen (and marked processed) in an earlier *failed* attempt would leave the
+        // peer permanently sessionless — the deadlock that spams "session out of sync".
+        // A reset-init must always rebuild, even for a previously-seen id.
+        if !forceReinit && PersistentACKStore.shared.isProcessed(message.id, in: context) {
+            Log.info("SESSION_STATE[first_message_dedup]: \(message.id.prefix(8))… from \(userId.prefix(8))… already processed — re-ACKing, skipping re-init", category: "SessionInit")
+            delegate?.messageRouter(self, needsReceipt: [message.id], to: userId, status: .delivered)
+            if isNewChat { context.delete(chat) }
+            return .durable
+        }
+
+        // Queue disposition comes from the pure SessionReducer, fed by the authoritative facts
+        // we hold here: no Rust session exists (this method is only reached when !hasSession),
+        // and whether init is already underway (something already queued for this peer).
+        // `.startInit` ⇒ this is the first message → fetch the bundle; otherwise just queue.
+        let disposition = SessionReducer.incomingDisposition(
+            hasActiveSession: false,
+            isInitInFlight: pendingQueue.count(for: userId) > 0
+        )
+        let isFirstForUser = disposition.contains(.startInit)
 
         // Deduplicate: skip if same message ID is already in the queue
         if pendingQueue.contains(messageId: message.id, for: userId) {
             Log.debug("Skipping duplicate queued message \(message.id.prefix(8))...", category: "MessageRouter")
             // Do NOT ACK as delivered yet: session init may still fail, and acknowledging would
             // cause the server to drop the pending message even though we haven't decrypted it.
-            return
+            return .deferred
         }
 
         // Guard: initReceivingSession requires messageNumber=0 (X3DH handshake).
@@ -721,19 +963,30 @@ final class MessageRouter {
             PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
             delegate?.messageRouter(self, needsReceipt: [message.id], to: userId, status: .failed)
             pendingQueue.touch(userId)
-            addSystemMessage(
-                "Encrypted session out of sync. Asking contact to restart...",
-                toUserId: userId,
-                in: context
-            )
+            // Throttle the user-visible notice + restart request per contact: a burst of
+            // mid-ratchet messages would otherwise stack identical "out of sync" bubbles and
+            // re-ask the sender to restart on every one. Cursor/ACK bookkeeping above is
+            // per-message and unaffected; only the notice + END_SESSION are rate-limited.
+            if shouldEmitOutOfSyncNotice(for: userId) {
+                addSystemMessage(
+                    "Encrypted session out of sync. Asking contact to restart...",
+                    toUserId: userId,
+                    in: context
+                )
+                delegate?.messageRouter(self, needsEndSession: userId)
+            }
             if isNewChat { context.delete(chat) }
-            delegate?.messageRouter(self, needsEndSession: userId)
-            return
+            // Give-up: message is marked processed + sender asked to restart; nothing to drain,
+            // so the cursor may advance past it.
+            return .durable
         }
 
         guard pendingQueue.enqueue(message, for: userId) else {
             Log.info("Pending queue saturated for \(userId.prefix(8))… — not queueing until session init completes", category: "MessageRouter")
-            return
+            // Not enqueued, but DON'T advance: the server keeps re-delivering it; once the queue
+            // drains (init completes) a later re-delivery is enqueued and processed. Holding the
+            // cursor (rather than dropping) trades a bounded stall for no message loss.
+            return .deferred
         }
 
         Log.info("Message queued for session init from \(userId) — queue size: \(pendingQueue.count(for: userId))", category: "MessageRouter")
@@ -751,8 +1004,12 @@ final class MessageRouter {
         if isFirstForUser {
             delegate?.messageRouter(self, needsPublicKeyBundle: userId, for: message)
         }
+
+        // Queued for session init — hold the resume cursor until this message is drained
+        // (re-routed → durable) or the queue is cleared (give-up).
+        return .deferred
     }
-    
+
     // MARK: - Session Message Handling
     
     // MARK: - Rust Heal Decision
@@ -831,12 +1088,12 @@ final class MessageRouter {
 
     /// Parse and dispatch an incoming E2E delivery receipt (content_type=14).
     ///
-    /// Payload format (sniff first byte):
-    /// - `0x7B` (`{`) → legacy JSON: `{"type":"delivery_receipt","message_ids":["<uuid>",...]}`
-    /// - else → binary proto: `Shared_Proto_Signaling_V1_DeliveryReceipt` with `.direct(DirectReceipt{ messageIds, ... })`
-    ///
-    /// Backward compat: JSON `type` field is checked so old clients that fall through to
-    /// `handleSpecialMessage` also silently discard the payload instead of saving it.
+    /// Payload is binary proto `Shared_Proto_Signaling_V1_DeliveryReceipt` with
+    /// `.direct(DirectReceipt{ messageIds, ... })`. The legacy JSON payload
+    /// (`{"type":"delivery_receipt",…}`) was retired once all clients emitted proto
+    /// (producer flipped 2026-06-11); a stale JSON payload now fails proto parse and is
+    /// discarded — never rendered, since ct=14 is intercepted before the chunk reassembler
+    /// and `Message.isServiceArtifact` guards any leak.
     private func handleIncomingE2EDeliveryReceipt(
         _ payload: Data,
         messageId: String,
@@ -853,15 +1110,7 @@ final class MessageRouter {
             return
         }
 
-        let ids: [String]
-
-        if payload.first == 0x7B {
-            // Legacy JSON path: {"type":"delivery_receipt","message_ids":[...]}
-            ids = parseLegacyJsonReceipt(payload, from: otherUserId) ?? []
-        } else {
-            // Binary proto path: Shared_Proto_Signaling_V1_DeliveryReceipt
-            ids = parseBinaryReceipt(payload, from: otherUserId) ?? []
-        }
+        let ids = parseBinaryReceipt(payload, from: otherUserId) ?? []
 
         guard !ids.isEmpty else {
             Log.error("E2E receipt: failed to parse payload from \(otherUserId.prefix(8))…", category: "MessageRouter")
@@ -870,27 +1119,6 @@ final class MessageRouter {
 
         Log.info("E2E receipt: \(ids.count) message(s) confirmed by \(otherUserId.prefix(8))…", category: "MessageRouter")
         delegate?.messageRouter(self, didDecryptDeliveryReceipt: ids)
-    }
-
-    /// Parse legacy JSON delivery receipt: `{"type":"delivery_receipt","message_ids":[...]}`
-    private func parseLegacyJsonReceipt(_ payload: Data, from otherUserId: String) -> [String]? {
-        let json: [String: Any]
-        do {
-            guard let parsed = try JSONSerialization.jsonObject(with: payload) as? [String: Any] else {
-                Log.error("E2E receipt: payload is not a JSON object from \(otherUserId.prefix(8))…", category: "MessageRouter")
-                return nil
-            }
-            json = parsed
-        } catch {
-            Log.error("E2E receipt: JSON parse failed from \(otherUserId.prefix(8))…: \(error)", category: "MessageRouter")
-            return nil
-        }
-        guard let type_ = json["type"] as? String, type_ == "delivery_receipt",
-              let ids = json["message_ids"] as? [String], !ids.isEmpty else {
-            Log.error("E2E receipt: failed to parse JSON payload from \(otherUserId.prefix(8))…", category: "MessageRouter")
-            return nil
-        }
-        return ids
     }
 
     /// Parse binary proto delivery receipt: `Shared_Proto_Signaling_V1_DeliveryReceipt`
@@ -940,18 +1168,9 @@ final class MessageRouter {
                 return false
             }
 
-            if type == "delivery_receipt" {
-                // Backward-compat guard: content_type=14 is handled in handleResolvedMessage.
-                // This branch catches any fallthrough from older code paths / future regressions.
-                if let ids = jsonDict["message_ids"] as? [String], !ids.isEmpty {
-                    Log.info("E2E receipt (special-msg path): \(ids.count) msg(s)", category: "MessageRouter")
-                    delegate?.messageRouter(self, didDecryptDeliveryReceipt: ids)
-                }
-                return true
-            }
-
             if type == "profile" {
-                if let profileData = ProfileSharingManager.shared.parseProfileMessage(decryptedContent) {
+                if let profileData = ProfileSharingManager.shared.parseProfileMessage(decryptedContent) ??
+                                     (decryptedContent.data(using: .utf8).flatMap { ProfileSharingManager.shared.parseProfileMessage(from: $0) }) {
                     Log.info("Received profile message from \(userId)", category: "MessageRouter")
                     ProfileSharingManager.shared.handleProfileMessage(profileData, from: userId, in: context)
                     return true
@@ -1013,9 +1232,13 @@ final class MessageRouter {
         SessionHealingService.shared.clearQueue(for: userId, in: context)
 
         // 4. Route the X3DH payload as a fresh msgNum=0 — triggers normal RESPONDER init path.
+        //    forceReinit: the session was just archived above, so the isProcessed dedup in
+        //    handleFirstMessage must not short-circuit re-init even if this reset-init id was
+        //    seen (and marked processed) in a prior failed attempt — otherwise the peer stays
+        //    sessionless forever and we spam "session out of sync".
         do {
             let (chat, isNewChat) = try findOrCreateChat(for: userId, in: context)
-            handleFirstMessage(message, from: userId, chat: chat, isNewChat: isNewChat, in: context)
+            handleFirstMessage(message, from: userId, chat: chat, isNewChat: isNewChat, in: context, forceReinit: true)
 
             Log.info("SESSION_RESET_INIT: old session archived, RESPONDER init triggered for \(userId.prefix(8))…", category: "MessageRouter")
         } catch {
@@ -1230,32 +1453,62 @@ final class MessageRouter {
     // MARK: - Message Persistence
     
     /// Save message to Core Data
+    /// Persists an incoming message and returns the canonical row id it was stored under.
+    /// `e2eMessageId` (sender's id from the encrypted KNST header) wins over the envelope id —
+    /// the server reassigns envelope ids on the sealed-sender path, and edits/receipts/replies
+    /// reference the sender's id. Falls back to the envelope id if the E2E id already belongs
+    /// to a different author's message (collision guard).
+    @discardableResult
     private func saveMessage(
         for chat: Chat,
         with messageData: ChatMessage,
         decryptedContent: String,
         quotedMessage: Shared_Proto_Messaging_V1_QuotedMessage?,
+        e2eMessageId: String? = nil,
         in context: NSManagedObjectContext
-    ) throws {
+    ) throws -> String {
+        var canonicalId = (e2eMessageId ?? messageData.id).lowercased()
         let fetchRequest = Message.fetchRequest()
-        let messagePredicate = NSPredicate(format: "id ==[c] %@", messageData.id)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [messagePredicate])
-        
-        // Check if message already exists (from background fetch)
+        fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", canonicalId)
+        fetchRequest.fetchLimit = 1
+
+        // Check if message already exists (from background fetch, retry redelivery, …)
         if let existingMessage = try context.fetch(fetchRequest).first {
-            // Update encrypted content if message wasn't previously decrypted
-            if !existingMessage.hasDecryptedContent {
-                Log.debug("Updating decrypted content for message \(messageData.id)", category: "MessageRouter")
-                existingMessage.applyStoredEncryption(plaintext: decryptedContent, contactId: messageData.from)
-                try context.saveOrThrow(category: "MessageRouter")
-                Log.debug("Updated message decryption", category: "MessageRouter")
+            if existingMessage.fromUserId == messageData.from {
+                // Update encrypted content if message wasn't previously decrypted
+                if !existingMessage.hasDecryptedContent {
+                    Log.debug("Updating decrypted content for message \(canonicalId)", category: "MessageRouter")
+                    existingMessage.applyStoredEncryption(plaintext: decryptedContent, contactId: messageData.from)
+                    let preview = Chat.formatPreviewText(decryptedContent)
+                    if let currentLastTime = chat.lastMessageTime {
+                        if existingMessage.timestamp >= currentLastTime || (chat.lastMessageText ?? "").isEmpty {
+                            chat.lastMessageText = preview
+                            chat.lastMessageTime = existingMessage.timestamp
+                        }
+                    } else {
+                        chat.lastMessageText = preview
+                        chat.lastMessageTime = existingMessage.timestamp
+                    }
+                    try context.saveOrThrow(category: "MessageRouter")
+                    Log.debug("Updated message decryption", category: "MessageRouter")
+                }
+                return canonicalId  // Message already exists
             }
-            return  // Message already exists
+            // The E2E id collides with a row from a different author — never overwrite or
+            // suppress it; store this message under the (unique) envelope id instead.
+            Log.error("E2E id \(canonicalId.prefix(8))… collides with a message from another author — falling back to envelope id", category: "MessageRouter")
+            canonicalId = messageData.id.lowercased()
+            let envelopeFetch = Message.fetchRequest()
+            envelopeFetch.predicate = NSPredicate(format: "id ==[c] %@", canonicalId)
+            envelopeFetch.fetchLimit = 1
+            if try context.fetch(envelopeFetch).first != nil {
+                return canonicalId  // already stored under the envelope id (e.g. by background fetch)
+            }
         }
 
         // Create new message
         let message = Message(context: context)
-        message.id = messageData.id.lowercased()
+        message.id = canonicalId
         message.fromUserId = messageData.from
         message.toUserId = messageData.to
         message.contentType = .regular
@@ -1290,8 +1543,15 @@ final class MessageRouter {
 
         chat.lastMessageText = Chat.formatPreviewText(decryptedContent)
         chat.lastMessageTime = message.timestamp
+        if InAppNotificationService.shared.activeChatId != chat.id {
+            chat.unreadCount += 1
+        }
 
         try context.saveOrThrow(category: "MessageRouter")
+        Log.debug(
+            "Chat metadata updated chatId=\(chat.id.prefix(8))… preview='\(chat.lastMessageText ?? "")' unread=\(chat.unreadCount) ts=\(chat.lastMessageTime?.description ?? "nil")",
+            category: "MessageRouter"
+        )
         PerformanceMetrics.shared.messageUIDisplayed(messageId: messageData.id)
 
         let senderId = messageData.from
@@ -1341,6 +1601,8 @@ final class MessageRouter {
                 )
             }
         }
+
+        return canonicalId
     }
 
     // MARK: - SENDER_SYNC Handling
@@ -1421,16 +1683,29 @@ final class MessageRouter {
         // Decode raw bytes through the binary pipeline (same as normal messages).
         let decrypted: String
         switch ChunkedMessageReassembler().process(data: decryptedBytes) {
-        case .assembled(let text, _):
+        case .assembled(let text, _, _, _):
             decrypted = text
         case .legacy(let text):
             decrypted = text
+        case .profile:
+            // A profile share synced from our own other device — never persist a placeholder.
+            // (Rendering it as an outgoing profile bubble on the synced device is not needed here.)
+            Log.info("SENDER_SYNC: profile-share carrier, not persisting as text", category: "MessageRouter")
+            return
+        case .edit:
+            // edits shouldn't appear in SENDER_SYNC init carrier
+            Log.info("SENDER_SYNC: edit in init-carrier, ignoring", category: "MessageRouter")
+            return
         case .incomplete, .invalid:
             Log.info("SENDER_SYNC: could not decode init-carrier payload for \(partnerUserId.prefix(8))… — session established, no user content", category: "MessageRouter")
             return
         }
 
-        // Discard session control strings — they carry no user-visible content.
+        // Discard session control signals — they carry no user-visible content.
+        // Typed (content_type 24/25/26) first, then legacy plaintext fallback.
+        if SessionControlCodec.op(forContentType: Int(original.contentType)) != nil {
+            return
+        }
         if decrypted.hasPrefix("__session_ping") || decrypted.hasPrefix("__session_reset_init")
             || decrypted.hasPrefix("__session_ready") || decrypted.hasPrefix("session_ready_")
         {

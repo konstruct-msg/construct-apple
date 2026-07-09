@@ -42,6 +42,11 @@ extension User {
     /// When the contact was first added (link, code, or incoming message).
     @NSManaged public var addedAt: Date?
 
+    /// Local-only display override the user assigns to this contact. Never sent to the
+    /// server or the contact — purely a presentation alias, resolved first in
+    /// `resolvedDisplayName`. `nil`/empty means "use the server/generated name".
+    @NSManaged public var localAlias: String?
+
     // MARK: Key Transparency
 
     /// The raw identity key bytes from the last successfully KT-verified bundle.

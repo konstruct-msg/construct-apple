@@ -16,6 +16,8 @@ struct SendBackupNearbyView: View {
     }
 
     var mode: Mode = .backup
+    /// When set (post–device-link history sync), sender uses the shared PIN — no display step.
+    var autoPairingPIN: String? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var context
@@ -33,7 +35,11 @@ struct SendBackupNearbyView: View {
                     title: NSLocalizedString(mode == .historySync ? "history_sync_send_title" : "transfer_send_title", comment: ""),
                     showBack: true,
                     backAction: { dismiss() }
-                )
+                ) {
+                    EmptyView()
+                } trailing: {
+                    EmptyView()
+                }
                 content
             }
         }
@@ -58,7 +64,14 @@ struct SendBackupNearbyView: View {
                 case .idle, .preparing:
                     preparingView
                 case .advertising:
-                    advertisingView
+                    if autoPairingPIN != nil {
+                        statusView(
+                            symbol: "[→]",
+                            label: NSLocalizedString("history_sync_auto_sending", comment: "")
+                        )
+                    } else {
+                        advertisingView
+                    }
                 case .browsing, .handshaking:
                     statusView(
                         symbol: "[↔]",
@@ -178,8 +191,8 @@ struct SendBackupNearbyView: View {
 
     private func failedView(_ message: String) -> some View {
         VStack(spacing: 16) {
-            Text("[!]")
-                .font(CTFont.bold(28))
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(CTFont.regular(28))
                 .foregroundColor(Color.CT.danger)
             Text(message)
                 .font(CTFont.regular(13))
@@ -206,7 +219,7 @@ struct SendBackupNearbyView: View {
             let userId = mode == .historySync ? KeychainManager.shared.loadUserID() : nil
             let payload = try await LocalBackupService.shared.buildTransferPayload(context: context, userId: userId)
             let transferType: NearbyTransferService.TransferType = mode == .historySync ? .historySync : .backup
-            service.startSending(payload: payload, type: transferType)
+            service.startSending(payload: payload, type: transferType, fixedPIN: autoPairingPIN)
         } catch {
             errorMessage = error.localizedDescription
             showError = true

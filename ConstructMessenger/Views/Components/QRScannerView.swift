@@ -259,10 +259,13 @@ struct QRScannerView: View {
         let normalized = normalizeScannedCode(code)
         Log.debug("QRScannerView: scanned=\(code.prefix(120)), normalized=\(normalized.prefix(120))", category: "QRScannerView")
 
-        if normalized.lowercased().hasPrefix("https://konstruct.cc/c/") ||
-           normalized.lowercased().hasPrefix("https://konstruct.cc/add") ||
-           normalized.lowercased().hasPrefix("https://web.konstruct.cc/add") ||
-           normalized.lowercased().hasPrefix(InviteConfig.qrCodePrefixScheme) {
+        let lower = normalized.lowercased()
+        if lower.hasPrefix("https://konstruct.cc/c/") ||
+           lower.hasPrefix("https://konstruct.cc/add") ||
+           lower.hasPrefix("https://web.konstruct.cc/add") ||
+           lower.hasPrefix(InviteConfig.qrCodePrefixScheme) ||
+           // Device link flows (Settings → Link Replica, onboarding join-request from Desktop)
+           lower.hasPrefix("konstruct://link") {
             onCodeScanned(normalized)
         } else if isBase64Like(normalized) {
             onCodeScanned("konstruct://add?invite=\(normalized)")

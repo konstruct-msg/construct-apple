@@ -64,15 +64,15 @@ struct OnboardingView: View {
                     }
 
                     if let errorKey = usernameErrorKey {
-                        Text("> [!] \(NSLocalizedString(errorKey, comment: ""))")
+                        Text((NSLocalizedString(errorKey, comment: "")))
                             .font(CTFont.regular(11))
                             .foregroundColor(Color.CT.danger)
                     } else if isCheckingUsername {
-                        Text("> checking...")
+                        Text("checking...")
                             .font(CTFont.regular(11))
                             .foregroundColor(Color.CT.textDim)
                     } else if let available = usernameIsAvailable {
-                        Text(available ? "> [ok] available" : "> [!] taken")
+                        Text(available ? "available" : "taken")
                             .font(CTFont.regular(11))
                             .foregroundColor(available ? Color.CT.accentDim : Color.CT.danger)
                     }
@@ -94,14 +94,14 @@ struct OnboardingView: View {
 
                     HStack(spacing: 32) {
                         Button { showingRecovery = true } label: {
-                            Text("[restore →]")
+                            Text("restore")
                                 .font(CTFont.regular(13))
                                 .foregroundColor(Color.CT.accentDim)
                         }
                         .buttonStyle(.plain)
 
                         Button { showingDeviceLink = true } label: {
-                            Text("[link device →]")
+                            Text("link device")
                                 .font(CTFont.regular(13))
                                 .foregroundColor(Color.CT.textDim)
                         }

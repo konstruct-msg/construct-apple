@@ -23,7 +23,7 @@ final class MediaServiceClient: Sendable {
 
     // MARK: - Models
 
-    struct UploadedMedia {
+    struct UploadedMedia: Codable, Sendable {
         let mediaId: String
         let mediaUrl: String
         let encryptionKey: Data
@@ -40,7 +40,13 @@ extension MediaServiceClient {
 
     // MARK: - Download Media (server streaming)
 
-    nonisolated func downloadEncryptedFile(mediaId: String) async throws -> Data {
+    /// - Parameter onProgress: called with cumulative bytes received as chunks arrive,
+    ///   for real download progress UI. The caller knows the expected total (the
+    ///   descriptor's encrypted `size`) and converts to a fraction.
+    nonisolated func downloadEncryptedFile(
+        mediaId: String,
+        onProgress: (@Sendable (Int64) -> Void)? = nil
+    ) async throws -> Data {
         // Media downloads are long-running server-streaming RPCs. Do NOT arm the 4s
         // fast-fallback direct timeout here — it causes false .deadlineExceeded on
         // healthy but high-latency/slow links.
@@ -66,6 +72,7 @@ extension MediaServiceClient {
                         switch part {
                         case .message(let chunk):
                             assembled.append(chunk.chunk)
+                            onProgress?(Int64(assembled.count))
                         case .trailingMetadata:
                             break
                         }
@@ -81,7 +88,14 @@ extension MediaServiceClient {
 
     // MARK: - High-Level: Upload Data
 
-    func uploadData(_ data: Data, mimeType: String = "application/octet-stream") async throws -> UploadedMedia {
+    /// - Parameter onProgress: called with cumulative upload fraction (0.0…1.0) as chunks
+    ///   are written to the stream, for real send-progress UI. Best-effort; may be called
+    ///   from a background task, so marshal to the main actor in the handler if updating UI.
+    func uploadData(
+        _ data: Data,
+        mimeType: String = "application/octet-stream",
+        onProgress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> UploadedMedia {
         // 1. Generate encryption key
         var keyBytes = [UInt8](repeating: 0, count: 32)
         guard SecRandomCopyBytes(kSecRandomDefault, keyBytes.count, &keyBytes) == errSecSuccess else {
@@ -127,6 +141,7 @@ extension MediaServiceClient {
             let uploadRequest = StreamingClientRequest<Shared_Proto_Services_V1_UploadMediaRequest>(
                 metadata: [],
                 producer: { writer in
+                    let totalBytes = capturedEncryptedData.count
                     for i in 0..<totalChunks {
                         let start = i * chunkSize
                         let end = min(start + chunkSize, capturedEncryptedData.count)
@@ -135,9 +150,14 @@ extension MediaServiceClient {
                         req.chunk = capturedEncryptedData.subdata(in: start..<end)
                         req.chunkNumber = Int32(i)
                         req.isLast = (i == totalChunks - 1)
-                        req.totalSize = Int64(capturedEncryptedData.count)
+                        req.totalSize = Int64(totalBytes)
                         req.fileHash = fileHash
                         try await writer.write(req)
+                        if let onProgress, totalBytes > 0 {
+                            // Cap streamed-bytes fraction at 0.95 — the final 5% covers the
+                            // server's assemble + ack round-trip after the last chunk.
+                            onProgress(min(0.95, Double(end) / Double(totalBytes)))
+                        }
                     }
                 }
             )

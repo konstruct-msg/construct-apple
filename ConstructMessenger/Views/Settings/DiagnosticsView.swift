@@ -23,6 +23,9 @@ struct DiagnosticsView: View {
     @State private var logText: String = ""
     @State private var logSize: String = ""
     @State private var push = PushNotificationManager.shared
+    #if DEBUG
+    @AppStorage("stealth_mode_enabled") private var stealthOverrideEnabled = true
+    #endif
     private var isPushPermissionGranted: Bool {
         push.authorizationStatus == .authorized || push.authorizationStatus == .provisional
     }
@@ -54,7 +57,11 @@ struct DiagnosticsView: View {
                         title: NSLocalizedString("diagnostics", comment: ""),
                         showBack: true,
                         backAction: { dismiss() }
-                    )
+                    ) {
+                        EmptyView()
+                    } trailing: {
+                        EmptyView()
+                    }
                 }
 
                 // MARK: - Push Notifications
@@ -88,6 +95,43 @@ struct DiagnosticsView: View {
                             .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                     }
                 }
+                
+                #if DEBUG
+                // MARK: - Dev Tools (Debug only)
+                VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        CTSettingsSectionHeader(title: NSLocalizedString("DEVELOPER", comment: ""), color: .orange)
+                        CTSectionGroup {
+                            Toggle(isOn: $stealthOverrideEnabled) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(LocalizedStringKey("diagnostics_stealth_override_title"))
+                                        .font(CTFont.regular(14))
+                                        .foregroundStyle(.orange)
+                                    Text(LocalizedStringKey("diagnostics_stealth_override_hint"))
+                                        .font(CTFont.regular(11))
+                                        .foregroundStyle(Color.CT.textDim)
+                                }
+                            }
+                            .tint(.orange)
+                            .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, SettingsLayout.rowVerticalPadding)
+                            ConstructActionRow(systemImage: "arrow.clockwise", title: LocalizedStringKey("diagnostics_force_spk_rotation"), role: .secondary) {
+                                Task {
+                                    await PreKeyRotationService.shared.forceRotate()
+                                }
+                            }
+                            ConstructActionRow(systemImage: "exclamationmark.triangle", title: LocalizedStringKey("diagnostics_reset_local_data_keychain"), role: .destructive) {
+                                resetLocalData()
+                            }
+                        }
+                    }
+                    Text(LocalizedStringKey("diagnostics_dev_tools_footer"))
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
+                }
+                #endif
+
 
                 // MARK: - Status
                 CTSectionGroup {
@@ -139,36 +183,7 @@ struct DiagnosticsView: View {
                     ConstructActionRow(systemImage: "square.and.arrow.up", title: LocalizedStringKey("diagnostics_share_logs"), role: .accent) {
                         shareArchive()
                     }
-
-                    ConstructActionRow(systemImage: "trash", title: LocalizedStringKey("diagnostics_clear_logs"), role: .destructive) {
-                        clearLogs()
-                    }
-                    .disabled(!isLogCollectionEnabled)
-                    .opacity(isLogCollectionEnabled ? 1 : DiagnosticsLayout.disabledActionOpacity)
                 }
-
-                #if DEBUG
-                // MARK: - Dev Tools (Debug only)
-                VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        CTSettingsSectionHeader(title: NSLocalizedString("DEVELOPER", comment: ""), color: .orange)
-                        CTSectionGroup {
-                            ConstructActionRow(systemImage: "arrow.clockwise", title: LocalizedStringKey("diagnostics_force_spk_rotation"), role: .secondary) {
-                                Task {
-                                    await PreKeyRotationService.shared.forceRotate()
-                                }
-                            }
-                            ConstructActionRow(systemImage: "exclamationmark.triangle", title: LocalizedStringKey("diagnostics_reset_local_data_keychain"), role: .destructive) {
-                                resetLocalData()
-                            }
-                        }
-                    }
-                    Text(LocalizedStringKey("diagnostics_dev_tools_footer"))
-                        .font(CTFont.regular(12))
-                        .foregroundStyle(Color.CT.textDim)
-                        .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
-                }
-                #endif
 
                 // MARK: - Recent Logs
                 if !logText.isEmpty {
@@ -186,6 +201,16 @@ struct DiagnosticsView: View {
                             .frame(height: DiagnosticsConfig.recentLogContainerHeight)
                         }
                     }
+                }
+                
+                // MARK: - Actions
+                CTSectionGroup {
+
+                    ConstructActionRow(systemImage: "trash", title: LocalizedStringKey("diagnostics_clear_logs"), role: .destructive) {
+                        clearLogs()
+                    }
+                    .disabled(!isLogCollectionEnabled)
+                    .opacity(isLogCollectionEnabled ? 1 : DiagnosticsLayout.disabledActionOpacity)
                 }
             }
             .padding(.vertical, SettingsLayout.screenVerticalPadding)
@@ -280,6 +305,7 @@ struct DiagnosticsView: View {
         KeychainManager.shared.deleteAllKeys()       // identity_key, signing_key, crypto_private_keys_json, sessions
         KeychainManager.shared.deleteDeviceKeys()    // deviceId, deviceSigningKey, deviceIdentityKey
         KeychainManager.shared.deleteOtpks()     // crypto_otpks (OTPK bundle)
+        KeychainManager.shared.deleteMlsStore()  // mls_store (MLS group store snapshot)
         KeychainManager.shared.deleteSessionToken()
         KeychainManager.shared.deleteRefreshToken()
 

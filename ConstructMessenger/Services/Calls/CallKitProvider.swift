@@ -7,6 +7,7 @@
 import Foundation
 import CallKit
 import AVFoundation
+import UIKit
 
 final class CallKitProvider: NSObject, CXProviderDelegate {
     static let shared = CallKitProvider()
@@ -149,9 +150,44 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     }
 
     nonisolated func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
-        Log.info("CallKit end (uuid=\(action.callUUID.uuidString.prefix(8))…)", category: "Calls")
+        Log.info(
+            "CallKit end (uuid=\(action.callUUID.uuidString.prefix(8))…) \(Self.currentAppContext())",
+            category: "Calls"
+        )
         onEnd?(action.callUUID)
         action.fulfill()
+    }
+
+    private static func currentAppContext() -> String {
+        let app = UIApplication.shared
+        let sceneStates = app.connectedScenes
+            .map { $0.activationState.debugName }
+            .sorted()
+            .joined(separator: ",")
+        return "appState=\(app.applicationState.debugName) protectedData=\(app.isProtectedDataAvailable) scenes=[\(sceneStates)]"
+    }
+}
+
+private extension UIApplication.State {
+    var debugName: String {
+        switch self {
+        case .active: return "active"
+        case .inactive: return "inactive"
+        case .background: return "background"
+        @unknown default: return "unknown(\(rawValue))"
+        }
+    }
+}
+
+private extension UIScene.ActivationState {
+    var debugName: String {
+        switch self {
+        case .foregroundActive: return "foregroundActive"
+        case .foregroundInactive: return "foregroundInactive"
+        case .background: return "background"
+        case .unattached: return "unattached"
+        @unknown default: return "unknown"
+        }
     }
 }
 

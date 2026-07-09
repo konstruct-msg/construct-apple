@@ -5,9 +5,14 @@
 
 #if os(iOS)
 import SwiftUI
+import Combine
 import CoreData
 
 struct ChatsListView: View {
+    private enum Layout {
+        static let topScrimUnderSafeArea: CGFloat = CTLayout.navBarHeight + 24
+    }
+
     @Environment(\.managedObjectContext) private var viewContext
 
     @FetchRequest
@@ -18,6 +23,7 @@ struct ChatsListView: View {
     @State private var navigationPath = NavigationPath()
     @State private var showingDrafts = false
     @State private var searchQuery = ""
+    @State private var listRevision = 0
 
     init() {
         let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
@@ -31,16 +37,47 @@ struct ChatsListView: View {
     var body: some View {
         let renderedChats = filteredChats
         NavigationStack(path: $navigationPath) {
-            VStack(spacing: 0) {
+            ZStack {
+                // Main list content - full height so it can scroll under floating capsules
+                chatList(chats: renderedChats)
+
+                GeometryReader { geo in
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color.CT.bg, location: 0),
+                                    .init(color: Color.CT.bg.opacity(0.65), location: 0.55),
+                                    .init(color: Color.CT.bg.opacity(0), location: 1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(height: geo.safeAreaInsets.top + Layout.topScrimUnderSafeArea)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .ignoresSafeArea(edges: .top)
+                }
+                .allowsHitTesting(false)
+
+                // Top floating area: nav + independent search capsule
+                VStack(spacing: 0) {
                     navBar
                     searchBar
-                    chatList(chats: renderedChats)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 4)  // small gap to make search independent capsule
+                    Spacer(minLength: 0)
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
             }
             .ctBackground()
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: String.self) { chatId in
                     if let chat = chats.first(where: { $0.id == chatId }) {
                         ChatView(chat: chat, context: viewContext)
+                            // Messenger convention: the bottom tab bar yields to the
+                            // message input bar while inside a conversation.
+                            .toolbar(.hidden, for: .tabBar)
                     }
             }
             .sheet(isPresented: $showingQRScanner) {
@@ -50,9 +87,6 @@ struct ChatsListView: View {
                     chatsViewModel.setContext(viewContext)
                     LocalNotificationManager.shared.clearBadge()
                     updateTotalUnreadCount()
-            }
-            .onChange(of: navigationPath) { _, path in
-                    chatsViewModel.isInChat = !path.isEmpty
             }
             .onChange(of: chatsViewModel.chatToOpen) { _, chatId in
                     if let chatId {
@@ -70,6 +104,12 @@ struct ChatsListView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
                     guard notificationContainsChatChanges(note) else { return }
+                    listRevision &+= 1
+                    updateTotalUnreadCount()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { note in
+                    guard notificationContainsChatChanges(note) else { return }
+                    listRevision &+= 1
                     updateTotalUnreadCount()
             }
         }
@@ -95,7 +135,6 @@ struct ChatsListView: View {
         }
         .padding(.horizontal, CTLayout.edgePad)
         .frame(height: CTLayout.navBarHeight)
-        .ctBorderBottom()
     }
 
     // MARK: - Chat List
@@ -108,6 +147,13 @@ struct ChatsListView: View {
 
     private func chatList(chats renderedChats: [Chat]) -> some View {
         List {
+            // Spacer row at top so first chats are visible below the floating search capsule,
+            // and content can scroll under the glass.
+            Color.clear
+                .frame(height: 70)  // approx height for nav + search
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
             ForEach(renderedChats) { chat in
                 Button {
                     navigationPath.append(chat.id)
@@ -115,7 +161,8 @@ struct ChatsListView: View {
                     ChatRowView(chat: chat)
                 }
                 .buttonStyle(.plain)
-                .listRowBackground(Color.CT.bg)
+                // Clear so the CTMatrixBackground watermark shows through the rows.
+                .listRowBackground(Color.clear)
                 .listRowSeparatorTint(Color.CT.noise)
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
@@ -145,14 +192,22 @@ struct ChatsListView: View {
                     .tint(Color.CT.textDim)
                 }
             }
+            // Spacer row so the last chat row is visible above the floating tab capsule,
+            // and list content can scroll under the glass.
+            Color.clear
+                .frame(height: 72)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
         }
+        .id(listRevision)
         .refreshable {
             await BackgroundFetchManager.shared.fetchPendingMessages()
         }
         .scrollDismissesKeyboard(.immediately)
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(Color.CT.bg)
+        // ASCII matrix watermark behind the rows (base #090909 comes from .ctBackground()).
+        .background(CTMatrixBackground())
     }
 
     // MARK: - Actions
@@ -175,7 +230,10 @@ struct ChatsListView: View {
         let keys = [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey]
         for key in keys {
             guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
-            if objects.contains(where: { $0.entity.name == "Chat" }) {
+            if objects.contains(where: { entity in
+                let name = entity.entity.name
+                return name == "Chat" || name == "Message"
+            }) {
                 return true
             }
         }

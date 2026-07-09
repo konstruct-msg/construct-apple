@@ -24,18 +24,13 @@ class CryptoManager {
 
     // Two-phase init: _bootstrapCore holds ClassicCryptoCore before userId is known;
     // orchestratorCore is created in setLocalUserId() once userId is available.
+    // Works for both iOS and macOS Desktop (Strategy B: direct core path).
     // Internal access for InviteGenerator (needs to export keys)
     internal var orchestratorCore: OrchestratorCore?
 
     /// True once OrchestratorCore has been successfully created from Keychain keys.
-    /// On macOS the engine owns the OrchestratorCore; always reports initialized so auth
-    /// flows don't fall into the "keys missing" branch.
     var isInitialized: Bool {
-        #if os(macOS)
-        return true
-        #else
         return orchestratorCore != nil
-        #endif
     }
     private var _bootstrapCore: ClassicCryptoCore?
     private var _cachedUserId: String?
@@ -311,7 +306,14 @@ class CryptoManager {
                     try newCore.importOneTimePrekeys(data: [UInt8](otpksData))
                     Log.debug("Imported OTPKs on core reload (\(newCore.oneTimePrekeyCount()) keys)", category: "CryptoManager")
                 } catch {
-                    Log.error("Failed to import OTPKs on core reload: \(error)", category: "CryptoManager")
+                    // CFE decode of the persisted OTPK blob failed → the core's private OTPK
+                    // store comes up EMPTY while the server still holds OTPKs whose private keys
+                    // we just lost. Left silent, this desyncs local↔server and every inbound X3DH
+                    // that used one of those OTPKs fails ("OTPK id not found"), driving the
+                    // session-init reset storm (see otpk-session-init-deadlock). Force a single
+                    // consistent replace-all on the next upload so counter/store/server reconverge.
+                    Log.fault("Failed to import OTPKs on core reload — forcing full OTPK replacement: \(error)", category: "CryptoManager")
+                    needsFullOtpkReplacement = true
                 }
             }
             PQCKeyManager.loadCFESnapshot(into: newCore)
@@ -401,6 +403,18 @@ class CryptoManager {
         orchestratorCore?.ackMarkProcessed(messageId: messageId)
     }
 
+    /// The NEGOTIATED crypto suite of the live session with `userId` — read from the
+    /// Rust core (authoritative; suite 3 is negotiated, the bundle only ever says 1/2).
+    /// Falls back to the Keychain copy when the session isn't loaded into the core yet.
+    /// Returns 0 when no session is known at all.
+    func sessionSuiteId(for userId: String) -> UInt16 {
+        coreLock.lock()
+        let coreSuite = orchestratorCore?.getSessionSuiteId(contactId: userId) ?? 0
+        coreLock.unlock()
+        if coreSuite > 0 { return coreSuite }
+        return KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0
+    }
+
     // MARK: - Orchestrator Event Bridge
 
     /// Single, serialized entry point for all `OrchestratorCore.handleEvent` calls.
@@ -448,60 +462,120 @@ class CryptoManager {
 
     // MARK: - Hybrid PQ Identity Signatures (Ed25519 + ML-DSA-65)
     //
-    // These wrap the stateless `hybrid*` free functions from construct-core. They do
-    // NOT touch orchestratorCore, so no coreLock is needed. The 2016-byte hybrid
-    // private key lives in Keychain (WhenUnlockedThisDeviceOnly) and is wiped by
-    // deleteAllCryptoKeys()/deleteAllKeys() (account deletion, duress, local reset).
+    // The hybrid signature private key is owned by the Rust core (KeyManager + CFE).
+    // All generation, signing and public key derivation go through OrchestratorCore.
+    // The "when to generate / sign SPK / publish" policy remains in Swift services.
     //
     // Client and server share the SAME implementation (RustCrypto ml-dsa, seed-based),
-    // so every format is byte-identical and signatures cross-verify:
-    //   private key 2016 = [ed25519_seed (32)] [mldsa65_seed (32)] [mldsa65_pk (1952)]
-    //   public key  1984 = [ed25519_pk (32)] [mldsa65_pk (1952)]
-    //   signature   3373 = [ed25519_sig (64)] [mldsa65_sig (3309)]
+    // so every format is byte-identical and signatures cross-verify.
 
-    /// Returns the device hybrid identity public key (1984 bytes), generating and
-    /// persisting a fresh hybrid keypair on first use.
+    /// Returns the device hybrid identity public key (1984 bytes).
+    /// The key is ensured inside the core on first use.
     @discardableResult
     func ensureHybridIdentityPublicKey() throws -> Data {
-        if let stored = KeychainManager.shared.loadHybridSigPrivateKey() {
-            return Data(try hybridPublicKeyFromPrivate(privateKey: [UInt8](stored)))
-        }
-        let pair = try hybridSignatureKeygen()
-        guard KeychainManager.shared.saveHybridSigPrivateKey(Data(pair.privateKey)) else {
-            throw CryptoManagerError.invalidKeyData
-        }
-        Log.info("Generated hybrid PQ identity signing keypair (Ed25519 + ML-DSA-65)", category: "CryptoManager")
-        return Data(pair.publicKey)
-    }
+        coreLock.lock()
+        defer { coreLock.unlock() }
 
-    /// The device hybrid identity public key if a keypair already exists, else nil
-    /// (does not generate one).
-    func hybridIdentityPublicKey() -> Data? {
-        guard let stored = KeychainManager.shared.loadHybridSigPrivateKey() else { return nil }
-        return (try? hybridPublicKeyFromPrivate(privateKey: [UInt8](stored))).map { Data($0) }
-    }
+        guard let core = orchestratorCore else {
+            throw CryptoManagerError.coreNotInitialized
+        }
 
-    /// Signs a message with the device hybrid identity key, generating the keypair on
-    /// first use. Returns a 3373-byte hybrid signature.
-    func signHybrid(_ message: [UInt8]) throws -> Data {
-        let priv: [UInt8]
-        if let stored = KeychainManager.shared.loadHybridSigPrivateKey() {
-            priv = [UInt8](stored)
-        } else {
-            let pair = try hybridSignatureKeygen()
-            guard KeychainManager.shared.saveHybridSigPrivateKey(Data(pair.privateKey)) else {
-                throw CryptoManagerError.invalidKeyData
+        // Migration from legacy separate keychain item (if any).
+        if core.hybridSignaturePublicKey() == nil,
+           let oldPriv = KeychainManager.shared.loadHybridSigPrivateKey(),
+           !oldPriv.isEmpty {
+            do {
+                try core.importHybridSignaturePrivateKey(privBytes: [UInt8](oldPriv))
+                _ = persistCoreState()
+                // Clean up the old separate item now that it's in core.
+                KeychainManager.shared.deleteHybridSigPrivateKey()
+                Log.info("Migrated legacy hybrid sig private key into core CFE", category: "CryptoManager")
+            } catch {
+                Log.error("Hybrid key migration import failed (will retry): \(error)", category: "CryptoManager")
             }
-            Log.info("Generated hybrid PQ identity signing keypair (Ed25519 + ML-DSA-65)", category: "CryptoManager")
-            priv = pair.privateKey
         }
-        return Data(try hybridSign(privateKey: priv, message: message))
+
+        let pub = try core.ensureHybridSignatureKey()
+        // Capture the hybrid key (if this call just generated it) into the CFE blob.
+        _ = persistCoreState()
+        return Data(pub)
+    }
+
+    /// The device hybrid identity public key if one exists in core, else nil.
+    func hybridIdentityPublicKey() -> Data? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { return nil }
+        return core.hybridSignaturePublicKey().map { Data($0) }
+    }
+
+    /// Signs a message with the device hybrid identity key (core-owned).
+    func signHybrid(_ message: [UInt8]) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        let sig = try core.signHybrid(message: message)
+        return Data(sig)
     }
 
     /// Verifies a hybrid signature against a peer's hybrid public key. Both the
     /// Ed25519 and ML-DSA-65 components must validate. Stateless.
     func verifyHybrid(publicKey: [UInt8], message: [UInt8], signature: [UInt8]) throws -> Bool {
         return try hybridVerify(publicKey: publicKey, message: message, signature: signature)
+    }
+
+    // MARK: - Core-delegated hybrid helpers (fully switched after bindings regen)
+
+    func buildX3dhSignMessage(suiteId: UInt8, publicKey: Data) -> [UInt8] {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else {
+            // Should not happen in normal use after core init; fall back to known bytes
+            var m = Data("KonstruktX3DH-v1".utf8)
+            m.append(0x00)
+            m.append(suiteId)
+            m.append(publicKey)
+            return [UInt8](m)
+        }
+        return core.buildX3dhSignMessage(suiteId: suiteId, publicKey: [UInt8](publicKey))
+    }
+
+    func buildHybridIdentityBindMessage(hybridPublic: Data) -> [UInt8] {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else {
+            var m = Data("KonstruktHybridId-v1".utf8)
+            m.append(hybridPublic)
+            return [UInt8](m)
+        }
+        return core.buildHybridIdentityBindMessage(hybridPublicKey: [UInt8](hybridPublic))
+    }
+
+    /// High-level: ensure hybrid key (if needed) + produce hybrid signature over the
+    /// standard X3DH prekey sign-message.
+    func signHybridPrekey(suiteId: UInt8, publicKey: Data) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        let sig = try core.signHybridPrekey(suiteId: suiteId, publicKey: [UInt8](publicKey))
+        return Data(sig)
+    }
+
+    /// Returns the hybrid signatures (if hybrid identity is published) over the
+    /// *current* classic and Kyber SPKs. This is the data the publish/rotation
+    /// paths need. Moving this here lifts logic from HybridIdentityService.
+    @MainActor
+    func currentHybridPrekeySignatures() -> (spk: Data?, kyber: Data?) {
+        // The flag is still in UserDefaults (app state), but the signing is core-routed.
+        guard HybridIdentityService.isHybridIdentityPublished else { return (nil, nil) }
+        let spk: Data? = (try? localBundlePublicKeys().signedPrekeyPublic).flatMap { pub in
+            try? signHybridPrekey(suiteId: 0x01, publicKey: pub)
+        }
+        // Kyber SPK is managed outside main KeyManager for now.
+        let kyber: Data? = (try? PQCKeyManager.shared.kyberSPKPublic()).flatMap { pub in
+            try? signHybridPrekey(suiteId: 0x10, publicKey: pub)
+        }
+        return (spk, kyber)
     }
 
     /// Apply a Kyber KEM shared secret to the named DR session.
@@ -577,6 +651,34 @@ class CryptoManager {
         return orchestratorCore?.oneTimePrekeyCount() ?? 0
     }
 
+    /// Prune OTPK private keys with id below `minKeepId`; returns the number removed.
+    /// Only valid right after a successful replace-all upload, when the server set is
+    /// known to be exactly the new batch — see `OtpkReplenishmentService`.
+    func pruneOneTimePrekeys(below minKeepId: UInt32) -> UInt32 {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.pruneOneTimePrekeysBelow(minKeepId: minKeepId) ?? 0
+    }
+
+    /// Store the ML-KEM-768 SPK in the core key-state (serialized via coreLock).
+    /// Commit-after-confirm: call only once the server confirmed the public upload,
+    /// then `persistCoreState()` — the key persists inside the private-keys CFE blob.
+    /// Returns false when the core is not initialized.
+    func setKyberSpk(keyId: UInt32, secretKey: Data, publicKey: Data) -> Bool {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { return false }
+        core.setKyberSpk(keyId: keyId, secretKey: [UInt8](secretKey), publicKey: [UInt8](publicKey))
+        return true
+    }
+
+    /// The ML-KEM-768 SPK held in the core key-state, or nil if none committed yet.
+    func kyberSpk() -> KyberSpkRecord? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.kyberSpk()
+    }
+
     /// Export a session's wire bytes (for session init completed notification).
     func exportSession(contactId: String) throws -> [UInt8] {
         coreLock.lock()
@@ -602,6 +704,10 @@ class CryptoManager {
         // Delete all individual keys and ALL sessions
         KeychainManager.shared.deleteAllKeys()
 
+        // MLS store is signed by the identity key being deleted — a fresh identity
+        // can never operate the old groups, so drop the snapshot with the keys.
+        MlsStoreManager.shared.reset()
+
         Log.info("All cryptographic keys and sessions deleted from Keychain", category: "CryptoManager")
         Log.info("On next app launch, fresh cryptographic keys will be generated", category: "CryptoManager")
     }
@@ -611,7 +717,7 @@ class CryptoManager {
         // MARK: - Session Management
 
     /// Initializes a secure session with a recipient using the Rust core.
-    func initializeSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil, spkUploadedAt: UInt64 = 0, spkRotationEpoch: UInt32 = 0, kyberSpkUploadedAt: UInt64 = 0, kyberSpkRotationEpoch: UInt32 = 0) throws {
+    func initializeSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil, spkUploadedAt: UInt64 = 0, spkRotationEpoch: UInt32 = 0, kyberSpkUploadedAt: UInt64 = 0, kyberSpkRotationEpoch: UInt32 = 0, supportsPqRatchet: Bool = false, allowStale: Bool = false) throws {
         do {
             try sessionInitService.initializeSession(
                 for: userId,
@@ -625,6 +731,8 @@ class CryptoManager {
                 spkRotationEpoch: spkRotationEpoch,
                 kyberSpkUploadedAt: kyberSpkUploadedAt,
                 kyberSpkRotationEpoch: kyberSpkRotationEpoch,
+                supportsPqRatchet: supportsPqRatchet,
+                allowStale: allowStale,
                 core: orchestratorCore,
                 archiveSession: { [weak self] userId, reason in
                     Log.info("Existing session found for \(userId) - archiving before reinitialization to prevent desync", category: "CryptoManager")
@@ -655,7 +763,6 @@ class CryptoManager {
     /// the remote party uses for the local device — see `cryptoLocalUserId`.
     func setLocalUserId(_ userId: String) {
         _cachedUserId = userId
-        #if !os(macOS)
         let cryptoId = cryptoLocalUserId
 
         if let existing = orchestratorCore {
@@ -686,7 +793,11 @@ class CryptoManager {
                     try newCore.importOneTimePrekeys(data: [UInt8](otpksData))
                     Log.debug("Imported OTPKs into OrchestratorCore (\(newCore.oneTimePrekeyCount()) keys)", category: "CryptoManager")
                 } catch {
-                    Log.error("Failed to import OTPKs into OrchestratorCore: \(error)", category: "CryptoManager")
+                    // See reloadCoreFromKeychain: a silent empty OTPK store + high next_otpk_id +
+                    // stale server keys is the seed of the session-init reset storm. Force a single
+                    // consistent replace-all instead of swallowing the failure.
+                    Log.fault("Failed to import OTPKs into OrchestratorCore — forcing full OTPK replacement: \(error)", category: "CryptoManager")
+                    needsFullOtpkReplacement = true
                 }
             } else {
                 Log.info("No OTPKs found in Keychain — key_manager will have empty OTPK store", category: "CryptoManager")
@@ -711,7 +822,6 @@ class CryptoManager {
         } catch {
             Log.error("setLocalUserId: OrchestratorCore init failed: \(error)", category: "CryptoManager")
         }
-        #endif
     }
 
     /// One-time migration: sessions saved before the AD fix (build < 350) stored
@@ -734,6 +844,26 @@ class CryptoManager {
 
     func hasSession(for userId: String) -> Bool {
         return orchestratorCore?.hasSession(contactId: userId) ?? false
+    }
+
+    /// True once the OrchestratorCore exists. Before this, `hasSession(for:)` returns
+    /// false for *every* contact, so any "session missing → END_SESSION / re-init"
+    /// decision (e.g. prewarm) MUST be gated on this. Otherwise, during the startup
+    /// window — especially when auth is delayed by a token refresh — a healthy session
+    /// that simply hasn't been restored yet looks missing and gets destroyed.
+    var isCoreReady: Bool {
+        return orchestratorCore != nil
+    }
+
+    /// Restore-aware variant of `hasSession`. If the core currently has no session for
+    /// `userId`, it attempts a lazy import from Keychain before answering. This closes a
+    /// startup race where prewarm runs after the core is created but before
+    /// `restoreRecentSessions` has imported the on-disk session — which otherwise looks
+    /// like a missing session and triggers a destructive END_SESSION + fresh re-init,
+    /// discarding the ratchet and breaking decryption of the peer's in-flight messages.
+    func hasOrRestoreSession(for userId: String) -> Bool {
+        guard isCoreReady else { return false }
+        return restoreSession(for: userId)
     }
 
     /// Return a read-only health snapshot for the session with `userId`.
@@ -948,7 +1078,10 @@ class CryptoManager {
                 contactId: message.from,
                 ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                 messageNumber: message.messageNumber,
-                content: [UInt8](contentForDecrypt)
+                content: [UInt8](contentForDecrypt),
+                suiteId: message.suiteId,
+                pqMessageEpoch: message.pqMessageEpoch,
+                pqRatchetField: [UInt8](message.pqRatchetField)
             )
             saveSessionToKeychain(for: message.from)
             Log.info("BG decrypt OK \(message.id.prefix(8))… msgNum=\(message.messageNumber) (\(result.plaintext.count) bytes)", category: "CryptoManager")
@@ -991,7 +1124,10 @@ class CryptoManager {
                 contactId: msg.from,
                 ephemeralPublicKey: [UInt8](msg.ephemeralPublicKey),
                 messageNumber: msg.messageNumber,
-                content: [UInt8](MessagePadding.unpadCiphertext(msg.content))
+                content: [UInt8](MessagePadding.unpadCiphertext(msg.content)),
+                suiteId: msg.suiteId,
+                pqMessageEpoch: msg.pqMessageEpoch,
+                pqRatchetField: [UInt8](msg.pqRatchetField)
             )
         }
 
@@ -1028,7 +1164,14 @@ class CryptoManager {
         contactId: String,
         ephemeralPublicKey: Data,
         messageNumber: UInt32,
-        content: Data
+        content: Data,
+        // The call-signal V2 frame does not yet carry these — it only supports
+        // classic (suite 1) sessions. TODO: extend the frame to carry suite_id /
+        // pq_message_epoch / pq_ratchet_field so call signals work over suite-3
+        // sessions (same fix as WirePayload; tracked separately).
+        suiteId: UInt16 = 1,
+        pqMessageEpoch: UInt32 = 0,
+        pqRatchetField: Data = Data()
     ) throws -> String {
         coreLock.lock()
         defer { coreLock.unlock() }
@@ -1052,7 +1195,10 @@ class CryptoManager {
             contactId: contactId,
             ephemeralPublicKey: [UInt8](ephemeralPublicKey),
             messageNumber: messageNumber,
-            content: [UInt8](contentForDecrypt)
+            content: [UInt8](contentForDecrypt),
+            suiteId: suiteId,
+            pqMessageEpoch: pqMessageEpoch,
+            pqRatchetField: [UInt8](pqRatchetField)
         )
         saveSessionToKeychain(for: contactId)
         return String(data: Data(result.plaintext), encoding: .utf8) ?? ""

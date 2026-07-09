@@ -3,6 +3,8 @@ import SwiftUI
 enum ChatUIConstants {
     enum Typography {
         static let messageTextSize: CGFloat = 15
+        static let iOSmessageTextSize: CGFloat = 15
+        static let macOSmessageTextSize: CGFloat = 13
     }
 
     enum Bubble {

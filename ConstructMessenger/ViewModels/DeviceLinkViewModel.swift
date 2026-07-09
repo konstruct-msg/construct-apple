@@ -45,6 +45,10 @@ final class DeviceLinkViewModel {
     var pendingApproval: PendingApprovalInfo? = nil
     /// True when the phone has successfully approved a join request (phone side only).
     var approvalGranted: Bool = false
+    /// Flow B: pending_device_id the phone just approved (for auto history-sync pairing).
+    private(set) var approvedJoinPendingId: String? = nil
+    /// Flow B: desktop's pending_device_id after link (for auto history-sync pairing).
+    var linkedPendingDeviceId: String? { joinDeviceId }
 
     struct PendingApprovalInfo {
         let deviceName: String
@@ -53,6 +57,8 @@ final class DeviceLinkViewModel {
 
     private var pollingTask: Task<Void, Never>? = nil
     private var joinDeviceId: String? = nil
+    private var joinSigningKey: Data? = nil
+    private var joinIdentityKey: Data? = nil
 
     // MARK: - Device A: Generate QR
 
@@ -110,7 +116,8 @@ final class DeviceLinkViewModel {
 
         do {
             // 1. Generate fresh keys for this new device
-            let (deviceId, bundle, _, _) = try CryptoManager.shared.generateRegistrationBundle()
+            let (deviceId, bundle, signingKey, identityKey) = try CryptoManager.shared.generateRegistrationBundle()
+            persistDeviceKeys(deviceId: deviceId, signingKey: signingKey, identityKey: identityKey)
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
             publicKeys.verifyingKey = Data(bundle.verifyingKey)
@@ -128,21 +135,9 @@ final class DeviceLinkViewModel {
                 publicKeys: publicKeys
             )
 
-            // 3. Persist credentials
-            KeychainManager.shared.saveDeviceID(deviceId)
-            KeychainManager.shared.saveUserID(result.userId)
-            KeychainManager.shared.saveSessionToken(result.accessToken)
-            KeychainManager.shared.saveRefreshToken(result.refreshToken)
-            if let cert = result.veilBridgeCert, !cert.isEmpty {
-                KeychainManager.shared.saveVEILBridgeCert(cert)
-            }
-
             Log.info("Device B: link confirmed — userId=\(result.userId.prefix(8))…", category: "DeviceLink")
 
-            // 4. Upload OTPKs (required — senders get "no prekeys" without this)
-            await uploadPreKeysAfterLink(deviceId: deviceId)
-
-            linkCompleted = true
+            await finishLink(result: result, deviceId: deviceId)
 
         } catch {
             errorMessage = localizedError(error)
@@ -162,12 +157,27 @@ final class DeviceLinkViewModel {
         joinRequestQRContent = nil
         defer { isGenerating = false }
         do {
-            let (deviceId, bundle, _, _) = try CryptoManager.shared.generateRegistrationBundle()
+            let (deviceId, bundle, signingKey, identityKey) = try CryptoManager.shared.generateRegistrationBundle()
             joinDeviceId = deviceId
+            joinSigningKey = signingKey
+            joinIdentityKey = identityKey
+            persistDeviceKeys(deviceId: deviceId, signingKey: signingKey, identityKey: identityKey)
             let name = DeviceInfo.deviceName
             let platform = platformString()
             let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
-            let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(bundle.identityPublic)&name=\(encoded)&platform=\(platform)"
+            let pubkeyB64 = Data(bundle.identityPublic).base64EncodedString()
+            var queryValueAllowed = CharacterSet.alphanumerics
+            queryValueAllowed.insert(charactersIn: "-._~")
+            let pubkeyEncoded = pubkeyB64.addingPercentEncoding(withAllowedCharacters: queryValueAllowed) ?? pubkeyB64
+            let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(pubkeyEncoded)&name=\(encoded)&platform=\(platform)"
+
+            try await AuthServiceClient.shared.submitJoinRequest(
+                deviceId: deviceId,
+                bundle: bundle,
+                deviceName: name,
+                platform: platform
+            )
+            Log.info("Join request submitted to server — deviceId=\(deviceId.prefix(8))…", category: "DeviceLink")
 
             joinRequestQRContent = url
             isWaitingForApproval = true
@@ -196,16 +206,11 @@ final class DeviceLinkViewModel {
                 do {
                     if let result = try await AuthServiceClient.shared.checkDeviceLinkStatus(pendingId: pendingId) {
                         let deviceId = self.joinDeviceId ?? pendingId
-                        KeychainManager.shared.saveDeviceID(deviceId)
-                        KeychainManager.shared.saveUserID(result.userId)
-                        KeychainManager.shared.saveSessionToken(result.accessToken)
-                        KeychainManager.shared.saveRefreshToken(result.refreshToken)
-                        if let cert = result.veilBridgeCert, !cert.isEmpty {
-                            KeychainManager.shared.saveVEILBridgeCert(cert)
+                        if let signingKey = self.joinSigningKey, let identityKey = self.joinIdentityKey {
+                            self.persistDeviceKeys(deviceId: deviceId, signingKey: signingKey, identityKey: identityKey)
                         }
-                        await uploadPreKeysAfterLink(deviceId: deviceId)
                         self.isWaitingForApproval = false
-                        self.linkCompleted = true
+                        await self.finishLink(result: result, deviceId: deviceId)
                         break
                     }
                 } catch DeviceLinkError.rejected {
@@ -251,10 +256,12 @@ final class DeviceLinkViewModel {
                 newDeviceName: name,
                 newDevicePlatform: platform
             )
+            approvedJoinPendingId = pendingId
             approvalGranted = true
             Log.info("Approved join request for '\(name)' (id=\(pendingId.prefix(8))…)", category: "DeviceLink")
         } catch {
             errorMessage = localizedError(error)
+            Log.error("approveJoinRequest failed: \(error)", category: "DeviceLink")
         }
     }
 
@@ -267,6 +274,29 @@ final class DeviceLinkViewModel {
     }
 
     // MARK: - Private helpers
+
+    private func persistDeviceKeys(deviceId: String, signingKey: Data, identityKey: Data) {
+        KeychainManager.shared.saveDeviceID(deviceId)
+        KeychainManager.shared.saveDeviceSigningKey(signingKey)
+        KeychainManager.shared.saveDeviceIdentityKey(identityKey)
+    }
+
+    /// Persists session tokens (with expiry + GRPC cache sync), initializes crypto, uploads OTPKs.
+    private func finishLink(result: AuthServiceClient.ConfirmLinkResult, deviceId: String) async {
+        let expiresIn = max(Int(result.expiresAt - Int64(Date().timeIntervalSince1970)), 0)
+
+        AuthSessionManager.shared.saveTokens(
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            expiresIn: expiresIn,
+            userId: result.userId
+        )
+        VeilProxyManager.shared.configureFromServer(cert: result.veilBridgeCert ?? "")
+
+        CryptoManager.shared.setLocalUserId(result.userId)
+        await uploadPreKeysAfterLink(deviceId: deviceId)
+        linkCompleted = true
+    }
 
     private func uploadPreKeysAfterLink(deviceId: String) async {
         do {

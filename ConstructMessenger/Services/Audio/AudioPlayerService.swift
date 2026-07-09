@@ -21,6 +21,11 @@ final class AudioPlayerService: NSObject, ObservableObject {
     @Published private(set) var elapsed: TimeInterval = 0
     @Published private(set) var totalDuration: Double = 0
 
+    /// Fired when a track finishes playing **naturally** (not when stopped/replaced).
+    /// Carries the mediaId that just finished. Used for continuous voice playback —
+    /// the active chat installs a handler to auto-advance to the next voice message.
+    var onTrackFinished: ((String) -> Void)?
+
     // MARK: - Private
 
     private var player: AVAudioPlayer?
@@ -129,12 +134,15 @@ final class AudioPlayerService: NSObject, ObservableObject {
 extension AudioPlayerService: AVAudioPlayerDelegate {
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor [weak self] in
-            self?.stopProgressTimer()
-            self?.progress       = 0
-            self?.elapsed        = 0
-            self?.playingMediaId = nil
-            self?.player         = nil
-            self?.deactivateSession()
+            guard let self else { return }
+            let finishedId = self.playingMediaId
+            self.stopProgressTimer()
+            self.progress       = 0
+            self.elapsed        = 0
+            self.playingMediaId = nil
+            self.player         = nil
+            self.deactivateSession()
+            if flag, let finishedId { self.onTrackFinished?(finishedId) }
         }
     }
 

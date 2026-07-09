@@ -88,6 +88,11 @@
 
 // MARK: - Settings -> Account
 "display_name" = "Отображаемое имя";
+"local_name" = "Внутреннее имя";
+"local_name_unset" = "Не задано";
+"local_name_placeholder" = "Введите имя";
+"local_name_clear" = "Очистить";
+"local_name_footer" = "Видно только вам. Контакт об этом не узнает.";
 "show_my_qr_code" = "Показать мой QR-код";
 "share_contact" = "Поделиться контактом";
 "share_contact_footer" = "Поделитесь своим QR-кодом или ссылкой, чтобы другие могли добавить вас в контакты";
@@ -440,6 +445,8 @@
 "veil_mode_auto" = "авто";
 "veil_mode_on" = "вкл";
 "veil_footer_off" = "Защита трафика отключена. Только прямое подключение.";
+"veil_footer_off_obf_active" = "VEIL выкл — прямой трафик обфусцирован через QUIC (Salamander).";
+"veil_footer_off_obf_fallback" = "VEIL выкл — обфускация QUIC включена; сейчас откат на H2 (без обфускации).";
 "veil_footer_auto" = "VEIL активируется автоматически при обнаружении блокировки.";
 "veil_footer_on" = "Весь трафик проходит через VEIL.";
 "veil_auto_active" = "Авто · прямое заблокировано";
@@ -497,6 +504,10 @@
 // MARK: - Message States
 "uploading" = "Загрузка…";
 "loading" = "Загрузка...";
+"send_original_quality" = "Оригинал";
+"quality_label" = "Качество";
+"quality_compressed" = "Сжатое";
+"quality_original" = "Оригинал";
 "failed_to_load" = "Не удалось загрузить";
 "shared_profile" = "Профиль отправлен";
 
@@ -531,6 +542,8 @@
 "diagnostics_size" = "Размер";
 "diagnostics_share_logs" = "Поделиться логами";
 "diagnostics_clear_logs" = "Очистить логи";
+"diagnostics_stealth_override_title" = "Скрытый отправитель (debug-переопределение)";
+"diagnostics_stealth_override_hint" = "В Release всегда включён. Отключите здесь, чтобы проверить устаревший путь отправки с раскрытием отправителя во время разработки.";
 "diagnostics_force_spk_rotation" = "Принудительно обновить SPK";
 "diagnostics_reset_local_data_keychain" = "Сбросить локальные данные и Keychain";
 "diagnostics_dev_tools_footer" = "Удаляет все ключи из Keychain, сессии и UserDefaults. Используйте для теста чистой инициализации без переустановки.";
@@ -596,6 +609,8 @@
 "flood_alert_body" = "Отправил %d сообщений за короткое время. Уведомления приостановлены.";
 "flood_banner_title" = "Слишком много сообщений";
 "flood_banner_subtitle" = "Уведомления от этого контакта приостановлены. Просмотрите и решите.";
+"session_at_risk_title" = "Ключи контакта не обновлены";
+"session_at_risk_subtitle" = "Контакт давно не в сети. Сообщения по-прежнему шифруются; ключи обновятся, когда он вернётся.";
 "lockdown_mode" = "Режим защиты";
 "lockdown_active_since" = "Активен с %@";
 "lockdown_mode_hint" = "Только контакты добавленные до активации получают уведомления. Новые отправители сохраняются без уведомлений — вы можете просмотреть их в любой момент.";
@@ -611,8 +626,8 @@
 "synapses_empty_title" = "Пока нет связей";
 "synapses_empty_subtitle" = "Люди с которыми вы общаетесь будут здесь, даже если вы удалили переписку.";
 "synapses_open_chat" = "Открыть чат";
-"synapses_prune_title" = "Отрезать синапс?";
-"synapses_prune_action" = "Отрезать";
+"synapses_prune_title" = "Удалить синапс?";
+"synapses_prune_action" = "Удалить";
 "synapses_prune_message" = "Это навсегда удалит %@ из ваших синапсов и удалит переписку.";
 
 // MARK: - Connection Status Indicator
@@ -638,7 +653,14 @@
 "calls_recents" = "Недавние";
 "calls_clear" = "Очистить";
 "calls_clear_confirm" = "Очистить историю звонков?";
+"calls_filter_all" = "Все";
+"calls_filter_missed" = "Пропущенные";
 "calls_empty" = "Нет недавних звонков";
+"calls_empty_missed" = "Нет пропущенных звонков";
+"calls_section_today" = "Сегодня";
+"calls_section_yesterday" = "Вчера";
+"calls_section_earlier" = "Ранее";
+"calls_section_older" = "Старые";
 "call_outgoing" = "Исходящий";
 "call_incoming" = "Входящий";
 "call_missed" = "Пропущенный";
@@ -734,8 +756,8 @@
 "searchable_confirm_action" = "включить";
 "searchable_no_username_hint" = "сначала задайте username";
 "username_not_set" = "username не задан";
-"searchable_indicator" = "[⊙] в поиске";
-"searchable_indicator_off" = "[ ] в поиске";
+"searchable_indicator" = "в поиске";
+"searchable_indicator_off" = "не в поиске";
 "synapses_remote_result_header" = "найдено в construct";
 "synapses_searching" = "поиск...";
 "synapses_not_found" = "не найдено";
@@ -772,17 +794,21 @@
 "stealth_scope_stream_hint" = "один токен на активный поток в день";
 "stealth_scope_message" = "на сообщение";
 "stealth_scope_message_hint" = "один токен на сообщение — максимальная анонимность";
+
+// Короткие метки для CTModeSelector (переключатель режимов) в настройках stealth.
+"stealth_scope_stream_short" = "поток";
+"stealth_scope_message_short" = "сообщение";
 "stealth_token_wallet" = "кошелёк токенов";
 "stealth_token_wallet_pending" = "[ещё не активно]";
 "stealth_token_count" = "%d токенов";
-"stealth_token_wallet_hint" = "токены добываются в фоне на зарядке. требует поддержки privacy pass на сервере.";
+"stealth_token_wallet_hint" = "первая пачка создаётся при регистрации или при включении стелс. пополнение — в фоне (лучше на зарядке). требует поддержки privacy pass на сервере.";
 
 // Key Transparency
 "kt_section" = "прозрачность ключей";
 "kt_status" = "merkle-лог";
-"kt_verified" = "[✓] подтверждено";
-"kt_warning" = "[!] внимание";
-"kt_no_data" = "[–] нет данных";
+"kt_verified" = "подтверждено";
+"kt_warning" = "внимание";
+"kt_no_data" = "нет данных";
 "kt_hint" = "каждый ключ идентификации постоянно записывается в append-only merkle-лог. подделка криптографически обнаруживаема.";
 "kt_failure_hint" = "проверка прозрачности ключей не прошла — возможна подделка.";
 "kt_last_failure_at" = "последний сбой: %@";
@@ -888,18 +914,15 @@
 "history_sync_send_title" = "Передать историю";
 "history_sync_receive_title" = "Получить историю";
 "history_sync_offer_title" = "Перенести историю сообщений?";
-"history_sync_offer_message" = "Хотите получить историю сообщений с другого устройства? Убедитесь, что оба устройства в одной сети WiFi.";
+"history_sync_offer_message" = "Получить историю с телефона, который только что одобрил этот компьютер? Оба устройства должны быть в одной сети Wi‑Fi — код вводить не нужно.";
 "history_sync_offer_yes" = "Получить историю";
 "history_sync_offer_skip" = "Пропустить";
+"history_sync_auto_connecting" = "Подключение к телефону…";
+"history_sync_auto_sending" = "Отправка истории на компьютер…";
 "history_sync_user_mismatch" = "Ошибка переноса истории: история принадлежит другому аккаунту.";
 "call_error_not_contacts" = "Нельзя позвонить этому ноду. Убедитесь, что вы являетесь взаимными контактами.";
 "call_error_busy" = "Вы уже в звонке.";
 "call_error_peer_offline" = "Нод не в сети. Попробуйте позже.";
-
-/* Tab bar labels */
-"tab_chats" = "СОБ";
-"tab_synapses" = "УЗЛ";
-"tab_settings" = "НСТ";
 
 /* Engine background push notifications */
 "notification.new_message.title" = "Новое сообщение";
@@ -929,6 +952,11 @@
 /* Desktop general settings */
 "message_section" = "Сообщения";
 
+/* Voice messages */
+"voice_section_title" = "Голосовые сообщения";
+"voice_continuous_playback" = "Непрерывное воспроизведение";
+"voice_continuous_playback_footer" = "Когда подряд приходит несколько голосовых, они воспроизводятся друг за другом автоматически, пока не закончится последнее.";
+
 /* STT / Transcription */
 "stt_section_title" = "Транскрипция";
 "stt_auto_transcribe" = "Автотранскрипция голосовых";
@@ -949,6 +977,10 @@
 "stt_section_header" = "транскрипция";
 "stt_section_footer" = "Голосовые сообщения можно расшифровать локально. Модели качаются один раз и не покидают телефон.";
 "stt_retry_download" = "повторить";
+"stt_engine_label" = "Движок";
+"stt_engine_auto" = "Авто";
+"stt_engine_whisper" = "Whisper";
+"stt_engine_apple" = "Apple Speech";
 "account_discard_changes_title" = "Отменить изменения?";
 "account_discard_changes_message" = "Есть несохранённые изменения профиля. Выйти без сохранения?";
 "account_discard_changes_discard" = "Не сохранять";

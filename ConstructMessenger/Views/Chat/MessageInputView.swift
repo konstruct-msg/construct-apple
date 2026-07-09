@@ -7,15 +7,19 @@
 //
 
 import SwiftUI
+import Combine
 
 struct MessageInputView: View {
     @Binding var text: String
     @Binding var droppedImages: [PlatformImage]
+    #if os(macOS)
+    @Binding var droppedFileURLs: [URL]
+    #endif
     let isSending: Bool
     let replyingTo: Message?
     let quoteOverride: String?
     let editingMessage: Message?
-    let onSend: ([PlatformImage], [URL]) -> Void
+    let onSend: ([MediaAttachment], [URL]) -> Void
     var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
     let onCancelReply: () -> Void
     let onCancelEdit: () -> Void
@@ -35,14 +39,16 @@ struct MessageInputView: View {
             onCancelEdit: onCancelEdit
         )
         #elseif os(macOS)
-        MacMessageInputView(
+        DesktopMessageInputView(
             text: $text,
             droppedImages: $droppedImages,
+            droppedFileURLs: $droppedFileURLs,
             isSending: isSending,
             replyingTo: replyingTo,
             quoteOverride: quoteOverride,
             editingMessage: editingMessage,
             onSend: onSend,
+            onSendVoice: onSendVoice,
             onCancelReply: onCancelReply,
             onCancelEdit: onCancelEdit
         )
@@ -50,6 +56,7 @@ struct MessageInputView: View {
     }
 }
 
+#if os(iOS)
 #Preview("Input — idle") {
     @Previewable @State var text = ""
     @Previewable @State var dropped: [PlatformImage] = []
@@ -70,24 +77,4 @@ struct MessageInputView: View {
     }
     .background(Color.platformBackground)
 }
-
-#Preview("Input — with text") {
-    @Previewable @State var text = "Hey there! 👋"
-    @Previewable @State var dropped: [PlatformImage] = []
-
-    VStack {
-        Spacer()
-        MessageInputView(
-            text: $text,
-            droppedImages: $dropped,
-            isSending: false,
-            replyingTo: nil,
-            quoteOverride: nil,
-            editingMessage: nil,
-            onSend: { _, _ in },
-            onCancelReply: {},
-            onCancelEdit: {}
-        )
-    }
-    .background(Color.platformBackground)
-}
+#endif

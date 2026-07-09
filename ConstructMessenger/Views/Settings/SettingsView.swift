@@ -25,12 +25,19 @@ struct SettingsView: View {
         NavigationStack(path: $navigationPath) {
             VStack(spacing: SettingsRootLayout.rootSpacing) {
                 
-                CTNavBar(title: NSLocalizedString("settings", comment: ""))
-                
+                // Section title as plain left-aligned label (not a capsule)
+                HStack {
+                    Text(NSLocalizedString("settings", comment: "").uppercased())
+                        .font(CTFont.bold(14))
+                        .foregroundColor(Color.CT.text)
+                        .tracking(4)
+                    Spacer()
+                }
+                .padding(.horizontal, CTLayout.edgePad)
+                .frame(height: CTLayout.navBarHeight)
 
                 ScrollView {
                     LazyVStack(spacing: SettingsRootLayout.listSpacing) {
-
                         // MARK: Recovery warning
                         if recoveryVM.statusLoaded && !recoveryVM.isSetup && !recoveryBannerDismissed {
                             recoveryBanner
@@ -91,6 +98,11 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                             CTSep(style: .thin)
+                            NavigationLink(destination: TranscriptionSettingsView()) {
+                                CTSettingsRow(label: NSLocalizedString("transcription", comment: "").uppercased(), icon: "mic", disclosure: true)
+                            }
+                            .buttonStyle(.plain)
+                            CTSep(style: .thin)
                             NavigationLink(destination: NotificationsSettingsView()) {
                                 CTSettingsRow(label: NSLocalizedString("notifications", comment: "").uppercased(), icon: "bell", disclosure: true)
                             }
@@ -99,9 +111,8 @@ struct SettingsView: View {
                             NavigationLink(destination: BackgroundFetchSettingsView()) {
                                 CTSettingsRow(
                                     label: NSLocalizedString("background_fetch", comment: "").uppercased(),
-                                    value: BackgroundFetchConfig.shouldBeEnabled ? "[on]" : "[off]",
+                                    status: BackgroundFetchConfig.shouldBeEnabled ? .on : .off,
                                     icon: "arrow.clockwise.circle",
-                                    valueColor: BackgroundFetchConfig.shouldBeEnabled ? Color.CT.accentDim : Color.CT.textDim,
                                     disclosure: true
                                 )
                             }
@@ -110,9 +121,8 @@ struct SettingsView: View {
                             NavigationLink(destination: NetworkSettingsView()) {
                                 CTSettingsRow(
                                     label: NSLocalizedString("network", comment: "").uppercased(),
-                                    value: connectionStatus.isConnected ? "[ok]" : "[err]",
+                                    status: connectionStatus.isConnected ? .ok : .error,
                                     icon: "globe",
-                                    valueColor: connectionStatus.isConnected ? Color.CT.accentDim : Color.CT.danger,
                                     disclosure: true
                                 )
                             }
@@ -137,6 +147,10 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                         }
+
+                        // Spacer for floating tab capsule
+                        Color.clear
+                            .frame(height: 72)
                     }
                     .padding(.bottom, SettingsRootLayout.listBottomPadding)
                 }
@@ -159,9 +173,6 @@ struct SettingsView: View {
             .sheet(isPresented: $showingQRCode) {
                 ContactQRCodeView(userId: viewModel.userId, username: viewModel.username)
             }
-            .onChange(of: navigationPath) { _, path in
-                chatsViewModel.isInSettings = !path.isEmpty
-            }
         }
     }
 
@@ -182,11 +193,14 @@ struct SettingsView: View {
                 Text(viewModel.username.isEmpty ? NSLocalizedString("username_not_set", comment: "") : "@\(viewModel.username)")
                     .font(CTFont.regular(12))
                     .foregroundColor(Color.CT.textDim)
-                Text(viewModel.isDiscoverable
-                    ? NSLocalizedString("searchable_indicator", comment: "")
-                    : NSLocalizedString("searchable_indicator_off", comment: ""))
-                    .font(CTFont.regular(11))
-                    .foregroundColor(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.noise)
+                HStack(spacing: 5) {
+                    CTStatusBadge(status: viewModel.isDiscoverable ? .on : .off, size: 11)
+                    Text(viewModel.isDiscoverable
+                        ? NSLocalizedString("searchable_indicator", comment: "")
+                        : NSLocalizedString("searchable_indicator_off", comment: ""))
+                        .font(CTFont.regular(11))
+                        .foregroundColor(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
+                }
             }
             Spacer()
             Image(systemName: "chevron.right")

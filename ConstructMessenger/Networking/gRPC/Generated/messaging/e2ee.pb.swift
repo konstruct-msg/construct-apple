@@ -39,6 +39,14 @@ public enum Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf.Enum, Sw
 
   /// Device changed (new device, old session invalid)
   case deviceChanged // = 4
+
+  /// The sender, acting as RESPONDER, could not reproduce the 4-DH one-time-prekey that the
+  /// peer's last X3DH used (OTPK id not found / no longer backed by a private key). Carried
+  /// on a SessionControl END signal (see content.proto) to ask the initiator to re-init
+  /// WITHOUT a one-time prekey (3-DH), which is always reproducible from identity + signed
+  /// prekey; retrying 4-DH would loop as every re-fetched OTPK hits the same unbackable
+  /// state. See otpk-session-init-deadlock.
+  case otpkUnreproducible // = 5
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -52,6 +60,7 @@ public enum Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf.Enum, Sw
     case 2: self = .security
     case 3: self = .user
     case 4: self = .deviceChanged
+    case 5: self = .otpkUnreproducible
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -63,6 +72,7 @@ public enum Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf.Enum, Sw
     case .security: return 2
     case .user: return 3
     case .deviceChanged: return 4
+    case .otpkUnreproducible: return 5
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -74,6 +84,7 @@ public enum Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf.Enum, Sw
     .security,
     .user,
     .deviceChanged,
+    .otpkUnreproducible,
   ]
 
 }
@@ -489,7 +500,7 @@ public struct Shared_Proto_Messaging_V1_RatchetState: Sendable {
 fileprivate let _protobuf_package = "shared.proto.messaging.v1"
 
 extension Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SESSION_RESET_REASON_UNSPECIFIED\0\u{1}SESSION_RESET_REASON_CORRUPTION\0\u{1}SESSION_RESET_REASON_SECURITY\0\u{1}SESSION_RESET_REASON_USER\0\u{1}SESSION_RESET_REASON_DEVICE_CHANGED\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SESSION_RESET_REASON_UNSPECIFIED\0\u{1}SESSION_RESET_REASON_CORRUPTION\0\u{1}SESSION_RESET_REASON_SECURITY\0\u{1}SESSION_RESET_REASON_USER\0\u{1}SESSION_RESET_REASON_DEVICE_CHANGED\0\u{1}SESSION_RESET_REASON_OTPK_UNREPRODUCIBLE\0")
 }
 
 extension Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf._ProtoNameProviding {

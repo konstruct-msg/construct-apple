@@ -26,6 +26,11 @@ final class ChatMessageStore: NSObject {
     private let initialMessageLimit = 30
     private let loadMoreBatchSize = 20
 
+    /// Coarse Core Data pre-filter. Note: messages are encrypted at rest
+    /// (`decryptedContent == nil`), so the `BEGINSWITH` clauses only catch legacy
+    /// unencrypted rows. The authoritative guard is `contentTypeRaw == 0` (stamped at
+    /// save time by `applyStoredEncryption`) plus the in-Swift `isControlArtifact` /
+    /// `isServiceArtifact` filter applied to fetched rows, which decrypts `displayText`.
     static let controlMessageFilterPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
         NSPredicate(format: "contentTypeRaw == 0"),
         NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__session_ready')"),
@@ -34,6 +39,12 @@ final class ChatMessageStore: NSObject {
         NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__END_SESSION')"),
         NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__binary_init_')")
     ])
+
+    /// In-Swift backstop for rows the Core Data predicate cannot see through at-rest
+    /// encryption. Drops any control/service payload that leaked into the transcript.
+    private static func visible(_ messages: [Message]) -> [Message] {
+        messages.filter { !$0.isControlArtifact && !$0.isServiceArtifact }
+    }
 
     // MARK: - Init
 
@@ -66,7 +77,7 @@ final class ChatMessageStore: NSObject {
         fetchedResultsController?.delegate = self
         do {
             try fetchedResultsController?.performFetch()
-            let fetched = fetchedResultsController?.fetchedObjects ?? []
+            let fetched = ChatMessageStore.visible(fetchedResultsController?.fetchedObjects ?? [])
             let messages = Array(fetched.reversed())
             viewModel?.messages = messages
             oldestLoadedTimestamp = messages.first?.timestamp
@@ -93,7 +104,7 @@ final class ChatMessageStore: NSObject {
         fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
         fetchRequest.fetchLimit = loadMoreBatchSize
         if let fetched = try? viewContext.fetch(fetchRequest) {
-            let newMessages = fetched.filter { !allLoadedMessageIds.contains($0.id) }
+            let newMessages = ChatMessageStore.visible(fetched).filter { !allLoadedMessageIds.contains($0.id) }
             if newMessages.isEmpty {
                 vm.hasMoreMessages = false
                 vm.isLoadingMore = false
@@ -156,8 +167,8 @@ final class ChatMessageStore: NSObject {
         func isValid(_ msg: Message) -> Bool {
             msg.managedObjectContext != nil && !msg.isDeleted
         }
-        let fetchedMessages = (controller.fetchedObjects as? [Message] ?? [])
-            .filter { isValid($0) }
+        let fetchedMessages = ChatMessageStore.visible((controller.fetchedObjects as? [Message] ?? [])
+            .filter { isValid($0) })
             .reversed() as [Message]
         let fetchedIds = Set(fetchedMessages.map { $0.id })
         let historicMessages = vm.messages.filter {

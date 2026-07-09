@@ -17,7 +17,16 @@ struct AuthInterceptor: ClientInterceptor {
         "RegisterDevice",
         "AuthenticateDevice",
         "RefreshToken",
-        "CheckUsernameAvailability"
+        "CheckUsernameAvailability",
+        // DeviceLinkService (Flow A + Flow B) — no JWT on the linking device yet.
+        "ConfirmDeviceLink",
+        "SubmitJoinRequest",
+        "CheckJoinRequestStatus",
+        // Stealth sealed-sender v2 Phase 2: genuinely sent over a separate
+        // no-interceptor channel (GRPCChannelManager.acquireSealedPersistentClient),
+        // but listed here too as defence-in-depth in case it's ever invoked
+        // over the authenticated channel by mistake.
+        "SendSealedMessage"
     ]
 
     func intercept<Input: Sendable, Output: Sendable>(
@@ -42,7 +51,7 @@ struct AuthInterceptor: ClientInterceptor {
                 request.metadata.addString(userId, forKey: "x-user-id")
             } else {
                 // Rare recovery path: userId missing from cache, extract from JWT claim.
-                if let recovered = JWTUtils.extractUserId(from: token) {
+                if let recovered = TokenUtils.extractUserId(from: token) {
                     await MainActor.run { AuthSessionManager.shared.updateUserId(recovered) }
                     request.metadata.addString(recovered, forKey: "x-user-id")
                 } else {

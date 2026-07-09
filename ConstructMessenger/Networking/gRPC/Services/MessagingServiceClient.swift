@@ -8,6 +8,7 @@
 import Foundation
 import GRPCCore
 import GRPCNIOTransportHTTP2
+import SwiftProtobuf
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -52,18 +53,21 @@ final class MessagingServiceClient: Sendable {
             var envelope = Shared_Proto_Core_V1_Envelope()
             envelope.messageID = messageId
             envelope.recipient = recipient
-            envelope.conversationID = conversationId
-            envelope.contentType = contentType
             envelope.encryptedPayload = encryptedPayload
             envelope.timestamp = Int64(timestamp)
 
             if let sealedInner = sealedInnerBytes, !sealedInner.isEmpty {
-                // STEALTH: do not populate sender — build SealedSenderEnvelope
+                // STEALTH (stealth-sealed-sender-v2 Phase 3): do not populate sender,
+                // conversation_id, or the real content_type on the outer envelope — the
+                // real content_type travels inside SealedInner (see StealthSenderService.
+                // buildSealedInner) and is recovered by the recipient after unsealing.
                 var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
                 sealedEnvelope.sealedInner = sealedInner
                 envelope.sealedSender = sealedEnvelope
             } else {
                 envelope.sender = sender
+                envelope.conversationID = conversationId
+                envelope.contentType = contentType
             }
 
             if let senderDeviceId, !senderDeviceId.isEmpty {
@@ -143,9 +147,83 @@ final class MessagingServiceClient: Sendable {
         }
     }
 
+    // MARK: - Send Sealed Message (stealth-sealed-sender-v2 Phase 2)
+
+    /// Sends a sealed-sender message over the unauthenticated sealed channel via the
+    /// new `SendSealedMessage` RPC — no outer `Envelope`, no sender/conversation_id/
+    /// content_type on the wire. Gated by `FeatureFlags.sealedSenderUnauthenticatedTransport`;
+    /// callers should fall back to `sendMessage(sealedInnerBytes:)` when the flag is off.
+    func sendSealedMessage(sealedInner: Data) async throws -> SendMessageResponse {
+        #if canImport(UIKit)
+        let bgTaskId = await MainActor.run { UIApplication.shared.beginBackgroundTask(withName: "send-sealed-msg-rpc") { } }
+        defer { Task { @MainActor in UIApplication.shared.endBackgroundTask(bgTaskId) } }
+        #endif
+        return try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
+            let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
+
+            var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
+            sealedEnvelope.sealedInner = sealedInner
+
+            let attemptId = UUID().uuidString.lowercased()
+
+            var request = Shared_Proto_Services_V1_SendSealedMessageRequest()
+            request.sealedSender = sealedEnvelope
+            request.attemptID = attemptId
+
+            Log.debug("sendSealedMessage RPC → attemptId=\(attemptId) payloadBytes=\(sealedInner.count)", category: "MessagingServiceClient")
+
+            let response = try await msgClient.sendSealedMessage(request: .init(message: request))
+
+            let errorCodeRaw = response.error.errorCode
+            let retryAfterMs = response.error.hasRetryAfterMs ? response.error.retryAfterMs : 0
+            let echoedAttemptId = response.hasAttemptID ? response.attemptID : attemptId
+
+            let status: String
+            let retryable: Bool
+            let errorCodeStr: String
+            if response.success {
+                status = "sent"
+                retryable = true
+                errorCodeStr = ""
+                Log.info("sendSealedMessage sent attemptId=\(echoedAttemptId) messageId=\(response.messageID)", category: "MessagingServiceClient")
+            } else if errorCodeRaw == .rateLimit {
+                status = "failed"
+                retryable = true
+                errorCodeStr = "rateLimit"
+                Log.error("sendSealedMessage rate limited — attemptId=\(echoedAttemptId) retryAfterMs=\(retryAfterMs)", category: "MessagingServiceClient")
+            } else {
+                status = "failed"
+                retryable = response.error.retryable
+                errorCodeStr = errorCodeRaw == .unspecified ? "" : "\(errorCodeRaw)"
+                Log.error("sendSealedMessage failed — attemptId=\(echoedAttemptId) errorCode=\(errorCodeRaw) retryable=\(retryable)", category: "MessagingServiceClient")
+            }
+
+            return SendMessageResponse(
+                messageId: response.messageID,
+                status: status,
+                retryable: retryable,
+                errorCode: errorCodeStr,
+                retryAfterMs: retryAfterMs,
+                attemptId: echoedAttemptId
+            )
+        }
+    }
+
     // MARK: - Send End Session (replaces MessagingAPI.sendEndSession)
 
-    func sendEndSession(to recipientId: String, reason: String? = nil) async throws -> EndSessionResponse {
+    /// - Parameter resetReason: optional machine-readable recovery hint carried in the
+    ///   END_SESSION payload as a typed `SessionControl{op: .end, reason}`. When set (≠
+    ///   `.unspecified`), it tells the peer HOW to re-initialise — notably
+    ///   `.otpkUnreproducible`, which asks the initiator to re-init WITHOUT a one-time
+    ///   prekey (3-DH) instead of looping 4-DH. When `.unspecified`, the legacy 16-byte
+    ///   sentinel payload is sent so pre-`reason` peers are unaffected. The serialized
+    ///   SessionControl stays < WirePayloadCoder.headerSize so the receiver's payload-size
+    ///   END_SESSION heuristic still fires even if the server strips content_type.
+    func sendEndSession(
+        to recipientId: String,
+        reason: String? = nil,
+        resetReason: Shared_Proto_Messaging_V1_SessionResetReason = .unspecified
+    ) async throws -> EndSessionResponse {
         let myUserId = await MainActor.run { AuthSessionManager.shared.currentUserId } ?? ""
         return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
@@ -164,8 +242,18 @@ final class MessagingServiceClient: Sendable {
             envelope.recipient = recipient
             envelope.contentType = .sessionReset
             envelope.timestamp = Int64(Date().timeIntervalSince1970)
-            // Always populate encrypted_payload — server validates it is non-empty.
-            envelope.encryptedPayload = Data(count: 16)
+            // Carry a typed reason hint when one is set; otherwise keep the legacy 16-byte
+            // sentinel (server validates the payload is non-empty either way).
+            if resetReason != .unspecified {
+                var control = Shared_Proto_Messaging_V1_SessionControl()
+                control.op = .end
+                control.reason = resetReason
+                // No nonce: END_SESSION dedup is by message id/timestamp, and omitting it
+                // keeps the payload tiny (< headerSize) for the receiver's size heuristic.
+                envelope.encryptedPayload = (try? control.serializedData()).flatMap { $0.isEmpty ? nil : $0 } ?? Data(count: 16)
+            } else {
+                envelope.encryptedPayload = Data(count: 16)
+            }
 
             var request = Shared_Proto_Services_V1_SendMessageRequest()
             request.message = envelope
@@ -235,12 +323,14 @@ final class MessagingServiceClient: Sendable {
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
-                    suiteId: 1,
+                    suiteId: decoded.suiteId,
                     timestamp: UInt64(msg.timestamp),
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
                     contentType: 24,
                     kyberOtpkId: decoded.kyberOtpkId,
+                    pqMessageEpoch: decoded.pqMessageEpoch,
+                    pqRatchetField: decoded.pqRatchetField,
                     rawPayload: msg.encryptedPayload
                 )
             }
@@ -282,11 +372,13 @@ final class MessagingServiceClient: Sendable {
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
-                    suiteId: 1,
+                    suiteId: decoded.suiteId,
                     timestamp: UInt64(msg.timestamp),
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
                     kyberOtpkId: decoded.kyberOtpkId,
+                    pqMessageEpoch: decoded.pqMessageEpoch,
+                    pqRatchetField: decoded.pqRatchetField,
                     senderDeviceId: "",
                     conversationId: ""
                 )
@@ -295,10 +387,16 @@ final class MessagingServiceClient: Sendable {
             // For STEALTH messages, `sealedInnerData` is populated and `senderID` is empty.
             let sealedInner = msg.sealedInnerData
             let isSealed = !sealedInner.isEmpty
-            guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
+            var wirePayload = msg.encryptedPayload
+            if isSealed && wirePayload.isEmpty {
+                if let sealedProto = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInner),
+                   !sealedProto.encryptedPayload.isEmpty {
+                    wirePayload = sealedProto.encryptedPayload
+                }
+            }
+            guard let decoded = try? WirePayloadCoder.decode(wirePayload) else {
                 if isSealed {
-                    // Sealed message payload is inside SealedInner — carry sealedInnerData
-                    // for MessageRouter to decrypt and route.
+                    // Fallback for sealed when outer payload not usable.
                     return ChatMessage(
                         id: msg.messageID,
                         from: "",
@@ -325,15 +423,17 @@ final class MessagingServiceClient: Sendable {
                 ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                 messageNumber: decoded.messageNumber,
                 content: decoded.content,
-                suiteId: 1,
+                suiteId: decoded.suiteId,
                 timestamp: UInt64(msg.timestamp),
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
                 contentType: UInt8(msg.contentType.rawValue),
                 kyberOtpkId: decoded.kyberOtpkId,
+                pqMessageEpoch: decoded.pqMessageEpoch,
+                pqRatchetField: decoded.pqRatchetField,
                 senderDeviceId: "",
                 conversationId: "",
-                rawPayload: msg.encryptedPayload,
+                rawPayload: wirePayload,
                 sealedInnerData: sealedInner
             )
         }

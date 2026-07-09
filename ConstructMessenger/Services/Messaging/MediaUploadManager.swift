@@ -11,7 +11,8 @@ class MediaUploadManager {
     // MARK: - Media Upload Result
     
     struct MediaUploadResult {
-        let messageContent: String
+        let messageContent: String          // local JSON (for display + multi-device sync)
+        let mediaList: [MediaMessageData]    // for building the binary wire proto (.mediaAlbum)
         let thumbnails: [Data]
     }
     
@@ -24,29 +25,75 @@ class MediaUploadManager {
     ///   - recipientId: ID of the recipient user
     /// - Returns: MediaUploadResult with content and thumbnails
     /// - Throws: MediaUploadError if upload fails
+    /// Aggregates per-item upload fractions into one overall album fraction.
+    private actor ProgressAggregator {
+        private var fractions: [Double]
+        init(count: Int) { fractions = Array(repeating: 0, count: max(count, 1)) }
+        func update(index: Int, fraction: Double) -> Double {
+            if fractions.indices.contains(index) { fractions[index] = fraction }
+            return fractions.reduce(0, +) / Double(fractions.count)
+        }
+    }
+
+    /// - Parameter onProgress: overall album upload fraction (0.0…1.0), reported as items
+    ///   upload concurrently. Called off the main actor — marshal before touching UI.
     func uploadMediaAndBuildContent(
-        images: [PlatformImage],
+        attachments: [MediaAttachment],
         caption: String,
-        recipientId: String
+        recipientId: String,
+        onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> MediaUploadResult {
+        let aggregator = onProgress != nil ? ProgressAggregator(count: attachments.count) : nil
+        // Local thumbnails for the sender placeholder (per item, in order).
+        let thumbnails: [Data] = attachments.compactMap { att in
+            att.displayImage.flatMap { MediaManager.shared.generateThumbnail(from: $0) }
+        }
+
+        // Upload with bounded concurrency so large albums (up to 99) overlap their I/O
+        // without unbounded memory/connections. Order is preserved across batches.
+        let maxConcurrent = 4
         var mediaDataList: [MediaMessageData] = []
-        var thumbnails: [Data] = []
-        
-        // Upload each image using MediaManager
-        for (index, image) in images.enumerated() {
-            Log.info("Uploading image \(index + 1)/\(images.count)", category: "MediaUploadManager")
-            
-            // Generate thumbnail before upload (for local storage on sender side)
-            if let thumbnail = MediaManager.shared.generateThumbnail(from: image) {
-                thumbnails.append(thumbnail)
-                Log.debug("Generated thumbnail: \(thumbnail.count) bytes", category: "MediaUploadManager")
+        mediaDataList.reserveCapacity(attachments.count)
+
+        var index = 0
+        while index < attachments.count {
+            let end = min(index + maxConcurrent, attachments.count)
+            let base = index
+            let batch = Array(attachments[index..<end])
+            Log.info("Uploading album batch \(base + 1)…\(end) of \(attachments.count)", category: "MediaUploadManager")
+
+            let uploaded: [(Int, MediaMessageData)] = try await withThrowingTaskGroup(
+                of: (Int, MediaMessageData).self
+            ) { group in
+                for (offset, attachment) in batch.enumerated() {
+                    let itemIndex = base + offset
+                    group.addTask {
+                        let itemProgress: (@Sendable (Double) -> Void)? = aggregator.map { agg in
+                            { @Sendable fraction in
+                                Task {
+                                    let overall = await agg.update(index: itemIndex, fraction: fraction)
+                                    onProgress?(overall)
+                                }
+                            }
+                        }
+                        let data: MediaMessageData
+                        switch attachment.kind {
+                        case .video:
+                            data = try await MediaManager.shared.uploadVideo(
+                                attachment, for: recipientId, onProgress: itemProgress)
+                        case .image:
+                            data = try await MediaManager.shared.uploadImage(
+                                attachment, for: recipientId, onProgress: itemProgress)
+                        }
+                        return (itemIndex, data)
+                    }
+                }
+                var acc: [(Int, MediaMessageData)] = []
+                for try await pair in group { acc.append(pair) }
+                return acc
             }
-            
-            // Upload via MediaManager
-            let mediaData = try await MediaManager.shared.uploadImage(image, for: recipientId)
-            mediaDataList.append(mediaData)
-            
-            Log.info("Image \(index + 1) uploaded: \(mediaData.mediaId)", category: "MediaUploadManager")
+            mediaDataList.append(contentsOf: uploaded.sorted { $0.0 < $1.0 }.map { $0.1 })
+            index = end
         }
         
         // Build message content with media references
@@ -55,7 +102,7 @@ class MediaUploadManager {
             mediaList: mediaDataList
         )
         
-        return MediaUploadResult(messageContent: messageContent, thumbnails: thumbnails)
+        return MediaUploadResult(messageContent: messageContent, mediaList: mediaDataList, thumbnails: thumbnails)
     }
     
     // MARK: - Media Content Builder

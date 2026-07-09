@@ -14,8 +14,11 @@ import UniformTypeIdentifiers
 struct DesktopAccountSettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(AuthViewModel.self) private var authViewModel
+    @Environment(AccountRecoveryViewModel.self) private var recoveryVM
 
     @State private var viewModel = SettingsViewModel()
+    @State private var showingRecoverySetup = false
+    @State private var recoveryBannerDismissed = UserDefaults.standard.bool(forKey: "recovery_banner_dismissed")
     @State private var originalUsername: String = ""
     @State private var showDeleteConfirm = false
     @State private var showExportAlert = false
@@ -24,6 +27,10 @@ struct DesktopAccountSettingsView: View {
         @Bindable var vm = viewModel
         ScrollView {
             VStack(spacing: 0) {
+                if recoveryVM.statusLoaded && !recoveryVM.isSetup && !recoveryBannerDismissed {
+                    recoveryBanner
+                    CTSep(style: .thick)
+                }
                 avatarSection
                 CTSep(style: .thick)
                 identitySection
@@ -48,6 +55,13 @@ struct DesktopAccountSettingsView: View {
             viewModel.loadUserInfo(from: authViewModel)
             originalUsername = viewModel.username
         }
+        .task { await recoveryVM.loadStatus() }
+        .sheet(isPresented: $showingRecoverySetup) {
+            RecoverySetupView()
+                .environment(recoveryVM)
+                .frame(minWidth: 480, minHeight: 520)
+                .onDisappear { Task { await recoveryVM.refreshStatus() } }
+        }
         .onChange(of: viewModel.usernameSaved) { _, saved in
             if saved { originalUsername = viewModel.username }
         }
@@ -63,6 +77,46 @@ struct DesktopAccountSettingsView: View {
             )
             .environment(authViewModel)
         }
+    }
+
+    // MARK: - Recovery banner
+
+    private var recoveryBanner: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.CT.danger)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(NSLocalizedString("recovery_not_configured_title", comment: "").uppercased())
+                    .font(CTFont.bold(11))
+                    .foregroundStyle(Color.CT.danger)
+                Text(NSLocalizedString("recovery_banner_subtitle", comment: ""))
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.textDim)
+                Button { showingRecoverySetup = true } label: {
+                    HStack(spacing: 4) {
+                        Text(NSLocalizedString("recovery_setup_action", comment: ""))
+                            .font(CTFont.bold(11))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.CT.accent)
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+            Button {
+                recoveryBannerDismissed = true
+                UserDefaults.standard.set(true, forKey: "recovery_banner_dismissed")
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.CT.textDim)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(12)
+        .background(Color.CT.danger.opacity(0.08))
     }
 
     // MARK: - Avatar
@@ -144,9 +198,10 @@ struct DesktopAccountSettingsView: View {
                     .foregroundStyle(Color.CT.textDim)
                     .frame(width: 120, alignment: .leading)
                 TextField("", text: $vm.displayName)
-                    .textFieldStyle(.plain)
                     .font(CTFont.regular(13))
                     .foregroundStyle(Color.CT.text)
+                    .textFieldStyle(.plain)
+                    .ctInputChrome(.compact)
                     .onChange(of: vm.displayName) { _, val in
                         viewModel.saveDisplayName(val, authViewModel: authViewModel)
                     }
@@ -162,9 +217,13 @@ struct DesktopAccountSettingsView: View {
                     .foregroundStyle(Color.CT.textDim)
                     .frame(width: 120, alignment: .leading)
                 TextField("", text: $vm.username)
-                    .textFieldStyle(.plain)
                     .font(CTFont.regular(13))
                     .foregroundStyle(Color.CT.text)
+                    .textFieldStyle(.plain)
+                    .ctInputChrome(
+                        .compact,
+                        strokeColor: viewModel.usernameSaveError == nil ? Color.CT.noise : Color.CT.danger
+                    )
                     .autocorrectionDisabled()
                     .onSubmit { Task { await saveUsernameIfNeeded() } }
                 Spacer()
@@ -398,4 +457,3 @@ struct DesktopDeleteAccountSheet: View {
         .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
         .frame(width: 500, height: 600)
 }
-
