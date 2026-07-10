@@ -683,6 +683,11 @@
 "keys_recovery_wipe_confirm_body" = "これにより、現在のアイデンティティとすべてのローカルデータが永久に削除されます。この操作は取り消せません。";
 "keys_recovery_wipe_confirm_action" = "削除して続行";
 
+// MARK: - Device Deregistered (コンストラクトがこのレプリカを認識しない)
+"device_deregistered_warning_title" = "⚠ レプリカが未登録です";
+"device_deregistered_warning_body" = "コンストラクトはこのレプリカを認識できなくなりました。サーバーの問題が発生した後や、他の端末でレプリカが取り消された場合に起こります。\n\n鍵はこの端末に残っており、何も削除されていません。下で再試行するか、シードフレーズからアイデンティティを復元してください。";
+"device_deregistered_retry_hint" = "拒否は一時的なサーバーの問題かもしれません。もう一度認証してみてください。";
+
 // MARK: - Logout
 "logout_row" = "サインアウト";
 "logout_all_row" = "すべてのレプリカからサインアウト";

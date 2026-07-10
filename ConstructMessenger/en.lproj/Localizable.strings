@@ -725,6 +725,11 @@
 "keys_recovery_wipe_confirm_body" = "This will permanently delete your current identity and all local data. This cannot be undone.";
 "keys_recovery_wipe_confirm_action" = "delete and continue";
 
+// MARK: - Device Deregistered (server no longer recognizes this device)
+"device_deregistered_warning_title" = "⚠ DEVICE NOT REGISTERED";
+"device_deregistered_warning_body" = "The Construct no longer recognizes this replica. This can happen after a server issue or if the replica was revoked elsewhere.\n\nYour keys are still on this device — nothing has been deleted. Retry below, or restore your identity from your seed phrase.";
+"device_deregistered_retry_hint" = "The rejection may be a temporary server issue. Try authenticating again.";
+
 // MARK: - Logout
 "logout_row" = "sign out";
 "logout_all_row" = "sign out all devices";

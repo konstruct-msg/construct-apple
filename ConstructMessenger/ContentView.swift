@@ -28,6 +28,11 @@ struct ContentView: View {
                 // Keys are NOT wiped; user can retry, recover via seed phrase, or register new.
                 KeysRecoveryView()
                     .environment(authViewModel)
+            } else if authViewModel.deviceDeregistered {
+                // Server rejected this device as unregistered but the keys are still present.
+                // Same recovery screen (retry / seed / new account) — never a silent wipe.
+                KeysRecoveryView(reason: .deviceDeregistered)
+                    .environment(authViewModel)
             } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
                 // Authenticated OR definitively registered — show main app.
                 // Checking isAuthenticated here prevents a flash to OnboardingView when

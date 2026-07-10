@@ -723,12 +723,18 @@ class CryptoManager {
         // Nullify in-memory cores so next registration generates a fresh keypair
         self.orchestratorCore = nil
         self._bootstrapCore = nil
+        hasRestoredSessions = false
 
         // Delete private keys JSON (identity, signed prekey, signing key)
         KeychainManager.shared.deletePrivateKeys()
 
         // Delete all individual keys and ALL sessions
         KeychainManager.shared.deleteAllKeys()
+        KeychainManager.shared.deleteOtpks()
+        KeychainManager.shared.deleteData(forKey: Self.orchestratorStateCFEKey)
+        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.public")
+        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.secret")
+        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.id")
 
         // MLS store is signed by the identity key being deleted — a fresh identity
         // can never operate the old groups, so drop the snapshot with the keys.

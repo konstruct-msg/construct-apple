@@ -25,6 +25,13 @@ class AuthViewModel {
     /// from Keychain. Drives a dedicated recovery screen instead of the main app.
     var deviceKeysUnavailable = false
 
+    /// True when the server deterministically rejected this device as unregistered
+    /// (gRPC UNAUTHENTICATED / "device not found"). The crypto keys are still present
+    /// locally, so we do NOT wipe them — instead we route to the recovery screen and let
+    /// the user retry (transient server hiccup), recover with a seed phrase, or start fresh.
+    /// Replaces the old silent destructive wipe on device rejection.
+    var deviceDeregistered = false
+
     /// True while RegistrationFlowView is active. Prevents restoreOrAuthenticateDevice()
     /// from interfering with an ongoing registration (the stream's UNAUTHENTICATED errors
     /// would otherwise trigger auth re-attempts every few seconds).
@@ -211,6 +218,7 @@ class AuthViewModel {
         func finishAuth(userId: String) {
             self.currentUserId = userId
             self.isAuthenticated = true
+            self.deviceDeregistered = false
             scheduleTokenRefresh()
             CryptoManager.shared.setLocalUserId(userId)
             loadUserFromCoreData(userId: userId)
@@ -369,6 +377,7 @@ class AuthViewModel {
                 || description.contains("error 7")    // gRPC PERMISSION_DENIED
                 || lower.contains("device is inactive")
                 || lower.contains("device inactive")
+                || lower.contains("device not found")
 
             if isDeviceRejected {
                 // If we have a pending registration bundle, the keys were saved before
@@ -381,11 +390,13 @@ class AuthViewModel {
                         // Keep keys; RegistrationFlowView will pick them up and retry.
                         hasRegisteredDeviceKeys = false
                     } else {
-                        Log.error("🗑️ Server rejected device (401/403) — clearing keys to show onboarding", category: "Auth")
-                        CryptoManager.shared.deleteAllCryptoKeys()
-                        KeychainManager.shared.deleteDeviceKeys()
-                        KeychainManager.shared.deleteOtpks()
-                        hasRegisteredDeviceKeys = false
+                        // Server says this device is unregistered, but we still hold valid
+                        // crypto keys. Do NOT wipe — a wipe would silently destroy the identity
+                        // (and orphan the account if recovery isn't set up) on what might be a
+                        // transient server error. Route to the recovery screen: the user can
+                        // retry, recover via seed phrase (preserves userId), or start fresh.
+                        Log.error("Server rejected device as unregistered — routing to recovery (keys preserved)", category: "Auth")
+                        deviceDeregistered = true
                     }
                 }
             } else {
@@ -570,6 +581,15 @@ class AuthViewModel {
         }
     }
 
+    /// Called from KeysRecoveryView "Try Again" button in the `.deviceDeregistered` mode —
+    /// re-attempts device authentication (the rejection may have been a transient server
+    /// error). Clears `deviceDeregistered` on success via finishAuth().
+    func retryDeviceAuthentication() {
+        Task { [weak self] in
+            await self?.restoreOrAuthenticateDevice()
+        }
+    }
+
     /// Called from KeysRecoveryView "Create New Account" button — explicit user action.
     /// Wipes ALL local crypto state so the user goes through fresh onboarding.
     /// Core Data (message history, contacts) is intentionally preserved.
@@ -590,6 +610,7 @@ class AuthViewModel {
         KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.id")
 
         deviceKeysUnavailable = false
+        deviceDeregistered = false
         isAuthenticated = false
         hasRegisteredDeviceKeys = false
         currentUserId = nil
@@ -623,12 +644,14 @@ class AuthViewModel {
         AuthSessionManager.shared.clearSession()
         CryptoManager.shared.deleteAllCryptoKeys()
         KeychainManager.shared.deleteDeviceKeys()
+        KeychainManager.shared.deleteOtpks()
         KeychainManager.shared.deleteAllContactRequestMappings()
         UserDefaults.standard.removeObject(forKey: "recovery_is_setup")
         UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
         UserDefaults.standard.removeObject(forKey: "cr_pending_nav_user_ids")
         deviceLinkPhase = .idle
         deviceKeysUnavailable = false
+        deviceDeregistered = false
         isAuthenticated = false
         currentUserId = nil
         currentUser = nil
@@ -846,7 +869,8 @@ class AuthViewModel {
         AuthSessionManager.shared.clearSession()
         CryptoManager.shared.deleteAllCryptoKeys()
         KeychainManager.shared.deleteDeviceKeys()
-        
+        KeychainManager.shared.deleteOtpks()
+
         // Clear all UserDefaults keys
         let userDefaultsKeys: [String] = [
             "biometricEnabled",

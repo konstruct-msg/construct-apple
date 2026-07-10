@@ -57,6 +57,10 @@ struct DesktopRootView: View {
             } else if authViewModel.deviceKeysUnavailable {
                 KeysRecoveryView()
                     .environment(authViewModel)
+            } else if authViewModel.deviceDeregistered {
+                // Server rejected this device as unregistered — recover, don't wipe silently.
+                KeysRecoveryView(reason: .deviceDeregistered)
+                    .environment(authViewModel)
             } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
                 mainContent
             } else {
