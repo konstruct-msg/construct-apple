@@ -62,6 +62,10 @@ enum MetricEvent: String {
     // Unseal itself failed (no sender/payload recoverable): held for one redelivery
     // before the eventual drop.
     case stealthUnsealDefer     = "stealth_unseal_defer"
+    // Send-side: policy wanted a Privacy Pass token but the wallet was empty, so the
+    // message was sealed and sent WITHOUT a token — anti-abuse degraded, anonymity
+    // intact. Makes the silent token-less degradation observable (empty-wallet symptom).
+    case stealthTokenlessSend   = "stealth_tokenless_send"
     // (The send-side degraded-delivery downgrade is already counted by
     // `stealthSealFailure` above — no separate event needed.)
 }

@@ -17,6 +17,41 @@
 //
 
 import Foundation
+import GRPCCore
+
+/// Classified result of the most recent token-issuance attempt. Surfaced (DEBUG
+/// Diagnostics) so an empty wallet is diagnosable instead of silent — in particular
+/// `.serverDisabled` (identity-service `TOKEN_ISSUER_KEY` unset) vs a transient blip.
+enum IssuanceOutcome: Equatable {
+    case ok(Int)             // n tokens deposited
+    case serverDisabled      // server: issuance not configured (UNAVAILABLE "not configured")
+    case rateLimited         // server: 20/hr bucket exhausted (RESOURCE_EXHAUSTED)
+    case unauthenticated     // access token rejected (UNAUTHENTICATED)
+    case verifyRejected      // every evaluated point failed client verify (bad/rotated issuer key)
+    case transportError      // network / plain UNAVAILABLE — transient
+    case malformed           // response count mismatch / bad blind output
+
+    /// Steady/expected states back off the full hour; transient transport failures
+    /// retry soon so a network blip doesn't strand the wallet empty for an hour.
+    var backsOffFullHour: Bool {
+        switch self {
+        case .transportError, .unauthenticated: return false
+        default: return true
+        }
+    }
+
+    var diagnosticLabel: String {
+        switch self {
+        case .ok(let n): return "ok(\(n))"
+        case .serverDisabled: return "server issuance disabled"
+        case .rateLimited: return "rate limited (20/hr)"
+        case .unauthenticated: return "unauthenticated"
+        case .verifyRejected: return "issuer-key/verify rejected"
+        case .transportError: return "transport error"
+        case .malformed: return "malformed response"
+        }
+    }
+}
 
 @MainActor
 final class BlindTokenService {
@@ -26,11 +61,24 @@ final class BlindTokenService {
     nonisolated static let batchSize = 20
     /// Don't replenish again within this window (mirrors server hourly bucket).
     private static let cooldown: TimeInterval = 3600
+    /// Brief back-off for transient transport failures — short enough that a network
+    /// blip doesn't keep the wallet empty for a full hour.
+    private static let transientRetry: TimeInterval = 120
 
-    private var lastReplenishDate: Date?
+    /// When the next replenish attempt becomes eligible (nil = eligible now).
+    private var cooldownUntil: Date?
     private var isReplenishing = false
 
+    /// Result + timestamp of the most recent issuance attempt (for DEBUG Diagnostics).
+    private(set) var lastOutcome: IssuanceOutcome?
+    private(set) var lastOutcomeDate: Date?
+
     private init() {}
+
+    private func record(_ outcome: IssuanceOutcome) {
+        lastOutcome = outcome
+        lastOutcomeDate = Date()
+    }
 
     // MARK: - Public API
 
@@ -42,7 +90,7 @@ final class BlindTokenService {
             Log.debug("BlindToken: replenishment already in progress — skipping", category: "BlindToken")
             return
         }
-        if let last = lastReplenishDate, Date().timeIntervalSince(last) < Self.cooldown {
+        if let until = cooldownUntil, Date() < until {
             Log.debug("BlindToken: cooldown active — skipping", category: "BlindToken")
             return
         }
@@ -56,13 +104,44 @@ final class BlindTokenService {
         do {
             let tokens = try await issueTokens(count: n)
             TokenWalletService.shared.deposit(tokens)
-            lastReplenishDate = Date()
+            record(.ok(tokens.count))
+            cooldownUntil = Date().addingTimeInterval(Self.cooldown)
             Log.info("BlindToken: replenished \(tokens.count) tokens (wallet=\(TokenWalletService.shared.balance))", category: "BlindToken")
         } catch {
-            Log.error("BlindToken: replenishment failed — \(error)", category: "BlindToken")
-            // Set date on failure too so cooldown prevents log spam / rapid retries (e.g. "not configured").
-            lastReplenishDate = Date()
+            // Classify so the wallet-empty cause is diagnosable, and so transient failures
+            // don't inherit the full hourly lockout that steady server states warrant.
+            let outcome = Self.classify(error)
+            record(outcome)
+            let backoff = outcome.backsOffFullHour ? Self.cooldown : Self.transientRetry
+            cooldownUntil = Date().addingTimeInterval(backoff)
+            Log.error("BlindToken: replenishment failed [\(outcome.diagnosticLabel)] — \(error)", category: "BlindToken")
         }
+    }
+
+    /// Map a thrown issuance error to a diagnostic outcome. The raw `RPCError` propagates
+    /// from `GRPCCallExecutor` (it rethrows unwrapped), so server status codes are legible
+    /// here: identity-service returns UNAVAILABLE "…not configured" when `TOKEN_ISSUER_KEY`
+    /// is unset, RESOURCE_EXHAUSTED for the 20/hr cap, UNAUTHENTICATED for a bad token.
+    private static func classify(_ error: Error) -> IssuanceOutcome {
+        if let bt = error as? BlindTokenError {
+            switch bt {
+            case .allPointsRejected: return .verifyRejected
+            case .responseMismatch, .invalidBlindOutput: return .malformed
+            case .entropyFailure: return .transportError  // local, retry soon
+            }
+        }
+        if let rpc = error as? RPCError {
+            switch rpc.code {
+            case .unavailable:
+                let m = rpc.message.lowercased()
+                return (m.contains("not configured") || m.contains("token issuance"))
+                    ? .serverDisabled : .transportError
+            case .resourceExhausted: return .rateLimited
+            case .unauthenticated: return .unauthenticated
+            default: return .transportError
+            }
+        }
+        return .transportError
     }
 
     /// Special bootstrap for the very first batch of stealth tokens.
@@ -80,13 +159,13 @@ final class BlindTokenService {
             return
         }
 
-        if let last = lastReplenishDate, Date().timeIntervalSince(last) < Self.cooldown {
+        if let until = cooldownUntil, Date() < until {
             Log.debug("BlindToken: bootstrap cooldown active — skipping", category: "BlindToken")
             return
         }
 
         // Force bypass of cooldown for the absolute first batch (only if no recent attempt).
-        lastReplenishDate = nil
+        cooldownUntil = nil
 
         Log.info("BlindToken: starting initial bootstrap batch", category: "BlindToken")
         await replenish(count: Self.batchSize)
@@ -150,6 +229,13 @@ final class BlindTokenService {
             tokens.append(BlindToken(nonce: Data(nonces[i]), token: Data(tokenBytes)))
         }
 
+        // Server returned a full response but every point failed client verification —
+        // a bad/rotated issuer key, not a transient fault. Surface it distinctly instead
+        // of logging "replenished 0" as if it were success.
+        if tokens.isEmpty && count > 0 {
+            throw BlindTokenError.allPointsRejected
+        }
+
         return tokens
     }
 
@@ -168,6 +254,7 @@ enum BlindTokenError: Error, LocalizedError {
     case entropyFailure
     case invalidBlindOutput
     case responseMismatch(expected: Int, got: Int)
+    case allPointsRejected
 
     var errorDescription: String? {
         switch self {
@@ -177,6 +264,8 @@ enum BlindTokenError: Error, LocalizedError {
             return "ppBlindToken returned unexpected output size (expected 64 bytes)"
         case .responseMismatch(let expected, let got):
             return "IssueTokens response mismatch: expected \(expected) points, got \(got)"
+        case .allPointsRejected:
+            return "Every evaluated point failed client verification (bad/rotated issuer key)"
         }
     }
 }

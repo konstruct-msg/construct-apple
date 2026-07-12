@@ -300,11 +300,22 @@ final class StealthSenderService {
         // - Per-stream → attach at most once per recipient per day.
         // The SealedInner certificate (hiding the sender) is still built by the caller
         // whenever stealth is enabled.
+        // Did policy WANT a token here (per-message, or per-stream window elapsed)?
+        // Captured before consuming so we can tell "policy skipped" (per-stream still
+        // within its 24h window) apart from "wallet empty" — previously indistinguishable.
+        let wantedToken = StealthPolicy.shared.shouldConsumeToken(for: recipientUserId)
         if let token = StealthPolicy.shared.consumeTokenIfNeeded(for: recipientUserId) {
             inner.tokenNonce = token.nonce
             // Encrypt token_bytes to the server's X25519 key so relay operators cannot
             // read the spent token. Falls back to plaintext if key is not yet cached.
             inner.tokenBytes = await ServerKeyManager.shared.sealTokenBytes(token.token)
+        } else if wantedToken {
+            // Policy wanted a token but the wallet was empty: seal + send anyway (the
+            // certificate seal hides the sender regardless). Anti-abuse degraded, anonymity
+            // intact — the invariant we deliberately preserve. Make it observable instead of
+            // silent, so an empty wallet (e.g. server issuance misconfigured) is diagnosable.
+            PerformanceMetrics.shared.record(.stealthTokenlessSend, label: String(recipientUserId.prefix(8)))
+            Log.info("Stealth: sealed send WITHOUT token — wallet empty (anti-abuse degraded, anonymity intact)", category: "Stealth")
         }
 
         return try inner.serializedData()

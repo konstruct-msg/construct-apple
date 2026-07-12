@@ -25,6 +25,14 @@ struct DiagnosticsView: View {
     @State private var push = PushNotificationManager.shared
     #if DEBUG
     @AppStorage("stealth_mode_enabled") private var stealthOverrideEnabled = true
+    // Stealth Privacy Pass token diagnostics — snapshotted on refresh (BlindTokenService
+    // is not @Observable). Makes an empty wallet diagnosable: shows balance, the last
+    // issuance outcome (e.g. "server issuance disabled" when TOKEN_ISSUER_KEY is unset),
+    // and the count of sealed sends that went out token-less (anti-abuse degraded).
+    @State private var tokenBalance: Int = 0
+    @State private var tokenOutcome: String = "—"
+    @State private var tokenOutcomeOk: Bool = true
+    @State private var tokenlessSends: Int = 0
     #endif
     private var isPushPermissionGranted: Bool {
         push.authorizationStatus == .authorized || push.authorizationStatus == .provisional
@@ -130,6 +138,18 @@ struct DiagnosticsView: View {
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                 }
+
+                // MARK: - Stealth Tokens (Debug only)
+                VStack(alignment: .leading, spacing: 0) {
+                    CTSettingsSectionHeader(title: "STEALTH TOKENS", color: .orange)
+                    CTSectionGroup {
+                        diagRow(label: "Wallet balance", value: "\(tokenBalance)", ok: tokenBalance > 0)
+                        ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
+                        diagRow(label: "Last issuance", value: tokenOutcome, ok: tokenOutcomeOk)
+                        ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
+                        diagRow(label: "Token-less sends", value: "\(tokenlessSends)", ok: tokenlessSends == 0)
+                    }
+                }
                 #endif
 
 
@@ -232,6 +252,9 @@ struct DiagnosticsView: View {
     // MARK: - Helpers
 
     private func refresh() {
+        #if DEBUG
+        refreshStealthTokens()
+        #endif
         let bytes = LogCollector.shared.getTotalLogSize()
         if bytes > 0 {
             logSize = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
@@ -300,6 +323,23 @@ struct DiagnosticsView: View {
     }
 
     #if DEBUG
+    private func refreshStealthTokens() {
+        tokenBalance = TokenWalletService.shared.balance
+        tokenlessSends = PerformanceMetrics.shared.count(event: .stealthTokenlessSend)
+        if let outcome = BlindTokenService.shared.lastOutcome {
+            if case .ok = outcome { tokenOutcomeOk = true } else { tokenOutcomeOk = false }
+            var label = outcome.diagnosticLabel
+            if let at = BlindTokenService.shared.lastOutcomeDate {
+                let mins = Int(Date().timeIntervalSince(at) / 60)
+                label += mins <= 0 ? " (just now)" : " (\(mins)m ago)"
+            }
+            tokenOutcome = label
+        } else {
+            tokenOutcome = "no attempt yet"
+            tokenOutcomeOk = false
+        }
+    }
+
     private func resetLocalData() {
         // --- Keychain: crypto keys ---
         KeychainManager.shared.deleteAllKeys()       // identity_key, signing_key, crypto_private_keys_json, sessions
