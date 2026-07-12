@@ -309,6 +309,9 @@ final class StealthSenderService {
             // Encrypt token_bytes to the server's X25519 key so relay operators cannot
             // read the spent token. Falls back to plaintext if key is not yet cached.
             inner.tokenBytes = await ServerKeyManager.shared.sealTokenBytes(token.token)
+            // Positive-path visibility: confirms a token was actually attached (successful
+            // consume was previously silent — the wallet could only be inferred, not seen).
+            Log.info("Stealth: sealed send WITH token (wallet=\(TokenWalletService.shared.balance) left)", category: "Stealth")
         } else if wantedToken {
             // Policy wanted a token but the wallet was empty: seal + send anyway (the
             // certificate seal hides the sender regardless). Anti-abuse degraded, anonymity
