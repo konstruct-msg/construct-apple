@@ -142,7 +142,12 @@ final class KeyServiceClient: Sendable {
                     identityPublic: b.identityKey,
                     signedPrekeyPublic: b.signedPreKey,
                     signature: b.signedPreKeySignature,
-                    verifyingKey: Data(),
+                    // Pass through the server-provided per-device Ed25519 verifying key.
+                    // Was hardcoded to Data() — every fan-out/SenderSync session init that
+                    // had to init a fresh session failed in the core with
+                    // "Invalid verifying_key size: expected 32, got 0" (B3, vk=0B). The
+                    // single-fetch path already forwards response.verifyingKey (line ~302).
+                    verifyingKey: deviceBundle.verifyingKey,
                     suiteId: Self.parseSuiteId(b.cryptoSuite),
                     oneTimePreKeyPublic: otpkPublic,
                     oneTimePreKeyId: otpkId,
