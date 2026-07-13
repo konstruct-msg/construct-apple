@@ -321,6 +321,11 @@ final class StealthSenderService {
             Log.info("Stealth: sealed send WITHOUT token — wallet empty (anti-abuse degraded, anonymity intact)", category: "Stealth")
         }
 
+        // Reactive top-up: per-message scope drains the wallet steadily, so refill toward
+        // the server hourly cap as we spend rather than waiting for foreground/background
+        // triggers. No-op when the wallet is above the low-water mark or within cooldown.
+        Task { await BlindTokenService.shared.topUpIfLow() }
+
         return try inner.serializedData()
     }
 

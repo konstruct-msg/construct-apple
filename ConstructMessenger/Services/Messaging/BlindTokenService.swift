@@ -12,8 +12,11 @@
 //         token = ppFinalizeToken(evaluated, blind_factor, nonce)
 //    5. Deliver finalized BlindTokens to TokenWalletService.
 //
-//  Rate limit: server enforces 20 tokens/hr. Client respects this by capping
-//  a single replenish() call at 20 tokens and enforcing a 1-hour cooldown.
+//  Rate limit: the server bounds each IssueTokens call at 20 blinded points and caps
+//  issuance per user per hour (TOKEN_ISSUANCE_MAX_PER_HOUR, default 120). The client
+//  batches at 20/call and paces successful batches by a short cooldown, topping the wallet
+//  up reactively (topUpIfLow) toward that cap for per-message scope; hitting the cap yields
+//  .rateLimited → a full-hour back-off.
 //
 
 import Foundation
@@ -57,13 +60,22 @@ enum IssuanceOutcome: Equatable {
 final class BlindTokenService {
     static let shared = BlindTokenService()
 
-    /// Maximum tokens to request in one IssueTokens call (server limit: 20/hr).
+    /// Maximum blinded points per IssueTokens call (server bounds a request at 20).
     nonisolated static let batchSize = 20
-    /// Don't replenish again within this window (mirrors server hourly bucket).
-    private static let cooldown: TimeInterval = 3600
-    /// Brief back-off for transient transport failures — short enough that a network
-    /// blip doesn't keep the wallet empty for a full hour.
+    /// Pace between *successful* batches. Short (not the server's hourly window) so the
+    /// wallet can be topped up across several batches toward the server hourly cap for
+    /// per-message scope (Phase B). Hitting the cap returns `.rateLimited` → full-hour
+    /// back-off, which is the real ceiling.
+    private static let successCooldown: TimeInterval = 90
+    /// Back-off for steady/expected server states (issuance disabled, hourly cap hit):
+    /// retrying sooner won't help until the next hour.
+    private static let rateLimitBackoff: TimeInterval = 3600
+    /// Brief back-off for transient transport failures — a network blip shouldn't keep
+    /// the wallet empty for a full hour.
     private static let transientRetry: TimeInterval = 120
+    /// Reactive top-up threshold: below this the wallet is refilled (per-message scope
+    /// drains it steadily, unlike per-stream's ~1/recipient/day).
+    private static let lowWaterMark = 20
 
     /// When the next replenish attempt becomes eligible (nil = eligible now).
     private var cooldownUntil: Date?
@@ -105,17 +117,27 @@ final class BlindTokenService {
             let tokens = try await issueTokens(count: n)
             TokenWalletService.shared.deposit(tokens)
             record(.ok(tokens.count))
-            cooldownUntil = Date().addingTimeInterval(Self.cooldown)
+            cooldownUntil = Date().addingTimeInterval(Self.successCooldown)
             Log.info("BlindToken: replenished \(tokens.count) tokens (wallet=\(TokenWalletService.shared.balance))", category: "BlindToken")
         } catch {
             // Classify so the wallet-empty cause is diagnosable, and so transient failures
             // don't inherit the full hourly lockout that steady server states warrant.
             let outcome = Self.classify(error)
             record(outcome)
-            let backoff = outcome.backsOffFullHour ? Self.cooldown : Self.transientRetry
+            let backoff = outcome.backsOffFullHour ? Self.rateLimitBackoff : Self.transientRetry
             cooldownUntil = Date().addingTimeInterval(backoff)
             Log.error("BlindToken: replenishment failed [\(outcome.diagnosticLabel)] — \(error)", category: "BlindToken")
         }
+    }
+
+    /// Reactive top-up for per-message scope: pull a fresh batch when the wallet runs low.
+    /// Called from the send path after a token is consumed (and on empty-wallet sends), so
+    /// the wallet chases the server hourly cap instead of waiting for the next foreground /
+    /// background trigger. Cheap and idempotent — guarded by the balance threshold, the
+    /// success cooldown, and `isReplenishing`; a hit hourly cap self-limits via `.rateLimited`.
+    func topUpIfLow() async {
+        guard TokenWalletService.shared.balance < Self.lowWaterMark else { return }
+        await replenish()
     }
 
     /// Map a thrown issuance error to a diagnostic outcome. The raw `RPCError` propagates

@@ -256,6 +256,16 @@ struct FeatureFlags {
     /// construct-docs/decisions/stealth-sealed-sender-v2-always-on.md Phase 2).
     static let sealedSenderUnauthenticatedTransport = false
 
+    /// Stealth-sealed-sender-v2 Phase B: default token-attach scope when the user hasn't
+    /// explicitly chosen one (`stealth_per_message` unset). `true` = per-message (a token
+    /// on every sealed send) — the anti-abuse model required for `MSG_STEALTH_TOKEN_POLICY=
+    /// enforce`, where a missing token is rejected. The server issuance cap
+    /// (`TOKEN_ISSUANCE_MAX_PER_HOUR`, default 120) is the effective sealed-send rate limit;
+    /// the client tops up reactively (`BlindTokenService.topUpIfLow`). Ships under `warn`
+    /// first to drive token-present% → ~100% before enforce is flipped. An explicit user
+    /// override in SecurityView still wins.
+    static let stealthPerMessageDefault = true
+
     // For Desktop we now use the direct iOS path (CryptoManager + gRPC-Swift) per Strategy B.
     // Engine send path is disabled for Desktop (engine paused for this surface).
     static let useEngineForSend = false

@@ -64,8 +64,14 @@ final class StealthPolicy {
 
     /// true  = per-message (consume token on every send)
     /// false = per-stream   (consume at most once per recipient per day)
+    ///
+    /// Defaults to `FeatureFlags.stealthPerMessageDefault` (per-message, Phase B) when the
+    /// user hasn't explicitly chosen a scope — the model required for `enforce`. An explicit
+    /// SecurityView choice (key present) still wins, mirroring `isEnabled`.
     var isPerMessage: Bool {
-        UserDefaults.standard.bool(forKey: "stealth_per_message")
+        UserDefaults.standard.object(forKey: "stealth_per_message") == nil
+            ? FeatureFlags.stealthPerMessageDefault
+            : UserDefaults.standard.bool(forKey: "stealth_per_message")
     }
 
     /// Should we build a SealedInner for this send?
