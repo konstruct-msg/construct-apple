@@ -14,8 +14,11 @@ struct ChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
     @Environment(ChatsViewModel.self) private var chatsViewModel
-    @State private var viewModel: ChatViewModel
-    @State private var scrollManager = ChatScrollManager()  // ✅ NEW: Isolated scroll management
+    /// Lazy holder — SwiftUI re-runs View.init on parent re-render; we must not
+    /// allocate ChatViewModel there or discarded copies spam deinit / waste work.
+    @State private var lazyViewModel: LazyChatViewModel
+    private var viewModel: ChatViewModel { lazyViewModel.value }
+    @State private var scrollManager = ChatScrollManager()
     private var connectionManager = ConnectionStatusManager.shared
     @State private var messageText = ""
     @State private var replyingTo: Message?
@@ -57,16 +60,18 @@ struct ChatView: View {
         /// by the top scrim so scrolling text blurs/fades before it reaches the clock & signal.
         static let topScrimUnderSafeArea: CGFloat = CTLayout.navBarHeight + 24
     }
-    
-    // ❌ REMOVED: Scroll-related @State variables (moved to ChatScrollManager)
-    // - hasScrolledToBottom
-    // - scrollProxy
-    // - shouldScrollToBottom
-    // - scrollOffset
-    // - dragOffset
+
+    /// Combined scroll metrics so a single `onScrollGeometryChange` drives both
+    /// offset tracking and container width (two modifiers caused multi-update-per-frame).
+    private struct ChatScrollGeometry: Equatable {
+        var offsetFromBottom: CGFloat
+        var width: CGFloat
+    }
 
     init(chat: Chat, context: NSManagedObjectContext) {
-        _viewModel = State(wrappedValue: ChatViewModel(chat: chat, context: context))
+        _lazyViewModel = State(wrappedValue: LazyChatViewModel {
+            ChatViewModel(chat: chat, context: context)
+        })
     }
 
     var body: some View {
@@ -180,15 +185,17 @@ struct ChatView: View {
                 .onTapGesture {
                     hideKeyboard()
                 }
-                .onScrollGeometryChange(for: CGFloat.self) { geo in
-                    geo.contentOffset.y + geo.containerSize.height - geo.contentSize.height
-                } action: { _, offsetFromBottom in
-                    scrollManager.updateScrollOffset(offsetFromBottom)
-                }
-                .onScrollGeometryChange(for: CGFloat.self) { geo in
-                    geo.containerSize.width
-                } action: { _, width in
-                    if width > 0 { containerWidth = width }
+                .onScrollGeometryChange(for: ChatScrollGeometry.self) { geo in
+                    ChatScrollGeometry(
+                        offsetFromBottom: geo.contentOffset.y + geo.containerSize.height - geo.contentSize.height,
+                        width: geo.containerSize.width
+                    )
+                } action: { _, metrics in
+                    scrollManager.updateScrollOffset(metrics.offsetFromBottom)
+                    // Ignore zero-width passes during mid-layout; avoid thrashing on sub-pixel noise.
+                    if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
+                        containerWidth = metrics.width
+                    }
                 }
                 .onAppear {
                     scrollManager.registerProxy(proxy)
@@ -367,6 +374,7 @@ struct ChatView: View {
                     // window open (the black flash). The media preview also loads thumbnails
                     // asynchronously, so its height settles in several steps — we pin on this
                     // event and once more after a short delay to catch the final height.
+                    guard newHeight.isFinite, newHeight >= 0 else { return }
                     let changed = abs(newHeight - composerHeight) > 1
                     composerHeight = newHeight
                     if changed && scrollManager.shouldScrollToBottom {

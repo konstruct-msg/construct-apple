@@ -21,18 +21,33 @@ struct VoiceWaveformView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let barCount = effectiveBarCount(for: geo.size.width)
-            let totalSpacing = barSpacing * CGFloat(max(barCount - 1, 0))
-            let barWidth = max(minBarWidth, (geo.size.width - totalSpacing) / CGFloat(barCount))
+            // Mid-layout GeometryReader often reports 0 or non-finite sizes; drawing
+            // bars into those frames logs "Invalid frame dimension (negative or non-finite)".
+            let rawW = geo.size.width
+            let rawH = geo.size.height
+            let width = (rawW.isFinite && rawW > 0) ? rawW : 0
+            let height = (rawH.isFinite && rawH > 0) ? rawH : 0
 
-            HStack(alignment: .center, spacing: barSpacing) {
-                ForEach(0..<barCount, id: \.self) { i in
-                    Capsule()
-                        .fill(color(for: i, total: barCount))
-                        .frame(width: barWidth, height: height(for: i, total: geo.size.height, count: barCount))
+            if width < 1 || height < 1 {
+                Color.clear
+            } else {
+                let barCount = effectiveBarCount(for: width)
+                let totalSpacing = barSpacing * CGFloat(max(barCount - 1, 0))
+                let usable = max(0, width - totalSpacing)
+                let barWidth = max(minBarWidth, usable / CGFloat(max(barCount, 1)))
+
+                HStack(alignment: .center, spacing: barSpacing) {
+                    ForEach(0..<barCount, id: \.self) { i in
+                        Capsule()
+                            .fill(color(for: i, total: barCount))
+                            .frame(
+                                width: barWidth,
+                                height: self.height(for: i, total: height, count: barCount)
+                            )
+                    }
                 }
+                .frame(width: width, height: height)
             }
-            .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 
@@ -71,19 +86,23 @@ struct VoiceWaveformView: View {
     }
 
     private func height(for index: Int, total: CGFloat, count: Int) -> CGFloat {
+        let safeTotal = (total.isFinite && total > 0) ? total : 0
         switch style {
         case .playback:
             let values = downsample(samples, to: count, empty: 0.3, pad: 0.1)
-            return max(2, CGFloat(values[index]) * total)
+            let sample = CGFloat(values[index]).isFinite ? CGFloat(values[index]) : 0.3
+            return max(2, sample * safeTotal)
         case .staticAccent:
             let values = downsample(samples, to: count, empty: 0.3, pad: 0.1)
-            return max(5, CGFloat(values[index]) * total * 0.85)
+            let sample = CGFloat(values[index]).isFinite ? CGFloat(values[index]) : 0.3
+            return max(5, sample * safeTotal * 0.85)
         case .liveInput:
             let sampleCount = samples.count
             guard sampleCount > 0 else { return 4 }
             let si = max(0, sampleCount - count + index)
             guard si < sampleCount else { return 4 }
-            return max(4, CGFloat(samples[si]) * total * 0.9)
+            let sample = CGFloat(samples[si]).isFinite ? CGFloat(samples[si]) : 0
+            return max(4, sample * safeTotal * 0.9)
         }
     }
 

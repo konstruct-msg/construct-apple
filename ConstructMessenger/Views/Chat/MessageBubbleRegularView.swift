@@ -187,7 +187,12 @@ struct MessageBubbleRegularView: View {
                     .padding(.horizontal, 4)
                 }
             }
-            .frame(maxWidth: containerWidth * 0.7, alignment: message.isSentByMe ? .trailing : .leading)
+            // Guard non-finite / tiny container widths from mid-layout geometry passes
+            // (they produce "Invalid frame dimension" in the layout engine).
+            .frame(
+                maxWidth: max(120, (containerWidth.isFinite ? containerWidth : 390) * 0.7),
+                alignment: message.isSentByMe ? .trailing : .leading
+            )
             .contentShape(.interaction, Rectangle())
             #if os(iOS)
             .contentShape(.contextMenuPreview, Rectangle())

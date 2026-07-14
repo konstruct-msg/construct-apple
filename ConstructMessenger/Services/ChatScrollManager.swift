@@ -29,45 +29,66 @@ import UIKit
 @MainActor
 @Observable
 class ChatScrollManager {
-    // MARK: - Published State
-    
+    // MARK: - Observed UI State
+    // Only properties that should invalidate ChatView belong here.
+    // High-frequency scroll position is @ObservationIgnored so
+    // onScrollGeometryChange does not re-render the chat every frame
+    // (that loop also produced "tried to update multiple times per frame").
+
     /// Whether the view should scroll to bottom on next layout
     var shouldScrollToBottom = true
-    
+
     /// Whether the view has scrolled to bottom at least once
     var hasScrolledToBottom = false
-    
-    /// Current vertical scroll offset
-    var scrollOffset: CGFloat = 0
-    
+
     /// Keyboard height when visible
     var keyboardHeight: CGFloat = 0
-    
-    // MARK: - Private State
-    
+
+    /// "Jump to bottom" FAB — only flips when crossing the threshold (not every pixel).
+    var shouldShowScrollToBottomButton = false
+
+    // MARK: - High-frequency / private state
+
+    /// Current offset from bottom (≈ 0 at bottom; large negative = scrolled up).
+    /// Not observed — reading/writing must not invalidate the view every frame.
+    @ObservationIgnored
+    private(set) var scrollOffset: CGFloat = 0
+
     /// Reference to ScrollViewProxy for programmatic scrolling
+    @ObservationIgnored
     private var proxy: ScrollViewProxy?
-    
+
     /// Drag offset for pull-to-refresh gestures
+    @ObservationIgnored
     private(set) var dragOffset: CGFloat = 0
-    
+
     /// Cancellables for keyboard notifications
+    @ObservationIgnored
     private var cancellables = Set<AnyCancellable>()
-    
+
+    // MARK: - Thresholds
+
+    private enum Threshold {
+        /// Near bottom → keep auto-scroll on for new messages.
+        static let nearBottom: CGFloat = -60
+        /// Far enough up to show the jump-to-bottom button.
+        static let showJumpButton: CGFloat = -200
+    }
+
     // MARK: - Initialization
-    
+
     init() {
         setupKeyboardObservers()
     }
-    
+
     // MARK: - Public Methods
-    
+
     /// Register the ScrollViewProxy for programmatic scrolling
     /// - Parameter proxy: ScrollViewProxy from ScrollViewReader
     func registerProxy(_ proxy: ScrollViewProxy) {
         self.proxy = proxy
     }
-    
+
     /// Scroll to bottom of chat
     /// - Parameters:
     ///   - messageId: Optional specific message ID to scroll to (defaults to "bottom")
@@ -92,9 +113,13 @@ class ChatScrollManager {
         }
 
         hasScrolledToBottom = true
-        Log.debug("Scrolled to bottom (messageId: \(messageId), animated: \(animated))", category: "ChatScrollManager")
+        // Corrective re-pins fire often (composer height, keyboard); keep the log
+        // for intentional animated scrolls only to cut console noise.
+        if animated {
+            Log.debug("Scrolled to bottom (messageId: \(messageId), animated: true)", category: "ChatScrollManager")
+        }
     }
-    
+
     /// Scroll to a specific message
     /// - Parameters:
     ///   - messageId: Message ID to scroll to
@@ -104,7 +129,7 @@ class ChatScrollManager {
         guard let proxy = proxy else {
             return
         }
-        
+
         if animated {
             withAnimation(.easeOut(duration: 0.3)) {
                 proxy.scrollTo(messageId, anchor: anchor)
@@ -112,54 +137,56 @@ class ChatScrollManager {
         } else {
             proxy.scrollTo(messageId, anchor: anchor)
         }
-        
+
         Log.debug("Scrolled to message: \(messageId)", category: "ChatScrollManager")
     }
-    
+
     /// Update scroll offset (called from onScrollGeometryChange).
     /// `offset` ≈ 0 when at the bottom; large negative means scrolled far up.
-    /// Automatically maintains `shouldScrollToBottom` so auto-scroll on new
-    /// messages doesn't fight the user when they deliberately scroll up.
+    /// Only mutates observed flags when crossing thresholds so the chat view
+    /// does not re-render on every scroll pixel.
     func updateScrollOffset(_ offset: CGFloat) {
-        // Ignore offset updates while keyboard is animating — container height
-        // changes during animation produce spurious offset values.
-        if isKeyboardVisible {
-            scrollOffset = offset
-            return
-        }
+        guard offset.isFinite else { return }
 
         scrollOffset = offset
 
-        if offset >= -60 {
-            // User is at (or very near) the bottom — re-enable auto-scroll.
-            shouldScrollToBottom = true
-        } else if offset < -60 {
-            // User has scrolled up — disable auto-scroll so new arrivals
-            // don't yank them back down. Single threshold avoids the
-            // -160…-60 gap where state would stay stale.
-            shouldScrollToBottom = false
+        // Ignore threshold updates while keyboard is animating — container height
+        // changes during animation produce spurious offset values.
+        if isKeyboardVisible {
+            return
+        }
+
+        let nearBottom = offset >= Threshold.nearBottom
+        if nearBottom != shouldScrollToBottom {
+            shouldScrollToBottom = nearBottom
+        }
+
+        let showButton = offset < Threshold.showJumpButton
+        if showButton != shouldShowScrollToBottomButton {
+            shouldShowScrollToBottomButton = showButton
         }
     }
-    
+
     /// Update drag offset for pull-to-refresh
     /// - Parameter offset: Drag gesture offset
     func updateDragOffset(_ offset: CGFloat) {
         dragOffset = offset
     }
-    
+
     /// Reset scroll state (e.g., when switching chats)
     func reset() {
         shouldScrollToBottom = true
         hasScrolledToBottom = false
+        shouldShowScrollToBottomButton = false
         scrollOffset = 0
         dragOffset = 0
         proxy = nil
-        
+
         Log.debug("ChatScrollManager reset", category: "ChatScrollManager")
     }
-    
+
     // MARK: - Keyboard Handling
-    
+
     private func setupKeyboardObservers() {
         #if canImport(UIKit)
         // Observe keyboard will show
@@ -181,7 +208,7 @@ class ChatScrollManager {
                 }
             }
             .store(in: &cancellables)
-        
+
         // Observe keyboard will hide
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
             .sink { [weak self] _ in
@@ -205,11 +232,5 @@ extension ChatScrollManager {
     /// Whether keyboard is currently visible
     var isKeyboardVisible: Bool {
         keyboardHeight > 0
-    }
-    
-    /// Whether to show "scroll to bottom" button (scrolled far from newest messages)
-    var shouldShowScrollToBottomButton: Bool {
-        // offsetFromBottom ≈ 0 means at bottom; large negative = scrolled up
-        return scrollOffset < -200
     }
 }
