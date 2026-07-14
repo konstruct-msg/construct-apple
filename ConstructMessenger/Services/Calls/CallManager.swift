@@ -1221,6 +1221,7 @@ final class CallManager: CallUIManaging {
             }
         case .iceCandidates(let batch):
             guard let active, active.session.id == signal.callID else { return }
+            var buffered = 0
             for ice in batch.candidates {
                 guard let candidateSdp = try? CallSignalCrypto.shared.decryptField(ice.candidate, from: senderUserId) else {
                     Log.error("Failed to decrypt E2EE ICE candidate (batch) from \(senderUserId.prefix(8))… — dropping", category: "Calls")
@@ -1229,12 +1230,13 @@ final class CallManager: CallUIManaging {
                 let c = WebRTCIceCandidate(sdp: candidateSdp, sdpMid: ice.sdpMid, sdpMLineIndex: Int32(ice.sdpMLineIndex))
                 if active.pendingRemoteOfferSdp != nil {
                     active.pendingIceCandidates.append(c)
+                    buffered += 1
                 } else {
                     Task { try? await active.webrtc?.addRemoteIceCandidate(c) }
                 }
             }
-            if active.pendingRemoteOfferSdp != nil {
-                Log.debug("Buffered \(batch.candidates.count) E2EE ICE candidates (pending SDP)", category: "Calls")
+            if buffered > 0 {
+                Log.debug("Buffered \(buffered)/\(batch.candidates.count) E2EE ICE candidates (pending SDP)", category: "Calls")
             }
         case .hangup(let hangup):
             guard active?.session.id == signal.callID else { return }
