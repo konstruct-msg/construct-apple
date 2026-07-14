@@ -135,6 +135,16 @@ final class BlindTokenService {
     /// the wallet chases the server hourly cap instead of waiting for the next foreground /
     /// background trigger. Cheap and idempotent — guarded by the balance threshold, the
     /// success cooldown, and `isReplenishing`; a hit hourly cap self-limits via `.rateLimited`.
+    /// Enforce-rejection recovery (FAILED_PRECONDITION "privacy_pass:*"): the server just
+    /// rejected our token, so any active cooldown is stale by definition — clear it and
+    /// pull a fresh batch immediately so the one-shot sealed retry has a valid token.
+    /// Still serialized by `isReplenishing`; a hit hourly cap re-arms the full back-off
+    /// via `.rateLimited` as usual.
+    func forceReplenish() async {
+        cooldownUntil = nil
+        await replenish()
+    }
+
     func topUpIfLow() async {
         guard TokenWalletService.shared.balance < Self.lowWaterMark else { return }
         await replenish()
