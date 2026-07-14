@@ -289,13 +289,17 @@ extension MessageStreamManager {
         // Process incoming events — callbacks are invoked on the task's actor context (main)
         let processingTask = Task { [weak self] in
             for await event in incomingStream {
+                guard let self else { return }
+                // Drop everything from a superseded stream so dual-accept during VEIL
+                // failover cannot double-fire receipts / messages into the UI pipeline.
+                guard self.activeStreamGeneration == generation else { break }
                 // Any server-pushed event proves the connection is live end-to-end
                 // (not just at TLS layer). Sets the watchdog-cancel flag below.
-                self?.firstServerEventReceived = true
+                self.firstServerEventReceived = true
                 switch event {
                 case .message(let msg, let cursor):
                     Log.debug("MessageStream received message from=\(msg.from) id=\(msg.id)", category: "MessageStream")
-                    if let handler = self?.onMessageReceived {
+                    if let handler = self.onMessageReceived {
                         // Track BEFORE handling so the cursor only advances once the pipeline
                         // reports a durable outcome (StreamCursorTracker.report inside
                         // routeIncomingMessage). A queued (no-session) message stays deferred
@@ -307,7 +311,7 @@ extension MessageStreamManager {
                     }
                 case .deliveryReceipt(let ids, let cursor):
                     Log.info("MessageStream receipt: \(ids.count) message(s) delivered → \(ids.joined(separator: ", "))", category: "MessageStream")
-                    self?.onDeliveryReceipt?(ids)
+                    self.onDeliveryReceipt?(ids)
                     // Receipts carry no recoverable user data and are handled synchronously —
                     // resolve immediately, but still through the tracker so the receipt's cursor
                     // can't leapfrog an earlier still-deferred message in the FIFO.
@@ -317,7 +321,7 @@ extension MessageStreamManager {
                     }
                 case .keySyncRequest(let userId, let cursor):
                     Log.info("KEY_SYNC received — re-keying session for \(userId.prefix(8))…", category: "MessageStream")
-                    self?.onKeySyncReceived?(userId)
+                    self.onKeySyncReceived?(userId)
                     if let cursor {
                         StreamCursorTracker.shared.track(messageId: cursor, cursor: cursor)
                         StreamCursorTracker.shared.resolve(messageId: cursor)
@@ -328,7 +332,7 @@ extension MessageStreamManager {
                     // acked cursor (since_cursor), so advancing it past a non-message event
                     // would tell the server to delete messages the client never received.
                     // (The server already sends no cursor on heartbeats; this is defensive.)
-                    self?.lastHeartbeatDate = Date()
+                    self.lastHeartbeatDate = Date()
                 }
             }
         }
@@ -344,11 +348,22 @@ extension MessageStreamManager {
         let onAccepted: @Sendable (String) -> Void = { [weak self] label in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                // VEIL failover routinely leaves a late-accepted direct/prior stream racing
+                // a newer openStream. Without this guard both log "connected" and both pump
+                // receipts (device logs: two accepts + receipt storm + stale generation).
+                guard self.activeStreamGeneration == generation else {
+                    Log.info(
+                        "MessageStream accept ignored (stale generation \(generation), active=\(self.activeStreamGeneration)) via \(metricsLabel)",
+                        category: "MessageStream"
+                    )
+                    return
+                }
                 let streamMs = PerformanceMetrics.shared.end(.streamOpenStart, endEvent: .streamOpenEnd, label: metricsLabel)
                 ConnectionStatusManager.shared.markRequestSucceeded()
                 self.isConnected = true
                 self.activeTransport = label
                 self.lastActiveTransport = label
+                self.activeRoutingKey = metricsLabel
                 self.lastHeartbeatDate = Date()
                 if self.lastStreamTransportWasH3 { self.consecutiveH3OpenFailures = 0 }
                 // The background fetch was a best-effort catch-up for messages missed
