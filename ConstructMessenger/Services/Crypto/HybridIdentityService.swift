@@ -27,20 +27,22 @@ import Foundation
 import CryptoKit
 import GRPCCore
 
+// File-level keys so `nonisolated` helpers (e.g. reset on device-link) can read them
+// without MainActor isolation (Swift 6 treats statics on @MainActor types as isolated).
+/// Set once the hybrid bundle has been accepted by the server. Bump the suffix to
+/// force a one-time re-publish after a protocol change.
+private let hybridIdentityPublishedFlagKey = "construct.hybridIdentity.published.v1"
+/// SHA-256 of the classic SPK the hybrid signatures were last published over.
+/// An SPK rotation clears the server-side hybrid SPK signature; comparing this
+/// against the current SPK lets `publishIfNeeded` detect that state and re-attach.
+/// Without it, a rotation whose best-effort re-attach failed (transient RPC error)
+/// left the bundle permanently unverifiable — hybrid identity present but
+/// "SPK hybrid signature missing" — because the one-time published flag made
+/// `publishIfNeeded` skip forever.
+private let hybridIdentitySpkFingerprintKey = "construct.hybridIdentity.spkFingerprint.v1"
+
 @MainActor
 enum HybridIdentityService {
-    /// Set once the hybrid bundle has been accepted by the server. Bump the suffix to
-    /// force a one-time re-publish after a protocol change.
-    private static let publishedFlagKey = "construct.hybridIdentity.published.v1"
-
-    /// SHA-256 of the classic SPK the hybrid signatures were last published over.
-    /// An SPK rotation clears the server-side hybrid SPK signature; comparing this
-    /// against the current SPK lets `publishIfNeeded` detect that state and re-attach.
-    /// Without it, a rotation whose best-effort re-attach failed (transient RPC error)
-    /// left the bundle permanently unverifiable — hybrid identity present but
-    /// "SPK hybrid signature missing" — because the one-time published flag made
-    /// `publishIfNeeded` skip forever.
-    private static let spkFingerprintKey = "construct.hybridIdentity.spkFingerprint.v1"
 
     /// Transient transport codes worth retrying in-session — same set the media
     /// up/download paths treat as retryable. `.cancelled`/`.unknown` cover the VEIL
@@ -63,9 +65,9 @@ enum HybridIdentityService {
     /// bail to next-launch immediately. On final failure nothing is recorded, so the next
     /// launch still retries.
     static func publishIfNeeded(deviceId: String) async {
-        let published = UserDefaults.standard.bool(forKey: publishedFlagKey)
+        let published = UserDefaults.standard.bool(forKey: hybridIdentityPublishedFlagKey)
         let current = try? currentSpkFingerprint()
-        let recorded = UserDefaults.standard.string(forKey: spkFingerprintKey)
+        let recorded = UserDefaults.standard.string(forKey: hybridIdentitySpkFingerprintKey)
         // Up to date only when we've published AND the SPK hasn't rotated since.
         if published, let current, current == recorded { return }
 
@@ -82,9 +84,9 @@ enum HybridIdentityService {
         // See otpk-session-init-deadlock.
         let spkConsistent = await PreKeyRotationService.shared.verifyAndRepairKeyConsistency()
         if !spkConsistent {
-            let healed = UserDefaults.standard.bool(forKey: publishedFlagKey)
+            let healed = UserDefaults.standard.bool(forKey: hybridIdentityPublishedFlagKey)
             let healedFp = try? currentSpkFingerprint()
-            let healedRecorded = UserDefaults.standard.string(forKey: spkFingerprintKey)
+            let healedRecorded = UserDefaults.standard.string(forKey: hybridIdentitySpkFingerprintKey)
             if healed, let healedFp, healedFp == healedRecorded { return }
         }
 
@@ -149,9 +151,9 @@ enum HybridIdentityService {
         )
 
         // 6. Record success...
-        UserDefaults.standard.set(true, forKey: publishedFlagKey)
+        UserDefaults.standard.set(true, forKey: hybridIdentityPublishedFlagKey)
         if let spkPublicForFp = try? cm.localBundlePublicKeys().signedPrekeyPublic {
-            UserDefaults.standard.set(Self.fingerprint(spkPublicForFp), forKey: spkFingerprintKey)
+            UserDefaults.standard.set(Self.fingerprint(spkPublicForFp), forKey: hybridIdentitySpkFingerprintKey)
         }
         Log.info("Hybrid PQ identity published (key=\(hybridPub.count)B, spkSig=\(spkHybridSig?.count ?? 0)B, kyberSig=\(kyberHybridSig?.count ?? 0)B)", category: "HybridPQ")
     }
@@ -171,15 +173,15 @@ enum HybridIdentityService {
     /// Atomic SPK-rotation hybrid signatures are only meaningful (server-verifiable) after this;
     /// before it, the server has no hybrid identity key to verify the SPK signature against.
     static var isHybridIdentityPublished: Bool {
-        UserDefaults.standard.bool(forKey: publishedFlagKey)
+        UserDefaults.standard.bool(forKey: hybridIdentityPublishedFlagKey)
     }
 
     /// Record that the hybrid SPK signature for `spkPublic` is now live server-side (e.g. it was
     /// stored atomically by SPK rotation), so `publishIfNeeded` won't redundantly re-publish on
     /// the next launch.
     static func recordHybridPublished(spkPublic: Data) {
-        UserDefaults.standard.set(true, forKey: publishedFlagKey)
-        UserDefaults.standard.set(fingerprint(spkPublic), forKey: spkFingerprintKey)
+        UserDefaults.standard.set(true, forKey: hybridIdentityPublishedFlagKey)
+        UserDefaults.standard.set(fingerprint(spkPublic), forKey: hybridIdentitySpkFingerprintKey)
     }
 
     /// Clear the "hybrid identity published" flags. MUST be called when the device switches to a
@@ -188,7 +190,7 @@ enum HybridIdentityService {
     /// rotation, which the server rejects with "device has no hybrid identity key" (the new
     /// identity has no hybrid key published yet).
     nonisolated static func resetPublishState() {
-        UserDefaults.standard.removeObject(forKey: publishedFlagKey)
-        UserDefaults.standard.removeObject(forKey: spkFingerprintKey)
+        UserDefaults.standard.removeObject(forKey: hybridIdentityPublishedFlagKey)
+        UserDefaults.standard.removeObject(forKey: hybridIdentitySpkFingerprintKey)
     }
 }

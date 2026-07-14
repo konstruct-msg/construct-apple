@@ -63,7 +63,7 @@ struct InCallView: View {
                 // Avatar + name
                 VStack(spacing: 16) {
                     ZStack {
-                        MainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 96)
+                        ContactMainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 96)
                         // Pulse appears in two distinct UX moments:
                         // 1. While the call is dialling / ringing (connecting=true)
                         // 2. While ICE has transiently dropped (.reconnecting)

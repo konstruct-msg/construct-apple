@@ -129,7 +129,9 @@ class MessageQueueManager {
     }
 
     private func handleTimedOutMessages(_ messageIds: [String], context: NSManagedObjectContext) {
-        context.perform {
+        // Outer perform already holds a strong self for its lifetime; nesting [weak self]
+        // on the MainActor hops would warn about mismatched ownership.
+        context.perform { [self] in
             for messageId in messageIds {
                 let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
                 fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
@@ -138,7 +140,7 @@ class MessageQueueManager {
                     if message.deliveryStatus == .sending {
                         Log.info("Message \(messageId) timed out, marking as queued", category: "MessageQueue")
                         message.deliveryStatus = .queued
-                        Task { @MainActor [weak self, messageId] in self?.markMessageAsFailed(messageId) }
+                        Task { @MainActor in self.markMessageAsFailed(messageId) }
                     }
                 }
             }
@@ -149,8 +151,8 @@ class MessageQueueManager {
                 Log.error("MessageQueueManager: failed to save timed-out message statuses: \(error)", category: "MessageQueue")
             }
             // Try to resend if network is available (gRPC reconnects automatically)
-            Task { @MainActor [weak self] in
-                if self?.networkManager.isReachable == true { self?.processQueuedMessages() }
+            Task { @MainActor in
+                if self.networkManager.isReachable { self.processQueuedMessages() }
             }
         }
     }

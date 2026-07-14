@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import Combine
 import CoreImage.CIFilterBuiltins
 
 struct ContactQRCodeView: View {

@@ -252,7 +252,7 @@ private struct CallHistoryRow: View {
                     .foregroundStyle(directionColor)
                     .frame(width: 20, alignment: .center)
 
-                MainAvatarView(
+                ContactMainAvatarView(
                     userId: record.peerUserId,
                     displayName: record.peerName,
                     size: 40

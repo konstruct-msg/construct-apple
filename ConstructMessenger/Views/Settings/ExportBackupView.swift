@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import CoreData
 
 struct ExportBackupView: View {
     @Environment(\.dismiss) private var dismiss

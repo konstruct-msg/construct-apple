@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import CoreData
 
 struct SecurityView: View {
     @Environment(SecurityViewModel.self) private var securityViewModel
