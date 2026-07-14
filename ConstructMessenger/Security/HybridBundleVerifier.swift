@@ -22,7 +22,7 @@ import Foundation
 import CryptoKit
 
 enum HybridBundleVerifier {
-    enum Outcome: Equatable {
+    enum Outcome: Equatable, Sendable {
         case verified         // hybrid fields present and the whole chain validates
         case absent           // no hybrid identity key → Ed25519-only peer (accepted)
         case degraded(String) // hybrid IDENTITY authentic (cross-sig valid) but the SPK-level

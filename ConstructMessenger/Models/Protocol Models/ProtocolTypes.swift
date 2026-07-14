@@ -133,7 +133,7 @@ struct PublicUserInfo: Codable, Identifiable {
     var deviceId: String?    // Set when known (e.g. from Dynamic Invite)
 }
 
-struct PublicKeyBundleData: Codable {
+struct PublicKeyBundleData: Codable, Sendable {
     let userId: String
     let username: String
     let identityPublic: Data

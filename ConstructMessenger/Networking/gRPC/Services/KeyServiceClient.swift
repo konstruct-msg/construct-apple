@@ -169,9 +169,21 @@ final class KeyServiceClient: Sendable {
 
     // MARK: - Get Pre-Key Bundle (replaces CryptoAPI.getPublicKey)
 
+    /// Intermediate result of the gRPC fetch + crypto verify. Core Data side effects
+    /// (KT status, hybrid pin) are applied on the MainActor *after* the RPC returns so
+    /// SwiftUI `@ObservedObject` User rows never receive objectWillChange off-main
+    /// (the classic "Publishing changes from background threads is not allowed" warning).
+    private struct PreKeyBundleFetchResult: Sendable {
+        let data: PublicKeyBundleData
+        let deviceID: String
+        let hybridOutcome: HybridBundleVerifier.Outcome
+        /// Non-nil when a KT inclusion proof was present and evaluated.
+        let ktStatus: KTStatus?
+    }
+
     /// Fetch a user's pre-key bundle for establishing an E2EE session.
     func getPreKeyBundle(userId: String, deviceId: String? = nil) async throws -> PublicKeyBundleData {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPreKeyBundle) { grpcClient in
+        let fetched = try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPreKeyBundle) { grpcClient -> PreKeyBundleFetchResult in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetPreKeyBundleRequest()
@@ -202,7 +214,9 @@ final class KeyServiceClient: Sendable {
             let kyberOtpkId: UInt32? = bundle.hasKyberOneTimePreKeyID && bundle.kyberOneTimePreKeyID > 0
                 ? bundle.kyberOneTimePreKeyID : nil
 
-            // KT verification (non-blocking: failure is logged but does not reject the bundle)
+            // KT verification (non-blocking: failure is logged but does not reject the bundle).
+            // Core Data write is deferred to MainActor after the RPC — see apply below.
+            var ktStatus: KTStatus? = nil
             if response.hasKtProof {
                 let p = response.ktProof
                 let serverKey = UserDefaults.standard.data(forKey: VeilCertFetcher.cachedBundleSigningKeyKey)
@@ -220,19 +234,11 @@ final class KeyServiceClient: Sendable {
                 case .verified:
                     KTStore.shared.recordVerified()
                     Log.info("KT: inclusion proof verified for device \(response.deviceID)", category: "KT")
-                    Self.updateContactKTStatus(
-                        userId: userId,
-                        identityKey: bundle.identityKey,
-                        newStatus: .verified
-                    )
+                    ktStatus = .verified
                 case .failed(let e):
                     KTStore.shared.recordFailure()
                     Log.error("KT: proof FAILED for device \(response.deviceID) — \(e)", category: "KT")
-                    Self.updateContactKTStatus(
-                        userId: userId,
-                        identityKey: bundle.identityKey,
-                        newStatus: .failed
-                    )
+                    ktStatus = .failed
                 case .unavailable:
                     break
                 }
@@ -262,8 +268,7 @@ final class KeyServiceClient: Sendable {
                 }
             }
 
-            // Hybrid PQ verification. Phase 2: present-but-invalid → tampering, reject.
-            // Phase 3: absent for a previously hybrid-capable peer → downgrade, reject.
+            // Hybrid PQ crypto verification only — Core Data pin is applied on MainActor below.
             let hybridOutcome = HybridBundleVerifier.verify(
                 hybridIdentityKey: bundle.hasHybridIdentityKey ? bundle.hybridIdentityKey : Data(),
                 hybridIdentitySignature: bundle.hasHybridIdentitySignature ? bundle.hybridIdentitySignature : Data(),
@@ -273,32 +278,14 @@ final class KeyServiceClient: Sendable {
                 kyberPreKey: kyberPK,
                 kyberPreKeyHybridSignature: bundle.hasKyberPreKeyHybridSignature ? bundle.kyberPreKeyHybridSignature : Data()
             )
-            let hybridDowngrade = Self.recordAndCheckHybrid(
-                userId: userId,
-                identityKey: bundle.identityKey,
-                outcome: hybridOutcome
-            )
-            switch hybridOutcome {
-            case .verified:
-                Log.info("Hybrid PQ bundle verified for device \(response.deviceID)", category: "HybridPQ")
-            case .degraded(let reason):
-                // Hybrid identity is authentic (cross-sig valid) but the SPK-level hybrid
-                // attestation is unavailable — proceed via classic X3DH rather than hard-block a
-                // desynced peer. The classic Ed25519 SPK signature is still enforced by the core.
-                Log.fault("Hybrid PQ DEGRADED for device \(response.deviceID): \(reason) — proceeding via classic X3DH (PQ SPK attestation unavailable; likely peer SPK desync)", category: "HybridPQ")
-            case .absent:
-                if hybridDowngrade {
-                    Log.error("Hybrid PQ DOWNGRADE for device \(response.deviceID): peer was hybrid-capable, bundle now Ed25519-only", category: "HybridPQ")
-                    throw HybridBundleVerificationError(reason: "hybrid downgrade — peer previously presented a hybrid key for this identity")
-                }
-            case .failed(let reason):
+
+            // Fail hard on identity-level tampering before we touch Core Data.
+            if case .failed(let reason) = hybridOutcome {
                 Log.error("Hybrid PQ bundle REJECTED for device \(response.deviceID): \(reason)", category: "HybridPQ")
                 throw HybridBundleVerificationError(reason: reason)
             }
 
-            Log.info("SESSION_STATE[bundle_capabilities]: userId=\(userId.prefix(8))…, device=\(response.deviceID.prefix(8))…, supportsPqRatchet=\(bundle.supportsPqRatchet)", category: "SessionInit")
-
-            return PublicKeyBundleData(
+            let data = PublicKeyBundleData(
                 userId: userId,
                 username: "",
                 identityPublic: bundle.identityKey,
@@ -319,7 +306,55 @@ final class KeyServiceClient: Sendable {
                 kyberSpkRotationEpoch: bundle.hasKyberSpkRotationEpoch ? bundle.kyberSpkRotationEpoch : 0,
                 supportsPqRatchet: bundle.supportsPqRatchet
             )
+
+            return PreKeyBundleFetchResult(
+                data: data,
+                deviceID: response.deviceID,
+                hybridOutcome: hybridOutcome,
+                ktStatus: ktStatus
+            )
         }
+
+        // --- MainActor Core Data side effects (UI-observed User fields) ---
+        let hybridDowngrade = await MainActor.run {
+            Self.recordAndCheckHybrid(
+                userId: userId,
+                identityKey: fetched.data.identityPublic,
+                outcome: fetched.hybridOutcome
+            )
+        }
+
+        switch fetched.hybridOutcome {
+        case .verified:
+            Log.info("Hybrid PQ bundle verified for device \(fetched.deviceID)", category: "HybridPQ")
+        case .degraded(let reason):
+            // Hybrid identity is authentic (cross-sig valid) but the SPK-level hybrid
+            // attestation is unavailable — proceed via classic X3DH rather than hard-block a
+            // desynced peer. The classic Ed25519 SPK signature is still enforced by the core.
+            Log.fault("Hybrid PQ DEGRADED for device \(fetched.deviceID): \(reason) — proceeding via classic X3DH (PQ SPK attestation unavailable; likely peer SPK desync)", category: "HybridPQ")
+        case .absent:
+            if hybridDowngrade {
+                Log.error("Hybrid PQ DOWNGRADE for device \(fetched.deviceID): peer was hybrid-capable, bundle now Ed25519-only", category: "HybridPQ")
+                throw HybridBundleVerificationError(reason: "hybrid downgrade — peer previously presented a hybrid key for this identity")
+            }
+        case .failed:
+            // Already thrown inside the RPC closure.
+            break
+        }
+
+        if let ktStatus = fetched.ktStatus {
+            await MainActor.run {
+                Self.updateContactKTStatus(
+                    userId: userId,
+                    identityKey: fetched.data.identityPublic,
+                    newStatus: ktStatus
+                )
+            }
+        }
+
+        Log.info("SESSION_STATE[bundle_capabilities]: userId=\(userId.prefix(8))…, device=\(fetched.deviceID.prefix(8))…, supportsPqRatchet=\(fetched.data.supportsPqRatchet)", category: "SessionInit")
+
+        return fetched.data
     }
 
     /// Map proto CryptoSuite enum → the core's SuiteID (suite_id.rs):
@@ -556,41 +591,43 @@ final class KeyServiceClient: Sendable {
     /// Update the `knownIdentityKey` and `ktStatus` on the User Core Data record
     /// for `userId` after a KT verification result.
     ///
+    /// **MainActor-only** — User is `@ObservedObject` in chat/list UI; writing from a
+    /// background context caused "Publishing changes from background threads".
+    ///
     /// - On first verification (`knownIdentityKey == nil`): stores the key and marks `.verified`.
     /// - On matching key: updates status to the new value (`.verified` or `.failed`).
     /// - On key change (was set, now different): marks `.keyChanged` and posts
     ///   `.contactKeyChanged` — regardless of whether the proof itself was valid,
     ///   because any unexpected key change must surface to the user.
+    @MainActor
     private static func updateContactKTStatus(
         userId: String,
         identityKey: Data,
         newStatus: KTStatus
     ) {
-        let context = PersistenceController.shared.container.newBackgroundContext()
-        context.perform {
-            let fetch = User.fetchRequest()
-            fetch.predicate = NSPredicate(format: "id == %@", userId)
-            fetch.fetchLimit = 1
-            guard let user = try? context.fetch(fetch).first else { return }
+        let context = PersistenceController.shared.container.viewContext
+        let fetch = User.fetchRequest()
+        fetch.predicate = NSPredicate(format: "id == %@", userId)
+        fetch.fetchLimit = 1
+        guard let user = try? context.fetch(fetch).first else { return }
 
-            if let known = user.knownIdentityKey, known != identityKey {
-                // Identity key has changed since the last verified session.
-                user.ktStatus = .keyChanged
+        if let known = user.knownIdentityKey, known != identityKey {
+            // Identity key has changed since the last verified session.
+            user.ktStatus = .keyChanged
+            user.knownIdentityKey = identityKey
+            Log.error("KT: identity key changed for user \(userId)", category: "KT")
+            NotificationCenter.default.post(
+                name: .contactKeyChanged,
+                object: nil,
+                userInfo: ["userId": userId]
+            )
+        } else {
+            user.ktStatus = newStatus
+            if newStatus == .verified {
                 user.knownIdentityKey = identityKey
-                Log.error("KT: identity key changed for user \(userId)", category: "KT")
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(
-                        name: .contactKeyChanged,
-                        object: nil,
-                        userInfo: ["userId": userId]
-                    )
-                }
-            } else {
-                user.ktStatus = newStatus
-                if newStatus == .verified {
-                    user.knownIdentityKey = identityKey
-                }
             }
+        }
+        if context.hasChanges {
             try? context.save()
         }
     }
@@ -599,45 +636,48 @@ final class KeyServiceClient: Sendable {
     /// for an Ed25519-only (`.absent`) bundle, reports whether this is a downgrade: the peer was
     /// previously seen hybrid-capable under the SAME identity key.
     ///
+    /// **MainActor-only** — same reason as `updateContactKTStatus`.
+    ///
     /// Returns `true` only when the caller must REJECT the bundle as a downgrade.
     /// Capability is keyed to `knownIdentityKey`, so a legitimate account reset (new identity key)
     /// clears the pin instead of false-positiving.
+    @MainActor
     private static func recordAndCheckHybrid(
         userId: String,
         identityKey: Data,
         outcome: HybridBundleVerifier.Outcome
     ) -> Bool {
-        let context = PersistenceController.shared.container.newBackgroundContext()
+        let context = PersistenceController.shared.container.viewContext
+        let fetch = User.fetchRequest()
+        fetch.predicate = NSPredicate(format: "id == %@", userId)
+        fetch.fetchLimit = 1
+        guard let user = try? context.fetch(fetch).first else { return false }
+
+        let identityChanged = user.knownIdentityKey != nil && user.knownIdentityKey != identityKey
         var isDowngrade = false
-        context.performAndWait {
-            let fetch = User.fetchRequest()
-            fetch.predicate = NSPredicate(format: "id == %@", userId)
-            fetch.fetchLimit = 1
-            guard let user = try? context.fetch(fetch).first else { return }
 
-            let identityChanged = user.knownIdentityKey != nil && user.knownIdentityKey != identityKey
-
-            switch outcome {
-            case .verified, .degraded:
-                // Pin hybrid capability to this identity. `.degraded` still presents an authentic
-                // (cross-signed) hybrid identity key — the peer IS hybrid-capable, only its SPK-level
-                // attestation is momentarily unavailable — so it must still count against a later
-                // true downgrade to Ed25519-only.
-                user.hybridCapable = true
+        switch outcome {
+        case .verified, .degraded:
+            // Pin hybrid capability to this identity. `.degraded` still presents an authentic
+            // (cross-signed) hybrid identity key — the peer IS hybrid-capable, only its SPK-level
+            // attestation is momentarily unavailable — so it must still count against a later
+            // true downgrade to Ed25519-only.
+            user.hybridCapable = true
+            user.knownIdentityKey = identityKey
+        case .absent:
+            if identityChanged {
+                // Legitimate new identity (account reset / new device) — clear the pin, accept.
+                user.hybridCapable = false
                 user.knownIdentityKey = identityKey
-            case .absent:
-                if identityChanged {
-                    // Legitimate new identity (account reset / new device) — clear the pin, accept.
-                    user.hybridCapable = false
-                    user.knownIdentityKey = identityKey
-                } else if user.hybridCapable {
-                    // Same identity, previously hybrid-capable, now Ed25519-only → downgrade.
-                    isDowngrade = true
-                }
-            case .failed:
-                break // caller rejects regardless
+            } else if user.hybridCapable {
+                // Same identity, previously hybrid-capable, now Ed25519-only → downgrade.
+                isDowngrade = true
             }
-            if context.hasChanges { try? context.save() }
+        case .failed:
+            break // caller rejects regardless
+        }
+        if context.hasChanges {
+            try? context.save()
         }
         return isDowngrade
     }
