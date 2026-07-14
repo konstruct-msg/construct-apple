@@ -80,6 +80,44 @@ public struct Shared_Proto_Services_V1_IssueVeilCapabilityResponse: Sendable {
   /// v3). Зависит от того, был ли в запросе задан veil_pk.
   public var capabilityVersion: UInt32 = 0
 
+  /// EntryDirectory v1 (decisions/entry-directory-design.md, Source 1): пред-выданные
+  /// альтернативные входы. Каждый — самодостаточная связка {coords + capability} на
+  /// ДРУГОЙ релей, так что при блокировке основного фронта клиент переключается на
+  /// закешированную альтернативу БЕЗ раунд-трипа к мёртвому фронту (закрывает
+  /// chicken-egg: смена входа требует capability для него).
+  ///
+  /// Backend выдаёт ротируемое K-подмножество из N сконфигурированных релеев на
+  /// пользователя (Salmon-lite: server-side квота ограничивает enumeration). Пусто,
+  /// если сконфигурирован ≤1 релей. capability каждого выпущена тем же путём
+  /// (bearer/key-bound), что и основная — по наличию veil_pk в запросе.
+  public var alternates: [Shared_Proto_Services_V1_EntryPoint] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Один альтернативный вход: те же поля, что и в основном ответе, но для другого
+/// релея. Клиент кеширует их (VeilTicketStore) и ранжирует своим RelaySelector.
+public struct Shared_Proto_Services_V1_EntryPoint: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// канонный подписанный blob (layout как в основном ответе)
+  public var capability: Data = Data()
+
+  public var relayAddress: String = String()
+
+  /// hex SHA-256 SPKI pin
+  public var spki: String = String()
+
+  public var sni: String = String()
+
+  public var notAfter: Int64 = 0
+
+  public var capabilityVersion: UInt32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -136,6 +174,66 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityRequest: SwiftProtobuf.Mes
 
 extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IssueVeilCapabilityResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}capability\0\u{3}relay_address\0\u{1}spki\0\u{1}sni\0\u{3}not_after\0\u{3}capability_version\0\u{1}alternates\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.capability) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.relayAddress) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.spki) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.sni) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.notAfter) }()
+      case 6: try { try decoder.decodeSingularUInt32Field(value: &self.capabilityVersion) }()
+      case 7: try { try decoder.decodeRepeatedMessageField(value: &self.alternates) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.capability.isEmpty {
+      try visitor.visitSingularBytesField(value: self.capability, fieldNumber: 1)
+    }
+    if !self.relayAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.relayAddress, fieldNumber: 2)
+    }
+    if !self.spki.isEmpty {
+      try visitor.visitSingularStringField(value: self.spki, fieldNumber: 3)
+    }
+    if !self.sni.isEmpty {
+      try visitor.visitSingularStringField(value: self.sni, fieldNumber: 4)
+    }
+    if self.notAfter != 0 {
+      try visitor.visitSingularInt64Field(value: self.notAfter, fieldNumber: 5)
+    }
+    if self.capabilityVersion != 0 {
+      try visitor.visitSingularUInt32Field(value: self.capabilityVersion, fieldNumber: 6)
+    }
+    if !self.alternates.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.alternates, fieldNumber: 7)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_IssueVeilCapabilityResponse, rhs: Shared_Proto_Services_V1_IssueVeilCapabilityResponse) -> Bool {
+    if lhs.capability != rhs.capability {return false}
+    if lhs.relayAddress != rhs.relayAddress {return false}
+    if lhs.spki != rhs.spki {return false}
+    if lhs.sni != rhs.sni {return false}
+    if lhs.notAfter != rhs.notAfter {return false}
+    if lhs.capabilityVersion != rhs.capabilityVersion {return false}
+    if lhs.alternates != rhs.alternates {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_EntryPoint: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".EntryPoint"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}capability\0\u{3}relay_address\0\u{1}spki\0\u{1}sni\0\u{3}not_after\0\u{3}capability_version\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -177,7 +275,7 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Shared_Proto_Services_V1_IssueVeilCapabilityResponse, rhs: Shared_Proto_Services_V1_IssueVeilCapabilityResponse) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_EntryPoint, rhs: Shared_Proto_Services_V1_EntryPoint) -> Bool {
     if lhs.capability != rhs.capability {return false}
     if lhs.relayAddress != rhs.relayAddress {return false}
     if lhs.spki != rhs.spki {return false}

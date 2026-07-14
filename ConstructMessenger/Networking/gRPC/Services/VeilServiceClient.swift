@@ -32,6 +32,24 @@ final class VeilServiceClient: Sendable {
         /// 1 = B2 bearer (AUTH v2), 2 = B1 key-bound (AUTH v3) — depends on whether
         /// `veilPk` was set on the request.
         let capabilityVersion: UInt32
+        /// EntryDirectory v1 (Source 1): pre-issued capabilities for alternate fronts,
+        /// so a blocked primary can fail over to a cached alternate with no round-trip to
+        /// the dead front. Empty when the backend has ≤1 relay configured. The caller
+        /// validates + caches these via `VeilAlternatesCache` (they are server-asserted
+        /// and only trusted against the signed relay manifest).
+        let alternates: [Alternate]
+    }
+
+    /// One pre-issued alternate front — the same shape as `IssuedCapability`, for a
+    /// different relay. Server-asserted: trust its coords only against the signed
+    /// relay manifest (see `VeilAlternatesCache`).
+    struct Alternate: Sendable {
+        let capability: Data
+        let relayAddress: String
+        let spki: String
+        let sni: String
+        let notAfter: Int64
+        let capabilityVersion: UInt32
     }
 
     /// `CapabilityV2.role` values (ticket B1) — mirrors `construct-veil-protocol`'s
@@ -72,7 +90,17 @@ final class VeilServiceClient: Sendable {
                 spki: response.spki,
                 sni: response.sni,
                 notAfter: response.notAfter,
-                capabilityVersion: response.capabilityVersion
+                capabilityVersion: response.capabilityVersion,
+                alternates: response.alternates.map {
+                    Alternate(
+                        capability: $0.capability,
+                        relayAddress: $0.relayAddress,
+                        spki: $0.spki,
+                        sni: $0.sni,
+                        notAfter: $0.notAfter,
+                        capabilityVersion: $0.capabilityVersion
+                    )
+                }
             )
         }
     }
