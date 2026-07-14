@@ -1270,6 +1270,15 @@ public struct Shared_Proto_Services_V1_GetSenderCertificateResponse: Sendable {
   /// Client should re-fetch before this time
   public var expiresAt: Int64 = 0
 
+  /// Server's static X25519 token-encryption public key (32 raw bytes), the same
+  /// key advertised as base64 `token_encryption_key` in /.well-known/construct-server.
+  /// Delivered here over the authenticated gRPC channel so clients that cannot reach
+  /// the HTTP well-known (self-signed native/VEIL listener, ATS, DPI) still obtain the
+  /// key needed to seal Privacy Pass token_bytes — without it the client would send an
+  /// unsealable token and every sealed send fails redemption (decrypt_failed) under
+  /// enforce. Empty when the server has no token-encryption key configured.
+  public var tokenEncryptionKey: Data = Data()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -3260,7 +3269,7 @@ extension Shared_Proto_Services_V1_GetSenderCertificateRequest: SwiftProtobuf.Me
 
 extension Shared_Proto_Services_V1_GetSenderCertificateResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetSenderCertificateResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}certificate\0\u{3}expires_at\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}certificate\0\u{3}expires_at\0\u{3}token_encryption_key\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3270,6 +3279,7 @@ extension Shared_Proto_Services_V1_GetSenderCertificateResponse: SwiftProtobuf.M
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.certificate) }()
       case 2: try { try decoder.decodeSingularInt64Field(value: &self.expiresAt) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.tokenEncryptionKey) }()
       default: break
       }
     }
@@ -3282,12 +3292,16 @@ extension Shared_Proto_Services_V1_GetSenderCertificateResponse: SwiftProtobuf.M
     if self.expiresAt != 0 {
       try visitor.visitSingularInt64Field(value: self.expiresAt, fieldNumber: 2)
     }
+    if !self.tokenEncryptionKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.tokenEncryptionKey, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_GetSenderCertificateResponse, rhs: Shared_Proto_Services_V1_GetSenderCertificateResponse) -> Bool {
     if lhs.certificate != rhs.certificate {return false}
     if lhs.expiresAt != rhs.expiresAt {return false}
+    if lhs.tokenEncryptionKey != rhs.tokenEncryptionKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

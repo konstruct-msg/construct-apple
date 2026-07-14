@@ -34,18 +34,39 @@ actor ServerKeyManager {
         return try? Curve25519.KeyAgreement.PublicKey(rawRepresentation: data)
     }
 
-    /// Encrypts `plaintext` as a NaCl sealed box to the server's token encryption key.
-    /// Returns the ciphertext (ephemeralPub‖nonce‖ciphertext‖tag) or `plaintext` unchanged
-    /// if the server key is unavailable (graceful degradation — relay can still see token,
-    /// which is acceptable during the transition period before the key is fetched).
-    func sealTokenBytes(_ plaintext: Data) -> Data {
-        guard let serverKey = tokenEncryptionKey() else { return plaintext }
+    /// Whether a usable token-encryption key is cached. Callers peek this BEFORE consuming
+    /// a wallet token so they never spend one on a send that could not seal it (an
+    /// unsealable token is `decrypt_failed` server-side — fatal under enforce).
+    func hasTokenEncryptionKey() -> Bool {
+        tokenEncryptionKey() != nil
+    }
+
+    /// Encrypts `plaintext` as a sealed box to the server's token-encryption key.
+    /// Returns the ciphertext (ephemeralPub‖nonce‖ciphertext‖tag), or `nil` if the key is
+    /// unavailable / sealing fails. **Never returns unsealed plaintext**: the server opens
+    /// `token_bytes` as an X25519 sealed box, so raw bytes would always fail redemption
+    /// (`decrypt_failed`). `nil` tells the caller to send WITHOUT a token instead —
+    /// anonymity is intact (cert seal is independent), only anti-abuse degrades.
+    func sealTokenBytes(_ plaintext: Data) -> Data? {
+        guard let serverKey = tokenEncryptionKey() else { return nil }
         do {
             return try sealBox(plaintext, to: serverKey)
         } catch {
-            Log.error("ServerKeyManager: token seal failed — using plaintext fallback: \(error)", category: "Stealth")
-            return plaintext
+            Log.error("ServerKeyManager: token seal failed — sending token-less: \(error)", category: "Stealth")
+            return nil
         }
+    }
+
+    /// Cache the token-encryption key delivered over the authenticated gRPC channel
+    /// (`GetSenderCertificateResponse.token_encryption_key`). This is the robust path —
+    /// it reuses the working gRPC transport instead of the HTTP well-known, which can fail
+    /// on the device (self-signed native/VEIL listener + ATS, DPI). Ignores empty / non-32B.
+    /// Also stamps the fetch time so the HTTP `prefetch()` TTL gate won't redundantly refetch.
+    func cacheFromGRPC(_ raw: Data) {
+        guard raw.count == 32 else { return }
+        UserDefaults.standard.set(raw, forKey: Self.cacheKey)
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.cacheAgeKey)
+        Log.info("ServerKeyManager: token encryption key cached via gRPC (32B)", category: "Stealth")
     }
 
     /// Fetch the token encryption key from the server if the cache is stale or missing.
