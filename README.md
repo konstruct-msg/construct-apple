@@ -6,7 +6,7 @@
 [![Swift](https://img.shields.io/badge/Swift-5.9+-red.svg)](https://swift.org/)
 [![UniFFI](https://img.shields.io/badge/UniFFI-0.30-blue.svg)](https://mozilla.github.io/uniffi-rs/)
 [![iOS](https://img.shields.io/badge/iOS-18.5+-black.svg)](https://developer.apple.com/ios/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-MPL--2.0-brightgreen.svg)](LICENSE)
 
 > This repository (`construct-messenger`) is the SwiftUI iOS/macOS client. The cryptographic
 > core, transport engine, and obfuscation proxy live in separate Rust repositories
@@ -219,10 +219,16 @@ xcodebuild test -scheme ConstructMessenger \
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MPL-2.0 — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
 - **Signal Foundation** — Double Ratchet & X3DH
 - **RustCrypto** & **Mozilla (UniFFI)** — crypto crates and FFI tooling
 - **NIST** — FIPS 203 (ML-KEM) & FIPS 204 (ML-DSA) standardization
+
+## Trademark
+
+**Konstruct™** / **Конструкт™** and the logo are trademarks of Maxim Eliseyev. The open-source
+license on this code does **not** grant trademark rights — see [TRADEMARK.md](TRADEMARK.md).
+Forks that distribute a modified version must rebrand.
