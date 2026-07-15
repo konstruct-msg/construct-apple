@@ -796,14 +796,8 @@
 "stealth_toggle_title" = "режим стелс";
 "stealth_toggle_active_hint" = "активен — личность отправителя скрыта от construct";
 "stealth_hint" = "личность отправителя не раскрывается серверу. сообщения проходят через анонимные токены — сервер не может связать исходящий трафик с вашей личностью.";
-"stealth_scope_stream" = "на поток (рекомендуется)";
-"stealth_scope_stream_hint" = "один токен на активный поток в день";
-"stealth_scope_message" = "на сообщение";
-"stealth_scope_message_hint" = "один токен на сообщение — максимальная анонимность";
 
 // Короткие метки для CTModeSelector (переключатель режимов) в настройках stealth.
-"stealth_scope_stream_short" = "поток";
-"stealth_scope_message_short" = "сообщение";
 "stealth_token_wallet" = "кошелёк токенов";
 "stealth_token_wallet_pending" = "[ещё не активно]";
 "stealth_token_count" = "%d токенов";

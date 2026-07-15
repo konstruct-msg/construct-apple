@@ -301,23 +301,18 @@ final class StealthSenderService {
         inner.contentType = contentType
         inner.deliveryTag = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
 
-        // Ask StealthPolicy whether we should attach a token.
-        // - When stealth is disabled → no token (and caller shouldn't even call this method).
-        // - Per-message → attach token every time.
-        // - Per-stream → attach at most once per recipient per day.
-        // The SealedInner certificate (hiding the sender) is still built by the caller
-        // whenever stealth is enabled.
-        // Did policy WANT a token here (per-message, or per-stream window elapsed)?
-        // Captured before consuming so we can tell "policy skipped" (per-stream still
-        // within its 24h window) apart from "wallet empty" — previously indistinguishable.
-        let wantedToken = StealthPolicy.shared.shouldConsumeToken(for: recipientUserId)
+        // A token accompanies every sealed send (per-message — the only model compatible
+        // with server-side enforce; per-stream removed 2026-07-15). `wantedToken` is
+        // captured before consuming so "stealth disabled" is distinguishable from
+        // "wallet empty" in the else-branch logging below.
+        let wantedToken = StealthPolicy.shared.shouldConsumeToken()
         // Peek the server token-encryption key BEFORE consuming a wallet token. An
         // unsealable token is rejected server-side (`decrypt_failed`, fatal under enforce),
         // so if we cannot seal we must NOT spend the token — leave it in the wallet for a
         // later send once the key is cached (it arrives via GetSenderCertificateResponse).
         let canSeal = await ServerKeyManager.shared.hasTokenEncryptionKey()
         if canSeal,
-           let token = StealthPolicy.shared.consumeTokenIfNeeded(for: recipientUserId),
+           let token = StealthPolicy.shared.consumeTokenIfNeeded(),
            let sealedToken = await ServerKeyManager.shared.sealTokenBytes(token.token) {
             inner.tokenNonce = token.nonce
             // token_bytes sealed to the server's X25519 key so relay operators cannot read

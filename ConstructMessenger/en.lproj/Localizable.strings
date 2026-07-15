@@ -786,14 +786,7 @@
 "stealth_toggle_title" = "stealth mode";
 "stealth_toggle_active_hint" = "active — sender identity concealed from the construct";
 "stealth_hint" = "sender identity is not disclosed to the construct. messages are routed through anonymous tokens — the server cannot link outgoing traffic to your identity.";
-"stealth_scope_stream" = "per stream (recommended)";
-"stealth_scope_stream_hint" = "one token per active stream per day";
-"stealth_scope_message" = "per message";
-"stealth_scope_message_hint" = "one token per message — maximum unlinkability";
 
-// Short labels for the CTModeSelector (segmented) next to the stealth toggle.
-"stealth_scope_stream_short" = "stream";
-"stealth_scope_message_short" = "message";
 "stealth_token_wallet" = "token wallet";
 "stealth_token_wallet_pending" = "[not yet active]";
 "stealth_token_count" = "%d tokens";
