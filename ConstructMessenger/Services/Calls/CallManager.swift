@@ -1407,19 +1407,45 @@ final class CallManager: CallUIManaging {
             guard !batch.isEmpty else { return }
             active.pendingOutgoingIce.removeAll()
             active.iceFlushTask = nil
-            var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
-            sig.callID = active.session.id
-            sig.senderDeviceID = Self.currentDeviceId()
-            sig.timestamp = Self.nowMs()
-            if batch.count == 1 {
-                sig.signal = .iceCandidate(batch[0])
-            } else {
-                var candidates = Shared_Proto_Signaling_V1_IceCandidateBatch()
-                candidates.candidates = batch
-                sig.signal = .iceCandidates(candidates)
+
+            // Split the flush into size-bounded signals: each candidate field is an
+            // ENC:v3 frame that can carry a PQ-ratchet blob on suite-3 sessions, so one
+            // burst can exceed the Rust E2EE padding cap of 65536 bytes (observed on
+            // device: a 134KB batch → CALL_SIGNAL_ENCRYPT_FAILED → the whole batch
+            // silently lost). Chunks stay well under the cap, leaving headroom for the
+            // outer WebRTCSignal proto + DR overhead. A burst of 24 candidates becomes
+            // ~2–4 signals — still far below the server's 10/sec signal rate limit.
+            let maxSignalBytes = 40_000
+            var chunks: [[Shared_Proto_Signaling_V1_IceCandidate]] = []
+            var current: [Shared_Proto_Signaling_V1_IceCandidate] = []
+            var currentBytes = 0
+            for candidate in batch {
+                let size = candidate.candidate.utf8.count + candidate.sdpMid.utf8.count + 16
+                if !current.isEmpty, currentBytes + size > maxSignalBytes {
+                    chunks.append(current)
+                    current = []
+                    currentBytes = 0
+                }
+                current.append(candidate)
+                currentBytes += size
             }
-            self.sendCallSignalProto(sig, to: peerUserId)
-            Log.info("Flushed \(batch.count) ICE candidate(s) via E2EE (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
+            if !current.isEmpty { chunks.append(current) }
+
+            for chunk in chunks {
+                var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+                sig.callID = active.session.id
+                sig.senderDeviceID = Self.currentDeviceId()
+                sig.timestamp = Self.nowMs()
+                if chunk.count == 1 {
+                    sig.signal = .iceCandidate(chunk[0])
+                } else {
+                    var candidates = Shared_Proto_Signaling_V1_IceCandidateBatch()
+                    candidates.candidates = chunk
+                    sig.signal = .iceCandidates(candidates)
+                }
+                self.sendCallSignalProto(sig, to: peerUserId)
+            }
+            Log.info("Flushed \(batch.count) ICE candidate(s) in \(chunks.count) signal(s) via E2EE (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
         }
     }
 
