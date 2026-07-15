@@ -743,14 +743,13 @@
 // Stealth mode
 "stealth_section" = "ステルス";
 "stealth_toggle_title" = "ステルスモード";
-"stealth_toggle_active_hint" = "有効 — 送信者のアイデンティティは共創から隠されています";
-"stealth_hint" = "送信者のアイデンティティは共創に開示されません。メッセージは匿名トークン経由でルーティングされ、Constructは送信トラフィックをあなたのアイデンティティに関連付けられません。";
+"stealth_toggle_active_hint" = "常時有効 — 送信者のアイデンティティは共創から隠されています";
+"stealth_hint" = "送信者のアイデンティティは共創に開示されません。メッセージは匿名トークン経由でルーティングされ、共創は送信トラフィックをあなたのアイデンティティに関連付けられません。";
 
 // Short labels for CTModeSelector
 "stealth_token_wallet" = "トークンウォレット";
-"stealth_token_wallet_pending" = "[まだアクティブではありません]";
 "stealth_token_count" = "%d個のトークン";
-"stealth_token_wallet_hint" = "トークンは充電中にバックグラウンドで作成されます。共創でのPrivacy Passサポートが必要です。";
+"stealth_token_wallet_hint" = "各メッセージには匿名のprivacy passトークンが付きます。ウォレットは送信に応じて自動補充されます（最初のバッチは登録時に作成）。空のウォレットがあなたを明かすことはありません — トークンは共創をスパムから守るためのものです。";
 
 // Key Transparency
 "kt_section" = "キーの透明性";

@@ -784,13 +784,12 @@
 // Stealth mode
 "stealth_section" = "stealth";
 "stealth_toggle_title" = "stealth mode";
-"stealth_toggle_active_hint" = "active — sender identity concealed from the construct";
-"stealth_hint" = "sender identity is not disclosed to the construct. messages are routed through anonymous tokens — the server cannot link outgoing traffic to your identity.";
+"stealth_toggle_active_hint" = "always on — sender identity concealed from the construct";
+"stealth_hint" = "sender identity is not disclosed to the construct. messages are routed through anonymous tokens — the construct cannot link outgoing traffic to your identity.";
 
 "stealth_token_wallet" = "token wallet";
-"stealth_token_wallet_pending" = "[not yet active]";
 "stealth_token_count" = "%d tokens";
-"stealth_token_wallet_hint" = "first batch is minted on registration or when you enable Stealth. top-ups happen in background (best while charging). requires privacy pass support on the construct.";
+"stealth_token_wallet_hint" = "every message carries an anonymous privacy pass token; the wallet refills itself as you send (first batch is minted at registration). an empty wallet never reveals you — tokens only shield the construct from spam.";
 
 // Key Transparency
 "kt_section" = "key transparency";
