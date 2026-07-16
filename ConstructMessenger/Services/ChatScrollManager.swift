@@ -145,10 +145,24 @@ class ChatScrollManager {
     /// `offset` ≈ 0 when at the bottom; large negative means scrolled far up.
     /// Only mutates observed flags when crossing thresholds so the chat view
     /// does not re-render on every scroll pixel.
-    func updateScrollOffset(_ offset: CGFloat) {
+    /// `contentFits` — content is shorter than the viewport: there is nothing to jump to,
+    /// so the FAB is force-hidden. This runs even while the keyboard is visible, because a
+    /// spurious mid-animation offset can latch the button ON right before the keyboard gate
+    /// freezes threshold updates (seen as a jump-FAB in a two-message chat).
+    func updateScrollOffset(_ offset: CGFloat, contentFits: Bool = false) {
         guard offset.isFinite else { return }
 
         scrollOffset = offset
+
+        if contentFits {
+            if shouldShowScrollToBottomButton {
+                shouldShowScrollToBottomButton = false
+            }
+            if !shouldScrollToBottom {
+                shouldScrollToBottom = true
+            }
+            return
+        }
 
         // Ignore threshold updates while keyboard is animating — container height
         // changes during animation produce spurious offset values.

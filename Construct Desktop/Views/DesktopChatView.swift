@@ -44,6 +44,8 @@ struct DesktopChatView: View {
     private struct ChatScrollGeometry: Equatable {
         var offsetFromBottom: CGFloat
         var width: CGFloat
+        /// Content shorter than the viewport ⇒ nothing to jump to — the FAB must never show.
+        var contentFits: Bool
     }
 
     init(chat: Chat, context: NSManagedObjectContext) {
@@ -138,10 +140,11 @@ struct DesktopChatView: View {
                 .onScrollGeometryChange(for: ChatScrollGeometry.self) { geo in
                     ChatScrollGeometry(
                         offsetFromBottom: geo.contentOffset.y + geo.containerSize.height - geo.contentSize.height,
-                        width: geo.containerSize.width
+                        width: geo.containerSize.width,
+                        contentFits: geo.contentSize.height <= geo.containerSize.height
                     )
                 } action: { _, metrics in
-                    scrollManager.updateScrollOffset(metrics.offsetFromBottom)
+                    scrollManager.updateScrollOffset(metrics.offsetFromBottom, contentFits: metrics.contentFits)
                     if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
                         containerWidth = metrics.width
                     }
