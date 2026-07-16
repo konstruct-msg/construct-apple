@@ -46,6 +46,25 @@ final class SessionCoordinator: MessageRouterDelegate {
     private let resendCooldown: TimeInterval = 10.0
     private let resendWindow: TimeInterval = 5 * 60 // 5 minutes
 
+    /// Pending INITIATOR re-inits scheduled by END_SESSION receipt, keyed by peer.
+    /// A server backlog flush delivers several END_SESSIONs at once; each used to schedule its
+    /// own wipe+init+SRI, and every re-init after the first destroyed the session the previous
+    /// one had just created — so the peer AEAD-failed all but the last SRI and answered with
+    /// fresh END_SESSIONs, sustaining the storm. One pending re-init per peer is enough.
+    /// The `token` disambiguates removal when a cancelled task's cleanup races a newly
+    /// scheduled one for the same peer.
+    private var endSessionReinitTasks: [String: (token: UUID, task: Task<Void, Never>)] = [:]
+    /// Delay before an END_SESSION-triggered re-init runs. Long enough for the rest of the same
+    /// stream flush — including the peer's own fresh X3DH init, which makes us RESPONDER — to be
+    /// processed first, so the re-init can see the new session and stand down.
+    private let endSessionReinitDebounceNanos: UInt64 = 1_500_000_000
+
+    /// Peers with an INITIATOR re-init currently executing (any entry point). A second re-init
+    /// starting while one is in flight deletes the session the first just created, invalidating
+    /// its SESSION_RESET_INIT before the peer ever sees it — overlaps are dropped; the tie-break
+    /// watchdog re-sends if the surviving SRI is lost.
+    private var initiatorReinitInFlight: Set<String> = []
+
     /// Watchdog tasks started after a tie-break WIN.
     /// If the RESPONDER (loser) does not reply within the timeout, re-sends the session ping
     /// so they can become RESPONDER even after a brief network outage.
@@ -446,16 +465,45 @@ final class SessionCoordinator: MessageRouterDelegate {
             return
         }
         resendUnconfirmedOutgoingMessagesIfNeeded(to: userId)
+        guard endSessionReinitTasks[userId] == nil else {
+            Log.info("END_SESSION coalesced — INITIATOR re-init already pending for \(userId.prefix(8))…", category: "SessionInit")
+            return
+        }
         Log.info("END_SESSION received — re-init as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
-        Task { [weak self] in
+        let token = UUID()
+        let task = Task { [weak self] in
             guard let self else { return }
+            defer {
+                if self.endSessionReinitTasks[userId]?.token == token {
+                    self.endSessionReinitTasks.removeValue(forKey: userId)
+                }
+            }
             do {
-                try await Task.sleep(nanoseconds: 300_000_000)
+                try await Task.sleep(nanoseconds: self.endSessionReinitDebounceNanos)
             } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            // A session that exists NOW was established AFTER this END_SESSION wiped the old
+            // one (MessageRouter archives before delegating) — typically the peer's fresh init
+            // from the same stream flush just made us RESPONDER. Re-initing over it would
+            // destroy a working session and re-open the desync it just closed.
+            if CryptoManager.shared.hasSession(for: userId) {
+                Log.info("SESSION_STATE[reinit_skipped_fresh_session]: session with \(userId.prefix(8))… established after END_SESSION — keeping it", category: "SessionInit")
                 return
             }
             self.reinitAndAnnounceAsInitiator(to: userId, reason: "end_session_received")
         }
+        endSessionReinitTasks[userId] = (token, task)
+    }
+
+    /// Cancel a pending END_SESSION-triggered INITIATOR re-init. Called whenever a session gets
+    /// established or confirmed for the peer, so the delayed re-init cannot destroy it.
+    private func cancelPendingEndSessionReinit(for userId: String, reason: String) {
+        assertMainThread()
+        guard let pending = endSessionReinitTasks.removeValue(forKey: userId) else { return }
+        pending.task.cancel()
+        Log.info("SESSION_STATE[reinit_cancelled]: pending INITIATOR re-init for \(userId.prefix(8))… cancelled (\(reason))", category: "SessionInit")
     }
 
     func messageRouter(_ router: MessageRouter, didWinTieBreak userId: String) {
@@ -477,9 +525,16 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// lets the RESPONDER bootstrap and reply `session_ready`, which clears `pending` and
     /// flushes the buffer via the existing markConfirmed → sendQueuedMessages path.
     private func reinitAndAnnounceAsInitiator(to userId: String, reason: String) {
+        assertMainThread()
+        guard !initiatorReinitInFlight.contains(userId) else {
+            Log.info("SESSION_STATE[initiator_announce_coalesced]: re-init already in flight for \(userId.prefix(8))… (\(reason))", category: "SessionInit")
+            return
+        }
+        initiatorReinitInFlight.insert(userId)
         Log.info("SESSION_STATE[initiator_announce]: re-init + SESSION_RESET_INIT for \(userId.prefix(8))… (\(reason))", category: "SessionInit")
         Task { [weak self] in
             guard let self else { return }
+            defer { self.initiatorReinitInFlight.remove(userId) }
             await self.sessionInitService.initializeSessionProactively(
                 userId: userId,
                 onSuccess: { },
@@ -566,6 +621,9 @@ final class SessionCoordinator: MessageRouterDelegate {
             if success {
                 // New session established — reset END_SESSION cooldown so future failures are handled.
                 endSessionSentAt.removeValue(forKey: userId)
+                // And stand down any END_SESSION-scheduled INITIATOR re-init: it would delete
+                // the RESPONDER session we just established.
+                cancelPendingEndSessionReinit(for: userId, reason: "responder_init_success")
 
                 // ACK only after we successfully decrypted + persisted the first message.
                 // This prevents message loss when initReceivingSession fails mid-flight.
@@ -1108,16 +1166,19 @@ final class SessionCoordinator: MessageRouterDelegate {
                 Log.info("SESSION_RESET_INIT payload discarded (not user-visible, content_type=24)", category: "SessionCoordinator")
                 cancelTieBreakWatchdog(for: peerId)
                 cancelResponderFallback(for: peerId)
+                cancelPendingEndSessionReinit(for: peerId, reason: "sri_received")
                 return
             case .ping:
                 Log.info("SESSION_STATE[ping_received]: session established as RESPONDER (ping discarded, content_type=25)", category: "SessionCoordinator")
                 cancelTieBreakWatchdog(for: peerId)
                 cancelResponderFallback(for: peerId)
+                cancelPendingEndSessionReinit(for: peerId, reason: "ping_received")
                 return
             case .ready:
                 Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed (content_type=26)", category: "SessionCoordinator")
                 cancelTieBreakWatchdog(for: peerId)
                 cancelResponderFallback(for: peerId)
+                cancelPendingEndSessionReinit(for: peerId, reason: "session_ready")
                 markActive(peerId)
                 SessionConfirmationTracker.shared.markConfirmed(peerId)
                 sendSessionQueuedMessages(for: peerId)
@@ -1134,6 +1195,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             Log.info("SESSION_RESET_INIT payload discarded (not user-visible)", category: "SessionCoordinator")
             cancelTieBreakWatchdog(for: messageData.from)
             cancelResponderFallback(for: messageData.from)
+            cancelPendingEndSessionReinit(for: messageData.from, reason: "sri_received_legacy")
             return
         }
 
@@ -1144,6 +1206,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             Log.info("SESSION_STATE[ping_received]: session established as RESPONDER (ping discarded)", category: "SessionCoordinator")
             cancelTieBreakWatchdog(for: messageData.from)
             cancelResponderFallback(for: messageData.from)
+            cancelPendingEndSessionReinit(for: messageData.from, reason: "ping_received_legacy")
             return
         }
 
@@ -1155,6 +1218,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed — session established both sides", category: "SessionCoordinator")
             cancelTieBreakWatchdog(for: peerId)
             cancelResponderFallback(for: peerId)
+            cancelPendingEndSessionReinit(for: peerId, reason: "session_ready_legacy")
             markActive(peerId)
             SessionConfirmationTracker.shared.markConfirmed(peerId)
             sendSessionQueuedMessages(for: peerId)
