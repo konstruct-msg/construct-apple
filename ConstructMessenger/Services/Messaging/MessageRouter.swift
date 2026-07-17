@@ -78,6 +78,38 @@ final class MessageRouter {
         return true
     }
 
+    /// Receive-side coalesce for END_SESSION / SESSION_RESET_INIT storms (server re-delivers
+    /// dozens of control msgs for one peer per reconnect). First handle wins; rest are ACK-only.
+    private var lastInboundEndSessionAt: [String: Date] = [:]
+    private var lastInboundSessionResetInitAt: [String: Date] = [:]
+    /// Long enough to cover a full pending-queue flush + stream reconnect without re-tearing
+    /// a session we just rebuilt; short enough that a real second reset later still lands.
+    private static let inboundControlCooldown: TimeInterval = 45.0
+
+    private func shouldHandleInboundEndSession(for userId: String) -> Bool {
+        let now = Date()
+        guard SessionReducer.shouldHandleInboundControl(
+            lastHandledAt: lastInboundEndSessionAt[userId],
+            now: now,
+            cooldown: Self.inboundControlCooldown
+        ) else { return false }
+        lastInboundEndSessionAt[userId] = now
+        return true
+    }
+
+    private func shouldHandleInboundSessionResetInit(for userId: String) -> Bool {
+        let now = Date()
+        // SRI also counts as "we just reset this peer" for END_SESSION coalesce.
+        guard SessionReducer.shouldHandleInboundControl(
+            lastHandledAt: lastInboundSessionResetInitAt[userId],
+            now: now,
+            cooldown: Self.inboundControlCooldown
+        ) else { return false }
+        lastInboundSessionResetInitAt[userId] = now
+        lastInboundEndSessionAt[userId] = now
+        return true
+    }
+
     // MARK: - Queue access for SessionCoordinator
 
     /// Drain and return all pending messages for `userId` (clears the queue as a side-effect).
@@ -235,8 +267,11 @@ final class MessageRouter {
             // messages that have already been through initReceivingSession and failed
             // (OTPK consumed, key mismatch, etc.) — those can never succeed and would
             // loop on every reconnect if we keep re-processing them.
+            // Never re-process control carriers as "orphaned init" — END_SESSION / SRI /
+            // sender-sync already failed or completed; replaying them loops session teardown.
             let isOrphanedInit = message.messageNumber == 0
                 && !message.isEndSession
+                && !message.isSessionResetInit
                 && !message.isSenderSync
                 && !CryptoManager.shared.hasSession(for: otherUserId)
                 && !FailedInitMessageStore.shared.contains(message.id)
@@ -262,6 +297,14 @@ final class MessageRouter {
         //     Must be checked BEFORE the END_SESSION path (it carries a real X3DH payload).
         if message.isSessionResetInit {
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            if !shouldHandleInboundSessionResetInit(for: otherUserId) {
+                Log.info(
+                    "SESSION_RESET_INIT coalesced for \(otherUserId.prefix(8))… — ACK only (inbound control cooldown)",
+                    category: "MessageRouter"
+                )
+                delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+                return
+            }
             Log.info("SESSION_RESET_INIT from \(otherUserId.prefix(8))…", category: "MessageRouter")
             handleSessionResetInit(message: message, from: otherUserId, in: context)
             delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
@@ -281,6 +324,14 @@ final class MessageRouter {
                control.reason == .otpkUnreproducible {
                 Log.info("END_SESSION from \(otherUserId.prefix(8))… hints OTPK-unreproducible — forcing 3-DH re-init", category: "MessageRouter")
                 SessionReinitHintStore.shared.requestThreeDHReinit(for: otherUserId)
+            }
+            if !shouldHandleInboundEndSession(for: otherUserId) {
+                Log.info(
+                    "END_SESSION coalesced for \(otherUserId.prefix(8))… — ACK only (inbound control cooldown)",
+                    category: "MessageRouter"
+                )
+                delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+                return
             }
             Log.info("Received END_SESSION from \(otherUserId)", category: "MessageRouter")
             handleEndSession(from: otherUserId, messageTimestamp: message.timestamp, in: context)
@@ -1373,7 +1424,8 @@ final class MessageRouter {
             // accepted. Leave it as .sent; a delivery receipt may still arrive later.
             if OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: msgId) == nil {
                 serverAcceptedCount += 1
-                Log.info("END_SESSION: skipping re-queue for \(msgId.prefix(8))… — server already accepted (no wire payload)", category: "MessageRouter")
+                // Per-message INFO here flooded device logs during END_SESSION storms
+                // (dozens of lines per control message). Count is logged once below.
                 continue
             }
 

@@ -194,6 +194,36 @@ final class SessionCoordinator: MessageRouterDelegate {
         startCooldownPurgeTimer()
     }
 
+    /// After CFE restore the Rust core has live sessions but `sessionPhases` / Keychain
+    /// `establishedAt` may be empty (older builds never persisted them). Without a timestamp,
+    /// re-delivered END_SESSION is never filtered as stale and tears down healthy sessions →
+    /// SESSION_RESET_INIT / openStream storms. Hydrate once the core is ready.
+    func hydrateEstablishedTimestampsForRestoredSessions() {
+        assertMainThread()
+        guard CryptoManager.shared.isCoreReady else { return }
+        let ids = CryptoManager.shared.getAllSessionUserIds()
+        guard !ids.isEmpty else { return }
+        var hydrated = 0
+        let now = UInt64(Date().timeIntervalSince1970)
+        for userId in ids {
+            if establishedAt(for: userId) != nil { continue }
+            // Prefer an existing Keychain value; otherwise stamp "now" so historical
+            // offline-queue END_SESSIONs (ts << now) are treated as stale.
+            if let persisted = KeychainManager.shared.loadSessionEstablishedAt(for: userId) {
+                sessionPhases[userId] = .active(establishedAt: persisted)
+            } else {
+                apply(.markActive(at: now), for: userId)
+            }
+            hydrated += 1
+        }
+        if hydrated > 0 {
+            Log.info(
+                "SESSION_STATE[hydrate_established]: stamped establishedAt for \(hydrated)/\(ids.count) restored session(s)",
+                category: "SessionInit"
+            )
+        }
+    }
+
     // MARK: - Public entry points
 
     /// Route a single incoming message through MessageRouter.
@@ -307,6 +337,9 @@ final class SessionCoordinator: MessageRouterDelegate {
             return
         }
 
+        // Ensure restored sessions can filter re-delivered END_SESSION (see hydrate docs).
+        hydrateEstablishedTimestampsForRestoredSessions()
+
         let toPrewarm = contactIds.filter { peer in
             SessionReducer.shouldPrewarm(
                 coreReady: coreReady,
@@ -341,13 +374,15 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // they already know their session with us needs reset. Sending another
                 // END_SESSION in that path creates a ping-pong loop where each side
                 // continuously triggers the other's END_SESSION handler.
+                // Rate-limited: startup + reconnect can hit prewarm repeatedly for the
+                // same peer and used to spray END_SESSION → peer reset storms.
                 if !skipEndSessionNotification {
-                    do {
-                        try await self.sendEndSession(to: contactId, reason: "session_missing_restart")
-                        self.endSessionSentAt[contactId] = Date()
+                    let sent = await self.sendEndSessionRateLimited(
+                        to: contactId,
+                        reason: "session_missing_restart"
+                    )
+                    if sent {
                         Log.info("Prewarm: notified \(contactId.prefix(8))… of missing session before fresh init", category: "SessionInit")
-                    } catch {
-                        Log.error("Prewarm: END_SESSION to \(contactId.prefix(8))… failed (proceeding with prewarm): \(error.localizedDescription)", category: "SessionInit")
                     }
                 }
 
@@ -707,14 +742,32 @@ final class SessionCoordinator: MessageRouterDelegate {
                 let otpkUnreproducible = SessionReinitHintStore.shared.consumeResponderOtpkUnreproducible(for: userId)
                 Task { [weak self] in
                     guard let self else { return }
-                    do {
-                        try await self.sendEndSession(
-                            to: userId,
-                            reason: otpkUnreproducible ? "session_init_failed_otpk_unreproducible" : "session_init_failed",
-                            resetReason: otpkUnreproducible ? .otpkUnreproducible : .unspecified
-                        )
-                    } catch {
-                        Log.error("SESSION_STATE[init_failed_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                    // Cooldown: pending-queue re-delivery of the same failed init used to
+                    // send END_SESSION on every reconnect → peer thrash + heat.
+                    if otpkUnreproducible {
+                        // Must carry the typed reason; still respect per-peer cooldown.
+                        let now = Date()
+                        if SessionReducer.shouldSendEndSession(
+                            lastSentAt: self.endSessionSentAt[userId],
+                            now: now,
+                            cooldown: self.endSessionCooldown
+                        ) {
+                            self.endSessionSentAt[userId] = now
+                            do {
+                                try await self.sendEndSession(
+                                    to: userId,
+                                    reason: "session_init_failed_otpk_unreproducible",
+                                    rateLimited: true,
+                                    resetReason: .otpkUnreproducible
+                                )
+                            } catch {
+                                Log.error("SESSION_STATE[init_failed_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                            }
+                        } else {
+                            Log.info("END_SESSION cooldown active for \(userId.prefix(8))…, skipping (session_init_failed_otpk_unreproducible)", category: "SessionCoordinator")
+                        }
+                    } else {
+                        _ = await self.sendEndSessionRateLimited(to: userId, reason: "session_init_failed")
                     }
                     await self.replenishOtpksAfterFailure(reason: "init_failed")
                 }
