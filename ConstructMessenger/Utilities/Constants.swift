@@ -379,18 +379,20 @@ struct FeatureFlags {
         set { UserDefaults.standard.set(newValue, forKey: typedSessionControlKey) }
     }
 
-    /// **Default `false`.** Phase S3 (destructive) of the typed session-control migration.
+    /// **Default `true` (flipped 2026-07-17).** Phase S3 of the typed session-control migration.
     ///
     /// When `true`, handshake producers send a pure binary `SessionControl{op, nonce}` as the
-    /// encrypted payload and **drop** the legacy magic string. This is only safe once the S1
-    /// typed consumer is fleet-wide: a peer on a pre-S1 build has no `content_type` dispatch and
-    /// reads the payload as a string — a binary payload would be unrecognised (silent handshake
-    /// loss → session desync). Keep `false` until adoption telemetry confirms pre-S1 peers are
-    /// negligible, then flip (ideally via staged/remote config). Independent of
+    /// encrypted payload and **drop** the legacy magic string. Safe now because the S1 typed
+    /// consumer (dispatch on `content_type` 24/25/26) is fleet-wide; the legacy string parser
+    /// (`SessionControlCodec.legacyOp`) is KEPT as a consumer fallback indefinitely, so peers
+    /// still producing strings remain fully understood. A pre-S1 peer (no `content_type`
+    /// dispatch) would not recognise our binary payload — that population is gone from the
+    /// fleet. Set to `false` (explicit UserDefaults toggle is respected) to fall back to
+    /// string-producing S2 if an ancient peer resurfaces. Independent of
     /// `typedSessionControl`, which only controls the (backward-safe) typed `content_type`.
     static let binarySessionControlPayloadKey = "ff.binarySessionControlPayload"
     static var binarySessionControlPayload: Bool {
-        get { UserDefaults.standard.object(forKey: binarySessionControlPayloadKey) as? Bool ?? false }
+        get { UserDefaults.standard.object(forKey: binarySessionControlPayloadKey) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: binarySessionControlPayloadKey) }
     }
 }
