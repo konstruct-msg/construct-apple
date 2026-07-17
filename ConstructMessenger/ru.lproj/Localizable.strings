@@ -799,6 +799,9 @@
 "contact_request_sent" = "Запрос отправлен";
 "contact_request_pending" = "Ожидание";
 "contact_request_send_action" = "Отправить запрос";
+"contact_request_send_failed" = "Не удалось отправить запрос. Проверьте соединение и попробуйте снова.";
+"contact_request_received_body" = "Новый запрос на переписку в Synapses";
+"contact_request_received_body_plural" = "%d запросов на переписку в Synapses";
 "contact_request_sheet_title" = "Запрос на переписку";
 "contact_request_from_title" = "хочет начать переписку";
 "contact_request_empty_inbox" = "нет входящих запросов";

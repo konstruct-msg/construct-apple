@@ -150,14 +150,63 @@ final class UserServiceClient: Sendable {
 
     // MARK: - Contact Requests
 
-    func sendContactRequest(toUserId: String) async throws -> String {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getUserProfile) { grpcClient in
-            let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
-            var request = Shared_Proto_Services_V1_SendContactRequestRequest()
-            request.toUserID = toUserId
-            let response = try await client.sendContactRequest(request: .init(message: request))
-            return response.requestID
+    /// Send a contact request. Retries on transient transport blips ("Stream unexpectedly closed")
+    /// — same pattern as AcceptInvite. Safe to retry: server returns the existing request id
+    /// when a pending request already exists (dedup on from/to).
+    ///
+    /// - Parameters:
+    ///   - toUserId: Recipient server user id.
+    ///   - username: Sender username snapshot (normalized lowercase, no `@`). Empty/nil if none.
+    ///   - displayName: Sender display name snapshot as shown in profile/QR UI.
+    ///     Server stores both in an envelope-encrypted identity snapshot for the recipient inbox.
+    func sendContactRequest(
+        toUserId: String,
+        username: String? = nil,
+        displayName: String? = nil
+    ) async throws -> String {
+        let snapshotUsername = Self.normalizedRequestUsername(username)
+        let snapshotDisplayName = (displayName ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return try await withRetry(
+            maxAttempts: 3,
+            backoff: 1.0,
+            retryIf: Self.isTransientTransportError,
+            label: "SendContactRequest"
+        ) {
+            // Invalidate the shared channel on transport failure so the next attempt
+            // does not reuse a dead HTTP/2 stream (MessageStream disconnect often kills
+            // the same persistent connection used by unary contact-request RPCs).
+            try await GRPCChannelManager.shared.performRPC(
+                timeout: GRPCTimeouts.sendContactRequest,
+                invalidatesConnectionOnFailure: true
+            ) { grpcClient in
+                let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
+                var request = Shared_Proto_Services_V1_SendContactRequestRequest()
+                request.toUserID = toUserId
+
+                // Always set from_identity so recipients see @username / display name
+                // without a profile fetch (server validates username against caller's hash).
+                var identity = Shared_Proto_Services_V1_ContactIdentitySnapshot()
+                identity.username = snapshotUsername
+                identity.displayName = snapshotDisplayName
+                request.fromIdentity = identity
+
+                let response = try await client.sendContactRequest(request: .init(message: request))
+                return response.requestID
+            }
         }
+    }
+
+    /// Normalize username for `ContactIdentitySnapshot`: trim, lowercase, strip leading `@`.
+    private static func normalizedRequestUsername(_ raw: String?) -> String {
+        var trimmed = (raw ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        if trimmed.hasPrefix("@") {
+            trimmed = String(trimmed.dropFirst())
+        }
+        return trimmed
     }
 
     func getContactRequests() async throws -> (
@@ -176,12 +225,45 @@ final class UserServiceClient: Sendable {
         requestId: String,
         action: Shared_Proto_Services_V1_ContactRequestAction
     ) async throws {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getUserProfile) { grpcClient in
-            let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
-            var request = Shared_Proto_Services_V1_RespondToContactRequestRequest()
-            request.requestID = requestId
-            request.action = action
-            _ = try await client.respondToContactRequest(request: .init(message: request))
+        try await withRetry(
+            maxAttempts: 3,
+            backoff: 1.0,
+            retryIf: Self.isTransientTransportError,
+            label: "RespondToContactRequest"
+        ) {
+            try await GRPCChannelManager.shared.performRPC(
+                timeout: GRPCTimeouts.getUserProfile,
+                invalidatesConnectionOnFailure: true
+            ) { grpcClient in
+                let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
+                var request = Shared_Proto_Services_V1_RespondToContactRequestRequest()
+                request.requestID = requestId
+                request.action = action
+                _ = try await client.respondToContactRequest(request: .init(message: request))
+            }
         }
+    }
+
+    /// Transient gRPC/transport failures worth a short backoff retry.
+    /// Matches AcceptInvite: "Stream unexpectedly closed" during MessageStream disconnect
+    /// or VEIL/channel invalidation must not surface as a hard UI failure on first try.
+    private static func isTransientTransportError(_ error: Error) -> Bool {
+        if error is CancellationError { return false }
+        if let rpc = error as? RPCError {
+            switch rpc.code {
+            // Transient transport / stream codes only — not ALREADY_EXISTS / rate-limit /
+            // permission / invalidArgument (those are permanent application errors).
+            case .unavailable, .deadlineExceeded, .cancelled, .unknown:
+                return true
+            default:
+                break
+            }
+        }
+        let desc = error.localizedDescription.lowercased()
+        return desc.contains("stream")
+            || desc.contains("unavailable")
+            || desc.contains("closed")
+            || desc.contains("reset")
+            || desc.contains("connection")
     }
 }

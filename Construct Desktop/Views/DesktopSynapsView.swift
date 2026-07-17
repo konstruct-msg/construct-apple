@@ -123,6 +123,10 @@ struct DesktopSynapsView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .contactRequestReceived)) { _ in
+            guard let vm = contactRequestsVM else { return }
+            Task { await refreshContactRequests(vm: vm, reason: "push_received") }
+        }
         .sheet(item: $selectedRequest) { request in
             if let vm = contactRequestsVM {
                 ContactRequestSheet(

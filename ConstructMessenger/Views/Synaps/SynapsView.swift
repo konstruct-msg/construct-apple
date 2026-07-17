@@ -217,6 +217,12 @@ struct SynapsView: View {
                     }
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .contactRequestReceived)) { _ in
+                // Silent push (or local banner tap path) — refresh the requests inbox
+                // while Synaps is already visible so the new row appears without a re-tab.
+                guard let vm = contactRequestsVM else { return }
+                Task { await refreshContactRequests(vm: vm, reason: "push_received") }
+            }
             #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
             #endif
@@ -584,8 +590,19 @@ struct SynapsView: View {
             // Surface the failure instead of swallowing it — a silent catch here hid the
             // real reason "Send request" did nothing (RPC rejected / no delivery). Log the
             // exact error and tell the user so it's retryable and diagnosable.
+            // Transport blips surface as gRPC "Stream unexpectedly closed." — map to a
+            // human-readable connection message (RPC already retried in UserServiceClient).
             Log.error("sendContactRequest failed for \(profile.userID.prefix(8))…: \(error)", category: "ContactRequest")
-            ErrorRouter.shared.report(.unknown(error.userFacingMessage))
+            let raw = error.userFacingMessage
+            let lower = raw.lowercased()
+            let message: String
+            if lower.contains("stream") || lower.contains("unavailable") || lower.contains("closed")
+                || lower.contains("connection") || lower.contains("timeout") || lower.contains("deadline") {
+                message = NSLocalizedString("contact_request_send_failed", comment: "")
+            } else {
+                message = raw
+            }
+            ErrorRouter.shared.report(.unknown(message))
         }
     }
 

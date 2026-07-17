@@ -212,6 +212,26 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
+        if activityType == "contact_request_received" {
+            let requestId = construct?["conversation_id"] as? String
+            Log.info("contact_request_received push — requestId: \(requestId ?? "nil")", category: "Push")
+            Task {
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        // Refresh inbox + local banner (background) / NC (foreground).
+                        await ContactRequestService.shared.handleIncomingRequestPush(
+                            requestId: requestId
+                        )
+                    }
+                    group.addTask { try? await Task.sleep(nanoseconds: 27_000_000_000) }
+                    await group.next()
+                    group.cancelAll()
+                }
+                completionHandler(.newData)
+            }
+            return
+        }
+
         // A new_message silent push that lands while the app is foregrounded with a LIVE
         // MessageStream is redundant — the stream already delivered the message — and was the
         // confirmed trigger of a reconnect storm: every incoming message produced a push, and

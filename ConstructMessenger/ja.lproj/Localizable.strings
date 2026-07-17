@@ -726,6 +726,9 @@
 "contact_request_sent" = "リクエストを送信しました";
 "contact_request_pending" = "[保留中]";
 "contact_request_send_action" = "[→ リクエストを送信]";
+"contact_request_send_failed" = "リクエストを送信できませんでした。接続を確認して再試行してください。";
+"contact_request_received_body" = "Synapsesに新しいコンタクトリクエストがあります";
+"contact_request_received_body_plural" = "Synapsesに%d件のコンタクトリクエストがあります";
 "contact_request_sheet_title" = "ノードリクエスト";
 "contact_request_from_title" = "が接続を希望しています";
 "contact_request_empty_inbox" = "保留中のリクエストはありません";

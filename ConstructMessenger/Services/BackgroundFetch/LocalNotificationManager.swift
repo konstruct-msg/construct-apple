@@ -68,6 +68,41 @@ class LocalNotificationManager: NSObject {
 
     // MARK: - Show Notifications
 
+    /// Local banner for a new incoming contact request (silent-push driven).
+    /// Privacy-preserving: no sender id/name in the body — only a generic prompt
+    /// to open Synaps. Collapses on a stable identifier so rapid retries don't spam.
+    func showContactRequestReceivedNotification(requestId: String?, pendingCount: Int) {
+        let content = UNMutableNotificationContent()
+        content.title = NSLocalizedString("construct_app_name", comment: "App name")
+        if pendingCount > 1 {
+            content.body = String(
+                format: NSLocalizedString("contact_request_received_body_plural", comment: ""),
+                pendingCount
+            )
+        } else {
+            content.body = NSLocalizedString("contact_request_received_body", comment: "")
+        }
+        content.sound = .default
+        content.userInfo = [
+            "type": "contactRequestReceived",
+            "requestId": requestId ?? "",
+        ]
+
+        let identifier = requestId.map { "cr-recv-\($0)" } ?? "cr-recv-\(UUID().uuidString)"
+        let request = UNNotificationRequest(
+            identifier: identifier,
+            content: content,
+            trigger: nil
+        )
+        notificationCenter.add(request) { error in
+            if let error = error {
+                Log.error("Failed to show contact-request notification: \(error)", category: "LocalNotifications")
+            } else {
+                Log.debug("Contact-request notification shown: \(identifier)", category: "LocalNotifications")
+            }
+        }
+    }
+
     /// Show a generic "New Message" notification.
     /// No sender name or content is included to preserve E2E privacy.
     /// - Parameter chatId: Used to collapse repeat notifications for the same chat.
@@ -262,6 +297,11 @@ extension LocalNotificationManager: UNUserNotificationCenterDelegate {
             case "multipleMessages":
                 handleOpenChats()
 
+            case "contactRequestReceived":
+                // Switch to Synaps and refresh the requests inbox.
+                NotificationCenter.default.post(name: .openSynapsTab, object: nil)
+                NotificationCenter.default.post(name: .contactRequestReceived, object: nil, userInfo: userInfo)
+
             default:
                 break
             }
@@ -305,6 +345,11 @@ extension Notification.Name {
     /// Fired when a silent push with `activity_type = contact_request_accepted` arrives.
     /// `userInfo["requestId"]` carries the request_id string from the server.
     static let contactRequestAccepted = Notification.Name("com.construct.contactRequestAccepted")
+    /// Fired when a silent push with `activity_type = contact_request_received` arrives
+    /// (or after a background inbox refresh). Synaps should reload the requests list.
+    static let contactRequestReceived = Notification.Name("com.construct.contactRequestReceived")
+    /// Switch UI to the Synaps tab (e.g. after tapping a contact-request local notification).
+    static let openSynapsTab = Notification.Name("com.construct.openSynapsTab")
 }
 
 // MARK: - Localization Helpers
