@@ -676,12 +676,12 @@
 "synapses" = "Синапсы";
 "search_prompt" = "Поиск";
 "synapses_search_prompt" = "Поиск";
-"synapses_empty_title" = "Пока нет связей";
-"synapses_empty_subtitle" = "Отсканируйте QR, покажите свой или найдите @alias, чтобы добавить node.";
+"synapses_empty_title" = "Пока никого нет";
+"synapses_empty_subtitle" = "Отсканируйте QR, покажите свой или найдите @псевдоним, чтобы связаться.";
 "synapses_empty_scan_qr" = "Сканировать QR";
-"synapses_empty_focus_search" = "Поиск по alias";
-"chats_empty_title" = "Пока нет streams";
-"chats_empty_subtitle" = "Добавьте node через QR или Synaps — переписки появятся здесь.";
+"synapses_empty_focus_search" = "Поиск по псевдониму";
+"chats_empty_title" = "Пока нет чатов";
+"chats_empty_subtitle" = "Свяжитесь с кем-то через QR или Synaps — переписки появятся здесь.";
 "chats_empty_scan_qr" = "Сканировать QR";
 "chats_empty_show_qr" = "Мой QR";
 "chats_empty_open_synaps" = "Открыть Synaps";
@@ -986,9 +986,9 @@
 "history_sync_auto_connecting" = "Подключение к телефону…";
 "history_sync_auto_sending" = "Отправка истории на компьютер…";
 "history_sync_user_mismatch" = "Ошибка переноса истории: история принадлежит другому аккаунту.";
-"call_error_not_contacts" = "Нельзя позвонить этому ноду. Убедитесь, что вы являетесь взаимными контактами.";
+"call_error_not_contacts" = "Звонить можно только тем, с кем вы уже связаны.";
 "call_error_busy" = "Вы уже в звонке.";
-"call_error_peer_offline" = "Нод не в сети. Попробуйте позже.";
+"call_error_peer_offline" = "Собеседник не в сети. Попробуйте позже.";
 
 /* Engine background push notifications */
 "notification.new_message.title" = "Новое сообщение";

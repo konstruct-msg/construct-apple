@@ -674,12 +674,12 @@
 // MARK: - Synapses
 "synapses" = "Synapses";
 "synapses_search_prompt" = "Search";
-"synapses_empty_title" = "No connections yet";
-"synapses_empty_subtitle" = "Scan a QR code, share yours, or search by @alias to add a node.";
+"synapses_empty_title" = "No people yet";
+"synapses_empty_subtitle" = "Scan a QR code, share yours, or search by @alias to connect.";
 "synapses_empty_scan_qr" = "Scan QR";
 "synapses_empty_focus_search" = "Search by alias";
-"chats_empty_title" = "No streams yet";
-"chats_empty_subtitle" = "Add a node with QR or Synaps — conversations show up here.";
+"chats_empty_title" = "No chats yet";
+"chats_empty_subtitle" = "Connect with someone via QR or Synaps — conversations show up here.";
 "chats_empty_scan_qr" = "Scan QR";
 "chats_empty_show_qr" = "Show my QR";
 "chats_empty_open_synaps" = "Open Synaps";
@@ -975,9 +975,9 @@
 "history_sync_auto_connecting" = "Connecting to your phone…";
 "history_sync_auto_sending" = "Sending history to your computer…";
 "history_sync_user_mismatch" = "History transfer failed: this history belongs to a different account.";
-"call_error_not_contacts" = "Cannot call this node. Make sure you are mutual contacts.";
+"call_error_not_contacts" = "You can only call people you are connected with.";
 "call_error_busy" = "You're already in a call.";
-"call_error_peer_offline" = "Node is offline. Try again later.";
+"call_error_peer_offline" = "They are offline. Try again later.";
 
 /* Engine background push notifications */
 "notification.new_message.title" = "New message";

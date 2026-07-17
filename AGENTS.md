@@ -230,23 +230,57 @@ switch that call site to `CTRadius` / `CTShape` in the same change.
 
 ---
 
-## Glossary
+## Glossary & product language
 
-We have our own terminology. Use it consistently in UI, code, and comments.
+Construct’s model is unusual. **User-facing copy must not sound like a research paper.**
+Plain language first; specialized terms only where they earn their place (and after orientation
+has introduced them). Follow the tone of the post-registration **orientation** screens
+(`orientation_page*_body` in Localizable.strings) — short, human, no “node / stream / replica”.
 
-| ❌ Avoid | ✅ Use instead |
-|---------|--------------|
-| Account | Identity |
-| Login / Sign in | Session |
-| Register | Initialize |
-| Device | Replica |
-| Contact | Node |
-| Profile | Identity |
-| Server | Construct |
-| Group | Cluster |
-| Message thread | Stream |
-| ICE (obfuscation layer) | VEIL |
-| obfs4/WebTunnel proxy | VEIL |
+### User-facing (UI strings, empty states, push, onboarding)
+
+Prefer ordinary words. When in doubt, re-read orientation page 2 (“People”) and page 3 (“Three places”).
+
+| Prefer in UI | Avoid in UI | Why |
+|--------------|-------------|-----|
+| **People** / someone / person | Node, contact graph jargon | “Node” scares non-technical users |
+| **Chats** | Streams (as a tab/product name) | Users know “chats”; “streams” is opaque |
+| **Identity** (sparingly) | Account (except restore/link edge cases) | Orientation defines it; don’t stack more jargon |
+| **@alias** | Username (in marketing/orientation tone) | Matches onboarding; “username” still OK in forms if needed |
+| **Device** / this phone | Replica | “Replica” is engineer-speak for v1 |
+| **Request** (to connect) | — | Clearer than “node request” |
+| **QR / link** | Invite token, JTI, etc. | Never surface protocol names |
+| **Synaps** | “Synapse graph”, “mesh” | Brand name — keep; explain as “your people & requests” |
+| **Settings** | — | Normal |
+| **Konstruct** / Construct | Server | Product name; don’t say “the server” in consumer copy |
+
+**Do not** force every ordinary word through the old avoid-table. “Contact” in a system dialog is
+fine if it reads naturally; **do not** replace it with “node”.
+
+### Code, architecture, docs (engineers)
+
+Internal names may stay precise. Comments and types can use domain language; **UI localization keys’
+English values** must stay plain.
+
+| Internal / code | Meaning |
+|-----------------|---------|
+| Identity | Keys + registration; not “account” in crypto paths |
+| Session | Auth / messaging session lifecycle |
+| Initialize | Registration / device init (not “sign up”) |
+| Replica | Multi-device peer of an identity (code/docs) |
+| Contact / User (Core Data) | Person the user can message |
+| Stream (legacy name) | 1:1 conversation / chat entity |
+| Cluster | Group (future) |
+| Construct | Our infrastructure (not user-facing “server”) |
+| VEIL | Obfuscation layer (obfs4 / WebTunnel) — never “ICE” |
+| ICE (WebRTC) | Call NAT traversal only — never rename to VEIL |
+
+### Gradual migration
+
+1. **New UI copy** → plain language table above (orientation style).  
+2. **When editing a screen** → drop residual “node / stream / replica” from visible strings.  
+3. **Code identifiers** (`Chat`, `User`, `openSynapsTab`) — no mass rename required.  
+4. **Old glossary rule “Contact → Node” is retired for UI.**
 
 ### VEIL vs WebRTC ICE — never confuse them
 

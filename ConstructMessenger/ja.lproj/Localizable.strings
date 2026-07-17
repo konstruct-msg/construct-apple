@@ -618,12 +618,12 @@
 // MARK: - Synapses
 "synapses" = "シナプス";
 "search_prompt" = "検索";
-"synapses_empty_title" = "接続はまだありません";
-"synapses_empty_subtitle" = "QRをスキャンする・共有する・@alias で検索して node を追加します。";
+"synapses_empty_title" = "まだ誰もいません";
+"synapses_empty_subtitle" = "QRをスキャン・共有するか、@エイリアスで検索してつながりましょう。";
 "synapses_empty_scan_qr" = "QRをスキャン";
 "synapses_empty_focus_search" = "エイリアスで検索";
-"chats_empty_title" = "Streams はまだありません";
-"chats_empty_subtitle" = "QR または Synaps で node を追加すると、ここに会話が表示されます。";
+"chats_empty_title" = "チャットはまだありません";
+"chats_empty_subtitle" = "QR または Synaps で誰かとつながると、ここに会話が表示されます。";
 "chats_empty_scan_qr" = "QRをスキャン";
 "chats_empty_show_qr" = "自分のQR";
 "chats_empty_open_synaps" = "Synaps を開く";
@@ -912,8 +912,8 @@
 "history_sync_send_offer_yes" = "履歴を同期";
 "history_sync_send_offer_skip" = "スキップ";
 "history_sync_user_mismatch" = "履歴の転送に失敗しました：この履歴は別のアイデンティティのものです。";
-"call_error_not_contacts" = "このノードに発信できません。お互いをノードとして追加していることを確認してください。";
-"call_error_peer_offline" = "ノードがオフラインです。後でもう一度お試しください。";
+"call_error_not_contacts" = "つながっている相手にだけ発信できます。";
+"call_error_peer_offline" = "相手はオフラインです。後でもう一度お試しください。";
 /* タブバーラベル */
 "tab_chats" = "チャット";
 "tab_synapses" = "シナプス";
