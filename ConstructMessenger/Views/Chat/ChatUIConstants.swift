@@ -8,15 +8,18 @@ enum ChatUIConstants {
     }
 
     enum Bubble {
-        static let cornerRadius: CGFloat = 10
+        /// Text bubbles share ``CTRadius.control`` with primary buttons.
+        static let cornerRadius: CGFloat = CTRadius.control
         static let strokeWidth: CGFloat = 0.5
         static let maxWidth: CGFloat = 360
-        static let horizontalPadding: CGFloat = 10
-        static let verticalPadding: CGFloat = 8
-        static let rowSpacing: CGFloat = 8
+        static let horizontalPadding: CGFloat = CTLayout.chromeGap
+        static let verticalPadding: CGFloat = CTLayout.inlinePad
+        static let rowSpacing: CGFloat = CTLayout.inlinePad
     }
 
     enum Voice {
+        /// Voice chrome uses ``CTRadius.pill`` (same family as composer glass).
+        static let cornerRadius: CGFloat = CTRadius.pill
         static let controlWidth: CGFloat = 38
         static let waveformHeight: CGFloat = 28
         static let durationWidth: CGFloat = 34
@@ -24,8 +27,10 @@ enum ChatUIConstants {
     }
 
     enum InputBar {
-        static let cornerRadius: CGFloat = 18
-        static let height: CGFloat = 52
-        static let horizontalPadding: CGFloat = 12
+        /// Full capsule — ``CTRadius.pill`` (attach circle peer).
+        static let cornerRadius: CGFloat = CTRadius.pill
+        /// Target single-line control height (attach / send / scroll FAB).
+        static let height: CGFloat = CTLayout.controlHeight
+        static let horizontalPadding: CGFloat = CTLayout.edgePad
     }
 }

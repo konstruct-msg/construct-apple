@@ -201,7 +201,7 @@ struct MediaPickerSheet: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
                     .background(Color.CT.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipShape(CTShape.control())
             }
             .buttonStyle(.plain)
             Spacer()
@@ -457,7 +457,7 @@ private struct MediaPickerCell: View {
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
                             .background(Color.black.opacity(0.55))
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                            .clipShape(CTShape.badge())
                         Spacer()
                     }
                     .padding(5)

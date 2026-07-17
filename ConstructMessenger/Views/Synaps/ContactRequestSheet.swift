@@ -187,9 +187,9 @@ struct ContactRequestSheet: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(background(for: role, dimmed: dimmed))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .clipShape(CTShape.control())
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                CTShape.control()
                     .stroke(border(for: role, dimmed: dimmed), lineWidth: 1)
             )
         }

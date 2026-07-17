@@ -19,15 +19,22 @@ struct MessageInputTextBar: View {
 
     @FocusState private var focused: Bool
 
+    /// Matches the attach `plus.circle` control (``CTLayout.controlHeight`` + pill).
+    private static let controlSize: CGFloat = CTLayout.controlHeight
+    private static let trailingIconSize: CGFloat = 28
+
     var body: some View {
-        HStack(alignment: .bottom, spacing: 0) {
+        // Center trailing controls with the single-line text row. Multi-line growth
+        // keeps send/mic vertically centered in the capsule (not bottom-hanging).
+        HStack(alignment: .center, spacing: 0) {
             textField
             charCounter
             sendButton
             voiceButton
         }
+        .frame(minHeight: Self.controlSize)
         .fixedSize(horizontal: false, vertical: true)
-        .glassCapsule(cornerRadius: 18) // use standardized glass capsule
+        .glassCapsule()
     }
 
     // MARK: - Text field
@@ -44,9 +51,10 @@ struct MessageInputTextBar: View {
             .textFieldStyle(.plain)
             .lineLimit(1...8)
             .focused($focused)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 13)
-            .padding(.trailing, canSend ? 4 : 0)
+            .padding(.leading, 16)
+            .padding(.trailing, canSend ? 4 : 8)
+            // Vertical padding keeps single-line height ≈ attach circle (42).
+            .padding(.vertical, 11)
             #if os(macOS)
             .onKeyPress(keys: [.return], phases: .down) { press in
                 guard !press.modifiers.contains(.shift) else { return .ignored }
@@ -87,10 +95,10 @@ struct MessageInputTextBar: View {
         if canSend {
             Button(action: onSend) {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 22, weight: .regular))
+                    .font(.system(size: Self.trailingIconSize, weight: .regular))
                     .foregroundColor(Color.CT.accent)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 7)
+                    .frame(width: Self.controlSize, height: Self.controlSize)
+                    .contentShape(Circle())
                     #if os(macOS)
                     .help("Send (⏎) · New line (⇧⏎)")
                     #endif
@@ -110,8 +118,8 @@ struct MessageInputTextBar: View {
                 Image(systemName: "mic.fill")
                     .font(.system(size: CTLayout.navIconSize))
                     .foregroundColor(Color.CT.textDim)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 10)
+                    .frame(width: Self.controlSize, height: Self.controlSize)
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .transition(.scale.combined(with: .opacity))

@@ -12,6 +12,8 @@ import UIKit
 #endif
 
 struct IOSMessageInputView: View {
+    private static let attachmentPreviewSpacing: CGFloat = 10
+
     @Binding var text: String
     @Binding var droppedImages: [PlatformImage]
     let isSending: Bool
@@ -33,6 +35,7 @@ struct IOSMessageInputView: View {
             replyOrEditBars
             attachmentPreviews
             voiceOrInputRow
+                .padding(.top, hasAttachmentPreviews ? Self.attachmentPreviewSpacing : 0)
         }
         .animation(.easeInOut(duration: 0.2), value: canSend)
         .animation(.easeInOut(duration: 0.2), value: replyingTo != nil)
@@ -126,7 +129,7 @@ struct IOSMessageInputView: View {
     }
 
     private var inputRow: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .center, spacing: CTLayout.chromeGap) {
             attachmentButton
             MessageInputTextBar(
                 text: $text,
@@ -136,17 +139,17 @@ struct IOSMessageInputView: View {
                 onStartVoice: startVoiceRecording
             )
         }
-        // No collective capsule — they are separate floating glass elements now
+        // No collective capsule — separate floating glass elements (same pill radius).
         .padding(.horizontal, 4)
     }
 
     private var attachmentButton: some View {
         Button { showMediaPicker = true } label: {
             Image(systemName: "plus.circle")
-                .font(.system(size: 20))
+                .font(.system(size: CTLayout.navIconSize))
                 .foregroundColor(Color.CT.textDim)
-                .frame(width: 42, height: 42)
-                .glassCapsule(cornerRadius: 999)
+                .frame(width: CTLayout.controlHeight, height: CTLayout.controlHeight)
+                .glassCapsule()
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(LocalizedStringKey("attach")))
@@ -154,6 +157,10 @@ struct IOSMessageInputView: View {
 
     private var canSend: Bool {
         attachments.canSend(text: text)
+    }
+
+    private var hasAttachmentPreviews: Bool {
+        !attachments.selectedAttachments.isEmpty || !attachments.selectedFileURLs.isEmpty
     }
 
     private func startVoiceRecording() {

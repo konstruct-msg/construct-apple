@@ -93,7 +93,7 @@ struct ChatView: View {
             // Message list — base layer, scrolls underneath the floating capsules
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 0) {
+                    LazyVStack(spacing: 8) {
                         // Load more indicator at TOP of list (oldest messages)
                         if viewModel.hasMoreMessages && !renderedMessages.isEmpty {
                             HStack {
@@ -581,12 +581,12 @@ struct ChatView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 24))
+                        .font(.system(size: CTLayout.callIconSize))
                         .foregroundColor(Color.CT.accent)
-                        .frame(width: 40, height: 40)
-                        .glassCapsule(cornerRadius: 999)
+                        .frame(width: CTLayout.controlHeight, height: CTLayout.controlHeight)
+                        .glassCapsule()
                 }
-                .padding(.trailing, 16)
+                .padding(.trailing, CTLayout.edgePad)
                 .padding(.bottom, 100) // Lift well above the (variable height) input glass
                 .transition(.move(edge: .trailing).combined(with: .opacity))
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: scrollManager.shouldShowScrollToBottomButton)

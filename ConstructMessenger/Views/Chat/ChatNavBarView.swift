@@ -75,7 +75,7 @@ struct ChatNavBarView: View {
         }
         .padding(.horizontal, CTLayout.edgePad)
         .frame(height: CTLayout.navBarHeight)
-        .glassCapsule(cornerRadius: 999) // full capsule for top nav bar
+        .glassCapsule()
     }
 
     @ViewBuilder private var ktBadge: some View {
