@@ -65,7 +65,10 @@ private final class ReconnPeer {
         return ReconnEncMsg(ephemeralPublicKey: r.ephemeralPublicKey,
                             messageNumber: r.messageNumber,
                             content: r.content,
-                            oneTimePrekeyId: r.oneTimePrekeyId)
+                            oneTimePrekeyId: r.oneTimePrekeyId,
+                            suiteId: r.suiteId,
+                            pqMessageEpoch: r.pqMessageEpoch,
+                            pqRatchetField: r.pqRatchetField)
     }
 
     func encryptString(_ s: String, to contactId: String) throws -> ReconnEncMsg {
@@ -76,7 +79,10 @@ private final class ReconnPeer {
         let r = try core.decryptMessage(contactId: contactId,
                                         ephemeralPublicKey: msg.ephemeralPublicKey,
                                         messageNumber: msg.messageNumber,
-                                        content: msg.content)
+                                        content: msg.content,
+                                        suiteId: msg.suiteId,
+                                        pqMessageEpoch: msg.pqMessageEpoch,
+                                        pqRatchetField: msg.pqRatchetField)
         return String(bytes: r.plaintext, encoding: .utf8) ?? "<binary>"
     }
 
@@ -94,13 +100,19 @@ private struct ReconnEncMsg {
     let messageNumber: UInt32
     let content: [UInt8]
     let oneTimePrekeyId: UInt32
+    let suiteId: UInt16
+    let pqMessageEpoch: UInt32
+    let pqRatchetField: [UInt8]
 
     func toBytes() -> BinaryFirstMessage {
         return BinaryFirstMessage(
             ephemeralPublicKey: ephemeralPublicKey,
             messageNumber: messageNumber,
             content: content,
-            oneTimePrekeyId: oneTimePrekeyId
+            oneTimePrekeyId: oneTimePrekeyId,
+            suiteId: suiteId,
+            pqMessageEpoch: pqMessageEpoch,
+            pqRatchetField: pqRatchetField
         )
     }
 }

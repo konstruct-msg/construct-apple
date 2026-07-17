@@ -2,12 +2,12 @@
 //  WirePayloadCoderTests.swift
 //  ConstructMessengerTests
 //
-//  Tests for WirePayloadCoder — the binary wire format encoder/decoder.
+//  Tests for WirePayloadCoder — the Swift adapter over the Rust core's canonical wire
+//  framing (`wirePayloadPack`/`wirePayloadUnpack`, backed by construct-core/wire_payload.rs).
 //
-//  Wire format:
-//    [4 bytes LE]  message_number
-//    [32 bytes]    dh_public_key
-//    [12+ bytes]   nonce || ciphertext || auth_tag
+//  The byte layout is owned and unit-tested in the Rust core (52-byte header + optional
+//  KEM/PQ sections). These tests exercise the Swift adapter: that it round-trips
+//  `EncryptedMessageComponents` field-for-field and honours the core's reject contract.
 //
 
 import XCTest
@@ -36,7 +36,9 @@ final class WirePayloadCoderTests: XCTestCase {
             content: sealedBox,
             suiteId: 1,
             oneTimePreKeyId: 0,
-            storageKey: Data()
+            storageKey: Data(),
+            pqMessageEpoch: 0,
+            pqRatchetField: Data()
         )
     }
 
@@ -61,6 +63,16 @@ final class WirePayloadCoderTests: XCTestCase {
         let payload = try WirePayloadCoder.encode(components)
         let decoded = try WirePayloadCoder.decode(payload)
         XCTAssertEqual(decoded.content, Self.sealedBox)
+    }
+
+    func testRoundtripPreservesPQFieldsForNonPQSuite() throws {
+        // Suite-1 components carry no PQ section; the adapter must surface the defaults
+        // (epoch 0, empty field) after a round-trip. Suite-3 PQ serialization itself is
+        // owned and tested in the Rust core.
+        let components = makeComponents()
+        let decoded = try WirePayloadCoder.decode(try WirePayloadCoder.encode(components))
+        XCTAssertEqual(decoded.pqMessageEpoch, 0)
+        XCTAssertTrue(decoded.pqRatchetField.isEmpty)
     }
 
     func testRoundtripWithMessageNumberZero() throws {
@@ -130,44 +142,45 @@ final class WirePayloadCoderTests: XCTestCase {
 
     // MARK: - Encode Errors
 
+    // The specific error taxonomy (InvalidDhPublicKey / TooShort / …) is owned and
+    // unit-tested in the Rust core (`construct-core/src/wire_payload.rs`). Across the FFI
+    // boundary these surface as a thrown `CryptoError`, so the Swift adapter tests assert
+    // the reject *contract* (it throws), not the Rust-internal variant.
+
     func testEncodeRejectsShortDHPublicKey() {
         let components = MessageCryptoService.EncryptedMessageComponents(
-            ephemeralPublicKey: Data(repeating: 0, count: 16),  // too short
+            ephemeralPublicKey: Data(repeating: 0, count: 16),  // too short (core requires 32)
             messageNumber: 0,
             content: Self.sealedBox,
             suiteId: 1,
             oneTimePreKeyId: 0,
-            storageKey: Data()
+            storageKey: Data(),
+            pqMessageEpoch: 0,
+            pqRatchetField: Data()
         )
-        XCTAssertThrowsError(try WirePayloadCoder.encode(components)) { error in
-            XCTAssertEqual(error as? WirePayloadError, .invalidDHPublicKey)
-        }
+        XCTAssertThrowsError(try WirePayloadCoder.encode(components))
     }
 
     func testEncodeRejectsLongDHPublicKey() {
         let components = MessageCryptoService.EncryptedMessageComponents(
-            ephemeralPublicKey: Data(repeating: 0, count: 64),  // too long
+            ephemeralPublicKey: Data(repeating: 0, count: 64),  // too long (core requires 32)
             messageNumber: 0,
             content: Self.sealedBox,
             suiteId: 1,
             oneTimePreKeyId: 0,
-            storageKey: Data()
+            storageKey: Data(),
+            pqMessageEpoch: 0,
+            pqRatchetField: Data()
         )
-        XCTAssertThrowsError(try WirePayloadCoder.encode(components)) { error in
-            XCTAssertEqual(error as? WirePayloadError, .invalidDHPublicKey)
-        }
+        XCTAssertThrowsError(try WirePayloadCoder.encode(components))
     }
 
     // MARK: - Decode Errors
 
     func testDecodeRejectsTooShortPayload() {
-        // Payload < 37 bytes (headerSize + 1 minimum content byte)
+        // Payload <= headerSize (52) → the core rejects it (TooShort → thrown CryptoError).
         let shortPayload = Data(repeating: 0, count: 10)
-        XCTAssertThrowsError(try WirePayloadCoder.decode(shortPayload)) { error in
-            if case WirePayloadError.payloadTooShort(_) = error { } else {
-                XCTFail("Expected payloadTooShort, got \(error)")
-            }
-        }
+        XCTAssertThrowsError(try WirePayloadCoder.decode(shortPayload))
     }
 
     func testDecodeRejectsExactlyHeaderSizePayload() {

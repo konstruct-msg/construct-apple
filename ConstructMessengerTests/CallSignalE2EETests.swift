@@ -84,7 +84,10 @@ private final class OrchestratorPeer {
             ephemeralPublicKey: r.ephemeralPublicKey,
             messageNumber: r.messageNumber,
             content: r.content,
-            oneTimePrekeyId: r.oneTimePrekeyId
+            oneTimePrekeyId: r.oneTimePrekeyId,
+            suiteId: r.suiteId,
+            pqMessageEpoch: r.pqMessageEpoch,
+            pqRatchetField: r.pqRatchetField
         )
     }
 
@@ -144,13 +147,19 @@ private struct EncryptedComponents {
     let messageNumber: UInt32
     let content: [UInt8]
     let oneTimePrekeyId: UInt32
+    let suiteId: UInt16
+    let pqMessageEpoch: UInt32
+    let pqRatchetField: [UInt8]
 
     func toMessageBytes() -> BinaryFirstMessage {
         return BinaryFirstMessage(
             ephemeralPublicKey: ephemeralPublicKey,
             messageNumber: messageNumber,
             content: content,
-            oneTimePrekeyId: oneTimePrekeyId
+            oneTimePrekeyId: oneTimePrekeyId,
+            suiteId: suiteId,
+            pqMessageEpoch: pqMessageEpoch,
+            pqRatchetField: pqRatchetField
         )
     }
 }
@@ -340,7 +349,9 @@ final class CallSignalE2EETests: XCTestCase {
                 content: MessagePadding.padCiphertext(Data(msg1.content)),
                 suiteId: 1,
                 oneTimePreKeyId: msg1.oneTimePrekeyId,
-                storageKey: Data()
+                storageKey: Data(),
+                pqMessageEpoch: 0,
+                pqRatchetField: Data()
             ))
         _ = try alice.receiveWirePayload(wireMsg1, from: bob.userId, contentType: 1)
 
@@ -353,7 +364,9 @@ final class CallSignalE2EETests: XCTestCase {
                 content: MessagePadding.padCiphertext(Data(aliceMsg.content)),
                 suiteId: 1,
                 oneTimePreKeyId: aliceMsg.oneTimePrekeyId,
-                storageKey: Data()
+                storageKey: Data(),
+                pqMessageEpoch: 0,
+                pqRatchetField: Data()
             ))
         _ = try bob.receiveWirePayload(wireAliceMsg, from: alice.userId, contentType: 1)
 

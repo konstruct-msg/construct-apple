@@ -66,7 +66,9 @@ final class CryptoWireIntegrationTests: XCTestCase {
                 content: MessagePadding.padCiphertext(rawContent),
                 suiteId: 1,
                 oneTimePreKeyId: rustComponents.oneTimePrekeyId,
-                storageKey: Data(rustComponents.storageKey)
+                storageKey: Data(rustComponents.storageKey),
+                pqMessageEpoch: 0,
+                pqRatchetField: Data()
             )
         }
 
@@ -83,7 +85,10 @@ final class CryptoWireIntegrationTests: XCTestCase {
                 contactId: contactId,
                 ephemeralPublicKey: decoded.ephemeralPublicKey,
                 messageNumber: decoded.messageNumber,
-                content: [UInt8](unpadded)
+                content: [UInt8](unpadded),
+                suiteId: decoded.suiteId,
+                pqMessageEpoch: decoded.pqMessageEpoch,
+                pqRatchetField: [UInt8](decoded.pqRatchetField)
             )
             return String(data: Data(plaintextData.plaintext), encoding: .utf8) ?? ""
         }
@@ -100,7 +105,10 @@ final class CryptoWireIntegrationTests: XCTestCase {
                 ephemeralPublicKey: decoded.ephemeralPublicKey,
                 messageNumber: decoded.messageNumber,
                 content: [UInt8](unpadded),
-                oneTimePrekeyId: 0
+                oneTimePrekeyId: 0,
+                suiteId: decoded.suiteId,
+                pqMessageEpoch: decoded.pqMessageEpoch,
+                pqRatchetField: [UInt8](decoded.pqRatchetField)
             )
             let result = try core.initReceivingSession(
                 contactId: contactId,

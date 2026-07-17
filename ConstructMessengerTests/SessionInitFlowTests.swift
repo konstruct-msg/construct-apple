@@ -68,7 +68,10 @@ private final class SessionPeer {
             ephemeralPublicKey: result.ephemeralPublicKey,
             messageNumber: result.messageNumber,
             content: result.content,
-            oneTimePrekeyId: result.oneTimePrekeyId
+            oneTimePrekeyId: result.oneTimePrekeyId,
+            suiteId: result.suiteId,
+            pqMessageEpoch: result.pqMessageEpoch,
+            pqRatchetField: result.pqRatchetField
         )
     }
 
@@ -96,7 +99,10 @@ private final class SessionPeer {
             contactId: contactId,
             ephemeralPublicKey: components.ephemeralPublicKey,
             messageNumber: components.messageNumber,
-            content: components.content
+            content: components.content,
+            suiteId: components.suiteId,
+            pqMessageEpoch: components.pqMessageEpoch,
+            pqRatchetField: components.pqRatchetField
         )
         return Data(result.plaintext)
     }
@@ -109,13 +115,19 @@ private struct EncryptedComponents {
     let messageNumber: UInt32
     let content: [UInt8]
     let oneTimePrekeyId: UInt32
+    let suiteId: UInt16
+    let pqMessageEpoch: UInt32
+    let pqRatchetField: [UInt8]
 
     func toBinaryFirstMessage() -> BinaryFirstMessage {
         return BinaryFirstMessage(
             ephemeralPublicKey: ephemeralPublicKey,
             messageNumber: messageNumber,
             content: content,
-            oneTimePrekeyId: oneTimePrekeyId
+            oneTimePrekeyId: oneTimePrekeyId,
+            suiteId: suiteId,
+            pqMessageEpoch: pqMessageEpoch,
+            pqRatchetField: pqRatchetField
         )
     }
 }
