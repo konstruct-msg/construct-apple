@@ -270,6 +270,7 @@
 "server_applied_title" = "Сервер обновлён";
 "server_applied_message" = "Новый сервер будет использоваться для всех последующих подключений.";
 "close" = "Закрыть";
+"chat_nav_back" = "Назад";
 "change_avatar" = "Сменить фото";
 
 // Onboarding (identity gate — create / restore / link)

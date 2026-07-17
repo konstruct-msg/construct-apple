@@ -294,6 +294,7 @@
 "server_applied_title" = "Construct接続先を更新しました";
 "server_applied_message" = "今後のすべての接続で新しいgRPC接続先を使用します。";
 "close" = "閉じる";
+"chat_nav_back" = "戻る";
 "change_avatar" = "写真を変更";
 
 // Onboarding (identity gate — create / restore / link)
