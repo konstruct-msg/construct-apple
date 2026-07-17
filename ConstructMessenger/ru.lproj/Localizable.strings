@@ -793,13 +793,13 @@
 // Contact Requests
 "contact_requests_section" = "запросы";
 "contact_request_from" = "от";
-"contact_request_confirm" = "[✓] принять";
-"contact_request_decline_block" = "[✗] отклонить + заблокировать";
-"contact_request_spam_block" = "[⚠] спам + заблокировать";
-"contact_request_sent" = "запрос отправлен";
-"contact_request_pending" = "[ожидание]";
-"contact_request_send_action" = "[→ отправить запрос]";
-"contact_request_sheet_title" = "запрос на переписку";
+"contact_request_confirm" = "Принять";
+"contact_request_decline_block" = "Отклонить и заблокировать";
+"contact_request_spam_block" = "Спам и заблокировать";
+"contact_request_sent" = "Запрос отправлен";
+"contact_request_pending" = "Ожидание";
+"contact_request_send_action" = "Отправить запрос";
+"contact_request_sheet_title" = "Запрос на переписку";
 "contact_request_from_title" = "хочет начать переписку";
 "contact_request_empty_inbox" = "нет входящих запросов";
 

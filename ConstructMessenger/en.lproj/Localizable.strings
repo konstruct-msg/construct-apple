@@ -783,13 +783,13 @@
 // Contact Requests
 "contact_requests_section" = "requests";
 "contact_request_from" = "from";
-"contact_request_confirm" = "[✓] confirm";
-"contact_request_decline_block" = "[✗] decline + block";
-"contact_request_spam_block" = "[⚠] report spam + block";
-"contact_request_sent" = "request sent";
-"contact_request_pending" = "[pending]";
-"contact_request_send_action" = "[send request]";
-"contact_request_sheet_title" = "contact request";
+"contact_request_confirm" = "Accept";
+"contact_request_decline_block" = "Decline and block";
+"contact_request_spam_block" = "Report spam and block";
+"contact_request_sent" = "Request sent";
+"contact_request_pending" = "Pending";
+"contact_request_send_action" = "Send request";
+"contact_request_sheet_title" = "Contact request";
 "contact_request_from_title" = "wants to connect";
 "contact_request_empty_inbox" = "no pending requests";
 
