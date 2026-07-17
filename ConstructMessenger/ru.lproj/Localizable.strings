@@ -274,9 +274,9 @@
 "change_avatar" = "Сменить фото";
 
 // Onboarding (identity gate — create / restore / link)
-"onboarding_tagline" = "постмодерн мессенджер";
+"onboarding_tagline" = "интернет — пространство свободы выражения мысли.\nидентичность — конструкт.";
 "onboarding_username_placeholder" = "публичный псевдоним (опционально)";
-"onboarding_create_identity" = "Создать идентификатор устройства";
+"onboarding_create_identity" = "Создать идентичность";
 "onboarding_restore" = "Восстановить из ключа восстановления";
 "onboarding_recovery_coming_soon" = "Восстановление скоро будет доступно";
 "onboarding_network_settings" = "Настройки сети";
@@ -285,33 +285,33 @@
 "orientation_section_label" = "> orientation";
 "orientation_skip" = "Пропустить";
 "orientation_next" = "Продолжить";
-"orientation_enter" = "Войти в Construct";
+"orientation_enter" = "Войти в Конструкт";
 "orientation_or" = "или";
 "orientation_page_a11y" = "Страница %d из %d";
-"orientation_settings_replay" = "Как устроен Construct";
-"orientation_page1_title" = "Ваша идентичность";
-"orientation_page1_body" = "Без телефона и почты. Identity — криптографические ключи на этом устройстве. Публичный @alias необязателен.";
-"orientation_page1_caption" = "Ключи остаются на этой реплике.";
+"orientation_settings_replay" = "Как устроен Конструкт";
+"orientation_page1_title" = "Идентичность";
+"orientation_page1_body" = "Без телефона, почты и настоящего имени. Идентичность создаётся с нуля на этом телефоне и не отсылает ни к чему вне себя. Кто вы здесь — решаете вы.";
+"orientation_page1_caption" = "Публичный @псевдоним необязателен. Ключи не покидают телефон.";
 "orientation_page1_visual_label" = "на этом устройстве";
-"orientation_page2_title" = "Добавить node";
-"orientation_page2_body" = "Нельзя написать случайному человеку из глобального каталога. Нужен явный жест — короткий QR или ссылка, либо запрос, который примут.";
-"orientation_page2_caption" = "Доверие приглашают, а не собирают.";
+"orientation_page2_title" = "Люди";
+"orientation_page2_body" = "Общего каталога нет, и вас нельзя найти без вашего ведома. Чтобы начать общение, один приглашает другого: покажите QR-код, отправьте ссылку или найдите @псевдоним и отправьте запрос.";
+"orientation_page2_caption" = "Никто не напишет вам без вашего согласия.";
 "orientation_page2_path_qr_title" = "QR / ссылка";
-"orientation_page2_path_qr_sub" = "Поделиться или сканировать. 5 минут.";
-"orientation_page2_path_search_title" = "Поиск в Synaps";
-"orientation_page2_path_search_sub" = "Найти @alias → отправить запрос.";
+"orientation_page2_path_qr_sub" = "Показать или сканировать. Действует 5 минут.";
+"orientation_page2_path_search_title" = "Поиск";
+"orientation_page2_path_search_sub" = "Найти @псевдоним → отправить запрос.";
 "orientation_page3_title" = "Три места";
-"orientation_page3_body" = "Streams — переписка. Synaps — сеть nodes и запросов. Settings — ваш QR, recovery и устройства.";
+"orientation_page3_body" = "Чаты — переписка. Synaps — ваши люди и входящие запросы. Настройки — ваш QR-код, восстановление и устройства.";
 "orientation_page3_caption" = "Начните с Synaps — покажите QR или найдите человека.";
-"orientation_map_streams" = "Streams";
-"orientation_map_streams_sub" = "Переписка 1:1";
+"orientation_map_streams" = "Чаты";
+"orientation_map_streams_sub" = "Личная переписка";
 "orientation_map_synaps" = "Synaps";
-"orientation_map_synaps_sub" = "Nodes, поиск, запросы";
-"orientation_map_settings" = "Settings";
-"orientation_map_settings_sub" = "QR, recovery, devices";
+"orientation_map_synaps_sub" = "Люди, поиск, запросы";
+"orientation_map_settings" = "Настройки";
+"orientation_map_settings_sub" = "QR, восстановление, устройства";
 
 // Registration flow
-"reg_establishing_trust" = "Установка доверия";
+"reg_establishing_trust" = "Создание ключей";
 "reg_joining_network" = "Ваше устройство подключается к сети";
 "reg_welcome" = "Добро пожаловать";
 "reg_label_username" = "Имя пользователя";
@@ -322,9 +322,9 @@
 "reg_continue" = "Продолжить";
 "reg_try_again" = "Попробовать снова";
 "reg_cancel" = "Отмена";
-"reg_phase_entropy" = "энтропия собрана";
-"reg_phase_nonce" = "поиск nonce";
-"reg_phase_solution" = "решение найдено";
+"reg_phase_entropy" = "случайность собрана";
+"reg_phase_nonce" = "антиспам-проверка";
+"reg_phase_solution" = "готово";
 
 // Delete Account
 "delete_account_footer" = "Навсегда удаляет идентичность и все связанные данные.";
@@ -753,7 +753,7 @@
 
 // MARK: - QR / Invite
 "invite" = "пригласить";
-"qr_caption_trust" = "доверие вычисляется, а не предполагается.";
+"qr_caption_trust" = "этот код — приглашение связаться.";
 "qr_scan_hint" = "покажи кому-то рядом или сделай скриншот";
 
 // MARK: - Device Link QR

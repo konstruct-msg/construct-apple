@@ -298,9 +298,9 @@
 "change_avatar" = "写真を変更";
 
 // Onboarding (identity gate — create / restore / link)
-"onboarding_tagline" = "ポストモダン・メッセンジャー";
+"onboarding_tagline" = "インターネットは自由な思考の空間。\nアイデンティティは構築物。";
 "onboarding_username_placeholder" = "公開エイリアスを選択 (任意)";
-"onboarding_create_identity" = "デバイスアイデンティティを作成";
+"onboarding_create_identity" = "アイデンティティを作成";
 "onboarding_restore" = "復旧キーから復元";
 "onboarding_recovery_coming_soon" = "復旧機能は近日公開";
 "onboarding_network_settings" = "ネットワーク設定";
@@ -309,33 +309,33 @@
 "orientation_section_label" = "> orientation";
 "orientation_skip" = "スキップ";
 "orientation_next" = "続ける";
-"orientation_enter" = "Construct に入る";
+"orientation_enter" = "共創に入る";
 "orientation_or" = "または";
 "orientation_page_a11y" = "%d / %d ページ";
-"orientation_settings_replay" = "Construct の使い方";
-"orientation_page1_title" = "あなたの Identity";
-"orientation_page1_body" = "電話番号もメールも不要です。Identity はこのデバイス上の暗号鍵です。公開 @alias は任意です。";
-"orientation_page1_caption" = "鍵はこのレプリカに残ります。";
+"orientation_settings_replay" = "共創の使い方";
+"orientation_page1_title" = "アイデンティティ";
+"orientation_page1_body" = "電話番号もメールも本名も不要。アイデンティティはこの端末上でゼロから作られ、外の何ものも指し示しません。ここでの自分は、自分で作るものです。";
+"orientation_page1_caption" = "公開 @エイリアスは任意。鍵はこの端末から出ません。";
 "orientation_page1_visual_label" = "このデバイス上";
-"orientation_page2_title" = "Node を追加";
-"orientation_page2_body" = "グローバル名簿から誰にでも送れません。短寿命の QR / リンク、または相手が承諾するリクエストが必要です。";
-"orientation_page2_caption" = "信頼は招待されるものであり、収集されるものではありません。";
+"orientation_page2_title" = "つながり";
+"orientation_page2_body" = "全体の名簿はなく、気づかれずにあなたを見つけることはできません。会話を始めるには、どちらかが招待します：QR コードを見せる、リンクを送る、@エイリアスを探してリクエストを送る。";
+"orientation_page2_caption" = "同意なしにメッセージが届くことはありません。";
 "orientation_page2_path_qr_title" = "QR / リンク";
-"orientation_page2_path_qr_sub" = "共有またはスキャン。有効 5 分。";
-"orientation_page2_path_search_title" = "Synaps 検索";
-"orientation_page2_path_search_sub" = "@alias を見つけてリクエスト。";
+"orientation_page2_path_qr_sub" = "見せる・スキャン。有効 5 分。";
+"orientation_page2_path_search_title" = "検索";
+"orientation_page2_path_search_sub" = "@エイリアスを探してリクエスト。";
 "orientation_page3_title" = "3 つの場所";
-"orientation_page3_body" = "Streams は会話。Synaps は node とリクエストのネットワーク。Settings では QR と recovery を管理します。";
+"orientation_page3_body" = "チャットは会話の場。Synaps は人と受信リクエストのネットワーク。設定には QR・復元・端末があります。";
 "orientation_page3_caption" = "まず Synaps — QR を見せるか相手を探す。";
-"orientation_map_streams" = "Streams";
-"orientation_map_streams_sub" = "1:1 の会話";
+"orientation_map_streams" = "チャット";
+"orientation_map_streams_sub" = "1対1の会話";
 "orientation_map_synaps" = "Synaps";
-"orientation_map_synaps_sub" = "Nodes・検索・リクエスト";
-"orientation_map_settings" = "Settings";
-"orientation_map_settings_sub" = "QR・recovery・devices";
+"orientation_map_synaps_sub" = "人・検索・リクエスト";
+"orientation_map_settings" = "設定";
+"orientation_map_settings_sub" = "QR・復元・端末";
 
 // Registration flow
-"reg_establishing_trust" = "信頼関係を構築中";
+"reg_establishing_trust" = "鍵を作成中";
 "reg_joining_network" = "デバイスがネットワークに参加しています";
 "reg_welcome" = "ようこそ";
 "reg_label_username" = "ユーザー名";
@@ -346,9 +346,9 @@
 "reg_continue" = "続行";
 "reg_try_again" = "再試行";
 "reg_cancel" = "キャンセル";
-"reg_phase_entropy" = "エントロピー収集済み";
-"reg_phase_nonce" = "ナンス検索中";
-"reg_phase_solution" = "解法が見つかりました";
+"reg_phase_entropy" = "乱数を収集済み";
+"reg_phase_nonce" = "スパム対策の計算中";
+"reg_phase_solution" = "完了";
 
 // Delete Account
 "delete_account_footer" = "アイデンティティと関連するすべてのデータを永久に削除します。";
@@ -686,7 +686,7 @@
 "call_voice" = "音声通話";
 "end_to_end_encrypted" = "変更はエンドツーエンドで暗号化されます";
 "invite" = "招待";
-"qr_caption_trust" = "信頼は仮定されるものではなく、計算されるものです。";
+"qr_caption_trust" = "このコードはつながりへの招待です。";
 "qr_scan_hint" = "近くの人に見せるか、スクリーンショットを撮ってください";
 
 // MARK: - Device Link QR
