@@ -419,17 +419,71 @@ struct SynapsView: View {
     // MARK: - Empty state
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: CTLayout.sectionGap) {
+            Image(systemName: "circle.grid.cross")
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(Color.CT.textDim)
+                .padding(.bottom, 4)
+
             Text(LocalizedStringKey("synapses_empty_title"))
-                .font(CTFont.bold(17))
+                .font(CTFont.bold(16))
                 .foregroundStyle(Color.CT.text)
+                .multilineTextAlignment(.center)
+
             Text(LocalizedStringKey("synapses_empty_subtitle"))
-                .font(CTFont.regular(14))
+                .font(CTFont.regular(13))
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+                .padding(.horizontal, CTLayout.sectionGap)
+
+            VStack(spacing: CTLayout.chromeGap) {
+                #if os(iOS)
+                emptyActionRow(
+                    titleKey: "synapses_empty_scan_qr",
+                    systemImage: "qrcode.viewfinder"
+                ) {
+                    showingQRScanner = true
+                }
+                #endif
+                emptyActionRow(
+                    titleKey: "synapses_empty_focus_search",
+                    systemImage: "magnifyingglass"
+                ) {
+                    isSearchFocused = true
+                }
+            }
+            .padding(.top, CTLayout.inlinePad)
+            .frame(maxWidth: 320)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, CTLayout.edgePad)
+    }
+
+    private func emptyActionRow(
+        titleKey: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: CTLayout.chromeGap) {
+                Image(systemName: systemImage)
+                    .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                Text(NSLocalizedString(titleKey, comment: "").uppercased())
+                    .font(CTFont.bold(12))
+                    .tracking(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.CT.textDim)
+            }
+            .foregroundStyle(Color.CT.accent)
+            .padding(.horizontal, CTLayout.edgePad)
+            .frame(minHeight: CTLayout.controlHeight)
+            .background(Color.CT.bgMsg)
+            .clipShape(CTShape.card())
+            .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Remote Search Card

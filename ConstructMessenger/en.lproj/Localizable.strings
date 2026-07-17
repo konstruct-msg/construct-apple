@@ -675,7 +675,15 @@
 "synapses" = "Synapses";
 "synapses_search_prompt" = "Search";
 "synapses_empty_title" = "No connections yet";
-"synapses_empty_subtitle" = "People you connect with will appear here, even after you clear a conversation.";
+"synapses_empty_subtitle" = "Scan a QR code, share yours, or search by @alias to add a node.";
+"synapses_empty_scan_qr" = "Scan QR";
+"synapses_empty_focus_search" = "Search by alias";
+"chats_empty_title" = "No streams yet";
+"chats_empty_subtitle" = "Add a node with QR or Synaps — conversations show up here.";
+"chats_empty_scan_qr" = "Scan QR";
+"chats_empty_show_qr" = "Show my QR";
+"chats_empty_open_synaps" = "Open Synaps";
+"chat_search_results" = "%d results";
 "synapses_open_chat" = "Open Chat";
 "synapses_prune_title" = "Cut this synapse?";
 "synapses_prune_action" = "Cut";

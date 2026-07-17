@@ -8,6 +8,13 @@
 import SwiftUI
 import Combine
 
+// MARK: - Shared chrome
+
+private enum ComposerAuxBarLayout {
+    static let accentBarWidth: CGFloat = 2
+    static let minHeight: CGFloat = CTLayout.controlHeight
+}
+
 // MARK: - Reply Bar
 
 struct MessageReplyBar: View {
@@ -16,10 +23,11 @@ struct MessageReplyBar: View {
     let onCancel: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .center, spacing: CTLayout.chromeGap) {
             Rectangle()
                 .fill(Color.CT.accent)
-                .frame(width: 2)
+                .frame(width: ComposerAuxBarLayout.accentBarWidth)
+                .frame(maxHeight: .infinity)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(LocalizedStringKey("reply_to_colon"))
@@ -32,24 +40,18 @@ struct MessageReplyBar: View {
                     lineLimit: 1
                 )
             }
-            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer()
-
-            Button(action: onCancel) {
-                Image(systemName: "xmark.circle")
-                    .font(CTFont.regular(13))
-                    .foregroundColor(Color.CT.textDim)
-            }
-            .buttonStyle(.plain)
+            cancelButton(action: onCancel)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxHeight: 50)
+        .padding(.leading, CTLayout.edgePad)
+        .padding(.trailing, CTLayout.inlinePad)
+        .padding(.vertical, CTLayout.inlinePad)
+        .frame(minHeight: ComposerAuxBarLayout.minHeight)
         .background(Color.CT.bgMsg)
-        .overlay(alignment: .bottom) {
-            Rectangle().frame(height: 0.5).foregroundColor(Color.CT.noise)
-        }
+        .clipShape(CTShape.card())
+        .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
+        .padding(.horizontal, 4)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }
@@ -61,10 +63,11 @@ struct MessageEditBar: View {
     let onCancel: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .center, spacing: CTLayout.chromeGap) {
             Rectangle()
                 .fill(Color.CT.accentDim)
-                .frame(width: 2)
+                .frame(width: ComposerAuxBarLayout.accentBarWidth)
+                .frame(maxHeight: .infinity)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(LocalizedStringKey("editing_message"))
@@ -75,26 +78,34 @@ struct MessageEditBar: View {
                     .lineLimit(1)
                     .foregroundColor(Color.CT.textDim)
             }
-            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer()
-
-            Button(action: onCancel) {
-                Image(systemName: "xmark.circle")
-                    .font(CTFont.regular(13))
-                    .foregroundColor(Color.CT.textDim)
-            }
-            .buttonStyle(.plain)
+            cancelButton(action: onCancel)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxHeight: 50)
+        .padding(.leading, CTLayout.edgePad)
+        .padding(.trailing, CTLayout.inlinePad)
+        .padding(.vertical, CTLayout.inlinePad)
+        .frame(minHeight: ComposerAuxBarLayout.minHeight)
         .background(Color.CT.bgMsg)
-        .overlay(alignment: .bottom) {
-            Rectangle().frame(height: 0.5).foregroundColor(Color.CT.noise)
-        }
+        .clipShape(CTShape.card())
+        .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
+        .padding(.horizontal, 4)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
+}
+
+// MARK: - Cancel control
+
+private func cancelButton(action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+        Image(systemName: "xmark.circle.fill")
+            .font(.system(size: CTLayout.navIconSize, weight: .regular))
+            .foregroundColor(Color.CT.textDim)
+            .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
+            .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(NSLocalizedString("close", comment: ""))
 }
 
 // MARK: - Previews
@@ -105,6 +116,8 @@ struct MessageEditBar: View {
         messageId: nil,
         onCancel: {}
     )
+    .padding()
+    .ctBackground()
 }
 
 #Preview("Edit Bar") {
@@ -112,4 +125,6 @@ struct MessageEditBar: View {
         content: "This is the message being edited",
         onCancel: {}
     )
+    .padding()
+    .ctBackground()
 }

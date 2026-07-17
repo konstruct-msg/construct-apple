@@ -55,20 +55,22 @@ private struct ChatRowLayout: View {
     let user: User?
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .center, spacing: CTLayout.chromeGap) {
             avatarView
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: CTLayout.inlinePad) {
                     if let user {
                         displayNameView(for: user)
+                            .lineLimit(1)
                     }
-                    Spacer()
+                    Spacer(minLength: 4)
 
                     if let ts = chat.lastMessageTime {
                         Text(ts, formatter: ChatRowView.rowTimeFormatter)
                             .font(CTFont.regular(11))
                             .foregroundColor(Color.CT.textDim)
+                            .lineLimit(1)
                     }
                     if chat.isPinned && chat.unreadCount == 0 {
                         Image(systemName: "pin.fill")
@@ -77,28 +79,28 @@ private struct ChatRowLayout: View {
                     }
                 }
 
-                HStack {
+                HStack(alignment: .center, spacing: CTLayout.inlinePad) {
                     if let lastMessage = chat.lastMessageText {
                         Text(Chat.formatPreviewText(lastMessage))
                             .font(CTFont.regular(12))
                             .foregroundColor(Color.CT.textDim)
                             .lineLimit(1)
                     }
-                    Spacer()
+                    Spacer(minLength: 4)
                     if chat.unreadCount > 0 {
                         Text(chat.unreadCount < 10000 ? "\(chat.unreadCount)" : "9999+")
-                            .font(CTFont.bold(13))
+                            .font(CTFont.bold(11))
                             .foregroundColor(Color.CT.bg)
-                            .padding(.horizontal, 5)
+                            .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Color.CT.accent)
-                            .clipShape(Capsule())
+                            .clipShape(CTShape.badge())
                             .animation(.easeInOut(duration: 0.2), value: chat.unreadCount)
                     }
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, CTLayout.inlinePad)
         .contentShape(Rectangle())
         #if os(iOS)
         .contentShape(.contextMenuPreview, Rectangle())

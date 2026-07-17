@@ -619,7 +619,15 @@
 "synapses" = "シナプス";
 "search_prompt" = "検索";
 "synapses_empty_title" = "接続はまだありません";
-"synapses_empty_subtitle" = "会話を消去した後でも、接続した人はここに表示されます。";
+"synapses_empty_subtitle" = "QRをスキャンする・共有する・@alias で検索して node を追加します。";
+"synapses_empty_scan_qr" = "QRをスキャン";
+"synapses_empty_focus_search" = "エイリアスで検索";
+"chats_empty_title" = "Streams はまだありません";
+"chats_empty_subtitle" = "QR または Synaps で node を追加すると、ここに会話が表示されます。";
+"chats_empty_scan_qr" = "QRをスキャン";
+"chats_empty_show_qr" = "自分のQR";
+"chats_empty_open_synaps" = "Synaps を開く";
+"chat_search_results" = "%d 件";
 "synapses_open_chat" = "チャットを開く";
 "synapses_prune_title" = "このシナプスを切断しますか？";
 "synapses_prune_action" = "切断";

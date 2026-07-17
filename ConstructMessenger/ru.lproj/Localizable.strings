@@ -677,7 +677,15 @@
 "search_prompt" = "Поиск";
 "synapses_search_prompt" = "Поиск";
 "synapses_empty_title" = "Пока нет связей";
-"synapses_empty_subtitle" = "Люди с которыми вы общаетесь будут здесь, даже если вы удалили переписку.";
+"synapses_empty_subtitle" = "Отсканируйте QR, покажите свой или найдите @alias, чтобы добавить node.";
+"synapses_empty_scan_qr" = "Сканировать QR";
+"synapses_empty_focus_search" = "Поиск по alias";
+"chats_empty_title" = "Пока нет streams";
+"chats_empty_subtitle" = "Добавьте node через QR или Synaps — переписки появятся здесь.";
+"chats_empty_scan_qr" = "Сканировать QR";
+"chats_empty_show_qr" = "Мой QR";
+"chats_empty_open_synaps" = "Открыть Synaps";
+"chat_search_results" = "%d результатов";
 "synapses_open_chat" = "Открыть чат";
 "synapses_prune_title" = "Удалить синапс?";
 "synapses_prune_action" = "Удалить";
