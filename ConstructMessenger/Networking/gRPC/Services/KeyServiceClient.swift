@@ -352,7 +352,8 @@ final class KeyServiceClient: Sendable {
             }
         }
 
-        Log.info("SESSION_STATE[bundle_capabilities]: userId=\(userId.prefix(8))…, device=\(fetched.deviceID.prefix(8))…, supportsPqRatchet=\(fetched.data.supportsPqRatchet)", category: "SessionInit")
+        let supportsPqRatchetDescription = fetched.data.supportsPqRatchet.map(String.init) ?? "nil"
+        Log.info("SESSION_STATE[bundle_capabilities]: userId=\(userId.prefix(8))…, device=\(fetched.deviceID.prefix(8))…, supportsPqRatchet=\(supportsPqRatchetDescription)", category: "SessionInit")
 
         return fetched.data
     }
