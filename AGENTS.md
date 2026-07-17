@@ -507,6 +507,7 @@ docs). The vault is a flat domain-folder structure — there is no `raw/` or `wi
 | Multi-device support | `client/specs/MULTI_DEVICE_CLIENT_SPEC.md` |
 | FFI binary format (CFE) | `client/construct-ffi-binary-format.md` |
 | construct-engine / EngineAdapter | `client/specs/DESKTOP_ENGINE_REFACTORING_SPEC.md` |
+| **iOS App Store / 1.0 readiness** | `client/specs/IOS_1_0_RELEASE_SCOPE.md` · `client/specs/IOS_APPSTORE_AUDIT_CHECKLIST.md` · `decisions/appstore-release-gates.md` |
 | Security architecture | `security/` |
 
 > Paths move as docs are reorganised — if one is missing, search the domain folder
