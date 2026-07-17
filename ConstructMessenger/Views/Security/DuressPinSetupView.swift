@@ -48,7 +48,7 @@ struct DuressPinSetupView: View {
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(canProceed ? Color.red.opacity(0.85) : Color.gray.opacity(0.4))
-                        .cornerRadius(12)
+                        .clipShape(CTShape.control())
                 }
                 .disabled(!canProceed)
                 .padding(.horizontal, 32)

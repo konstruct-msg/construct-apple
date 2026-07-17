@@ -52,7 +52,7 @@ struct PinDisableView: View {
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(pin.count >= 6 ? Color.red : Color.gray.opacity(0.4))
-                        .cornerRadius(12)
+                        .clipShape(CTShape.control())
                 }
                 .disabled(pin.count < 6)
                 .padding(.horizontal, 32)

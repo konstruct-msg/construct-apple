@@ -782,10 +782,10 @@ struct DeleteAccountConfirmationView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: DeleteAccountSheetLayout.actionButtonHeight)
                             .background(
-                                RoundedRectangle(cornerRadius: 8)
+                                CTShape.card()
                                     .fill(Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonActiveFillOpacity))
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
+                                        CTShape.card()
                                             .strokeBorder(
                                                 Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonActiveStrokeOpacity),
                                                 lineWidth: DeleteAccountSheetLayout.deleteButtonStrokeWidth
@@ -856,10 +856,10 @@ struct DeleteAccountConfirmationView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: DeleteAccountSheetLayout.actionButtonHeight)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
+                        CTShape.card()
                             .fill(Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonIdleFillOpacity))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 8)
+                                CTShape.card()
                                     .strokeBorder(
                                         Color.CT.danger,
                                         lineWidth: DeleteAccountSheetLayout.deleteButtonStrokeWidth

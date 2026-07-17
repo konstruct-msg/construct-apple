@@ -266,9 +266,9 @@ struct SettingsView: View {
         }
         .padding(SettingsRootLayout.recoveryBannerPadding)
         .background(Color.CT.danger.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: SettingsRootLayout.recoveryBannerCornerRadius))
+        .clipShape(CTShape.control())
         .overlay(
-            RoundedRectangle(cornerRadius: SettingsRootLayout.recoveryBannerCornerRadius)
+            CTShape.control()
                 .stroke(Color.CT.danger.opacity(0.4), lineWidth: SettingsRootLayout.recoveryBannerStrokeWidth)
         )
         .padding(.horizontal, SettingsRootLayout.recoveryBannerHorizontalPadding)
