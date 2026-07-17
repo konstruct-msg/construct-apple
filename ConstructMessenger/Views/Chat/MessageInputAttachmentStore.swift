@@ -34,6 +34,12 @@ final class MessageInputAttachmentStore: ObservableObject {
         selectedAttachments.append(contentsOf: images.map { MediaAttachment(image: $0) })
     }
 
+    /// Append already-built attachments (custom media picker Add / camera).
+    func appendAttachments(_ items: [MediaAttachment]) {
+        guard !items.isEmpty else { return }
+        selectedAttachments.append(contentsOf: items)
+    }
+
     func removeAttachment(at index: Int) {
         guard selectedAttachments.indices.contains(index) else { return }
         selectedAttachments.remove(at: index)

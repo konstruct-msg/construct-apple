@@ -326,17 +326,17 @@ struct CTNoise: View {
 
 // MARK: - Mode Selector (tri-state segmented control)
 
-/// A CT-styled segmented control for selecting between modes.
-/// No rounded corners, accent color on selected segment, ASCII aesthetic.
+/// A CT-styled segmented control for selecting between modes (e.g. VEIL OFF|AUTO|ON).
+/// Accent fill on the selected segment; equal-width options.
 struct CTModeSelector<T: Hashable>: View {
     @Binding var selection: T
     let options: [T]
     let labels: [T: String]
-    /// Total width of the control. Pass nil to size to content (parent should constrain).
+    /// Fixed total width. Pass `nil` to expand to the parent’s max width (media picker tray).
     var width: CGFloat? = 180
 
     var body: some View {
-        HStack(spacing: 0) {
+        let control = HStack(spacing: 0) {
             ForEach(options, id: \.self) { option in
                 let isSelected = selection == option
                 Button {
@@ -356,7 +356,12 @@ struct CTModeSelector<T: Hashable>: View {
         }
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .frame(width: width)
+
+        if let width {
+            control.frame(width: width)
+        } else {
+            control.frame(maxWidth: .infinity)
+        }
     }
 }
 
@@ -434,7 +439,11 @@ struct CTSearchBar: View {
                 .tint(Color.CT.accent)
 
             if !text.isEmpty {
-                Button { text = "" } label: {
+                Button {
+                    text = ""
+                    // Drop keyboard when clearing — otherwise focus can stick with no dismiss path.
+                    focused?.wrappedValue = false
+                } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 13))
                         .foregroundColor(Color.CT.textDim)

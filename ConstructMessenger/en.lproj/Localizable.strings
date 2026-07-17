@@ -508,6 +508,28 @@
 "quality_label" = "Quality";
 "quality_compressed" = "Compressed";
 "quality_original" = "Original";
+
+/* Custom media picker (P1) */
+"media_picker_recents" = "Recents";
+"media_picker_add" = "Add";
+"media_picker_send_n" = "Send %d";
+"media_picker_tab_gallery" = "Gallery";
+"media_picker_allow_access" = "Allow photo library access to attach photos and videos.";
+"media_picker_allow_access_action" = "Allow Access";
+"media_picker_access_denied" = "Photo library access is off. Enable it in Settings to attach media.";
+"media_picker_open_settings" = "Open Settings";
+"media_picker_empty" = "No photos or videos yet.";
+"media_picker_limit_reached" = "Selection limit reached.";
+"media_picker_item_too_large" = "One or more items exceed the size limit.";
+"media_picker_export_failed" = "Could not prepare media. Try again.";
+"media_picker_hd" = "HD";
+"media_picker_hd_hint" = "Send photos without recompression";
+"media_picker_quality_photo" = "Photo quality";
+"media_picker_quality_video" = "Video quality";
+"media_picker_estimate_n" = "%d items · ~%@";
+"media_picker_video_720" = "720p";
+"media_picker_video_1080" = "1080p";
+"media_picker_confirm" = "Confirm selection";
 "failed_to_load" = "Failed to load";
 "shared_profile" = "Shared profile";
 

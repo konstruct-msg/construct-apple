@@ -509,6 +509,28 @@
 "quality_label" = "Качество";
 "quality_compressed" = "Сжатое";
 "quality_original" = "Оригинал";
+
+/* Custom media picker (P1) */
+"media_picker_recents" = "Недавние";
+"media_picker_add" = "Добавить";
+"media_picker_send_n" = "Отправить %d";
+"media_picker_tab_gallery" = "Галерея";
+"media_picker_allow_access" = "Разрешите доступ к фото, чтобы прикреплять фото и видео.";
+"media_picker_allow_access_action" = "Разрешить";
+"media_picker_access_denied" = "Доступ к фото выключен. Включите его в Настройках.";
+"media_picker_open_settings" = "Открыть Настройки";
+"media_picker_empty" = "Пока нет фото или видео.";
+"media_picker_limit_reached" = "Достигнут лимит выбора.";
+"media_picker_item_too_large" = "Один или несколько файлов слишком большие.";
+"media_picker_export_failed" = "Не удалось подготовить медиа. Попробуйте снова.";
+"media_picker_hd" = "HD";
+"media_picker_hd_hint" = "Отправлять фото без сжатия";
+"media_picker_quality_photo" = "Качество фото";
+"media_picker_quality_video" = "Качество видео";
+"media_picker_estimate_n" = "%d шт. · ~%@";
+"media_picker_video_720" = "720p";
+"media_picker_video_1080" = "1080p";
+"media_picker_confirm" = "Подтвердить выбор";
 "failed_to_load" = "Не удалось загрузить";
 "shared_profile" = "Профиль отправлен";
 

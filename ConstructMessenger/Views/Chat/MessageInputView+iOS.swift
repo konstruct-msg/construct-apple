@@ -7,7 +7,6 @@
 //
 
 import SwiftUI
-import PhotosUI
 #if os(iOS)
 import UIKit
 #endif
@@ -24,18 +23,10 @@ struct IOSMessageInputView: View {
     let onCancelReply: () -> Void
     let onCancelEdit: () -> Void
 
-    @State private var selectedPhotos: [PhotosPickerItem] = []
-    @State private var showAttachmentMenu = false
-    @State private var showPhotoPicker = false
-    @State private var showFilePicker = false
-    @State private var showCameraPicker = false
+    @State private var showMediaPicker = false
     @StateObject private var audioRecorder = AudioRecorderService.shared
     @StateObject private var attachments = MessageInputAttachmentStore()
     @State private var showMicPermissionAlert = false
-    /// Per-user preference: send photos at original quality (no recompression).
-    @AppStorage("composer.sendOriginalPhotos") private var sendOriginal = false
-    /// Per-user preference: video send quality (720 / 1080 / original).
-    @AppStorage("composer.videoQuality") private var videoQualityRaw = VideoQuality.p1080.rawValue
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,19 +49,21 @@ struct IOSMessageInputView: View {
         } message: {
             Text("Please allow microphone access in Settings to send voice messages.")
         }
-        .onChange(of: selectedPhotos) {
-            Task { await attachments.loadSelectedPhotos(selectedPhotos) }
-        }
         .onChange(of: droppedImages) { _, newImages in
             attachments.appendDroppedImages(newImages)
             droppedImages.removeAll()
         }
-        .fileImporter(
-            isPresented: $showFilePicker,
-            allowedContentTypes: [.item],
-            allowsMultipleSelection: true
-        ) { result in
-            if case .success(let urls) = result { attachments.handlePickedFiles(urls) }
+        .sheet(isPresented: $showMediaPicker) {
+            MediaPickerSheet(
+                maxSelection: 99,
+                onConfirm: { media in
+                    // Confirm → composer strip (caption / send from input bar).
+                    attachments.appendAttachments(media)
+                },
+                onPickFiles: { urls in
+                    attachments.handlePickedFiles(urls)
+                }
+            )
         }
     }
 
@@ -90,12 +83,12 @@ struct IOSMessageInputView: View {
 
     @ViewBuilder
     private var attachmentPreviews: some View {
+        // Quality lives in the media picker (HD / video menu). Composer only shows thumbs.
         if !attachments.selectedAttachments.isEmpty {
             MessagePhotoPreviewBar(
                 images: attachments.selectedAttachments.compactMap { $0.displayImage },
                 onRemove: removePhoto
             )
-            qualitySelector
         }
         if !attachments.selectedFileURLs.isEmpty {
             MessageFilePreviewBar(
@@ -132,61 +125,6 @@ struct IOSMessageInputView: View {
         }
     }
 
-    private var hasVideoAttachment: Bool {
-        attachments.selectedAttachments.contains { $0.kind == .video }
-    }
-
-    private var selectedVideoQuality: VideoQuality {
-        VideoQuality(rawValue: videoQualityRaw) ?? .p1080
-    }
-
-    /// Quality selector shown above the composer when media is attached. Adapts to content:
-    /// videos get 720 / 1080 / Original; photos keep the binary Compressed / Original choice.
-    /// Chip controls (not a tiny checkbox) so the tap targets are comfortable.
-    private var qualitySelector: some View {
-        HStack(spacing: 8) {
-            Text(LocalizedStringKey("quality_label"))
-                .font(CTFont.regular(12))
-                .foregroundColor(Color.CT.textDim)
-            Spacer(minLength: 8)
-            
-            if hasVideoAttachment {
-                qualityChip(title: VideoQuality.p720.shortLabel, selected: selectedVideoQuality == .p720) {
-                    videoQualityRaw = VideoQuality.p720.rawValue
-                }
-                qualityChip(title: VideoQuality.p1080.shortLabel, selected: selectedVideoQuality == .p1080) {
-                    videoQualityRaw = VideoQuality.p1080.rawValue
-                }
-                qualityChip(title: VideoQuality.original.shortLabel, selected: selectedVideoQuality == .original) {
-                    videoQualityRaw = VideoQuality.original.rawValue
-                }
-            } else {
-                qualityChip(title: NSLocalizedString("quality_compressed", comment: "Compressed media quality"),
-                            selected: !sendOriginal) { sendOriginal = false }
-                qualityChip(title: NSLocalizedString("quality_original", comment: "Original media quality"),
-                            selected: sendOriginal) { sendOriginal = true }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-    }
-
-    private func qualityChip(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(CTFont.medium(12))
-                .foregroundColor(selected ? Color.CT.bg : Color.CT.text)
-                .padding(.horizontal, 14)
-                .frame(height: 48)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(selected ? Color.CT.accent : Color.CT.bgMsg)
-                )
-        }
-        .buttonStyle(.plain)
-        .animation(.easeOut(duration: 0.15), value: selected)
-    }
-
     private var inputRow: some View {
         HStack(spacing: 12) {
             attachmentButton
@@ -203,7 +141,7 @@ struct IOSMessageInputView: View {
     }
 
     private var attachmentButton: some View {
-        Button { showAttachmentMenu = true } label: {
+        Button { showMediaPicker = true } label: {
             Image(systemName: "plus.circle")
                 .font(.system(size: 20))
                 .foregroundColor(Color.CT.textDim)
@@ -211,21 +149,7 @@ struct IOSMessageInputView: View {
                 .glassCapsule(cornerRadius: 999)
         }
         .buttonStyle(.plain)
-        .confirmationDialog(LocalizedStringKey("attach"), isPresented: $showAttachmentMenu) {
-            Button { showPhotoPicker = true } label: {
-                Label(LocalizedStringKey("photos"), systemImage: "photo.on.rectangle")
-            }
-            Button(LocalizedStringKey("camera")) { showCameraPicker = true }
-            Button(LocalizedStringKey("files")) { showFilePicker = true }
-            Button(LocalizedStringKey("cancel"), role: .cancel) {}
-        }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos, maxSelectionCount: 99, matching: .any(of: [.images, .videos]))
-        .sheet(isPresented: $showCameraPicker) {
-            CameraPickerView { image in
-                attachments.appendDroppedImages([image])
-            }
-            .ignoresSafeArea()
-        }
+        .accessibilityLabel(Text(LocalizedStringKey("attach")))
     }
 
     private var canSend: Bool {
@@ -245,27 +169,14 @@ struct IOSMessageInputView: View {
     }
 
     private func sendMessage() {
-        // Photos: the binary Compressed/Original switch. In a mixed batch the video 720/1080
-        // choices map images to compressed, "Original" maps them to original.
-        let imageQuality: MediaQuality = {
-            if hasVideoAttachment { return selectedVideoQuality == .original ? .original : .compressed }
-            return sendOriginal ? .original : .compressed
-        }()
-        let videoQuality = selectedVideoQuality
-        let preparedAttachments = attachments.selectedAttachments.map { att -> MediaAttachment in
-            var a = att
-            a.quality = imageQuality
-            a.videoQuality = videoQuality
-            return a
-        }
-        onSend(preparedAttachments, attachments.selectedFileURLs)
-        selectedPhotos.removeAll()
+        // Quality is stamped by the media picker (or camera/drop helpers below).
+        // Do not batch-overwrite here — that used to fight the picker's HD / video menu.
+        onSend(attachments.selectedAttachments, attachments.selectedFileURLs)
         attachments.clear()
     }
 
     private func removePhoto(at index: Int) {
         attachments.removeAttachment(at: index)
-        if index < selectedPhotos.count { selectedPhotos.remove(at: index) }
     }
 }
 
