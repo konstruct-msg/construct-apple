@@ -373,7 +373,7 @@
 
 // Linked Devices
 "linked_devices" = "Связанные устройства";
-"linked_devices_hint" = "Используйте аккаунт одновременно на нескольких устройствах.";
+"linked_devices_hint" = "Используйте одну идентичность сразу на нескольких устройствах.";
 "linked_devices_coming_soon" = "Привязка дополнительных устройств появится в одном из следующих обновлений.";
 "link_new_device" = "Привязать устройство";
 "device_link_show_qr" = "Показать QR-код";
@@ -404,7 +404,7 @@
 "try_again" = "Попробовать снова";
 "recovery_not_configured" = "Не настроено";
 "recovery_intro_title" = "Настройка восстановления аккаунта";
-"recovery_intro_body" = "Сгенерируйте фразу из 12 слов. Если вы потеряете устройство, используйте фразу для восстановления доступа.";
+"recovery_intro_body" = "Сгенерируйте фразу из 12 слов. Если вы потеряете устройство, используйте её, чтобы восстановить идентичность.";
 "recovery_generate" = "Сгенерировать фразу";
 "recovery_write_down" = "Запишите эти 12 слов по порядку. Храните их в надёжном месте — никому не передавайте.";
 "recovery_never_share" = "Никогда не передавайте свою фразу восстановления.";
@@ -420,11 +420,11 @@
 "recovery_fingerprint" = "Отпечаток ключа";
 "recovery_error_title" = "Произошла ошибка";
 "recovery_error_not_found" = "Аккаунт не найден или восстановление не включено.";
-"recovery_error_not_configured" = "Фраза восстановления для этого аккаунта не была настроена.";
+"recovery_error_not_configured" = "Фраза восстановления для этой идентичности не была настроена.";
 "recovery_error_wrong_phrase" = "Неверная фраза восстановления.";
 "recovery_error_cooldown" = "Восстановление недавно использовалось. Повторите попытку позже.";
 "recovery_error_already_set" = "Ключ восстановления уже установлен (неизменяем).";
-"recovery_entry_instructions" = "Введите фразу из 12 слов для восстановления аккаунта на этом устройстве.";
+"recovery_entry_instructions" = "Введите фразу из 12 слов, чтобы восстановить идентичность на этом устройстве.";
 "recovery_identifier_label" = "ID аккаунта или имя пользователя";
 "recovery_identifier_placeholder" = "имя_пользователя или UUID";
 "recovery_enter_phrase" = "Фраза восстановления (12 слов)";
@@ -607,13 +607,13 @@
 "preview_desc_none" = "Показывать только «Новое сообщение»";
 
 // MARK: - Device Linking
-"onboarding_link_device" = "Привязать существующий аккаунт";
+"onboarding_link_device" = "Привязать существующую идентичность";
 "device_link_scan_title" = "Сканировать для привязки";
 "device_link_scan_instructions" = "Откройте существующее устройство → Настройки → Устройства → Привязать новое устройство, затем отсканируйте QR-код.";
 "device_link_linking" = "Привязка устройства…";
 "device_link_success" = "Устройство успешно привязано";
 "device_link_qr_title" = "Привязать новое устройство";
-"device_link_qr_instructions" = "На новом устройстве выберите «Привязать существующий аккаунт» при входе и отсканируйте этот код.";
+"device_link_qr_instructions" = "На новом устройстве выберите «Привязать существующую идентичность» при входе и отсканируйте этот код.";
 "device_link_expires_in" = "Истекает через %@";
 "device_link_expired" = "Код устарел — нажмите для обновления";
 "device_link_refresh" = "Создать новый код";
@@ -623,11 +623,11 @@
 "device_link_confirm_title" = "Привязать устройство?";
 "device_revoke" = "Удалить устройство";
 "device_revoke_confirm_title" = "Удалить устройство";
-"device_revoke_confirm" = "Это устройство будет удалено из вашего аккаунта.";
+"device_revoke_confirm" = "Это устройство будет удалено из вашей идентичности.";
 "device_added_%@" = "Добавлено %@";
 
 // MARK: - Device Join Request (Desktop onboarding)
-"device_link_request_title" = "Привязать к существующему аккаунту";
+"device_link_request_title" = "Привязать к существующей идентичности";
 "device_link_request_instruction" = "Отсканируйте с iPhone";
 "device_link_request_steps" = "Откройте Construct на iPhone → Настройки → Устройства → нажмите «Привязать новое устройство» — или просто отсканируйте этот код, если Construct уже открыт.";
 "device_link_waiting_approval" = "Ожидание подтверждения на iPhone…";
@@ -635,12 +635,12 @@
 "device_link_request_timeout" = "Время ожидания истекло — попробуйте снова";
 "device_link_feature_unavailable" = "Функция требует обновления сервера. Попробуйте позже.";
 "device_link_invalid_qr" = "Неверный QR-код — убедитесь, что сканируете код Construct.";
-"device_link_approve_title" = "Привязать «%@» к аккаунту?";
-"device_link_approve_title_fallback" = "Привязать новое устройство к аккаунту?";
+"device_link_approve_title" = "Привязать «%@» к вашей идентичности?";
+"device_link_approve_title_fallback" = "Привязать новое устройство к вашей идентичности?";
 "device_link_approve" = "Привязать устройство";
-"device_link_approve_message" = "Это устройство получит полный доступ к вашему аккаунту Construct.";
+"device_link_approve_message" = "Это устройство получит полный доступ к вашей идентичности в Конструкте.";
 "device_link_approved_title" = "Устройство привязано";
-"device_link_approved_message" = "Устройство успешно привязано к вашему аккаунту.";
+"device_link_approved_message" = "Устройство успешно привязано к вашей идентичности.";
 
 // MARK: - Session Management
 "session_management" = "Управление сессиями";
@@ -653,9 +653,9 @@
 "sign_out_all_hint" = "Выход со всех устройств немедленно аннулирует все сессии. Потребуется повторная аутентификация на каждом устройстве.";
 "sign_out" = "Выйти";
 "device_scan_to_approve" = "Сканировать для одобрения";
-"device_revoke_confirm_message" = "Удалённо выйти с устройства «%@»? Оно будет отключено от вашего аккаунта.";
+"device_revoke_confirm_message" = "Удалённо выйти с устройства «%@»? Оно будет отключено от вашей идентичности.";
 "other_devices" = "Другие устройства";
-"other_devices_hint" = "Нажмите − чтобы удалить устройство из аккаунта.";
+"other_devices_hint" = "Нажмите − чтобы удалить устройство из вашей идентичности.";
 "device_active_now" = "Активно сейчас";
 
 // MARK: - Flood guard & Lockdown

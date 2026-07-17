@@ -186,7 +186,7 @@ struct RegistrationStageView: View {
                     .font(CTFont.bold(12))
                     .foregroundColor(Color.CT.text)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, CTLayout.edgePad)
             .padding(.vertical, 9)
         }
     }

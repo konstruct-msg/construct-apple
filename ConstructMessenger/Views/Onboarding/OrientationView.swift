@@ -307,7 +307,7 @@ struct OrientationView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, CTLayout.sectionGap)
         .padding(.vertical, 12)
     }
 

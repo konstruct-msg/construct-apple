@@ -89,10 +89,10 @@ struct DesktopLinkRequestView: View {
                     Text(LocalizedStringKey("device_link_refresh"))
                         .font(CTFont.regular(13))
                         .foregroundColor(Color.CT.text)
-                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .padding(.horizontal, CTLayout.sectionGap).padding(.vertical, 10)
                         .background(Color.CT.bgMsg)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent, lineWidth: 1))
+                        .clipShape(CTShape.card())
+                        .overlay(CTShape.card().stroke(Color.CT.accent, lineWidth: 1))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

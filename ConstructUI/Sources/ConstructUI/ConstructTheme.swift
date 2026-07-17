@@ -172,6 +172,8 @@ enum CTLayout {
 
     /// Large icon for full-screen call UI (accept / decline / mute buttons).
     static let callIconSize: CGFloat = 24
+    static let callControlSize: CGFloat = 56
+    static let callEndSize: CGFloat = 64
 
     static let controlHeight: CGFloat = 42
     static let hitTarget: CGFloat = 44

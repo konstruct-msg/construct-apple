@@ -180,6 +180,12 @@ enum CTLayout {
     /// Large icon for full-screen call UI (accept / decline / mute buttons).
     static let callIconSize: CGFloat = 24
 
+    /// Circular call control (mute / speaker / secondary).
+    static let callControlSize: CGFloat = 56
+
+    /// Hang-up control diameter (slightly larger than secondary controls).
+    static let callEndSize: CGFloat = 64
+
     /// Fixed side zones keep the title visually centered even when leading and
     /// trailing controls differ between screens or editing states.
     static let navBarSideWidth: CGFloat = 96

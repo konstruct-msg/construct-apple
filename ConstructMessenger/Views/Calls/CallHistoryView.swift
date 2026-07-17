@@ -286,7 +286,7 @@ private struct CallHistoryRow: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.CT.accent)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, CTLayout.sectionGap)
             .padding(.vertical, 12)
             .contentShape(Rectangle())
         }
