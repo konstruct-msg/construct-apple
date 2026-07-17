@@ -615,6 +615,7 @@ class AuthViewModel {
         hasRegisteredDeviceKeys = false
         currentUserId = nil
         currentUser = nil
+        OrientationStore.reset()
     }
 
     func logout() {
@@ -649,6 +650,7 @@ class AuthViewModel {
         UserDefaults.standard.removeObject(forKey: "recovery_is_setup")
         UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
         UserDefaults.standard.removeObject(forKey: "cr_pending_nav_user_ids")
+        OrientationStore.reset()
         deviceLinkPhase = .idle
         deviceKeysUnavailable = false
         deviceDeregistered = false

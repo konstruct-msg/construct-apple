@@ -26,6 +26,7 @@ struct DesktopRootView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.commandBridge) private var commandBridge
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
+    @AppStorage(OrientationStore.completedKey) private var orientationCompleted = false
 
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showAddContact = false
@@ -62,7 +63,11 @@ struct DesktopRootView: View {
                 KeysRecoveryView(reason: .deviceDeregistered)
                     .environment(authViewModel)
             } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
-                mainContent
+                if orientationCompleted {
+                    mainContent
+                } else {
+                    OrientationView(openSynapsOnFinish: true)
+                }
             } else {
                 OnboardingView()
                     .environment(authViewModel)
@@ -198,6 +203,11 @@ struct DesktopRootView: View {
             .onChange(of: sidebarMode) { _, mode in
                 withAnimation(.easeInOut(duration: 0.2)) {
                     columnVisibility = mode == .synaps ? .detailOnly : .all
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openSynapsTab)) { _ in
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    sidebarMode = .synaps
                 }
             }
             // Incoming call banner — bottom-center

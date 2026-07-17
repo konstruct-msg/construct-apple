@@ -272,13 +272,42 @@
 "close" = "Закрыть";
 "change_avatar" = "Сменить фото";
 
-// Onboarding
+// Onboarding (identity gate — create / restore / link)
 "onboarding_tagline" = "постмодерн мессенджер";
 "onboarding_username_placeholder" = "публичный псевдоним (опционально)";
 "onboarding_create_identity" = "Создать идентификатор устройства";
 "onboarding_restore" = "Восстановить из ключа восстановления";
 "onboarding_recovery_coming_soon" = "Восстановление скоро будет доступно";
 "onboarding_network_settings" = "Настройки сети";
+
+// First-run orientation (product education after identity init)
+"orientation_section_label" = "> orientation";
+"orientation_skip" = "Пропустить";
+"orientation_next" = "Продолжить";
+"orientation_enter" = "Войти в Construct";
+"orientation_or" = "или";
+"orientation_page_a11y" = "Страница %d из %d";
+"orientation_settings_replay" = "Как устроен Construct";
+"orientation_page1_title" = "Ваша идентичность";
+"orientation_page1_body" = "Без телефона и почты. Identity — криптографические ключи на этом устройстве. Публичный @alias необязателен.";
+"orientation_page1_caption" = "Ключи остаются на этой реплике.";
+"orientation_page1_visual_label" = "на этом устройстве";
+"orientation_page2_title" = "Добавить node";
+"orientation_page2_body" = "Нельзя написать случайному человеку из глобального каталога. Нужен явный жест — короткий QR или ссылка, либо запрос, который примут.";
+"orientation_page2_caption" = "Доверие приглашают, а не собирают.";
+"orientation_page2_path_qr_title" = "QR / ссылка";
+"orientation_page2_path_qr_sub" = "Поделиться или сканировать. 5 минут.";
+"orientation_page2_path_search_title" = "Поиск в Synaps";
+"orientation_page2_path_search_sub" = "Найти @alias → отправить запрос.";
+"orientation_page3_title" = "Три места";
+"orientation_page3_body" = "Streams — переписка. Synaps — сеть nodes и запросов. Settings — ваш QR, recovery и устройства.";
+"orientation_page3_caption" = "Начните с Synaps — покажите QR или найдите человека.";
+"orientation_map_streams" = "Streams";
+"orientation_map_streams_sub" = "Переписка 1:1";
+"orientation_map_synaps" = "Synaps";
+"orientation_map_synaps_sub" = "Nodes, поиск, запросы";
+"orientation_map_settings" = "Settings";
+"orientation_map_settings_sub" = "QR, recovery, devices";
 
 // Registration flow
 "reg_establishing_trust" = "Установка доверия";

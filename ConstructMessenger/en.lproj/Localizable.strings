@@ -312,13 +312,42 @@
 "close" = "Close";
 "change_avatar" = "Change Photo";
 
-// Onboarding
+// Onboarding (identity gate — create / restore / link)
 "onboarding_tagline" = "postmodern messenger";
 "onboarding_username_placeholder" = "choose a public alias (optional)";
 "onboarding_create_identity" = "Create device identity";
 "onboarding_restore" = "Restore from recovery key";
 "onboarding_recovery_coming_soon" = "Recovery coming soon";
 "onboarding_network_settings" = "Network settings";
+
+// First-run orientation (product education after identity init)
+"orientation_section_label" = "> orientation";
+"orientation_skip" = "Skip";
+"orientation_next" = "Continue";
+"orientation_enter" = "Enter Construct";
+"orientation_or" = "or";
+"orientation_page_a11y" = "Page %d of %d";
+"orientation_settings_replay" = "How Construct works";
+"orientation_page1_title" = "Your identity";
+"orientation_page1_body" = "No phone number. No email. Your identity is cryptographic keys that live on this device. A public @alias is optional.";
+"orientation_page1_caption" = "Keys stay on this replica.";
+"orientation_page1_visual_label" = "on this device";
+"orientation_page2_title" = "Add a node";
+"orientation_page2_body" = "You cannot message people by scraping a global directory. Connection needs an explicit invite — a short-lived QR or link, or a request they accept.";
+"orientation_page2_caption" = "Trust is invited, not scraped.";
+"orientation_page2_path_qr_title" = "QR / link";
+"orientation_page2_path_qr_sub" = "Share or scan. Valid 5 minutes.";
+"orientation_page2_path_search_title" = "Synaps search";
+"orientation_page2_path_search_sub" = "Find @alias → send request.";
+"orientation_page3_title" = "Three places";
+"orientation_page3_body" = "Streams hold conversations. Synaps is your network of nodes and requests. Settings is where you show your QR and manage recovery.";
+"orientation_page3_caption" = "Start in Synaps — show a QR or find someone.";
+"orientation_map_streams" = "Streams";
+"orientation_map_streams_sub" = "1:1 conversations";
+"orientation_map_synaps" = "Synaps";
+"orientation_map_synaps_sub" = "Nodes, search, requests";
+"orientation_map_settings" = "Settings";
+"orientation_map_settings_sub" = "QR, recovery, devices";
 
 // Registration flow
 "reg_establishing_trust" = "Establishing trust";

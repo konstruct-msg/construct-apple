@@ -296,13 +296,42 @@
 "close" = "閉じる";
 "change_avatar" = "写真を変更";
 
-// Onboarding
+// Onboarding (identity gate — create / restore / link)
 "onboarding_tagline" = "ポストモダン・メッセンジャー";
 "onboarding_username_placeholder" = "公開エイリアスを選択 (任意)";
 "onboarding_create_identity" = "デバイスアイデンティティを作成";
 "onboarding_restore" = "復旧キーから復元";
 "onboarding_recovery_coming_soon" = "復旧機能は近日公開";
 "onboarding_network_settings" = "ネットワーク設定";
+
+// First-run orientation (product education after identity init)
+"orientation_section_label" = "> orientation";
+"orientation_skip" = "スキップ";
+"orientation_next" = "続ける";
+"orientation_enter" = "Construct に入る";
+"orientation_or" = "または";
+"orientation_page_a11y" = "%d / %d ページ";
+"orientation_settings_replay" = "Construct の使い方";
+"orientation_page1_title" = "あなたの Identity";
+"orientation_page1_body" = "電話番号もメールも不要です。Identity はこのデバイス上の暗号鍵です。公開 @alias は任意です。";
+"orientation_page1_caption" = "鍵はこのレプリカに残ります。";
+"orientation_page1_visual_label" = "このデバイス上";
+"orientation_page2_title" = "Node を追加";
+"orientation_page2_body" = "グローバル名簿から誰にでも送れません。短寿命の QR / リンク、または相手が承諾するリクエストが必要です。";
+"orientation_page2_caption" = "信頼は招待されるものであり、収集されるものではありません。";
+"orientation_page2_path_qr_title" = "QR / リンク";
+"orientation_page2_path_qr_sub" = "共有またはスキャン。有効 5 分。";
+"orientation_page2_path_search_title" = "Synaps 検索";
+"orientation_page2_path_search_sub" = "@alias を見つけてリクエスト。";
+"orientation_page3_title" = "3 つの場所";
+"orientation_page3_body" = "Streams は会話。Synaps は node とリクエストのネットワーク。Settings では QR と recovery を管理します。";
+"orientation_page3_caption" = "まず Synaps — QR を見せるか相手を探す。";
+"orientation_map_streams" = "Streams";
+"orientation_map_streams_sub" = "1:1 の会話";
+"orientation_map_synaps" = "Synaps";
+"orientation_map_synaps_sub" = "Nodes・検索・リクエスト";
+"orientation_map_settings" = "Settings";
+"orientation_map_settings_sub" = "QR・recovery・devices";
 
 // Registration flow
 "reg_establishing_trust" = "信頼関係を構築中";
