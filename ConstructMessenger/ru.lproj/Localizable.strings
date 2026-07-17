@@ -10,7 +10,7 @@
 "app_loading_state" = "Инициализация защищённого состояния";
 "app_loading_stage_transport" = "прогрев транспортного контура";
 "app_loading_stage_identity" = "восстановление оболочки идентичности";
-"app_loading_stage_streams" = "подготовка зашифрованных потоков";
+"app_loading_stage_streams" = "подготовка защищённых чатов";
 
 // MARK: - Main Tabs
 "chats" = "Чаты";

@@ -11,7 +11,7 @@
 "app_loading_state" = "Initializing secure state";
 "app_loading_stage_transport" = "warming transport envelope";
 "app_loading_stage_identity" = "restoring identity envelope";
-"app_loading_stage_streams" = "preparing encrypted streams";
+"app_loading_stage_streams" = "preparing secure chats";
 
 // MARK: - Main Tabs
 "chats" = "Chats";
@@ -196,7 +196,7 @@
 "construct_sync_completed" = "Messages Synced";
 "construct_sync_completed_count" = "Synced %d new messages";
 "background_fetch" = "Background Refresh";
-"background_fetch_footer" = "Periodically fetches missed messages via an encrypted gRPC connection when the live stream is not active (e.g. app is backgrounded or network was interrupted). Keeps your inbox up to date without relying on push notifications alone.";
+"background_fetch_footer" = "Periodically fetches missed messages when the live connection is not active (for example when the app is backgrounded or the network was interrupted). Keeps your chats up to date without relying on push notifications alone.";
 "enable_background_fetch" = "Enable Background Refresh";
 "background_fetch_status" = "Background Refresh Status";
 "background_fetch_disabled" = "Disabled";
@@ -204,7 +204,7 @@
 "background_fetch_last_check" = "Last check: %@";
 "background_fetch_interval" = "Check Interval";
 "background_fetch_interval_settings" = "Check Interval";
-"background_fetch_interval_footer" = "How often to fetch missed messages when the live stream is inactive. iOS may adjust this based on your usage patterns.";
+"background_fetch_interval_footer" = "How often to fetch missed messages when the live connection is inactive. iOS may adjust this based on your usage patterns.";
 "background_fetch_interval_minutes" = "%d min";
 "background_fetch_interval_hours" = "%d hour";
 "background_fetch_low_power_mode_warning" = "Disabled in Low Power Mode";
@@ -763,9 +763,9 @@
 "qr_scan_hint" = "show to someone nearby or take a screenshot";
 
 // MARK: - Device Link QR
-"device_link_section" = "link replica";
+"device_link_section" = "link device";
 "generating" = "generating...";
-"device_link_scan_hint" = "scan with another replica to link";
+"device_link_scan_hint" = "scan with another device to link";
 
 // MARK: - Keys Recovery
 "keys_recovery_title" = "device keys unavailable";
@@ -787,7 +787,7 @@
 
 // MARK: - Device Deregistered (server no longer recognizes this device)
 "device_deregistered_warning_title" = "⚠ DEVICE NOT REGISTERED";
-"device_deregistered_warning_body" = "The Construct no longer recognizes this replica. This can happen after a server issue or if the replica was revoked elsewhere.\n\nYour keys are still on this device — nothing has been deleted. Retry below, or restore your identity from your seed phrase.";
+"device_deregistered_warning_body" = "Konstruct no longer recognizes this device. This can happen after a temporary outage or if the device was removed elsewhere.\n\nYour keys are still on this phone — nothing has been deleted. Retry below, or restore your identity from your recovery phrase.";
 "device_deregistered_retry_hint" = "The rejection may be a temporary server issue. Try authenticating again.";
 
 // MARK: - Logout
