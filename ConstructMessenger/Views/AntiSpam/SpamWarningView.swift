@@ -83,8 +83,8 @@ struct SpamWarningBanner: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(Color.CT.bgMsg)
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.orange.opacity(0.35), lineWidth: 1))
-            .padding(.horizontal, 12)
+            .overlay(CTShape.card().strokeBorder(Color.orange.opacity(0.35), lineWidth: 1))
+            .padding(.horizontal, CTLayout.edgePad)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
@@ -128,7 +128,7 @@ struct SpamStrongWarningSheet: View {
             }
             .frame(width: 96, height: 96)
             .background(Color.CT.bgMsg)
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.orange.opacity(0.4), lineWidth: 1))
+            .overlay(CTShape.card().strokeBorder(Color.orange.opacity(0.4), lineWidth: 1))
 
             Spacer()
 
@@ -144,7 +144,7 @@ struct SpamStrongWarningSheet: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(Color.CT.bgMsg)
-                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.CT.danger.opacity(0.4), lineWidth: 1))
+                        .overlay(CTShape.card().strokeBorder(Color.CT.danger.opacity(0.4), lineWidth: 1))
                 }
                 .padding(.horizontal, 32)
             } else {

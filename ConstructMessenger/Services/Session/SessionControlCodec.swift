@@ -54,15 +54,15 @@ enum SessionControlCodec {
 
     /// Build the encrypted inner payload for an outgoing control signal (producer half).
     ///
-    /// S3 (`binarySessionControlPayload` ON, destructive): a serialized `SessionControl{op, nonce}` —
-    /// the magic string is dropped; new consumers dispatch on the typed `content_type` and read the
-    /// payload only for `nonce`. This breaks pre-S1 peers and must wait until the typed consumer is
-    /// fleet-wide.
+    /// S3 / default since 2026-07-17 (`binarySessionControlPayload` ON): a serialized
+    /// `SessionControl{op, nonce}` — the magic string is dropped from the wire; consumers dispatch
+    /// on the typed `content_type` and read the payload only for `nonce`. The string parser
+    /// (`legacyOp`) stays as a consumer fallback, so string-producing peers are still understood.
     ///
-    /// S2 / default (`binarySessionControlPayload` OFF): the legacy magic string, so peers that
-    /// predate the typed consumer dispatch (`legacyOp`) still recognise the signal. In S2 dual-send
+    /// S2 fallback (`binarySessionControlPayload` explicitly OFF): the legacy magic string, for
+    /// the case an ancient pre-S1 peer (no `content_type` dispatch) resurfaces. In S2 dual-send
     /// the typed signal still rides in the Envelope `content_type` (gated by `typedSessionControl`,
-    /// default ON) — this is the backward-safe "binary first, string fallback" wire form.
+    /// default ON).
     ///
     /// See `decisions/binary-control-message-format.md`.
     static func encodePayload(op: Op, nonce: String) -> Data {

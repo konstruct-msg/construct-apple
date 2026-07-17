@@ -183,7 +183,8 @@ final class ConnectionLoopTests: XCTestCase {
 
         let snapshot = await router.snapshot()
         XCTAssertEqual(snapshot.state, .direct(consecutiveFails: 0))
-        XCTAssertEqual(await proxy.stopCalls(), 1)
+        let stopCalls = await proxy.stopCalls()
+        XCTAssertEqual(stopCalls, 1)
     }
 
     func testTransportRouter_AutoCensored_StaysDirectUntilRealFailure() async {

@@ -49,13 +49,12 @@ struct DesktopLinkRequestView: View {
             }
         }
         .onChange(of: vm.errorMessage) { _, msg in showError = msg != nil }
-        .onChange(of: vm.linkCompleted) { _, completed in
-            guard completed else { return }
-            let userId = KeychainManager.shared.loadUserID() ?? ""
-            authViewModel.finalizeDeviceRegistration(userId: userId, username: nil)
-            authViewModel.linkedJoinPendingDeviceId = vm.linkedPendingDeviceId
-            authViewModel.pendingHistorySyncOffer = true
-            dismiss()
+        .onChange(of: vm.linkOutcome) { _, outcome in
+            guard let outcome else { return }
+            Task {
+                await authViewModel.completeDeviceLink(outcome)
+                dismiss()
+            }
         }
     }
 
@@ -90,10 +89,10 @@ struct DesktopLinkRequestView: View {
                     Text(LocalizedStringKey("device_link_refresh"))
                         .font(CTFont.regular(13))
                         .foregroundColor(Color.CT.text)
-                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .padding(.horizontal, CTLayout.sectionGap).padding(.vertical, 10)
                         .background(Color.CT.bgMsg)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent, lineWidth: 1))
+                        .clipShape(CTShape.card())
+                        .overlay(CTShape.card().stroke(Color.CT.accent, lineWidth: 1))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

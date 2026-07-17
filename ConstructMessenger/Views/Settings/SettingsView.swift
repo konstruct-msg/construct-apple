@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import CoreData
 
 struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -16,6 +17,7 @@ struct SettingsView: View {
     @State private var showingQRCode = false
     @State private var linkCopied = false
     @State private var showingRecoverySetup = false
+    @State private var showingOrientation = false
     @State private var recoveryBannerDismissed = UserDefaults.standard.bool(forKey: "recovery_banner_dismissed")
     @State private var navigationPath = NavigationPath()
 
@@ -137,6 +139,16 @@ struct SettingsView: View {
                         // MARK: About
 
                         CTSectionGroup {
+                            Button { showingOrientation = true } label: {
+                                CTSettingsRow(
+                                    label: NSLocalizedString("orientation_settings_replay", comment: "").uppercased(),
+                                    icon: "text.book.closed",
+                                    isAction: true,
+                                    disclosure: true
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            CTSep(style: .thin)
                             CTSettingsRow(label: NSLocalizedString("version", comment: "").uppercased(), value: "v\(AppConstants.appVersion) (\(AppConstants.buildNumber))", icon: "info.circle")
                         }
 
@@ -172,6 +184,11 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingQRCode) {
                 ContactQRCodeView(userId: viewModel.userId, username: viewModel.username)
+            }
+            .sheet(isPresented: $showingOrientation) {
+                OrientationView(openSynapsOnFinish: false) {
+                    showingOrientation = false
+                }
             }
         }
     }
@@ -249,9 +266,9 @@ struct SettingsView: View {
         }
         .padding(SettingsRootLayout.recoveryBannerPadding)
         .background(Color.CT.danger.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: SettingsRootLayout.recoveryBannerCornerRadius))
+        .clipShape(CTShape.control())
         .overlay(
-            RoundedRectangle(cornerRadius: SettingsRootLayout.recoveryBannerCornerRadius)
+            CTShape.control()
                 .stroke(Color.CT.danger.opacity(0.4), lineWidth: SettingsRootLayout.recoveryBannerStrokeWidth)
         )
         .padding(.horizontal, SettingsRootLayout.recoveryBannerHorizontalPadding)

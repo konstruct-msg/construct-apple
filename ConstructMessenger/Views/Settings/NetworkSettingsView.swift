@@ -120,7 +120,7 @@ struct NetworkSettingsView: View {
                                     : Color.CT.textDim)
                                 .padding(.horizontal, NetworkSettingsLayout.transportBadgeHorizontalPadding)
                                 .padding(.vertical, NetworkSettingsLayout.transportBadgeVerticalPadding)
-                                .overlay(RoundedRectangle(cornerRadius: NetworkSettingsLayout.transportBadgeCornerRadius).stroke(
+                                .overlay(CTShape.badge().stroke(
                                     (isLive ? Color.CT.accent : Color.CT.textDim).opacity(NetworkSettingsLayout.transportBadgeStrokeOpacity),
                                     lineWidth: NetworkSettingsLayout.transportBadgeStrokeWidth))
                         }

@@ -252,7 +252,7 @@ private struct CallHistoryRow: View {
                     .foregroundStyle(directionColor)
                     .frame(width: 20, alignment: .center)
 
-                MainAvatarView(
+                ContactMainAvatarView(
                     userId: record.peerUserId,
                     displayName: record.peerName,
                     size: 40
@@ -286,7 +286,7 @@ private struct CallHistoryRow: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.CT.accent)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, CTLayout.sectionGap)
             .padding(.vertical, 12)
             .contentShape(Rectangle())
         }

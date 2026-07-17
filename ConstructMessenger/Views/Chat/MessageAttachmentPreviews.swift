@@ -15,34 +15,33 @@ struct MessagePhotoPreviewBar: View {
     let images: [PlatformImage]
     let onRemove: (Int) -> Void
 
+    private let thumbSize: CGFloat = 80
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: CTLayout.inlinePad) {
                 ForEach(Array(images.enumerated()), id: \.offset) { index, image in
                     ZStack(alignment: .topTrailing) {
                         Image(platformImage: image)
                             .resizable()
                             .scaledToFill()
-                            .frame(width: 80, height: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .frame(width: thumbSize, height: thumbSize)
+                            .clipShape(CTShape.card())
+                            .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
 
-                        Button { onRemove(index) } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(CTFont.regular(11))
-                                .foregroundColor(Color.CT.text)
-                                .padding(4)
-                                .lineLimit(1).fixedSize()
-                        }
+                        removeButton { onRemove(index) }
+                            .offset(x: 6, y: -6)
                     }
+                    .frame(width: thumbSize, height: thumbSize)
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.horizontal, CTLayout.edgePad)
+            .padding(.vertical, CTLayout.inlinePad)
         }
-        .background(.ultraThinMaterial, in: .rect(cornerRadius: 10))
-        .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(.white.opacity(0.15), lineWidth: 1))
+        .background(.ultraThinMaterial)
+        .clipShape(CTShape.control())
+        .overlay(CTShape.control().stroke(Color.CT.noise.opacity(0.5), lineWidth: 0.5))
+        .padding(.horizontal, 4)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }
@@ -55,13 +54,13 @@ struct MessageFilePreviewBar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: CTLayout.inlinePad) {
                 ForEach(Array(fileURLs.enumerated()), id: \.offset) { index, url in
-                    HStack(spacing: 6) {
-                        Text(asciiFileIcon(for: url.pathExtension))
-                            .font(CTFont.regular(16))
+                    HStack(spacing: CTLayout.inlinePad) {
+                        Image(systemName: fileSystemIcon(for: url.pathExtension))
+                            .font(.system(size: CTLayout.navIconSize, weight: .medium))
                             .foregroundColor(Color.CT.accent)
-                            .lineLimit(1).fixedSize()
+                            .frame(width: 24, height: 24)
 
                         VStack(alignment: .leading, spacing: 1) {
                             Text(url.lastPathComponent)
@@ -75,45 +74,65 @@ struct MessageFilePreviewBar: View {
                             }
                         }
 
-                        Button { onRemove(index) } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(CTFont.regular(11))
-                                .foregroundColor(Color.CT.textDim)
-                                .lineLimit(1).fixedSize()
-                        }
+                        removeButton { onRemove(index) }
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
+                    .padding(.leading, CTLayout.edgePad)
+                    .padding(.trailing, CTLayout.inlinePad)
+                    .padding(.vertical, CTLayout.inlinePad)
                     .background(Color.CT.bgMsg)
-                    .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
+                    .clipShape(CTShape.card())
+                    .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.horizontal, CTLayout.edgePad)
+            .padding(.vertical, CTLayout.inlinePad)
         }
-        .background(Color.CT.bgMsg)
+        .background(.ultraThinMaterial)
+        .clipShape(CTShape.control())
+        .overlay(CTShape.control().stroke(Color.CT.noise.opacity(0.5), lineWidth: 0.5))
+        .padding(.horizontal, 4)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
-    private func asciiFileIcon(for ext: String) -> String {
+    private func fileSystemIcon(for ext: String) -> String {
         switch ext.lowercased() {
-        case "pdf":               return "[pdf]"
-        case "md", "markdown", "txt": return "[txt]"
-        case "zip", "gz", "tar":  return "[zip]"
-        case "mp3", "aac", "m4a", "wav": return "[♪]"
-        case "mp4", "mov", "avi": return "[vid]"
-        default:                  return "[doc]"
+        case "pdf":
+            return "doc.richtext"
+        case "md", "markdown", "txt", "rtf":
+            return "doc.text"
+        case "zip", "gz", "tar", "7z":
+            return "doc.zipper"
+        case "mp3", "aac", "m4a", "wav", "flac":
+            return "waveform"
+        case "mp4", "mov", "avi", "mkv":
+            return "film"
+        case "png", "jpg", "jpeg", "heic", "gif", "webp":
+            return "photo"
+        default:
+            return "doc"
         }
     }
-
-    @available(*, unavailable)
-    private func fileIcon(for ext: String) -> String { "" }
 
     private func fileSize(_ url: URL) -> String? {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
               let bytes = attrs[.size] as? Int64 else { return nil }
         return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
+}
+
+// MARK: - Remove control
+
+private func removeButton(action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+        Image(systemName: "xmark.circle.fill")
+            .font(.system(size: 18, weight: .regular))
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(Color.CT.text, Color.CT.bgMsg.opacity(0.92))
+            .frame(width: CTLayout.hitTarget * 0.7, height: CTLayout.hitTarget * 0.7)
+            .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(NSLocalizedString("close", comment: ""))
 }
 
 // MARK: - Previews
@@ -124,6 +143,8 @@ struct MessageFilePreviewBar: View {
         images: [UIImage(systemName: "photo")!, UIImage(systemName: "photo.fill")!],
         onRemove: { _ in }
     )
+    .padding()
+    .ctBackground()
     #else
     Text("iOS only")
     #endif
@@ -137,4 +158,6 @@ struct MessageFilePreviewBar: View {
         ],
         onRemove: { _ in }
     )
+    .padding()
+    .ctBackground()
 }

@@ -45,16 +45,17 @@ final class CryptoIntegrationTests: XCTestCase {
             sessions[contactId] = sessionId
         }
 
-        func encryptMessage(contactId: String, plaintext: String) throws -> (ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8]) {
+        func encryptMessage(contactId: String, plaintext: String) throws -> (ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) {
             guard let sessionId = sessions[contactId] else {
                 throw NSError(domain: "TestError", code: 3, userInfo: [NSLocalizedDescriptionKey: "No session for \(contactId)"])
             }
 
             let components = try core.encryptMessage(sessionId: sessionId, plaintext: plaintext)
-            return (Data(components.ephemeralPublicKey), components.messageNumber, components.content)
+            return (Data(components.ephemeralPublicKey), components.messageNumber, components.content,
+                    components.suiteId, components.pqMessageEpoch, components.pqRatchetField)
         }
 
-        func initReceivingSession(contactId: String, senderBundle: (identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16), firstMessage: (ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8])) throws -> String {
+        func initReceivingSession(contactId: String, senderBundle: (identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16), firstMessage: (ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8])) throws -> String {
             let bundle = BinaryKeyBundle(
                 identityPublic: senderBundle.identityPublic,
                 signedPrekeyPublic: senderBundle.signedPrekeyPublic,
@@ -69,7 +70,10 @@ final class CryptoIntegrationTests: XCTestCase {
                 ephemeralPublicKey: [UInt8](firstMessage.ephemeralPublicKey),
                 messageNumber: firstMessage.messageNumber,
                 content: firstMessage.content,
-                oneTimePrekeyId: 0
+                oneTimePrekeyId: 0,
+                suiteId: firstMessage.suiteId,
+                pqMessageEpoch: firstMessage.pqMessageEpoch,
+                pqRatchetField: firstMessage.pqRatchetField
             )
             // ✅ NEW API: Returns SessionInitResult with decrypted message
             let result = try core.initReceivingSession(
@@ -81,7 +85,7 @@ final class CryptoIntegrationTests: XCTestCase {
             return String(bytes: result.decryptedMessage, encoding: .utf8) ?? "__binary_init__"
         }
 
-        func decryptMessage(contactId: String, message: (ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8])) throws -> String {
+        func decryptMessage(contactId: String, message: (ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8])) throws -> String {
             guard let sessionId = sessions[contactId] else {
                 throw NSError(domain: "TestError", code: 5, userInfo: [NSLocalizedDescriptionKey: "No session for \(contactId)"])
             }
@@ -90,7 +94,10 @@ final class CryptoIntegrationTests: XCTestCase {
                 sessionId: sessionId,
                 ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                 messageNumber: message.messageNumber,
-                content: message.content
+                content: message.content,
+                suiteId: message.suiteId,
+                pqMessageEpoch: message.pqMessageEpoch,
+                pqRatchetField: message.pqRatchetField
             )
             return String(bytes: result.plaintext, encoding: .utf8) ?? ""
         }
@@ -335,7 +342,10 @@ final class CryptoIntegrationTests: XCTestCase {
         let tamperedMessage = (
             ephemeralPublicKey: encrypted.ephemeralPublicKey,
             messageNumber: encrypted.messageNumber + 1, // TAMPERED!
-            content: encrypted.content
+            content: encrypted.content,
+            suiteId: encrypted.suiteId,
+            pqMessageEpoch: encrypted.pqMessageEpoch,
+            pqRatchetField: encrypted.pqRatchetField
         )
 
         // Second message to test with
@@ -388,7 +398,7 @@ final class CryptoIntegrationTests: XCTestCase {
 
         // XCTest.measure runs the block 10 times; generate 20 unique DR messages
         // so we never re-decrypt an already-consumed slot (DR is one-way / one-use)
-        var messages: [(ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8])] = []
+        var messages: [(ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8])] = []
         for i in 0..<20 {
             let msg = try alice.encryptMessage(contactId: "bob", plaintext: "Test \(i)")
             messages.append(msg)

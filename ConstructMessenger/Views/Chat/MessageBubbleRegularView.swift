@@ -69,7 +69,7 @@ struct MessageBubbleRegularView: View {
                 if let profileData {
                     ProfileShareBubbleView(profileData: profileData)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
+                            CTShape.card()
                                 .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                         )
                 } else if let mediaContent {
@@ -87,7 +87,7 @@ struct MessageBubbleRegularView: View {
                         replyIndicatorView
                         FileAttachmentBubbleView(fileContent: fileContent, isSentByMe: message.isSentByMe)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 8)
+                                CTShape.card()
                                     .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                             )
                     }
@@ -125,7 +125,7 @@ struct MessageBubbleRegularView: View {
                     )
                     .frame(maxWidth: 360)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        CTShape.control()
                             .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                     )
                 } else {
@@ -158,11 +158,11 @@ struct MessageBubbleRegularView: View {
                             isSelected: isSelected
                         )
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipShape(CTShape.control())
                     .overlay(
                         Group {
                             if !message.isSentByMe {
-                                RoundedRectangle(cornerRadius: 10).stroke(Color.CT.noise, lineWidth: 0.5)
+                                CTShape.control().stroke(Color.CT.noise, lineWidth: 0.5)
                             }
                         }
                     )
@@ -187,7 +187,12 @@ struct MessageBubbleRegularView: View {
                     .padding(.horizontal, 4)
                 }
             }
-            .frame(maxWidth: containerWidth * 0.7, alignment: message.isSentByMe ? .trailing : .leading)
+            // Guard non-finite / tiny container widths from mid-layout geometry passes
+            // (they produce "Invalid frame dimension" in the layout engine).
+            .frame(
+                maxWidth: max(120, (containerWidth.isFinite ? containerWidth : 390) * 0.7),
+                alignment: message.isSentByMe ? .trailing : .leading
+            )
             .contentShape(.interaction, Rectangle())
             #if os(iOS)
             .contentShape(.contextMenuPreview, Rectangle())

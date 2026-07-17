@@ -121,27 +121,23 @@ struct AppleSpeechProvider: TranscriptionProvider {
         guard !text.isEmpty else { return text }
 
         #if canImport(Translation)
-        if #available(iOS 17.0, *) {
-            // On-device translation using TranslationSession.
-            // The initializer and translate call may require explicit source/target
-            // in the form TranslationSession.Configuration or installedSource/target.
-            // This is the structure for real implementation when building against
-            // a full modern SDK:
-            //
-            // let sourceLang = Locale.Language(identifier: sourceLocale.identifier)
-            // let targetLang = Locale.Language(identifier: "en")
-            // let config = TranslationSession.Configuration(source: sourceLang, target: targetLang)
-            // let session = TranslationSession(configuration: config)
-            // let translated = try await session.translate(text)
-            // return translated
-            //
-            // For current build SDK compatibility we return original.
-            return text
-        }
-        #endif
-
+        // On-device translation using TranslationSession.
+        // Enclosing type is already @available(iOS 26, macOS 15, *), so no extra
+        // #available(iOS 17) guard (always true). Structure for a full SDK build:
+        //
+        // let sourceLang = Locale.Language(identifier: sourceLocale.identifier)
+        // let targetLang = Locale.Language(identifier: "en")
+        // let config = TranslationSession.Configuration(source: sourceLang, target: targetLang)
+        // let session = TranslationSession(configuration: config)
+        // let translated = try await session.translate(text)
+        // return translated
+        //
+        // For current build SDK compatibility we return original.
+        return text
+        #else
         // Fallback: return original if Translation not usable.
         return text
+        #endif
     }
 }
 #endif

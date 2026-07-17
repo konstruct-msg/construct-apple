@@ -157,7 +157,7 @@ struct MediaGalleryViewer: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(CTFont.regular(20))
                         .foregroundColor(.white.opacity(0.9))
-                        .frame(width: 44, height: 44)
+                        .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                         .contentShape(Rectangle())
                         .lineLimit(1).fixedSize()
                 }
@@ -176,12 +176,12 @@ struct MediaGalleryViewer: View {
                     Image(systemName: "ellipsis.circle.fill")
                         .font(CTFont.regular(20))
                         .foregroundColor(.white.opacity(0.9))
-                        .frame(width: 44, height: 44)
+                        .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                         .contentShape(Rectangle())
                         .lineLimit(1).fixedSize()
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, CTLayout.sectionGap)
             .padding(.top, 56)
             .padding(.bottom, 24)
             .background(

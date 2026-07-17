@@ -58,9 +58,34 @@ final class ChunkedMessageSender {
             }
 
             let response: SendMessageResponse
-            if let sealedInner, FeatureFlags.sealedSenderUnauthenticatedTransport {
-                // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
-                response = try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: sealedInner)
+            if let sealedInner, let recipientIK = recipientIdentityKey {
+                // Sealed path with one-shot enforce recovery: on a privacy_pass rejection
+                // the wallet is force-replenished and the SealedInner rebuilt (fresh token +
+                // delivery tag; the DR payload is reused — the ratchet does not advance).
+                // Never downgrades to an identified send (StealthSendRecovery invariant).
+                response = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+                    try await StealthSenderService.buildSealedInner(
+                        recipientUserId: recipientId,
+                        recipientIdentityKey: recipientIK,
+                        encryptedPayload: encryptedPayload,
+                        contentType: .e2EeSignal
+                    )
+                }, send: { inner in
+                    if FeatureFlags.sealedSenderUnauthenticatedTransport {
+                        // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
+                        return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)
+                    } else {
+                        return try await MessagingServiceClient.shared.sendMessage(
+                            messageId: chunkMessageId,
+                            recipientId: recipientId,
+                            senderId: senderId,
+                            conversationId: conversationId,
+                            encryptedPayload: encryptedPayload,
+                            timestamp: timestamp,
+                            sealedInnerBytes: inner
+                        )
+                    }
+                })
             } else {
                 response = try await MessagingServiceClient.shared.sendMessage(
                     messageId: chunkMessageId,
@@ -69,7 +94,7 @@ final class ChunkedMessageSender {
                     conversationId: conversationId,
                     encryptedPayload: encryptedPayload,
                     timestamp: timestamp,
-                    sealedInnerBytes: sealedInner
+                    sealedInnerBytes: nil
                 )
             }
             responses.append(response)

@@ -14,7 +14,9 @@ import UniformTypeIdentifiers
 struct DesktopChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(ChatsViewModel.self) private var chatsViewModel
-    @State private var viewModel: ChatViewModel
+    /// Lazy holder — avoid allocating ChatViewModel in View.init (parent re-render churn).
+    @State private var lazyViewModel: LazyChatViewModel
+    private var viewModel: ChatViewModel { lazyViewModel.value }
     @State private var scrollManager = ChatScrollManager()
     private var connectionManager = ConnectionStatusManager.shared
     @State private var messageText = ""
@@ -39,8 +41,17 @@ struct DesktopChatView: View {
     @State private var isSessionAtRisk = false
     @State private var containerWidth: CGFloat = 800
 
+    private struct ChatScrollGeometry: Equatable {
+        var offsetFromBottom: CGFloat
+        var width: CGFloat
+        /// Content shorter than the viewport ⇒ nothing to jump to — the FAB must never show.
+        var contentFits: Bool
+    }
+
     init(chat: Chat, context: NSManagedObjectContext) {
-        _viewModel = State(wrappedValue: ChatViewModel(chat: chat, context: context))
+        _lazyViewModel = State(wrappedValue: LazyChatViewModel {
+            ChatViewModel(chat: chat, context: context)
+        })
     }
 
     var body: some View {
@@ -126,15 +137,17 @@ struct DesktopChatView: View {
                 .scrollDismissesKeyboard(.interactively)
                 .environment(\.containerWidth, containerWidth)
                 .onTapGesture { hideKeyboard() }
-                .onScrollGeometryChange(for: CGFloat.self) { geo in
-                    geo.contentOffset.y + geo.containerSize.height - geo.contentSize.height
-                } action: { _, offsetFromBottom in
-                    scrollManager.updateScrollOffset(offsetFromBottom)
-                }
-                .onScrollGeometryChange(for: CGFloat.self) { geo in
-                    geo.containerSize.width
-                } action: { _, width in
-                    if width > 0 { containerWidth = width }
+                .onScrollGeometryChange(for: ChatScrollGeometry.self) { geo in
+                    ChatScrollGeometry(
+                        offsetFromBottom: geo.contentOffset.y + geo.containerSize.height - geo.contentSize.height,
+                        width: geo.containerSize.width,
+                        contentFits: geo.contentSize.height <= geo.containerSize.height
+                    )
+                } action: { _, metrics in
+                    scrollManager.updateScrollOffset(metrics.offsetFromBottom, contentFits: metrics.contentFits)
+                    if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
+                        containerWidth = metrics.width
+                    }
                 }
                 .onAppear {
                     scrollManager.registerProxy(proxy)

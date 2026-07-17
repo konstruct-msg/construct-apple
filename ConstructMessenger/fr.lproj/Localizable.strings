@@ -285,6 +285,14 @@
 "linked_devices_hint" = "Utilisez votre compte sur plusieurs appareils simultanément.";
 "linked_devices_coming_soon" = "La liaison d'appareils supplémentaires sera disponible dans une future mise à jour.";
 "link_new_device" = "Lier un nouvel appareil";
+"device_link_show_qr" = "Afficher le code QR";
+"history_sync_send_offer_title" = "Synchroniser l'historique des messages ?";
+"history_sync_send_offer_message" = "Envoyer votre historique de messages vers le nouvel appareil ? Les deux appareils doivent être sur le même réseau Wi‑Fi — aucun code requis.";
+"history_sync_send_offer_yes" = "Synchroniser l'historique";
+"history_sync_send_offer_skip" = "Ignorer";
+"device_deregistered_warning_title" = "⚠ RÉPLIQUE NON ENREGISTRÉE";
+"device_deregistered_warning_body" = "Le Construct ne reconnaît plus cette réplique. Cela peut se produire après un incident serveur ou si la réplique a été révoquée ailleurs.\n\nVos clés sont toujours sur cet appareil — rien n'a été supprimé. Réessayez ci‑dessous, ou restaurez votre identité à partir de votre phrase de récupération.";
+"device_deregistered_retry_hint" = "Le rejet peut être un problème serveur temporaire. Réessayez de vous authentifier.";
 "transfer_history_row" = "Transférer l'historique vers un appareil à proximité";
 "transfer_history_hint" = "Envoyez votre historique de messages à un appareil sur le même réseau WiFi.";
 "this_device" = "Cet appareil";

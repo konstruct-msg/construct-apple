@@ -146,6 +146,19 @@ enum SessionReducer {
         return now.timeIntervalSince(lastSentAt) >= cooldown
     }
 
+    /// Receive-side control-message coalesce. Server offline queues re-deliver batches of
+    /// END_SESSION / SESSION_RESET_INIT for the same peer; acting on each one re-archives
+    /// Keychain + requeues + reopens streams. After the first handled control message in a
+    /// window, further ones for that peer should only be ACK'd.
+    static func shouldHandleInboundControl(
+        lastHandledAt: Date?,
+        now: Date,
+        cooldown: TimeInterval
+    ) -> Bool {
+        guard let lastHandledAt else { return true }
+        return now.timeIntervalSince(lastHandledAt) >= cooldown
+    }
+
     /// Whether a received END_SESSION pre-dates our established session and should be discarded.
     ///
     /// `establishedAt` is now persisted per-peer in the Keychain (see

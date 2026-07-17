@@ -256,6 +256,11 @@ struct FeatureFlags {
     /// construct-docs/decisions/stealth-sealed-sender-v2-always-on.md Phase 2).
     static let sealedSenderUnauthenticatedTransport = false
 
+    // (stealthPerMessageDefault removed 2026-07-15: per-message is the only token model
+    // now — the per-stream scope and its SecurityView picker are gone. A token rides
+    // every sealed send; the server issuance cap (`TOKEN_ISSUANCE_MAX_PER_HOUR`) is the
+    // effective sealed-send rate limit. decisions/sealed-sender-anti-abuse-economics.md.)
+
     // For Desktop we now use the direct iOS path (CryptoManager + gRPC-Swift) per Strategy B.
     // Engine send path is disabled for Desktop (engine paused for this surface).
     static let useEngineForSend = false
@@ -374,18 +379,20 @@ struct FeatureFlags {
         set { UserDefaults.standard.set(newValue, forKey: typedSessionControlKey) }
     }
 
-    /// **Default `false`.** Phase S3 (destructive) of the typed session-control migration.
+    /// **Default `true` (flipped 2026-07-17).** Phase S3 of the typed session-control migration.
     ///
     /// When `true`, handshake producers send a pure binary `SessionControl{op, nonce}` as the
-    /// encrypted payload and **drop** the legacy magic string. This is only safe once the S1
-    /// typed consumer is fleet-wide: a peer on a pre-S1 build has no `content_type` dispatch and
-    /// reads the payload as a string — a binary payload would be unrecognised (silent handshake
-    /// loss → session desync). Keep `false` until adoption telemetry confirms pre-S1 peers are
-    /// negligible, then flip (ideally via staged/remote config). Independent of
+    /// encrypted payload and **drop** the legacy magic string. Safe now because the S1 typed
+    /// consumer (dispatch on `content_type` 24/25/26) is fleet-wide; the legacy string parser
+    /// (`SessionControlCodec.legacyOp`) is KEPT as a consumer fallback indefinitely, so peers
+    /// still producing strings remain fully understood. A pre-S1 peer (no `content_type`
+    /// dispatch) would not recognise our binary payload — that population is gone from the
+    /// fleet. Set to `false` (explicit UserDefaults toggle is respected) to fall back to
+    /// string-producing S2 if an ancient peer resurfaces. Independent of
     /// `typedSessionControl`, which only controls the (backward-safe) typed `content_type`.
     static let binarySessionControlPayloadKey = "ff.binarySessionControlPayload"
     static var binarySessionControlPayload: Bool {
-        get { UserDefaults.standard.object(forKey: binarySessionControlPayloadKey) as? Bool ?? false }
+        get { UserDefaults.standard.object(forKey: binarySessionControlPayloadKey) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: binarySessionControlPayloadKey) }
     }
 }
@@ -534,6 +541,30 @@ struct VEILRelayRegion: Codable {
     }
 }
 
+// MARK: - VEIL Seed Front (EntryDirectory Source 2)
+
+/// One bundled seed front. The in-binary pin is the strongest trust anchor there is —
+/// a seed is trusted because it shipped inside the signed app, needing no manifest
+/// fetch (which a censored fresh install can't perform). This is the reachability
+/// *floor*: even with `.well-known` unreachable and no cached manifest, the client
+/// still has a pool of fronts to probe.
+///
+/// Seeds are expendable — assume a censor eventually blocks each IP; rotate the pool
+/// per release. Adding a front is a one-line append to `VEILConfig.seedRelays`; every
+/// consumer (relay selector candidates, TransportRouter pin/SNI, `VeilAlternatesCache`
+/// accept-gate, `importBlob` anti-redirection) derives from that list, so nothing else
+/// needs touching.
+struct VEILSeedRelay {
+    /// host:port.
+    let address: String
+    /// TLS SNI (required — IP-based relays can't use the IP as SNI).
+    let sni: String
+    /// hex SHA-256 SPKI pin.
+    let spki: String
+    /// WebTunnel WebSocket resource path; nil if the relay doesn't serve WebTunnel.
+    let wtPath: String?
+}
+
 // MARK: - VEIL Bridge Configuration
 struct VEILConfig {
     /// Primary VEIL endpoint: TLS 1.3 → obfs4 → gRPC (Amsterdam, via Traefik).
@@ -603,24 +634,30 @@ struct VEILConfig {
         return retiredRelayHosts.contains(host)
     }
 
-    /// Hardcoded relay list used as a last resort when discovery is unavailable.
-    /// Order matters: relays are probed concurrently but this sets tie-break priority.
-    static let hardcodedRelayAddresses: [String] = [
-        ruRelayAddress,
+    /// Bundled seed-front pool (EntryDirectory Source 2) — the single source of truth
+    /// the address list and the SNI/SPKI/WT dicts below all derive from. Add a bundled
+    /// front here and every consumer picks it up; no other edit needed. Keep the primary
+    /// (ruRelay*) first — order is the relay selector's tie-break priority.
+    static let seedRelays: [VEILSeedRelay] = [
+        VEILSeedRelay(address: ruRelayAddress, sni: ruRelaySNI, spki: ruRelayPinnedSPKI, wtPath: "/api/stream"),
+        // Append additional bundled fronts here (e.g. co-tenancy relays). Each needs a
+        // distinct address, its TLS SNI, and the hex SHA-256 SPKI pin of its live cert.
     ]
+
+    /// Ordered relay candidate list used as a last resort when discovery is unavailable.
+    /// Order matters: relays are probed concurrently but this sets tie-break priority.
+    static let hardcodedRelayAddresses: [String] = seedRelays.map(\.address)
 
     /// TLS SNI overrides keyed by relay address string.
     /// Required for IP-based relays (IPs cannot be used as TLS SNI).
     /// Also used for domain-based relays that need explicit SPKI pinning.
-    static let hardcodedRelaySNIs: [String: String] = [
-        ruRelayAddress:  ruRelaySNI,
-    ]
+    static let hardcodedRelaySNIs: [String: String] = Dictionary(
+        seedRelays.map { ($0.address, $0.sni) }, uniquingKeysWith: { first, _ in first })
 
     /// SPKI pins keyed by relay address. Looked up by makeRelay() for any relay
     /// that appears in hardcodedRelaySNIs.
-    static let hardcodedRelaySPKIs: [String: String] = [
-        ruRelayAddress:  ruRelayPinnedSPKI,
-    ]
+    static let hardcodedRelaySPKIs: [String: String] = Dictionary(
+        seedRelays.map { ($0.address, $0.spki) }, uniquingKeysWith: { first, _ in first })
 
     /// UserDefaults key where the relay list fetched from the server is cached.
     static let cachedRelayListKey = "construct.ice_relays"
@@ -632,9 +669,9 @@ struct VEILConfig {
     /// WebTunnel (ICE v2) WebSocket resource paths, keyed by relay address.
     /// When present, makeRelay() activates WebTunnel-first transport for that relay.
     /// Override via `.well-known/construct-server` `ice.relays[].wt_path` without a new build.
-    static let hardcodedRelayWTPaths: [String: String] = [
-        ruRelayAddress:  "/api/stream",
-    ]
+    static let hardcodedRelayWTPaths: [String: String] = Dictionary(
+        seedRelays.compactMap { r in r.wtPath.map { (r.address, $0) } },
+        uniquingKeysWith: { first, _ in first })
 
     /// Companion obfs4-only ports for CDN-fronted relays. None currently.
     static let hardcodedRelayObfs4Companions: [String: String] = [:]

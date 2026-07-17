@@ -314,6 +314,14 @@ final class SessionRaceConditionTests: XCTestCase {
         // Well past the window → allowed.
         XCTAssertTrue(SessionReducer.shouldSendEndSession(
             lastSentAt: now.addingTimeInterval(-120), now: now, cooldown: cooldown))
+
+        // Receive-side control coalesce uses the same window semantics.
+        XCTAssertTrue(SessionReducer.shouldHandleInboundControl(
+            lastHandledAt: nil, now: now, cooldown: cooldown))
+        XCTAssertFalse(SessionReducer.shouldHandleInboundControl(
+            lastHandledAt: now.addingTimeInterval(-1), now: now, cooldown: cooldown))
+        XCTAssertTrue(SessionReducer.shouldHandleInboundControl(
+            lastHandledAt: now.addingTimeInterval(-30), now: now, cooldown: cooldown))
     }
 
     // MARK: 12. END_SESSION staleness — the post-launch reset hypothesis

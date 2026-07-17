@@ -1,3 +1,10 @@
+//
+//  ChatNavBarView.swift
+//  Construct Messenger
+//
+//  Floating glass chat navigation — uses CTLayout hit targets and icon scale.
+//
+
 import SwiftUI
 
 struct ChatNavBarView: View {
@@ -17,12 +24,27 @@ struct ChatNavBarView: View {
     let onToggleSearch: () -> Void
 
     var body: some View {
-        HStack(spacing: 16) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.backward.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(Color.CT.accent)
-            }
+        HStack(alignment: .center, spacing: CTLayout.chromeGap) {
+            leadingCluster
+            Spacer(minLength: CTLayout.inlinePad)
+            trailingCluster
+        }
+        .padding(.horizontal, CTLayout.edgePad)
+        .frame(height: CTLayout.navBarHeight)
+        .glassCapsule()
+    }
+
+    // MARK: - Leading
+
+    private var leadingCluster: some View {
+        HStack(alignment: .center, spacing: CTLayout.inlinePad) {
+            navIconButton(
+                systemName: "chevron.backward.circle.fill",
+                size: CTLayout.navIconSizeLg,
+                weight: .regular,
+                accessibilityKey: "chat_nav_back",
+                action: onBack
+            )
 
             Button(action: onOpenProfile) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -30,52 +52,89 @@ struct ChatNavBarView: View {
                         .font(CTFont.bold(14))
                         .foregroundColor(Color.CT.text)
                         .tracking(4)
+                        .lineLimit(1)
                     if let subtitle {
                         Text(subtitle)
                             .font(CTFont.regular(10))
                             .foregroundColor(Color.CT.accentDim)
+                            .lineLimit(1)
                             .transition(.opacity)
                     }
                 }
-                .animation(.easeInOut(duration: 0.25), value: subtitle)
+                // Title is flexible but stays vertically centered with 44pt peers.
+                .frame(minHeight: CTLayout.hitTarget, alignment: .center)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .layoutPriority(1)
 
             ktBadge
+        }
+    }
 
-            Spacer()
+    // MARK: - Trailing
 
+    @ViewBuilder
+    private var trailingCluster: some View {
+        HStack(alignment: .center, spacing: 0) {
             if isEditMode {
-                Button(action: onDoneEdit) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(CTFont.regular(13))
-                        .foregroundColor(Color.CT.accent)
-                }
+                navIconButton(
+                    systemName: "checkmark.circle.fill",
+                    size: CTLayout.navIconSizeLg,
+                    weight: .regular,
+                    accessibilityKey: "done",
+                    action: onDoneEdit
+                )
             } else {
                 if canStartCall {
                     if CallsFeature.isVideoEnabled {
-                        Button(action: onStartVideoCall) {
-                            Image(systemName: "video.fill")
-                                .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
-                                .foregroundColor(Color.CT.accent)
-                        }
+                        navIconButton(
+                            systemName: "video.fill",
+                            size: CTLayout.navIconSizeLg,
+                            weight: .medium,
+                            accessibilityKey: "call_video",
+                            action: onStartVideoCall
+                        )
                     }
-                    Button(action: onStartCall) {
-                        Image(systemName: "phone")
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundColor(Color.CT.accent)
-                    }
+                    navIconButton(
+                        systemName: "phone",
+                        size: CTLayout.navIconSizeLg,
+                        weight: .medium,
+                        accessibilityKey: "call_voice",
+                        action: onStartCall
+                    )
                 }
-                Button(action: onToggleSearch) {
-                    Image(systemName: isSearchActive ? "xmark" : "magnifyingglass")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(Color.CT.accent)
-                }
+                navIconButton(
+                    systemName: isSearchActive ? "xmark" : "magnifyingglass",
+                    size: CTLayout.navIconSizeLg,
+                    weight: .medium,
+                    accessibilityKey: isSearchActive ? "close" : "search_messages",
+                    action: onToggleSearch
+                )
             }
         }
-        .padding(.horizontal, CTLayout.edgePad)
-        .frame(height: CTLayout.navBarHeight)
-        .glassCapsule(cornerRadius: 999) // full capsule for top nav bar
+    }
+
+    // MARK: - Shared control
+
+    /// Square hit target (`CTLayout.hitTarget`) with centered SF Symbol — prevents
+    /// optical hang and under-sized taps when icons differ (filled vs outline).
+    private func navIconButton(
+        systemName: String,
+        size: CGFloat,
+        weight: Font.Weight,
+        accessibilityKey: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: size, weight: weight))
+                .foregroundColor(Color.CT.accent)
+                .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(NSLocalizedString(accessibilityKey, comment: ""))
     }
 
     @ViewBuilder private var ktBadge: some View {
@@ -84,12 +143,15 @@ struct ChatNavBarView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(CTFont.regular(11))
                 .foregroundColor(Color.CT.accent)
+                .accessibilityLabel(Text(LocalizedStringKey("kt_verified")))
         case .keyChanged, .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(CTFont.bold(11))
                 .foregroundColor(Color.CT.danger)
+                .accessibilityLabel(Text(LocalizedStringKey("kt_warning")))
         case .unverified:
             EmptyView()
         }
     }
 }
+

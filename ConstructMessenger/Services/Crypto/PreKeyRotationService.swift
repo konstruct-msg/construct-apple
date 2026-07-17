@@ -343,9 +343,17 @@ final class PreKeyRotationService {
             Log.error("Key consistency check skipped — userId unavailable", category: "SPKRotation")
             return true
         }
+        let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
         do {
             let (localIk, localSpk) = try CryptoManager.shared.localBundlePublicKeys()
-            let serverBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: localUserId)
+            // Fetch THIS device's bundle. Without the deviceId the server may return a *different*
+            // device's bundle on a multi-device account (whichever it picks for the user), producing
+            // a spurious identity "desync" against our local keys — and, worse, a destructive repair
+            // rotation. Pin the query to our own deviceId so the comparison is apples-to-apples.
+            let serverBundle = try await KeyServiceClient.shared.getPreKeyBundle(
+                userId: localUserId,
+                deviceId: deviceId.isEmpty ? nil : deviceId
+            )
 
             let ikMatch  = localIk  == serverBundle.identityPublic
             let spkMatch = localSpk == serverBundle.signedPrekeyPublic
@@ -381,14 +389,15 @@ final class PreKeyRotationService {
             }
 
             // Repair via atomic rotation — it rotates the classic AND Kyber SPK together, so it
-            // heals either desync. (An identity mismatch is NOT rotation-repairable; only logged.)
-            if !spkMatch || !kyberMatch {
-                let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
-                if !deviceId.isEmpty {
-                    Log.info("Key consistency: attempting SPK+Kyber re-upload to repair desync…", category: "SPKRotation")
-                    try await forceRotate(deviceId: deviceId, reason: .security)
-                    Log.info("Key consistency: SPK+Kyber re-upload complete", category: "SPKRotation")
-                }
+            // heals either SPK/Kyber desync. An identity mismatch is NOT rotation-repairable
+            // (rotation only re-signs the SPK against the identity the server already holds for us);
+            // rotating when the server has a *different* identity for this device is futile and —
+            // before the hybrid identity is published — fails the RPC with "device has no hybrid
+            // identity key". So only repair when the identity itself matches.
+            if ikMatch, !spkMatch || !kyberMatch, !deviceId.isEmpty {
+                Log.info("Key consistency: attempting SPK+Kyber re-upload to repair desync…", category: "SPKRotation")
+                try await forceRotate(deviceId: deviceId, reason: .security)
+                Log.info("Key consistency: SPK+Kyber re-upload complete", category: "SPKRotation")
             }
             return false
         } catch {

@@ -10,7 +10,7 @@
 "app_loading_state" = "Инициализация защищённого состояния";
 "app_loading_stage_transport" = "прогрев транспортного контура";
 "app_loading_stage_identity" = "восстановление оболочки идентичности";
-"app_loading_stage_streams" = "подготовка зашифрованных потоков";
+"app_loading_stage_streams" = "подготовка защищённых чатов";
 
 // MARK: - Main Tabs
 "chats" = "Чаты";
@@ -270,18 +270,48 @@
 "server_applied_title" = "Сервер обновлён";
 "server_applied_message" = "Новый сервер будет использоваться для всех последующих подключений.";
 "close" = "Закрыть";
+"chat_nav_back" = "Назад";
 "change_avatar" = "Сменить фото";
 
-// Onboarding
-"onboarding_tagline" = "постмодерн мессенджер";
+// Onboarding (identity gate — create / restore / link)
+"onboarding_tagline" = "интернет — пространство свободы выражения мысли.\nидентичность — конструкт.";
 "onboarding_username_placeholder" = "публичный псевдоним (опционально)";
-"onboarding_create_identity" = "Создать идентификатор устройства";
+"onboarding_create_identity" = "Создать идентичность";
 "onboarding_restore" = "Восстановить из ключа восстановления";
 "onboarding_recovery_coming_soon" = "Восстановление скоро будет доступно";
 "onboarding_network_settings" = "Настройки сети";
 
+// First-run orientation (product education after identity init)
+"orientation_section_label" = "> orientation";
+"orientation_skip" = "Пропустить";
+"orientation_next" = "Продолжить";
+"orientation_enter" = "Войти в Конструкт";
+"orientation_or" = "или";
+"orientation_page_a11y" = "Страница %d из %d";
+"orientation_settings_replay" = "Как устроен Конструкт";
+"orientation_page1_title" = "Идентичность";
+"orientation_page1_body" = "Без телефона, почты и настоящего имени. Идентичность создаётся с нуля на этом телефоне и не отсылает ни к чему вне себя. Кто вы здесь — решаете вы.";
+"orientation_page1_caption" = "Публичный @псевдоним необязателен. Ключи не покидают телефон.";
+"orientation_page1_visual_label" = "на этом устройстве";
+"orientation_page2_title" = "Люди";
+"orientation_page2_body" = "Общего каталога нет, и вас нельзя найти без вашего ведома. Чтобы начать общение, один приглашает другого: покажите QR-код, отправьте ссылку или найдите @псевдоним и отправьте запрос.";
+"orientation_page2_caption" = "Никто не напишет вам без вашего согласия.";
+"orientation_page2_path_qr_title" = "QR / ссылка";
+"orientation_page2_path_qr_sub" = "Показать или сканировать. Действует 5 минут.";
+"orientation_page2_path_search_title" = "Поиск";
+"orientation_page2_path_search_sub" = "Найти @псевдоним → отправить запрос.";
+"orientation_page3_title" = "Три места";
+"orientation_page3_body" = "Чаты — переписка. Synaps — ваши люди и входящие запросы. Настройки — ваш QR-код, восстановление и устройства.";
+"orientation_page3_caption" = "Начните с Synaps — покажите QR или найдите человека.";
+"orientation_map_streams" = "Чаты";
+"orientation_map_streams_sub" = "Личная переписка";
+"orientation_map_synaps" = "Synaps";
+"orientation_map_synaps_sub" = "Люди, поиск, запросы";
+"orientation_map_settings" = "Настройки";
+"orientation_map_settings_sub" = "QR, восстановление, устройства";
+
 // Registration flow
-"reg_establishing_trust" = "Установка доверия";
+"reg_establishing_trust" = "Создание ключей";
 "reg_joining_network" = "Ваше устройство подключается к сети";
 "reg_welcome" = "Добро пожаловать";
 "reg_label_username" = "Имя пользователя";
@@ -292,9 +322,9 @@
 "reg_continue" = "Продолжить";
 "reg_try_again" = "Попробовать снова";
 "reg_cancel" = "Отмена";
-"reg_phase_entropy" = "энтропия собрана";
-"reg_phase_nonce" = "поиск nonce";
-"reg_phase_solution" = "решение найдено";
+"reg_phase_entropy" = "случайность собрана";
+"reg_phase_nonce" = "антиспам-проверка";
+"reg_phase_solution" = "готово";
 
 // Delete Account
 "delete_account_footer" = "Навсегда удаляет идентичность и все связанные данные.";
@@ -343,9 +373,10 @@
 
 // Linked Devices
 "linked_devices" = "Связанные устройства";
-"linked_devices_hint" = "Используйте аккаунт одновременно на нескольких устройствах.";
+"linked_devices_hint" = "Используйте одну идентичность сразу на нескольких устройствах.";
 "linked_devices_coming_soon" = "Привязка дополнительных устройств появится в одном из следующих обновлений.";
 "link_new_device" = "Привязать устройство";
+"device_link_show_qr" = "Показать QR-код";
 "transfer_history_row" = "Передать историю на соседнее устройство";
 "transfer_history_hint" = "Отправьте историю сообщений на устройство в той же сети WiFi.";
 "this_device" = "Это устройство";
@@ -373,7 +404,7 @@
 "try_again" = "Попробовать снова";
 "recovery_not_configured" = "Не настроено";
 "recovery_intro_title" = "Настройка восстановления аккаунта";
-"recovery_intro_body" = "Сгенерируйте фразу из 12 слов. Если вы потеряете устройство, используйте фразу для восстановления доступа.";
+"recovery_intro_body" = "Сгенерируйте фразу из 12 слов. Если вы потеряете устройство, используйте её, чтобы восстановить идентичность.";
 "recovery_generate" = "Сгенерировать фразу";
 "recovery_write_down" = "Запишите эти 12 слов по порядку. Храните их в надёжном месте — никому не передавайте.";
 "recovery_never_share" = "Никогда не передавайте свою фразу восстановления.";
@@ -389,11 +420,11 @@
 "recovery_fingerprint" = "Отпечаток ключа";
 "recovery_error_title" = "Произошла ошибка";
 "recovery_error_not_found" = "Аккаунт не найден или восстановление не включено.";
-"recovery_error_not_configured" = "Фраза восстановления для этого аккаунта не была настроена.";
+"recovery_error_not_configured" = "Фраза восстановления для этой идентичности не была настроена.";
 "recovery_error_wrong_phrase" = "Неверная фраза восстановления.";
 "recovery_error_cooldown" = "Восстановление недавно использовалось. Повторите попытку позже.";
 "recovery_error_already_set" = "Ключ восстановления уже установлен (неизменяем).";
-"recovery_entry_instructions" = "Введите фразу из 12 слов для восстановления аккаунта на этом устройстве.";
+"recovery_entry_instructions" = "Введите фразу из 12 слов, чтобы восстановить идентичность на этом устройстве.";
 "recovery_identifier_label" = "ID аккаунта или имя пользователя";
 "recovery_identifier_placeholder" = "имя_пользователя или UUID";
 "recovery_enter_phrase" = "Фраза восстановления (12 слов)";
@@ -508,6 +539,28 @@
 "quality_label" = "Качество";
 "quality_compressed" = "Сжатое";
 "quality_original" = "Оригинал";
+
+/* Custom media picker (P1) */
+"media_picker_recents" = "Недавние";
+"media_picker_add" = "Добавить";
+"media_picker_send_n" = "Отправить %d";
+"media_picker_tab_gallery" = "Галерея";
+"media_picker_allow_access" = "Разрешите доступ к фото, чтобы прикреплять фото и видео.";
+"media_picker_allow_access_action" = "Разрешить";
+"media_picker_access_denied" = "Доступ к фото выключен. Включите его в Настройках.";
+"media_picker_open_settings" = "Открыть Настройки";
+"media_picker_empty" = "Пока нет фото или видео.";
+"media_picker_limit_reached" = "Достигнут лимит выбора.";
+"media_picker_item_too_large" = "Один или несколько файлов слишком большие.";
+"media_picker_export_failed" = "Не удалось подготовить медиа. Попробуйте снова.";
+"media_picker_hd" = "HD";
+"media_picker_hd_hint" = "Отправлять фото без сжатия";
+"media_picker_quality_photo" = "Качество фото";
+"media_picker_quality_video" = "Качество видео";
+"media_picker_estimate_n" = "%d шт. · ~%@";
+"media_picker_video_720" = "720p";
+"media_picker_video_1080" = "1080p";
+"media_picker_confirm" = "Подтвердить выбор";
 "failed_to_load" = "Не удалось загрузить";
 "shared_profile" = "Профиль отправлен";
 
@@ -554,13 +607,13 @@
 "preview_desc_none" = "Показывать только «Новое сообщение»";
 
 // MARK: - Device Linking
-"onboarding_link_device" = "Привязать существующий аккаунт";
+"onboarding_link_device" = "Привязать существующую идентичность";
 "device_link_scan_title" = "Сканировать для привязки";
 "device_link_scan_instructions" = "Откройте существующее устройство → Настройки → Устройства → Привязать новое устройство, затем отсканируйте QR-код.";
 "device_link_linking" = "Привязка устройства…";
 "device_link_success" = "Устройство успешно привязано";
 "device_link_qr_title" = "Привязать новое устройство";
-"device_link_qr_instructions" = "На новом устройстве выберите «Привязать существующий аккаунт» при входе и отсканируйте этот код.";
+"device_link_qr_instructions" = "На новом устройстве выберите «Привязать существующую идентичность» при входе и отсканируйте этот код.";
 "device_link_expires_in" = "Истекает через %@";
 "device_link_expired" = "Код устарел — нажмите для обновления";
 "device_link_refresh" = "Создать новый код";
@@ -570,11 +623,11 @@
 "device_link_confirm_title" = "Привязать устройство?";
 "device_revoke" = "Удалить устройство";
 "device_revoke_confirm_title" = "Удалить устройство";
-"device_revoke_confirm" = "Это устройство будет удалено из вашего аккаунта.";
+"device_revoke_confirm" = "Это устройство будет удалено из вашей идентичности.";
 "device_added_%@" = "Добавлено %@";
 
 // MARK: - Device Join Request (Desktop onboarding)
-"device_link_request_title" = "Привязать к существующему аккаунту";
+"device_link_request_title" = "Привязать к существующей идентичности";
 "device_link_request_instruction" = "Отсканируйте с iPhone";
 "device_link_request_steps" = "Откройте Construct на iPhone → Настройки → Устройства → нажмите «Привязать новое устройство» — или просто отсканируйте этот код, если Construct уже открыт.";
 "device_link_waiting_approval" = "Ожидание подтверждения на iPhone…";
@@ -582,12 +635,12 @@
 "device_link_request_timeout" = "Время ожидания истекло — попробуйте снова";
 "device_link_feature_unavailable" = "Функция требует обновления сервера. Попробуйте позже.";
 "device_link_invalid_qr" = "Неверный QR-код — убедитесь, что сканируете код Construct.";
-"device_link_approve_title" = "Привязать «%@» к аккаунту?";
-"device_link_approve_title_fallback" = "Привязать новое устройство к аккаунту?";
+"device_link_approve_title" = "Привязать «%@» к вашей идентичности?";
+"device_link_approve_title_fallback" = "Привязать новое устройство к вашей идентичности?";
 "device_link_approve" = "Привязать устройство";
-"device_link_approve_message" = "Это устройство получит полный доступ к вашему аккаунту Construct.";
+"device_link_approve_message" = "Это устройство получит полный доступ к вашей идентичности в Конструкте.";
 "device_link_approved_title" = "Устройство привязано";
-"device_link_approved_message" = "Устройство успешно привязано к вашему аккаунту.";
+"device_link_approved_message" = "Устройство успешно привязано к вашей идентичности.";
 
 // MARK: - Session Management
 "session_management" = "Управление сессиями";
@@ -600,9 +653,9 @@
 "sign_out_all_hint" = "Выход со всех устройств немедленно аннулирует все сессии. Потребуется повторная аутентификация на каждом устройстве.";
 "sign_out" = "Выйти";
 "device_scan_to_approve" = "Сканировать для одобрения";
-"device_revoke_confirm_message" = "Удалённо выйти с устройства «%@»? Оно будет отключено от вашего аккаунта.";
+"device_revoke_confirm_message" = "Удалённо выйти с устройства «%@»? Оно будет отключено от вашей идентичности.";
 "other_devices" = "Другие устройства";
-"other_devices_hint" = "Нажмите − чтобы удалить устройство из аккаунта.";
+"other_devices_hint" = "Нажмите − чтобы удалить устройство из вашей идентичности.";
 "device_active_now" = "Активно сейчас";
 
 // MARK: - Flood guard & Lockdown
@@ -623,8 +676,16 @@
 "synapses" = "Синапсы";
 "search_prompt" = "Поиск";
 "synapses_search_prompt" = "Поиск";
-"synapses_empty_title" = "Пока нет связей";
-"synapses_empty_subtitle" = "Люди с которыми вы общаетесь будут здесь, даже если вы удалили переписку.";
+"synapses_empty_title" = "Пока никого нет";
+"synapses_empty_subtitle" = "Отсканируйте QR, покажите свой или найдите @псевдоним, чтобы связаться.";
+"synapses_empty_scan_qr" = "Сканировать QR";
+"synapses_empty_focus_search" = "Поиск по псевдониму";
+"chats_empty_title" = "Пока нет чатов";
+"chats_empty_subtitle" = "Свяжитесь с кем-то через QR или Synaps — переписки появятся здесь.";
+"chats_empty_scan_qr" = "Сканировать QR";
+"chats_empty_show_qr" = "Мой QR";
+"chats_empty_open_synaps" = "Открыть Synaps";
+"chat_search_results" = "%d результатов";
 "synapses_open_chat" = "Открыть чат";
 "synapses_prune_title" = "Удалить синапс?";
 "synapses_prune_action" = "Удалить";
@@ -700,7 +761,7 @@
 
 // MARK: - QR / Invite
 "invite" = "пригласить";
-"qr_caption_trust" = "доверие вычисляется, а не предполагается.";
+"qr_caption_trust" = "этот код — приглашение связаться.";
 "qr_scan_hint" = "покажи кому-то рядом или сделай скриншот";
 
 // MARK: - Device Link QR
@@ -734,6 +795,11 @@
 "keys_recovery_wipe_confirm_body" = "Это действие безвозвратно удалит вашу текущую идентичность и все локальные данные. Отменить невозможно.";
 "keys_recovery_wipe_confirm_action" = "удалить и продолжить";
 
+// MARK: - Device Deregistered (Конструкт больше не знает эту реплику)
+"device_deregistered_warning_title" = "⚠ РЕПЛИКА НЕ ЗАРЕГИСТРИРОВАНА";
+"device_deregistered_warning_body" = "Конструкт больше не распознаёт эту реплику. Такое бывает после сбоя на сервере или если реплику отозвали с другого устройства.\n\nКлючи всё ещё на этом устройстве — ничего не удалено. Повторите попытку ниже или восстановите личность по сид-фразе.";
+"device_deregistered_retry_hint" = "Отказ может быть временным сбоем сервера. Попробуйте пройти аутентификацию ещё раз.";
+
 // MARK: - Logout
 "logout_row" = "выйти";
 "logout_all_row" = "выйти на всех устройствах";
@@ -765,13 +831,16 @@
 // Contact Requests
 "contact_requests_section" = "запросы";
 "contact_request_from" = "от";
-"contact_request_confirm" = "[✓] принять";
-"contact_request_decline_block" = "[✗] отклонить + заблокировать";
-"contact_request_spam_block" = "[⚠] спам + заблокировать";
-"contact_request_sent" = "запрос отправлен";
-"contact_request_pending" = "[ожидание]";
-"contact_request_send_action" = "[→ отправить запрос]";
-"contact_request_sheet_title" = "запрос на переписку";
+"contact_request_confirm" = "Принять";
+"contact_request_decline_block" = "Отклонить и заблокировать";
+"contact_request_spam_block" = "Спам и заблокировать";
+"contact_request_sent" = "Запрос отправлен";
+"contact_request_pending" = "Ожидание";
+"contact_request_send_action" = "Отправить запрос";
+"contact_request_send_failed" = "Не удалось отправить запрос. Проверьте соединение и попробуйте снова.";
+"contact_request_received_body" = "Новый запрос на переписку в Synapses";
+"contact_request_received_body_plural" = "%d запросов на переписку в Synapses";
+"contact_request_sheet_title" = "Запрос на переписку";
 "contact_request_from_title" = "хочет начать переписку";
 "contact_request_empty_inbox" = "нет входящих запросов";
 
@@ -788,20 +857,13 @@
 // Stealth mode
 "stealth_section" = "стелс";
 "stealth_toggle_title" = "режим стелс";
-"stealth_toggle_active_hint" = "активен — личность отправителя скрыта от construct";
-"stealth_hint" = "личность отправителя не раскрывается серверу. сообщения проходят через анонимные токены — сервер не может связать исходящий трафик с вашей личностью.";
-"stealth_scope_stream" = "на поток (рекомендуется)";
-"stealth_scope_stream_hint" = "один токен на активный поток в день";
-"stealth_scope_message" = "на сообщение";
-"stealth_scope_message_hint" = "один токен на сообщение — максимальная анонимность";
+"stealth_toggle_active_hint" = "всегда активен — личность отправителя скрыта от construct";
+"stealth_hint" = "личность отправителя не раскрывается construct. сообщения проходят через анонимные токены — construct не может связать исходящий трафик с вашей личностью.";
 
 // Короткие метки для CTModeSelector (переключатель режимов) в настройках stealth.
-"stealth_scope_stream_short" = "поток";
-"stealth_scope_message_short" = "сообщение";
 "stealth_token_wallet" = "кошелёк токенов";
-"stealth_token_wallet_pending" = "[ещё не активно]";
 "stealth_token_count" = "%d токенов";
-"stealth_token_wallet_hint" = "первая пачка создаётся при регистрации или при включении стелс. пополнение — в фоне (лучше на зарядке). требует поддержки privacy pass на сервере.";
+"stealth_token_wallet_hint" = "каждое сообщение несёт анонимный privacy pass токен; кошелёк пополняется сам по мере отправки (первая пачка создаётся при регистрации). пустой кошелёк не раскрывает вас — токены лишь защищают construct от спама.";
 
 // Key Transparency
 "kt_section" = "прозрачность ключей";
@@ -917,12 +979,16 @@
 "history_sync_offer_message" = "Получить историю с телефона, который только что одобрил этот компьютер? Оба устройства должны быть в одной сети Wi‑Fi — код вводить не нужно.";
 "history_sync_offer_yes" = "Получить историю";
 "history_sync_offer_skip" = "Пропустить";
+"history_sync_send_offer_title" = "Синхронизировать историю сообщений?";
+"history_sync_send_offer_message" = "Отправить историю сообщений на новое устройство? Оба устройства должны быть в одной сети Wi‑Fi — коды вводить не нужно.";
+"history_sync_send_offer_yes" = "Синхронизировать";
+"history_sync_send_offer_skip" = "Пропустить";
 "history_sync_auto_connecting" = "Подключение к телефону…";
 "history_sync_auto_sending" = "Отправка истории на компьютер…";
 "history_sync_user_mismatch" = "Ошибка переноса истории: история принадлежит другому аккаунту.";
-"call_error_not_contacts" = "Нельзя позвонить этому ноду. Убедитесь, что вы являетесь взаимными контактами.";
+"call_error_not_contacts" = "Звонить можно только тем, с кем вы уже связаны.";
 "call_error_busy" = "Вы уже в звонке.";
-"call_error_peer_offline" = "Нод не в сети. Попробуйте позже.";
+"call_error_peer_offline" = "Собеседник не в сети. Попробуйте позже.";
 
 /* Engine background push notifications */
 "notification.new_message.title" = "Новое сообщение";

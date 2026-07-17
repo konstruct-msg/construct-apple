@@ -9,7 +9,7 @@ import CoreData
 // MARK: - Key Transparency status per contact
 
 /// Reflects the result of the last Key Transparency verification for this contact.
-enum KTStatus: Int16 {
+enum KTStatus: Int16, Sendable {
     /// No bundle has been fetched yet (new contact, or no session established).
     case unverified = 0
     /// Last verification succeeded and identity key matches the Merkle log.

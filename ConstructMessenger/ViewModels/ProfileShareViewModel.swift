@@ -36,27 +36,34 @@ class ProfileShareViewModel {
             completion(false, NSLocalizedString("not_authenticated", comment: ""))
             return
         }
-        
+
         // Get current user's profile data
         let userFetchRequest: NSFetchRequest<User> = User.fetchRequest()
         userFetchRequest.predicate = NSPredicate(format: "id == %@", currentUserId)
-        
+
         guard let currentUser = try? context.fetch(userFetchRequest).first else {
             completion(false, NSLocalizedString("user_not_found", comment: ""))
             return
         }
-        
+
+        // Snapshot values we need before any await — NSManagedObject must not be
+        // read off MainActor after suspension points.
+        let displayName = currentUser.resolvedDisplayName
+        let avatarDataSnapshot = currentUser.avatarData
+        let avatarImage = avatarDataSnapshot.flatMap { ImageHelper.imageFromData($0) }
+
         // Prevent concurrent share attempts
         guard !isSharingProfile else {
             Log.info("Profile share already in progress, ignoring duplicate", category: "ProfileShare")
             return
         }
         isSharingProfile = true
-        
-        // Upload avatar via Media Upload API if available
-        Task { [weak self] in
+
+        // Explicit @MainActor so completion + @Observable state never hop off main
+        // after gRPC/media awaits (SwiftUI "Publishing changes from background threads").
+        Task { @MainActor [weak self] in
             guard let self else { return }
-            defer { isSharingProfile = false }
+            defer { self.isSharingProfile = false }
 
             // Check if session is ready; if not, initialize it on-demand
             if !CryptoManager.shared.hasSession(for: userId) {
@@ -74,9 +81,7 @@ class ProfileShareViewModel {
                     Log.info("Session initialized for profile share with \(userId)", category: "ProfileShare")
                 } catch {
                     Log.error("Failed to initialize session for profile share: \(error)", category: "ProfileShare")
-                    await MainActor.run {
-                        completion(false, NSLocalizedString("failed_to_establish_session", comment: ""))
-                    }
+                    completion(false, NSLocalizedString("failed_to_establish_session", comment: ""))
                     return
                 }
             }
@@ -85,9 +90,8 @@ class ProfileShareViewModel {
             var avatarMediaUrl: String? = nil
             var avatarMediaKey: Data? = nil
             var avatarMediaType: String? = nil
-            
-            if let avatarData = currentUser.avatarData,
-               let avatarImage = ImageHelper.imageFromData(avatarData) {
+
+            if let avatarImage {
                 do {
                     Log.info("Uploading avatar via MediaManager", category: "ProfileShare")
                     let uploadResult = try await MediaManager.shared.uploadAvatar(avatarImage)
@@ -100,17 +104,17 @@ class ProfileShareViewModel {
                     Log.error("Failed to upload avatar: \(error.localizedDescription)", category: "ProfileShare")
                 }
             }
-            
+
             // Create profile data with media info
             let profileData = ProfileShareData(
-                displayName: currentUser.resolvedDisplayName,
+                displayName: displayName,
                 avatarMediaId: avatarMediaId,
                 avatarMediaUrl: avatarMediaUrl,
                 avatarMediaKey: avatarMediaKey,
                 avatarMediaType: avatarMediaType,
                 timestamp: Int64(Date().timeIntervalSince1970)
             )
-            
+
             // Serialize to binary (closes legacy JSON in wire payload).
             // Still E2EE via DR. Supports stealth when enabled.
             let binaryPayload = profileData.toBinaryData()
@@ -124,39 +128,31 @@ class ProfileShareViewModel {
                 : nil
 
             // Encrypt and send via E2E message (binary payload)
-            do {
-                Log.debug("Sending profile message for user \(userId), binary size: \(binaryPayload.count) bytes", category: "ProfileShare")
-                let messageId = UUID().uuidString
-                let plan = ChunkedMessageSender.shared.buildPlan(plaintext: binaryPayload, messageId: UUID(uuidString: messageId) ?? UUID())
+            Log.debug("Sending profile message for user \(userId), binary size: \(binaryPayload.count) bytes", category: "ProfileShare")
+            let messageId = UUID().uuidString
+            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: binaryPayload, messageId: UUID(uuidString: messageId) ?? UUID())
 
-                // Send via gRPC
-                do {
-                    let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: userId)
-                    let responses = try await ChunkedMessageSender.shared.sendChunks(
-                        plan: plan,
-                        senderId: currentUserId,
-                        recipientId: userId,
-                        conversationId: conversationId,
-                        timestamp: UInt64(Date().timeIntervalSince1970),
-                        recipientIdentityKey: recipientIdentityKey
-                    )
-                    let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
-                    if response.status.lowercased() == "blocked" {
-                        Log.error("Profile share rejected — sender is blocked by \(userId.prefix(8))…", category: "ProfileShare")
-                        await MainActor.run { completion(false, "blocked") }
-                        return
-                    }
-                    Log.info("Profile shared with user \(userId) via gRPC: \(response.messageId)", category: "ProfileShare")
-                    await MainActor.run {
-                        completion(true, nil)
-                    }
-                } catch {
-                    Log.error("Failed to send profile message via gRPC: \(error.localizedDescription)", category: "ProfileShare")
-                    await MainActor.run {
-                        completion(false, error.localizedDescription)
-                    }
+            do {
+                let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: userId)
+                let responses = try await ChunkedMessageSender.shared.sendChunks(
+                    plan: plan,
+                    senderId: currentUserId,
+                    recipientId: userId,
+                    conversationId: conversationId,
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    recipientIdentityKey: recipientIdentityKey
+                )
+                let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
+                if response.status.lowercased() == "blocked" {
+                    Log.error("Profile share rejected — sender is blocked by \(userId.prefix(8))…", category: "ProfileShare")
+                    completion(false, "blocked")
                     return
                 }
+                Log.info("Profile shared with user \(userId) via gRPC: \(response.messageId)", category: "ProfileShare")
+                completion(true, nil)
+            } catch {
+                Log.error("Failed to send profile message via gRPC: \(error.localizedDescription)", category: "ProfileShare")
+                completion(false, error.localizedDescription)
             }
         }
     }

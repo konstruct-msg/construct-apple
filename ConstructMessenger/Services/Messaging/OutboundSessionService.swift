@@ -220,9 +220,35 @@ final class OutboundSessionService {
                     PerformanceMetrics.shared.record(.stealthSealFailure, label: "receipt")
                 }
             }
-            if let sealedInner, FeatureFlags.sealedSenderUnauthenticatedTransport {
-                // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
-                _ = try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: sealedInner)
+            if let sealedInner, let identityKey = recipientIdentityKey {
+                // Sealed receipt with one-shot enforce recovery (fresh token + tag on
+                // privacy_pass rejection; DR payload reused). Receipts carry tokens like
+                // any sealed send — no content-type exemption exists (see decisions/
+                // sealed-sender-anti-abuse-economics.md); never downgrades to identified.
+                _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+                    try await StealthSenderService.buildSealedInner(
+                        recipientUserId: contactId,
+                        recipientIdentityKey: identityKey,
+                        encryptedPayload: wirePayload,
+                        contentType: .deliveryReceipt
+                    )
+                }, send: { inner in
+                    if FeatureFlags.sealedSenderUnauthenticatedTransport {
+                        // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
+                        return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)
+                    } else {
+                        return try await MessagingServiceClient.shared.sendMessage(
+                            messageId: receiptId,
+                            recipientId: contactId,
+                            senderId: myId,
+                            conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
+                            encryptedPayload: wirePayload,
+                            timestamp: UInt64(Date().timeIntervalSince1970),
+                            contentType: .deliveryReceipt,
+                            sealedInnerBytes: inner
+                        )
+                    }
+                })
             } else {
                 _ = try await MessagingServiceClient.shared.sendMessage(
                     messageId: receiptId,
@@ -232,7 +258,7 @@ final class OutboundSessionService {
                     encryptedPayload: wirePayload,
                     timestamp: UInt64(Date().timeIntervalSince1970),
                     contentType: .deliveryReceipt,
-                    sealedInnerBytes: sealedInner
+                    sealedInnerBytes: nil
                 )
             }
             Log.info("E2E receipt sent: \(messageIds.count) msg(s) → \(contactId.prefix(8))…", category: "OutboundSession")

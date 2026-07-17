@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import CoreData
 
 struct SecurityView: View {
     @Environment(SecurityViewModel.self) private var securityViewModel
@@ -24,16 +25,6 @@ struct SecurityView: View {
     @State private var showingLockDelayPicker = false
     @State private var lockdown = LockdownManager.shared
     @State private var tokenWallet = TokenWalletService.shared
-
-    @AppStorage("stealth_per_message") private var stealthPerMessage = false
-
-    /// Binding adapter so we can drive CTModeSelector (like the VEIL tri-state) from the existing Bool storage.
-    private var stealthScope: Binding<StealthScope> {
-        Binding(
-            get: { StealthScope.from(isPerMessage: stealthPerMessage) },
-            set: { newScope in stealthPerMessage = newScope.isPerMessage }
-        )
-    }
 
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
@@ -251,31 +242,9 @@ struct SecurityView: View {
                 }
                 .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
 
-                Rectangle()
-                    .fill(Color.CT.noise.opacity(SecuritySettingsLayout.separatorOpacity))
-                    .frame(height: 1)
-                    .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
-
-                // Scope selector — normal CTModeSelector (same as VEIL off/auto/on).
-                CTModeSelector(
-                    selection: stealthScope,
-                    options: StealthScope.allCases,
-                    labels: [
-                        .perStream: NSLocalizedString("stealth_scope_stream_short", comment: ""),
-                        .perMessage: NSLocalizedString("stealth_scope_message_short", comment: "")
-                    ],
-                    width: .infinity
-                )
-                .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
-                .padding(.vertical, SecuritySettingsLayout.compactRowVerticalPadding)
-
-                // Dynamic one-line hint for the chosen scope (matches the previous per-choice hints).
-                let scopeHintKey = stealthPerMessage ? "stealth_scope_message_hint" : "stealth_scope_stream_hint"
-                securityHintText(
-                    LocalizedStringKey(scopeHintKey),
-                    color: Color.CT.textDim,
-                    top: SecuritySettingsLayout.hintCompactTopPadding
-                )
+                // (Scope selector removed 2026-07-15: per-message is the only token model —
+                // per-stream is incompatible with server-side enforce. See
+                // decisions/sealed-sender-anti-abuse-economics.md.)
 
                 Rectangle()
                     .fill(Color.CT.noise.opacity(SecuritySettingsLayout.separatorOpacity))

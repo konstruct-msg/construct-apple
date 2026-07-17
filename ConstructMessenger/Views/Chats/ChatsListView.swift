@@ -14,12 +14,14 @@ struct ChatsListView: View {
     }
 
     @Environment(\.managedObjectContext) private var viewContext
+    @Environment(AuthViewModel.self) private var authViewModel
 
     @FetchRequest
     private var chats: FetchedResults<Chat>
 
     @Environment(ChatsViewModel.self) private var chatsViewModel
     @State private var showingQRScanner = false
+    @State private var showingMyQR = false
     @State private var navigationPath = NavigationPath()
     @State private var showingDrafts = false
     @State private var searchQuery = ""
@@ -64,8 +66,8 @@ struct ChatsListView: View {
                 VStack(spacing: 0) {
                     navBar
                     searchBar
-                        .padding(.horizontal, 12)
-                        .padding(.top, 4)  // small gap to make search independent capsule
+                        .padding(.horizontal, CTLayout.edgePad)
+                        .padding(.top, 4)
                     Spacer(minLength: 0)
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -82,6 +84,14 @@ struct ChatsListView: View {
             }
             .sheet(isPresented: $showingQRScanner) {
                     QRScannerView { contactURL in handleScannedContact(contactURL) }
+            }
+            .sheet(isPresented: $showingMyQR) {
+                ContactQRCodeView(
+                    userId: authViewModel.currentUserId
+                        ?? AuthSessionManager.shared.currentUserId
+                        ?? "",
+                    username: authViewModel.currentUsername
+                )
             }
             .onAppear {
                     chatsViewModel.setContext(viewContext)
@@ -124,14 +134,18 @@ struct ChatsListView: View {
     // MARK: - Nav Bar
 
     private var navBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: CTLayout.chromeGap) {
             ConnectionStatusIndicator()
             Spacer()
             Button { showingQRScanner = true } label: {
                 Image(systemName: "qrcode.viewfinder")
                     .font(.system(size: CTLayout.navIconSize, weight: .medium))
                     .foregroundColor(Color.CT.accent)
+                    .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(NSLocalizedString("scan_qr_code", comment: ""))
         }
         .padding(.horizontal, CTLayout.edgePad)
         .frame(height: CTLayout.navBarHeight)
@@ -150,46 +164,52 @@ struct ChatsListView: View {
             // Spacer row at top so first chats are visible below the floating search capsule,
             // and content can scroll under the glass.
             Color.clear
-                .frame(height: 70)  // approx height for nav + search
+                .frame(height: CTLayout.navBarHeight + CTLayout.controlHeight + 12)
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 
-            ForEach(renderedChats) { chat in
-                Button {
-                    navigationPath.append(chat.id)
-                } label: {
-                    ChatRowView(chat: chat)
-                }
-                .buttonStyle(.plain)
-                // Clear so the CTMatrixBackground watermark shows through the rows.
-                .listRowBackground(Color.clear)
-                .listRowSeparatorTint(Color.CT.noise)
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) {
-                        Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
-                    } label: {
-                        Label(LocalizedStringKey("delete"), systemImage: "trash")
-                    }
+            if renderedChats.isEmpty {
+                streamsEmptyState
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            } else {
+                ForEach(renderedChats) { chat in
                     Button {
-                        toggleMarkUnread(chat)
+                        navigationPath.append(chat.id)
                     } label: {
-                        Label(
-                            LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
-                            systemImage: chat.unreadCount > 0 ? "envelope.open" : "envelope.badge"
-                        )
+                        ChatRowView(chat: chat)
                     }
-                    .tint(Color.CT.accentDim)
-                }
-                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                    Button {
-                        togglePin(chat)
-                    } label: {
-                        Label(
-                            LocalizedStringKey(chat.isPinned ? "unpin" : "pin"),
-                            systemImage: chat.isPinned ? "pin.slash" : "pin"
-                        )
+                    .buttonStyle(.plain)
+                    // Clear so the CTMatrixBackground watermark shows through the rows.
+                    .listRowBackground(Color.clear)
+                    .listRowSeparatorTint(Color.CT.noise)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+                        } label: {
+                            Label(LocalizedStringKey("delete"), systemImage: "trash")
+                        }
+                        Button {
+                            toggleMarkUnread(chat)
+                        } label: {
+                            Label(
+                                LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
+                                systemImage: chat.unreadCount > 0 ? "envelope.open" : "envelope.badge"
+                            )
+                        }
+                        .tint(Color.CT.accentDim)
                     }
-                    .tint(Color.CT.textDim)
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        Button {
+                            togglePin(chat)
+                        } label: {
+                            Label(
+                                LocalizedStringKey(chat.isPinned ? "unpin" : "pin"),
+                                systemImage: chat.isPinned ? "pin.slash" : "pin"
+                            )
+                        }
+                        .tint(Color.CT.textDim)
+                    }
                 }
             }
             // Spacer row so the last chat row is visible above the floating tab capsule,
@@ -208,6 +228,80 @@ struct ChatsListView: View {
         .scrollContentBackground(.hidden)
         // ASCII matrix watermark behind the rows (base #090909 comes from .ctBackground()).
         .background(CTMatrixBackground())
+    }
+
+    /// Empty streams list — points users to invite paths (QR / Synaps).
+    private var streamsEmptyState: some View {
+        VStack(spacing: CTLayout.sectionGap) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(Color.CT.textDim)
+                .padding(.bottom, 4)
+
+            Text(LocalizedStringKey("chats_empty_title"))
+                .font(CTFont.bold(16))
+                .foregroundStyle(Color.CT.text)
+                .multilineTextAlignment(.center)
+
+            Text(LocalizedStringKey("chats_empty_subtitle"))
+                .font(CTFont.regular(13))
+                .foregroundStyle(Color.CT.textDim)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, CTLayout.sectionGap)
+
+            VStack(spacing: CTLayout.chromeGap) {
+                emptyActionButton(
+                    titleKey: "chats_empty_scan_qr",
+                    systemImage: "qrcode.viewfinder"
+                ) {
+                    showingQRScanner = true
+                }
+                emptyActionButton(
+                    titleKey: "chats_empty_show_qr",
+                    systemImage: "qrcode"
+                ) {
+                    showingMyQR = true
+                }
+                emptyActionButton(
+                    titleKey: "chats_empty_open_synaps",
+                    systemImage: "circle.grid.cross"
+                ) {
+                    NotificationCenter.default.post(name: .openSynapsTab, object: nil)
+                }
+            }
+            .padding(.top, CTLayout.inlinePad)
+            .frame(maxWidth: 320)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 48)
+        .padding(.horizontal, CTLayout.edgePad)
+    }
+
+    private func emptyActionButton(
+        titleKey: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: CTLayout.chromeGap) {
+                Image(systemName: systemImage)
+                    .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                Text(NSLocalizedString(titleKey, comment: "").uppercased())
+                    .font(CTFont.bold(12))
+                    .tracking(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.CT.textDim)
+            }
+            .foregroundStyle(Color.CT.accent)
+            .padding(.horizontal, CTLayout.edgePad)
+            .frame(minHeight: CTLayout.controlHeight)
+            .background(Color.CT.bgMsg)
+            .clipShape(CTShape.card())
+            .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Actions

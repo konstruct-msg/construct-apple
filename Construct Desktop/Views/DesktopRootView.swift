@@ -26,20 +26,29 @@ struct DesktopRootView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.commandBridge) private var commandBridge
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
+    @AppStorage(OrientationStore.completedKey) private var orientationCompleted = false
 
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showAddContact = false
     @State private var sidebarMode: SidebarMode = .chats
     @State private var callManager = CallManager.shared
     @State private var showReceiveHistorySync = false
+    @State private var historySyncPendingDeviceId: String? = nil
 
     private enum SidebarMode { case chats, synaps }
 
-    private var historySyncPairingPIN: String? {
-        guard let pendingId = authViewModel.linkedJoinPendingDeviceId,
-              let userId = authViewModel.currentUserId ?? KeychainManager.shared.loadUserID(),
-              !pendingId.isEmpty, !userId.isEmpty else { return nil }
-        return HistorySyncPairing.pin(pendingDeviceId: pendingId, userId: userId)
+    /// Derives the Nearby-transfer PIN for the post-link history sync. The `pendingDeviceId` the
+    /// phone hashed is THIS device's freshly-linked deviceId (it generated the join request under
+    /// it), which equals `KeychainManager.loadDeviceID()`. Prefer the value plumbed through the
+    /// link phase, but fall back to our own deviceId so the auto-PIN survives a dropped/late phase
+    /// hand-off (otherwise the receiver degrades to a manual 6-digit PIN prompt).
+    private func historySyncPairingPIN(for pendingId: String?) -> String? {
+        guard let userId = authViewModel.currentUserId ?? KeychainManager.shared.loadUserID(),
+              !userId.isEmpty else { return nil }
+        let resolvedPendingId = (pendingId?.isEmpty == false ? pendingId : nil)
+            ?? KeychainManager.shared.loadDeviceID()
+        guard let resolvedPendingId, !resolvedPendingId.isEmpty else { return nil }
+        return HistorySyncPairing.pin(pendingDeviceId: resolvedPendingId, userId: userId)
     }
 
     var body: some View {
@@ -49,8 +58,16 @@ struct DesktopRootView: View {
             } else if authViewModel.deviceKeysUnavailable {
                 KeysRecoveryView()
                     .environment(authViewModel)
+            } else if authViewModel.deviceDeregistered {
+                // Server rejected this device as unregistered — recover, don't wipe silently.
+                KeysRecoveryView(reason: .deviceDeregistered)
+                    .environment(authViewModel)
             } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
-                mainContent
+                if orientationCompleted {
+                    mainContent
+                } else {
+                    OrientationView(openSynapsOnFinish: true)
+                }
             } else {
                 OnboardingView()
                     .environment(authViewModel)
@@ -96,28 +113,21 @@ struct DesktopRootView: View {
         .onChange(of: chatsViewModel.totalUnreadCount) { _, count in
             NSApplication.shared.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
         }
-        .alert(
-            NSLocalizedString("history_sync_offer_title", comment: ""),
-            isPresented: Binding(
-                get: { authViewModel.pendingHistorySyncOffer },
-                set: { if !$0 { authViewModel.pendingHistorySyncOffer = false } }
-            )
-        ) {
-            Button(NSLocalizedString("history_sync_offer_yes", comment: "")) {
-                authViewModel.pendingHistorySyncOffer = false
+        .onChange(of: authViewModel.deviceLinkPhase) { _, phase in
+            if case .historySyncReceive(let pendingId) = phase {
+                historySyncPendingDeviceId = pendingId
                 showReceiveHistorySync = true
             }
-            Button(NSLocalizedString("history_sync_offer_skip", comment: ""), role: .cancel) {
-                authViewModel.pendingHistorySyncOffer = false
-            }
-        } message: {
-            Text(NSLocalizedString("history_sync_offer_message", comment: ""))
         }
         .sheet(isPresented: $showReceiveHistorySync) {
             ReceiveBackupNearbyView(
                 mode: .historySync,
-                autoPairingPIN: historySyncPairingPIN
+                autoPairingPIN: historySyncPairingPIN(for: historySyncPendingDeviceId)
             )
+            .onDisappear {
+                authViewModel.clearDeviceLinkPhase()
+                historySyncPendingDeviceId = nil
+            }
         }
     }
 
@@ -193,6 +203,11 @@ struct DesktopRootView: View {
             .onChange(of: sidebarMode) { _, mode in
                 withAnimation(.easeInOut(duration: 0.2)) {
                     columnVisibility = mode == .synaps ? .detailOnly : .all
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openSynapsTab)) { _ in
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    sidebarMode = .synaps
                 }
             }
             // Incoming call banner — bottom-center

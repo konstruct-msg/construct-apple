@@ -64,8 +64,8 @@ struct ConstructActionRow: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 13)
             .background(rowFill)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(rowBorder, lineWidth: 1))
+            .clipShape(CTShape.card())
+            .overlay(CTShape.card().strokeBorder(rowBorder, lineWidth: 1))
             .foregroundStyle(rowForeground)
         }
         .buttonStyle(.plain)

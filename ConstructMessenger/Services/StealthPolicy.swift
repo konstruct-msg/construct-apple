@@ -5,10 +5,15 @@
 //  Central policy for Stealth / Sealed Sender (Ghost Mode).
 //  Decides:
 //  - whether to use sealed sender at all (hides sender identity from the server)
-//  - whether/when to consume a Privacy Pass token (per-stream vs per-message)
+//  - whether to consume a Privacy Pass token for a send
 //
-//  Token consumption is rate-limited in per-stream mode (1 token per recipient per ~24h).
-//  The SealedInner certificate seal (actual sender hiding) is independent of token spend.
+//  Token model: **per-message** — a token accompanies every sealed send. The former
+//  per-stream scope (1 token per recipient per 24h) was removed 2026-07-15: under
+//  MSG_STEALTH_TOKEN_POLICY=enforce every sealed envelope must carry a valid token
+//  (the server cannot tell message kinds apart inside the seal), so a device still on
+//  per-stream would have ~all its sends dropped. A legacy explicit per-stream choice
+//  in UserDefaults silently overrode the per-message default — observed on device
+//  2026-07-14. See decisions/sealed-sender-anti-abuse-economics.md.
 //
 //  Explicit exclusions (even when stealth is enabled):
 //  - E2E heartbeats (ct=13) — see decisions/stealth-heartbeat-exclusion.md
@@ -19,32 +24,14 @@
 import Foundation
 import Observation
 
-/// Scope for when to apply sealed-sender + consume Privacy Pass tokens.
-enum StealthScope: String, CaseIterable, Identifiable {
-    case perStream
-    case perMessage
-
-    var id: String { rawValue }
-
-    var isPerMessage: Bool { self == .perMessage }
-
-    static func from(isPerMessage: Bool) -> StealthScope {
-        isPerMessage ? .perMessage : .perStream
-    }
-}
-
 @Observable
 @MainActor
 final class StealthPolicy {
     static let shared = StealthPolicy()
 
-    private static let lastStreamKey = "stealth_last_stream_token_v1"
-    private static let perStreamWindow: TimeInterval = 86_400 // 24h
-
-    private var lastStreamConsumption: [String: Date] = [:]
-    private var lastStreamLoaded = false
-
-    private init() {}
+    private init() {
+        Self.cleanupLegacyScopeState()
+    }
 
     // MARK: - Public queries
 
@@ -62,12 +49,6 @@ final class StealthPolicy {
         #endif
     }
 
-    /// true  = per-message (consume token on every send)
-    /// false = per-stream   (consume at most once per recipient per day)
-    var isPerMessage: Bool {
-        UserDefaults.standard.bool(forKey: "stealth_per_message")
-    }
-
     /// Should we build a SealedInner for this send?
     ///
     /// This returns true when stealth is globally enabled.
@@ -83,72 +64,38 @@ final class StealthPolicy {
     /// - E2E heartbeats (ct=13) — see decisions/stealth-heartbeat-exclusion.md
     /// - Multi-device internal traffic (SenderSync, fan-out to own devices, reset broadcasts)
     /// - Pure session control messages (END_SESSION, sessionReset*, etc.)
-    ///
-    /// Per-stream token consumption is handled separately in consumeTokenIfNeeded.
-    /// See overall stealth scope decisions.
     func shouldUseSealedSender() -> Bool {
         isEnabled
     }
 
-    /// Should we spend a token for this recipient under the current scope?
-    func shouldConsumeToken(for recipient: String) -> Bool {
-        guard isEnabled else { return false }
-
-        if isPerMessage {
-            return true
-        }
-
-        // per-stream mode
-        loadLastStreamIfNeeded()
-
-        if let last = lastStreamConsumption[recipient],
-           Date().timeIntervalSince(last) < Self.perStreamWindow {
-            return false
-        }
-        return true
+    /// A Privacy Pass token accompanies every sealed send (per-message — the only
+    /// model compatible with server-side enforce).
+    func shouldConsumeToken() -> Bool {
+        isEnabled
     }
 
-    /// Ask the policy whether we should attach a token right now.
-    /// If yes, consumes one from the wallet and updates per-stream timestamp.
-    /// Returns the token (or nil if we shouldn't / wallet empty).
+    /// Consume one token from the wallet for a sealed send.
+    /// Returns nil when stealth is disabled or the wallet is empty (the caller then
+    /// sends token-less: anti-abuse degrades, anonymity and delivery stay intact).
     @discardableResult
-    func consumeTokenIfNeeded(for recipient: String) -> BlindToken? {
-        guard shouldConsumeToken(for: recipient) else {
-            return nil
-        }
-
-        guard let token = TokenWalletService.shared.consumeToken() else {
-            return nil
-        }
-
-        if !isPerMessage {
-            lastStreamConsumption[recipient] = Date()
-            saveLastStreamConsumption()
-        }
-
-        return token
+    func consumeTokenIfNeeded() -> BlindToken? {
+        guard shouldConsumeToken() else { return nil }
+        return TokenWalletService.shared.consumeToken()
     }
 
-    // MARK: - Persistence for per-stream state
+    // MARK: - Legacy per-stream cleanup
 
-    private func loadLastStreamIfNeeded() {
-        guard !lastStreamLoaded else { return }
-        if let data = KeychainManager.shared.loadRawData(forKey: Self.lastStreamKey),
-           let map = try? JSONDecoder().decode([String: Date].self, from: data) {
-            lastStreamConsumption = map
+    /// One-time cleanup of the removed per-stream scope machinery:
+    /// - `stealth_per_message` UserDefaults key — a legacy explicit "per-stream" choice
+    ///   beat the per-message default and made the device send token-less silently
+    ///   (fatal under enforce).
+    /// - Keychain per-stream consumption map (`stealth_last_stream_token_v1`).
+    /// Idempotent and cheap; runs on every init so stragglers self-heal.
+    private static func cleanupLegacyScopeState() {
+        if UserDefaults.standard.object(forKey: "stealth_per_message") != nil {
+            UserDefaults.standard.removeObject(forKey: "stealth_per_message")
+            Log.info("StealthPolicy: removed legacy stealth_per_message scope override — per-message is the only model", category: "Stealth")
         }
-        lastStreamLoaded = true
-    }
-
-    private func saveLastStreamConsumption() {
-        guard let data = try? JSONEncoder().encode(lastStreamConsumption) else { return }
-        KeychainManager.shared.saveRawData(data, forKey: Self.lastStreamKey)
-    }
-
-    /// Call on logout or when resetting stealth state.
-    func clearStreamState() {
-        lastStreamConsumption.removeAll()
-        KeychainManager.shared.deleteData(forKey: Self.lastStreamKey)
-        lastStreamLoaded = false
+        KeychainManager.shared.deleteData(forKey: "stealth_last_stream_token_v1")
     }
 }

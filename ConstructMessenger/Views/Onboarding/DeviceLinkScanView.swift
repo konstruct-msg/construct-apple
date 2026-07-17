@@ -21,9 +21,9 @@ struct DeviceLinkScanView: View {
 
     @State private var vm = DeviceLinkViewModel()
     @State private var showError = false
-    @State private var showHistorySyncOffer = false
     @State private var showReceiveHistorySync = false
     @State private var showSendHistorySync = false
+    @State private var showHistorySyncOffer = false
     @State private var historySyncPIN: String? = nil
 
     var body: some View {
@@ -83,45 +83,64 @@ struct DeviceLinkScanView: View {
         } message: {
             Text(LocalizedStringKey("device_link_approve_message"))
         }
+        // MARK: History-sync offer — phone (history owner) chooses to send after linking.
+        // .alert (not confirmationDialog): two stacked confirmationDialogs on one view drop
+        // buttons on iOS, and AGENTS.md prefers .alert — it reliably renders both choices.
+        .alert(
+            LocalizedStringKey("history_sync_send_offer_title"),
+            isPresented: $showHistorySyncOffer
+        ) {
+            Button(LocalizedStringKey("history_sync_send_offer_yes")) {
+                showHistorySyncOffer = false
+                showSendHistorySync = true
+            }
+            Button(LocalizedStringKey("history_sync_send_offer_skip"), role: .cancel) {
+                showHistorySyncOffer = false
+                dismiss()
+            }
+        } message: {
+            Text(LocalizedStringKey("history_sync_send_offer_message"))
+        }
         // MARK: Error
         .alert(vm.errorMessage ?? "", isPresented: $showError) {
             Button(LocalizedStringKey("ok"), role: .cancel) { vm.errorMessage = nil }
         }
         .onChange(of: vm.errorMessage) { _, msg in showError = msg != nil }
-        // MARK: New device link completed (phone joined existing account)
-        .onChange(of: vm.linkCompleted) { _, completed in
-            guard completed else { return }
-            let userId = KeychainManager.shared.loadUserID() ?? ""
-            authViewModel.finalizeDeviceRegistration(userId: userId, username: nil)
-            showHistorySyncOffer = true
-        }
-        // MARK: History sync offer
-        .alert(NSLocalizedString("history_sync_offer_title", comment: ""), isPresented: $showHistorySyncOffer) {
-            Button(NSLocalizedString("history_sync_offer_yes", comment: "")) {
-                showReceiveHistorySync = true
+        // MARK: Link handshake completed — unified post-link bootstrap
+        .onChange(of: vm.linkOutcome) { _, outcome in
+            guard let outcome else { return }
+            Task {
+                await authViewModel.completeDeviceLink(outcome)
+                switch outcome.role {
+                case .linkedNewDevice:
+                    showReceiveHistorySync = true
+                case .approvedJoinRequest:
+                    // Device linked. Offer to sync history to the new device — the user with
+                    // the message history decides; no codes, no steps beyond a yes/no.
+                    if let pendingId = outcome.pendingDeviceId,
+                       let userId = KeychainManager.shared.loadUserID() {
+                        historySyncPIN = HistorySyncPairing.pin(pendingDeviceId: pendingId, userId: userId)
+                        showHistorySyncOffer = true
+                    } else {
+                        dismiss()
+                    }
+                }
             }
-            Button(NSLocalizedString("history_sync_offer_skip", comment: ""), role: .cancel) {
-                dismiss()
-            }
-        } message: {
-            Text(NSLocalizedString("history_sync_offer_message", comment: ""))
         }
         .fullScreenCover(isPresented: $showReceiveHistorySync) {
             ReceiveBackupNearbyView(mode: .historySync)
-                .onDisappear { dismiss() }
-        }
-        // MARK: Phone approved a laptop's join request — auto-start history send
-        .onChange(of: vm.approvalGranted) { _, granted in
-            guard granted,
-                  let pendingId = vm.approvedJoinPendingId,
-                  let userId = KeychainManager.shared.loadUserID() else { return }
-            historySyncPIN = HistorySyncPairing.pin(pendingDeviceId: pendingId, userId: userId)
-            showSendHistorySync = true
+                .onDisappear {
+                    authViewModel.clearDeviceLinkPhase()
+                    dismiss()
+                }
         }
         .sheet(isPresented: $showSendHistorySync) {
             SendBackupNearbyView(mode: .historySync, autoPairingPIN: historySyncPIN)
                 .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
-                .onDisappear { dismiss() }
+                .onDisappear {
+                    authViewModel.clearDeviceLinkPhase()
+                    dismiss()
+                }
         }
     }
 

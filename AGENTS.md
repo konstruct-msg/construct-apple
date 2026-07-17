@@ -139,9 +139,20 @@ The goal is a **bespoke look** that does not clash with iOS / macOS platform nor
 > labels, `CTRowIcon("[x]")`) are pending conversion, not the target state.
 
 ### Tokens
-- Colors: `Color.CT.bg`, `Color.CT.text`, `Color.CT.accent`, `Color.CT.danger`, `Color.CT.noise`, `Color.CT.textDim`
-- Fonts: `CTFont.regular(size)`, `CTFont.bold(size)` — always JetBrains Mono
-- Symbols: `CTSymbol.*` ASCII glyphs for structural/nav elements; `Image(systemName:)` SF Symbols for interactive controls
+
+Source of truth: `ConstructMessenger/Utilities/ConstructTheme.swift` (mirror layout/radius tokens in
+`ConstructUI` when changing them).
+
+| Kind | API |
+|------|-----|
+| Colors | `Color.CT.bg`, `.text`, `.textDim`, `.accent`, `.accentDim`, `.danger`, `.noise`, `.bgMsg`, `.outMsgBg`, `.outMsgText` |
+| Fonts | `CTFont.regular/medium/bold(size)` — always JetBrains Mono |
+| Radii | **`CTRadius`**: `badge` 6 · `card` 8 · `control` 10 · `pill` 999 |
+| Shapes | **`CTShape.badge/card/control/pill()`** — preferred over raw `RoundedRectangle(cornerRadius: N)` |
+| Layout | **`CTLayout`**: `edgePad` 12 · `navBarHeight` 44 · `controlHeight` 42 · `hitTarget` 44 · `chromeGap` 10 · `sectionGap` 16 · `inlinePad` 8 · icon sizes |
+| Glass | `.glassCapsule()` — **defaults to `CTRadius.pill`**; do not pass 18/22 |
+| Chat | `ChatUIConstants.Bubble/InputBar/Voice` — aliases onto `CTRadius` / `CTLayout` |
+| Symbols | `CTSymbol.*` decorative only; SF Symbols for interactive controls |
 
 ### Rules
 
@@ -160,34 +171,52 @@ The goal is a **bespoke look** that does not clash with iOS / macOS platform nor
   .busy .unknown`) — never a `"[ok]"` / `"[err]"` text token. `CTSettingsRow(status:)` renders it.
 
 **Platform-specific SF Symbol conventions (iOS is primary, macOS follows):**
-- Back navigation: iOS → `chevron.backward.circle.fill` (size 22); macOS → `chevron.backward.circle` (size 18)
+- Back navigation: iOS → `chevron.backward.circle.fill` (size **`CTLayout.navIconSizeLg` 22**);
+  macOS → `chevron.backward.circle` (size 18)
 - **Modal / sheet close on macOS**: use `xmark.circle` (size 18) — NOT chevron. macOS users expect a close button in sheets. Pass `isModal: true` to `CTNavBar`.
 - iOS modals: `chevron.backward.circle.fill` same as navigation (sheet dismiss via swipe is the primary affordance)
 - Design code is shared: no `#if os(iOS)` / `#else` blocks for the same symbol concept — use `#if os(macOS)` only to swap to the macOS platform variant.
 
-#### Shapes & Corners
-- **Rounded corners**: use `RoundedRectangle(cornerRadius:)` where Apple HIG implies it —
-  `cornerRadius: 10` for message bubbles and input/search fields,
-  `cornerRadius: 6` for small inline badges or tags.
-- **`Rectangle()`**: for nav bars, row backgrounds, list containers, full-width structural
-  dividers and backdrops. Avoids the "card stack" look that clashes with CT's flat terminal feel.
-- Avoid `cornerRadius > 18` except for input pill bars.
+#### Shapes, corners, spacing (CRITICAL)
+
+**Two surface languages — do not mix on the same control:**
+
+| Language | Radius | Material | Examples |
+|----------|--------|----------|----------|
+| **Form / card** | `CTRadius.card` (8) | solid `bgMsg` / `outMsgBg` | settings groups, `CTTextField` / `ctInputChrome`, toasts, recovery fields |
+| **Composer / glass** | `CTRadius.pill` (999) | `.glassCapsule()` | chat input, attach, scroll FAB, chat glass nav, search capsule |
+| **Interactive solid** | `CTRadius.control` (10) | solid accent / bubble fill | `CTButton`, text message bubbles |
+| **Badge** | `CTRadius.badge` (6) | — | unread chips, tiny tags |
+
+- Prefer **`CTShape.*()`** for clip/overlay. Avoid magic `cornerRadius: 16|18|22`.
+- **`Rectangle()`**: structural full-width chrome (list backdrops, thick dividers) when a card stack look is wrong.
+- Floating peers of a circle (attach `+`, send, scroll-to-bottom) share **`CTLayout.controlHeight` (42)** and **pill**.
+- Min tappable side: **`CTLayout.hitTarget` (44)** where layout allows (nav side zones).
+- Horizontal page inset: **`CTLayout.edgePad` (12)** unless a screen documents an exception.
+- Trailing controls next to text: **square frame + center alignment**, not asymmetric vertical padding only (prevents “hanging” send buttons).
+
+**Migration:** new UI must use tokens. When editing a file that still has literal `8`/`10`/`18`,
+switch that call site to `CTRadius` / `CTShape` in the same change.
 
 #### Other rules
 - **NO NavigationStack** inside sheet/modal views — use `CTNavBar(showBack: true, backAction: { dismiss() })` + `@Environment(\.dismiss)`.
 - **Background color**: always `Color.CT.bg` (`#090909`). Use `.ctBackground()` modifier.
 - **Section headers**: `CTSettingsSectionHeader(title:)` — renders `> TITLE` in accent color.
-- **Dividers**: `Rectangle().fill(Color.CT.noise).frame(height: 1)` (full-width) or with `.padding(.horizontal, 20)` (between rows).
-- **Action rows**: trailing `[→]` / `CTSymbol.forward`, font `.regular(13)`.
+- **Dividers**: `Rectangle().fill(Color.CT.noise).frame(height: 1)` (full-width) or with `.padding(.horizontal, CTLayout.edgePad)` (between rows).
+- **Action rows**: trailing disclosure via SF Symbol `chevron.right` / `CTSettingsRow(disclosure:)`; do not regress to ASCII `[→]`.
 - **Developer/debug UI**: use `.orange` color for all dev-facing elements.
 - **Tab bar**: standard SwiftUI `TabView` (`MainTabView`). Hide it inside a conversation only via `.toolbar(.hidden, for: .tabBar)` on the `ChatView` destination — see *Tab bar (native `TabView`)* below.
 
 ### Components
-- `CTNavBar` — navigation bar with optional back `[←]` and trailing action
+- `CTNavBar` — navigation bar with optional back and trailing action (flat; not glass)
+- `CTSearchBar` — floating search capsule (pill)
+- `.glassCapsule()` — floating glass chrome (pill by default)
+- `CTButton` — primary full-width action (`CTRadius.control`)
+- `CTSectionGroup` — settings card (`CTRadius.card`)
 - `CTSettingsSectionHeader` — `> SECTION` header, supports `color:` parameter
-- `CTSettingsRow` — label + value row, supports `labelColor:`, `valueColor:`, `isAction:`, `isDestructive:`
+- `CTSettingsRow` — label + value row, supports `labelColor:`, `valueColor:`, `isAction:`, `isDestructive:`, `status:`, `disclosure:`
 - `CTSep` — separator (`.thick` between sections, `.thin` between rows)
-- `CTHexAvatar` / `HexagonAvatarView` — hexagonal avatars, NO circular avatars
+- `CTHexAvatar` / `HexagonAvatarView` — hexagonal avatars, NO circular avatars (prefer hex over `Circle()`)
 
 ---
 
@@ -201,23 +230,57 @@ The goal is a **bespoke look** that does not clash with iOS / macOS platform nor
 
 ---
 
-## Glossary
+## Glossary & product language
 
-We have our own terminology. Use it consistently in UI, code, and comments.
+Construct’s model is unusual. **User-facing copy must not sound like a research paper.**
+Plain language first; specialized terms only where they earn their place (and after orientation
+has introduced them). Follow the tone of the post-registration **orientation** screens
+(`orientation_page*_body` in Localizable.strings) — short, human, no “node / stream / replica”.
 
-| ❌ Avoid | ✅ Use instead |
-|---------|--------------|
-| Account | Identity |
-| Login / Sign in | Session |
-| Register | Initialize |
-| Device | Replica |
-| Contact | Node |
-| Profile | Identity |
-| Server | Construct |
-| Group | Cluster |
-| Message thread | Stream |
-| ICE (obfuscation layer) | VEIL |
-| obfs4/WebTunnel proxy | VEIL |
+### User-facing (UI strings, empty states, push, onboarding)
+
+Prefer ordinary words. When in doubt, re-read orientation page 2 (“People”) and page 3 (“Three places”).
+
+| Prefer in UI | Avoid in UI | Why |
+|--------------|-------------|-----|
+| **People** / someone / person | Node, contact graph jargon | “Node” scares non-technical users |
+| **Chats** | Streams (as a tab/product name) | Users know “chats”; “streams” is opaque |
+| **Identity** (sparingly) | Account (except restore/link edge cases) | Orientation defines it; don’t stack more jargon |
+| **@alias** | Username (in marketing/orientation tone) | Matches onboarding; “username” still OK in forms if needed |
+| **Device** / this phone | Replica | “Replica” is engineer-speak for v1 |
+| **Request** (to connect) | — | Clearer than “node request” |
+| **QR / link** | Invite token, JTI, etc. | Never surface protocol names |
+| **Synaps** | “Synapse graph”, “mesh” | Brand name — keep; explain as “your people & requests” |
+| **Settings** | — | Normal |
+| **Konstruct** / Construct | Server | Product name; don’t say “the server” in consumer copy |
+
+**Do not** force every ordinary word through the old avoid-table. “Contact” in a system dialog is
+fine if it reads naturally; **do not** replace it with “node”.
+
+### Code, architecture, docs (engineers)
+
+Internal names may stay precise. Comments and types can use domain language; **UI localization keys’
+English values** must stay plain.
+
+| Internal / code | Meaning |
+|-----------------|---------|
+| Identity | Keys + registration; not “account” in crypto paths |
+| Session | Auth / messaging session lifecycle |
+| Initialize | Registration / device init (not “sign up”) |
+| Replica | Multi-device peer of an identity (code/docs) |
+| Contact / User (Core Data) | Person the user can message |
+| Stream (legacy name) | 1:1 conversation / chat entity |
+| Cluster | Group (future) |
+| Construct | Our infrastructure (not user-facing “server”) |
+| VEIL | Obfuscation layer (obfs4 / WebTunnel) — never “ICE” |
+| ICE (WebRTC) | Call NAT traversal only — never rename to VEIL |
+
+### Gradual migration
+
+1. **New UI copy** → plain language table above (orientation style).  
+2. **When editing a screen** → drop residual “node / stream / replica” from visible strings.  
+3. **Code identifiers** (`Chat`, `User`, `openSynapsTab`) — no mass rename required.  
+4. **Old glossary rule “Contact → Node” is retired for UI.**
 
 ### VEIL vs WebRTC ICE — never confuse them
 
@@ -507,6 +570,7 @@ docs). The vault is a flat domain-folder structure — there is no `raw/` or `wi
 | Multi-device support | `client/specs/MULTI_DEVICE_CLIENT_SPEC.md` |
 | FFI binary format (CFE) | `client/construct-ffi-binary-format.md` |
 | construct-engine / EngineAdapter | `client/specs/DESKTOP_ENGINE_REFACTORING_SPEC.md` |
+| **iOS App Store / 1.0 readiness** | `client/specs/IOS_1_0_RELEASE_SCOPE.md` · `client/specs/IOS_APPSTORE_AUDIT_CHECKLIST.md` · `decisions/appstore-release-gates.md` |
 | Security architecture | `security/` |
 
 > Paths move as docs are reorganised — if one is missing, search the domain folder

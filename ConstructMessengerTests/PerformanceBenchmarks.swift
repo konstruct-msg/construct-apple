@@ -60,7 +60,9 @@ final class PerformanceBenchmarks: XCTestCase {
             content: sealedBox,
             suiteId: 1,
             oneTimePreKeyId: 0,
-            storageKey: Data()
+            storageKey: Data(),
+            pqMessageEpoch: 0,
+            pqRatchetField: Data()
         )
         measure {
             for _ in 0..<1000 {
@@ -78,7 +80,9 @@ final class PerformanceBenchmarks: XCTestCase {
             content: sealedBox,
             suiteId: 1,
             oneTimePreKeyId: 0,
-            storageKey: Data()
+            storageKey: Data(),
+            pqMessageEpoch: 0,
+            pqRatchetField: Data()
         )
         let payload = try WirePayloadCoder.encode(components)
         measure {
@@ -123,7 +127,9 @@ final class PerformanceBenchmarks: XCTestCase {
                     content: content,
                     suiteId: 1,
                     oneTimePreKeyId: 0,
-                    storageKey: Data()
+                    storageKey: Data(),
+                    pqMessageEpoch: 0,
+                    pqRatchetField: Data()
                 )
                 _ = try? WirePayloadCoder.encode(components)
             }
@@ -147,7 +153,10 @@ final class PerformanceBenchmarks: XCTestCase {
             ephemeralPublicKey: init0.ephemeralPublicKey,
             messageNumber: init0.messageNumber,
             content: [UInt8](init0Padded),
-            oneTimePrekeyId: init0.oneTimePrekeyId
+            oneTimePrekeyId: init0.oneTimePrekeyId,
+            suiteId: init0.suiteId,
+            pqMessageEpoch: init0.pqMessageEpoch,
+            pqRatchetField: init0.pqRatchetField
         )
         _ = try bob.core.initReceivingSession(
             contactId: alice.userId,
@@ -170,7 +179,9 @@ final class PerformanceBenchmarks: XCTestCase {
                     content: content,
                     suiteId: 1,
                     oneTimePreKeyId: 0,
-                    storageKey: Data()
+                    storageKey: Data(),
+                    pqMessageEpoch: 0,
+                    pqRatchetField: Data()
                 )
                 guard let wire = try? WirePayloadCoder.encode(components) else { return }
                 guard let decoded = try? WirePayloadCoder.decode(wire) else { return }
@@ -179,7 +190,10 @@ final class PerformanceBenchmarks: XCTestCase {
                     contactId: alice.userId,
                     ephemeralPublicKey: decoded.ephemeralPublicKey,
                     messageNumber: decoded.messageNumber,
-                    content: [UInt8](unpadded)
+                    content: [UInt8](unpadded),
+                    suiteId: decoded.suiteId,
+                    pqMessageEpoch: decoded.pqMessageEpoch,
+                    pqRatchetField: [UInt8](decoded.pqRatchetField)
                 )
             }
         }

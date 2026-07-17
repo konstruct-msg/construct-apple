@@ -74,6 +74,11 @@ final class MessageStreamManager {
     var activeTransport: String = ""
     /// Last transport that was successfully used; persists across disconnects for display purposes.
     var lastActiveTransport: String = ""
+    /// Routing key (`direct:host:port` / `ice:PORT`) of the stream that last reached `onAccepted`.
+    /// Used to skip `serverChanged` reconnects when the live stream already rides the new route
+    /// (VEIL failover storm: connectLoop opens ice:port, then debounced reconnect tears it down).
+    /// Writable from `MessageStreamTransport` (same type, other file).
+    var activeRoutingKey: String = ""
 
     /// True when a connection attempt is actively in progress (not sleeping in backoff).
     /// When true, app-foreground force-reconnect should be skipped to avoid interrupting
@@ -226,6 +231,17 @@ final class MessageStreamManager {
             Log.debug("Routing reconnect skipped — no active stream (reason=\(reason))", category: "MessageStream")
             return
         }
+        // VEIL probe → setVeilPort posts grpcServerChanged even when connectLoop already
+        // opened (or is opening) on the new ice:port. Tearing that stream down for a
+        // second connect is the dual-accept / receipt storm seen in device logs.
+        let currentKey = GRPCChannelManager.shared.currentRoutingKey
+        if isConnected, !activeRoutingKey.isEmpty, activeRoutingKey == currentKey {
+            Log.info(
+                "Routing reconnect skipped — already live on \(currentKey) (reason=\(reason))",
+                category: "MessageStream"
+            )
+            return
+        }
         let ids = subscriptionUserIds
         guard !ids.isEmpty || subscriptionUserIds.isEmpty else {
             Log.debug(
@@ -363,8 +379,12 @@ final class MessageStreamManager {
         // task cancellation then only aborts a sleeping backoff or an idle await point.
         isConnected = false
         activeTransport = ""
+        activeRoutingKey = ""
         outboundContinuation?.finish()
         outboundContinuation = nil
+        // Invalidate any in-flight accept/event pump before starting a new connectLoop.
+        streamGeneration &+= 1
+        activeStreamGeneration = 0
         streamTask?.cancel()
         streamTask = nil
         heartbeatTask?.cancel()
@@ -399,6 +419,7 @@ final class MessageStreamManager {
         Log.info("forceDisconnect — reason=\(reason)", category: "MessageStream")
         isConnected = false
         activeTransport = ""
+        activeRoutingKey = ""
         outboundContinuation?.finish()
         outboundContinuation = nil
         heartbeatTask?.cancel()
@@ -407,6 +428,10 @@ final class MessageStreamManager {
         heartbeatWatchdogTask = nil
         backgroundFetchTask?.cancel()
         backgroundFetchTask = nil
+        // Bump generation so any in-flight openStream (onAccepted / event pump) is
+        // immediately stale — setting 0 alone left a race where a late accept still
+        // marked isConnected and dual streams both delivered receipts.
+        streamGeneration &+= 1
         activeStreamGeneration = 0
         streamTask?.cancel()
         streamTask = nil
@@ -506,6 +531,25 @@ final class MessageStreamManager {
     }
 
     // MARK: - Private: Connection Loop
+
+    /// Poll transport state until VEIL leaves `.veilProbing`, or `timeoutSeconds` elapses.
+    /// Returns `true` only when the FSM lands on `.veilActive`.
+    private func waitWhileVeilProbing(timeoutSeconds: TimeInterval) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        while Date() < deadline {
+            if Task.isCancelled { return false }
+            let state = await TransportRouter.shared.snapshot().state
+            switch state {
+            case .veilProbing:
+                try? await Task.sleep(for: .milliseconds(200))
+            case .veilActive:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
+    }
 
     private func connectLoop() async {
         let host = GRPCChannelManager.shared.currentHost
@@ -678,6 +722,34 @@ final class MessageStreamManager {
                     Log.info("MessageStream reconnecting immediately (VEIL=\(nowUsingVEIL))", category: "MessageStream")
                     backgroundFetchTask?.cancel()
                     retryCount = 0
+                    // If grpcServerChanged already scheduled a debounced reconnect, do not
+                    // open another stream in this loop — that is the dual-connect storm
+                    // (connectLoop open + forceDisconnect/connect 2s later).
+                    if routingReconnectDebounce != nil {
+                        Log.info(
+                            "MessageStream fast-failover deferred to pending routing reconnect",
+                            category: "MessageStream"
+                        )
+                        break
+                    }
+                    // VEIL probe in flight: wait for active (or timeout) so the next
+                    // openStream uses ice:port instead of racing a doomed direct open.
+                    if case .veilProbing = await TransportRouter.shared.snapshot().state {
+                        let becameActive = await waitWhileVeilProbing(timeoutSeconds: 8)
+                        if routingReconnectDebounce != nil {
+                            Log.info(
+                                "MessageStream VEIL wait ended with pending routing reconnect — yielding",
+                                category: "MessageStream"
+                            )
+                            break
+                        }
+                        if !becameActive {
+                            Log.info(
+                                "MessageStream VEIL probe did not become active within timeout — continuing openStream",
+                                category: "MessageStream"
+                            )
+                        }
+                    }
                     continue
                 }
                 // Generic stream failure → feed to the FSM.

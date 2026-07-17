@@ -13,6 +13,7 @@ struct ContentView: View {
     @Environment(DeepLinkHandler.self) var deepLinkHandler
     @Environment(\.managedObjectContext) private var viewContext
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
+    @AppStorage(OrientationStore.completedKey) private var orientationCompleted = false
 
     @State private var chatsViewModel = ChatsViewModel()
 
@@ -28,14 +29,26 @@ struct ContentView: View {
                 // Keys are NOT wiped; user can retry, recover via seed phrase, or register new.
                 KeysRecoveryView()
                     .environment(authViewModel)
+            } else if authViewModel.deviceDeregistered {
+                // Server rejected this device as unregistered but the keys are still present.
+                // Same recovery screen (retry / seed / new account) — never a silent wipe.
+                KeysRecoveryView(reason: .deviceDeregistered)
+                    .environment(authViewModel)
             } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
-                // Authenticated OR definitively registered — show main app.
+                // Authenticated OR definitively registered — main app or first-run orientation.
                 // Checking isAuthenticated here prevents a flash to OnboardingView when
                 // Keychain is temporarily unavailable (WhenUnlockedThisDeviceOnly) but
                 // the user's session is still valid in memory.
-                MainTabView()
-                    .environment(authViewModel)
-                    .environment(chatsViewModel)
+                //
+                // Orientation is product education (not identity init). Skip always available.
+                // Existing installs see it once after upgrade until completed/skipped.
+                if orientationCompleted {
+                    MainTabView()
+                        .environment(authViewModel)
+                        .environment(chatsViewModel)
+                } else {
+                    OrientationView(openSynapsOnFinish: true)
+                }
             } else {
                 // No device keys and not authenticated → new user or wiped account.
                 OnboardingView()

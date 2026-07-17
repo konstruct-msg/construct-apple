@@ -85,7 +85,7 @@ struct RecoverySetupView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(Color.CT.bgMsg)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent, lineWidth: 1))
+                    .overlay(CTShape.card().stroke(Color.CT.accent, lineWidth: 1))
             }
             .padding(.horizontal)
             .padding(.bottom)
@@ -126,7 +126,7 @@ struct RecoverySetupView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(Color.CT.bgMsg)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent, lineWidth: 1))
+                    .overlay(CTShape.card().stroke(Color.CT.accent, lineWidth: 1))
             }
             .padding(.horizontal)
             .padding(.bottom)
@@ -148,7 +148,7 @@ struct RecoverySetupView: View {
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
         .background(Color.CT.bgMsg)
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 1))
+        .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 1))
     }
 
     // Safe indexed iteration over potentially mutating @Observable arrays.
@@ -191,7 +191,7 @@ struct RecoverySetupView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(Color.CT.bgMsg)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(vm.quizPassed ? Color.CT.accent : Color.CT.noise, lineWidth: 1))
+                        .overlay(CTShape.card().stroke(vm.quizPassed ? Color.CT.accent : Color.CT.noise, lineWidth: 1))
                 }
                 .disabled(!vm.quizPassed)
                 .padding(.horizontal)
@@ -245,7 +245,7 @@ struct RecoverySetupView: View {
                         .foregroundColor(Color.CT.text)
                         .padding(8)
                         .background(Color.CT.bgMsg)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 1))
+                        .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 1))
                 }
             }
             Spacer()
@@ -259,7 +259,7 @@ struct RecoverySetupView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(Color.CT.bgMsg)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent, lineWidth: 1))
+                    .overlay(CTShape.card().stroke(Color.CT.accent, lineWidth: 1))
             }
             .padding(.horizontal)
             .padding(.bottom)
@@ -291,7 +291,7 @@ struct RecoverySetupView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(Color.CT.bgMsg)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent, lineWidth: 1))
+                    .overlay(CTShape.card().stroke(Color.CT.accent, lineWidth: 1))
             }
             .padding(.horizontal)
             .padding(.bottom)

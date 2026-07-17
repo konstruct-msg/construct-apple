@@ -43,6 +43,13 @@ final class StealthSenderService {
             try await AuthServiceClient.shared.getSenderCertificate()
         }
         cacheCert(response.certificate, expiresAt: response.expiresAt)
+        // Piggyback: the server delivers its X25519 token-encryption key alongside the cert
+        // (same authenticated gRPC channel, same 24h lifecycle). This is the robust source
+        // for the seal key — the HTTP well-known can fail on-device (self-signed native/VEIL
+        // listener + ATS), leaving the client unable to seal tokens → decrypt_failed.
+        if !response.tokenEncryptionKey.isEmpty {
+            await ServerKeyManager.shared.cacheFromGRPC(response.tokenEncryptionKey)
+        }
         return response.certificate
     }
 
@@ -294,18 +301,46 @@ final class StealthSenderService {
         inner.contentType = contentType
         inner.deliveryTag = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
 
-        // Ask StealthPolicy whether we should attach a token.
-        // - When stealth is disabled → no token (and caller shouldn't even call this method).
-        // - Per-message → attach token every time.
-        // - Per-stream → attach at most once per recipient per day.
-        // The SealedInner certificate (hiding the sender) is still built by the caller
-        // whenever stealth is enabled.
-        if let token = StealthPolicy.shared.consumeTokenIfNeeded(for: recipientUserId) {
+        // A token accompanies every sealed send (per-message — the only model compatible
+        // with server-side enforce; per-stream removed 2026-07-15). `wantedToken` is
+        // captured before consuming so "stealth disabled" is distinguishable from
+        // "wallet empty" in the else-branch logging below.
+        let wantedToken = StealthPolicy.shared.shouldConsumeToken()
+        // Peek the server token-encryption key BEFORE consuming a wallet token. An
+        // unsealable token is rejected server-side (`decrypt_failed`, fatal under enforce),
+        // so if we cannot seal we must NOT spend the token — leave it in the wallet for a
+        // later send once the key is cached (it arrives via GetSenderCertificateResponse).
+        let canSeal = await ServerKeyManager.shared.hasTokenEncryptionKey()
+        if canSeal,
+           let token = StealthPolicy.shared.consumeTokenIfNeeded(),
+           let sealedToken = await ServerKeyManager.shared.sealTokenBytes(token.token) {
             inner.tokenNonce = token.nonce
-            // Encrypt token_bytes to the server's X25519 key so relay operators cannot
-            // read the spent token. Falls back to plaintext if key is not yet cached.
-            inner.tokenBytes = await ServerKeyManager.shared.sealTokenBytes(token.token)
+            // token_bytes sealed to the server's X25519 key so relay operators cannot read
+            // the spent token (VEIL ghost-mode) and the server can redeem it.
+            inner.tokenBytes = sealedToken
+            // Positive-path visibility: confirms a token was actually attached (successful
+            // consume was previously silent — the wallet could only be inferred, not seen).
+            Log.info("Stealth: sealed send WITH token (wallet=\(TokenWalletService.shared.balance) left)", category: "Stealth")
+        } else if wantedToken {
+            // Policy wanted a token but we sent without one — seal + send anyway (the
+            // certificate seal hides the sender regardless). Anti-abuse degraded, anonymity
+            // intact — the invariant we deliberately preserve. Distinguish the two causes so
+            // an on-device diagnosis is unambiguous:
+            //   • server key not yet cached → cannot seal (kick a fetch so the next send seals)
+            //   • wallet empty → issuance not keeping up
+            PerformanceMetrics.shared.record(.stealthTokenlessSend, label: String(recipientUserId.prefix(8)))
+            if !canSeal {
+                Log.info("Stealth: sealed send WITHOUT token — server key not yet cached, cannot seal (would-be decrypt_failed avoided)", category: "Stealth")
+                Task { await ServerKeyManager.shared.prefetch() }
+            } else {
+                Log.info("Stealth: sealed send WITHOUT token — wallet empty (anti-abuse degraded, anonymity intact)", category: "Stealth")
+            }
         }
+
+        // Reactive top-up: per-message scope drains the wallet steadily, so refill toward
+        // the server hourly cap as we spend rather than waiting for foreground/background
+        // triggers. No-op when the wallet is above the low-water mark or within cooldown.
+        Task { await BlindTokenService.shared.topUpIfLow() }
 
         return try inner.serializedData()
     }

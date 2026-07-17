@@ -121,6 +121,31 @@ enum CTFont {
     static func bold(_ size: CGFloat)    -> Font { ConstructFont.mono(size, weight: .bold)    }
 }
 
+// MARK: - Corner Radii
+
+/// Canonical corner radii — keep in sync with ConstructMessenger `ConstructTheme.swift`.
+enum CTRadius {
+    static let badge: CGFloat = 6
+    static let card: CGFloat = 8
+    static let control: CGFloat = 10
+    static let pill: CGFloat = 999
+}
+
+enum CTShape {
+    static func badge(style: RoundedCornerStyle = .continuous) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: CTRadius.badge, style: style)
+    }
+    static func card(style: RoundedCornerStyle = .continuous) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: CTRadius.card, style: style)
+    }
+    static func control(style: RoundedCornerStyle = .continuous) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: CTRadius.control, style: style)
+    }
+    static func pill(style: RoundedCornerStyle = .continuous) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: CTRadius.pill, style: style)
+    }
+}
+
 // MARK: - Layout Constants
 
 /// Canonical sizing tokens for nav bars, action icons, and content rows.
@@ -147,6 +172,14 @@ enum CTLayout {
 
     /// Large icon for full-screen call UI (accept / decline / mute buttons).
     static let callIconSize: CGFloat = 24
+    static let callControlSize: CGFloat = 56
+    static let callEndSize: CGFloat = 64
+
+    static let controlHeight: CGFloat = 42
+    static let hitTarget: CGFloat = 44
+    static let chromeGap: CGFloat = 10
+    static let sectionGap: CGFloat = 16
+    static let inlinePad: CGFloat = 8
 }
 
 // MARK: - Cross-platform helpers
@@ -457,9 +490,7 @@ struct CTSep: View {
 // MARK: - Section Group
 
 /// Rounded card container for settings sections that use the flat CTSettingsRow pattern.
-/// Wraps rows in a subtle elevated background with cornerRadius 8.
-/// Usage: wrap the rows of one section (not the CTSettingsSectionHeader) in CTSectionGroup { ... }
-/// Remove CTSep(style: .thick) between sections — CTSettingsSectionHeader's .padding(.top, 16) provides the gap.
+/// Wraps rows with ``CTRadius.card``.
 struct CTSectionGroup<Content: View>: View {
     @ViewBuilder let content: Content
 
@@ -468,9 +499,9 @@ struct CTSectionGroup<Content: View>: View {
             content
         }
         .background(Color.CT.outMsgBg)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 0.5))
-        .padding(.horizontal, 12)
+        .clipShape(CTShape.card())
+        .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
+        .padding(.horizontal, CTLayout.edgePad)
     }
 }
 
@@ -739,11 +770,11 @@ struct CTTextField: View {
         .font(CTFont.regular(14))
         .foregroundColor(Color.CT.text)
         .multilineTextAlignment(alignment)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
+        .padding(.horizontal, CTLayout.edgePad)
+        .padding(.vertical, CTLayout.navVPad)
         .background(Color.CT.bgMsg)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(CTShape.card())
+        .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
         #if os(macOS)
         .textFieldStyle(.plain)
         #endif
@@ -776,9 +807,9 @@ struct CTButton: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(bgColor)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipShape(CTShape.control())
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
+                    CTShape.control()
                         .stroke(isEnabled ? Color.clear : Color.CT.noise, lineWidth: 0.5)
                 )
         }

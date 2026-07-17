@@ -36,7 +36,7 @@ struct FullScreenImageView: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(CTFont.regular(20))
                     .foregroundColor(.white.opacity(0.9))
-                    .frame(width: 44, height: 44)
+                    .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                     .contentShape(Rectangle())
             }
             .padding(.leading, 8)

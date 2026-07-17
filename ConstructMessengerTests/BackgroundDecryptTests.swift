@@ -56,7 +56,9 @@ final class BackgroundDecryptTests: XCTestCase {
                 content: MessagePadding.padCiphertext(Data(comps.content)),
                 suiteId: 1,
                 oneTimePreKeyId: comps.oneTimePrekeyId,
-                storageKey: Data(comps.storageKey)
+                storageKey: Data(comps.storageKey),
+                pqMessageEpoch: 0,
+                pqRatchetField: Data()
             )
             return try WirePayloadCoder.encode(swiftComps)
         }
@@ -70,7 +72,10 @@ final class BackgroundDecryptTests: XCTestCase {
                 ephemeralPublicKey: decoded.ephemeralPublicKey,
                 messageNumber: decoded.messageNumber,
                 content: [UInt8](unpadded),
-                oneTimePrekeyId: 0
+                oneTimePrekeyId: 0,
+                suiteId: decoded.suiteId,
+                pqMessageEpoch: decoded.pqMessageEpoch,
+                pqRatchetField: [UInt8](decoded.pqRatchetField)
             )
             _ = try core.initReceivingSession(
                 contactId: sender.userId,
@@ -97,7 +102,10 @@ final class BackgroundDecryptTests: XCTestCase {
                 contactId: contactId,
                 ephemeralPublicKey: decoded.ephemeralPublicKey,
                 messageNumber: decoded.messageNumber,
-                content: [UInt8](unpadded)
+                content: [UInt8](unpadded),
+                suiteId: decoded.suiteId,
+                pqMessageEpoch: decoded.pqMessageEpoch,
+                pqRatchetField: [UInt8](decoded.pqRatchetField)
             )
             return String(data: Data(result.plaintext), encoding: .utf8) ?? "__binary__"
         }
@@ -132,7 +140,10 @@ final class BackgroundDecryptTests: XCTestCase {
             contactId: alice.userId,
             ephemeralPublicKey: enc2.ephemeralPublicKey,
             messageNumber: enc2.messageNumber,
-            content: [UInt8](repeating: 0xFF, count: max(64, enc2.content.count))
+            content: [UInt8](repeating: 0xFF, count: max(64, enc2.content.count)),
+            suiteId: enc2.suiteId,
+            pqMessageEpoch: enc2.pqMessageEpoch,
+            pqRatchetField: enc2.pqRatchetField
         )
 
         // ── Batch decrypt (background path) ───────────────────────────────────
@@ -154,7 +165,9 @@ final class BackgroundDecryptTests: XCTestCase {
             content: MessagePadding.padCiphertext(Data(enc3.content)),
             suiteId: 1,
             oneTimePreKeyId: enc3.oneTimePrekeyId,
-            storageKey: Data(enc3.storageKey)
+            storageKey: Data(enc3.storageKey),
+            pqMessageEpoch: 0,
+            pqRatchetField: Data()
         )
         let wire3 = try WirePayloadCoder.encode(swiftComps3)
         let decrypted3 = try bob.decryptViaWire(wire3, from: alice.userId)
@@ -179,7 +192,10 @@ final class BackgroundDecryptTests: XCTestCase {
                 contactId: alice.userId,
                 ephemeralPublicKey: enc.ephemeralPublicKey,
                 messageNumber: enc.messageNumber,
-                content: [UInt8](repeating: 0xAB, count: 64)
+                content: [UInt8](repeating: 0xAB, count: 64),
+                suiteId: enc.suiteId,
+                pqMessageEpoch: enc.pqMessageEpoch,
+                pqRatchetField: enc.pqRatchetField
             )
         }
 

@@ -218,6 +218,8 @@ final class StreamLifecycleCoordinator {
             guard !Task.isCancelled, let self else { return }
             let ids = self.currentConversationIds()
             self.lastReconnectSubscriptionSet = Set(ids)
+            // Stamp establishedAt for CFE-restored sessions before any prewarm END_SESSION.
+            self.sessionCoordinator.hydrateEstablishedTimestampsForRestoredSessions()
             self.wireStreamCallbacks()
             self.streamManager.forceReconnect(contactUserIds: ids) { [weak self] message in
                 self?.handleIncomingMessage(message)

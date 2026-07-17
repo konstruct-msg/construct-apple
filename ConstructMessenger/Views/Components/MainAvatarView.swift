@@ -4,7 +4,7 @@
 //
 
 import SwiftUI
-
+import CoreData
 
 // MARK: - Deterministic accent color
 
@@ -213,6 +213,61 @@ struct MainAvatarView: View {
                     .stroke(Color.AppBackground.primary, lineWidth: 1.5)
             )
             .offset(x: 2, y: 2)
+    }
+}
+
+// MARK: - Contact-resolved avatar
+
+/// Looks up `User.avatarData` for `userId` and renders `MainAvatarView` with it.
+/// Falls back to the deterministic identicon when no stored avatar exists.
+/// Use this anywhere you only have a peer user id (calls, history) rather than a
+/// live `User` object — chat rows already observe `User` and pass `image` directly.
+struct ContactMainAvatarView: View {
+    let userId: String
+    var displayName: String = ""
+    var size: CGFloat = 44
+    var isActive: Bool = false
+    var isOnline: Bool = false
+    var strokeWidth: CGFloat = 1.5
+
+    @FetchRequest private var users: FetchedResults<User>
+
+    init(
+        userId: String,
+        displayName: String = "",
+        size: CGFloat = 44,
+        isActive: Bool = false,
+        isOnline: Bool = false,
+        strokeWidth: CGFloat = 1.5
+    ) {
+        self.userId = userId
+        self.displayName = displayName
+        self.size = size
+        self.isActive = isActive
+        self.isOnline = isOnline
+        self.strokeWidth = strokeWidth
+        _users = FetchRequest(
+            sortDescriptors: [],
+            predicate: NSPredicate(format: "id == %@", userId),
+            animation: nil
+        )
+    }
+
+    var body: some View {
+        let user = users.first
+        let image: PlatformImage? = user?.avatarData.flatMap { PlatformImage(data: $0) }
+        let resolvedName = displayName.isEmpty
+            ? (user?.resolvedDisplayName ?? "")
+            : displayName
+        MainAvatarView(
+            userId: userId,
+            displayName: resolvedName,
+            image: image,
+            size: size,
+            isActive: isActive,
+            isOnline: isOnline,
+            strokeWidth: strokeWidth
+        )
     }
 }
 

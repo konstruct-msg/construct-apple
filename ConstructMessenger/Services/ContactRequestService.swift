@@ -1,5 +1,8 @@
 import CoreData
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Background-safe contact request acceptance handler.
 ///
@@ -84,6 +87,55 @@ final class ContactRequestService {
             )
             return []
         }
+    }
+
+    // MARK: - Incoming request push
+
+    /// Handles silent push `activity_type = contact_request_received`.
+    /// Fetches the inbox so a later Synaps open is warm, posts
+    /// `.contactRequestReceived` for an already-visible Synaps tab, and shows a
+    /// privacy-preserving local banner when the app is backgrounded.
+    func handleIncomingRequestPush(requestId: String?) async {
+        Log.info(
+            "contact_request_received push — requestId: \(requestId ?? "nil")",
+            category: "ContactRequests"
+        )
+
+        var incomingCount = 0
+        do {
+            let result = try await userServiceClient.getContactRequests()
+            incomingCount = result.incoming.count
+        } catch {
+            Log.error(
+                "contact_request_received: GetContactRequests failed: \(error)",
+                category: "ContactRequests"
+            )
+        }
+
+        NotificationCenter.default.post(
+            name: .contactRequestReceived,
+            object: nil,
+            userInfo: requestId.map { ["requestId": $0] }
+        )
+
+        // Local banner only when not already foreground-active — Synaps can refresh
+        // live via the notification above without a lock-screen alert.
+        #if canImport(UIKit)
+        let isActive = await MainActor.run {
+            UIApplication.shared.applicationState == .active
+        }
+        if !isActive {
+            LocalNotificationManager.shared.showContactRequestReceivedNotification(
+                requestId: requestId,
+                pendingCount: incomingCount
+            )
+        }
+        #else
+        LocalNotificationManager.shared.showContactRequestReceivedNotification(
+            requestId: requestId,
+            pendingCount: incomingCount
+        )
+        #endif
     }
 
     // MARK: - Pending navigation

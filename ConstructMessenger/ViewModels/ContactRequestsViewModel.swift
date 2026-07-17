@@ -87,10 +87,22 @@ final class ContactRequestsViewModel {
 
     // MARK: - Send
 
-    /// Returns the new request ID, or nil if duplicate pending.
+    /// Returns the new request ID. Populates `from_identity` from the local current user
+    /// so the recipient inbox shows a human-readable sender without a profile fetch.
     @discardableResult
     func sendRequest(toUserId: String) async throws -> String {
-        try await userServiceClient.sendContactRequest(toUserId: toUserId)
+        let identity = currentSenderIdentity()
+        return try await userServiceClient.sendContactRequest(
+            toUserId: toUserId,
+            username: identity.username,
+            displayName: identity.displayName
+        )
+    }
+
+    /// Local current-user identity used for the request-time snapshot (same source as QR/share).
+    private func currentSenderIdentity() -> (username: String?, displayName: String?) {
+        guard let userId = AuthSessionManager.shared.currentUserId else { return (nil, nil) }
+        return (resolveUsername(for: userId), resolveDisplayName(for: userId))
     }
 
     /// Returns true if sender already has a pending sent request to `toUserId`.
@@ -192,21 +204,24 @@ final class ContactRequestsViewModel {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    /// Prefer request-time snapshot (server `from_*` fields), then local Core Data cache,
+    /// then best-effort profile fetch. Snapshot is the authoritative early UX hint until
+    /// the long-term contact/profile pipeline catches up after accept.
     private func resolveIncomingIdentity(
         fromUserId: String,
         fallbackDisplayName: String?,
         fallbackUsername: String?
     ) async -> (displayName: String?, username: String?) {
-        let cachedDisplayName = resolveDisplayName(for: fromUserId)
-        let cachedUsername = resolveUsername(for: fromUserId)
-        if cachedDisplayName != nil || cachedUsername != nil {
-            return (cachedDisplayName, cachedUsername)
-        }
-
         let requestDisplayName = fallbackDisplayName.flatMap(normalizedValue)
         let requestUsername = fallbackUsername.flatMap(normalizedValue)
         if requestDisplayName != nil || requestUsername != nil {
             return (requestDisplayName, requestUsername)
+        }
+
+        let cachedDisplayName = resolveDisplayName(for: fromUserId)
+        let cachedUsername = resolveUsername(for: fromUserId)
+        if cachedDisplayName != nil || cachedUsername != nil {
+            return (cachedDisplayName, cachedUsername)
         }
 
         do {

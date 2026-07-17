@@ -65,6 +65,14 @@ final class VeilCapabilityRenewer {
                 }
                 Log.info("VEIL renew: capability renewed for \(issued.relayAddress) (new exp in \(Int((Double(newParsed.notAfter) - Date().timeIntervalSince1970) / 86400))d)", category: "VEIL")
 
+                // EntryDirectory v1: cache the pre-issued alternate fronts so a blocked
+                // primary can fail over without a round-trip. Validated against the signed
+                // manifest inside VeilAlternatesCache (server-asserted coords aren't trusted).
+                let cachedAlts = VeilAlternatesCache.store(issued.alternates)
+                if cachedAlts > 0 {
+                    Log.info("VEIL renew: cached \(cachedAlts)/\(issued.alternates.count) alternate front(s)", category: "VEIL")
+                }
+
                 // Anti-downgrade: never override a binary-pinned relay's SPKI from the
                 // response. Surface drift so we know a cert rotation needs an app update.
                 if let pin = VEILConfig.hardcodedRelaySPKIs[issued.relayAddress],

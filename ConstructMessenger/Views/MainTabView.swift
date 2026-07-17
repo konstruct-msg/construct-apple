@@ -61,6 +61,11 @@ struct MainTabView: View {
                 // ended in the minimised state.
                 if isActive { isCallExpanded = true }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .openSynapsTab)) { _ in
+                // Compact tab bar only — regular/iPad uses split chrome, but setting
+                // selectedTab is still harmless and keeps Synaps selection consistent.
+                chatsViewModel.selectedTab = 1
+            }
     }
 
     /// Binding that drives `fullScreenCover`. The cover is shown when there is

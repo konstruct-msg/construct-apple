@@ -116,9 +116,46 @@ enum CTFont {
     static func bold(_ size: CGFloat)    -> Font { ConstructFont.mono(size, weight: .bold)    }
 }
 
+// MARK: - Corner Radii
+
+/// Canonical corner radii. Prefer these over magic numbers.
+///
+/// | Token   | Value | Use |
+/// |---------|-------|-----|
+/// | badge   | 6     | Unread counts, tiny tags |
+/// | card    | 8     | Settings groups, form fields, toasts, QR frames |
+/// | control | 10    | CTButton, text message bubbles, small interactive surfaces |
+/// | pill    | 999   | Full capsule ends — floating glass, circular peers, voice chrome |
+///
+/// **Do not invent 16 / 18 / 22** for “almost pill” — that is how the composer
+/// circle vs field mismatch happened. Floating glass always uses `pill`.
+enum CTRadius {
+    static let badge: CGFloat = 6
+    static let card: CGFloat = 8
+    static let control: CGFloat = 10
+    /// Large enough that any reasonable height becomes a true stadium/capsule.
+    static let pill: CGFloat = 999
+}
+
+/// Continuous rounded rectangles keyed by ``CTRadius`` (preferred clip/overlay shapes).
+enum CTShape {
+    static func badge(style: RoundedCornerStyle = .continuous) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: CTRadius.badge, style: style)
+    }
+    static func card(style: RoundedCornerStyle = .continuous) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: CTRadius.card, style: style)
+    }
+    static func control(style: RoundedCornerStyle = .continuous) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: CTRadius.control, style: style)
+    }
+    static func pill(style: RoundedCornerStyle = .continuous) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: CTRadius.pill, style: style)
+    }
+}
+
 // MARK: - Layout Constants
 
-/// Canonical sizing tokens for nav bars, action icons, and content rows.
+/// Canonical sizing tokens for nav bars, action icons, content rows, and composer chrome.
 ///
 /// All icon sizes are derived from `CTFont.bold(13)` line height (~16 pt) so that
 /// a nav bar containing only an SF Symbol is the same height as one containing text.
@@ -143,9 +180,32 @@ enum CTLayout {
     /// Large icon for full-screen call UI (accept / decline / mute buttons).
     static let callIconSize: CGFloat = 24
 
+    /// Circular call control (mute / speaker / secondary).
+    static let callControlSize: CGFloat = 56
+
+    /// Hang-up control diameter (slightly larger than secondary controls).
+    static let callEndSize: CGFloat = 64
+
     /// Fixed side zones keep the title visually centered even when leading and
     /// trailing controls differ between screens or editing states.
     static let navBarSideWidth: CGFloat = 96
+
+    // MARK: Controls & spacing
+
+    /// Composer family: attach, send, mic, scroll-to-bottom peer height.
+    static let controlHeight: CGFloat = 42
+
+    /// Minimum tappable side length (Apple HIG).
+    static let hitTarget: CGFloat = 44
+
+    /// Gap between related floating chrome pieces (attach ↔ field).
+    static let chromeGap: CGFloat = 10
+
+    /// Vertical gap before a settings section header / between major blocks.
+    static let sectionGap: CGFloat = 16
+
+    /// Tight inset inside cards / preview chips.
+    static let inlinePad: CGFloat = 8
 }
 
 // MARK: - Cross-platform helpers
@@ -326,17 +386,17 @@ struct CTNoise: View {
 
 // MARK: - Mode Selector (tri-state segmented control)
 
-/// A CT-styled segmented control for selecting between modes.
-/// No rounded corners, accent color on selected segment, ASCII aesthetic.
+/// A CT-styled segmented control for selecting between modes (e.g. VEIL OFF|AUTO|ON).
+/// Accent fill on the selected segment; equal-width options.
 struct CTModeSelector<T: Hashable>: View {
     @Binding var selection: T
     let options: [T]
     let labels: [T: String]
-    /// Total width of the control. Pass nil to size to content (parent should constrain).
+    /// Fixed total width. Pass `nil` to expand to the parent’s max width (media picker tray).
     var width: CGFloat? = 180
 
     var body: some View {
-        HStack(spacing: 0) {
+        let control = HStack(spacing: 0) {
             ForEach(options, id: \.self) { option in
                 let isSelected = selection == option
                 Button {
@@ -354,9 +414,14 @@ struct CTModeSelector<T: Hashable>: View {
                 .buttonStyle(.plain)
             }
         }
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .frame(width: width)
+        .overlay(CTShape.card().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
+        .clipShape(CTShape.card())
+
+        if let width {
+            control.frame(width: width)
+        } else {
+            control.frame(maxWidth: .infinity)
+        }
     }
 }
 
@@ -378,9 +443,9 @@ struct CTSep: View {
 // MARK: - Section Group
 
 /// Rounded card container for settings sections that use the flat CTSettingsRow pattern.
-/// Wraps rows in a subtle elevated background with cornerRadius 8.
+/// Wraps rows in a subtle elevated background with ``CTRadius.card``.
 /// Usage: wrap the rows of one section (not the CTSettingsSectionHeader) in CTSectionGroup { ... }
-/// Remove CTSep(style: .thick) between sections — CTSettingsSectionHeader's .padding(.top, 16) provides the gap.
+/// Remove CTSep(style: .thick) between sections — CTSettingsSectionHeader's top pad provides the gap.
 struct CTSectionGroup<Content: View>: View {
     @ViewBuilder let content: Content
 
@@ -389,9 +454,9 @@ struct CTSectionGroup<Content: View>: View {
             content
         }
         .background(Color.CT.outMsgBg)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 0.5))
-        .padding(.horizontal, 12)
+        .clipShape(CTShape.card())
+        .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
+        .padding(.horizontal, CTLayout.edgePad)
     }
 }
 
@@ -434,7 +499,11 @@ struct CTSearchBar: View {
                 .tint(Color.CT.accent)
 
             if !text.isEmpty {
-                Button { text = "" } label: {
+                Button {
+                    text = ""
+                    // Drop keyboard when clearing — otherwise focus can stick with no dismiss path.
+                    focused?.wrappedValue = false
+                } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 13))
                         .foregroundColor(Color.CT.textDim)
@@ -803,9 +872,9 @@ struct CTButton: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(bgColor)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(CTShape.control())
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
+                    CTShape.control()
                         .stroke(isEnabled ? Color.clear : Color.CT.noise, lineWidth: 0.5)
                 )
         }
@@ -891,8 +960,10 @@ extension View {
             .overlay(Circle().stroke(Color.CT.noise, lineWidth: 0.5))
     }
 
-    /// Reusable floating glass capsule for bars, inputs, tab bars (Apple capsulization).
-    func glassCapsule(cornerRadius: CGFloat = 22) -> some View {
+    /// Reusable floating glass capsule for bars, inputs, FABs (Apple capsulization).
+    /// Default radius is ``CTRadius.pill`` so peers of a circle (attach, scroll FAB)
+    /// always match — do not pass 18/22 “almost pill” values.
+    func glassCapsule(cornerRadius: CGFloat = CTRadius.pill) -> some View {
         self
             .background(.ultraThinMaterial)
             .background(Color.CT.bg.opacity(0.35))
@@ -947,10 +1018,8 @@ enum CTInputChromeStyle {
     }
 
     fileprivate var cornerRadius: CGFloat {
-        switch self {
-        case .standard: return 8
-        case .compact: return 8
-        }
+        // Form fields use card radius (solid bgMsg), not floating glass pill.
+        CTRadius.card
     }
 
     fileprivate var defaultStrokeColor: Color {

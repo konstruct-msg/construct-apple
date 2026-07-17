@@ -71,9 +71,9 @@ struct ErrorToastView: View {
         .padding(.vertical, 12)
         .padding(.horizontal, 14)
         .background(Color.CT.bgMsg).opacity(0.6)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(CTShape.card())
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            CTShape.card()
                 .stroke(tintColor(for: error).opacity(0.8), lineWidth: 1)
         )
         .padding(.horizontal, 16)

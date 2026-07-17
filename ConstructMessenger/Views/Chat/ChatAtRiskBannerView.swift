@@ -10,25 +10,28 @@ struct ChatAtRiskBannerView: View {
 
     var body: some View {
         if isVisible {
-            HStack(spacing: 10) {
+            HStack(spacing: CTLayout.chromeGap) {
                 Image(systemName: "clock.badge.exclamationmark")
                     .font(CTFont.regular(16))
                     .foregroundStyle(.orange)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(LocalizedStringKey("session_at_risk_title"))
-                        .font(.footnote.weight(.semibold))
+                        .font(CTFont.bold(12))
+                        .foregroundStyle(Color.CT.text)
                     Text(LocalizedStringKey("session_at_risk_subtitle"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, CTLayout.edgePad)
+            .padding(.vertical, CTLayout.chromeGap)
             .background(Color.orange.opacity(0.08))
-            .overlay(Rectangle().frame(height: 1).foregroundStyle(.orange.opacity(0.3)), alignment: .bottom)
+            .clipShape(CTShape.card())
+            .overlay(CTShape.card().stroke(Color.orange.opacity(0.35), lineWidth: 0.5))
+            .padding(.horizontal, 4)
             .transition(.move(edge: .top).combined(with: .opacity))
         }
     }

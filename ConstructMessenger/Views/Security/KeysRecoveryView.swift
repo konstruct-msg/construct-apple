@@ -10,6 +10,18 @@
 import SwiftUI
 
 struct KeysRecoveryView: View {
+    /// Why the recovery screen is shown. Only the warning copy and the Retry action differ;
+    /// seed-phrase recovery and "new account" are identical for both.
+    enum Reason {
+        /// Authenticated but device crypto keys couldn't be read from Keychain.
+        case keysUnavailable
+        /// Server rejected this device as unregistered (UNAUTHENTICATED / "device not found");
+        /// keys are still present locally, so nothing is wiped until the user chooses.
+        case deviceDeregistered
+    }
+
+    var reason: Reason = .keysUnavailable
+
     @Environment(AuthViewModel.self) private var auth
     @State private var recoveryVM = AccountRecoveryViewModel()
     @State private var showRecovery = false
@@ -30,12 +42,12 @@ struct KeysRecoveryView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         // Warning block
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(NSLocalizedString("keys_recovery_warning_title", comment: ""))
+                            Text(NSLocalizedString(warningTitleKey, comment: ""))
                                 .font(CTFont.bold(13))
                                 .foregroundColor(Color.CT.danger)
                                 .tracking(2)
 
-                            Text(NSLocalizedString("keys_recovery_warning_body", comment: ""))
+                            Text(NSLocalizedString(warningBodyKey, comment: ""))
                                 .font(CTFont.regular(13))
                                 .foregroundColor(Color.CT.text)
                                 .lineSpacing(4)
@@ -50,13 +62,16 @@ struct KeysRecoveryView: View {
 
                         // Option 1: Retry
                         CTSettingsSectionHeader(title: NSLocalizedString("keys_recovery_section_retry", comment: ""))
-                        Text(NSLocalizedString("keys_recovery_retry_hint", comment: ""))
+                        Text(NSLocalizedString(retryHintKey, comment: ""))
                             .font(CTFont.regular(12))
                             .foregroundColor(Color.CT.textDim)
                             .padding(.horizontal, 20)
                         Button {
                             retryCount += 1
-                            auth.retryLoadingDeviceKeys()
+                            switch reason {
+                            case .keysUnavailable:    auth.retryLoadingDeviceKeys()
+                            case .deviceDeregistered: auth.retryDeviceAuthentication()
+                            }
                         } label: {
                             CTSettingsRow(
                                 label: NSLocalizedString("keys_recovery_retry_action", comment: ""),
@@ -129,6 +144,29 @@ struct KeysRecoveryView: View {
             Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {}
         } message: {
             Text(NSLocalizedString("keys_recovery_wipe_confirm_body", comment: ""))
+        }
+    }
+
+    // MARK: - Reason-specific copy
+
+    private var warningTitleKey: String {
+        switch reason {
+        case .keysUnavailable:    return "keys_recovery_warning_title"
+        case .deviceDeregistered: return "device_deregistered_warning_title"
+        }
+    }
+
+    private var warningBodyKey: String {
+        switch reason {
+        case .keysUnavailable:    return "keys_recovery_warning_body"
+        case .deviceDeregistered: return "device_deregistered_warning_body"
+        }
+    }
+
+    private var retryHintKey: String {
+        switch reason {
+        case .keysUnavailable:    return "keys_recovery_retry_hint"
+        case .deviceDeregistered: return "device_deregistered_retry_hint"
         }
     }
 }

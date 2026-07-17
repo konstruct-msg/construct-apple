@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import CoreData
 
 struct ExportBackupView: View {
     @Environment(\.dismiss) private var dismiss
@@ -146,7 +147,7 @@ struct ExportBackupView: View {
                         .foregroundStyle(Color.CT.accent)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent.opacity(0.5), lineWidth: 1))
+                        .overlay(CTShape.card().stroke(Color.CT.accent.opacity(0.5), lineWidth: 1))
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)

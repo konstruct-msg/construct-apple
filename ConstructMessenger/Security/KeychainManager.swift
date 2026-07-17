@@ -394,6 +394,11 @@ class KeychainManager {
         Log.info("All cryptographic keys and sessions deleted", category: "Keychain")
     }
     
+    /// Delete all per-contact E2EE session blobs (`session_*` keys).
+    func deleteAllE2EESessions() {
+        deleteAllSessions()
+    }
+
     /// Delete all saved sessions (sessions are stored with keys like "session_<contactId>")
     /// Note: Keychain doesn't provide a way to list keys, so we delete by pattern
     /// This is called during account deletion to ensure clean state

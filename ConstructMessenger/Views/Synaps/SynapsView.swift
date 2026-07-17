@@ -11,6 +11,9 @@
 import SwiftUI
 import CoreData
 import GRPCCore
+#if os(iOS)
+import UIKit
+#endif
 
 // MARK: - SynapsView
 
@@ -27,6 +30,7 @@ struct SynapsView: View {
     private var contacts: FetchedResults<User>
 
     @State private var searchText      = ""
+    @FocusState private var isSearchFocused: Bool
     @State private var selectedContact: User? = nil
     @State private var pruneTarget:     User? = nil
     @State private var showPruneConfirm = false
@@ -44,6 +48,9 @@ struct SynapsView: View {
     }
     @State private var remoteState: RemoteSearchState = .idle
     @State private var searchTask: Task<Void, Never>? = nil
+    /// Optimistic / session UI for “request sent” — UserDefaults alone does not invalidate the view.
+    @State private var pendingSentUserIds: Set<String> = []
+    @State private var sendingRequestToUserId: String? = nil
 
     // MARK: - QR Scanner
     @State private var showingQRScanner = false
@@ -68,23 +75,32 @@ struct SynapsView: View {
     var body: some View {
         let filteredContacts = filtered
         NavigationStack {
+            // Content is laid out in the safe area *below* the top chrome (nav + search)
+            // via safeAreaInset. Do not overlay chrome without reserving that space —
+            // remote-search results and the honeycomb were previously drawn under the
+            // search field. Extra bottom padding for the old floating CTTabBar is gone:
+            // native TabView already applies tab-bar safe area; the extra 72pt made the
+            // visible cloud end far above the bar.
             ZStack {
-                // Main content - full, padded top for floating search capsule
+                CTMatrixBackground().ignoresSafeArea()
+
                 VStack(spacing: 0) {
                     if !searchText.isEmpty, filteredContacts.isEmpty {
                         remoteSearchCard
-                            .padding(.top, 8)
                     }
                     if let vm = contactRequestsVM, !vm.incomingRequests.isEmpty, searchText.isEmpty {
                         requestsSection(vm: vm)
-                            .padding(.top, 8)
                     }
                     GeometryReader { geo in
-                        ZStack {
-                            CTMatrixBackground().ignoresSafeArea()
-
+                        Group {
                             if contacts.isEmpty {
-                                emptyState
+                                // While searching, the remote card above is the primary UI;
+                                // keep the “no synapses yet” empty state for idle only.
+                                if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    emptyState
+                                } else {
+                                    Color.clear
+                                }
                             } else {
                                 ZoomableCloud(
                                     scale:    $canvasScale,
@@ -103,24 +119,47 @@ struct SynapsView: View {
                                 }
                             }
                         }
-                        .padding(.bottom, 72) // for floating tab capsule
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            // No ScrollView here — tap empty canvas / empty state to drop keyboard.
+                            dismissSearchKeyboard()
+                        }
                         .onAppear {
+                            // Fit once per appear; do not re-fit on keyboard-driven size
+                            // changes — that would yank a mid-gesture pan/zoom.
                             canvasScale = fitScale(contacts: Array(contacts), screenSize: geo.size)
                         }
                     }
                 }
-
-                // Floating independent search capsule (and keep nav above)
+            }
+            .ctBackground()
+            .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: 0) {
                     synapsNavBar
                     synapsSearchBar
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
-                    Spacer(minLength: 0)
+                        .padding(.bottom, 8)
                 }
-                .frame(maxHeight: .infinity, alignment: .top)
+                // Solid enough that result rows never read through the chrome; matrix
+                // still shows at the sides via the search capsule’s material.
+                .background(Color.CT.bg.opacity(0.94))
             }
-            .ctBackground()
+            #if os(iOS)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button {
+                        dismissSearchKeyboard()
+                    } label: {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                            .foregroundStyle(Color.CT.accent)
+                    }
+                    .accessibilityLabel(Text(LocalizedStringKey("done")))
+                }
+            }
+            #endif
             .onAppear {
                 rebuildContactMetrics()
             }
@@ -130,7 +169,10 @@ struct SynapsView: View {
                 }
                 searchTask?.cancel()
                 remoteState = .idle
-                guard !newValue.isEmpty else { return }
+                if newValue.isEmpty {
+                    dismissSearchKeyboard()
+                    return
+                }
                 searchTask = Task {
                     try? await Task.sleep(nanoseconds: 500_000_000)  // 0.5s debounce
                     guard !Task.isCancelled else { return }
@@ -174,6 +216,12 @@ struct SynapsView: View {
                         await MainActor.run { chatsViewModel.openOrCreateChat(with: user) }
                     }
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .contactRequestReceived)) { _ in
+                // Silent push (or local banner tap path) — refresh the requests inbox
+                // while Synaps is already visible so the new row appears without a re-tab.
+                guard let vm = contactRequestsVM else { return }
+                Task { await refreshContactRequests(vm: vm, reason: "push_received") }
             }
             #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
@@ -349,23 +397,93 @@ struct SynapsView: View {
     // MARK: - Search Bar
 
     private var synapsSearchBar: some View {
-        CTSearchBar(text: $searchText)
+        CTSearchBar(text: $searchText, focused: $isSearchFocused)
+            .onSubmit { dismissSearchKeyboard() }
+    }
+
+    private func dismissSearchKeyboard() {
+        isSearchFocused = false
+        #if os(iOS)
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil, from: nil, for: nil
+        )
+        #endif
+    }
+
+    private func isRequestAlreadySent(toUserId: String) -> Bool {
+        if pendingSentUserIds.contains(toUserId) { return true }
+        return contactRequestsVM?.hasPendingSentRequest(toUserId: toUserId) ?? false
     }
 
     // MARK: - Empty state
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: CTLayout.sectionGap) {
+            Image(systemName: "circle.grid.cross")
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(Color.CT.textDim)
+                .padding(.bottom, 4)
+
             Text(LocalizedStringKey("synapses_empty_title"))
-                .font(CTFont.bold(17))
+                .font(CTFont.bold(16))
                 .foregroundStyle(Color.CT.text)
+                .multilineTextAlignment(.center)
+
             Text(LocalizedStringKey("synapses_empty_subtitle"))
-                .font(CTFont.regular(14))
+                .font(CTFont.regular(13))
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+                .padding(.horizontal, CTLayout.sectionGap)
+
+            VStack(spacing: CTLayout.chromeGap) {
+                #if os(iOS)
+                emptyActionRow(
+                    titleKey: "synapses_empty_scan_qr",
+                    systemImage: "qrcode.viewfinder"
+                ) {
+                    showingQRScanner = true
+                }
+                #endif
+                emptyActionRow(
+                    titleKey: "synapses_empty_focus_search",
+                    systemImage: "magnifyingglass"
+                ) {
+                    isSearchFocused = true
+                }
+            }
+            .padding(.top, CTLayout.inlinePad)
+            .frame(maxWidth: 320)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, CTLayout.edgePad)
+    }
+
+    private func emptyActionRow(
+        titleKey: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: CTLayout.chromeGap) {
+                Image(systemName: systemImage)
+                    .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                Text(NSLocalizedString(titleKey, comment: "").uppercased())
+                    .font(CTFont.bold(12))
+                    .tracking(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.CT.textDim)
+            }
+            .foregroundStyle(Color.CT.accent)
+            .padding(.horizontal, CTLayout.edgePad)
+            .frame(minHeight: CTLayout.controlHeight)
+            .background(Color.CT.bgMsg)
+            .clipShape(CTShape.card())
+            .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Remote Search Card
@@ -402,52 +520,73 @@ struct SynapsView: View {
                 .padding(.vertical, 12)
 
             case .found(let profile):
-                let alreadySent = contactRequestsVM.map {
-                    $0.hasPendingSentRequest(toUserId: profile.userID)
-                } ?? false
+                let alreadySent = isRequestAlreadySent(toUserId: profile.userID)
+                let isSending = sendingRequestToUserId == profile.userID
                 let fallbackQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
 
-                Button {
-                    if !alreadySent {
-                        Task { await sendContactRequest(to: profile) }
-                    }
-                } label: {
-                    HStack(spacing: 12) {
-                        Text("[@]")
-                            .font(CTFont.bold(14))
-                            .foregroundStyle(Color.CT.accent)
-                        VStack(alignment: .leading, spacing: 2) {
-                            if profile.hasDisplayName {
-                                Text(profile.displayName)
-                                    .font(CTFont.bold(14))
-                                    .foregroundStyle(Color.CT.text)
-                            }
-                            if profile.hasUsername {
-                                Text("@\(profile.username)")
-                                    .font(CTFont.regular(12))
-                                    .foregroundStyle(Color.CT.textDim)
-                            } else if !fallbackQuery.isEmpty {
-                                Text("@\(fallbackQuery)")
-                                    .font(CTFont.regular(12))
-                                    .foregroundStyle(Color.CT.text)
-                            } else {
-                                Text(DisplayNameGenerator.generate(from: profile.userID))
-                                    .font(CTFont.regular(13))
-                                    .foregroundStyle(Color.CT.text)
-                            }
+                HStack(spacing: 12) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 28, weight: .regular))
+                        .foregroundStyle(Color.CT.accent)
+                        .frame(width: 32, height: 32)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        if profile.hasDisplayName {
+                            Text(profile.displayName)
+                                .font(CTFont.bold(14))
+                                .foregroundStyle(Color.CT.text)
                         }
-                        Spacer()
-                        Text(alreadySent
-                             ? NSLocalizedString("contact_request_pending", comment: "")
-                             : NSLocalizedString("contact_request_send_action", comment: ""))
-                            .font(CTFont.regular(12))
-                            .foregroundStyle(alreadySent ? Color.CT.textDim : Color.CT.accent)
+                        if profile.hasUsername {
+                            Text("@\(profile.username)")
+                                .font(CTFont.regular(12))
+                                .foregroundStyle(Color.CT.textDim)
+                        } else if !fallbackQuery.isEmpty {
+                            Text("@\(fallbackQuery)")
+                                .font(CTFont.regular(12))
+                                .foregroundStyle(Color.CT.text)
+                        } else {
+                            Text(DisplayNameGenerator.generate(from: profile.userID))
+                                .font(CTFont.regular(13))
+                                .foregroundStyle(Color.CT.text)
+                        }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
+
+                    Spacer(minLength: 8)
+
+                    if alreadySent {
+                        HStack(spacing: 5) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text(NSLocalizedString("contact_request_sent", comment: ""))
+                                .font(CTFont.regular(12))
+                        }
+                        .foregroundStyle(Color.CT.textDim)
+                    } else if isSending {
+                        ProgressView()
+                            .tint(Color.CT.accent)
+                            .scaleEffect(0.85)
+                    } else {
+                        Button {
+                            dismissSearchKeyboard()
+                            Task { await sendContactRequest(to: profile) }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "person.badge.plus")
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text(NSLocalizedString("contact_request_send_action", comment: ""))
+                                    .font(CTFont.medium(12))
+                            }
+                            .foregroundStyle(Color.CT.bg)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.CT.accent)
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
-                .disabled(alreadySent)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
 
             case .notFound:
                 HStack {
@@ -492,17 +631,32 @@ struct SynapsView: View {
     @MainActor
     private func sendContactRequest(to profile: Shared_Proto_Services_V1_UserProfile) async {
         guard let vm = contactRequestsVM else { return }
+        guard !isRequestAlreadySent(toUserId: profile.userID) else { return }
+        sendingRequestToUserId = profile.userID
+        defer { sendingRequestToUserId = nil }
         do {
             let requestId = try await vm.sendRequest(toUserId: profile.userID)
             vm.markSentRequest(toUserId: profile.userID, requestId: requestId)
-            // Refresh UI to show [pending] state.
+            // Drive visible “request sent” state (UserDefaults alone is not @Observable).
+            pendingSentUserIds.insert(profile.userID)
             remoteState = .found(profile)
         } catch {
             // Surface the failure instead of swallowing it — a silent catch here hid the
             // real reason "Send request" did nothing (RPC rejected / no delivery). Log the
             // exact error and tell the user so it's retryable and diagnosable.
+            // Transport blips surface as gRPC "Stream unexpectedly closed." — map to a
+            // human-readable connection message (RPC already retried in UserServiceClient).
             Log.error("sendContactRequest failed for \(profile.userID.prefix(8))…: \(error)", category: "ContactRequest")
-            ErrorRouter.shared.report(.unknown(error.userFacingMessage))
+            let raw = error.userFacingMessage
+            let lower = raw.lowercased()
+            let message: String
+            if lower.contains("stream") || lower.contains("unavailable") || lower.contains("closed")
+                || lower.contains("connection") || lower.contains("timeout") || lower.contains("deadline") {
+                message = NSLocalizedString("contact_request_send_failed", comment: "")
+            } else {
+                message = raw
+            }
+            ErrorRouter.shared.report(.unknown(message))
         }
     }
 
@@ -519,10 +673,15 @@ struct SynapsView: View {
                 Button {
                     selectedRequest = request
                 } label: {
-                    HStack(spacing: 10) {
-                        Text("[@]")
-                            .font(CTFont.bold(13))
-                            .foregroundStyle(Color.CT.accent)
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.CT.bgMsg)
+                                .frame(width: 36, height: 36)
+                            IdenticonView(seed: request.fromUserId)
+                                .frame(width: 28, height: 28)
+                                .clipShape(Circle())
+                        }
                         VStack(alignment: .leading, spacing: 2) {
                             if let name = request.displayName, !name.isEmpty {
                                 Text(name)
@@ -537,6 +696,9 @@ struct SynapsView: View {
                                     .font(CTFont.regular(13))
                                     .foregroundStyle(Color.CT.textDim)
                             }
+                            Text(NSLocalizedString("contact_request_from_title", comment: ""))
+                                .font(CTFont.regular(11))
+                                .foregroundStyle(Color.CT.textDim)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")

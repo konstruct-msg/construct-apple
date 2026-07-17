@@ -47,23 +47,25 @@ struct InCallView: View {
                     if let onMinimize, !isEnded {
                         Button(action: onMinimize) {
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 22, weight: .medium))
+                                .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
                                 .foregroundStyle(Color.CT.textDim)
-                                .frame(width: 44, height: 44, alignment: .leading)
+                                .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget, alignment: .leading)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                         .accessibilityLabel(NSLocalizedString("call_minimize", comment: ""))
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
+                .padding(.horizontal, CTLayout.edgePad)
+                .padding(.top, CTLayout.inlinePad)
 
                 Spacer()
 
                 // Avatar + name
                 VStack(spacing: 16) {
                     ZStack {
-                        MainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 96)
+                        ContactMainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 96)
                         // Pulse appears in two distinct UX moments:
                         // 1. While the call is dialling / ringing (connecting=true)
                         // 2. While ICE has transiently dropped (.reconnecting)
@@ -240,7 +242,7 @@ private struct CallControlsBar<Secondary: View>: View {
                 Image(systemName: "phone.down.fill")
                     .font(.system(size: CTLayout.callIconSize, weight: .medium))
                     .foregroundStyle(.white)
-                    .frame(width: 64, height: 64)
+                    .frame(width: CTLayout.callEndSize, height: CTLayout.callEndSize)
                     .background(Color.CT.danger)
                     .clipShape(Circle())
             }
@@ -266,7 +268,7 @@ struct CallControlButton: View {
                 Image(systemName: config.systemImage)
                     .font(.system(size: CTLayout.callIconSize, weight: .medium))
                     .foregroundStyle(config.tint)
-                    .frame(width: 56, height: 56)
+                    .frame(width: CTLayout.callControlSize, height: CTLayout.callControlSize)
                     .background(Color.CT.bgMsg)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(config.tint.opacity(0.4), lineWidth: 1))
@@ -275,6 +277,7 @@ struct CallControlButton: View {
                     .foregroundStyle(Color.CT.textDim)
             }
         }
+        .buttonStyle(.plain)
         .accessibilityLabel(config.label)
     }
 }
@@ -295,7 +298,7 @@ struct AudioRoutePickerButton: View {
                 Image(systemName: routeSymbol)
                     .font(.system(size: CTLayout.callIconSize, weight: .medium))
                     .foregroundStyle(Color.CT.textDim)
-                    .frame(width: 56, height: 56)
+                    .frame(width: CTLayout.callControlSize, height: CTLayout.callControlSize)
                     .background(Color.CT.bgMsg)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.CT.textDim.opacity(0.4), lineWidth: 1))
@@ -304,7 +307,7 @@ struct AudioRoutePickerButton: View {
                 // its hit area maps onto our visible icon. Tap shows the
                 // system route-selection sheet (AirPods, Bluetooth, Speaker…).
                 AVRoutePickerViewRepresentable()
-                    .frame(width: 56, height: 56)
+                    .frame(width: CTLayout.callControlSize, height: CTLayout.callControlSize)
                     .opacity(0.02) // tiny non-zero opacity keeps hit-testing on
             }
 

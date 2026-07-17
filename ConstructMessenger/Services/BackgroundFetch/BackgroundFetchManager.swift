@@ -504,7 +504,7 @@ class BackgroundFetchManager: NSObject {
                 // Profile share: defer application to the main actor (post-merge). Supports binary wire (no JSON) + legacy.
                 if let dc = decryptedContent, ProfileShareData.fromBinaryData(dc) != nil ||
                    decryptedString.contains("\"type\":\"profile\"") {
-                    deferredProfileMessages.append((from: item.messageData.from, contentData: dc ?? Data(), legacyString: decryptedString.isEmpty ? nil : decryptedString))
+                    deferredProfileMessages.append((from: item.messageData.from, contentData: dc, legacyString: decryptedString.isEmpty ? nil : decryptedString))
                     PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
                     continue
                 }

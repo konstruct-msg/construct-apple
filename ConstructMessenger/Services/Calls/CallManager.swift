@@ -1051,9 +1051,30 @@ final class CallManager: CallUIManaging {
                         let sealedInnerBytes = await buildSealedForCallSignalIfNeeded(recipient: to, payload: payload)
 
                         do {
-                            if let sealedInnerBytes, FeatureFlags.sealedSenderUnauthenticatedTransport {
-                                // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
-                                _ = try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: sealedInnerBytes)
+                            if let sealedInnerBytes {
+                                // Sealed call signal with one-shot enforce recovery: fresh
+                                // token + tag on privacy_pass rejection, DR payload reused.
+                                // Never downgrades to identified (StealthSendRecovery invariant).
+                                _ = try await StealthSendRecovery.sendSealed(sealedInnerBytes, rebuild: {
+                                    await self.buildSealedForCallSignalIfNeeded(recipient: to, payload: payload)
+                                }, send: { inner in
+                                    if FeatureFlags.sealedSenderUnauthenticatedTransport {
+                                        // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
+                                        return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)
+                                    } else {
+                                        return try await MessagingServiceClient.shared.sendMessage(
+                                            messageId: msgId,
+                                            recipientId: to,
+                                            senderId: currentUserId,
+                                            conversationId: "",
+                                            encryptedPayload: payload,
+                                            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                                            senderDeviceId: Self.currentDeviceId(),
+                                            contentType: .callSignal,
+                                            sealedInnerBytes: inner
+                                        )
+                                    }
+                                })
                             } else {
                                 _ = try await MessagingServiceClient.shared.sendMessage(
                                     messageId: msgId,
@@ -1064,7 +1085,7 @@ final class CallManager: CallUIManaging {
                                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                                     senderDeviceId: Self.currentDeviceId(),
                                     contentType: .callSignal,
-                                    sealedInnerBytes: sealedInnerBytes
+                                    sealedInnerBytes: nil
                                 )
                             }
                             let sealedNote = sealedInnerBytes != nil ? " [STEALTH]" : ""
@@ -1221,6 +1242,7 @@ final class CallManager: CallUIManaging {
             }
         case .iceCandidates(let batch):
             guard let active, active.session.id == signal.callID else { return }
+            var buffered = 0
             for ice in batch.candidates {
                 guard let candidateSdp = try? CallSignalCrypto.shared.decryptField(ice.candidate, from: senderUserId) else {
                     Log.error("Failed to decrypt E2EE ICE candidate (batch) from \(senderUserId.prefix(8))… — dropping", category: "Calls")
@@ -1229,12 +1251,13 @@ final class CallManager: CallUIManaging {
                 let c = WebRTCIceCandidate(sdp: candidateSdp, sdpMid: ice.sdpMid, sdpMLineIndex: Int32(ice.sdpMLineIndex))
                 if active.pendingRemoteOfferSdp != nil {
                     active.pendingIceCandidates.append(c)
+                    buffered += 1
                 } else {
                     Task { try? await active.webrtc?.addRemoteIceCandidate(c) }
                 }
             }
-            if active.pendingRemoteOfferSdp != nil {
-                Log.debug("Buffered \(batch.candidates.count) E2EE ICE candidates (pending SDP)", category: "Calls")
+            if buffered > 0 {
+                Log.debug("Buffered \(buffered)/\(batch.candidates.count) E2EE ICE candidates (pending SDP)", category: "Calls")
             }
         case .hangup(let hangup):
             guard active?.session.id == signal.callID else { return }
@@ -1384,19 +1407,45 @@ final class CallManager: CallUIManaging {
             guard !batch.isEmpty else { return }
             active.pendingOutgoingIce.removeAll()
             active.iceFlushTask = nil
-            var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
-            sig.callID = active.session.id
-            sig.senderDeviceID = Self.currentDeviceId()
-            sig.timestamp = Self.nowMs()
-            if batch.count == 1 {
-                sig.signal = .iceCandidate(batch[0])
-            } else {
-                var candidates = Shared_Proto_Signaling_V1_IceCandidateBatch()
-                candidates.candidates = batch
-                sig.signal = .iceCandidates(candidates)
+
+            // Split the flush into size-bounded signals: each candidate field is an
+            // ENC:v3 frame that can carry a PQ-ratchet blob on suite-3 sessions, so one
+            // burst can exceed the Rust E2EE padding cap of 65536 bytes (observed on
+            // device: a 134KB batch → CALL_SIGNAL_ENCRYPT_FAILED → the whole batch
+            // silently lost). Chunks stay well under the cap, leaving headroom for the
+            // outer WebRTCSignal proto + DR overhead. A burst of 24 candidates becomes
+            // ~2–4 signals — still far below the server's 10/sec signal rate limit.
+            let maxSignalBytes = 40_000
+            var chunks: [[Shared_Proto_Signaling_V1_IceCandidate]] = []
+            var current: [Shared_Proto_Signaling_V1_IceCandidate] = []
+            var currentBytes = 0
+            for candidate in batch {
+                let size = candidate.candidate.utf8.count + candidate.sdpMid.utf8.count + 16
+                if !current.isEmpty, currentBytes + size > maxSignalBytes {
+                    chunks.append(current)
+                    current = []
+                    currentBytes = 0
+                }
+                current.append(candidate)
+                currentBytes += size
             }
-            self.sendCallSignalProto(sig, to: peerUserId)
-            Log.info("Flushed \(batch.count) ICE candidate(s) via E2EE (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
+            if !current.isEmpty { chunks.append(current) }
+
+            for chunk in chunks {
+                var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+                sig.callID = active.session.id
+                sig.senderDeviceID = Self.currentDeviceId()
+                sig.timestamp = Self.nowMs()
+                if chunk.count == 1 {
+                    sig.signal = .iceCandidate(chunk[0])
+                } else {
+                    var candidates = Shared_Proto_Signaling_V1_IceCandidateBatch()
+                    candidates.candidates = chunk
+                    sig.signal = .iceCandidates(candidates)
+                }
+                self.sendCallSignalProto(sig, to: peerUserId)
+            }
+            Log.info("Flushed \(batch.count) ICE candidate(s) in \(chunks.count) signal(s) via E2EE (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
         }
     }
 

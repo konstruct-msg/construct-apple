@@ -95,6 +95,13 @@ final class VeilCapabilityV2Bootstrapper {
                     return
                 }
                 Log.info("VEIL B1: capability ready for \(issued.relayAddress) (exp in \(Int((Double(parsed.notAfter) - Date().timeIntervalSince1970) / 86400))d)", category: "VEIL")
+
+                // EntryDirectory v1: cache the pre-issued key-bound alternate fronts (same
+                // veil_pk binding), validated against the signed manifest in VeilAlternatesCache.
+                let cachedAlts = VeilAlternatesCache.store(issued.alternates)
+                if cachedAlts > 0 {
+                    Log.info("VEIL B1: cached \(cachedAlts)/\(issued.alternates.count) alternate front(s)", category: "VEIL")
+                }
             } catch {
                 Log.error("VEIL B1 bootstrap/renew failed for \(relayAddress): \(error)", category: "VEIL")
             }

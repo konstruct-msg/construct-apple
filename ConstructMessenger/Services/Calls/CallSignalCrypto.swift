@@ -10,9 +10,17 @@
 //  those fields using the existing Double Ratchet session so the server
 //  sees only ciphertext.
 //
-//  Format (v2): encrypted fields are prefixed with "ENC:v2:" followed by
-//  a single base64-encoded binary frame: [4 bytes msgNum LE][32 bytes epk][ciphertext].
-//  v1 ("ENC:v1:" + base64(JSON)) is still decoded for backward compatibility.
+//  Format (v3): encrypted fields are prefixed with "ENC:v3:" followed by a single
+//  base64-encoded binary frame:
+//    [2B suiteId LE][4B msgNum LE][4B pqMessageEpoch LE][4B pqFieldLen LE]
+//    [pqRatchetField][32B epk][ciphertext]
+//  v3 carries the full suite-3 (PQ ratchet) component set — the v2 frame dropped
+//  suiteId/pqMessageEpoch/pqRatchetField, which made every field encrypted over a
+//  suite-3 session undecryptable on the receiver (decrypt ran as suite 1): ICE
+//  candidates failed 100% both directions → no media path → silent calls.
+//  v2 ("ENC:v2:" + base64([4B msgNum LE][32B epk][ciphertext])) and v1
+//  ("ENC:v1:" + base64(JSON)) are still decoded for backward compatibility
+//  (correct only for classic suite-1 sessions, which is all they ever worked on).
 //  Plaintext values (no prefix) are passed through unchanged.
 //
 
@@ -42,6 +50,7 @@ final class CallSignalCrypto {
     static let shared = CallSignalCrypto()
     private init() {}
 
+    private static let v3Prefix = "ENC:v3:"
     private static let v2Prefix = "ENC:v2:"
     private static let v1Prefix = "ENC:v1:"
 
@@ -53,12 +62,20 @@ final class CallSignalCrypto {
     func encryptField(_ plaintext: String, for peerUserId: String) throws -> String {
         do {
             let components = try CryptoManager.shared.encryptMessage(plaintext, for: peerUserId)
-            var frame = Data(capacity: 4 + 32 + components.content.count)
+            let pqField = components.pqRatchetField
+            var frame = Data(capacity: 2 + 4 + 4 + 4 + pqField.count + 32 + components.content.count)
+            var suiteLE = components.suiteId.littleEndian
+            withUnsafeBytes(of: &suiteLE) { frame.append(contentsOf: $0) }
             var msgNumLE = components.messageNumber.littleEndian
             withUnsafeBytes(of: &msgNumLE) { frame.append(contentsOf: $0) }
+            var pqEpochLE = components.pqMessageEpoch.littleEndian
+            withUnsafeBytes(of: &pqEpochLE) { frame.append(contentsOf: $0) }
+            var pqLenLE = UInt32(pqField.count).littleEndian
+            withUnsafeBytes(of: &pqLenLE) { frame.append(contentsOf: $0) }
+            frame.append(pqField)
             frame.append(contentsOf: components.ephemeralPublicKey)
             frame.append(components.content)
-            return Self.v2Prefix + frame.base64EncodedString()
+            return Self.v3Prefix + frame.base64EncodedString()
         } catch CryptoManagerError.sessionNotFound {
             throw CallSignalCryptoError.missingSession(peerUserId: peerUserId)
         }
@@ -69,7 +86,9 @@ final class CallSignalCrypto {
     /// Decrypt a signaling field from a peer.
     /// If the value is not prefixed, returns it unchanged (plaintext passthrough).
     func decryptField(_ value: String, from peerUserId: String) throws -> String {
-        if value.hasPrefix(Self.v2Prefix) {
+        if value.hasPrefix(Self.v3Prefix) {
+            return try decryptV3(String(value.dropFirst(Self.v3Prefix.count)), from: peerUserId)
+        } else if value.hasPrefix(Self.v2Prefix) {
             return try decryptV2(String(value.dropFirst(Self.v2Prefix.count)), from: peerUserId)
         } else if value.hasPrefix(Self.v1Prefix) {
             return try decryptV1(String(value.dropFirst(Self.v1Prefix.count)), from: peerUserId)
@@ -81,10 +100,37 @@ final class CallSignalCrypto {
 
     /// Returns true if the value was encrypted by this layer.
     func isEncrypted(_ value: String) -> Bool {
-        value.hasPrefix(Self.v2Prefix) || value.hasPrefix(Self.v1Prefix)
+        value.hasPrefix(Self.v3Prefix) || value.hasPrefix(Self.v2Prefix) || value.hasPrefix(Self.v1Prefix)
     }
 
     // MARK: - Private
+
+    private func decryptV3(_ b64: String, from peerUserId: String) throws -> String {
+        // [2B suiteId LE][4B msgNum LE][4B pqEpoch LE][4B pqFieldLen LE][pqField][32B epk][ct]
+        guard let frame = Data(base64Encoded: b64), frame.count >= 2 + 4 + 4 + 4 + 32 + 1 else {
+            throw CallSignalCryptoError.invalidEnvelope
+        }
+        let suiteId = frame.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 0, as: UInt16.self).littleEndian }
+        let msgNum = frame.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 2, as: UInt32.self).littleEndian }
+        let pqEpoch = frame.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 6, as: UInt32.self).littleEndian }
+        let pqLen = Int(frame.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 10, as: UInt32.self).littleEndian })
+        let pqEnd = 14 + pqLen
+        guard frame.count > pqEnd + 32 else {
+            throw CallSignalCryptoError.invalidEnvelope
+        }
+        let pqField = frame[14..<pqEnd]
+        let epk = frame[pqEnd..<(pqEnd + 32)]
+        let content = frame[(pqEnd + 32)...]
+        return try CryptoManager.shared.decryptRawComponents(
+            contactId: peerUserId,
+            ephemeralPublicKey: Data(epk),
+            messageNumber: msgNum,
+            content: Data(content),
+            suiteId: suiteId,
+            pqMessageEpoch: pqEpoch,
+            pqRatchetField: Data(pqField)
+        )
+    }
 
     private func decryptV2(_ b64: String, from peerUserId: String) throws -> String {
         guard let frame = Data(base64Encoded: b64), frame.count > 36 else {

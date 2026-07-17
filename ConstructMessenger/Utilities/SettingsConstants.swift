@@ -80,27 +80,28 @@ enum DiagnosticsLayout {
 }
 
 enum NotificationsSettingsLayout {
-    static let rowHorizontalPadding: CGFloat = 12
-    static let rowVerticalPadding: CGFloat = 12
+    static let rowHorizontalPadding: CGFloat = CTLayout.edgePad
+    static let rowVerticalPadding: CGFloat = CTLayout.edgePad
     static let compactSectionSpacing: CGFloat = 0
-    static let footerBottomPadding: CGFloat = 8
+    static let footerBottomPadding: CGFloat = CTLayout.inlinePad
     static let sectionVerticalPadding: CGFloat = 20
     static let pushDetailSpacing: CGFloat = 4
 }
 
 enum NetworkSettingsLayout {
-    static let rowHorizontalPadding: CGFloat = 12
-    static let rowVerticalPadding: CGFloat = 12
-    static let compactRowVerticalPadding: CGFloat = 10
-    static let relayRowVerticalPadding: CGFloat = 8
+    static let rowHorizontalPadding: CGFloat = CTLayout.edgePad
+    static let rowVerticalPadding: CGFloat = CTLayout.edgePad
+    static let compactRowVerticalPadding: CGFloat = CTLayout.chromeGap
+    static let relayRowVerticalPadding: CGFloat = CTLayout.inlinePad
     static let compactSectionSpacing: CGFloat = 0
     static let sectionVerticalPadding: CGFloat = 20
-    static let footerVerticalPadding: CGFloat = 12
-    static let statusRowSpacing: CGFloat = 12
+    static let footerVerticalPadding: CGFloat = CTLayout.edgePad
+    static let statusRowSpacing: CGFloat = CTLayout.edgePad
     static let statusDetailSpacing: CGFloat = 2
     static let transportBadgeHorizontalPadding: CGFloat = 5
     static let transportBadgeVerticalPadding: CGFloat = 2
-    static let transportBadgeCornerRadius: CGFloat = 4
+    /// Tiny transport chip — maps to badge scale (was ad-hoc 4).
+    static let transportBadgeCornerRadius: CGFloat = CTRadius.badge
     static let transportBadgeStrokeWidth: CGFloat = 0.5
     static let transportBadgeStrokeOpacity: Double = 0.4
     static let relayBadgeFontSize: CGFloat = 10
@@ -117,19 +118,19 @@ enum NetworkSettingsLabels {
 }
 
 enum BackgroundFetchSettingsLayout {
-    static let rowHorizontalPadding: CGFloat = 12
-    static let rowVerticalPadding: CGFloat = 12
-    static let toggleRowSpacing: CGFloat = 12
+    static let rowHorizontalPadding: CGFloat = CTLayout.edgePad
+    static let rowVerticalPadding: CGFloat = CTLayout.edgePad
+    static let toggleRowSpacing: CGFloat = CTLayout.edgePad
     static let warningSpacing: CGFloat = 4
     static let sectionVerticalPadding: CGFloat = 20
-    static let footerBottomPadding: CGFloat = 8
-    static let sliderSectionSpacing: CGFloat = 12
+    static let footerBottomPadding: CGFloat = CTLayout.inlinePad
+    static let sliderSectionSpacing: CGFloat = CTLayout.edgePad
     static let tickLabelFontSize: CGFloat = 10
     static let tickLabelMinimumScale: CGFloat = 0.7
     static let trackMarkSpacing: CGFloat = 4
     static let trackMarkWidth: CGFloat = 1
     static let trackMinorMarkHeight: CGFloat = 5
-    static let trackMajorMarkHeight: CGFloat = 8
+    static let trackMajorMarkHeight: CGFloat = CTLayout.inlinePad
     static let disabledRowOpacity: Double = 0.5
 }
 
@@ -139,13 +140,13 @@ enum BackgroundFetchSettingsConfig {
 }
 
 enum SecuritySettingsLayout {
-    static let rowHorizontalPadding: CGFloat = 12
-    static let rowVerticalPadding: CGFloat = 12
-    static let compactRowVerticalPadding: CGFloat = 10
-    static let rowContentSpacing: CGFloat = 10
-    static let sectionVerticalPadding: CGFloat = 8
+    static let rowHorizontalPadding: CGFloat = CTLayout.edgePad
+    static let rowVerticalPadding: CGFloat = CTLayout.edgePad
+    static let compactRowVerticalPadding: CGFloat = CTLayout.chromeGap
+    static let rowContentSpacing: CGFloat = CTLayout.chromeGap
+    static let sectionVerticalPadding: CGFloat = CTLayout.inlinePad
     static let hintTopPadding: CGFloat = 6
-    static let hintBottomPadding: CGFloat = 10
+    static let hintBottomPadding: CGFloat = CTLayout.chromeGap
     static let hintCompactTopPadding: CGFloat = 2
     static let hintDisabledOpacity: Double = 0.6
     static let lockStatusSpacing: CGFloat = 2
@@ -154,11 +155,11 @@ enum SecuritySettingsLayout {
 }
 
 enum KeyTransparencySettingsLayout {
-    static let rowHorizontalPadding: CGFloat = 16
-    static let rowVerticalPadding: CGFloat = 10
-    static let hintHorizontalPadding: CGFloat = 12
+    static let rowHorizontalPadding: CGFloat = CTLayout.sectionGap
+    static let rowVerticalPadding: CGFloat = CTLayout.chromeGap
+    static let hintHorizontalPadding: CGFloat = CTLayout.edgePad
     static let hintTopPadding: CGFloat = 2
-    static let hintBottomPadding: CGFloat = 10
+    static let hintBottomPadding: CGFloat = CTLayout.chromeGap
     static let statusTrailingPadding: CGFloat = 4
 }
 
@@ -166,8 +167,8 @@ enum DevicesSettingsLayout {
     static let sectionSpacing: CGFloat = 6
     static let listSpacing: CGFloat = 20
     static let listVerticalPadding: CGFloat = 20
-    static let rowContentSpacing: CGFloat = 12
-    static let rowHorizontalPadding: CGFloat = 16
+    static let rowContentSpacing: CGFloat = CTLayout.edgePad
+    static let rowHorizontalPadding: CGFloat = CTLayout.sectionGap
     static let rowVerticalPadding: CGFloat = 14
     static let hintHorizontalPadding: CGFloat = 20
     static let deviceMetaSpacing: CGFloat = 2
@@ -180,18 +181,19 @@ enum SettingsRootLayout {
     static let rootSpacing: CGFloat = 20
     static let listSpacing: CGFloat = 30
     static let listBottomPadding: CGFloat = 32
-    static let profileRowSpacing: CGFloat = 12
+    static let profileRowSpacing: CGFloat = CTLayout.edgePad
     static let profileMetaSpacing: CGFloat = 3
-    static let profileRowHorizontalPadding: CGFloat = 12
-    static let profileRowVerticalPadding: CGFloat = 12
-    static let recoveryBannerContentSpacing: CGFloat = 10
+    static let profileRowHorizontalPadding: CGFloat = CTLayout.edgePad
+    static let profileRowVerticalPadding: CGFloat = CTLayout.edgePad
+    static let recoveryBannerContentSpacing: CGFloat = CTLayout.chromeGap
     static let recoveryBannerTextSpacing: CGFloat = 4
     static let recoveryBannerActionSpacing: CGFloat = 3
-    static let recoveryBannerPadding: CGFloat = 12
-    static let recoveryBannerCornerRadius: CGFloat = 10
+    static let recoveryBannerPadding: CGFloat = CTLayout.edgePad
+    /// Interactive banner surface — control radius family.
+    static let recoveryBannerCornerRadius: CGFloat = CTRadius.control
     static let recoveryBannerStrokeWidth: CGFloat = 0.5
-    static let recoveryBannerHorizontalPadding: CGFloat = 12
-    static let recoveryBannerVerticalPadding: CGFloat = 8
+    static let recoveryBannerHorizontalPadding: CGFloat = CTLayout.edgePad
+    static let recoveryBannerVerticalPadding: CGFloat = CTLayout.inlinePad
     static let recoveryBannerIconSize: CGFloat = 15
     static let recoveryBannerChevronSize: CGFloat = 9
     static let recoveryBannerDismissIconSize: CGFloat = 11
@@ -206,12 +208,14 @@ enum ContactQRCodeLayout {
     static let footerHorizontalPadding: CGFloat = 20
     static let footerVerticalPadding: CGFloat = 14
     static let qrCodeBorderWidth: CGFloat = 1
-    static let qrCodeErrorSpacing: CGFloat = 10
-    static let qrCodeErrorHorizontalPadding: CGFloat = 16
+    /// QR frames and outline buttons use form/card radius.
+    static let cornerRadius: CGFloat = CTRadius.card
+    static let qrCodeErrorSpacing: CGFloat = CTLayout.chromeGap
+    static let qrCodeErrorHorizontalPadding: CGFloat = CTLayout.sectionGap
     static let timerRowSpacing: CGFloat = 6
     static let expiredBlockSpacing: CGFloat = 14
     static let refreshButtonHorizontalPadding: CGFloat = 20
-    static let refreshButtonVerticalPadding: CGFloat = 10
+    static let refreshButtonVerticalPadding: CGFloat = CTLayout.chromeGap
     static let refreshButtonStrokeOpacity: Double = 0.4
     static let refreshButtonStrokeWidth: CGFloat = 1
     static let idealWidth: CGFloat = 400
@@ -220,7 +224,7 @@ enum ContactQRCodeLayout {
 
 enum DeviceLinkQRLayout {
     static let rootSpacing: CGFloat = 0
-    static let loadingSpacing: CGFloat = 12
+    static let loadingSpacing: CGFloat = CTLayout.edgePad
     static let loadingIndicatorScale: CGFloat = 1.4
     static let contentSpacing: CGFloat = 24
     static let sectionHeaderSpacing: CGFloat = 6
@@ -230,12 +234,13 @@ enum DeviceLinkQRLayout {
     static let scanHintHorizontalPadding: CGFloat = 24
     static let scanHintBottomPadding: CGFloat = 32
     static let qrSize: CGFloat = 220
-    static let qrPadding: CGFloat = 16
+    static let qrPadding: CGFloat = CTLayout.sectionGap
     static let qrBorderWidth: CGFloat = 1
-    static let expiredStateSpacing: CGFloat = 16
+    static let cornerRadius: CGFloat = CTRadius.card
+    static let expiredStateSpacing: CGFloat = CTLayout.sectionGap
     static let statusIconSize: CGFloat = 36
-    static let actionButtonHorizontalPadding: CGFloat = 16
-    static let actionButtonVerticalPadding: CGFloat = 10
+    static let actionButtonHorizontalPadding: CGFloat = CTLayout.sectionGap
+    static let actionButtonVerticalPadding: CGFloat = CTLayout.chromeGap
     static let actionButtonStrokeWidth: CGFloat = 0.5
     static let errorMessageHorizontalPadding: CGFloat = 24
 }

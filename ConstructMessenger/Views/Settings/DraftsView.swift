@@ -45,8 +45,8 @@ struct DraftsView: View {
                         .foregroundColor(Color.CT.text)
                         .scrollContentBackground(.hidden)
                         .scrollIndicators(.hidden)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 1))
+                        .clipShape(CTShape.card())
+                        .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 1))
 
                     Button {
                         addDraft()
@@ -57,8 +57,8 @@ struct DraftsView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                             .background(Color.CT.bgMsg)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent, lineWidth: 1))
+                            .clipShape(CTShape.card())
+                            .overlay(CTShape.card().stroke(Color.CT.accent, lineWidth: 1))
                     }
                     .disabled(!canSaveDraft)
                 }
