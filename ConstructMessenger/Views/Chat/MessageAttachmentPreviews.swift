@@ -17,7 +17,7 @@ struct MessagePhotoPreviewBar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 ForEach(Array(images.enumerated()), id: \.offset) { index, image in
                     ZStack(alignment: .topTrailing) {
                         Image(platformImage: image)

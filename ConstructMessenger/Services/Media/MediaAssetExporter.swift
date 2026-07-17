@@ -129,21 +129,12 @@ enum MediaAssetExporter {
         guard let session = AVAssetExportSession(asset: avAsset, presetName: AVAssetExportPresetPassthrough) else {
             throw MediaAssetExportError.exportFailed("export session")
         }
-        session.outputURL = dest
-        session.outputFileType = .mov
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            session.exportAsynchronously {
-                switch session.status {
-                case .completed:
-                    cont.resume()
-                case .cancelled:
-                    cont.resume(throwing: MediaAssetExportError.cancelled)
-                default:
-                    cont.resume(throwing: MediaAssetExportError.exportFailed(
-                        session.error?.localizedDescription ?? "export failed"
-                    ))
-                }
-            }
+        do {
+            try await session.export(to: dest, as: .mov)
+        } catch is CancellationError {
+            throw MediaAssetExportError.cancelled
+        } catch {
+            throw MediaAssetExportError.exportFailed(error.localizedDescription)
         }
     }
 
