@@ -49,6 +49,7 @@
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_construct-transfer._tcp</string>
+		<string>_construct-veil._tcp</string>
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
