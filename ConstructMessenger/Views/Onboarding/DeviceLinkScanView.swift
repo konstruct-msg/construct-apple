@@ -25,6 +25,8 @@ struct DeviceLinkScanView: View {
     @State private var showSendHistorySync = false
     @State private var showHistorySyncOffer = false
     @State private var historySyncPIN: String? = nil
+    /// Receiver-side auto PIN (derived from our own new device id) so history sync auto-connects.
+    @State private var receiveHistorySyncPIN: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -113,6 +115,10 @@ struct DeviceLinkScanView: View {
                 await authViewModel.completeDeviceLink(outcome)
                 switch outcome.role {
                 case .linkedNewDevice:
+                    receiveHistorySyncPIN = HistorySyncPairing.pin(
+                        pendingDeviceId: outcome.deviceId,
+                        userId: outcome.userId
+                    )
                     showReceiveHistorySync = true
                 case .approvedJoinRequest:
                     // Device linked. Offer to sync history to the new device — the user with
@@ -128,7 +134,7 @@ struct DeviceLinkScanView: View {
             }
         }
         .fullScreenCover(isPresented: $showReceiveHistorySync) {
-            ReceiveBackupNearbyView(mode: .historySync)
+            ReceiveBackupNearbyView(mode: .historySync, autoPairingPIN: receiveHistorySyncPIN)
                 .onDisappear {
                     authViewModel.clearDeviceLinkPhase()
                     dismiss()

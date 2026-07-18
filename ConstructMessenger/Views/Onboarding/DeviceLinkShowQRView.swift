@@ -23,6 +23,7 @@ struct DeviceLinkShowQRView: View {
     @State private var vm = DeviceLinkViewModel()
     @State private var showError = false
     @State private var showReceiveHistorySync = false
+    @State private var receiveHistorySyncPIN: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -58,11 +59,15 @@ struct DeviceLinkShowQRView: View {
             guard let outcome else { return }
             Task {
                 await authViewModel.completeDeviceLink(outcome)
+                receiveHistorySyncPIN = HistorySyncPairing.pin(
+                    pendingDeviceId: outcome.deviceId,
+                    userId: outcome.userId
+                )
                 showReceiveHistorySync = true
             }
         }
         .fullScreenCover(isPresented: $showReceiveHistorySync) {
-            ReceiveBackupNearbyView(mode: .historySync)
+            ReceiveBackupNearbyView(mode: .historySync, autoPairingPIN: receiveHistorySyncPIN)
                 .onDisappear {
                     authViewModel.clearDeviceLinkPhase()
                     dismiss()
