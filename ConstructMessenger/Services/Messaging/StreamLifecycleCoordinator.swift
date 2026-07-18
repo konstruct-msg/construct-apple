@@ -217,7 +217,22 @@ final class StreamLifecycleCoordinator {
             try? await Task.sleep(for: Self.reconnectDebounceDelay)
             guard !Task.isCancelled, let self else { return }
             let ids = self.currentConversationIds()
-            self.lastReconnectSubscriptionSet = Set(ids)
+            let idSet = Set(ids)
+            // Coalesce: if a connect is already in flight with the same subscription set,
+            // do not kill a mid-handshake QUIC/H2 open just to start another (device logs:
+            // openStream QUIC → forceReconnect 1–2s later → second QUIC timeout).
+            if self.streamManager.isActivelyConnecting || self.streamManager.isConnected {
+                let current = Set(self.streamManager.subscriptionUserIds)
+                if idSet == current || (current.isEmpty == false && ids.isEmpty) {
+                    Log.info(
+                        "Reconnect coalesced — stream \(self.streamManager.isConnected ? "live" : "connecting") with same subscriptions (\(current.count))",
+                        category: "StreamLifecycle"
+                    )
+                    self.lastReconnectSubscriptionSet = current.isEmpty ? idSet : current
+                    return
+                }
+            }
+            self.lastReconnectSubscriptionSet = idSet
             // Stamp establishedAt for CFE-restored sessions before any prewarm END_SESSION.
             self.sessionCoordinator.hydrateEstablishedTimestampsForRestoredSessions()
             self.wireStreamCallbacks()

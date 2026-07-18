@@ -395,9 +395,11 @@ final class MessageStreamManager {
         backgroundFetchTask = nil
         retryCount = 0
 
-        shouldFallbackToH2Direct = false
-        lastStreamTransportWasH3 = false
-        consecutiveH3OpenFailures = 0
+        // Preserve QUIC/H3 health signals across force-reconnect.
+        // Resetting consecutiveH3OpenFailures / shouldFallbackToH2Direct here forced a fresh
+        // QUIC handshake every time polling/status scheduled forceReconnect mid-open — device
+        // logs showed openStream QUIC → forceReconnect → QUIC again → double timeout → only
+        // then H2. fastUdpUnhealthyUntil was already preserved; keep the rest of the ladder too.
         continuousFailureStreakStart = nil
         isInDegradedMode = false
         connect(contactUserIds: contactUserIds, trigger: "forceReconnect", onMessageReceived: onMessageReceived)
@@ -437,7 +439,8 @@ final class MessageStreamManager {
         streamTask = nil
         retryCount = 0
 
-        shouldFallbackToH2Direct = false
+        // Do not clear consecutiveH3OpenFailures / shouldFallbackToH2Direct /
+        // fastUdpUnhealthyUntil — UDP health is network-session state, not stream-instance state.
         lastStreamTransportWasH3 = false
         continuousFailureStreakStart = nil
         isInDegradedMode = false
@@ -772,7 +775,11 @@ final class MessageStreamManager {
                 )
                 if lastStreamTransportWasH3 {
                     consecutiveH3OpenFailures += 1
-                    Log.info("H3 failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold)", category: "MessageStream")
+                    // First open failure → next connectLoop iteration uses H2 immediately
+                    // (shouldFallbackToH2Direct), without waiting for a second full QUIC
+                    // handshake timeout (often 3s each) before the stream is usable.
+                    shouldFallbackToH2Direct = true
+                    Log.info("H3 failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold) — next open prefers H2", category: "MessageStream")
                     if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
                         fastUdpUnhealthyUntil = Date().addingTimeInterval(Self.fastUdpCooldown)
                         Log.info("Fast-UDP (QUIC/H3) suppressed \(Int(Self.fastUdpCooldown))s — DPI/idle death on this network, using H2", category: "MessageStream")
