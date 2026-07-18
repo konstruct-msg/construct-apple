@@ -35,6 +35,16 @@ final class SessionCoordinator: MessageRouterDelegate {
     private var endSessionSentAt: [String: Date] = [:]
     private let endSessionCooldown: TimeInterval = 30.0
 
+    /// When we last *received* END_SESSION from a peer (any role). Used to suppress an
+    /// immediate outbound END_SESSION if the first post-reset msg0 fails AEAD — that
+    /// message is often a race/stale wire frame; the peer usually follows with
+    /// SESSION_RESET_INIT or a fresh init. Blind END_SESSION here doubles the reset storm
+    /// (seen in device logs: AEAD fail → session_init_failed → SRI → success).
+    private var lastInboundEndSessionAt: [String: Date] = [:]
+    /// Grace after inbound END_SESSION during which initReceiving failure does not
+    /// emit outbound END_SESSION (still ACKs + FailedInitMessageStore + OTPK top-up).
+    private let postEndSessionInitFailGrace: TimeInterval = 20.0
+
     /// Shadow-only mirror of *every* END_SESSION send (rate-limited AND must-send), used solely
     /// to evaluate the Phase-2b cut-over question — "how often would the rate limiter suppress a
     /// currently must-send END_SESSION?" — without touching live behaviour. Never gates a send.
@@ -491,6 +501,7 @@ final class SessionCoordinator: MessageRouterDelegate {
     }
 
     func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64) {
+        lastInboundEndSessionAt[userId] = Date()
         let myId = AuthSessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return }
         guard DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) else {
@@ -656,6 +667,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             if success {
                 // New session established — reset END_SESSION cooldown so future failures are handled.
                 endSessionSentAt.removeValue(forKey: userId)
+                lastInboundEndSessionAt.removeValue(forKey: userId)
                 // And stand down any END_SESSION-scheduled INITIATOR re-init: it would delete
                 // the RESPONDER session we just established.
                 cancelPendingEndSessionReinit(for: userId, reason: "responder_init_success")
@@ -718,14 +730,15 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // desync bug (see also the entry guard in MessageRouter.routeIncomingMessage).
                 Log.info("initReceivingSession deferred — core not initialized (device likely locked) for \(userId.prefix(8))… (no END_SESSION)", category: "SessionInit")
             } else {
-                // initReceivingSession failed — prekey exhausted or invalid.
-                Log.info("initReceivingSession failed — clearing queue, sending END_SESSION to \(userId.prefix(8))...", category: "SessionInit")
+                // initReceivingSession failed — prekey exhausted, AEAD mismatch, or race after
+                // peer END_SESSION (stale msg0 on the wire).
+                Log.info("initReceivingSession failed — clearing queue for \(userId.prefix(8))…", category: "SessionInit")
                 // ACK as delivered so the server advances the delivery cursor past this message.
                 // Sending .failed causes some server implementations to re-enqueue for retry,
                 // creating a cascade: on every reconnect the same undecryptable message comes
                 // back, triggers another failed init, sends another END_SESSION, etc.
-                // .delivered = "message reached device" — the END_SESSION we send separately
-                // tells the sender that decryption failed and a fresh session is needed.
+                // .delivered = "message reached device" — recovery is peer re-init / SRI or
+                // our rate-limited END_SESSION outside the post-END_SESSION grace window.
                 streamManager?.sendReceipt([message.id], to: userId, status: .delivered)
                 // Track as permanently failed so the orphaned-init exception in MessageRouter
                 // does not re-process this message ID on subsequent reconnects.
@@ -736,12 +749,32 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
                 // init failed → reset phase to absent + clear the pending queue, via the reducer.
                 perform(apply(.initFailed, for: userId), for: userId)
+
+                let withinPostEndSessionGrace: Bool = {
+                    guard let t = lastInboundEndSessionAt[userId] else { return false }
+                    return Date().timeIntervalSince(t) < postEndSessionInitFailGrace
+                }()
+
                 // If the init failed because we couldn't reproduce the sender's OTPK, ask them
                 // (via the typed END_SESSION reason) to re-init WITHOUT one — 3-DH is always
                 // reproducible, so this breaks the 4-DH retry loop instead of perpetuating it.
                 let otpkUnreproducible = SessionReinitHintStore.shared.consumeResponderOtpkUnreproducible(for: userId)
                 Task { [weak self] in
                     guard let self else { return }
+                    await self.replenishOtpksAfterFailure(reason: "init_failed")
+
+                    // OTPK-unreproducible always needs a typed signal to the peer (3-DH re-init).
+                    // Plain AEAD fail *right after we accepted their END_SESSION* is usually a
+                    // race: do not amplify with our own END_SESSION — wait for SRI / next msg0
+                    // (responder fallback still covers a stuck INITIATOR).
+                    if withinPostEndSessionGrace && !otpkUnreproducible {
+                        Log.info(
+                            "SESSION_STATE[init_fail_grace]: suppressed END_SESSION for \(userId.prefix(8))… (within \(Int(self.postEndSessionInitFailGrace))s of inbound END_SESSION)",
+                            category: "SessionInit"
+                        )
+                        return
+                    }
+
                     // Cooldown: pending-queue re-delivery of the same failed init used to
                     // send END_SESSION on every reconnect → peer thrash + heat.
                     if otpkUnreproducible {
@@ -769,7 +802,6 @@ final class SessionCoordinator: MessageRouterDelegate {
                     } else {
                         _ = await self.sendEndSessionRateLimited(to: userId, reason: "session_init_failed")
                     }
-                    await self.replenishOtpksAfterFailure(reason: "init_failed")
                 }
             }
         } catch {
