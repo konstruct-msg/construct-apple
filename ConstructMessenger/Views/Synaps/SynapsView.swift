@@ -294,7 +294,7 @@ struct SynapsView: View {
             return
         }
 
-        var drafts: [(id: String, count: Int, lastMessage: Date?)] = []
+        var drafts: [(id: String, count: Int, lastMessage: Date?, unread: Int)] = []
         var maxCount = 0
 
         for user in users {
@@ -302,7 +302,8 @@ struct SynapsView: View {
             let count = userChats.map { $0.messages?.count ?? 0 }.max() ?? 0
             maxCount = max(maxCount, count)
             let lastMessage = userChats.compactMap { $0.lastMessageTime }.max()
-            drafts.append((id: user.id, count: count, lastMessage: lastMessage))
+            let unread = userChats.reduce(0) { $0 + Int($1.unreadCount) }
+            drafts.append((id: user.id, count: count, lastMessage: lastMessage, unread: unread))
         }
 
         let now = Date()
@@ -316,7 +317,11 @@ struct SynapsView: View {
             } else {
                 recency = .none
             }
-            nextMap[draft.id] = ContactMetrics(frequencyScore: score, recency: recency)
+            nextMap[draft.id] = ContactMetrics(
+                frequencyScore: score,
+                recency: recency,
+                unreadCount: draft.unread
+            )
         }
         contactMetricsByUser = nextMap
     }
@@ -842,18 +847,33 @@ private struct ContactCircle: View {
 
     var body: some View {
         ZStack {
-            if let data = user.avatarData, let img = PlatformImage(data: data) {
-                Image(platformImage: img)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Circle().fill(accentColor.opacity(0.12))
-                IdenticonView(seed: user.id)
+            // Soft halo — ambient “this node is live” (not a feed preview).
+            if metrics.showsActivityHalo && !user.isBlocked {
+                Circle()
+                    .stroke(Color.CT.accent.opacity(0.28), lineWidth: 3)
+                    .frame(width: effectiveSize * 1.14, height: effectiveSize * 1.14)
+            }
+
+            ZStack {
+                if let data = user.avatarData, let img = PlatformImage(data: data) {
+                    Image(platformImage: img)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Circle().fill(accentColor.opacity(0.12))
+                    IdenticonView(seed: user.id)
+                }
+            }
+            .frame(width: effectiveSize, height: effectiveSize)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(borderColor, lineWidth: metrics.activityRingLineWidth))
+
+            if metrics.unreadCount > 0 {
+                unreadBadge
+                    .offset(x: effectiveSize * 0.34, y: -effectiveSize * 0.34)
             }
         }
-        .frame(width: effectiveSize, height: effectiveSize)
-        .clipShape(Circle())
-        .overlay(Circle().stroke(borderColor, lineWidth: 1.5))
+        .frame(width: effectiveSize * 1.2, height: effectiveSize * 1.2)
         .scaleEffect(proximityScale)
         .opacity(proximityOpacity)
         // Use DragGesture(minimumDistance: 0) so we can distinguish a stationary
@@ -874,6 +894,33 @@ private struct ContactCircle: View {
                     onTap()
                 }
         )
+        .accessibilityLabel(Text(accessibilityLabel))
+    }
+
+    private var unreadBadge: some View {
+        let n = metrics.unreadCount
+        let label = n > 99 ? "99+" : "\(n)"
+        return Text(label)
+            .font(CTFont.bold(n > 9 ? 8 : 9))
+            .foregroundStyle(Color.CT.bg)
+            .padding(.horizontal, n > 9 ? 4 : 0)
+            .frame(minWidth: 15, minHeight: 15)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.CT.accent)
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(Color.CT.bg.opacity(0.35), lineWidth: 0.5)
+            )
+    }
+
+    private var accessibilityLabel: String {
+        let name = user.displayName ?? user.username ?? ""
+        if metrics.unreadCount > 0 {
+            return "\(name), \(metrics.unreadCount)"
+        }
+        return name
     }
 
     // MARK: Proximity effect
@@ -914,7 +961,8 @@ private struct ContactCircle: View {
 
     private var accentColor: Color { .hexagonAccent(for: user.id) }
     private var borderColor: Color {
-        user.isBlocked ? Color.red.opacity(0.55) : Color.CT.textDim.opacity(0.5)
+        if user.isBlocked { return Color.red.opacity(0.55) }
+        return metrics.activityRingColor
     }
 }
 

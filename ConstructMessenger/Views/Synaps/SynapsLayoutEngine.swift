@@ -78,11 +78,14 @@ struct HoneycombLayoutEngine {
 // MARK: - Contact activity metrics
 
 /// Locally-derived activity signals — no server data, no social graph.
+/// Used for ambient density on the Synaps honeycomb (P1 spatial track): size, ring, badge.
 struct ContactMetrics {
     /// Normalised message count across all contacts: 0 = fewest/none, 1 = most active.
     let frequencyScore: CGFloat
-    /// Time-based glow tier.
+    /// Time-based glow tier (last message age).
     let recency: Recency
+    /// Sum of unread counts on chats with this contact (local Core Data).
+    let unreadCount: Int
 
     enum Recency {
         case fresh     // last message < 24 h
@@ -90,7 +93,26 @@ struct ContactMetrics {
         case none
     }
 
-    static let zero = ContactMetrics(frequencyScore: 0, recency: .none)
+    static let zero = ContactMetrics(frequencyScore: 0, recency: .none, unreadCount: 0)
+
+    /// Stroke for the node ring — unread wins over recency; blocked handled by the view.
+    var activityRingColor: Color {
+        if unreadCount > 0 { return Color.CT.accent }
+        switch recency {
+        case .fresh:  return Color.CT.accent.opacity(0.90)
+        case .recent: return Color.CT.accent.opacity(0.45)
+        case .none:   return Color.CT.textDim.opacity(0.50)
+        }
+    }
+
+    var activityRingLineWidth: CGFloat {
+        unreadCount > 0 ? 2.25 : (recency == .fresh ? 2.0 : 1.5)
+    }
+
+    /// Soft outer halo for “live” nodes (unread or fresh).
+    var showsActivityHalo: Bool {
+        unreadCount > 0 || recency == .fresh
+    }
 }
 
 // MARK: - ZoomableCloud

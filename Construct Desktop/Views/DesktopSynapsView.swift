@@ -359,11 +359,11 @@ private struct DesktopHoneycombCloud: View {
         let now = Date()
         var map: [String: ContactMetrics] = [:]
         for user in contacts {
+            let userChats = (user.chats?.allObjects as? [Chat]) ?? []
             let count = counts[user.id] ?? 0
             let score: CGFloat = maxCount > 0 ? CGFloat(count) / CGFloat(maxCount) : 0
-            let lastMsg = ((user.chats?.allObjects as? [Chat]) ?? [])
-                .compactMap { $0.lastMessageTime }
-                .max()
+            let lastMsg = userChats.compactMap { $0.lastMessageTime }.max()
+            let unread = userChats.reduce(0) { $0 + Int($1.unreadCount) }
             let recency: ContactMetrics.Recency
             if let t = lastMsg {
                 let age = now.timeIntervalSince(t)
@@ -371,7 +371,11 @@ private struct DesktopHoneycombCloud: View {
             } else {
                 recency = .none
             }
-            map[user.id] = ContactMetrics(frequencyScore: score, recency: recency)
+            map[user.id] = ContactMetrics(
+                frequencyScore: score,
+                recency: recency,
+                unreadCount: unread
+            )
         }
         return map
     }
@@ -426,23 +430,44 @@ private struct DesktopContactNode: View {
 
     var body: some View {
         ZStack {
-            if let data = user.avatarData, let img = PlatformImage(data: data) {
-                Image(platformImage: img)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Circle().fill(accentColor.opacity(0.12))
-                IdenticonView(seed: user.id)
+            if metrics.showsActivityHalo && !user.isBlocked {
+                Circle()
+                    .stroke(Color.CT.accent.opacity(0.28), lineWidth: 3)
+                    .frame(width: effectiveSize * 1.14, height: effectiveSize * 1.14)
+            }
+
+            ZStack {
+                if let data = user.avatarData, let img = PlatformImage(data: data) {
+                    Image(platformImage: img)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Circle().fill(accentColor.opacity(0.12))
+                    IdenticonView(seed: user.id)
+                }
+            }
+            .frame(width: effectiveSize, height: effectiveSize)
+            .clipShape(Circle())
+            .overlay(
+                Circle().stroke(
+                    isHovered ? Color.CT.accent : borderColor,
+                    lineWidth: isHovered ? 2.5 : metrics.activityRingLineWidth
+                )
+            )
+
+            if metrics.unreadCount > 0 {
+                let n = metrics.unreadCount
+                let label = n > 99 ? "99+" : "\(n)"
+                Text(label)
+                    .font(CTFont.bold(n > 9 ? 8 : 9))
+                    .foregroundStyle(Color.CT.bg)
+                    .padding(.horizontal, n > 9 ? 4 : 0)
+                    .frame(minWidth: 15, minHeight: 15)
+                    .background(Capsule(style: .continuous).fill(Color.CT.accent))
+                    .offset(x: effectiveSize * 0.34, y: -effectiveSize * 0.34)
             }
         }
-        .frame(width: effectiveSize, height: effectiveSize)
-        .clipShape(Circle())
-        .overlay(
-            Circle().stroke(
-                isHovered ? Color.CT.accent : borderColor,
-                lineWidth: isHovered ? 2 : 1.5
-            )
-        )
+        .frame(width: effectiveSize * 1.2, height: effectiveSize * 1.2)
         .scaleEffect(proximityScale)
         .opacity(proximityOpacity)
         .animation(.easeInOut(duration: 0.12), value: isHovered)
@@ -524,7 +549,8 @@ private struct DesktopContactNode: View {
 
     private var accentColor: Color { .hexagonAccent(for: user.id) }
     private var borderColor: Color {
-        user.isBlocked ? Color.red.opacity(0.55) : Color.CT.textDim.opacity(0.5)
+        if user.isBlocked { return Color.red.opacity(0.55) }
+        return metrics.activityRingColor
     }
 
 }
