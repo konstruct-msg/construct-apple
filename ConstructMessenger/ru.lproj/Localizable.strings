@@ -349,6 +349,8 @@
 // iPad Split View
 "select_chat" = "Выберите чат";
 "select_chat_description" = "Выберите разговор на боковой панели, чтобы начать общение.";
+"show_chat_list" = "Показать список чатов";
+"hide_chat_list" = "Скрыть список чатов";
 
 // Security — Recovery & Duress (from EN)
 "account_recovery" = "Восстановление аккаунта";

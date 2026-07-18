@@ -39,6 +39,8 @@ struct ChatsSplitView: View {
     @State private var activeTab: SidebarTab = .chats
     @State private var showingDrafts = false
     @State private var listRevision = 0
+    /// Collapses the streams list so the open chat spans the full stage.
+    @State private var listCollapsed = false
 
     /// Mirrors compact MainTabView indices for SynapsView refresh guards / orientation.
     private enum SidebarTab: Int, CaseIterable {
@@ -137,6 +139,11 @@ struct ChatsSplitView: View {
                 railDestinationButton(tab)
             }
 
+            if activeTab == .chats {
+                railListToggleButton
+                    .transition(.opacity.combined(with: .scale))
+            }
+
             Spacer(minLength: CTLayout.sectionGap)
 
             railQRButton
@@ -172,6 +179,22 @@ struct ChatsSplitView: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
+    /// Collapse / expand the streams list. Lives in the rail (predictable slot,
+    /// never overlaps ChatView's own floating nav in the detail panel).
+    private var railListToggleButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.25)) { listCollapsed.toggle() }
+        } label: {
+            Image(systemName: listCollapsed ? "sidebar.leading" : "sidebar.left")
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(listCollapsed ? Color.CT.textDim : Color.CT.accent)
+                .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(LocalizedStringKey(listCollapsed ? "show_chat_list" : "hide_chat_list")))
+    }
+
     private var railQRButton: some View {
         Button {
             showingQRScanner = true
@@ -201,7 +224,8 @@ struct ChatsSplitView: View {
             chatsStage
         case .synaps:
             floatingStage {
-                SynapsView()
+                // Rail already exposes a global QR scan — don't duplicate it in the nav bar.
+                SynapsView(showsScanAction: false)
                     .environment(chatsViewModel)
             }
         case .settings:
@@ -217,15 +241,20 @@ struct ChatsSplitView: View {
     }
 
     /// Streams: floating list column + detail (not one fused split chrome slab).
+    /// The list collapses (via the rail toggle) so an open chat can span the stage.
     private var chatsStage: some View {
         HStack(alignment: .top, spacing: CTLayout.chromeGap) {
-            streamsListPanel
-                .frame(width: streamsColumnWidth)
-                .frame(maxHeight: .infinity)
+            if !listCollapsed {
+                streamsListPanel
+                    .frame(width: streamsColumnWidth)
+                    .frame(maxHeight: .infinity)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
 
             chatDetailPanel
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .animation(.easeInOut(duration: 0.25), value: listCollapsed)
     }
 
     private var streamsListPanel: some View {
@@ -447,30 +476,25 @@ struct ChatsSplitView: View {
     }
 }
 
-// MARK: - Floating chrome (Liquid Glass when available, CT glass fallback)
+// MARK: - Floating chrome (solid CT surface)
 
-/// Separates shell panels the way iOS 26 / macOS float sidebars and tab chrome —
-/// material + continuous corners + light edge, not a fused full-bleed bar.
+/// Separates shell panels as floating cards using the CT surface language:
+/// solid `#090909` fill + continuous corners + a hairline `noise` edge.
+///
+/// Deliberately NOT translucent glass — `.glassEffect(.regular)` over the black
+/// background renders as a light grey material, which clashes with the app's
+/// all-black aesthetic. Panels stay black like everywhere else; the hairline
+/// border is what delineates each floating card.
 private struct RegularShellFloatingChrome: ViewModifier {
     var cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content
-                .glassEffect(
-                    .regular,
-                    in: .rect(cornerRadius: cornerRadius)
-                )
-        } else {
-            content
-                .background(.ultraThinMaterial)
-                .background(Color.CT.bg.opacity(0.35))
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Color.CT.noise.opacity(0.5), lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
-        }
+        content
+            .background(Color.CT.bg)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(Color.CT.noise, lineWidth: 0.5)
+            )
     }
 }

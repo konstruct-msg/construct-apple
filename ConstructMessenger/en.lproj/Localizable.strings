@@ -389,6 +389,8 @@
 // iPad Split View
 "select_chat" = "Select a Chat";
 "select_chat_description" = "Choose a conversation from the sidebar to start messaging.";
+"show_chat_list" = "Show chat list";
+"hide_chat_list" = "Hide chat list";
 
 // QR Code
 
