@@ -76,7 +76,7 @@ struct ReceiveBackupNearbyView: View {
                 case .idle:
                     if autoPairingPIN != nil {
                         statusView(
-                            symbol: "[…]",
+                            systemImage: "antenna.radiowaves.left.and.right",
                             label: NSLocalizedString("history_sync_auto_connecting", comment: "")
                         )
                     } else {
@@ -84,12 +84,12 @@ struct ReceiveBackupNearbyView: View {
                     }
                 case .browsing:
                     statusView(
-                        symbol: "[?]",
+                        systemImage: "magnifyingglass",
                         label: NSLocalizedString("transfer_searching", comment: "")
                     )
                 case .handshaking:
                     statusView(
-                        symbol: "[↔]",
+                        systemImage: "arrow.left.arrow.right",
                         label: NSLocalizedString("transfer_connecting", comment: "")
                     )
                 case .transferring:
@@ -97,7 +97,7 @@ struct ReceiveBackupNearbyView: View {
                 case .complete:
                     if isStaging {
                         statusView(
-                            symbol: "[…]",
+                            systemImage: "tray.and.arrow.down",
                             label: NSLocalizedString("transfer_staging", comment: "")
                         )
                     } else {
@@ -202,10 +202,10 @@ struct ReceiveBackupNearbyView: View {
         .padding(.top, 40)
     }
 
-    private func statusView(symbol: String, label: String) -> some View {
+    private func statusView(systemImage: String, label: String) -> some View {
         VStack(spacing: 16) {
-            Text(symbol)
-                .font(CTFont.bold(28))
+            Image(systemName: systemImage)
+                .font(.system(size: 28, weight: .semibold))
                 .foregroundColor(Color.CT.accent)
             Text(label)
                 .font(CTFont.regular(13))
