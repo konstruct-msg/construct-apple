@@ -24,10 +24,11 @@ struct MessageReplyBar: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: CTLayout.chromeGap) {
+            // Height follows text/thumbnail only — never `.infinity` (that blew the bar
+            // to full viewport when the composer safeAreaInset proposed a tall height).
             Rectangle()
                 .fill(Color.CT.accent)
                 .frame(width: ComposerAuxBarLayout.accentBarWidth)
-                .frame(maxHeight: .infinity)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(LocalizedStringKey("reply_to_colon"))
@@ -48,6 +49,7 @@ struct MessageReplyBar: View {
         .padding(.trailing, CTLayout.inlinePad)
         .padding(.vertical, CTLayout.inlinePad)
         .frame(minHeight: ComposerAuxBarLayout.minHeight)
+        .fixedSize(horizontal: false, vertical: true)
         .background(Color.CT.bgMsg)
         .clipShape(CTShape.card())
         .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
@@ -67,7 +69,6 @@ struct MessageEditBar: View {
             Rectangle()
                 .fill(Color.CT.accentDim)
                 .frame(width: ComposerAuxBarLayout.accentBarWidth)
-                .frame(maxHeight: .infinity)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(LocalizedStringKey("editing_message"))
@@ -86,6 +87,7 @@ struct MessageEditBar: View {
         .padding(.trailing, CTLayout.inlinePad)
         .padding(.vertical, CTLayout.inlinePad)
         .frame(minHeight: ComposerAuxBarLayout.minHeight)
+        .fixedSize(horizontal: false, vertical: true)
         .background(Color.CT.bgMsg)
         .clipShape(CTShape.card())
         .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))

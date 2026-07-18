@@ -120,6 +120,32 @@ class ChatScrollManager {
         }
     }
 
+    /// Multi-pass non-animated pin used when the composer inset / first layout is still
+    /// settling. Stops early if the user scrolls away (`shouldScrollToBottom == false`).
+    /// Default delays cover: immediate · after first inset · after load-more/FRC churn.
+    func pinToBottomCorrective(
+        delaysMs: [UInt64] = [0, 50, 160, 350],
+        messageId: String = "bottom"
+    ) {
+        Task { @MainActor [weak self] in
+            for (index, ms) in delaysMs.enumerated() {
+                if ms > 0 {
+                    try? await Task.sleep(for: .milliseconds(ms))
+                }
+                guard let self else { return }
+                guard self.shouldScrollToBottom else { return }
+                guard self.proxy != nil else { return }
+                self.scrollToBottom(messageId: messageId, animated: false)
+                // First tick is often a no-op if LazyVStack has not produced the anchor yet.
+                if index == 0 {
+                    try? await Task.sleep(for: .milliseconds(16))
+                    guard self.shouldScrollToBottom else { return }
+                    self.scrollToBottom(messageId: messageId, animated: false)
+                }
+            }
+        }
+    }
+
     /// Scroll to a specific message
     /// - Parameters:
     ///   - messageId: Message ID to scroll to
@@ -210,14 +236,17 @@ class ChatScrollManager {
             }
             .sink { [weak self] height in
                 self?.keyboardHeight = height
-                // Scroll to bottom when keyboard appears, but only if user was already near bottom.
-                // The shouldScrollToBottom flag is managed by updateScrollOffset based on
-                // actual scroll position before keyboard animation started.
+                // Corrective pin only — animated scroll during keyboard animation
+                // dematerializes LazyVStack (empty chat flash).
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(for: .milliseconds(150))
                     guard let self else { return }
                     if self.shouldScrollToBottom {
-                        self.scrollToBottom()
+                        self.scrollToBottom(animated: false)
+                        try? await Task.sleep(for: .milliseconds(120))
+                        if self.shouldScrollToBottom {
+                            self.scrollToBottom(animated: false)
+                        }
                     }
                 }
             }
@@ -231,8 +260,13 @@ class ChatScrollManager {
                 // is likely back at the input area.
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(for: .milliseconds(100))
-                    self?.shouldScrollToBottom = true
-                    self?.scrollToBottom()
+                    guard let self else { return }
+                    self.shouldScrollToBottom = true
+                    self.scrollToBottom(animated: false)
+                    try? await Task.sleep(for: .milliseconds(100))
+                    if self.shouldScrollToBottom {
+                        self.scrollToBottom(animated: false)
+                    }
                 }
             }
             .store(in: &cancellables)

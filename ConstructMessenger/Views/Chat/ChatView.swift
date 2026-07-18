@@ -51,6 +51,9 @@ struct ChatView: View {
     /// Current height of the bottom composer (safeAreaInset). Tracked so we can re-pin the
     /// scroll when it changes — see the composer's `.onGeometryChange` below.
     @State private var composerHeight: CGFloat = 0
+    /// False until the multi-pass open pin finishes — during this window all auto-scrolls
+    /// stay non-animated so LazyVStack does not dematerialize into a blank list.
+    @State private var didStabilizeInitialScroll = false
 
     private enum Layout {
         static let composerHorizontalPadding: CGFloat = 8
@@ -206,20 +209,21 @@ struct ChatView: View {
                     scrollManager.registerProxy(proxy)
                     LocalNotificationManager.shared.clearBadge()
                     scrollManager.hasScrolledToBottom = true
-                    // .defaultScrollAnchor(.bottom) alone occasionally lands the initial
-                    // layout out of range (composer inset applied after first content pass),
-                    // leaving the list blank until a scroll event — the "opens empty then
-                    // scrolls in from nowhere" symptom. Force a valid bottom offset once the
-                    // first content pass has rendered. Non-animated so it never flashes in.
-                    if !renderedMessages.isEmpty {
+                    didStabilizeInitialScroll = false
+                    // .defaultScrollAnchor(.bottom) + LazyVStack + composer safeAreaInset often
+                    // lands the first offset out of range → blank list until a gesture.
+                    // Multi-pass non-animated pin covers inset settle and FRC load-more churn.
+                    if !renderedMessages.isEmpty || !viewModel.messages.isEmpty {
+                        scrollManager.pinToBottomCorrective()
                         Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(60))
-                            guard scrollManager.shouldScrollToBottom else { return }
-                            scrollManager.scrollToBottom(animated: false)
+                            try? await Task.sleep(for: .milliseconds(400))
+                            didStabilizeInitialScroll = true
                         }
+                    } else {
+                        didStabilizeInitialScroll = true
                     }
                 }
-                .onChange(of: viewModel.messages.count) { _, count in
+                .onChange(of: viewModel.messages.count) { oldCount, count in
                     if AppConstants.enableDebugLogging {
                         Log.info("ChatView: messages count changed to \(count)")
                     }
@@ -227,14 +231,20 @@ struct ChatView: View {
                     // Auto-scroll when new messages arrive — only if user is at the bottom.
                     // `shouldScrollToBottom` is automatically managed by ChatScrollManager
                     // based on scroll position, so this won't fight the user reading history.
-                    if scrollManager.shouldScrollToBottom && !isSearchActive && !viewModel.messages.isEmpty {
-                        let delay = ChatViewConstants.MessageDelay.mediaRender
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .seconds(delay))
-                            // Use the virtual bottom anchor so the last real message ends up
-                            // visually above the composer inset.
-                            scrollManager.scrollToBottom()
-                        }
+                    guard scrollManager.shouldScrollToBottom, !isSearchActive, count > 0 else { return }
+
+                    // Opening path: FRC 0→N or N→N+loadMore — corrective pin only.
+                    // Animated scroll here was a top contributor to the empty-first-paint bug.
+                    if !didStabilizeInitialScroll || oldCount == 0 {
+                        scrollManager.pinToBottomCorrective(delaysMs: [0, 80, 200])
+                        return
+                    }
+
+                    let delay = ChatViewConstants.MessageDelay.mediaRender
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(delay))
+                        guard scrollManager.shouldScrollToBottom else { return }
+                        scrollManager.scrollToBottom(animated: true)
                     }
                 }
                 .onChange(of: viewModel.voicePlaybackScrollTarget) { _, target in
@@ -383,12 +393,8 @@ struct ChatView: View {
                     let changed = abs(newHeight - composerHeight) > 1
                     composerHeight = newHeight
                     if changed && scrollManager.shouldScrollToBottom {
-                        scrollManager.scrollToBottom(animated: false)
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(120))
-                            guard scrollManager.shouldScrollToBottom else { return }
-                            scrollManager.scrollToBottom(animated: false)
-                        }
+                        // Reply/edit/media growth must re-pin without animation (same black-flash path).
+                        scrollManager.pinToBottomCorrective(delaysMs: [0, 80, 180])
                     }
                 }
         }
