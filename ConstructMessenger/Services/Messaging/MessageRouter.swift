@@ -763,6 +763,17 @@ final class MessageRouter {
             }
         default: // .ping (and any other non-ready signal routed here)
             Log.info("SESSION_STATE[session_ping_received]: discarding session ping from \(otherUserId.prefix(8))…", category: "MessageRouter")
+            // A ping means the peer initiated and a RESPONDER session is established on our side,
+            // so stop buffering outgoing messages that were waiting for a session_ready.
+            SessionConfirmationTracker.shared.markConfirmed(otherUserId)
+            if let myId = AuthSessionManager.shared.currentUserId {
+                MessageRetryManager.shared.sendQueuedMessages(
+                    for: chat,
+                    recipientId: otherUserId,
+                    currentUserId: myId,
+                    context: context
+                )
+            }
         }
     }
 

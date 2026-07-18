@@ -1258,6 +1258,12 @@ final class SessionCoordinator: MessageRouterDelegate {
                 cancelTieBreakWatchdog(for: peerId)
                 cancelResponderFallback(for: peerId)
                 cancelPendingEndSessionReinit(for: peerId, reason: "ping_received")
+                // A RESPONDER session now exists. If we were also waiting on our own
+                // INITIATOR session_ready, that confirmation will never arrive (the peer is the
+                // INITIATOR here) — release the stale pending flag and flush the outgoing buffer
+                // so sends stop deadlocking on a session_ready that won't come.
+                SessionConfirmationTracker.shared.markConfirmed(peerId)
+                sendSessionQueuedMessages(for: peerId)
                 return
             case .ready:
                 Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed (content_type=26)", category: "SessionCoordinator")
@@ -1292,6 +1298,10 @@ final class SessionCoordinator: MessageRouterDelegate {
             cancelTieBreakWatchdog(for: messageData.from)
             cancelResponderFallback(for: messageData.from)
             cancelPendingEndSessionReinit(for: messageData.from, reason: "ping_received_legacy")
+            // See the typed-ping case above: a RESPONDER session exists, so release any stale
+            // INITIATOR-pending buffer instead of waiting for a session_ready that won't arrive.
+            SessionConfirmationTracker.shared.markConfirmed(messageData.from)
+            sendSessionQueuedMessages(for: messageData.from)
             return
         }
 
