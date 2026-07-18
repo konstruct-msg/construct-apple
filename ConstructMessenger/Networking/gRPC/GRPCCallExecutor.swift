@@ -93,6 +93,26 @@ final class GRPCCallExecutor: Sendable {
                 // The router decides on rotation / probe restart / cooldown via effects;
                 // here we only decide whether to retry the local for-loop.
                 let kind = RPCFailureClassifier.classify(error)
+
+                // Channel yanked out from under this RPC: some other event invalidated the
+                // persistent connection mid-call (a routing change, a VEIL relay rotation, or
+                // the experimental QUIC/H3 stream tearing down the shared H2 client on its own
+                // handshake timeout). The RPC then throws `unavailable: "channel is closed"` —
+                // a LOCAL lifecycle artifact, NOT evidence the direct path is blocked. Feeding
+                // it to the FSM spuriously escalates auto-mode to the VEIL relay (observed: a
+                // launch-time engine-QUIC handshake timeout cascading direct → veil-active while
+                // H2-direct was healthy). Detect it via the generation counter — the same signal
+                // handleConnectionCleanup uses to skip invalidation — and retry on the fresh
+                // channel instead of counting a self-inflicted failure against the direct path.
+                if usingPersistent {
+                    let currentGen = cm.captureConnectionGeneration()
+                    if currentGen != capturedGen {
+                        Log.debug("gRPC failure not fed to router — persistent channel invalidated mid-RPC (gen \(capturedGen)→\(currentGen), kind=\(kind))", category: "GRPCChannel")
+                        if attempt < 2 { continue }
+                        throw error
+                    }
+                }
+
                 let target: TransportTarget
                 if usingVEIL, let port = cm.veilProxyPort(), let addr = capturedRelayAddr {
                     target = .veil(port: port, relay: addr)
