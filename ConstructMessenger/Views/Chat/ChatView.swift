@@ -392,9 +392,17 @@ struct ChatView: View {
                     guard newHeight.isFinite, newHeight >= 0 else { return }
                     let changed = abs(newHeight - composerHeight) > 1
                     composerHeight = newHeight
-                    if changed && scrollManager.shouldScrollToBottom {
-                        // Reply/edit/media growth must re-pin without animation (same black-flash path).
-                        scrollManager.pinToBottomCorrective(delaysMs: [0, 80, 180])
+                    if changed {
+                        if scrollManager.shouldScrollToBottom {
+                            // Reply/edit/media growth must re-pin without animation (same black-flash path).
+                            scrollManager.pinToBottomCorrective(delaysMs: [0, 80, 180])
+                        } else if let anchorId = (replyingTo ?? viewModel.editingMessage)?.id {
+                            // Reading history and starting a reply/edit: the bar grew the bottom
+                            // inset. Without a corrective the LazyVStack dematerializes into a
+                            // blank list ("chat disappears"). Re-pin around the targeted message
+                            // instead of the bottom — keeps it visible without yanking the reader.
+                            scrollManager.scrollTo(messageId: anchorId, anchor: .center, animated: false)
+                        }
                     }
                 }
         }

@@ -30,6 +30,21 @@ struct VoiceMessageBubbleView: View {
     /// user can still collapse it via the inline toggle.
     @State private var isTranscriptExpanded: Bool = true
 
+    /// True when the transcript is actually rendered below the waveform, making
+    /// the bubble tall.
+    private var isTranscriptShown: Bool { (transcript?.isEmpty == false) && isTranscriptExpanded }
+
+    /// Waveform-only voice reads as a capsule (pill — voice/composer chrome family).
+    /// With the transcript expanded the bubble is tall, and a pill radius (clamped to
+    /// height/2) curls the corners into an oval that clips the transcript text — so it
+    /// drops to the normal message-bubble radius, matching text bubbles.
+    private var playerBubbleShape: RoundedRectangle {
+        RoundedRectangle(
+            cornerRadius: isTranscriptShown ? CTRadius.control : CTRadius.pill,
+            style: .continuous
+        )
+    }
+
     private var isPlaying: Bool { player.isPlaying(voiceContent.mediaId) }
     private var isUploading: Bool { deliveryStatus == .sending && voiceContent.mediaUrl.isEmpty }
     private var uploadFailed: Bool { deliveryStatus == .failed && voiceContent.mediaUrl.isEmpty }
@@ -115,8 +130,9 @@ struct VoiceMessageBubbleView: View {
         }
         .frame(maxWidth: 360)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe))
-        .clipShape(CTShape.pill())
-        .overlay(CTShape.pill().stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(playerBubbleShape)
+        .overlay(playerBubbleShape.stroke(Color.CT.noise, lineWidth: 0.5))
+        .animation(.easeInOut(duration: 0.2), value: isTranscriptShown)
         .onChange(of: transcript) { _, newTranscript in
             // Auto-reveal a fresh transcript so the user sees what they
             // triggered. They can still collapse via the inline toggle.
