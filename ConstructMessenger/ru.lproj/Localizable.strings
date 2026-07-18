@@ -611,6 +611,12 @@
 // MARK: - Device Linking
 "onboarding_link_device" = "Привязать существующую идентичность";
 "device_link_scan_title" = "Сканировать для привязки";
+"link_method_title" = "Привязать устройство";
+"link_method_intro" = "Добавьте это устройство к вашей существующей идентичности Konstruct. Выберите способ по тому, какой камерой удобнее навести.";
+"link_method_scan_title" = "Сканировать код";
+"link_method_scan_subtitle" = "Другое устройство показывает QR-код";
+"link_method_show_title" = "Показать код";
+"link_method_show_subtitle" = "Другое устройство сканирует это";
 "device_link_scan_instructions" = "Откройте существующее устройство → Настройки → Устройства → Привязать новое устройство, затем отсканируйте QR-код.";
 "device_link_linking" = "Привязка устройства…";
 "device_link_success" = "Устройство успешно привязано";

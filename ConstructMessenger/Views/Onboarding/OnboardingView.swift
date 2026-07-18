@@ -125,7 +125,8 @@ struct OnboardingView: View {
             }
             .sheet(isPresented: $showingDeviceLink) {
                 #if os(iOS)
-                DeviceLinkScanView()
+                // Offer both directions: scan the other device, or show a code it can scan.
+                DeviceLinkMethodView()
                 #else
                 DesktopLinkRequestView()
                 #endif

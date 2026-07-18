@@ -610,6 +610,12 @@
 // MARK: - Device Linking
 "onboarding_link_device" = "Link Existing Identity";
 "device_link_scan_title" = "Scan to Link";
+"link_method_title" = "Link Device";
+"link_method_intro" = "Add this device to your existing Konstruct identity. Use whichever device is easiest to point a camera with.";
+"link_method_scan_title" = "Scan a code";
+"link_method_scan_subtitle" = "Your other device shows a QR code";
+"link_method_show_title" = "Show a code";
+"link_method_show_subtitle" = "Your other device scans this one";
 "device_link_scan_instructions" = "Open your existing device → Settings → Linked Devices → Link New Device, then scan the QR code.";
 "device_link_linking" = "Linking device…";
 "device_link_success" = "Device linked successfully";
