@@ -121,7 +121,7 @@ struct SettingsView: View {
                 guard let ui = viewModel.profileImage else { return nil }
                 return Image(uiImage: ui)
             }()
-            CTHexAvatar(initials: profileInitials, image: img, size: .large)
+            CTHexAvatar(initials: profileInitials, image: img, size: .large, colorSeed: viewModel.userId)
 
             VStack(alignment: .leading, spacing: SettingsRootLayout.profileMetaSpacing) {
                 Text(profileDisplayName.uppercased())
@@ -180,7 +180,7 @@ struct SettingsView: View {
                         guard let ui = viewModel.profileImage else { return nil }
                         return Image(uiImage: ui)
                     }()
-                    CTHexAvatar(initials: profileInitials, image: img, size: .large)
+                    CTHexAvatar(initials: profileInitials, image: img, size: .large, colorSeed: viewModel.userId)
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text(profileDisplayName.uppercased())
