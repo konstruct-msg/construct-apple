@@ -2,15 +2,20 @@
 //  ChatsSplitView.swift
 //  Construct Messenger
 //
-//  Regular-width shell (iPad full-screen / wide multitasking):
-//  NavigationSplitView with Streams list in the sidebar and detail that switches
-//  between chat, Synaps cloud, and Settings.
+//  Regular-width shell (iPad full-screen / wide multitasking).
 //
-//  Compact iPhone keeps TabView in MainTabView — this file is only used when
-//  horizontalSizeClass == .regular.
+//  Layout (iPadOS 26-inspired, CT glass language):
+//  ┌──────┬────────────────┬─────────────────────────┐
+//  │ Rail │ Streams list   │ Detail (chat / empty)   │  ← chats
+//  │ vert │ (floating card)│                         │
+//  │ glass│                │                         │
+//  └──────┴────────────────┴─────────────────────────┘
+//  ┌──────┬──────────────────────────────────────────┐
+//  │ Rail │ Synaps / Settings (full stage)           │
+//  └──────┴──────────────────────────────────────────┘
 //
-//  Product: P0 of spatial composition — Synaps must exist on iPad (see
-//  construct-docs RADAR_ATTENTION_SURFACE §9.4–§9.5). Radar inspector = later.
+//  Compact iPhone keeps TabView in MainTabView.
+//  Product: spatial composition P0/P1 — see RADAR_ATTENTION_SURFACE §9.4–§9.5.
 //
 
 import SwiftUI
@@ -36,73 +41,53 @@ struct ChatsSplitView: View {
     @State private var listRevision = 0
 
     /// Mirrors compact MainTabView indices for SynapsView refresh guards / orientation.
-    private enum SidebarTab: Int {
+    private enum SidebarTab: Int, CaseIterable {
         case chats = 0
         case synaps = 1
         case settings = 2
+
+        var titleKey: LocalizedStringKey {
+            switch self {
+            case .chats: return "chats"
+            case .synaps: return "synapses"
+            case .settings: return "settings"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .chats: return "message"
+            case .synaps: return "circle.grid.cross"
+            case .settings: return "gearshape"
+            }
+        }
     }
 
+    /// Narrow vertical section switcher (icon rail).
+    private let railWidth: CGFloat = 56
+    /// Preferred streams column width on regular (list floats beside detail).
+    private let streamsColumnWidth: CGFloat = 320
+
     var body: some View {
-        NavigationSplitView {
-            VStack(spacing: 0) {
-                sidebarChats
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                #if !targetEnvironment(macCatalyst)
-                Divider()
-                sidebarTabBar
-                #endif
+        HStack(alignment: .top, spacing: CTLayout.chromeGap) {
+            sectionRail
+                .padding(.leading, CTLayout.edgePad)
+                .padding(.vertical, CTLayout.edgePad)
+
+            mainStage
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.trailing, CTLayout.edgePad)
+                .padding(.vertical, CTLayout.edgePad)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ctBackground()
+        .sheet(isPresented: $showingQRScanner) {
+            QRScannerView { contactURL in
+                handleScannedContact(contactURL)
             }
-            .navigationTitle(sidebarNavigationTitle)
-            .toolbar {
-                #if os(iOS)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showingQRScanner = true
-                    } label: {
-                        Image(systemName: "qrcode.viewfinder")
-                            .font(.system(size: 17, weight: .regular))
-                            .foregroundStyle(Color.CT.accent)
-                    }
-                    .accessibilityLabel(Text(LocalizedStringKey("scan_qr_code")))
-                }
-                #else
-                ToolbarItem(placement: .automatic) {
-                    Button {
-                        showingQRScanner = true
-                    } label: {
-                        Image(systemName: "qrcode.viewfinder")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundStyle(Color.CT.accent)
-                    }
-                    .accessibilityLabel(Text(LocalizedStringKey("scan_qr_code")))
-                }
-                #endif
-                ToolbarItem(placement: .principal) {
-                    ConnectionStatusIndicator()
-                }
-                #if targetEnvironment(macCatalyst)
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        cycleSidebarTab()
-                    } label: {
-                        Image(systemName: catalystToggleSystemImage)
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundStyle(Color.CT.accent)
-                    }
-                    .accessibilityLabel(Text(LocalizedStringKey(catalystToggleA11yKey)))
-                }
-                #endif
-            }
-            .sheet(isPresented: $showingQRScanner) {
-                QRScannerView { contactURL in
-                    handleScannedContact(contactURL)
-                }
-            }
-            .sheet(isPresented: $showingDrafts) {
-                DraftsView()
-            }
-        } detail: {
-            detailContent
+        }
+        .sheet(isPresented: $showingDrafts) {
+            DraftsView()
         }
         .onAppear {
             chatsViewModel.setContext(viewContext)
@@ -120,7 +105,6 @@ struct ChatsSplitView: View {
             openSynaps()
         }
         .onChange(of: chatsViewModel.selectedTab) { _, tab in
-            // Compact → regular rotation, or MainTabView still writing selectedTab.
             if tab == SidebarTab.synaps.rawValue {
                 openSynaps()
             } else if tab == 0 {
@@ -137,163 +121,217 @@ struct ChatsSplitView: View {
             }
         }
         .onChange(of: selectedChatId) { _, newId in
-            // Picking a stream from the sidebar always returns to chats detail.
             if newId != nil {
                 selectTab(.chats, clearChatSelection: false)
             }
         }
     }
 
-    // MARK: - Sidebar chrome
+    // MARK: - Vertical section rail (left)
 
-    private var sidebarNavigationTitle: LocalizedStringKey {
-        switch activeTab {
-        case .chats: return "chats"
-        case .synaps: return "synapses"
-        case .settings: return "settings"
+    /// iPadOS 26 pattern: primary sections as a floating vertical control, not a fused
+    /// bottom bar. QR sits apart at the bottom of the rail (action vs destination).
+    private var sectionRail: some View {
+        VStack(spacing: CTLayout.chromeGap) {
+            ForEach(SidebarTab.allCases, id: \.rawValue) { tab in
+                railDestinationButton(tab)
+            }
+
+            Spacer(minLength: CTLayout.sectionGap)
+
+            railQRButton
+            connectionRailBadge
         }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 8)
+        .frame(width: railWidth)
+        .frame(maxHeight: .infinity)
+        .modifier(RegularShellFloatingChrome(cornerRadius: CTRadius.pill))
+        .accessibilityElement(children: .contain)
     }
 
-    private var sidebarTabBar: some View {
-        HStack(spacing: 0) {
-            sidebarTabButton(
-                title: "chats",
-                systemImage: "message",
-                tab: .chats
-            )
-            sidebarTabButton(
-                title: "synapses",
-                systemImage: "circle.grid.cross",
-                tab: .synaps
-            )
-            sidebarTabButton(
-                title: "settings",
-                systemImage: "gearshape",
-                tab: .settings
-            )
-        }
-        .frame(height: 56)
-        .background(.bar)
-    }
-
-    @ViewBuilder
-    private func sidebarTabButton(title: LocalizedStringKey, systemImage: String, tab: SidebarTab) -> some View {
+    private func railDestinationButton(_ tab: SidebarTab) -> some View {
         let selected = activeTab == tab
-        Button {
+        return Button {
             selectTab(tab, clearChatSelection: tab != .chats)
         } label: {
-            VStack(spacing: 3) {
-                Image(systemName: systemImage)
-                    .font(.system(size: selected ? 18 : 16, weight: selected ? .semibold : .regular))
-                Text(title)
-                    .font(CTFont.regular(10))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(selected ? Color.CT.accent : Color.CT.textDim)
-            .frame(maxWidth: .infinity)
+            Image(systemName: tab.systemImage)
+                .font(.system(size: 18, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? Color.CT.bg : Color.CT.textDim)
+                .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
+                .background {
+                    if selected {
+                        Circle()
+                            .fill(Color.CT.accent)
+                    }
+                }
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(tab.titleKey))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    #if targetEnvironment(macCatalyst)
-    private var catalystToggleSystemImage: String {
-        switch activeTab {
-        case .chats: return "circle.grid.cross"
-        case .synaps: return "gearshape"
-        case .settings: return "message"
+    private var railQRButton: some View {
+        Button {
+            showingQRScanner = true
+        } label: {
+            Image(systemName: "qrcode.viewfinder")
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(Color.CT.accent)
+                .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
+                .contentShape(Circle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(LocalizedStringKey("scan_qr_code")))
     }
 
-    private var catalystToggleA11yKey: String {
-        switch activeTab {
-        case .chats: return "synapses"
-        case .synaps: return "settings"
-        case .settings: return "chats"
-        }
+    private var connectionRailBadge: some View {
+        ConnectionStatusIndicator()
+            .scaleEffect(0.85)
+            .frame(width: CTLayout.hitTarget)
     }
 
-    private func cycleSidebarTab() {
-        switch activeTab {
-        case .chats: selectTab(.synaps, clearChatSelection: true)
-        case .synaps: selectTab(.settings, clearChatSelection: true)
-        case .settings: selectTab(.chats, clearChatSelection: false)
-        }
-    }
-    #endif
-
-    // MARK: - Sidebar: Chats
-
-    private var sidebarChats: some View {
-        List(selection: $selectedChatId) {
-            ForEach(chats) { chat in
-                ChatRowView(chat: chat)
-                    .tag(chat.id)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) { deleteChat(chat) } label: {
-                            Label(LocalizedStringKey("delete"), systemImage: "trash")
-                        }
-                        Button { toggleMarkUnread(chat) } label: {
-                            Label(LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
-                                  systemImage: chat.unreadCount > 0 ? "envelope.open" : "envelope.badge")
-                        }
-                        .tint(.blue)
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button { togglePin(chat) } label: {
-                            Label(LocalizedStringKey(chat.isPinned ? "unpin" : "pin"),
-                                  systemImage: chat.isPinned ? "pin.slash" : "pin")
-                        }
-                        .tint(.yellow)
-                    }
-                    .contextMenu {
-                        Button(role: .destructive) { deleteChat(chat) } label: {
-                            Label("delete_chat", systemImage: "trash")
-                        }
-                    }
-            }
-            .onDelete(perform: deleteChatsAtOffsets)
-        }
-        .id(listRevision)
-        .refreshable {
-            #if os(iOS)
-            await BackgroundFetchManager.shared.fetchPendingMessages()
-            #endif
-        }
-    }
-
-    // MARK: - Detail
+    // MARK: - Main stage
 
     @ViewBuilder
-    private var detailContent: some View {
+    private var mainStage: some View {
         switch activeTab {
-        case .synaps:
-            SynapsView()
-                .environment(chatsViewModel)
-        case .settings:
-            #if os(iOS)
-            SettingsView()
-                .environment(chatsViewModel)
-            #else
-            DesktopSettingsView()
-            #endif
         case .chats:
-            if let chatId = selectedChatId,
-               let chat = chats.first(where: { $0.id == chatId }) {
-                ChatView(chat: chat, context: viewContext)
-            } else {
-                ContentUnavailableView(
-                    String(localized: "select_chat"),
-                    systemImage: "message",
-                    description: Text("select_chat_description")
-                )
+            chatsStage
+        case .synaps:
+            floatingStage {
+                SynapsView()
+                    .environment(chatsViewModel)
             }
+        case .settings:
+            floatingStage {
+                #if os(iOS)
+                SettingsView()
+                    .environment(chatsViewModel)
+                #else
+                DesktopSettingsView()
+                #endif
+            }
+        }
+    }
+
+    /// Streams: floating list column + detail (not one fused split chrome slab).
+    private var chatsStage: some View {
+        HStack(alignment: .top, spacing: CTLayout.chromeGap) {
+            streamsListPanel
+                .frame(width: streamsColumnWidth)
+                .frame(maxHeight: .infinity)
+
+            chatDetailPanel
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var streamsListPanel: some View {
+        VStack(spacing: 0) {
+            panelHeader(titleKey: "chats") {
+                EmptyView()
+            }
+
+            List(selection: $selectedChatId) {
+                ForEach(chats) { chat in
+                    ChatRowView(chat: chat)
+                        .tag(chat.id)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) { deleteChat(chat) } label: {
+                                Label(LocalizedStringKey("delete"), systemImage: "trash")
+                            }
+                            Button { toggleMarkUnread(chat) } label: {
+                                Label(
+                                    LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
+                                    systemImage: chat.unreadCount > 0 ? "envelope.open" : "envelope.badge"
+                                )
+                            }
+                            .tint(.blue)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            Button { togglePin(chat) } label: {
+                                Label(
+                                    LocalizedStringKey(chat.isPinned ? "unpin" : "pin"),
+                                    systemImage: chat.isPinned ? "pin.slash" : "pin"
+                                )
+                            }
+                            .tint(.yellow)
+                        }
+                        .contextMenu {
+                            Button(role: .destructive) { deleteChat(chat) } label: {
+                                Label("delete_chat", systemImage: "trash")
+                            }
+                        }
+                }
+                .onDelete(perform: deleteChatsAtOffsets)
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .id(listRevision)
+            .refreshable {
+                #if os(iOS)
+                await BackgroundFetchManager.shared.fetchPendingMessages()
+                #endif
+            }
+        }
+        .modifier(RegularShellFloatingChrome(cornerRadius: CTRadius.card))
+    }
+
+    @ViewBuilder
+    private var chatDetailPanel: some View {
+        if let chatId = selectedChatId,
+           let chat = chats.first(where: { $0.id == chatId }) {
+            // ChatView already owns floating glass nav/composer — do not double-chrome.
+            ChatView(chat: chat, context: viewContext)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: CTRadius.card, style: .continuous))
+        } else {
+            ContentUnavailableView(
+                String(localized: "select_chat"),
+                systemImage: "message",
+                description: Text("select_chat_description")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .modifier(RegularShellFloatingChrome(cornerRadius: CTRadius.card))
+        }
+    }
+
+    /// Full-stage surface for Synaps / Settings — one floating panel, not edge-fused.
+    private func floatingStage<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .modifier(RegularShellFloatingChrome(cornerRadius: CTRadius.card))
+            .clipShape(RoundedRectangle(cornerRadius: CTRadius.card, style: .continuous))
+    }
+
+    private func panelHeader<Trailing: View>(
+        titleKey: LocalizedStringKey,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(spacing: CTLayout.chromeGap) {
+            Text(titleKey)
+                .font(CTFont.bold(13))
+                .foregroundStyle(Color.CT.text)
+                .tracking(3)
+                .textCase(.uppercase)
+            Spacer(minLength: 0)
+            trailing()
+        }
+        .padding(.horizontal, CTLayout.edgePad)
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.CT.noise.opacity(0.55))
+                .frame(height: 1)
         }
     }
 
     // MARK: - Tab selection
 
-    /// Compact MainTabView settings index when calls tab is present.
     private var settingsTabIndex: Int { CallsFeature.isEnabled ? 3 : 2 }
 
     private func openSynaps() {
@@ -305,8 +343,6 @@ struct ChatsSplitView: View {
         if clearChatSelection {
             selectedChatId = nil
         }
-        // Keep ChatsViewModel.selectedTab in sync so SynapsView request refresh
-        // (guards on selectedTab == 1) and orientation paths stay consistent.
         switch tab {
         case .chats:
             chatsViewModel.selectedTab = 0
@@ -407,6 +443,34 @@ struct ChatsSplitView: View {
     private func showErrorAfterDismiss(_ message: String) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             ErrorRouter.shared.report(.unknown(message))
+        }
+    }
+}
+
+// MARK: - Floating chrome (Liquid Glass when available, CT glass fallback)
+
+/// Separates shell panels the way iOS 26 / macOS float sidebars and tab chrome —
+/// material + continuous corners + light edge, not a fused full-bleed bar.
+private struct RegularShellFloatingChrome: ViewModifier {
+    var cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .glassEffect(
+                    .regular,
+                    in: .rect(cornerRadius: cornerRadius)
+                )
+        } else {
+            content
+                .background(.ultraThinMaterial)
+                .background(Color.CT.bg.opacity(0.35))
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.CT.noise.opacity(0.5), lineWidth: 0.5)
+                )
+                .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
         }
     }
 }
