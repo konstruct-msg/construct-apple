@@ -2,12 +2,15 @@
 //  ChatsSplitView.swift
 //  Construct Messenger
 //
-//  iPad split-view layout: sidebar (chat list) + detail (open chat).
-//  Used automatically on regular-width size class (iPad, or iPhone landscape
-//  on Pro Max when split-view multitasking is active).
+//  Regular-width shell (iPad full-screen / wide multitasking):
+//  NavigationSplitView with Streams list in the sidebar and detail that switches
+//  between chat, Synaps cloud, and Settings.
 //
-//  iPhone (compact) keeps the existing TabView + NavigationStack layout
-//  in MainTabView — this file is only instantiated for regular width.
+//  Compact iPhone keeps TabView in MainTabView — this file is only used when
+//  horizontalSizeClass == .regular.
+//
+//  Product: P0 of spatial composition — Synaps must exist on iPad (see
+//  construct-docs RADAR_ATTENTION_SURFACE §9.4–§9.5). Radar inspector = later.
 //
 
 import SwiftUI
@@ -32,7 +35,12 @@ struct ChatsSplitView: View {
     @State private var showingDrafts = false
     @State private var listRevision = 0
 
-    private enum SidebarTab { case chats, settings }
+    /// Mirrors compact MainTabView indices for SynapsView refresh guards / orientation.
+    private enum SidebarTab: Int {
+        case chats = 0
+        case synaps = 1
+        case settings = 2
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -44,29 +52,29 @@ struct ChatsSplitView: View {
                 sidebarTabBar
                 #endif
             }
-            .navigationTitle("chats")
+            .navigationTitle(sidebarNavigationTitle)
             .toolbar {
                 #if os(iOS)
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showingQRScanner = true
                     } label: {
-                        Text("[qr]")
-                            .font(CTFont.regular(13))
-                            .foregroundColor(Color.CT.accent)
-                            .lineLimit(1).fixedSize()
+                        Image(systemName: "qrcode.viewfinder")
+                            .font(.system(size: 17, weight: .regular))
+                            .foregroundStyle(Color.CT.accent)
                     }
+                    .accessibilityLabel(Text(LocalizedStringKey("scan_qr_code")))
                 }
                 #else
                 ToolbarItem(placement: .automatic) {
                     Button {
                         showingQRScanner = true
                     } label: {
-                        Text("[qr]")
-                            .font(CTFont.regular(13))
-                            .foregroundColor(Color.CT.accent)
-                            .lineLimit(1).fixedSize()
+                        Image(systemName: "qrcode.viewfinder")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundStyle(Color.CT.accent)
                     }
+                    .accessibilityLabel(Text(LocalizedStringKey("scan_qr_code")))
                 }
                 #endif
                 ToolbarItem(placement: .principal) {
@@ -75,18 +83,13 @@ struct ChatsSplitView: View {
                 #if targetEnvironment(macCatalyst)
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        if activeTab == .settings {
-                            activeTab = .chats
-                        } else {
-                            activeTab = .settings
-                            selectedChatId = nil
-                        }
+                        cycleSidebarTab()
                     } label: {
-                        Text(activeTab == .settings ? "[msg]" : "[⚙]")
-                            .font(CTFont.regular(13))
-                            .foregroundColor(Color.CT.accent)
-                            .lineLimit(1).fixedSize()
+                        Image(systemName: catalystToggleSystemImage)
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundStyle(Color.CT.accent)
                     }
+                    .accessibilityLabel(Text(LocalizedStringKey(catalystToggleA11yKey)))
                 }
                 #endif
             }
@@ -103,6 +106,7 @@ struct ChatsSplitView: View {
         }
         .onAppear {
             chatsViewModel.setContext(viewContext)
+            applySelectedTabFromViewModel()
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
             guard notificationContainsChatChanges(note) else { return }
@@ -112,21 +116,43 @@ struct ChatsSplitView: View {
             guard notificationContainsChatChanges(note) else { return }
             listRevision &+= 1
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openSynapsTab)) { _ in
+            openSynaps()
+        }
+        .onChange(of: chatsViewModel.selectedTab) { _, tab in
+            // Compact → regular rotation, or MainTabView still writing selectedTab.
+            if tab == SidebarTab.synaps.rawValue {
+                openSynaps()
+            } else if tab == 0 {
+                selectTab(.chats, clearChatSelection: false)
+            } else if tab == settingsTabIndex {
+                selectTab(.settings, clearChatSelection: true)
+            }
+        }
         .onChange(of: chatsViewModel.chatToOpen) { _, chatId in
             if let chatId {
                 selectedChatId = chatId
-                activeTab = .chats
+                selectTab(.chats, clearChatSelection: false)
                 chatsViewModel.chatToOpen = nil
             }
         }
         .onChange(of: selectedChatId) { _, newId in
+            // Picking a stream from the sidebar always returns to chats detail.
             if newId != nil {
-                activeTab = .chats
+                selectTab(.chats, clearChatSelection: false)
             }
         }
     }
 
-    // MARK: - Sidebar: Tab Bar
+    // MARK: - Sidebar chrome
+
+    private var sidebarNavigationTitle: LocalizedStringKey {
+        switch activeTab {
+        case .chats: return "chats"
+        case .synaps: return "synapses"
+        case .settings: return "settings"
+        }
+    }
 
     private var sidebarTabBar: some View {
         HStack(spacing: 0) {
@@ -136,8 +162,13 @@ struct ChatsSplitView: View {
                 tab: .chats
             )
             sidebarTabButton(
+                title: "synapses",
+                systemImage: "circle.grid.cross",
+                tab: .synaps
+            )
+            sidebarTabButton(
                 title: "settings",
-                systemImage: "gear",
+                systemImage: "gearshape",
                 tab: .settings
             )
         }
@@ -148,27 +179,48 @@ struct ChatsSplitView: View {
     @ViewBuilder
     private func sidebarTabButton(title: LocalizedStringKey, systemImage: String, tab: SidebarTab) -> some View {
         let selected = activeTab == tab
-        let ascii = systemImage == "message" ? "[msg]" : "[⚙]"
         Button {
-            activeTab = tab
-            if tab == .chats {
-                selectedChatId = selectedChatId
-            } else {
-                selectedChatId = nil
-            }
+            selectTab(tab, clearChatSelection: tab != .chats)
         } label: {
             VStack(spacing: 3) {
-                Text(ascii)
-                    .font(CTFont.bold(selected ? 16 : 14))
-                    .lineLimit(1).fixedSize()
+                Image(systemName: systemImage)
+                    .font(.system(size: selected ? 18 : 16, weight: selected ? .semibold : .regular))
                 Text(title)
                     .font(CTFont.regular(10))
+                    .lineLimit(1)
             }
             .foregroundStyle(selected ? Color.CT.accent : Color.CT.textDim)
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
+
+    #if targetEnvironment(macCatalyst)
+    private var catalystToggleSystemImage: String {
+        switch activeTab {
+        case .chats: return "circle.grid.cross"
+        case .synaps: return "gearshape"
+        case .settings: return "message"
+        }
+    }
+
+    private var catalystToggleA11yKey: String {
+        switch activeTab {
+        case .chats: return "synapses"
+        case .synaps: return "settings"
+        case .settings: return "chats"
+        }
+    }
+
+    private func cycleSidebarTab() {
+        switch activeTab {
+        case .chats: selectTab(.synaps, clearChatSelection: true)
+        case .synaps: selectTab(.settings, clearChatSelection: true)
+        case .settings: selectTab(.chats, clearChatSelection: false)
+        }
+    }
+    #endif
 
     // MARK: - Sidebar: Chats
 
@@ -214,21 +266,65 @@ struct ChatsSplitView: View {
 
     @ViewBuilder
     private var detailContent: some View {
-        if activeTab == .settings && selectedChatId == nil {
+        switch activeTab {
+        case .synaps:
+            SynapsView()
+                .environment(chatsViewModel)
+        case .settings:
             #if os(iOS)
             SettingsView()
+                .environment(chatsViewModel)
             #else
             DesktopSettingsView()
             #endif
-        } else if let chatId = selectedChatId,
-           let chat = chats.first(where: { $0.id == chatId }) {
-            ChatView(chat: chat, context: viewContext)
-        } else {
-            ContentUnavailableView(
-                String(localized: "select_chat"),
-                systemImage: "message",
-                description: Text("select_chat_description")
-            )
+        case .chats:
+            if let chatId = selectedChatId,
+               let chat = chats.first(where: { $0.id == chatId }) {
+                ChatView(chat: chat, context: viewContext)
+            } else {
+                ContentUnavailableView(
+                    String(localized: "select_chat"),
+                    systemImage: "message",
+                    description: Text("select_chat_description")
+                )
+            }
+        }
+    }
+
+    // MARK: - Tab selection
+
+    /// Compact MainTabView settings index when calls tab is present.
+    private var settingsTabIndex: Int { CallsFeature.isEnabled ? 3 : 2 }
+
+    private func openSynaps() {
+        selectTab(.synaps, clearChatSelection: true)
+    }
+
+    private func selectTab(_ tab: SidebarTab, clearChatSelection: Bool) {
+        activeTab = tab
+        if clearChatSelection {
+            selectedChatId = nil
+        }
+        // Keep ChatsViewModel.selectedTab in sync so SynapsView request refresh
+        // (guards on selectedTab == 1) and orientation paths stay consistent.
+        switch tab {
+        case .chats:
+            chatsViewModel.selectedTab = 0
+        case .synaps:
+            chatsViewModel.selectedTab = 1
+        case .settings:
+            chatsViewModel.selectedTab = settingsTabIndex
+        }
+    }
+
+    private func applySelectedTabFromViewModel() {
+        switch chatsViewModel.selectedTab {
+        case 1:
+            openSynaps()
+        case let t where t == settingsTabIndex:
+            selectTab(.settings, clearChatSelection: true)
+        default:
+            break
         }
     }
 
@@ -304,6 +400,7 @@ struct ChatsSplitView: View {
         )
         if let chat = chatsViewModel.startChat(with: publicUserInfo) {
             selectedChatId = chat.id
+            selectTab(.chats, clearChatSelection: false)
         }
     }
 
