@@ -108,6 +108,12 @@ docs for detail):
 - **Messaging:** Double Ratchet (forward secrecy + post-compromise security), with session
   healing and multi-device support.
 - **Metadata:** sealed-sender / stealth addressing to reduce who-talks-to-whom exposure.
+  Its anti-abuse tokens (ConstructPrivacyPass, a Ristretto255 VOPRF) are unlinkable against
+  an **honest-but-curious** server. They are **not yet** verifiable: the issuer key is not
+  published as a commitment and issuance carries no DLEQ proof, so a *malicious or
+  compromised* server could in principle key-tag a targeted user at issuance to link their
+  sealed sends. Closing this (verifiable VOPRF) is a planned fast-follow; do not rely on
+  sender-unlinkability against an actively hostile server until then.
 - **Transport obfuscation (VEIL):** pluggable transports (obfs4 / WebTunnel / veil-front) with
   backend-signed, per-user capabilities for censorship circumvention.
 
