@@ -248,11 +248,23 @@ class PushNotificationManager: NSObject {
                 Log.info("Device token registered with server: success=\(response.success)", category: "Push")
                 return
             } catch {
-                let shouldRetry: Bool
+                var shouldRetry = false
                 if let rpcError = error as? RPCError {
-                    shouldRetry = rpcError.code == .unavailable || rpcError.code == .deadlineExceeded
-                } else {
-                    shouldRetry = false
+                    switch rpcError.code {
+                    case .unavailable, .deadlineExceeded:
+                        shouldRetry = true
+                    case .unauthenticated:
+                        // Session may be mid device-auth after dead refresh — wait briefly
+                        // for a valid token (single-flight DeviceAuthCoordinator) then retry.
+                        Log.info("Push register UNAUTH — waiting for session recovery", category: "Push")
+                        for _ in 0..<12 {
+                            if AuthSessionManager.shared.isSessionValid { break }
+                            try? await Task.sleep(for: .milliseconds(250))
+                        }
+                        shouldRetry = AuthSessionManager.shared.isSessionValid
+                    default:
+                        shouldRetry = false
+                    }
                 }
                 if shouldRetry && attempt < 2 {
                     let delay = Double(attempt + 1) * 2.0

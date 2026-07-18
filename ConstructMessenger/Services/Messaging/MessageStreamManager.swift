@@ -676,8 +676,15 @@ final class MessageStreamManager {
                                 )
                             }
                         } else {
-                            Log.info("MessageStream refresh rejected by server — triggering device re-auth", category: "MessageStream")
+                            Log.info("MessageStream refresh rejected by server — device re-auth", category: "MessageStream")
                             AuthSessionManager.shared.invalidateTokensForReauth()
+                            let outcome = await DeviceAuthCoordinator.shared.authenticateIfPossible()
+                            if case .success = outcome {
+                                Log.info("MessageStream: device re-auth recovered session — reconnecting", category: "MessageStream")
+                                retryCount = 0
+                                continue
+                            }
+                            Log.error("MessageStream: device re-auth failed after dead refresh — \(String(describing: outcome))", category: "MessageStream")
                         }
                     } else {
                         Log.info("MessageStream refresh failed (network error) — keeping tokens, will retry later", category: "MessageStream")

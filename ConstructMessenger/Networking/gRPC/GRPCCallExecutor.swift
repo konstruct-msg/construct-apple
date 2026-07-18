@@ -376,13 +376,20 @@ final class GRPCCallExecutor: Sendable {
                     // Router rotation is requested by the caller of handleAuthRetry on .suspectRejection.
                     return .suspectRejection
                 }
-                Log.info("Refresh rejected across \(attempts) VEIL relay rotations — honoring as a real rejection, triggering device re-auth", category: "GRPCChannel")
+                Log.info("Refresh rejected across \(attempts) VEIL relay rotations — honoring as real, device re-auth", category: "GRPCChannel")
                 await TokenRefreshCoordinator.shared.resetInvalidation()
-                await MainActor.run { AuthSessionManager.shared.invalidateTokensForReauth() }
-                return .serverRejected
+            } else {
+                Log.info("Refresh rejected by server — device re-auth", category: "GRPCChannel")
             }
-            Log.info("Refresh rejected by server — triggering device re-auth", category: "GRPCChannel")
+            // Single-flight device auth: concurrent push/VoIP/stream/gRPC callers join one mint
+            // instead of each failing with UNAUTH while AuthViewModel alone recovers.
             await MainActor.run { AuthSessionManager.shared.invalidateTokensForReauth() }
+            let outcome = await DeviceAuthCoordinator.shared.authenticateIfPossible()
+            if case .success = outcome {
+                Log.info("Device re-auth recovered session after dead refresh — retrying RPC", category: "GRPCChannel")
+                return .retry
+            }
+            Log.error("Device re-auth failed after dead refresh — \(String(describing: outcome))", category: "GRPCChannel")
             return .serverRejected
         } else {
             Log.info("Refresh failed (network error) — keeping tokens for retry when online", category: "GRPCChannel")

@@ -1,0 +1,118 @@
+//
+//  DeviceAuthCoordinator.swift
+//  Construct Messenger
+//
+//  Single-flight device signing-key authentication. When the refresh token is
+//  permanently dead, many callers hit `.unauthenticated` at once (push, VoIP,
+//  stream, gRPC retry). Without coordination they each fail and log UNAUTH while
+//  AuthViewModel alone re-mints tokens — push/VoIP never retry with the new session.
+//
+
+import Foundation
+import CryptoKit
+import GRPCCore
+
+/// Outcome of a device-auth attempt (signing key → new access+refresh tokens).
+enum DeviceAuthOutcome: Sendable {
+    case success(userId: String)
+    /// No deviceId / signing key in Keychain — caller must route to registration.
+    case noDeviceKeys
+    case failed(message: String)
+}
+
+/// Serializes device-auth RPCs so concurrent recovery paths share one mint.
+actor DeviceAuthCoordinator {
+    static let shared = DeviceAuthCoordinator()
+
+    private var inFlight: Task<DeviceAuthOutcome, Never>?
+
+    /// Authenticate with the local device signing key and persist new tokens.
+    /// Concurrent callers join the same in-flight task.
+    @discardableResult
+    func authenticateIfPossible() async -> DeviceAuthOutcome {
+        // Fast path: another recovery already produced a valid session.
+        let alreadyValid = await MainActor.run {
+            AuthSessionManager.shared.sessionToken != nil && AuthSessionManager.shared.isSessionValid
+        }
+        if alreadyValid {
+            let uid = await MainActor.run { AuthSessionManager.shared.currentUserId ?? "" }
+            if !uid.isEmpty {
+                return .success(userId: uid)
+            }
+        }
+
+        if let inFlight {
+            return await inFlight.value
+        }
+
+        let task = Task<DeviceAuthOutcome, Never> {
+            await Self.performDeviceAuth()
+        }
+        inFlight = task
+        defer { inFlight = nil }
+        return await task.value
+    }
+
+    // MARK: - Private
+
+    @MainActor
+    private static func performDeviceAuth() async -> DeviceAuthOutcome {
+        guard let deviceId = KeychainManager.shared.loadDeviceID(),
+              let rawSigningKey = KeychainManager.shared.loadDeviceSigningKey() else {
+            Log.info("DeviceAuthCoordinator: no device keys — cannot re-auth", category: "Auth")
+            return .noDeviceKeys
+        }
+
+        do {
+            let timestamp = Int64(Date().timeIntervalSince1970)
+            let message = "\(deviceId)\(timestamp)"
+            guard let messageData = message.data(using: .utf8) else {
+                return .failed(message: "encodingFailed")
+            }
+
+            let signingKeyBytes: [UInt8]
+            do {
+                signingKeyBytes = try CryptoManager.shared.exportSigningSecretKey()
+            } catch {
+                Log.info("DeviceAuthCoordinator: CryptoCore unavailable — raw Keychain key: \(error)", category: "Auth")
+                signingKeyBytes = [UInt8](rawSigningKey)
+            }
+            let privateKey = try Curve25519.Signing.PrivateKey(rawRepresentation: Data(signingKeyBytes))
+            let signatureData = try privateKey.signature(for: messageData)
+
+            // allowAuthRetry: false on the client — must not recurse into refresh/device-auth.
+            let response = try await AuthServiceClient.shared.authenticateDevice(
+                deviceId: deviceId,
+                timestamp: timestamp,
+                signature: signatureData
+            )
+
+            let expiresInSeconds: Int
+            if let expiresAt = response.expiresAt {
+                expiresInSeconds = max(Int(expiresAt - Int64(Date().timeIntervalSince1970)), 0)
+            } else if let expiresIn = response.expiresIn {
+                expiresInSeconds = expiresIn
+            } else {
+                expiresInSeconds = 3600
+            }
+
+            AuthSessionManager.shared.saveTokens(
+                accessToken: response.accessToken,
+                refreshToken: response.refreshToken,
+                expiresIn: expiresInSeconds,
+                userId: response.userId
+            )
+            AuthSessionManager.shared.resetSessionInvalidated()
+
+            VeilProxyManager.shared.configureFromServer(cert: response.veilBridgeCert ?? "")
+            Log.info(
+                "DeviceAuthCoordinator: device auth OK userId=\(response.userId.prefix(8))…",
+                category: "Auth"
+            )
+            return .success(userId: response.userId)
+        } catch {
+            Log.error("DeviceAuthCoordinator: device auth failed: \(error)", category: "Auth")
+            return .failed(message: "\(error)")
+        }
+    }
+}
