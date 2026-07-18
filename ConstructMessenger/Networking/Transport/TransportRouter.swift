@@ -238,6 +238,31 @@ enum ConnectionLoopRelayBridge {
     /// independent of ConnectionLoop. Once ConnectionLoop is deleted in Chunk 3 this
     /// becomes the canonical implementation.
     private static func buildRelay(address: String, bridgeCert: String) -> VeilRelay {
+        // EntryDirectory Source 3: a LAN-discovered island relay. Its identity was already
+        // trust-gated by VeilLocalDiscovery (advertised SPKI matched a seed pin or a signed-
+        // manifest pin), so we build it directly from the trust-gated fields — with the pin
+        // ALWAYS applied. Handled as an explicit first case so the anti-redirection invariant
+        // never depends on the SNI-coupled resolution below (which drops the pin when no SNI
+        // is known). The discovered address is new by definition, so it appears in neither the
+        // server manifest cache nor the hardcoded seed maps.
+        if let disc = DiscoveredRelayStore.shared.relay(for: address) {
+            let host = address.components(separatedBy: ":").first.flatMap { $0.isEmpty ? nil : $0 }
+            return VeilRelay(
+                address: address,
+                bridgeCert: "",
+                iatMode: .enabled,
+                tlsServerName: disc.sni ?? host,
+                pinnedSpki: disc.spki,
+                wtPath: disc.wtPath,
+                wtHostHeader: nil,
+                alternativeSNIs: [],
+                manifestId: nil,
+                veilFrontTicket: VeilTicketStore.ticket(for: address),
+                veilCapabilityV2: VeilCapabilityV2Store.capability(for: address),
+                veilSkHex: VeilAccessKeyStore.shared.veilSkHex
+            )
+        }
+
         let resolvedCert = VeilCertFetcher.bridgeCertSync(for: address) ?? bridgeCert
         let serverPushedSNI = VeilCertFetcher.sniSync(for: address)
         let hardcodedSNI    = VEILConfig.hardcodedRelaySNIs[address]

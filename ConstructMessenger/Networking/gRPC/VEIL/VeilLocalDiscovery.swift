@@ -32,6 +32,8 @@ struct DiscoveredRelay: Equatable {
     let sni: String?
     /// hex SHA-256 SPKI pin — matched a trusted identity at accept time.
     let spki: String
+    /// WebTunnel WebSocket resource path (advert `wt`), or nil for a plain-TLS relay.
+    let wtPath: String?
 
     var addressWithPort: String { "\(host):\(port)" }
 }
@@ -47,6 +49,11 @@ final class VeilLocalDiscovery {
     private var browser: NWBrowser?
     private var connections: [NWConnection] = []
     private(set) var discovered: [DiscoveredRelay] = []
+
+    /// Fired after the discovered set changes (and the nonisolated `DiscoveredRelayStore`
+    /// snapshot has been refreshed), so the transport layer can re-snapshot its relay pool.
+    /// Set by `VeilProxyManager`; nil until then.
+    var onDiscoveredRelaysChanged: (() -> Void)?
 
     private init() {}
 
@@ -64,13 +71,15 @@ final class VeilLocalDiscovery {
         return set
     }
 
-    /// Parse a Bonjour TXT advert into `{spki, sni, version}`. Returns nil if the
-    /// required `spki` field is missing/empty.
-    nonisolated static func parseAdvert(_ txt: [String: String]) -> (spki: String, sni: String?, version: Int)? {
+    /// Parse a Bonjour TXT advert into `{spki, sni, wt, version}`. Returns nil if the
+    /// required `spki` field is missing/empty. `wt` is the WebTunnel resource path
+    /// (present for TLS-WebSocket island relays; absent for plain-TLS).
+    nonisolated static func parseAdvert(_ txt: [String: String]) -> (spki: String, sni: String?, wtPath: String?, version: Int)? {
         guard let spki = txt["spki"], !spki.isEmpty else { return nil }
         let sni = txt["sni"].flatMap { $0.isEmpty ? nil : $0 }
+        let wtPath = txt["wt"].flatMap { $0.isEmpty ? nil : $0 }
         let version = txt["v"].flatMap { Int($0) } ?? 1
-        return (spki, sni, version)
+        return (spki, sni, wtPath, version)
     }
 
     /// The trust gate: accept an advertised SPKI iff it matches a trusted identity.
@@ -106,7 +115,9 @@ final class VeilLocalDiscovery {
                 guard let advert = Self.parseAdvert(Self.txtDictionary(txtRecord)),
                       Self.accept(spki: advert.spki, trusted: trusted) else { continue }
                 let endpoint = result.endpoint
-                Task { @MainActor in self?.resolve(endpoint, sni: advert.sni, spki: advert.spki) }
+                Task { @MainActor in
+                    self?.resolve(endpoint, sni: advert.sni, spki: advert.spki, wtPath: advert.wtPath)
+                }
             }
         }
         browser.stateUpdateHandler = { state in
@@ -125,13 +136,16 @@ final class VeilLocalDiscovery {
         browser = nil
         connections.forEach { $0.cancel() }
         connections.removeAll()
+        let hadEntries = !discovered.isEmpty
         discovered.removeAll()
+        DiscoveredRelayStore.shared.clear()
+        if hadEntries { onDiscoveredRelaysChanged?() }
     }
 
     /// Resolve a Bonjour endpoint to a concrete `host:port` via a short-lived connection,
     /// then record the trust-gated `DiscoveredRelay`. The advert's SPKI already matched a
     /// trusted identity; the TLS pin check on connect is the actual enforcement.
-    private func resolve(_ endpoint: NWEndpoint, sni: String?, spki: String) {
+    private func resolve(_ endpoint: NWEndpoint, sni: String?, spki: String, wtPath: String?) {
         let connection = NWConnection(to: endpoint, using: .tcp)
         connections.append(connection)
         connection.stateUpdateHandler = { [weak self, weak connection] state in
@@ -143,14 +157,16 @@ final class VeilLocalDiscovery {
                     let hostString = String(describing: host).split(separator: "%").first.map(String.init)
                         ?? String(describing: host)
                     resolved = DiscoveredRelay(
-                        host: hostString, port: Int(port.rawValue), sni: sni, spki: spki)
+                        host: hostString, port: Int(port.rawValue), sni: sni, spki: spki, wtPath: wtPath)
                 }
                 connection.cancel()
                 Task { @MainActor in
                     guard let self else { return }
                     if let relay = resolved, !self.discovered.contains(relay) {
                         self.discovered.append(relay)
+                        DiscoveredRelayStore.shared.publish(self.discovered)
                         Log.info("VEIL Source3: accepted island relay \(relay.addressWithPort)", category: "VEIL")
+                        self.onDiscoveredRelaysChanged?()
                     }
                     self.connections.removeAll { $0 === connection }
                 }
