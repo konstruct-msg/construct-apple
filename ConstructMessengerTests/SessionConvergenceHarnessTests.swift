@@ -116,6 +116,16 @@ private final class Peer {
         net.send(Envelope(from: id, to: peerId, frame: frame))
     }
 
+    /// Emit a control op the production `SessionReducer.controlsToEmit` prescribed.
+    private func emit(_ op: SessionReducer.ControlOp, to peerId: String) {
+        switch op {
+        case .resetInit: send(.resetInit, to: peerId)
+        case .ready:     send(.ready, to: peerId)
+        case .ping:      send(.ping, to: peerId)
+        case .endSession, .other: break
+        }
+    }
+
     // MARK: Local intent
 
     /// The app wants to send a DATA message. Uses the production disposition + confirm-gate.
@@ -159,7 +169,7 @@ private final class Peer {
                 // and open the confirm gate (buffer outgoing until RESPONDER acks).
                 if phase == nil { phase = SessionReducer.reduce(phase, on: .initStarted).0 }
                 confirmPendingSince = now
-                send(.resetInit, to: peerId)
+                for op in SessionReducer.controlsToEmit(on: .tieBreakWin) { emit(op, to: peerId) }
             } else {
                 // We LOSE: become RESPONDER immediately and acknowledge (ready + ping).
                 becomeResponder(to: peerId, now: now)
@@ -197,8 +207,8 @@ private final class Peer {
     private func becomeResponder(to peerId: String, now: Date) {
         phase = SessionReducer.reduce(phase, on: .markActive(at: UInt64(now.timeIntervalSince1970))).0
         confirmPendingSince = nil
-        send(.ready, to: peerId)
-        send(.ping, to: peerId)
+        // Emission via the production authority — canonically just session_ready (ping is legacy).
+        for op in SessionReducer.controlsToEmit(on: .becameResponder) { emit(op, to: peerId) }
         // Now active — release any of our own buffered sends.
         flushOrInit(to: peerId, now: now)
     }
@@ -319,6 +329,16 @@ final class SessionConvergenceHarnessTests: XCTestCase {
         XCTAssertTrue(h.a.isActive && h.b.isActive, "both peers converge to active after heal")
         XCTAssertTrue(h.a.delivered.contains("b1") || h.a.delivered.contains("b2"),
                       "RESPONDER traffic reaches the INITIATOR after convergence")
+    }
+
+    // Emission authority: which control op(s) each handshake transition sends. Pins the canonical
+    // set the SessionCoordinator call-sites + this harness both route through.
+    @MainActor
+    func testControlsToEmit_CanonicalSet() {
+        XCTAssertEqual(SessionReducer.controlsToEmit(on: .tieBreakWin), [.resetInit],
+                       "INITIATOR announces via SESSION_RESET_INIT only")
+        XCTAssertEqual(SessionReducer.controlsToEmit(on: .becameResponder), [.ready],
+                       "RESPONDER acknowledges via session_ready only (ping is legacy, not canonical)")
     }
 
     // Watchdog policy: re-arm (retry SRI) while within the confirm window, give up after it lapses.

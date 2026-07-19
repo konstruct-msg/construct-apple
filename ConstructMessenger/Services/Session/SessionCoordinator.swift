@@ -592,7 +592,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     Log.error("SESSION_STATE[initiator_announce_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                 }
             )
-            await self.sendSessionResetInit(to: userId)
+            await self.emitHandshakeControls(.tieBreakWin, to: userId)
             SessionConfirmationTracker.shared.markPending(userId)
         }
         startTieBreakWatchdog(for: userId)
@@ -636,7 +636,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     Log.error("SESSION_STATE[zombie_recover_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                 }
             )
-            await self.sendSessionResetInit(to: userId)
+            await self.emitHandshakeControls(.tieBreakWin, to: userId)
             SessionConfirmationTracker.shared.markPending(userId)
         }
         startTieBreakWatchdog(for: userId)
@@ -723,7 +723,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // any buffered outgoing messages.
                 Task { [weak self] in
                     guard let self else { return }
-                    await self.sendSessionReady(to: userId)
+                    await self.emitHandshakeControls(.becameResponder, to: userId)
                 }
             } else if !CryptoManager.shared.isInitialized {
                 // initReceivingSession failed because the crypto core isn't initialized
@@ -989,144 +989,114 @@ final class SessionCoordinator: MessageRouterDelegate {
     private let pingMaxAttempts = 3
     private let pingRetryBaseDelay: UInt64 = 1_000_000_000 // 1 s
 
+    /// Emit the control message(s) the reducer prescribes for a handshake transition — the single
+    /// send-side authority (`SessionReducer.controlsToEmit`). Tie-break win → SESSION_RESET_INIT;
+    /// RESPONDER established → session_ready.
+    private func emitHandshakeControls(_ transition: SessionReducer.HandshakeTransition, to userId: String) async {
+        for op in SessionReducer.controlsToEmit(on: transition) {
+            switch op {
+            case .resetInit: await sendSessionResetInit(to: userId)
+            case .ready:     await sendSessionReady(to: userId)
+            case .ping:      await sendSessionPing(to: userId)
+            case .endSession, .other: break
+            }
+        }
+    }
+
+    /// One handshake-control emitter (replaces the three near-identical
+    /// sendSessionResetInit/Ping/Ready bodies). Encodes the op payload once — the typed
+    /// `content_type` for new consumers, with the magic-string payload from `encodePayload` as the
+    /// dual-send fallback for peers predating typed dispatch — and sends with bounded retries +
+    /// exponential back-off. `onExhaustion` runs after the final failed attempt (SRI's two-step
+    /// fallback); `logTag` keeps the existing per-op log breadcrumbs.
+    private func sendSessionControlCore(
+        codecOp: SessionControlCodec.Op,
+        contentType: Shared_Proto_Core_V1_ContentType,
+        to userId: String,
+        maxAttempts: Int,
+        logTag: String,
+        onExhaustion: (() async -> Void)? = nil
+    ) async {
+        guard CryptoManager.shared.hasSession(for: userId) else {
+            Log.info("SESSION_STATE[\(logTag)_skip]: no session for \(userId.prefix(8))…", category: "SessionInit")
+            return
+        }
+        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
+
+        for attempt in 1...maxAttempts {
+            do {
+                let nonce = UUID().uuidString
+                let msgId = UUID().uuidString.lowercased()
+                let _ = try await MessagingServiceClient.shared.sendMessage(
+                    messageId: msgId,
+                    recipientId: userId,
+                    senderId: myId,
+                    conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
+                    encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
+                        payload: SessionControlCodec.encodePayload(op: codecOp, nonce: nonce),
+                        messageId: msgId,
+                        recipientId: userId
+                    ),
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    contentType: contentType
+                )
+                Log.info("SESSION_STATE[\(logTag)_sent]: to \(userId.prefix(8))… (attempt \(attempt))", category: "SessionInit")
+                return
+            } catch {
+                Log.error("SESSION_STATE[\(logTag)_fail]: attempt \(attempt)/\(maxAttempts): \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                if attempt < maxAttempts {
+                    do {
+                        try await Task.sleep(nanoseconds: pingRetryBaseDelay * UInt64(attempt))
+                    } catch {
+                        return
+                    }
+                } else {
+                    await onExhaustion?()
+                }
+            }
+        }
+    }
+
     /// Send SESSION_RESET_INIT — atomic replacement for `sendEndSession` + `sendSessionPing`.
-    ///
-    /// Encodes the X3DH init payload (`msgNum=0`) with `contentType: .sessionResetInit`.
-    /// RESPONDER atomically archives old session and inits as RESPONDER in one `handleEvent` pass,
-    /// eliminating the 200 ms ordering window from the legacy two-step tie-break sequence.
-    ///
-    /// Falls back to the legacy two-step sequence if all attempts fail (backward compat).
+    /// Encodes the X3DH init payload (`msgNum=0`) as `.sessionResetInit` (always typed — no peer
+    /// predates this atomic form). Falls back to the legacy two-step (END_SESSION → ping) if all
+    /// attempts fail (backward compat).
     private func sendSessionResetInit(to userId: String) async {
-        guard CryptoManager.shared.hasSession(for: userId) else {
-            Log.info("SESSION_STATE[sri_skip]: no INITIATOR session for \(userId.prefix(8))…", category: "SessionInit")
-            return
-        }
-        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
-
-        for attempt in 1...pingMaxAttempts {
+        await sendSessionControlCore(
+            codecOp: .resetInit, contentType: .sessionResetInit, to: userId,
+            maxAttempts: pingMaxAttempts, logTag: "sri"
+        ) { [weak self] in
+            guard let self else { return }
+            Log.info("SESSION_STATE[sri_fallback]: SESSION_RESET_INIT exhausted, falling back to two-step for \(userId.prefix(8))…", category: "SessionInit")
             do {
-                let nonce = UUID().uuidString
-                let sriId = UUID().uuidString.lowercased()
-                let _ = try await MessagingServiceClient.shared.sendMessage(
-                    messageId: sriId,
-                    recipientId: userId,
-                    senderId: myId,
-                    conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
-                    encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
-                        payload: SessionControlCodec.encodePayload(op: .resetInit, nonce: nonce),
-                        messageId: sriId,
-                        recipientId: userId
-                    ),
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    contentType: .sessionResetInit
-                )
-                Log.info("SESSION_STATE[sri_sent]: SESSION_RESET_INIT to \(userId.prefix(8))… (attempt \(attempt))", category: "SessionInit")
-                return
+                _ = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: "sri_fallback")
             } catch {
-                Log.error("SESSION_STATE[sri_fail]: attempt \(attempt)/\(pingMaxAttempts): \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
-                if attempt < pingMaxAttempts {
-                    do {
-                        try await Task.sleep(nanoseconds: pingRetryBaseDelay * UInt64(attempt))
-                    } catch {
-                        return
-                    }
-                } else {
-                    Log.info("SESSION_STATE[sri_fallback]: SESSION_RESET_INIT exhausted, falling back to two-step for \(userId.prefix(8))…", category: "SessionInit")
-                    do {
-                        _ = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: "sri_fallback")
-                    } catch {
-                        Log.error("SESSION_STATE[sri_fallback_end_session_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
-                    }
-                    do {
-                        try await Task.sleep(nanoseconds: 300_000_000)
-                    } catch {
-                        return
-                    }
-                    await sendSessionPing(to: userId)
-                }
+                Log.error("SESSION_STATE[sri_fallback_end_session_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
             }
+            do { try await Task.sleep(nanoseconds: 300_000_000) } catch { return }
+            await self.sendSessionPing(to: userId)
         }
     }
 
+    /// Legacy tie-break ping (superseded by SESSION_RESET_INIT; survives only in the SRI fallback).
+    /// Dual-send: typed `.sessionPing` for new consumers, `.e2EeSignal` + magic string otherwise.
     private func sendSessionPing(to userId: String) async {
-        guard CryptoManager.shared.hasSession(for: userId) else {
-            Log.info("SESSION_STATE[tie_break_ping_skip]: no INITIATOR session for \(userId.prefix(8))…", category: "SessionInit")
-            return
-        }
-        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
-
-        for attempt in 1...pingMaxAttempts {
-            do {
-                let nonce = UUID().uuidString
-                let pingId = UUID()
-                let pingMessageId = pingId.uuidString.lowercased()
-                let _ = try await MessagingServiceClient.shared.sendMessage(
-                    messageId: pingMessageId,
-                    recipientId: userId,
-                    senderId: myId,
-                    conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
-                    encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
-                        payload: SessionControlCodec.encodePayload(op: .ping, nonce: nonce),
-                        messageId: pingMessageId,
-                        recipientId: userId
-                    ),
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    // S2 dual-send: typed opcode for new consumers; the magic-string payload
-                    // above remains the fallback for peers that predate the typed dispatch.
-                    contentType: FeatureFlags.typedSessionControl ? .sessionPing : .e2EeSignal
-                )
-                Log.info("SESSION_STATE[tie_break_ping]: sent to \(userId.prefix(8))… (attempt \(attempt)) — loser can now init as RESPONDER", category: "SessionInit")
-                return
-            } catch {
-                Log.error("SESSION_STATE[tie_break_ping_fail]: attempt \(attempt)/\(pingMaxAttempts): \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
-                if attempt < pingMaxAttempts {
-                    // Exponential back-off: 1s, 2s
-                    do {
-                        try await Task.sleep(nanoseconds: pingRetryBaseDelay * UInt64(attempt))
-                    } catch {
-                        return
-                    }
-                } else {
-                    Log.error("SESSION_STATE[tie_break_ping_exhausted]: loser \(userId.prefix(8))… must re-initiate manually", category: "SessionInit")
-                }
-            }
-        }
+        await sendSessionControlCore(
+            codecOp: .ping,
+            contentType: FeatureFlags.typedSessionControl ? .sessionPing : .e2EeSignal,
+            to: userId, maxAttempts: pingMaxAttempts, logTag: "tie_break_ping"
+        )
     }
 
-    // MARK: - Session ready signal (RESPONDER → INITIATOR, phase 2 of two-phase handshake)
-
-    /// Sent by the RESPONDER after a successful `initReceivingSession`.
-    /// Signals to the INITIATOR that both sides have established matching sessions,
-    /// allowing them to cancel the watchdog and flush any buffered outgoing messages.
+    /// RESPONDER → INITIATOR ack after a successful `initReceivingSession` (phase 2 of the two-phase
+    /// handshake): lets the INITIATOR cancel its watchdog and flush. Single attempt (no retry).
+    /// Dual-send: typed `.sessionReady` for new consumers, `.e2EeSignal` + magic string otherwise.
     private func sendSessionReady(to userId: String) async {
-        guard CryptoManager.shared.hasSession(for: userId) else {
-            Log.info("SESSION_STATE[session_ready_skip]: no RESPONDER session for \(userId.prefix(8))…", category: "SessionInit")
-            return
-        }
-        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
-
-        do {
-            let nonce = UUID().uuidString
-            let readyMessageId = UUID().uuidString.lowercased()
-            let _ = try await MessagingServiceClient.shared.sendMessage(
-                messageId: readyMessageId,
-                recipientId: userId,
-                senderId: myId,
-                conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
-                encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
-                    payload: SessionControlCodec.encodePayload(op: .ready, nonce: nonce),
-                    messageId: readyMessageId,
-                    recipientId: userId
-                ),
-                timestamp: UInt64(Date().timeIntervalSince1970),
-                // S2 dual-send: typed opcode for new consumers; the magic-string payload
-                // above remains the fallback for peers that predate the typed dispatch.
-                contentType: FeatureFlags.typedSessionControl ? .sessionReady : .e2EeSignal
-            )
-            Log.info("SESSION_STATE[session_ready_sent]: RESPONDER notified INITIATOR \(userId.prefix(8))…", category: "SessionInit")
-        } catch {
-            Log.error("SESSION_STATE[session_ready_fail]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
-        }
+        await sendSessionControlCore(
+            codecOp: .ready,
+            contentType: FeatureFlags.typedSessionControl ? .sessionReady : .e2EeSignal,
+            to: userId, maxAttempts: 1, logTag: "session_ready"
+        )
     }
 
     // MARK: - Tie-break watchdog

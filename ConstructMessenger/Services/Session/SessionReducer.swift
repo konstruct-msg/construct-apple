@@ -210,6 +210,31 @@ enum SessionReducer {
         return now.timeIntervalSince(pendingSince) < confirmWindow
     }
 
+    // MARK: - Handshake control emission (the send-side authority)
+
+    /// A handshake transition that emits control message(s) to the peer.
+    enum HandshakeTransition: Equatable {
+        /// We kept the INITIATOR session after a tie-break win → announce it so the loser can
+        /// atomically become RESPONDER.
+        case tieBreakWin
+        /// We just established the RESPONDER session (`initReceivingSession` ok) → acknowledge so
+        /// the INITIATOR cancels its watchdog and flushes.
+        case becameResponder
+    }
+
+    /// Which control op(s) to emit on a handshake transition — the single authority for the
+    /// handshake's *send* side (the *receive* side is `confirmReleases` + the transition table in
+    /// SESSION_COORDINATOR_REFACTOR_SPEC §"Confirm protocol"). INITIATOR announces via
+    /// SESSION_RESET_INIT; RESPONDER acknowledges via session_ready. `.ping` is **not** in the
+    /// canonical set — it survives only as the SRI two-step fallback (a legacy trigger), so it is
+    /// emitted by that fallback directly, not prescribed here.
+    static func controlsToEmit(on transition: HandshakeTransition) -> [ControlOp] {
+        switch transition {
+        case .tieBreakWin:     return [.resetInit]
+        case .becameResponder: return [.ready]
+        }
+    }
+
     /// What the tie-break watchdog should do on a tick.
     enum WatchdogTick: Equatable {
         /// Re-send SESSION_RESET_INIT — still within the confirm window, RESPONDER hasn't acked.
