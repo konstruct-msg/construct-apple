@@ -138,6 +138,21 @@ enum ChatUIConstants {
         static let selectionStrokeWidth: CGFloat = 2
     }
 
+    // MARK: - Reply focus (soft dim, not Apple-style isolation)
+
+    /// When the user is composing a reply or peeks a reply chain, non-focused
+    /// bubbles fade slightly. Layout and hit-testing stay unchanged — only opacity.
+    /// Idle chat is unaffected (`replyFocusIds` empty → full opacity).
+    enum ReplyFocus {
+        /// Other messages while focus is active. ~0.5 keeps CT density readable;
+        /// Apple Messages goes much lower (almost isolation).
+        static let dimmedOpacity: Double = 0.48
+        static let focusedOpacity: Double = 1.0
+        static let animationDuration: Double = 0.22
+        /// Auto-clear for strip-tap “peek” when not also composing a reply.
+        static let peekHoldNanoseconds: UInt64 = 2_500_000_000
+    }
+
     // MARK: - Composer input bar
 
     enum InputBar {

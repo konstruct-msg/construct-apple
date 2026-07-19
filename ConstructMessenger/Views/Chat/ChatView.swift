@@ -26,6 +26,10 @@ struct ChatView: View {
     @State private var replyQuoteText: String? = nil
     /// Message opened for "Quote & Reply" selection sheet.
     @State private var quotingMessage: Message? = nil
+    /// Soft reply focus — lowercased message ids that stay full-opacity; others dim.
+    /// Empty = idle chat (no visual change). See ``ChatUIConstants.ReplyFocus``.
+    @State private var replyFocusIds: Set<String> = []
+    @State private var replyFocusPeekTask: Task<Void, Never>?
     @State private var showingUserProfile = false
     @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
 
@@ -138,6 +142,7 @@ struct ChatView: View {
                                     onReply: { msg in
                                         replyingTo = msg
                                         replyQuoteText = nil
+                                        setComposeReplyFocus(messageId: msg.id)
                                     },
                                     onDelete: { msg in
                                         viewModel.deleteMessage(msg)
@@ -161,9 +166,17 @@ struct ChatView: View {
                                     },
                                     onReplyWithQuote: { msg, _ in
                                         quotingMessage = msg
+                                    },
+                                    onJumpToReply: { msg in
+                                        peekReplyChain(for: msg)
                                     }
                                 )
                                 .id(message.id)
+                                .opacity(replyFocusOpacity(for: message))
+                                .animation(
+                                    .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
+                                    value: replyFocusIds
+                                )
 
                                 // Add spacing after each message
                                 if index < renderedMessages.count - 1 {
@@ -436,6 +449,7 @@ struct ChatView: View {
             QuoteSelectionSheet(message: msg) { selectedQuote in
                 replyingTo = msg
                 replyQuoteText = selectedQuote
+                setComposeReplyFocus(messageId: msg.id)
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -554,6 +568,7 @@ struct ChatView: View {
                     DraftStore.shared.clear(for: viewModel.chat.id)
                     replyingTo = nil
                     replyQuoteText = nil
+                    clearReplyFocus(animated: true)
 
                     // ✅ Enable auto-scroll for new message
                     scrollManager.shouldScrollToBottom = true
@@ -579,6 +594,7 @@ struct ChatView: View {
             onCancelReply: {
                 replyingTo = nil
                 replyQuoteText = nil
+                clearReplyFocus(animated: true)
             },
             onCancelEdit: {
                 viewModel.editingMessage = nil
@@ -719,6 +735,67 @@ struct ChatView: View {
         }
     }
 
+    // MARK: - Soft reply focus (dim non-related bubbles)
+
+    private func replyFocusOpacity(for message: Message) -> Double {
+        guard !isEditMode, !replyFocusIds.isEmpty else {
+            return ChatUIConstants.ReplyFocus.focusedOpacity
+        }
+        let id = message.id.lowercased()
+        if replyFocusIds.contains(id) {
+            return ChatUIConstants.ReplyFocus.focusedOpacity
+        }
+        return ChatUIConstants.ReplyFocus.dimmedOpacity
+    }
+
+    /// Compose-reply focus: keep the quoted parent bright while the reply bar is up.
+    private func setComposeReplyFocus(messageId: String) {
+        replyFocusPeekTask?.cancel()
+        replyFocusPeekTask = nil
+        withAnimation(.easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration)) {
+            replyFocusIds = [messageId.lowercased()]
+        }
+    }
+
+    /// Tap on in-bubble reply strip: scroll to parent, keep parent + child bright briefly.
+    private func peekReplyChain(for message: Message) {
+        let childId = message.id.lowercased()
+        let parentId = (message.replyToMessageId ?? "").lowercased()
+        guard !parentId.isEmpty else { return }
+
+        replyFocusPeekTask?.cancel()
+        withAnimation(.easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration)) {
+            replyFocusIds = [parentId, childId]
+        }
+        // Prefer scrolling to the parent (what the user is looking for).
+        scrollManager.scrollTo(messageId: parentId, anchor: .center, animated: true)
+
+        // Hold while composing a reply to this parent; otherwise auto-clear.
+        let holdParent = parentId
+        replyFocusPeekTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: ChatUIConstants.ReplyFocus.peekHoldNanoseconds)
+            guard !Task.isCancelled else { return }
+            if replyingTo?.id.lowercased() == holdParent {
+                // Compose focus owns the set now.
+                return
+            }
+            clearReplyFocus(animated: true)
+        }
+    }
+
+    private func clearReplyFocus(animated: Bool) {
+        replyFocusPeekTask?.cancel()
+        replyFocusPeekTask = nil
+        guard !replyFocusIds.isEmpty else { return }
+        if animated {
+            withAnimation(.easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration)) {
+                replyFocusIds = []
+            }
+        } else {
+            replyFocusIds = []
+        }
+    }
+
     // MARK: - Lifecycle
 
     private var isPreviewRuntime: Bool {
@@ -753,6 +830,8 @@ struct ChatView: View {
     }
 
     private func handleViewDisappear() {
+        replyFocusPeekTask?.cancel()
+        replyFocusPeekTask = nil
         guard !isPreviewRuntime else { return }
         // Preserve a half-typed message across navigation. Skip while editing,
         // so the edit buffer never leaks into the new-message draft.

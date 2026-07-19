@@ -51,6 +51,7 @@
 "retry" = "Réessayer";
 "message" = "Message";
 "reply_to_colon" = "Répondre à :";
+"jump_to_replied_message" = "Aller au message d’origine";
 "message_placeholder" = "Message...";
 
 // MARK: - Message Info

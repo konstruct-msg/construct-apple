@@ -25,6 +25,8 @@ struct MessageBubble: View {
     let onEdit: ((Message) -> Void)?
     /// Called when the user chooses "Quote & Reply" — provides the message and the selected quote text.
     let onReplyWithQuote: ((Message, String) -> Void)?
+    /// Tap on the in-bubble reply strip — jump to the parent message and soft-focus the pair.
+    let onJumpToReply: ((Message) -> Void)?
 
     @Environment(\.containerWidth) var containerWidth
 
@@ -40,7 +42,8 @@ struct MessageBubble: View {
         onEnterSelectMode: ((Message) -> Void)? = nil,
         onTapMedia: ((Message, Int) -> Void)? = nil,
         onEdit: ((Message) -> Void)? = nil,
-        onReplyWithQuote: ((Message, String) -> Void)? = nil
+        onReplyWithQuote: ((Message, String) -> Void)? = nil,
+        onJumpToReply: ((Message) -> Void)? = nil
     ) {
         self.message = message
         self.isLastInGroup = isLastInGroup
@@ -54,5 +57,6 @@ struct MessageBubble: View {
         self.onTapMedia = onTapMedia
         self.onEdit = onEdit
         self.onReplyWithQuote = onReplyWithQuote
+        self.onJumpToReply = onJumpToReply
     }
 }

@@ -50,6 +50,7 @@
 "retry" = "Повторить";
 "message" = "Сообщение";
 "reply_to_colon" = "Ответ на:";
+"jump_to_replied_message" = "Перейти к исходному сообщению";
 "message_placeholder" = "Сообщение...";
 
 // MARK: - Message Info

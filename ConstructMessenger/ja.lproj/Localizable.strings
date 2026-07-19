@@ -43,6 +43,7 @@
 "retry" = "再試行";
 "message" = "メッセージ";
 "reply_to_colon" = "返信先:";
+"jump_to_replied_message" = "返信元のメッセージへ";
 "message_placeholder" = "メッセージ...";
     
 // MARK: - Message Info

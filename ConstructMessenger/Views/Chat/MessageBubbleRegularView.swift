@@ -31,6 +31,8 @@ struct MessageBubbleRegularView: View {
     let onTapMedia: ((Message, Int) -> Void)?
     let onEdit: ((Message) -> Void)?
     let onReplyWithQuote: ((Message, String) -> Void)?
+    /// Tap on the in-bubble reply strip — parent jump + soft focus.
+    let onJumpToReply: ((Message) -> Void)?
 
     @State private var swipeOffset: CGFloat = 0
     @State private var isTranscribingVoice = false
@@ -355,31 +357,38 @@ struct MessageBubbleRegularView: View {
     private var replyIndicatorView: some View {
         let hasReply = message.replyToMessageId != nil && !(message.replyToMessageId ?? "").isEmpty
         if hasReply {
-            HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
-                Rectangle()
-                    .fill(Color.CT.accentDim)
-                    .frame(width: ChatUIConstants.Bubble.replyAccentWidth)
+            Button {
+                onJumpToReply?(message)
+            } label: {
+                HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
+                    Rectangle()
+                        .fill(Color.CT.accentDim)
+                        .frame(width: ChatUIConstants.Bubble.replyAccentWidth)
 
-                if let replyContent = message.replyToContent {
-                    ReplyPreviewContent(
-                        content: replyContent,
-                        messageId: message.replyToMessageId,
-                        thumbnailSize: ChatUIConstants.Bubble.replyThumbnailSize,
-                        lineLimit: 2
-                    )
-                    .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
-                    .padding(.trailing, ChatUIConstants.Bubble.tightVerticalPadding)
-                } else {
-                    Text("Original message")
-                        .font(CTFont.regular(ChatUIConstants.Typography.systemSize))
-                        .foregroundColor(Color.CT.textDim)
+                    if let replyContent = message.replyToContent {
+                        ReplyPreviewContent(
+                            content: replyContent,
+                            messageId: message.replyToMessageId,
+                            thumbnailSize: ChatUIConstants.Bubble.replyThumbnailSize,
+                            lineLimit: 2
+                        )
                         .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
                         .padding(.trailing, ChatUIConstants.Bubble.tightVerticalPadding)
+                    } else {
+                        Text("Original message")
+                            .font(CTFont.regular(ChatUIConstants.Typography.systemSize))
+                            .foregroundColor(Color.CT.textDim)
+                            .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
+                            .padding(.trailing, ChatUIConstants.Bubble.tightVerticalPadding)
+                    }
                 }
+                .padding(.horizontal, ChatUIConstants.Bubble.horizontalPadding)
+                .padding(.top, ChatUIConstants.Bubble.verticalPadding)
+                .padding(.bottom, ChatUIConstants.Bubble.tightVerticalPadding)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, ChatUIConstants.Bubble.horizontalPadding)
-            .padding(.top, ChatUIConstants.Bubble.verticalPadding)
-            .padding(.bottom, ChatUIConstants.Bubble.tightVerticalPadding)
+            .buttonStyle(.plain)
+            .accessibilityLabel(NSLocalizedString("jump_to_replied_message", comment: "Jump to the message this reply quotes"))
         }
     }
 

@@ -51,6 +51,7 @@
 "retry" = "Retry";
 "message" = "Message";
 "reply_to_colon" = "Reply to:";
+"jump_to_replied_message" = "Jump to replied message";
 "message_placeholder" = "Message...";
 
 // MARK: - Message Info
