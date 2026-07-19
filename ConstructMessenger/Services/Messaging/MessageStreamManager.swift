@@ -626,8 +626,18 @@ final class MessageStreamManager {
                 await TransportRouter.shared.send(.rpcSucceeded(via: okTarget, latencyMs: 0))
                 retryCount = 0
                 shouldFallbackToH2Direct = false
+                // Only clear the fast-UDP failure counter when the stream that just ended cleanly
+                // actually ran over fast-UDP (H3/QUIC). Clearing it on a clean *H2* end (H2 was
+                // chosen because QUIC failed to open) re-arms QUIC for the next reconnect, so
+                // networks that block QUIC via DPI (e.g. RU — FR/AU connect over QUIC fine) re-probe
+                // dead QUIC on every reconnect and pay the ~3s handshake-timeout tax before falling
+                // back. That is the endless thrash this counter + fastUdpUnhealthyUntil cooldown
+                // were meant to stop; the unconditional reset here defeated them. A QUIC-good
+                // network leaves lastStreamTransportWasH3 == true, so QUIC is still cleared normally.
+                if lastStreamTransportWasH3 {
+                    consecutiveH3OpenFailures = 0
+                }
                 lastStreamTransportWasH3 = false
-                consecutiveH3OpenFailures = 0
                 continuousFailureStreakStart = nil
                 isInDegradedMode = false
                 try await Task.sleep(for: .seconds(NetworkTiming.Stream.cleanEndReconnectDelay))
