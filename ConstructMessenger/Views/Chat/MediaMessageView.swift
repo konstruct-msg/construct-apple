@@ -107,7 +107,7 @@ private struct SingleMediaCell: View {
 
     /// Matches the album grid's outer radius (`MediaGridView`) so single and multi-item
     /// media round identically.
-    private let cornerRadius: CGFloat = 10
+    private let cornerRadius: CGFloat = ChatUIConstants.Media.cornerRadius
 
     private var itemDict: [String: Any] {
         mediaContent.mediaItems.indices.contains(itemIndex)
@@ -137,13 +137,16 @@ private struct SingleMediaCell: View {
                     .scaledToFill()
                     .frame(width: previewSize.width, height: previewSize.height)
                     .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipShape(RoundedRectangle(cornerRadius: ChatUIConstants.Media.cornerRadius, style: .continuous))
                     .overlay(alignment: .bottom) {
                         if isUploading { uploadingBadge }
                     }
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
+                        RoundedRectangle(cornerRadius: ChatUIConstants.Media.cornerRadius, style: .continuous)
+                            .stroke(
+                                isSelected ? Color.CT.accent : Color.clear,
+                                lineWidth: ChatUIConstants.Media.selectionStrokeWidth
+                            )
                     )
                     .onTapGesture { onTap() }
             } else if isLoading {
@@ -186,17 +189,20 @@ private struct SingleMediaCell: View {
             }
             if !isUploading { videoOverlayGlyph }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: ChatUIConstants.Media.cornerRadius, style: .continuous))
         .overlay(alignment: .bottomLeading) {
             if !isUploading, let d = itemDict["duration"] as? Double, d > 0 {
                 durationBadge(d)
-                    .padding(.leading, 8)
+                    .padding(.leading, CTLayout.inlinePad)
             }
         }
         .overlay(alignment: .bottom) { if isUploading { uploadingBadge } }
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
+            RoundedRectangle(cornerRadius: ChatUIConstants.Media.cornerRadius, style: .continuous)
+                .stroke(
+                    isSelected ? Color.CT.accent : Color.clear,
+                    lineWidth: ChatUIConstants.Media.selectionStrokeWidth
+                )
         )
         .onTapGesture {
             guard !isPlaceholder else { return }
@@ -242,10 +248,10 @@ private struct SingleMediaCell: View {
                     .font(CTFont.regular(11)).foregroundColor(.white)
             }
         }
-        .padding(.horizontal, 8).padding(.vertical, 4)
+        .padding(.horizontal, CTLayout.inlinePad).padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
         .background(.black.opacity(0.55))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .padding(.bottom, 8)
+        .clipShape(RoundedRectangle(cornerRadius: ChatUIConstants.Media.badgeCornerRadius, style: .continuous))
+        .padding(.bottom, CTLayout.inlinePad)
         .animation(.easeOut(duration: 0.2), value: progress)
     }
 
@@ -270,14 +276,20 @@ private struct SingleMediaCell: View {
                         .monospacedDigit()
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, CTLayout.chromeGap)
+            .padding(.vertical, CTLayout.inlinePad)
+            .background(
+                .black.opacity(0.55),
+                in: RoundedRectangle(cornerRadius: ChatUIConstants.Media.overlayChipRadius, style: .continuous)
+            )
         } else if downloadedVideoURL != nil {
             Image(systemName: "play.fill")
-                .font(.system(size: 22))
+                .font(.system(size: CTLayout.navIconSizeLg))
                 .foregroundColor(.white)
-                .frame(width: 54, height: 54)
+                .frame(
+                    width: ChatUIConstants.Media.playButtonSize,
+                    height: ChatUIConstants.Media.playButtonSize
+                )
                 .background(.black.opacity(0.45), in: Circle())
         } else {
             Image(systemName: "arrow.down.circle.fill")
@@ -325,7 +337,7 @@ private struct SingleMediaCell: View {
             .ctGlassCircle()
         }
         .frame(width: previewSize.width, height: previewSize.height)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: ChatUIConstants.Media.cornerRadius, style: .continuous))
     }
 
     private func decodeBlurPreview(_ hash: String) -> PlatformImage? {
@@ -521,7 +533,7 @@ private struct MediaGridView: View {
     let onTapItem: (Int) -> Void
 
     private let albumWidth: CGFloat = 244
-    private let spacing: CGFloat = 2
+    private let spacing: CGFloat = ChatUIConstants.Media.albumTileGap
 
     private var itemCount: Int { mediaContent.mediaItems.count }
 
@@ -538,8 +550,14 @@ private struct MediaGridView: View {
             }
         }
         .frame(width: albumWidth)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2))
+        .clipShape(RoundedRectangle(cornerRadius: ChatUIConstants.Media.cornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: ChatUIConstants.Media.cornerRadius, style: .continuous)
+                .stroke(
+                    isSelected ? Color.CT.accent : Color.clear,
+                    lineWidth: ChatUIConstants.Media.selectionStrokeWidth
+                )
+        )
     }
 
     private func tile(_ index: Int, _ w: CGFloat, _ h: CGFloat, extra: Int = 0) -> some View {
@@ -776,14 +794,20 @@ private struct GridCell: View {
                         .monospacedDigit()
                 }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, CTLayout.inlinePad)
             .padding(.vertical, 6)
-            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
+            .background(
+                .black.opacity(0.55),
+                in: RoundedRectangle(cornerRadius: ChatUIConstants.Media.cornerRadius, style: .continuous)
+            )
         } else if downloadedVideoURL != nil {
             Image(systemName: "play.fill")
-                .font(.system(size: 16))
+                .font(.system(size: CTLayout.sectionGap))
                 .foregroundColor(.white)
-                .frame(width: 38, height: 38)
+                .frame(
+                    width: ChatUIConstants.Voice.controlWidth,
+                    height: ChatUIConstants.Voice.controlWidth
+                )
                 .background(.black.opacity(0.45), in: Circle())
         } else {
             Image(systemName: "arrow.down.circle.fill")

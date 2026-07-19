@@ -26,7 +26,7 @@ struct FileAttachmentBubbleView: View {
     @State private var videoThumbnails: [String: PlatformImage] = [:]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: CTRadius.badge) {
             ForEach(fileContent.files, id: \.mediaId) { file in
                 if isVideoFile(file.filename) {
                     videoRow(file)
@@ -36,14 +36,21 @@ struct FileAttachmentBubbleView: View {
             }
             if !fileContent.caption.isEmpty {
                 Text(fileContent.caption)
-                    .font(CTFont.regular(12))
+                    .font(CTFont.regular(ChatUIConstants.Typography.captionSize))
                     .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.text)
                     .padding(.top, 2)
             }
         }
-        .padding(12)
+        .padding(ChatUIConstants.Bubble.horizontalPadding)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe))
-        .ctNoiseBorder()
+        // Control radius — not Capsule: multi-file stacks would oval-clip like voice+transcript.
+        .clipShape(CTShape.control())
+        .overlay(
+            CTShape.control().stroke(
+                Color.CT.noise,
+                lineWidth: ChatUIConstants.Bubble.strokeWidth
+            )
+        )
         .quickLookPreview($previewURL)
         #if canImport(UIKit)
         .fullScreenCover(item: Binding(
@@ -76,13 +83,22 @@ struct FileAttachmentBubbleView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 180)
                 .clipped()
-                .ctNoiseBorder()
+                .clipShape(CTShape.control())
+                .overlay(
+                    CTShape.control().stroke(
+                        Color.CT.noise,
+                        lineWidth: ChatUIConstants.Bubble.strokeWidth
+                    )
+                )
 
                 // Play / Download overlay
                 ZStack {
                     Rectangle()
                         .fill(Color.black.opacity(0.55))
-                        .frame(width: 54, height: 54)
+                        .frame(
+                            width: ChatUIConstants.Media.playButtonSize,
+                            height: ChatUIConstants.Media.playButtonSize
+                        )
                     if downloading.contains(file.mediaId) {
                         ProgressView().tint(Color.CT.accent).scaleEffect(1.2)
                     } else {
@@ -120,7 +136,7 @@ struct FileAttachmentBubbleView: View {
         Button {
             openOrDownload(file)
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: CTLayout.chromeGap) {
                 Text(asciiIcon(for: file.filename))
                     .font(CTFont.regular(20))
                     .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.accent)
@@ -133,7 +149,7 @@ struct FileAttachmentBubbleView: View {
                         .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.text)
                         .lineLimit(1)
                     Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.regular(ChatUIConstants.Typography.systemSize))
                         .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.7) : Color.CT.textDim)
                 }
 

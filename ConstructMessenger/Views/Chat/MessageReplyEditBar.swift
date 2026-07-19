@@ -37,7 +37,7 @@ struct MessageReplyBar: View {
                 ReplyPreviewContent(
                     content: content,
                     messageId: messageId,
-                    thumbnailSize: 36,
+                    thumbnailSize: ChatUIConstants.Bubble.replyBarThumbnailSize,
                     lineLimit: 1
                 )
             }
@@ -52,8 +52,8 @@ struct MessageReplyBar: View {
         .fixedSize(horizontal: false, vertical: true)
         .background(Color.CT.bgMsg)
         .clipShape(CTShape.card())
-        .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
-        .padding(.horizontal, 4)
+        .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: ChatUIConstants.Bubble.strokeWidth))
+        .padding(.horizontal, ChatUIConstants.Shell.auxOuterPad)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }
@@ -90,8 +90,8 @@ struct MessageEditBar: View {
         .fixedSize(horizontal: false, vertical: true)
         .background(Color.CT.bgMsg)
         .clipShape(CTShape.card())
-        .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
-        .padding(.horizontal, 4)
+        .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: ChatUIConstants.Bubble.strokeWidth))
+        .padding(.horizontal, ChatUIConstants.Shell.auxOuterPad)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }

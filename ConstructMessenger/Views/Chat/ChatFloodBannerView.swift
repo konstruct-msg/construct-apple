@@ -46,7 +46,7 @@ struct ChatFloodBannerView: View {
             .background(Color.orange.opacity(0.08))
             .clipShape(CTShape.card())
             .overlay(CTShape.card().stroke(Color.orange.opacity(0.35), lineWidth: 0.5))
-            .padding(.horizontal, 4)
+            .padding(.horizontal, ChatUIConstants.Shell.auxOuterPad)
             .transition(.move(edge: .top).combined(with: .opacity))
         }
     }

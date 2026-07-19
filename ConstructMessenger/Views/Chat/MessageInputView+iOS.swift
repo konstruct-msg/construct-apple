@@ -12,7 +12,7 @@ import UIKit
 #endif
 
 struct IOSMessageInputView: View {
-    private static let attachmentPreviewSpacing: CGFloat = 10
+    private static let attachmentPreviewSpacing: CGFloat = ChatUIConstants.InputBar.attachFieldGap
 
     @Binding var text: String
     @Binding var droppedImages: [PlatformImage]
@@ -111,7 +111,7 @@ struct IOSMessageInputView: View {
                 audioRecorder.cancel()
             }
             .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            .padding(.vertical, 8)
+            .padding(.vertical, CTLayout.inlinePad)
 
         case .recorded(let url, let duration, let waveform):
             VoicePreviewBar(duration: duration, waveform: waveform) {
@@ -121,7 +121,7 @@ struct IOSMessageInputView: View {
                 audioRecorder.cancel()
             }
             .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            .padding(.vertical, 8)
+            .padding(.vertical, CTLayout.inlinePad)
 
         case .idle:
             inputRow
@@ -129,7 +129,7 @@ struct IOSMessageInputView: View {
     }
 
     private var inputRow: some View {
-        HStack(alignment: .center, spacing: CTLayout.chromeGap) {
+        HStack(alignment: .center, spacing: ChatUIConstants.InputBar.attachFieldGap) {
             attachmentButton
             MessageInputTextBar(
                 text: $text,
@@ -140,7 +140,7 @@ struct IOSMessageInputView: View {
             )
         }
         // No collective capsule — separate floating glass elements (same pill radius).
-        .padding(.horizontal, 4)
+        .padding(.horizontal, ChatUIConstants.InputBar.rowOuterPad)
     }
 
     private var attachmentButton: some View {

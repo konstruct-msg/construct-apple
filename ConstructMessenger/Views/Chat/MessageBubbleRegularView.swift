@@ -41,7 +41,7 @@ struct MessageBubbleRegularView: View {
         let fileContent = (profileData == nil && mediaContent == nil) ? MessageBubbleContentParsing.parseFileMessage(message.displayText) : nil
         let voiceContent = (profileData == nil && mediaContent == nil && fileContent == nil) ? MessageBubbleContentParsing.parseVoiceMessage(message.displayText) : nil
 
-        HStack(spacing: 8) {
+        HStack(spacing: ChatUIConstants.Bubble.rowSpacing) {
             // Selection checkbox in edit mode - positioned based on message direction
             if isEditMode && !message.isSentByMe {
                 Button {
@@ -62,15 +62,18 @@ struct MessageBubbleRegularView: View {
             }
 
             if message.isSentByMe {
-                Spacer(minLength: 60)
+                Spacer(minLength: ChatUIConstants.Bubble.sideGutter)
             }
 
-            VStack(alignment: message.isSentByMe ? .trailing : .leading, spacing: 4) {
+            VStack(alignment: message.isSentByMe ? .trailing : .leading, spacing: ChatUIConstants.Bubble.stackSpacing) {
                 if let profileData {
                     ProfileShareBubbleView(profileData: profileData)
                         .overlay(
-                            CTShape.card()
-                                .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
+                            CTShape.control()
+                                .stroke(
+                                    isSelected ? Color.CT.accent : Color.clear,
+                                    lineWidth: ChatUIConstants.Bubble.selectionStrokeWidth
+                                )
                         )
                 } else if let mediaContent {
                     VStack(alignment: .leading, spacing: 0) {
@@ -87,8 +90,11 @@ struct MessageBubbleRegularView: View {
                         replyIndicatorView
                         FileAttachmentBubbleView(fileContent: fileContent, isSentByMe: message.isSentByMe)
                             .overlay(
-                                CTShape.card()
-                                    .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
+                                CTShape.control()
+                                    .stroke(
+                                        isSelected ? Color.CT.accent : Color.clear,
+                                        lineWidth: ChatUIConstants.Bubble.selectionStrokeWidth
+                                    )
                             )
                     }
                 } else if let voiceContent {
@@ -123,16 +129,19 @@ struct MessageBubbleRegularView: View {
                             }
                         }
                     )
-                    .frame(maxWidth: 360)
+                    .frame(maxWidth: ChatUIConstants.Bubble.maxWidth)
                     .overlay(
                         CTShape.control()
-                            .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
+                            .stroke(
+                                isSelected ? Color.CT.accent : Color.clear,
+                                lineWidth: ChatUIConstants.Bubble.selectionStrokeWidth
+                            )
                     )
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
                         replyIndicatorView
 
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: ChatUIConstants.Bubble.stackSpacing) {
                             let text = message.displayText
                             if text.isEmpty {
                                 Text((NSLocalizedString("message_unavailable", comment: "")))
@@ -148,9 +157,14 @@ struct MessageBubbleRegularView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.top, message.replyToContent != nil ? 4 : 8)
-                        .padding(.bottom, 8)
+                        .padding(.horizontal, ChatUIConstants.Bubble.horizontalPadding)
+                        .padding(
+                            .top,
+                            message.replyToContent != nil
+                                ? ChatUIConstants.Bubble.tightVerticalPadding
+                                : ChatUIConstants.Bubble.verticalPadding
+                        )
+                        .padding(.bottom, ChatUIConstants.Bubble.verticalPadding)
                     }
                     .background(
                         CTMessageBubbleTheme.regularBackground(
@@ -162,35 +176,44 @@ struct MessageBubbleRegularView: View {
                     .overlay(
                         Group {
                             if !message.isSentByMe {
-                                CTShape.control().stroke(Color.CT.noise, lineWidth: 0.5)
+                                CTShape.control().stroke(
+                                    Color.CT.noise,
+                                    lineWidth: ChatUIConstants.Bubble.strokeWidth
+                                )
                             }
                         }
                     )
                 }
 
                 if isLastInGroup {
-                    HStack(spacing: 4) {
+                    HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
                         if message.isSentByMe {
                             deliveryStatusView
                         }
 
                         if message.isEdited {
                             Text(NSLocalizedString("edited", comment: ""))
-                                .font(CTFont.regular(10))
+                                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
                                 .foregroundColor(Color.CT.textDim)
                         }
 
                         Text(message.safeTimestamp, style: .time)
-                            .font(CTFont.regular(10))
+                            .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
                             .foregroundColor(Color.CT.textDim)
                     }
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, ChatUIConstants.Bubble.metaHorizontalPadding)
                 }
             }
             // Guard non-finite / tiny container widths from mid-layout geometry passes
             // (they produce "Invalid frame dimension" in the layout engine).
             .frame(
-                maxWidth: max(120, (containerWidth.isFinite ? containerWidth : 390) * 0.7),
+                maxWidth: max(
+                    ChatUIConstants.Bubble.minColumnWidth,
+                    (containerWidth.isFinite
+                        ? containerWidth
+                        : ChatUIConstants.Bubble.defaultContainerWidth)
+                        * ChatUIConstants.Bubble.maxWidthFraction
+                ),
                 alignment: message.isSentByMe ? .trailing : .leading
             )
             .contentShape(.interaction, Rectangle())
@@ -268,7 +291,7 @@ struct MessageBubbleRegularView: View {
             .overlay(alignment: message.isSentByMe ? .leading : .trailing) { swipeIndicatorOverlay }
 
             if !message.isSentByMe {
-                Spacer(minLength: 60)
+                Spacer(minLength: ChatUIConstants.Bubble.sideGutter)
             }
 
             if isEditMode && message.isSentByMe {
@@ -296,23 +319,23 @@ struct MessageBubbleRegularView: View {
         switch message.deliveryStatus {
         case .sending:
             Image(systemName: "circle")
-                .font(CTFont.regular(10))
+                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
                 .foregroundColor(Color.CT.textDim)
 
         case .sent:
             Image(systemName: "circle.fill")
-                .font(CTFont.regular(10))
+                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
                 .foregroundColor(Color.CT.textDim)
 
         case .delivered:
             Image(systemName: "checkmark.circle")
-                .font(CTFont.regular(10))
+                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
                 .foregroundColor(.green)
 
         case .queued:
             Button { onRetry?(message) } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(CTFont.regular(10))
+                    .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
                     .foregroundColor(Color.CT.textDim)
             }
             .buttonStyle(.plain)
@@ -320,7 +343,7 @@ struct MessageBubbleRegularView: View {
         case .failed:
             Button { onRetry?(message) } label: {
                 Image(systemName: "exclamationmark.circle.fill")
-                    .font(CTFont.regular(10))
+                    .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
                     .foregroundColor(Color.CT.danger)
             }
             .buttonStyle(.plain)
@@ -331,31 +354,31 @@ struct MessageBubbleRegularView: View {
     private var replyIndicatorView: some View {
         let hasReply = message.replyToMessageId != nil && !(message.replyToMessageId ?? "").isEmpty
         if hasReply {
-            HStack(spacing: 4) {
+            HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
                 Rectangle()
                     .fill(Color.CT.accentDim)
-                    .frame(width: 2)
+                    .frame(width: ChatUIConstants.Bubble.replyAccentWidth)
 
                 if let replyContent = message.replyToContent {
                     ReplyPreviewContent(
                         content: replyContent,
                         messageId: message.replyToMessageId,
-                        thumbnailSize: 40,
+                        thumbnailSize: ChatUIConstants.Bubble.replyThumbnailSize,
                         lineLimit: 2
                     )
-                    .padding(.vertical, 4)
-                    .padding(.trailing, 4)
+                    .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
+                    .padding(.trailing, ChatUIConstants.Bubble.tightVerticalPadding)
                 } else {
                     Text("Original message")
-                        .font(CTFont.regular(11))
+                        .font(CTFont.regular(ChatUIConstants.Typography.systemSize))
                         .foregroundColor(Color.CT.textDim)
-                        .padding(.vertical, 4)
-                        .padding(.trailing, 4)
+                        .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
+                        .padding(.trailing, ChatUIConstants.Bubble.tightVerticalPadding)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+            .padding(.horizontal, ChatUIConstants.Bubble.horizontalPadding)
+            .padding(.top, ChatUIConstants.Bubble.verticalPadding)
+            .padding(.bottom, ChatUIConstants.Bubble.tightVerticalPadding)
         }
     }
 

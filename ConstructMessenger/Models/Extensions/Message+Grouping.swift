@@ -46,15 +46,13 @@ extension Message {
     /// - Parameters:
     ///   - index: Index of this message in the array
     ///   - messages: Array of messages (newest-first order expected)
-    /// - Returns: Spacing in points (12pt for group end, 4pt within group)
+    /// - Returns: ``ChatUIConstants.Shell.betweenGroupSpacing`` at group end,
+    ///   ``ChatUIConstants.Shell.withinGroupSpacing`` inside a group
     func spacingAfterMessage(at index: Int, in messages: [Message]) -> CGFloat {
-        // If this is the last in group, use larger spacing
         if self.isLastInGroup(at: index, in: messages) {
-            return 12
+            return ChatUIConstants.Shell.betweenGroupSpacing
         }
-
-        // Otherwise, use compact spacing within the group
-        return 4
+        return ChatUIConstants.Shell.withinGroupSpacing
     }
 }
 
@@ -69,7 +67,7 @@ extension Array where Element == Message {
     
     /// Helper to get spacing after a message at an index
     func spacingAfterMessage(at index: Int) -> CGFloat {
-        guard index < count else { return 12 }
+        guard index < count else { return ChatUIConstants.Shell.betweenGroupSpacing }
         return self[index].spacingAfterMessage(at: index, in: self)
     }
 }

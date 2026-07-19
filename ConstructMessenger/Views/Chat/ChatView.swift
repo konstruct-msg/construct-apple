@@ -47,7 +47,7 @@ struct ChatView: View {
     /// True when the session with this contact was established via a degraded (stale-SPK) init.
     @State private var isSessionAtRisk = false
 
-    @State private var containerWidth: CGFloat = 390
+    @State private var containerWidth: CGFloat = ChatUIConstants.Bubble.defaultContainerWidth
     /// Current height of the bottom composer (safeAreaInset). Tracked so we can re-pin the
     /// scroll when it changes — see the composer's `.onGeometryChange` below.
     @State private var composerHeight: CGFloat = 0
@@ -56,12 +56,12 @@ struct ChatView: View {
     @State private var didStabilizeInitialScroll = false
 
     private enum Layout {
-        static let composerHorizontalPadding: CGFloat = 8
-        static let composerBottomPadding: CGFloat = 8
-        static let messageBottomClearance: CGFloat = 12
+        static let composerHorizontalPadding = ChatUIConstants.Shell.composerHorizontalPadding
+        static let composerBottomPadding = ChatUIConstants.Shell.composerBottomPadding
+        static let messageBottomClearance = ChatUIConstants.Shell.messageBottomClearance
         /// Extra band below the status-bar safe area (≈ nav capsule height + margin) covered
         /// by the top scrim so scrolling text blurs/fades before it reaches the clock & signal.
-        static let topScrimUnderSafeArea: CGFloat = CTLayout.navBarHeight + 24
+        static let topScrimUnderSafeArea = ChatUIConstants.Shell.topScrimUnderSafeArea
     }
 
     /// Combined scroll metrics so a single `onScrollGeometryChange` drives both
@@ -96,7 +96,7 @@ struct ChatView: View {
             // Message list — base layer, scrolls underneath the floating capsules
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: ChatUIConstants.Shell.listSpacing) {
                         // Load more indicator at TOP of list (oldest messages)
                         if viewModel.hasMoreMessages && !renderedMessages.isEmpty {
                             HStack {
@@ -109,9 +109,9 @@ struct ChatView: View {
                                         viewModel.loadMoreMessages()
                                     } label: {
                                         Text(NSLocalizedString("load_older_messages", comment: "Load older messages button"))
-                                            .font(CTFont.regular(12))
+                                            .font(CTFont.regular(ChatUIConstants.Typography.captionSize))
                                             .foregroundColor(Color.CT.accentDim)
-                                            .padding(.vertical, 8)
+                                            .padding(.vertical, ChatUIConstants.Shell.listSpacing)
                                     }
                                 }
                                 Spacer()
@@ -182,7 +182,7 @@ struct ChatView: View {
                             .id("bottom")
                     }
                     // Top space for floating nav capsule (+ call mini-bar when a call is active).
-                    .padding(.top, 70 + callBarInset)
+                    .padding(.top, ChatUIConstants.Shell.scrollContentTopPad + callBarInset)
                     .padding(.horizontal)
                 }
                 .background(Color.CT.bg) // base under glass
@@ -348,10 +348,10 @@ struct ChatView: View {
 
             // === Floating capsule glass panels (Apple capsulization) ===
             // Top: nav + banners (capsule style)
-            VStack(spacing: 8) {
+            VStack(spacing: ChatUIConstants.Shell.floatingChromeSpacing) {
                 chatNavBar
-                    .padding(.horizontal, 8)
-                    .padding(.top, 4 + callBarInset)
+                    .padding(.horizontal, ChatUIConstants.Shell.floatingChromeHorizontal)
+                    .padding(.top, ChatUIConstants.Shell.floatingChromeTop + callBarInset)
 
                 floodBurstBanner
 
@@ -601,7 +601,7 @@ struct ChatView: View {
                         .glassCapsule()
                 }
                 .padding(.trailing, CTLayout.edgePad)
-                .padding(.bottom, 100) // Lift well above the (variable height) input glass
+                .padding(.bottom, ChatUIConstants.Shell.scrollToBottomLift)
                 .transition(.move(edge: .trailing).combined(with: .opacity))
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: scrollManager.shouldShowScrollToBottomButton)
             }
