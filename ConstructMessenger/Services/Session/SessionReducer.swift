@@ -235,6 +235,18 @@ enum SessionReducer {
         }
     }
 
+    /// Responder-fallback override gate — the mirror of the tie-break watchdog. The two are the
+    /// role-split halves of one liveness guarantee ("a stalled handshake gets re-driven by
+    /// *someone*"): the INITIATOR re-sends SRI (`tieBreakWatchdogTick`); the natural RESPONDER, if
+    /// the INITIATOR stays silent past the fallback timeout, **overrides** the tie-break and takes
+    /// the INITIATOR role itself. They are mutually exclusive by role, so they never dueling-init.
+    ///
+    /// Override iff, when the fallback fires, there is still no session and none in flight — i.e. the
+    /// INITIATOR never showed up. If either is true the handshake already progressed; stand down.
+    static func shouldResponderOverride(hasSession: Bool, isInitializing: Bool) -> Bool {
+        !hasSession && !isInitializing
+    }
+
     /// What the tie-break watchdog should do on a tick.
     enum WatchdogTick: Equatable {
         /// Re-send SESSION_RESET_INIT — still within the confirm window, RESPONDER hasn't acked.

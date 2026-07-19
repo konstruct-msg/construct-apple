@@ -1168,9 +1168,12 @@ final class SessionCoordinator: MessageRouterDelegate {
             }
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                guard !CryptoManager.shared.hasSession(for: userId),
-                      !self.isInitializing(userId) else {
-                    Log.debug("RESPONDER fallback: session already established for \(userId.prefix(8))… — skipping", category: "SessionInit")
+                // Override gate — the mirror of the watchdog, via the reducer authority.
+                guard SessionReducer.shouldResponderOverride(
+                    hasSession: CryptoManager.shared.hasSession(for: userId),
+                    isInitializing: self.isInitializing(userId)
+                ) else {
+                    Log.debug("RESPONDER fallback: session already established / initializing for \(userId.prefix(8))… — skipping", category: "SessionInit")
                     return
                 }
                 Log.info("RESPONDER fallback: no init from \(userId.prefix(8))… after \(Int(self.responderFallbackTimeout))s — taking INITIATOR role", category: "SessionInit")

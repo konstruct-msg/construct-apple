@@ -96,6 +96,9 @@ private final class Peer {
     var outbox: [String] = []
     /// DATA ids this peer has received and processed.
     private(set) var delivered: Set<String> = []
+    /// Natural RESPONDER waiting for the INITIATOR (e.g. post-END_SESSION): suppresses our own
+    /// proactive init until the responder-fallback overrides. Cleared once we initiate or go active.
+    var awaitingInitiator = false
 
     init(id: String, net: Network, confirmWindow: TimeInterval) {
         self.id = id
@@ -134,6 +137,25 @@ private final class Peer {
         flushOrInit(to: peerId, now: now)
     }
 
+    /// Buffer a DATA send as a natural RESPONDER *waiting* for the INITIATOR — i.e. do NOT initiate
+    /// our own handshake (the tie-break says the peer should). Without the responder-fallback this
+    /// is where a one-sided deadlock lives: if the INITIATOR never shows, we wait forever.
+    func enqueueSendWaiting(_ dataId: String) {
+        outbox.append(dataId)
+        awaitingInitiator = true
+    }
+
+    /// Model the responder-fallback firing: if the INITIATOR never showed (no session, none in
+    /// flight), override the tie-break and kick off an init — exactly
+    /// `SessionReducer.shouldResponderOverride`. (Final roles still resolve by tie-break once the
+    /// peer responds; the override only breaks the both-waiting deadlock.)
+    func fireResponderFallback(to peerId: String, now: Date) {
+        guard SessionReducer.shouldResponderOverride(hasSession: isActive, isInitializing: isInitializing) else { return }
+        awaitingInitiator = false
+        if phase == nil { phase = SessionReducer.reduce(phase, on: .initStarted).0 }
+        send(.initMsg, to: peerId)
+    }
+
     /// Re-evaluate the outbox against the production confirm-gate + phase. Called on every pump so
     /// a TTL expiry (isConfirmBuffering → false) actually releases buffered sends — the exact
     /// liveness the ad-hoc 04f16211 patch guaranteed, now under test.
@@ -151,8 +173,9 @@ private final class Peer {
             for d in batch { send(.data(d), to: peerId) }
             return
         }
-        // No session and not buffering → (re)start a dueling init.
-        if phase == nil {
+        // No session and not buffering → (re)start a dueling init — unless we're a natural
+        // RESPONDER deliberately waiting for the INITIATOR (only the responder-fallback breaks that).
+        if phase == nil, !awaitingInitiator {
             let (p, _) = SessionReducer.reduce(phase, on: .initStarted)
             phase = p
             send(.initMsg, to: peerId)
@@ -329,6 +352,40 @@ final class SessionConvergenceHarnessTests: XCTestCase {
         XCTAssertTrue(h.a.isActive && h.b.isActive, "both peers converge to active after heal")
         XCTAssertTrue(h.a.delivered.contains("b1") || h.a.delivered.contains("b2"),
                       "RESPONDER traffic reaches the INITIATOR after convergence")
+    }
+
+    // Responder-fallback override gate (mirror of the watchdog): override only when the INITIATOR
+    // never showed (no session, none in flight).
+    @MainActor
+    func testShouldResponderOverride_OnlyWhenNoSessionAndIdle() {
+        XCTAssertTrue(SessionReducer.shouldResponderOverride(hasSession: false, isInitializing: false),
+                      "INITIATOR silent + idle → override")
+        XCTAssertFalse(SessionReducer.shouldResponderOverride(hasSession: true, isInitializing: false),
+                       "session already exists → stand down")
+        XCTAssertFalse(SessionReducer.shouldResponderOverride(hasSession: false, isInitializing: true),
+                       "init already underway → stand down")
+        XCTAssertFalse(SessionReducer.shouldResponderOverride(hasSession: true, isInitializing: true))
+    }
+
+    // P1 (one-sided): the natural RESPONDER is waiting on a silent INITIATOR — a permanent deadlock
+    // without the fallback. The responder-fallback override must break it: the RESPONDER initiates,
+    // roles resolve by tie-break, and its buffered message is delivered.
+    @MainActor
+    func testResponderFallback_SilentInitiator_OverrideBreaksDeadlock() {
+        let h = Harness()
+        // B is the natural RESPONDER (lower id). It wants to send but waits for A (the INITIATOR),
+        // which never initiates.
+        h.b.enqueueSendWaiting("b1")
+        h.settle()
+        XCTAssertFalse(h.b.isActive, "no handshake yet — B is waiting on a silent INITIATOR")
+        XCTAssertTrue(h.net.isQuiet, "nothing on the wire: the one-sided deadlock")
+
+        // Fallback fires — B overrides and kicks off the handshake.
+        h.b.fireResponderFallback(to: h.a.id, now: h.now)
+        h.settle()
+
+        XCTAssertTrue(h.a.isActive && h.b.isActive, "override breaks the deadlock — both converge")
+        XCTAssertTrue(h.a.delivered.contains("b1"), "B's buffered message reaches A after convergence")
     }
 
     // Emission authority: which control op(s) each handshake transition sends. Pins the canonical
