@@ -518,3 +518,49 @@ final class OtpkUnreproducibleRecoveryTests: XCTestCase {
         XCTAssertEqual(SessionReducer.nextInitDHMode(forceThreeDHHintPending: false), .fourDH)
     }
 }
+
+// MARK: - Non-OTPK init-failure self-heal (stale SPK / stale bundle)
+
+/// Locks the finding from the point-2 follow-up (variant 1): a RESPONDER `initReceivingSession`
+/// failure that is NOT otpk-unreproducible (e.g. the INITIATOR used a signed prekey older than the
+/// responder still holds — the Rust core message lacks "cannot reproduce", so no 3-DH hint is set)
+/// **self-heals via a bare END_SESSION → 4-DH re-fetch**, and must NOT need or trigger the 3-DH
+/// loop-breaker. Why it self-heals (verified in construct-core `init_receiving_session_with_ephemeral`):
+/// the responder tries *all* its historical signed prekeys, and a re-fetch after END_SESSION hands
+/// the INITIATOR the responder's *current* SPK, which the responder always holds privately. (The one
+/// non-healing non-otpk case is an AD-space mismatch — a code bug guarded by `UserIdentity` +
+/// Rust `debug_assert`, not a runtime prekeyChanged root.)
+private final class StaleBundleRecoveryModel {
+    /// Round 1 the INITIATOR holds a stale SPK the responder pruned; a re-fetch after END_SESSION
+    /// yields the responder's current SPK, which it can always back.
+    private var initiatorHasCurrentSpk = false
+    private(set) var initModes: [SessionReducer.DHMode] = []
+    private(set) var rounds = 0
+    private(set) var converged = false
+
+    func step() {
+        rounds += 1
+        // A non-otpk failure never sets the 3-DH hint → always 4-DH.
+        let mode = SessionReducer.nextInitDHMode(forceThreeDHHintPending: false)
+        initModes.append(mode)
+        if initiatorHasCurrentSpk {
+            converged = true            // current SPK → responder backs it → converges
+        } else {
+            initiatorHasCurrentSpk = true  // bare END_SESSION → INITIATOR re-fetches current SPK
+        }
+    }
+}
+
+final class StaleBundleRecoveryTests: XCTestCase {
+
+    // Non-otpk failure self-heals via 4-DH re-fetch in two rounds — NO 3-DH hint, no loop.
+    func testStaleSpk_SelfHealsViaFourDHRefetch_NoThreeDH() {
+        let m = StaleBundleRecoveryModel()
+        var guardRounds = 0
+        while !m.converged && guardRounds < 10 { m.step(); guardRounds += 1 }
+
+        XCTAssertTrue(m.converged, "stale-SPK / stale-bundle failure must self-heal, not deadlock")
+        XCTAssertEqual(m.initModes, [.fourDH, .fourDH],
+                       "recovery is a plain 4-DH re-fetch — the 3-DH loop-breaker must NOT fire for non-otpk failures")
+    }
+}
