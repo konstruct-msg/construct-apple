@@ -25,7 +25,6 @@ struct ChatsListView: View {
     @State private var navigationPath = NavigationPath()
     @State private var showingDrafts = false
     @State private var searchQuery = ""
-    @State private var listRevision = 0
 
     init() {
         let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
@@ -112,14 +111,18 @@ struct ChatsListView: View {
                           let chat = chats.first(where: { $0.id == chatId }) else { return }
                     Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
             }
+            // Total-unread badge only. Do NOT force-invalidate the List here (no
+            // `.id(revision)`): the `@FetchRequest(animation: .default)` already drives
+            // row inserts/deletes/reordering, and each `ChatRowView` observes its own
+            // `chat`/`user`. Swapping the List's identity mid-animation raced the
+            // coalesced UICollectionView batch update → "invalid number of items"
+            // crash (device log 2026-07-19, during END_SESSION re-init + openOrCreateChat).
             .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
                     guard notificationContainsChatChanges(note) else { return }
-                    listRevision &+= 1
                     updateTotalUnreadCount()
             }
             .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { note in
                     guard notificationContainsChatChanges(note) else { return }
-                    listRevision &+= 1
                     updateTotalUnreadCount()
             }
         }
@@ -219,7 +222,6 @@ struct ChatsListView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
         }
-        .id(listRevision)
         .refreshable {
             await BackgroundFetchManager.shared.fetchPendingMessages()
         }
