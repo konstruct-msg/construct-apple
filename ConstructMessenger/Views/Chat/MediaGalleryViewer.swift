@@ -329,15 +329,8 @@ struct MediaGalleryViewer: View {
               let img = MediaImageCache.shared.image(for: entry.message.id, at: entry.itemIndex) else { return }
 
 #if canImport(UIKit)
-        let av = UIActivityViewController(activityItems: [img], applicationActivities: nil)
-        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
-            var top = root
-            while let presented = top.presentedViewController {
-                top = presented
-            }
-            top.present(av, animated: true)
-        }
+        // iPad requires popover sourceView — see ActivityShare / Diagnostics share-logs crash.
+        ActivityShare.present(items: [img])
 #endif
     }
 }
