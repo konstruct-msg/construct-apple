@@ -492,16 +492,22 @@ final class SessionCoordinator: MessageRouterDelegate {
         lastInboundEndSessionAt[userId] = Date()
         let myId = AuthSessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return }
-        guard SessionReducer.isNaturalInitiator(myId: myId, peerId: userId) else {
+
+        switch SessionReducer.endSessionReceiptAction(
+            isNaturalInitiator: SessionReducer.isNaturalInitiator(myId: myId, peerId: userId),
+            hasPendingReinit: endSessionReinitTasks[userId] != nil
+        ) {
+        case .waitAsResponder:
             Log.info("END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER", category: "SessionInit")
             startResponderFallback(for: userId)
             onEphemeralSubscriptionNeeded?(userId)
             return
-        }
-        resendUnconfirmedOutgoingMessagesIfNeeded(to: userId)
-        guard endSessionReinitTasks[userId] == nil else {
+        case .coalesce:
+            resendUnconfirmedOutgoingMessagesIfNeeded(to: userId)
             Log.info("END_SESSION coalesced — INITIATOR re-init already pending for \(userId.prefix(8))…", category: "SessionInit")
             return
+        case .scheduleReinit:
+            resendUnconfirmedOutgoingMessagesIfNeeded(to: userId)
         }
         Log.info("END_SESSION received — re-init as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
         let token = UUID()
@@ -522,7 +528,9 @@ final class SessionCoordinator: MessageRouterDelegate {
             // one (MessageRouter archives before delegating) — typically the peer's fresh init
             // from the same stream flush just made us RESPONDER. Re-initing over it would
             // destroy a working session and re-open the desync it just closed.
-            if CryptoManager.shared.hasSession(for: userId) {
+            guard SessionReducer.endSessionReinitStillNeeded(
+                hasSession: CryptoManager.shared.hasSession(for: userId)
+            ) else {
                 Log.info("SESSION_STATE[reinit_skipped_fresh_session]: session with \(userId.prefix(8))… established after END_SESSION — keeping it", category: "SessionInit")
                 return
             }

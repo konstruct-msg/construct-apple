@@ -422,6 +422,28 @@ final class SessionConvergenceHarnessTests: XCTestCase {
             .sendTypedOtpk)
     }
 
+    // END_SESSION-receipt branch policy: natural RESPONDER waits; natural INITIATOR coalesces onto
+    // an already-pending re-init (the storm guard — one pending re-init per peer) or schedules one.
+    // Post-debounce, the re-init only proceeds if no session appeared meanwhile (a fresh session
+    // means the peer's init already made us RESPONDER; re-initing over it re-opens the desync).
+    func testEndSessionReceiptAction_RoleAndCoalesce() {
+        XCTAssertEqual(
+            SessionReducer.endSessionReceiptAction(isNaturalInitiator: false, hasPendingReinit: false),
+            .waitAsResponder)
+        XCTAssertEqual(
+            SessionReducer.endSessionReceiptAction(isNaturalInitiator: false, hasPendingReinit: true),
+            .waitAsResponder, "RESPONDER role wins regardless of a stale pending entry")
+        XCTAssertEqual(
+            SessionReducer.endSessionReceiptAction(isNaturalInitiator: true, hasPendingReinit: true),
+            .coalesce)
+        XCTAssertEqual(
+            SessionReducer.endSessionReceiptAction(isNaturalInitiator: true, hasPendingReinit: false),
+            .scheduleReinit)
+        // Post-debounce stand-down: proceed only when no session exists yet.
+        XCTAssertTrue(SessionReducer.endSessionReinitStillNeeded(hasSession: false))
+        XCTAssertFalse(SessionReducer.endSessionReinitStillNeeded(hasSession: true))
+    }
+
     // Watchdog policy: re-arm (retry SRI) while within the confirm window, give up after it lapses.
     // Pins the exact decision the re-armed SessionCoordinator watchdog loops on — the fix for the
     // single-shot watchdog that fired once then went silent (confirm-deadlock root).

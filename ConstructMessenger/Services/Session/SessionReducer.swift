@@ -173,6 +173,34 @@ enum SessionReducer {
         return .sendPlain
     }
 
+    /// What to do when an END_SESSION is *received* from a peer — the single branch authority for
+    /// `SessionCoordinator.messageRouter(_:receivedEndSession:)`.
+    enum EndSessionReceiptAction: Equatable {
+        /// We are the natural RESPONDER (lower userId): don't re-init, wait for the INITIATOR's
+        /// fresh X3DH (responder fallback covers a stuck INITIATOR).
+        case waitAsResponder
+        /// We are the natural INITIATOR but a debounced re-init is already pending — a server
+        /// backlog flush delivers several END_SESSIONs at once; one pending re-init per peer is
+        /// enough (each extra one destroyed the session the previous just created → storm).
+        case coalesce
+        /// We are the natural INITIATOR with no pending re-init: schedule the debounced re-init.
+        case scheduleReinit
+    }
+
+    static func endSessionReceiptAction(
+        isNaturalInitiator: Bool,
+        hasPendingReinit: Bool
+    ) -> EndSessionReceiptAction {
+        guard isNaturalInitiator else { return .waitAsResponder }
+        return hasPendingReinit ? .coalesce : .scheduleReinit
+    }
+
+    /// After the END_SESSION re-init debounce elapses: only proceed if no session exists yet.
+    /// A session present NOW was established *after* the END_SESSION (typically the peer's fresh
+    /// init from the same stream flush made us RESPONDER); re-initing over it would destroy a
+    /// working session and re-open the desync it just closed.
+    static func endSessionReinitStillNeeded(hasSession: Bool) -> Bool { !hasSession }
+
     /// Receive-side control-message coalesce. Server offline queues re-deliver batches of
     /// END_SESSION / SESSION_RESET_INIT for the same peer; acting on each one re-archives
     /// Keychain + requeues + reopens streams. After the first handled control message in a
