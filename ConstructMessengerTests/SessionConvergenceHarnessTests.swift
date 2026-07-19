@@ -398,6 +398,30 @@ final class SessionConvergenceHarnessTests: XCTestCase {
                        "RESPONDER acknowledges via session_ready only (ping is legacy, not canonical)")
     }
 
+    // END_SESSION-on-init-failure branch policy: the single authority for the grace/otpk/plain
+    // decision that used to be nested inline `if`s in SessionCoordinator. otpk-unreproducible must
+    // ALWAYS win (the typed 3-DH hint has to reach the peer), even inside the inbound-END_SESSION
+    // grace window; a plain fail inside grace is a stale-wire race and must be suppressed (not
+    // amplify the reset storm); a plain fail outside grace sends an ordinary rate-limited reset.
+    func testInitFailureAction_GraceOtpkTruthTable() {
+        // otpk=false, grace=false → plain reset
+        XCTAssertEqual(
+            SessionReducer.initFailureAction(otpkUnreproducible: false, withinInboundGrace: false),
+            .sendPlain)
+        // otpk=false, grace=true → suppress (likely race right after inbound END_SESSION)
+        XCTAssertEqual(
+            SessionReducer.initFailureAction(otpkUnreproducible: false, withinInboundGrace: true),
+            .suppressWithinGrace)
+        // otpk=true, grace=false → typed 3-DH hint
+        XCTAssertEqual(
+            SessionReducer.initFailureAction(otpkUnreproducible: true, withinInboundGrace: false),
+            .sendTypedOtpk)
+        // otpk=true, grace=true → typed hint STILL wins (bypasses grace)
+        XCTAssertEqual(
+            SessionReducer.initFailureAction(otpkUnreproducible: true, withinInboundGrace: true),
+            .sendTypedOtpk)
+    }
+
     // Watchdog policy: re-arm (retry SRI) while within the confirm window, give up after it lapses.
     // Pins the exact decision the re-armed SessionCoordinator watchdog loops on — the fix for the
     // single-shot watchdog that fired once then went silent (confirm-deadlock root).

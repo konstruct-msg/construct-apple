@@ -146,6 +146,33 @@ enum SessionReducer {
         return now.timeIntervalSince(lastSentAt) >= cooldown
     }
 
+    /// What to do about END_SESSION after a RESPONDER `initReceivingSession` failure — the single
+    /// authority for the grace/otpk/plain branch that used to be nested inline `if`s in
+    /// `SessionCoordinator`. Cooldown is still applied separately by `shouldSendEndSession` at the
+    /// send site; this only chooses the *branch*.
+    enum InitFailureAction: Equatable {
+        /// Plain AEAD fail right after we *received* END_SESSION — usually a stale-wire race.
+        /// Do not amplify the reset storm; wait for the peer's SRI / next msg0 (responder
+        /// fallback still covers a stuck INITIATOR).
+        case suppressWithinGrace
+        /// Peer used a 4-DH OTPK we cannot reproduce → send a typed END_SESSION carrying
+        /// `.otpkUnreproducible` so they re-init WITHOUT one (3-DH is always reproducible,
+        /// breaking the 4-DH retry loop). Bypasses the inbound grace — the hint must reach them.
+        case sendTypedOtpk
+        /// Plain init failure outside the inbound-END_SESSION grace → ordinary rate-limited
+        /// END_SESSION so the peer re-inits.
+        case sendPlain
+    }
+
+    static func initFailureAction(
+        otpkUnreproducible: Bool,
+        withinInboundGrace: Bool
+    ) -> InitFailureAction {
+        if otpkUnreproducible { return .sendTypedOtpk }
+        if withinInboundGrace { return .suppressWithinGrace }
+        return .sendPlain
+    }
+
     /// Receive-side control-message coalesce. Server offline queues re-deliver batches of
     /// END_SESSION / SESSION_RESET_INIT for the same peer; acting on each one re-archives
     /// Keychain + requeues + reopens streams. After the first handled control message in a

@@ -751,21 +751,19 @@ final class SessionCoordinator: MessageRouterDelegate {
                     guard let self else { return }
                     await self.replenishOtpksAfterFailure(reason: "init_failed")
 
-                    // OTPK-unreproducible always needs a typed signal to the peer (3-DH re-init).
-                    // Plain AEAD fail *right after we accepted their END_SESSION* is usually a
-                    // race: do not amplify with our own END_SESSION — wait for SRI / next msg0
-                    // (responder fallback still covers a stuck INITIATOR).
-                    if withinPostEndSessionGrace && !otpkUnreproducible {
+                    // Single branch authority — grace/otpk/plain now decided by the reducer.
+                    // Cooldown (per-peer storm rate limit) is still applied at each send site.
+                    switch SessionReducer.initFailureAction(
+                        otpkUnreproducible: otpkUnreproducible,
+                        withinInboundGrace: withinPostEndSessionGrace
+                    ) {
+                    case .suppressWithinGrace:
                         Log.info(
                             "SESSION_STATE[init_fail_grace]: suppressed END_SESSION for \(userId.prefix(8))… (within \(Int(self.postEndSessionInitFailGrace))s of inbound END_SESSION)",
                             category: "SessionInit"
                         )
-                        return
-                    }
 
-                    // Cooldown: pending-queue re-delivery of the same failed init used to
-                    // send END_SESSION on every reconnect → peer thrash + heat.
-                    if otpkUnreproducible {
+                    case .sendTypedOtpk:
                         // Must carry the typed reason; still respect per-peer cooldown.
                         let now = Date()
                         if SessionReducer.shouldSendEndSession(
@@ -786,7 +784,8 @@ final class SessionCoordinator: MessageRouterDelegate {
                         } else {
                             Log.info("END_SESSION cooldown active for \(userId.prefix(8))…, skipping (session_init_failed_otpk_unreproducible)", category: "SessionCoordinator")
                         }
-                    } else {
+
+                    case .sendPlain:
                         _ = await self.sendEndSessionRateLimited(to: userId, reason: "session_init_failed")
                     }
                 }
