@@ -71,11 +71,11 @@ struct ChatView: View {
     /// Combined scroll metrics so a single `onScrollGeometryChange` drives both
     /// offset tracking and container width (two modifiers caused multi-update-per-frame).
     private struct ChatScrollGeometry: Equatable {
-        var offsetFromBottom: CGFloat
+        /// Points of content below the visible rect (0 ≈ at bottom). Uses `visibleRect`,
+        /// not the inset-blind `contentOffset + container − contentSize` formula.
+        var distanceFromBottom: CGFloat
         var width: CGFloat
         /// Content shorter than the viewport ⇒ nothing to jump to — the FAB must never show.
-        /// Also guards against spurious negative offsets produced mid keyboard/layout animation
-        /// in short chats (contentOffset and containerSize change in different frames).
         var contentFits: Bool
     }
 
@@ -206,13 +206,19 @@ struct ChatView: View {
                     hideKeyboard()
                 }
                 .onScrollGeometryChange(for: ChatScrollGeometry.self) { geo in
-                    ChatScrollGeometry(
-                        offsetFromBottom: geo.contentOffset.y + geo.containerSize.height - geo.contentSize.height,
+                    // visibleRect is in content coordinates and already reflects safeAreaInset
+                    // (composer). Subtracting maxY from content height is the true "how far up".
+                    let distance = geo.contentSize.height - geo.visibleRect.maxY
+                    return ChatScrollGeometry(
+                        distanceFromBottom: distance,
                         width: geo.containerSize.width,
-                        contentFits: geo.contentSize.height <= geo.containerSize.height
+                        contentFits: geo.contentSize.height <= geo.visibleRect.height + 8
                     )
                 } action: { _, metrics in
-                    scrollManager.updateScrollOffset(metrics.offsetFromBottom, contentFits: metrics.contentFits)
+                    scrollManager.updateScrollOffset(
+                        distanceFromBottom: metrics.distanceFromBottom,
+                        contentFits: metrics.contentFits
+                    )
                     // Ignore zero-width passes during mid-layout; avoid thrashing on sub-pixel noise.
                     if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
                         containerWidth = metrics.width

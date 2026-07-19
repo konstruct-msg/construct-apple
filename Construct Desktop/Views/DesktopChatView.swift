@@ -44,7 +44,8 @@ struct DesktopChatView: View {
     @State private var containerWidth: CGFloat = 800
 
     private struct ChatScrollGeometry: Equatable {
-        var offsetFromBottom: CGFloat
+        /// Points of content below the visible rect (0 ≈ at bottom).
+        var distanceFromBottom: CGFloat
         var width: CGFloat
         /// Content shorter than the viewport ⇒ nothing to jump to — the FAB must never show.
         var contentFits: Bool
@@ -147,13 +148,17 @@ struct DesktopChatView: View {
                 .environment(\.containerWidth, containerWidth)
                 .onTapGesture { hideKeyboard() }
                 .onScrollGeometryChange(for: ChatScrollGeometry.self) { geo in
-                    ChatScrollGeometry(
-                        offsetFromBottom: geo.contentOffset.y + geo.containerSize.height - geo.contentSize.height,
+                    let distance = geo.contentSize.height - geo.visibleRect.maxY
+                    return ChatScrollGeometry(
+                        distanceFromBottom: distance,
                         width: geo.containerSize.width,
-                        contentFits: geo.contentSize.height <= geo.containerSize.height
+                        contentFits: geo.contentSize.height <= geo.visibleRect.height + 8
                     )
                 } action: { _, metrics in
-                    scrollManager.updateScrollOffset(metrics.offsetFromBottom, contentFits: metrics.contentFits)
+                    scrollManager.updateScrollOffset(
+                        distanceFromBottom: metrics.distanceFromBottom,
+                        contentFits: metrics.contentFits
+                    )
                     if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
                         containerWidth = metrics.width
                     }
