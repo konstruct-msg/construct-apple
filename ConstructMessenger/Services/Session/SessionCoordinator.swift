@@ -45,11 +45,6 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// emit outbound END_SESSION (still ACKs + FailedInitMessageStore + OTPK top-up).
     private let postEndSessionInitFailGrace: TimeInterval = 20.0
 
-    /// Shadow-only mirror of *every* END_SESSION send (rate-limited AND must-send), used solely
-    /// to evaluate the Phase-2b cut-over question — "how often would the rate limiter suppress a
-    /// currently must-send END_SESSION?" — without touching live behaviour. Never gates a send.
-    private var shadowEndSessionSentAt: [String: Date] = [:]
-
     /// Tracks when we last attempted an automatic resend after receiving END_SESSION from a peer.
     /// Prevents resend loops when both sides reset simultaneously.
     private var resendAttemptedAt: [String: Date] = [:]
@@ -273,25 +268,14 @@ final class SessionCoordinator: MessageRouterDelegate {
 
     /// Send END_SESSION to a peer and archive + clear the local session.
     ///
-    /// `rateLimited` marks calls that already passed the cooldown decision (the DR-diverge
-    /// path). For every *other* caller (a "must-send" path) we run a shadow comparison: what
-    /// would the rate limiter have decided here? This measures Phase-2b risk without changing
-    /// behaviour — the send always proceeds.
+    /// Rate-limited recovery paths (`sendEndSessionRateLimited`, the otpk-unreproducible path)
+    /// decide via `SessionReducer.shouldSendEndSession` *before* calling this; must-send paths
+    /// (logout, manual reset, terminal init/heal failures) call it directly and always send.
     func sendEndSession(
         to userId: String,
         reason: String = "manual_reset",
-        rateLimited: Bool = false,
         resetReason: Shared_Proto_Messaging_V1_SessionResetReason = .unspecified
     ) async throws {
-        if !rateLimited {
-            let candidate = SessionReducer.shouldSendEndSession(
-                lastSentAt: shadowEndSessionSentAt[userId], now: Date(), cooldown: endSessionCooldown
-            )
-            // live = true (must-send paths always send today); candidate = the rate limiter's verdict.
-            ShadowCompare.decide("end_session_must_send", key: userId, live: true, candidate: candidate, context: reason)
-        }
-        shadowEndSessionSentAt[userId] = Date()
-
         Log.info("Sending END_SESSION to \(userId): \(reason)\(resetReason != .unspecified ? " [hint=\(resetReason)]" : "")", category: "ChatsViewModel")
         do {
             let response = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: reason, resetReason: resetReason)
@@ -324,7 +308,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         endSessionSentAt[userId] = now
         Log.info("Sending END_SESSION to \(userId.prefix(8))… (\(reason))", category: "SessionCoordinator")
         do {
-            try await sendEndSession(to: userId, reason: reason, rateLimited: true)
+            try await sendEndSession(to: userId, reason: reason)
         } catch {
             Log.error("Failed to send END_SESSION to \(userId.prefix(8))…: \(error)", category: "SessionCoordinator")
         }
@@ -497,7 +481,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // if a live Rust session exists, it is about to be torn down. Surface this in device logs.
         if established == nil {
             let hasLive = CryptoManager.shared.hasSession(for: userId)
-            Log.info("SESSION_STATE[end_session_stale_check]: \(userId.prefix(8))… ts=\(timestamp) established=nil hasLiveSession=\(hasLive) → not filtered\(hasLive ? " ⚠️ live session will be reset by a possibly-stale END_SESSION (no in-memory establishedAt)" : "")", category: "SessionInit")
+            Log.info("SESSION_STATE[end_session_stale_check]: \(userId.prefix(8))… ts=\(timestamp) established=nil hasLiveSession=\(hasLive) → not filtered\(hasLive ? " live session will be reset by a possibly-stale END_SESSION (no in-memory establishedAt)" : "")", category: "SessionInit")
         } else {
             Log.info("SESSION_STATE[end_session_stale_check]: \(userId.prefix(8))… ts=\(timestamp) established=\(established!) → \(stale ? "STALE (filtered)" : "fresh (acted on)")", category: "SessionInit")
         }
@@ -794,7 +778,6 @@ final class SessionCoordinator: MessageRouterDelegate {
                                 try await self.sendEndSession(
                                     to: userId,
                                     reason: "session_init_failed_otpk_unreproducible",
-                                    rateLimited: true,
                                     resetReason: .otpkUnreproducible
                                 )
                             } catch {
