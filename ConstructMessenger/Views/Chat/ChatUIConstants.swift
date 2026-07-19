@@ -10,7 +10,8 @@ import SwiftUI
 /// | Media / album tiles | ``Media.cornerRadius`` → same control | Align single + grid |
 /// | Voice **waveform-only** | ``Voice.cornerRadius`` → `CTRadius.pill` | Compact chrome peer of composer |
 /// | Voice **with transcript** | ``Voice.transcriptCornerRadius`` → `CTRadius.control` | Pill clamps to height/2 and oval-clips multi-line STT text |
-/// | Composer glass / attach / FAB | ``InputBar.cornerRadius`` → `CTRadius.pill` | True capsule |
+/// | Composer **single-line** field / attach / FAB | ``InputBar.cornerRadius`` → `CTRadius.pill` | Capsule peer of attach |
+/// | Composer **multi-line** field | ``InputBar.expandedCornerRadius`` → `CTRadius.control` | Pill clamps to height/2 and oval-clips text |
 enum ChatUIConstants {
 
     // MARK: - Typography
@@ -87,7 +88,8 @@ enum ChatUIConstants {
         /// Accent bar on reply strip inside a bubble.
         static let replyAccentWidth: CGFloat = 2
         static let replyThumbnailSize: CGFloat = 40
-        static let replyBarThumbnailSize: CGFloat = 36
+        /// Compact compose-bar reply strip (was 36 — made the aux bar too tall).
+        static let replyBarThumbnailSize: CGFloat = 28
         /// Horizontal inset on the timestamp / status row under a group.
         static let metaHorizontalPadding: CGFloat = 4
     }
@@ -156,8 +158,11 @@ enum ChatUIConstants {
     // MARK: - Composer input bar
 
     enum InputBar {
-        /// Full capsule — attach circle peer.
+        /// Single-line only — attach circle peer. Never use for multi-line height.
         static let cornerRadius: CGFloat = CTRadius.pill
+        /// Multi-line field radius. Same invariant as ``Voice.transcriptCornerRadius``:
+        /// ContinuousRoundedRect clamps pill to height/2 → oval that clips text.
+        static let expandedCornerRadius: CGFloat = CTRadius.control
         /// Target single-line control height (attach / send / scroll FAB).
         static let height: CGFloat = CTLayout.controlHeight
         static let horizontalPadding: CGFloat = CTLayout.edgePad
@@ -169,8 +174,16 @@ enum ChatUIConstants {
         static let attachFieldGap: CGFloat = CTLayout.chromeGap
         /// Outer horizontal pad of the attach+field row.
         static let rowOuterPad: CGFloat = 4
+        /// Gap between reply/edit aux bar and the attach+field row.
+        static let auxBarGap: CGFloat = CTLayout.inlinePad
         /// Voice recording / preview bar height.
         static let voiceChromeHeight: CGFloat = 52
         static let voiceChromeIconSize: CGFloat = 22
+
+        /// Pick field radius from measured bar height (single-line vs multi-line).
+        static func fieldCornerRadius(barHeight: CGFloat) -> CGFloat {
+            // A few points of tolerance for font metrics / padding jitter.
+            barHeight > height + 6 ? expandedCornerRadius : cornerRadius
+        }
     }
 }

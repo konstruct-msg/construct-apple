@@ -33,6 +33,11 @@ struct IOSMessageInputView: View {
     var body: some View {
         VStack(spacing: 0) {
             replyOrEditBars
+            // Explicit gap — aux bar and field used to sit flush (screenshot #2).
+            if hasAuxBar {
+                Color.clear
+                    .frame(height: ChatUIConstants.InputBar.auxBarGap)
+            }
             attachmentPreviews
             voiceOrInputRow
                 .padding(.top, hasAttachmentPreviews ? Self.attachmentPreviewSpacing : 0)
@@ -161,6 +166,10 @@ struct IOSMessageInputView: View {
 
     private var hasAttachmentPreviews: Bool {
         !attachments.selectedAttachments.isEmpty || !attachments.selectedFileURLs.isEmpty
+    }
+
+    private var hasAuxBar: Bool {
+        replyingTo != nil || editingMessage != nil
     }
 
     private func startVoiceRecording() {

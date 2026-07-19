@@ -12,7 +12,11 @@ import Combine
 
 private enum ComposerAuxBarLayout {
     static let accentBarWidth: CGFloat = 2
-    static let minHeight: CGFloat = CTLayout.controlHeight
+    /// Compact cancel glyph (full hit target still applied via contentShape padding).
+    static let cancelIconSize: CGFloat = 18
+    static let cancelHit: CGFloat = 32
+    static let verticalPadding: CGFloat = 6
+    static let labelPreviewSpacing: CGFloat = 1
 }
 
 // MARK: - Reply Bar
@@ -30,9 +34,9 @@ struct MessageReplyBar: View {
                 .fill(Color.CT.accent)
                 .frame(width: ComposerAuxBarLayout.accentBarWidth)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: ComposerAuxBarLayout.labelPreviewSpacing) {
                 Text(LocalizedStringKey("reply_to_colon"))
-                    .font(CTFont.regular(10))
+                    .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
                     .foregroundColor(Color.CT.textDim)
                 ReplyPreviewContent(
                     content: content,
@@ -47,8 +51,8 @@ struct MessageReplyBar: View {
         }
         .padding(.leading, CTLayout.edgePad)
         .padding(.trailing, CTLayout.inlinePad)
-        .padding(.vertical, CTLayout.inlinePad)
-        .frame(minHeight: ComposerAuxBarLayout.minHeight)
+        .padding(.vertical, ComposerAuxBarLayout.verticalPadding)
+        // No minHeight = controlHeight — that forced a tall empty strip above the field.
         .fixedSize(horizontal: false, vertical: true)
         .background(Color.CT.bgMsg)
         .clipShape(CTShape.card())
@@ -70,12 +74,12 @@ struct MessageEditBar: View {
                 .fill(Color.CT.accentDim)
                 .frame(width: ComposerAuxBarLayout.accentBarWidth)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: ComposerAuxBarLayout.labelPreviewSpacing) {
                 Text(LocalizedStringKey("editing_message"))
-                    .font(CTFont.regular(10))
+                    .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
                     .foregroundColor(Color.CT.accentDim)
                 Text(content)
-                    .font(CTFont.regular(13))
+                    .font(CTFont.regular(12))
                     .lineLimit(1)
                     .foregroundColor(Color.CT.textDim)
             }
@@ -85,8 +89,7 @@ struct MessageEditBar: View {
         }
         .padding(.leading, CTLayout.edgePad)
         .padding(.trailing, CTLayout.inlinePad)
-        .padding(.vertical, CTLayout.inlinePad)
-        .frame(minHeight: ComposerAuxBarLayout.minHeight)
+        .padding(.vertical, ComposerAuxBarLayout.verticalPadding)
         .fixedSize(horizontal: false, vertical: true)
         .background(Color.CT.bgMsg)
         .clipShape(CTShape.card())
@@ -101,9 +104,12 @@ struct MessageEditBar: View {
 private func cancelButton(action: @escaping () -> Void) -> some View {
     Button(action: action) {
         Image(systemName: "xmark.circle.fill")
-            .font(.system(size: CTLayout.navIconSize, weight: .regular))
+            .font(.system(size: ComposerAuxBarLayout.cancelIconSize, weight: .regular))
             .foregroundColor(Color.CT.textDim)
-            .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
+            .frame(
+                width: ComposerAuxBarLayout.cancelHit,
+                height: ComposerAuxBarLayout.cancelHit
+            )
             .contentShape(Rectangle())
     }
     .buttonStyle(.plain)

@@ -23,9 +23,12 @@ struct MessageInputTextBar: View {
     private static let controlSize: CGFloat = ChatUIConstants.InputBar.height
     private static let trailingIconSize: CGFloat = ChatUIConstants.InputBar.trailingIconSize
 
+    /// Measured bar height drives single-line pill vs multi-line control radius.
+    @State private var barHeight: CGFloat = ChatUIConstants.InputBar.height
+
     var body: some View {
         // Center trailing controls with the single-line text row. Multi-line growth
-        // keeps send/mic vertically centered in the capsule (not bottom-hanging).
+        // keeps send/mic vertically centered (not bottom-hanging).
         HStack(alignment: .center, spacing: 0) {
             textField
             charCounter
@@ -34,7 +37,21 @@ struct MessageInputTextBar: View {
         }
         .frame(minHeight: Self.controlSize)
         .fixedSize(horizontal: false, vertical: true)
-        .glassCapsule()
+        // Pill is fine while ≈ attach height; tall multi-line must drop to control
+        // or ContinuousRoundedRect becomes an oval and clips the text (screenshot).
+        .glassCapsule(cornerRadius: ChatUIConstants.InputBar.fieldCornerRadius(barHeight: barHeight))
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.height
+        } action: { _, height in
+            guard height.isFinite, height > 0 else { return }
+            if abs(height - barHeight) > 0.5 {
+                barHeight = height
+            }
+        }
+        .animation(
+            .easeInOut(duration: 0.15),
+            value: ChatUIConstants.InputBar.fieldCornerRadius(barHeight: barHeight)
+        )
     }
 
     // MARK: - Text field
