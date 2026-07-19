@@ -120,7 +120,8 @@ class SessionInitializationService {
         // do 3-DH, which the responder can always reproduce from identity + signed prekey —
         // instead of handing it another OTPK it will also reject and looping. Consumed once; a
         // later clean init uses 4-DH again. (The Kyber OTPK is a separate store and is left as-is.)
-        if SessionReinitHintStore.shared.consumeThreeDHReinit(for: userId) {
+        let hintPending = SessionReinitHintStore.shared.consumeThreeDHReinit(for: userId)
+        if SessionReducer.nextInitDHMode(forceThreeDHHintPending: hintPending) == .threeDH {
             Log.info("SESSION_STATE[force_3dh_reinit]: \(userId.prefix(8))… — dropping one-time-prekey, using 3-DH", category: "SessionInit")
             otpkPublic = Data()
             otpkId = 0

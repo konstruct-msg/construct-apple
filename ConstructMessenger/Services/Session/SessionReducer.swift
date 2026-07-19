@@ -235,6 +235,23 @@ enum SessionReducer {
         }
     }
 
+    // MARK: - OTPK-unreproducible recovery (the 3-DH loop-breaker)
+
+    /// DH mode for a session init. 4-DH mixes a one-time prekey (OTPK) into X3DH; 3-DH omits it.
+    enum DHMode: Equatable { case fourDH, threeDH }
+
+    /// The DH mode for the *next* INITIATOR init. Normally 4-DH; but when a force-3-DH hint is
+    /// pending — the peer, as our RESPONDER, told us via END_SESSION(`.otpkUnreproducible`) that it
+    /// could not reproduce the 4-DH one-time-prekey our last X3DH used — the recovery init MUST drop
+    /// the OTPK and use 3-DH. **This is the loop-breaker:** re-fetching another OTPK (4-DH) would
+    /// hand the responder yet another key it also cannot back, looping forever; 3-DH derives from
+    /// identity + signed prekey only, which the responder can always reproduce. The hint is consumed
+    /// once (a later clean init uses 4-DH again). See `SessionReinitHintStore` / L2 of the
+    /// otpk-session-init-deadlock fix.
+    static func nextInitDHMode(forceThreeDHHintPending: Bool) -> DHMode {
+        forceThreeDHHintPending ? .threeDH : .fourDH
+    }
+
     /// Responder-fallback override gate — the mirror of the tie-break watchdog. The two are the
     /// role-split halves of one liveness guarantee ("a stalled handshake gets re-driven by
     /// *someone*"): the INITIATOR re-sends SRI (`tieBreakWatchdogTick`); the natural RESPONDER, if

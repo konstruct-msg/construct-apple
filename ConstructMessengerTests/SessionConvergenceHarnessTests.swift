@@ -454,3 +454,67 @@ final class SessionConvergenceHarnessTests: XCTestCase {
         XCTAssertTrue(h.b.delivered.contains("a2"), "post-storm message delivered")
     }
 }
+
+// MARK: - OTPK-unreproducible recovery (the 3-DH loop-breaker)
+
+/// Models the OTPK-unreproducible 2-hop recovery (SessionReinitHintStore L2): a RESPONDER whose
+/// one-time-prekey the INITIATOR's 4-DH cannot be backed by (reinstall / prekeyChanged) drives the
+/// handshake to converge via a 3-DH re-init — and must NOT loop by re-fetching another OTPK (the
+/// otpk-session-init-deadlock). Drives the production loop-breaker decision
+/// `SessionReducer.nextInitDHMode`; the hint plumbing (END_SESSION.otpkUnreproducible → force-3-DH)
+/// is modelled as the 2-hop contract SessionReinitHintStore implements.
+private final class OtpkRecoveryModel {
+    /// The responder cannot reproduce a 4-DH OTPK (reinstall / prekeyChanged).
+    let responderOtpkStale: Bool
+    /// INITIATOR-side hint: next init must be 3-DH (set on receiving END_SESSION.otpkUnreproducible).
+    private var force3DHHint = false
+    private(set) var initModes: [SessionReducer.DHMode] = []
+    private(set) var converged = false
+
+    init(responderOtpkStale: Bool) { self.responderOtpkStale = responderOtpkStale }
+
+    /// One INITIATOR init attempt + the RESPONDER's reaction, via the production decision
+    /// (`nextInitDHMode`), consuming the hint once exactly like `SessionReinitHintStore`.
+    func step() {
+        let mode = SessionReducer.nextInitDHMode(forceThreeDHHintPending: force3DHHint)
+        force3DHHint = false
+        initModes.append(mode)
+        if mode == .fourDH && responderOtpkStale {
+            // RESPONDER cannot reproduce the OTPK → END_SESSION(.otpkUnreproducible) → force 3-DH.
+            force3DHHint = true
+        } else {
+            // 3-DH (or a non-stale responder) reproduces from identity + signed prekey → converges.
+            converged = true
+        }
+    }
+}
+
+final class OtpkUnreproducibleRecoveryTests: XCTestCase {
+
+    // Recovery must terminate in exactly two rounds: the 4-DH fails once, the 3-DH re-init succeeds.
+    // It must NOT loop by re-fetching another OTPK (the otpk-session-init deadlock).
+    func testOtpkUnreproducible_RecoversViaThreeDH_NoLoop() {
+        let m = OtpkRecoveryModel(responderOtpkStale: true)
+        var guardRounds = 0
+        while !m.converged && guardRounds < 10 { m.step(); guardRounds += 1 }
+
+        XCTAssertTrue(m.converged, "recovery must converge, not deadlock")
+        XCTAssertEqual(m.initModes, [.fourDH, .threeDH],
+                       "4-DH fails once, recovery init is 3-DH (loop-breaker) — no OTPK re-fetch loop")
+    }
+
+    // A healthy responder (OTPK reproducible) converges on the first 4-DH init — no 3-DH needed.
+    func testHealthyResponder_ConvergesOnFirstFourDH() {
+        let m = OtpkRecoveryModel(responderOtpkStale: false)
+        m.step()
+        XCTAssertTrue(m.converged)
+        XCTAssertEqual(m.initModes, [.fourDH], "no recovery needed — a single 4-DH init")
+    }
+
+    // The loop-breaker decision itself: hint pending → 3-DH; else 4-DH (consumed once, so a later
+    // clean init returns to 4-DH).
+    func testNextInitDHMode_Decision() {
+        XCTAssertEqual(SessionReducer.nextInitDHMode(forceThreeDHHintPending: true), .threeDH)
+        XCTAssertEqual(SessionReducer.nextInitDHMode(forceThreeDHHintPending: false), .fourDH)
+    }
+}
