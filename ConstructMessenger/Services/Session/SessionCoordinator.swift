@@ -329,7 +329,8 @@ final class SessionCoordinator: MessageRouterDelegate {
     }
 
     /// Broadcast END_SESSION to all peers that have an active session (e.g., on logout).
-    /// Pre-warm sessions for contacts where we are the natural INITIATOR (higher deviceId).
+    /// Pre-warm sessions for contacts where we are the natural INITIATOR (higher userId — see
+    /// `SessionReducer.tieBreakRole`, which matches the Rust core rule).
     /// Called once per app launch after stream connects. Ensures first messages are instant.
     func prewarmSessions(for contactIds: [String], skipEndSessionNotification: Bool = false) {
         let myId = AuthSessionManager.shared.currentUserId ?? ""
@@ -353,7 +354,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         let toPrewarm = contactIds.filter { peer in
             SessionReducer.shouldPrewarm(
                 coreReady: coreReady,
-                isNaturalInitiator: DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: peer),
+                isNaturalInitiator: SessionReducer.isNaturalInitiator(myId: myId, peerId: peer),
                 sessionExistsOrRestorable: CryptoManager.shared.hasOrRestoreSession(for: peer)
             )
         }
@@ -463,7 +464,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             } catch {
                 return
             }
-            if DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) {
+            if SessionReducer.isNaturalInitiator(myId: myId, peerId: userId) {
                 Log.info("DR diverge: auto-reinit as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
                 self.reinitAndAnnounceAsInitiator(to: userId, reason: "dr_diverge")
             } else {
@@ -504,7 +505,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         lastInboundEndSessionAt[userId] = Date()
         let myId = AuthSessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return }
-        guard DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) else {
+        guard SessionReducer.isNaturalInitiator(myId: myId, peerId: userId) else {
             Log.info("END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER", category: "SessionInit")
             startResponderFallback(for: userId)
             onEphemeralSubscriptionNeeded?(userId)

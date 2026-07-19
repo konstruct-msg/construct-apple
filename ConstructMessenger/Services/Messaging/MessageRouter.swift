@@ -1092,7 +1092,7 @@ final class MessageRouter {
         let suiteId = Int(KeychainManager.shared.loadSessionSuiteId(userId: contactId) ?? 0)
 
         if role == "Initiator" {
-            // We are INITIATOR (higher deviceId) — WE WIN the tie-break.
+            // We are INITIATOR (higher userId — see SessionReducer.tieBreakRole) — WE WIN the tie-break.
             // The Rust session is already intact thanks to the DR snapshot/rollback.
             Log.info("SESSION_STATE[tie_break_win]: kept INITIATOR (my=\(myUserId.prefix(8))… > peer=\(contactId.prefix(8))…), suiteId=\(suiteId)", category: "SessionInit")
             PersistentACKStore.shared.markProcessed(message.id, senderId: contactId, in: context)

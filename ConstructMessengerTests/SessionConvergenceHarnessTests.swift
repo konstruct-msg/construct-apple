@@ -103,8 +103,11 @@ private final class Peer {
         self.confirmWindow = confirmWindow
     }
 
-    // Tie-break: higher id wins as INITIATOR (matches §6.6 / handleRustHealDecision).
-    private func isInitiator(over peerId: String) -> Bool { id > peerId }
+    // Tie-break via the production authority (folded from glue — SessionReducer.tieBreakRole,
+    // which matches the Rust core). The harness now exercises the real role rule, not a copy.
+    private func isInitiator(over peerId: String) -> Bool {
+        SessionReducer.tieBreakRole(myId: id, peerId: peerId) == .initiator
+    }
 
     var isActive: Bool { if case .active = phase { return true }; return false }
     var isInitializing: Bool { phase == .initializing }
