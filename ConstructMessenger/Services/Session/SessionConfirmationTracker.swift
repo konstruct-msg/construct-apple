@@ -45,6 +45,23 @@ final class SessionConfirmationTracker {
         Log.info("SESSION_CONFIRM[confirmed]: \(userId.prefix(8))… — RESPONDER acknowledged", category: "SessionConfirm")
     }
 
+    // MARK: - Tie-break watchdog (called by SessionCoordinator's re-arming watchdog)
+
+    /// Watchdog tick decision for this peer, delegating to the reducer's pure policy: `.retry` while
+    /// within the confirm window, `.giveUp` once it has lapsed. Read-only (does not mutate the map).
+    func watchdogTick(_ userId: String, now: Date = Date()) -> SessionReducer.WatchdogTick {
+        SessionReducer.tieBreakWatchdogTick(pendingSince: pendingSince[userId], now: now, confirmWindow: confirmWindow)
+    }
+
+    /// Explicitly release a lapsed confirm buffer on watchdog give-up (proactive, vs the lazy TTL
+    /// expiry in `isPending`). Returns whether an entry was actually pending.
+    @discardableResult
+    func releaseLapsed(_ userId: String) -> Bool {
+        guard pendingSince.removeValue(forKey: userId) != nil else { return false }
+        Log.info("SESSION_CONFIRM[watchdog_giveup]: \(userId.prefix(8))… — confirm window exhausted, releasing gate + flushing", category: "SessionConfirm")
+        return true
+    }
+
     // MARK: - Query (called by ChatViewModel)
 
     /// Returns true when the INITIATOR session for this peer is awaiting `session_ready`

@@ -79,7 +79,10 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// If the RESPONDER (loser) does not reply within the timeout, re-sends the session ping
     /// so they can become RESPONDER even after a brief network outage.
     private var tieBreakWatchdogs: [String: Task<Void, Never>] = [:]
-    private let tieBreakWatchdogTimeout: TimeInterval = 30.0
+    /// Interval between SESSION_RESET_INIT re-sends while awaiting the RESPONDER's ack. The watchdog
+    /// re-arms at this cadence and gives up when the confirm window (`SessionConfirmationTracker`)
+    /// lapses — see `SessionReducer.tieBreakWatchdogTick`. (Was a single-shot 30 s timeout.)
+    private let tieBreakWatchdogRetryInterval: TimeInterval = 30.0
 
     /// Fallback tasks started when we are the natural RESPONDER (lower deviceId) and receive
     /// END_SESSION from the INITIATOR. If the INITIATOR does not send a new session init within
@@ -1128,31 +1131,47 @@ final class SessionCoordinator: MessageRouterDelegate {
 
     // MARK: - Tie-break watchdog
 
-    /// Start a watchdog Task that re-sends the session ping if the RESPONDER has not
-    /// replied within `tieBreakWatchdogTimeout` seconds.  Cancels any prior watchdog
-    /// for the same peer so multiple tie-breaks don't stack up.
+    /// Start a **re-arming, bounded** watchdog that re-sends SESSION_RESET_INIT every
+    /// `tieBreakWatchdogRetryInterval` while the RESPONDER hasn't acked — but only within the confirm
+    /// window (`SessionReducer.tieBreakWatchdogTick`). When the window lapses it gives up cleanly:
+    /// releases the confirm gate and proactively flushes the buffer, so a persistently lost SRI/ping
+    /// can no longer deadlock (the single-shot version fired once then went silent forever, leaving
+    /// `pending` set — the confirm-deadlock root). Cancelled on any RESPONDER ack (ready/ping/SRI).
     private func startTieBreakWatchdog(for userId: String) {
         assertMainThread()
         tieBreakWatchdogs[userId]?.cancel()
         tieBreakWatchdogs[userId] = Task { [weak self] in
             guard let self else { return }
-            do {
-                try await Task.sleep(nanoseconds: UInt64(self.tieBreakWatchdogTimeout * 1_000_000_000))
-            } catch {
-                return // Task was cancelled — RESPONDER replied in time
-            }
-            guard !Task.isCancelled else { return }
-            // RESPONDER has not replied — reinitialize session so the retry ping
-            // is a fresh X3DH init (msgNum=0) that RESPONDER can accept.
-            Log.info("SESSION_STATE[tie_break_watchdog]: timeout — re-prewarming for \(userId.prefix(8))…", category: "SessionInit")
-            await self.sessionInitService.initializeSessionProactively(
-                userId: userId,
-                onSuccess: { },
-                onFailure: { err in
-                    Log.error("SESSION_STATE[watchdog_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(self.tieBreakWatchdogRetryInterval * 1_000_000_000))
+                } catch {
+                    return // cancelled — RESPONDER acked in time
                 }
-            )
-            await self.sendSessionResetInit(to: userId)
+                guard !Task.isCancelled else { return }
+                switch SessionConfirmationTracker.shared.watchdogTick(userId) {
+                case .retry:
+                    // RESPONDER still silent — re-send a fresh X3DH init (msgNum=0) it can accept.
+                    Log.info("SESSION_STATE[tie_break_watchdog]: no ack — re-sending SESSION_RESET_INIT for \(userId.prefix(8))…", category: "SessionInit")
+                    await self.sessionInitService.initializeSessionProactively(
+                        userId: userId,
+                        onSuccess: { },
+                        onFailure: { err in
+                            Log.error("SESSION_STATE[watchdog_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
+                        }
+                    )
+                    await self.sendSessionResetInit(to: userId)
+                case .giveUp:
+                    // Confirm window exhausted — stop retrying, release the gate, drain the buffer
+                    // (rather than waiting for the lazy TTL / next reconnect). New sends flow; if the
+                    // session is genuinely broken the peer's decrypt-fail drives normal recovery.
+                    Log.info("SESSION_STATE[tie_break_watchdog]: confirm window exhausted for \(userId.prefix(8))… — releasing gate + flushing buffer", category: "SessionInit")
+                    SessionConfirmationTracker.shared.releaseLapsed(userId)
+                    self.sendSessionQueuedMessages(for: userId)
+                    self.tieBreakWatchdogs.removeValue(forKey: userId)
+                    return
+                }
+            }
         }
     }
 

@@ -321,6 +321,38 @@ final class SessionConvergenceHarnessTests: XCTestCase {
                       "RESPONDER traffic reaches the INITIATOR after convergence")
     }
 
+    // Watchdog policy: re-arm (retry SRI) while within the confirm window, give up after it lapses.
+    // Pins the exact decision the re-armed SessionCoordinator watchdog loops on — the fix for the
+    // single-shot watchdog that fired once then went silent (confirm-deadlock root).
+    @MainActor
+    func testTieBreakWatchdogTick_RetriesWithinWindow_GivesUpAfter() {
+        let started = Date(timeIntervalSince1970: 2_000_000)
+        let window: TimeInterval = 75
+
+        // Not pending → nothing to do (give up).
+        XCTAssertEqual(
+            SessionReducer.tieBreakWatchdogTick(pendingSince: nil, now: started, confirmWindow: window),
+            .giveUp)
+        // Within the window (30 s, 60 s) → keep re-sending the SRI.
+        XCTAssertEqual(
+            SessionReducer.tieBreakWatchdogTick(
+                pendingSince: started, now: started.addingTimeInterval(30), confirmWindow: window),
+            .retry)
+        XCTAssertEqual(
+            SessionReducer.tieBreakWatchdogTick(
+                pendingSince: started, now: started.addingTimeInterval(60), confirmWindow: window),
+            .retry)
+        // At / past the window (75 s, 90 s) → give up (release + flush).
+        XCTAssertEqual(
+            SessionReducer.tieBreakWatchdogTick(
+                pendingSince: started, now: started.addingTimeInterval(75), confirmWindow: window),
+            .giveUp)
+        XCTAssertEqual(
+            SessionReducer.tieBreakWatchdogTick(
+                pendingSince: started, now: started.addingTimeInterval(90), confirmWindow: window),
+            .giveUp)
+    }
+
     // P3: an END_SESSION storm must leave the phase idle with no orphaned buffer, and a subsequent
     // send must start exactly one fresh init (no dueling storm re-entry).
     @MainActor

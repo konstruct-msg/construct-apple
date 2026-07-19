@@ -210,6 +210,25 @@ enum SessionReducer {
         return now.timeIntervalSince(pendingSince) < confirmWindow
     }
 
+    /// What the tie-break watchdog should do on a tick.
+    enum WatchdogTick: Equatable {
+        /// Re-send SESSION_RESET_INIT — still within the confirm window, RESPONDER hasn't acked.
+        case retry
+        /// The confirm window has lapsed — stop retrying, release the gate, flush the buffer.
+        case giveUp
+    }
+
+    /// Tie-break watchdog policy: after the INITIATOR sends SESSION_RESET_INIT it waits for the
+    /// RESPONDER's ack (ready/ping); if none comes it re-sends the SRI — but only while still within
+    /// the confirm window (`isConfirmBuffering`). This makes the watchdog **re-arming and bounded**;
+    /// it was previously single-shot (one retry at 30 s, then silence forever — the confirm-deadlock
+    /// root, patched piecemeal in `04f16211`). Folding the retry lifetime onto the confirm window
+    /// keeps the two liveness mechanisms coherent: they give up together, and give-up proactively
+    /// releases the gate + flushes instead of waiting for a lazy TTL read / the next reconnect.
+    static func tieBreakWatchdogTick(pendingSince: Date?, now: Date, confirmWindow: TimeInterval) -> WatchdogTick {
+        isConfirmBuffering(pendingSince: pendingSince, now: now, confirmWindow: confirmWindow) ? .retry : .giveUp
+    }
+
     /// Does receiving this control op release the confirm gate (RESPONDER acknowledged)?
     /// PING and READY both prove a bidirectional session exists (see the transition table in
     /// SESSION_COORDINATOR_REFACTOR_SPEC §"Confirm protocol"); RESET_INIT only cancels the
