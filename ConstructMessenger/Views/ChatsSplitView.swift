@@ -133,16 +133,21 @@ struct ChatsSplitView: View {
 
     /// iPadOS 26 pattern: primary sections as a floating vertical control, not a fused
     /// bottom bar. QR sits apart at the bottom of the rail (action vs destination).
+    ///
+    /// Streams list toggle is a **permanent rail slot** (not tab-conditional). Hiding it
+    /// only on `.chats` made the control pop in/out when switching Synaps/Settings —
+    /// bad discoverability and a flickering chrome layout.
     private var sectionRail: some View {
         VStack(spacing: CTLayout.chromeGap) {
             ForEach(SidebarTab.allCases, id: \.rawValue) { tab in
                 railDestinationButton(tab)
             }
 
-            if activeTab == .chats {
-                railListToggleButton
-                    .transition(.opacity.combined(with: .scale))
-            }
+            railChromeDivider
+
+            // Fixed slot — same position whether the list is open, collapsed, or another
+            // section is selected. Never animates its own presence.
+            railListToggleButton
 
             Spacer(minLength: CTLayout.sectionGap)
 
@@ -155,6 +160,13 @@ struct ChatsSplitView: View {
         .frame(maxHeight: .infinity)
         .modifier(RegularShellFloatingChrome(cornerRadius: CTRadius.pill))
         .accessibilityElement(children: .contain)
+    }
+
+    private var railChromeDivider: some View {
+        Rectangle()
+            .fill(Color.CT.noise.opacity(0.55))
+            .frame(width: 22, height: 1)
+            .frame(width: CTLayout.hitTarget)
     }
 
     private func railDestinationButton(_ tab: SidebarTab) -> some View {
@@ -179,20 +191,52 @@ struct ChatsSplitView: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    /// Collapse / expand the streams list. Lives in the rail (predictable slot,
-    /// never overlaps ChatView's own floating nav in the detail panel).
+    /// Collapse / expand the streams list — permanent rail chrome.
+    /// - On chats: toggles `listCollapsed`.
+    /// - On Synaps/Settings: jumps back to chats and ensures the list is visible
+    ///   (the control is not a no-op ghost on other sections).
     private var railListToggleButton: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.25)) { listCollapsed.toggle() }
+            withAnimation(.easeInOut(duration: 0.25)) {
+                if activeTab != .chats {
+                    selectTab(.chats, clearChatSelection: false)
+                    listCollapsed = false
+                } else {
+                    listCollapsed.toggle()
+                }
+            }
         } label: {
-            Image(systemName: listCollapsed ? "sidebar.leading" : "sidebar.left")
+            Image(systemName: listToggleSystemImage)
                 .font(.system(size: 17, weight: .regular))
-                .foregroundStyle(listCollapsed ? Color.CT.textDim : Color.CT.accent)
+                .foregroundStyle(listToggleForeground)
                 .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(LocalizedStringKey(listCollapsed ? "show_chat_list" : "hide_chat_list")))
+        .accessibilityLabel(Text(LocalizedStringKey(listToggleAccessibilityKey)))
+    }
+
+    /// Distinct glyphs: split columns vs single pane — `sidebar.left` / `sidebar.leading`
+    /// looked nearly identical and read as a broken control.
+    private var listToggleSystemImage: String {
+        if activeTab != .chats {
+            return "rectangle.split.1x2"
+        }
+        return listCollapsed ? "rectangle.split.1x2" : "rectangle.lefthalf.inset.filled"
+    }
+
+    private var listToggleForeground: Color {
+        if activeTab != .chats {
+            return Color.CT.textDim
+        }
+        return listCollapsed ? Color.CT.textDim : Color.CT.accent
+    }
+
+    private var listToggleAccessibilityKey: String {
+        if activeTab != .chats {
+            return "show_chat_list"
+        }
+        return listCollapsed ? "show_chat_list" : "hide_chat_list"
     }
 
     private var railQRButton: some View {
@@ -259,8 +303,20 @@ struct ChatsSplitView: View {
 
     private var streamsListPanel: some View {
         VStack(spacing: 0) {
+            // Secondary hide affordance co-located with the list surface (Mail/Notes).
+            // Expand always lives on the permanent rail slot — list chrome can't own that.
             panelHeader(titleKey: "chats") {
-                EmptyView()
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) { listCollapsed = true }
+                } label: {
+                    Image(systemName: "rectangle.lefthalf.inset.filled")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(Color.CT.textDim)
+                        .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(LocalizedStringKey("hide_chat_list")))
             }
 
             List(selection: $selectedChatId) {
