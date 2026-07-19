@@ -52,10 +52,13 @@ final class SessionConfirmationTracker {
     /// messages as `.queued`; MessageRouter uses it to drop the peer's stale msgNum=0. Once the
     /// window passes without confirmation the entry self-expires so neither guard can deadlock.
     func isPending(_ userId: String) -> Bool {
-        guard let since = pendingSince[userId] else { return false }
-        guard Date().timeIntervalSince(since) < confirmWindow else {
-            pendingSince.removeValue(forKey: userId)
-            Log.info("SESSION_CONFIRM[window_expired]: \(userId.prefix(8))… — no session_ready in \(Int(confirmWindow))s, releasing gate (peer re-init will now converge; buffered sends drain via retry)", category: "SessionConfirm")
+        let since = pendingSince[userId]
+        // Single tested authority for the TTL decision (harness-covered).
+        guard SessionReducer.isConfirmBuffering(pendingSince: since, now: Date(), confirmWindow: confirmWindow) else {
+            if since != nil {
+                pendingSince.removeValue(forKey: userId)
+                Log.info("SESSION_CONFIRM[window_expired]: \(userId.prefix(8))… — no session_ready in \(Int(confirmWindow))s, releasing gate (peer re-init will now converge; buffered sends drain via retry)", category: "SessionConfirm")
+            }
             return false
         }
         return true

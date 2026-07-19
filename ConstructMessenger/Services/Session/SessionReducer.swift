@@ -159,6 +159,39 @@ enum SessionReducer {
         return now.timeIntervalSince(lastHandledAt) >= cooldown
     }
 
+    // MARK: - Confirmation gate (INITIATOR awaiting RESPONDER session_ready)
+
+    /// A handshake control op, modelled dependency-free (the proto `SessionControlOp` maps 1:1).
+    /// Kept local so the reducer stays pure — no proto/gRPC imports.
+    enum ControlOp: Equatable {
+        case resetInit  // ct24 — X3DH carrier for a session reset
+        case ping       // ct25 — "I am now a RESPONDER for you"
+        case ready      // ct26 — "my RESPONDER session is confirmed"
+        case endSession // teardown
+        case other
+    }
+
+    /// The INITIATOR (tie-break winner) buffers outgoing and drops the peer's stale msgNum=0 while
+    /// awaiting the RESPONDER's `session_ready`. This gate is a **hint, never a permanent lock**:
+    /// it self-releases after `confirmWindow` so a lost SESSION_RESET_INIT / lost ping / lost
+    /// session_ready can't deadlock (the class fixed piecemeal in `3f166e61` + `04f16211`, now a
+    /// single tested decision `SessionConfirmationTracker` delegates to).
+    ///
+    /// - Returns: true iff a pending mark exists AND the confirm window has not elapsed — i.e.
+    ///   outgoing should still buffer and the peer's msgNum=0 should still be `stale_init_drop`'d.
+    static func isConfirmBuffering(pendingSince: Date?, now: Date, confirmWindow: TimeInterval) -> Bool {
+        guard let pendingSince else { return false }
+        return now.timeIntervalSince(pendingSince) < confirmWindow
+    }
+
+    /// Does receiving this control op release the confirm gate (RESPONDER acknowledged)?
+    /// PING and READY both prove a bidirectional session exists (see the transition table in
+    /// SESSION_COORDINATOR_REFACTOR_SPEC §"Confirm protocol"); RESET_INIT only cancels the
+    /// watchdog, it is not itself an acknowledgement.
+    static func confirmReleases(on op: ControlOp) -> Bool {
+        op == .ping || op == .ready
+    }
+
     /// Whether a received END_SESSION pre-dates our established session and should be discarded.
     ///
     /// `establishedAt` is now persisted per-peer in the Keychain (see
