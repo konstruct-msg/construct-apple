@@ -45,7 +45,8 @@ struct MediaMessageView: View {
     let mediaContent: MediaMessageContent
     let message: Message
     let isSelected: Bool
-    let onTapFullScreen: (() -> Void)?
+    /// Album item index the user tapped (0 for a single-photo message).
+    let onTapFullScreen: ((Int) -> Void)?
 
     /// True when this message is a local upload placeholder (not yet sent to server).
     private var isPlaceholder: Bool {
@@ -63,7 +64,7 @@ struct MediaMessageView: View {
                     itemIndex: 0,
                     isPlaceholder: isPlaceholder,
                     isSelected: isSelected,
-                    onTap: { if !isPlaceholder { onTapFullScreen?() } }
+                    onTap: { if !isPlaceholder { onTapFullScreen?(0) } }
                 )
             } else {
                 MediaGridView(
@@ -71,7 +72,7 @@ struct MediaMessageView: View {
                     message: message,
                     isPlaceholder: isPlaceholder,
                     isSelected: isSelected,
-                    onTapItem: { _ in if !isPlaceholder { onTapFullScreen?() } }
+                    onTapItem: { index in if !isPlaceholder { onTapFullScreen?(index) } }
                 )
             }
 

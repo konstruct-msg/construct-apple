@@ -153,8 +153,8 @@ struct ChatView: View {
                                         }
                                         selectedMessages.insert(msg.id)
                                     },
-                                    onTapMedia: { msg in
-                                        galleryStartItem = GalleryStartItem(id: msg.id)
+                                    onTapMedia: { msg, itemIndex in
+                                        galleryStartItem = GalleryStartItem(id: msg.id, itemIndex: itemIndex)
                                     },
                                     onEdit: { msg in
                                         viewModel.editingMessage = msg
@@ -455,7 +455,8 @@ struct ChatView: View {
         .fullScreenCover(item: $galleryStartItem) { item in
                 MediaGalleryViewer(
                     messages: mediaMessages(in: renderedMessages),
-                    initialMessageId: item.id,
+                    initialMessageId: item.messageId,
+                    initialItemIndex: item.itemIndex,
                     isPresented: Binding(
                     get: { galleryStartItem != nil },
                     set: { if !$0 { galleryStartItem = nil } }

@@ -27,7 +27,8 @@ struct MessageBubbleRegularView: View {
     let onDelete: ((Message) -> Void)?
     let onSelect: ((Message) -> Void)?
     let onEnterSelectMode: ((Message) -> Void)?
-    let onTapMedia: ((Message) -> Void)?
+    /// Media open — second argument is the album tile index (0 for single-item).
+    let onTapMedia: ((Message, Int) -> Void)?
     let onEdit: ((Message) -> Void)?
     let onReplyWithQuote: ((Message, String) -> Void)?
 
@@ -82,7 +83,7 @@ struct MessageBubbleRegularView: View {
                             mediaContent: mediaContent,
                             message: message,
                             isSelected: isSelected,
-                            onTapFullScreen: { onTapMedia?(message) }
+                            onTapFullScreen: { itemIndex in onTapMedia?(message, itemIndex) }
                         )
                     }
                 } else if let fileContent {

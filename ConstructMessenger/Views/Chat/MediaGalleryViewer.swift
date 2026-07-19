@@ -60,9 +60,20 @@ final class MediaVideoCache {
 
 // MARK: - Gallery Presenter Token
 
-/// Drives `fullScreenCover(item:)` from ChatView.
+/// Drives `fullScreenCover(item:)` / sheet from ChatView / DesktopChatView.
+/// `itemIndex` is the album tile the user tapped (0 for single-image messages).
 struct GalleryStartItem: Identifiable {
-    let id: String  // message.id
+    /// Core Data message id of the album/bubble.
+    let messageId: String
+    /// Index into that message's `mediaItems` (grid tile the user tapped).
+    let itemIndex: Int
+    /// Unique per (message, tile) so reopening another tile of the same album re-presents.
+    var id: String { "\(messageId)_\(itemIndex)" }
+
+    init(id messageId: String, itemIndex: Int = 0) {
+        self.messageId = messageId
+        self.itemIndex = max(0, itemIndex)
+    }
 }
 
 // MARK: - Flat gallery entry (message + item index)
@@ -79,6 +90,7 @@ private struct GalleryEntry: Identifiable {
 struct MediaGalleryViewer: View {
     let messages: [Message]
     let initialMessageId: String
+    let initialItemIndex: Int
     @Binding var isPresented: Bool
 
     @State private var currentEntryId: String
@@ -107,11 +119,46 @@ struct MediaGalleryViewer: View {
         (entry.mediaItem["mediaType"] as? String)?.hasPrefix("video/") == true
     }
 
-    init(messages: [Message], initialMessageId: String, isPresented: Binding<Bool>) {
+    /// Prefer the tapped album tile; fall back to first page of that message if the index is gone.
+    private static func initialEntryId(
+        messageId: String,
+        itemIndex: Int,
+        messages: [Message]
+    ) -> String {
+        let preferred = "\(messageId)_\(itemIndex)"
+        // Build the same id set as `entries` without storing `self` in init.
+        let validIds: Set<String> = Set(messages.flatMap { msg -> [String] in
+            guard let mc = parseMediaContent(from: msg.displayText), !mc.mediaItems.isEmpty else {
+                return ["\(msg.id)_0"]
+            }
+            return mc.mediaItems.enumerated().compactMap { idx, item in
+                if let mimeType = item["mediaType"] as? String,
+                   !mimeType.hasPrefix("image/"), !mimeType.hasPrefix("video/") { return nil }
+                return "\(msg.id)_\(idx)"
+            }
+        })
+        if validIds.contains(preferred) { return preferred }
+        if validIds.contains("\(messageId)_0") { return "\(messageId)_0" }
+        return preferred
+    }
+
+    init(
+        messages: [Message],
+        initialMessageId: String,
+        initialItemIndex: Int = 0,
+        isPresented: Binding<Bool>
+    ) {
         self.messages = messages
         self.initialMessageId = initialMessageId
+        self.initialItemIndex = max(0, initialItemIndex)
         self._isPresented = isPresented
-        self._currentEntryId = State(initialValue: "\(initialMessageId)_0")
+        self._currentEntryId = State(
+            initialValue: Self.initialEntryId(
+                messageId: initialMessageId,
+                itemIndex: max(0, initialItemIndex),
+                messages: messages
+            )
+        )
     }
 
     private var currentPosition: Int {

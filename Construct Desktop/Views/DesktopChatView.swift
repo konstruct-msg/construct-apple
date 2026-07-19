@@ -106,8 +106,8 @@ struct DesktopChatView: View {
                                         }
                                         selectedMessages.insert(msg.id)
                                     },
-                                    onTapMedia: { msg in
-                                        galleryStartItem = GalleryStartItem(id: msg.id)
+                                    onTapMedia: { msg, itemIndex in
+                                        galleryStartItem = GalleryStartItem(id: msg.id, itemIndex: itemIndex)
                                     },
                                     onEdit: { msg in viewModel.editingMessage = msg },
                                     onReplyWithQuote: { msg, _ in quotingMessage = msg }
@@ -260,7 +260,8 @@ struct DesktopChatView: View {
             .sheet(item: $galleryStartItem) { item in
                 MediaGalleryViewer(
                     messages: mediaMessages,
-                    initialMessageId: item.id,
+                    initialMessageId: item.messageId,
+                    initialItemIndex: item.itemIndex,
                     isPresented: Binding(
                         get: { galleryStartItem != nil },
                         set: { if !$0 { galleryStartItem = nil } }
