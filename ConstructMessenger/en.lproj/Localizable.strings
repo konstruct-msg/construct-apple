@@ -335,12 +335,12 @@
 "orientation_page1_caption" = "A public @alias is optional. Your keys never leave this phone.";
 "orientation_page1_visual_label" = "on this device";
 "orientation_page2_title" = "People";
-"orientation_page2_body" = "There is no global directory. The usual path is invite-only: show a QR code or share a link. Search by @alias works only if that person has explicitly turned on “searchable by username” in Security — off by default.";
-"orientation_page2_caption" = "Nobody can message you without your consent. Alias search never works unless you opt in.";
+"orientation_page2_body" = "To add someone, show a QR code or share a link. Search by @alias only works if they turned it on in Security — off by default.";
+"orientation_page2_caption" = "Nobody can message you without your consent.";
 "orientation_page2_path_qr_title" = "QR / link";
 "orientation_page2_path_qr_sub" = "Show or scan. Valid for 5 minutes.";
 "orientation_page2_path_search_title" = "Search";
-"orientation_page2_path_search_sub" = "Only if they enabled search in Security.";
+"orientation_page2_path_search_sub" = "Only if they enabled it in Security.";
 "orientation_page3_title" = "Three places";
 "orientation_page3_body" = "Chats is where you talk. Synaps is your web of people and incoming requests. Settings holds your QR code, recovery and devices.";
 "orientation_page3_caption" = "Start in Synaps — show a QR or find someone.";

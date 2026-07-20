@@ -319,12 +319,12 @@
 "orientation_page1_caption" = "公開 @エイリアスは任意。鍵はこの端末から出ません。";
 "orientation_page1_visual_label" = "このデバイス上";
 "orientation_page2_title" = "つながり";
-"orientation_page2_body" = "全体の名簿はありません。基本は招待のみ：QR コードを見せるかリンクを送ります。@エイリアス検索は、相手がセキュリティ設定で「ユーザー名で検索可能」を明示的にオンにした場合だけ機能します（既定はオフ）。";
-"orientation_page2_caption" = "同意なしにメッセージは届きません。エイリアス検索も、自分で有効にしない限り使えません。";
+"orientation_page2_body" = "相手を追加するには QR を見せるかリンクを共有します。@エイリアス検索は、相手がセキュリティでオンにした場合だけ（既定はオフ）。";
+"orientation_page2_caption" = "同意なしにメッセージは届きません。";
 "orientation_page2_path_qr_title" = "QR / リンク";
 "orientation_page2_path_qr_sub" = "見せる・スキャン。有効 5 分。";
 "orientation_page2_path_search_title" = "検索";
-"orientation_page2_path_search_sub" = "相手がセキュリティで検索をオンにした場合のみ。";
+"orientation_page2_path_search_sub" = "セキュリティでオンにした相手のみ。";
 "orientation_page3_title" = "3 つの場所";
 "orientation_page3_body" = "チャットは会話の場。Synaps は人と受信リクエストのネットワーク。設定には QR・復元・端末があります。";
 "orientation_page3_caption" = "まず Synaps — QR を見せるか相手を探す。";
