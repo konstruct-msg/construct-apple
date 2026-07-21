@@ -476,6 +476,12 @@
 "traffic_protection" = "Защита трафика";
 "veil_footer_short" = "VEIL маскирует трафик под обычный HTTPS. Конфигурация предоставляется автоматически.";
 
+// Защита от блокировок (продуктовый soft-control — без VEIL / адресов релеев)
+"censorship_protection" = "Защита от блокировок";
+"censorship_protection_footer_off" = "Выкл. Подключение напрямую к Construct.";
+"censorship_protection_footer_auto" = "Включается автоматически при обнаружении блокировки. Настройка идёт в фоне.";
+"censorship_protection_footer_on" = "Всегда обходит сетевые блокировки. Настройка идёт в фоне.";
+
 // VEIL mode (tri-state)
 "veil_mode_off" = "выкл";
 "veil_mode_auto" = "авто";

@@ -169,42 +169,32 @@ struct NetworkSettingsView: View {
                 BackgroundFetchSettingsContent()
                 #endif
 
+                // MARK: - Censorship protection (all builds)
+                // Product-facing control: off / auto / on. No VEIL name, no relay coords, no
+                // path detail. Enabling auto/on silently fetches signed relay config from the
+                // server then starts if the mode requires it. Technical diagnostics stay under
+                // DEBUG || INTERNAL_TOOLS below (silent-transport-ui).
+                #if !DEBUG && !INTERNAL_TOOLS
+                censorshipProtectionSection
+                #endif
+
                 // Silent-transport (decisions/silent-transport-ui): the external build discloses
-                // NO reachability data — no relay address, path, transport, VEIL toggle, or manual
-                // import. VEIL runs invisibly in `auto`. Everything below is internal-only.
+                // NO reachability data — no relay address, path, transport badges, or manual
+                // import. Technical VEIL controls live only on internal builds.
                 #if DEBUG || INTERNAL_TOOLS
-                // MARK: - Traffic Protection (VEIL)
+                // MARK: - Traffic Protection (VEIL) — internal
                 CTSettingsSectionHeader(title: NSLocalizedString("traffic_protection", comment: "").uppercased())
                 CTSectionGroup {
-                    // Tri-state mode selector
+                    // Tri-state mode selector (same binding as production soft control)
                     HStack {
                         Text(LocalizedStringKey("veil_title"))
                             .font(CTFont.regular(13))
                             .foregroundColor(Color.CT.textDim)
                         Spacer()
                         CTModeSelector(
-                            selection: Binding(
-                                get: { veilManager.mode },
-                                set: { newMode in
-                                    let oldMode = veilManager.mode
-                                    veilManager.mode = newMode
-                                    switch newMode {
-                                    case .off:
-                                        veilManager.stop()
-                                    case .auto:
-                                        // Switching to auto: stop proxy, let DPI detection handle it.
-                                        if oldMode == .on { veilManager.stop() }
-                                    case .on:
-                                        Task { await veilManager.startIfEnabled() }
-                                    }
-                                }
-                            ),
+                            selection: veilModeBinding,
                             options: VeilMode.allCases,
-                            labels: [
-                                .off:  NSLocalizedString("veil_mode_off", comment: ""),
-                                .auto: NSLocalizedString("veil_mode_auto", comment: ""),
-                                .on:   NSLocalizedString("veil_mode_on", comment: "")
-                            ]
+                            labels: veilModeLabels
                         )
                     }
                     .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
@@ -386,6 +376,80 @@ struct NetworkSettingsView: View {
         let port = Int(customPort.trimmingCharacters(in: .whitespaces)) ?? 443
         GRPCChannelManager.shared.setCustomServer(host: host, port: port)
         showingAppliedAlert = true
+    }
+
+    // MARK: - Censorship protection (production soft control)
+
+    /// Shared mode binding for production soft UI and DEBUG technical UI.
+    /// On auto/on: silently refresh signed relay config from the server, then start if needed.
+    private var veilModeBinding: Binding<VeilMode> {
+        Binding(
+            get: { veilManager.mode },
+            set: { newMode in
+                applyVeilMode(newMode)
+            }
+        )
+    }
+
+    private var veilModeLabels: [VeilMode: String] {
+        [
+            .off:  NSLocalizedString("veil_mode_off", comment: ""),
+            .auto: NSLocalizedString("veil_mode_auto", comment: ""),
+            .on:   NSLocalizedString("veil_mode_on", comment: "")
+        ]
+    }
+
+    private func applyVeilMode(_ newMode: VeilMode) {
+        let oldMode = veilManager.mode
+        guard oldMode != newMode else { return }
+        veilManager.mode = newMode
+        switch newMode {
+        case .off:
+            // didSet already stops + notifies the transport router.
+            veilManager.stop()
+        case .auto, .on:
+            // Fetch cert/relay addresses from the server, then connect if the mode requires it.
+            // Fully automatic — no coordinates or errors surface in production UI.
+            Task { await veilManager.refreshConfigAndStartIfNeeded() }
+        }
+    }
+
+    /// Production-only: product name for VEIL, no technical disclosure.
+    @ViewBuilder
+    private var censorshipProtectionSection: some View {
+        CTSettingsSectionHeader(
+            title: NSLocalizedString("censorship_protection", comment: "").uppercased()
+        )
+        CTSectionGroup {
+            HStack {
+                Text(LocalizedStringKey("censorship_protection"))
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.textDim)
+                Spacer()
+                CTModeSelector(
+                    selection: veilModeBinding,
+                    options: VeilMode.allCases,
+                    labels: veilModeLabels
+                )
+            }
+            .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+            .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
+        }
+
+        Text(LocalizedStringKey(censorshipProtectionFooterKey))
+            .font(CTFont.regular(11))
+            .foregroundStyle(Color.CT.textDim)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+            .padding(.vertical, NetworkSettingsLayout.footerVerticalPadding)
+    }
+
+    private var censorshipProtectionFooterKey: String {
+        switch veilManager.mode {
+        case .off:  return "censorship_protection_footer_off"
+        case .auto: return "censorship_protection_footer_auto"
+        case .on:   return "censorship_protection_footer_on"
+        }
     }
 
     // MARK: - VEIL access (per-user ticket import)

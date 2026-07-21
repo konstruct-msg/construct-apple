@@ -445,6 +445,12 @@
 "traffic_protection" = "トラフィック保護";
 "veil_footer_short" = "VEILはトラフィックを標準のHTTPSとして偽装します。設定は自動的に行われます。";
 
+// 検閲対策（本番向け soft-control — VEIL / リレー住所は出さない）
+"censorship_protection" = "検閲対策";
+"censorship_protection_footer_off" = "オフ。Constructへ直接接続します。";
+"censorship_protection_footer_auto" = "遮断が検出されると自動で有効になります。設定はバックグラウンドで行われます。";
+"censorship_protection_footer_on" = "常にネットワーク遮断を回避します。設定はバックグラウンドで行われます。";
+
 // VEIL mode (tri-state)
 "veil_mode_off" = "オフ";
 "veil_mode_auto" = "自動";

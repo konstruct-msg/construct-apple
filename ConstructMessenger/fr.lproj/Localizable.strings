@@ -451,6 +451,12 @@
 "traffic_protection" = "Protection du trafic";
 "veil_footer_short" = "VEIL masque le trafic comme du HTTPS standard. La configuration est fournie automatiquement.";
 
+// Protection anti-censure (soft control production — sans VEIL / adresses de relais)
+"censorship_protection" = "Protection anti-censure";
+"censorship_protection_footer_off" = "Désactivé. Connexion directe à Construct.";
+"censorship_protection_footer_auto" = "S'active automatiquement en cas de blocage. La configuration se fait en arrière-plan.";
+"censorship_protection_footer_on" = "Contourne toujours les blocages réseau. La configuration se fait en arrière-plan.";
+
 // VEIL mode (tri-state)
 "veil_mode_off" = "désactivé";
 "veil_mode_auto" = "auto";

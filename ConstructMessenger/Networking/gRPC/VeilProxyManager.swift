@@ -223,6 +223,39 @@ final class VeilProxyManager: ObservableObject {
         }
     }
 
+    /// User-facing enable path for `.auto` / `.on`.
+    ///
+    /// Always pulls the latest signed relay config (addresses + cert material) from the
+    /// server first — silent, no UI surface for coordinates — then starts the proxy if
+    /// the current mode actually needs VEIL. Failures fall back to cache / seed relays.
+    ///
+    /// - `.on`: fetches config, then forces a VEIL probe via the transport router.
+    /// - `.auto`: fetches config so the pool is warm; only starts the proxy when the
+    ///   transport layer already prefers VEIL (direct path is blocked).
+    func refreshConfigAndStartIfNeeded() async {
+        migrateToModeIfNeeded()
+        guard mode != .off else {
+            Log.info("VEIL enable skipped — mode is off", category: "VEIL")
+            return
+        }
+        guard KeychainManager.shared.isDeviceRegistered() else {
+            Log.info("VEIL enable skipped — device not registered", category: "VEIL")
+            return
+        }
+
+        Log.info("VEIL enable — refreshing server relay config (mode=\(mode.rawValue))", category: "VEIL")
+        // Pull addresses + SPKI/SNI/cert material from the signed well-known manifest.
+        // Seeds remain the floor if the fetch fails (censored first hop, offline, etc.).
+        await fetchConfigAndEvictIfRemoved()
+
+        // In-band capability renew/bootstrap over whatever transport is up (typically
+        // direct right after the user toggles). No-ops without a prior ticket / path.
+        VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
+        VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
+
+        await startIfNeeded()
+    }
+
     /// Start or refresh VEIL when the transport layer actually needs it.
     /// In `.auto` mode this is a no-op on a healthy direct path — avoids spinning up
     /// the local proxy (and its CPU cost) on every foreground transition.
