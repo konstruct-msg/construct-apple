@@ -129,8 +129,64 @@ final class MessageStreamManager {
     /// ~30s because DPI throttles UDP. Without this, each reconnect re-tries QUIC, dies, falls to
     /// H2, and (on a clean H2 end) resets the counter → endless QUIC thrash. While set in the
     /// future, `openStream()` goes straight to H2. Reset by an explicit transport toggle.
-    var fastUdpUnhealthyUntil: Date?
+    ///
+    /// **Persisted across cold starts** (write-through, keyed by the network fingerprint): on a
+    /// censored network the old in-memory-only suppression meant every launch re-probed QUIC and
+    /// paid the "open → die at idle → fall to H2" tax before going sticky-H2. Persisting the window
+    /// (scoped to the same network) skips that on relaunch. A genuine network change clears it
+    /// (`resetDegradedModeOnNetworkChange` sets nil → write-through removes it; restore also requires
+    /// a fingerprint match).
+    private var _fastUdpUnhealthyUntil: Date?
+    var fastUdpUnhealthyUntil: Date? {
+        get { _fastUdpUnhealthyUntil }
+        set {
+            _fastUdpUnhealthyUntil = newValue
+            Self.persistQuicSuppression(until: newValue)
+        }
+    }
     static let fastUdpCooldown: TimeInterval = 300
+
+    private static let quicSuppressedUntilKey = "quic_suppressed_until_v1"
+    private static let quicSuppressedNetworkKey = "quic_suppressed_network_v1"
+    /// One-shot guard so the persisted suppression is restored at most once per launch (at the first
+    /// connect, by when the network monitor has reported a fingerprint).
+    private var didRestoreQuicSuppression = false
+
+    /// Write-through the suppression window to `UserDefaults`, tagged with the current network
+    /// fingerprint. A nil / past value clears it.
+    private static func persistQuicSuppression(until: Date?) {
+        let d = UserDefaults.standard
+        if let until, until > Date() {
+            d.set(until, forKey: quicSuppressedUntilKey)
+            d.set(NetworkReachabilityManager.shared.currentPathFingerprint, forKey: quicSuppressedNetworkKey)
+        } else {
+            d.removeObject(forKey: quicSuppressedUntilKey)
+            d.removeObject(forKey: quicSuppressedNetworkKey)
+        }
+    }
+
+    /// Restore a persisted QUIC suppression once per launch — but ONLY if it is still in the future
+    /// AND on the same network fingerprint. A different (or unknown) network must re-probe QUIC, so
+    /// a stale suppression from another network never wrongly forces H2.
+    private func restoreQuicSuppressionOnceIfNeeded() {
+        guard !didRestoreQuicSuppression else { return }
+        didRestoreQuicSuppression = true
+
+        let d = UserDefaults.standard
+        guard let until = d.object(forKey: Self.quicSuppressedUntilKey) as? Date, until > Date() else {
+            Self.persistQuicSuppression(until: nil)
+            return
+        }
+        let persistedNet = d.string(forKey: Self.quicSuppressedNetworkKey) ?? ""
+        let currentNet = NetworkReachabilityManager.shared.currentPathFingerprint
+        if !persistedNet.isEmpty, persistedNet == currentNet {
+            _fastUdpUnhealthyUntil = until   // set backing directly — already persisted, same value
+            Log.info("QUIC suppression restored from prior session (same network, \(Int(until.timeIntervalSinceNow))s left) — starting on H2", category: "MessageStream")
+        } else {
+            // Different / unknown network → drop the stale suppression and re-probe QUIC.
+            Self.persistQuicSuppression(until: nil)
+        }
+    }
     /// Debounce for `reconnectForTransportChange`. A transport toggle does a full teardown +
     /// reconnect; toggling rapidly (or SwiftUI firing `.onChange` twice) stacks teardowns and
     /// creates connect→immediate-invalidate races. We coalesce bursts into a single reconnect to
@@ -272,6 +328,11 @@ final class MessageStreamManager {
 
     func connect(contactUserIds: [String] = [], trigger: String = "?", onMessageReceived: @escaping (ChatMessage) -> Void) {
         self.onMessageReceived = onMessageReceived
+
+        // Restore a prior-session QUIC suppression (same network only) before the first transport
+        // decision, so a cold start on a still-blocked network goes straight to H2 instead of
+        // re-paying the QUIC open-then-die tax.
+        restoreQuicSuppressionOnceIfNeeded()
 
         // Use Set comparison: currentConversationIds() builds from Array(Set) whose order is
         // non-deterministic across calls, so the same 3 IDs may arrive in a different order on

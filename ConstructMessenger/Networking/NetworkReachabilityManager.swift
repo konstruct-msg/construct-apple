@@ -47,7 +47,13 @@ class NetworkReachabilityManager {
     /// Detects VPN on/off, interface additions/removals that don't change the high-level
     /// ConnectionType but still invalidate existing TCP connections.
     private var prevPathFingerprint: String = ""
-    
+
+    /// Current NWPath interface fingerprint (sorted interface names, e.g. "en0,utun3"). A stable
+    /// "same network" identifier — used to scope persisted transport state (the QUIC-unhealthy
+    /// suppression) so it only re-applies after a cold start on the SAME network, never on a
+    /// different one. Empty until the monitor's first path callback.
+    var currentPathFingerprint: String { prevPathFingerprint }
+
     private init() {
         // Always set default values first
         isReachable = true
