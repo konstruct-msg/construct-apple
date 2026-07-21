@@ -25,6 +25,36 @@
 import XCTest
 @testable import Construct_Messenger
 
+// MARK: - Seeded RNG (reproducible property-fuzz)
+
+/// Deterministic, seedable RNG (SplitMix64) so a fuzz failure is reproducible from its printed seed
+/// alone — `SystemRandomNumberGenerator` is unseedable and would make a red run un-rerunnable.
+private struct SeededRNG: RandomNumberGenerator {
+    private var state: UInt64
+    init(seed: UInt64) { state = seed }
+    mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
+    }
+}
+
+/// Reference box so a single seed stream drives *all* fuzz decisions (shuffle order, drop, dup, burst
+/// sizes) in deterministic call order — one seed fully determines a scenario.
+private final class RNGBox {
+    var rng: SeededRNG
+    init(seed: UInt64) { rng = SeededRNG(seed: seed) }
+    /// Bernoulli trial with probability `p` (53-bit uniform).
+    func chance(_ p: Double) -> Bool {
+        Double(rng.next() >> 11) * (1.0 / 9_007_199_254_740_992.0) < p
+    }
+    func shuffled<T>(_ a: [T]) -> [T] { var c = a; c.shuffle(using: &rng); return c }
+    /// Uniform in `0..<n`.
+    func int(_ n: Int) -> Int { Int(rng.next() % UInt64(n)) }
+}
+
 // MARK: - Wire model
 
 /// A frame on the virtual wire between the two peers.
@@ -66,18 +96,25 @@ private final class Network {
     /// Deliver each pump's batch back-to-front — deterministic adversarial reordering (control
     /// frames vs DATA, and DATA within a burst, arrive permuted).
     var reorder = false
+    /// Per-envelope duplication predicate (seeded fuzz). When nil, falls back to the `duplicate` bool.
+    var dupPolicy: ((Envelope) -> Bool)?
+    /// Seeded batch reordering for the property-fuzz. Applied in `drain()` only when `reorder` is off,
+    /// so the deterministic reverse-reorder tests are untouched.
+    var shuffleHook: (([Envelope]) -> [Envelope])?
 
     func send(_ env: Envelope) {
         if dropPolicy(env) { return }
         inFlight.append(env)
-        if duplicate { inFlight.append(env) }
+        if dupPolicy?(env) ?? duplicate { inFlight.append(env) }
     }
 
-    /// Pop everything currently in flight for delivery this pump (FIFO, or reversed if `reorder`).
+    /// Pop everything currently in flight for delivery this pump (FIFO, reversed if `reorder`, or
+    /// seed-shuffled if `shuffleHook` is set).
     func drain() -> [Envelope] {
         var batch = inFlight
         inFlight.removeAll()
         if reorder { batch.reverse() }
+        else if let hook = shuffleHook { batch = hook(batch) }
         return batch
     }
 
@@ -158,6 +195,32 @@ private final class Peer {
         awaitingInitiator = false
         if phase == nil { phase = SessionReducer.reduce(phase, on: .initStarted).0 }
         send(.initMsg, to: peerId)
+    }
+
+    /// Model the production liveness timers (POINT-1) firing once: the re-armed tie-break watchdog,
+    /// the RESPONDER ack retransmit, the responder-fallback, and abandonment of a stale half-open
+    /// init. Every branch is a production `SessionReducer` decision — this models the *timers* that
+    /// re-drive a handshake whose only ack was lost to the wire, not any new policy. The seeded
+    /// drop-fuzz calls this during the post-heal window to prove the handshake still converges.
+    func livenessTick(to peerId: String, now: Date) {
+        // INITIATOR: re-announce the SRI while still within the confirm window; release once it lapses.
+        switch SessionReducer.tieBreakWatchdogTick(pendingSince: confirmPendingSince, now: now, confirmWindow: confirmWindow) {
+        case .retry:  send(.resetInit, to: peerId)
+        case .giveUp: if confirmPendingSince != nil { confirmPendingSince = nil }
+        }
+        // Established RESPONDER re-sends its ack in case session_ready was dropped (idempotent — a dup
+        // ready on an already-active INITIATOR is ignored).
+        if isActive, !isInitiator(over: peerId) {
+            send(.ready, to: peerId)
+        }
+        // Both-sides-waiting deadlock (natural RESPONDER, silent INITIATOR) — the responder-fallback.
+        if SessionReducer.shouldResponderOverride(hasSession: isActive, isInitializing: isInitializing), !outbox.isEmpty {
+            fireResponderFallback(to: peerId, now: now)
+        }
+        // Abandon a stale half-open init (init sent, no ack, gate lapsed) so the next flush re-inits.
+        if phase == .initializing, !isActive, confirmPendingSince == nil {
+            phase = nil
+        }
     }
 
     /// Re-evaluate the outbox against the production confirm-gate + phase. Called on every pump so
@@ -292,6 +355,16 @@ private final class Harness {
     }
 
     func advance(_ seconds: TimeInterval) { now = now.addingTimeInterval(seconds) }
+
+    /// One production-liveness round: advance the clock, let each peer's timers fire (watchdog
+    /// re-emit / responder-fallback / stale-init abandonment), then deliver. Used by the seeded
+    /// drop-fuzz to re-drive a handshake once the network heals.
+    func recoveryTick(_ seconds: TimeInterval) {
+        advance(seconds)
+        a.livenessTick(to: b.id, now: now)
+        b.livenessTick(to: a.id, now: now)
+        pump()
+    }
 }
 
 // MARK: - Tests
@@ -552,6 +625,82 @@ final class SessionConvergenceHarnessTests: XCTestCase {
         XCTAssertTrue(h.a.delivered.isSuperset(of: ["b1", "b2"]), "all of B's DATA delivered despite reorder")
         XCTAssertTrue(h.a.outbox.isEmpty && h.b.outbox.isEmpty, "no message left buffered after reorder settle")
         XCTAssertNil(h.a.confirmPendingSince, "confirm gate released even with ready reordered")
+    }
+
+    // MARK: - Seeded property-fuzz (generalizes the hand-written reorder/dup/drop cases)
+
+    // Property-fuzz over the LOSSLESS permutation space: every frame arrives (seed-shuffled batch
+    // order + random per-frame duplication), nothing is dropped. Across many seeds the reducer must
+    // ALWAYS converge and deliver every DATA exactly once — generalizing testReorderedFrames +
+    // testDuplicatedFrames to the full random space, not two fixed permutations. A failure prints its
+    // seed, which reproduces the exact scenario deterministically.
+    @MainActor
+    func testFuzz_ReorderAndDuplicate_NoLoss_AlwaysConverges() {
+        for seed in UInt64(0)..<300 {
+            let box = RNGBox(seed: seed)
+            let h = Harness()
+            h.net.shuffleHook = { box.shuffled($0) }
+            h.net.dupPolicy = { _ in box.chance(0.35) }   // at-least-once wire, random per frame
+
+            // Random burst of DATA each way (1…4), enqueued up front (buffered behind the handshake).
+            let (na, nb) = (1 + box.int(4), 1 + box.int(4))
+            var aIds: [String] = [], bIds: [String] = []
+            for i in 0..<na { let id = "a\(seed)-\(i)"; aIds.append(id); h.a.enqueueSend(id, to: h.b.id, now: h.now) }
+            for i in 0..<nb { let id = "b\(seed)-\(i)"; bIds.append(id); h.b.enqueueSend(id, to: h.a.id, now: h.now) }
+
+            h.settle(maxSteps: 200)
+
+            XCTAssertTrue(h.a.isActive && h.b.isActive, "seed \(seed): must converge under reorder+dup")
+            XCTAssertTrue(h.b.delivered.isSuperset(of: aIds), "seed \(seed): all A→B DATA delivered")
+            XCTAssertTrue(h.a.delivered.isSuperset(of: bIds), "seed \(seed): all B→A DATA delivered")
+            XCTAssertTrue(h.a.outbox.isEmpty && h.b.outbox.isEmpty, "seed \(seed): nothing left buffered")
+            XCTAssertNil(h.a.confirmPendingSince, "seed \(seed): a dup/reordered frame must not leave the gate armed")
+            XCTAssertNil(h.b.confirmPendingSince, "seed \(seed): confirm gate must release")
+        }
+    }
+
+    // Property-fuzz over the LOSSY space: during a turbulent window, control frames (init / SRI /
+    // ready / ping) are dropped, duplicated and seed-shuffled adversarially (DATA is never dropped —
+    // this in-memory wire has no retransmit, so DATA loss would be a model artefact, not a reducer
+    // bug). Then the network heals and the production liveness timers (re-armed watchdog / responder-
+    // fallback / stale-init abandonment) must re-drive EVERY seed to convergence with all DATA
+    // delivered — the property that POINT-1's four liveness mechanisms exist to guarantee, now proven
+    // over the random permutation space instead of the three hand-written loss scenarios.
+    @MainActor
+    func testFuzz_DropReorderDuplicate_HealsAndConverges() {
+        for seed in UInt64(1000)..<1250 {
+            let box = RNGBox(seed: seed)
+            let h = Harness()
+            var turbulent = true
+            h.net.shuffleHook = { turbulent ? box.shuffled($0) : $0 }
+            h.net.dupPolicy = { _ in turbulent && box.chance(0.3) }
+            h.net.dropPolicy = { env in
+                guard turbulent else { return false }
+                if case .data = env.frame { return false }   // never lose DATA (no retransmit in-model)
+                return box.chance(0.4)                        // drop control frames adversarially
+            }
+
+            let (na, nb) = (1 + box.int(3), 1 + box.int(3))
+            var aIds: [String] = [], bIds: [String] = []
+            for i in 0..<na { let id = "a\(seed)-\(i)"; aIds.append(id); h.a.enqueueSend(id, to: h.b.id, now: h.now) }
+            for i in 0..<nb { let id = "b\(seed)-\(i)"; bIds.append(id); h.b.enqueueSend(id, to: h.a.id, now: h.now) }
+
+            // Turbulent window: pump with loss/reorder/dup, nudging the virtual clock.
+            for _ in 0..<12 {
+                h.pump()
+                if box.chance(0.3) { h.advance(5) }
+            }
+
+            // Heal, then let the liveness timers re-drive the handshake, then drain.
+            turbulent = false
+            for _ in 0..<12 { h.recoveryTick(10) }
+            h.settle(maxSteps: 200)
+
+            XCTAssertTrue(h.a.isActive && h.b.isActive, "seed \(seed): must converge after the network heals")
+            XCTAssertTrue(h.b.delivered.isSuperset(of: aIds), "seed \(seed): all A→B DATA eventually delivered")
+            XCTAssertTrue(h.a.delivered.isSuperset(of: bIds), "seed \(seed): all B→A DATA eventually delivered")
+            XCTAssertTrue(h.a.outbox.isEmpty && h.b.outbox.isEmpty, "seed \(seed): no message orphaned after heal")
+        }
     }
 }
 
