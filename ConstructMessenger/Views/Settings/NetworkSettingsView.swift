@@ -163,6 +163,12 @@ struct NetworkSettingsView: View {
                     #endif
                 }
 
+                // Background refresh lives under Network (single production entry). iOS-only —
+                // BGAppRefresh / Low Power Mode do not apply on Desktop.
+                #if os(iOS)
+                BackgroundFetchSettingsContent()
+                #endif
+
                 // Silent-transport (decisions/silent-transport-ui): the external build discloses
                 // NO reachability data — no relay address, path, transport, VEIL toggle, or manual
                 // import. VEIL runs invisibly in `auto`. Everything below is internal-only.

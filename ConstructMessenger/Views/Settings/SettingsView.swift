@@ -276,16 +276,8 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             CTSep(style: .thin)
-            NavigationLink(destination: BackgroundFetchSettingsView()) {
-                CTSettingsRow(
-                    label: NSLocalizedString("background_fetch", comment: "").uppercased(),
-                    status: BackgroundFetchConfig.shouldBeEnabled ? .on : .off,
-                    icon: "arrow.clockwise.circle",
-                    disclosure: true
-                )
-            }
-            .buttonStyle(.plain)
-            CTSep(style: .thin)
+            // Network + Background Refresh merged (silent-transport-ui left Network nearly empty
+            // on production — one Connectivity-style entry with live status + BG controls).
             NavigationLink(destination: NetworkSettingsView()) {
                 CTSettingsRow(
                     label: NSLocalizedString("network", comment: "").uppercased(),
