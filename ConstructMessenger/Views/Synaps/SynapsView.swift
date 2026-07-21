@@ -879,7 +879,7 @@ private struct ContactCircle: View {
     }
 
     private var accessibilityLabel: String {
-        let name = user.displayName ?? user.username ?? ""
+        let name = user.displayName
         if metrics.unreadCount > 0 {
             return "\(name), \(metrics.unreadCount)"
         }

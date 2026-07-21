@@ -187,8 +187,8 @@ struct QRScannerView: View {
         case .authorized: "✅ Authorized"
         case .notDetermined: "⏳ Not Determined"
         case .denied: "❌ Denied"
-        case .restricted: "⚠️ Restricted"
-        @unknown default: "❓ Unknown"
+        case .restricted: "Restricted"
+        @unknown default: "Unknown"
         }
     }
 
