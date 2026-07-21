@@ -65,6 +65,12 @@ enum HybridIdentityService {
     /// bail to next-launch immediately. On final failure nothing is recorded, so the next
     /// launch still retries.
     static func publishIfNeeded(deviceId: String) async {
+        // One-time heal for the pre-2026-07-21 bug where the first-ever publish omitted the SPK
+        // hybrid signature (flag-gated), recorded a fingerprint anyway, and then skipped forever —
+        // stranding the bundle in "SPK hybrid signature missing" (peers degrade to classic X3DH).
+        // Clear that stale fingerprint ONCE so the (now-fixed) publish below re-attaches the signature.
+        healMissingSpkSignatureOnce()
+
         let published = UserDefaults.standard.bool(forKey: hybridIdentityPublishedFlagKey)
         let current = try? currentSpkFingerprint()
         let recorded = UserDefaults.standard.string(forKey: hybridIdentitySpkFingerprintKey)
@@ -139,8 +145,13 @@ enum HybridIdentityService {
         let bindMessage = cm.buildHybridIdentityBindMessage(hybridPublic: hybridPub)
         let crossSignature = try cm.signBundleData(bindMessage) // 64 B Ed25519 (uses main device signing key)
 
-        // 3+4. Hybrid signatures over current prekeys. Use the lifted helper that prefers core.
-        let (spkHybridSig, kyberHybridSig) = cm.currentHybridPrekeySignatures()
+        // 3+4. Hybrid signatures over the current prekeys. Sign UNCONDITIONALLY (do NOT use the
+        // flag-gated currentHybridPrekeySignatures()): this upload carries the hybrid identity key in
+        // the SAME request, and key-service store_hybrid_identity verifies the SPK signature against
+        // that same-request key (skipping best-effort on a momentary SPK desync). Gating on the
+        // published flag omitted the signature on the first-ever publish — the "SPK hybrid signature
+        // missing" bundle root cause.
+        let (spkHybridSig, kyberHybridSig) = cm.hybridPrekeySignaturesForPublish()
 
         // 5. Upload the self-contained bundle (no rotation triggered).
         _ = try await KeyServiceClient.shared.uploadPreKeys(
@@ -150,9 +161,13 @@ enum HybridIdentityService {
             kyberSignedPreKeyHybridSignature: kyberHybridSig
         )
 
-        // 6. Record success...
+        // 6. Record success. The hybrid identity KEY is now published (cross-signature verified above).
+        // Record the SPK fingerprint as up-to-date ONLY when the SPK hybrid signature was actually
+        // attached — otherwise leave it stale so publishIfNeeded retries next launch, rather than
+        // marking the bundle "done" while the signature is still missing (a transient signing failure
+        // must not permanently strand the bundle in the missing-signature state).
         UserDefaults.standard.set(true, forKey: hybridIdentityPublishedFlagKey)
-        if let spkPublicForFp = try? cm.localBundlePublicKeys().signedPrekeyPublic {
+        if spkHybridSig != nil, let spkPublicForFp = try? cm.localBundlePublicKeys().signedPrekeyPublic {
             UserDefaults.standard.set(Self.fingerprint(spkPublicForFp), forKey: hybridIdentitySpkFingerprintKey)
         }
         Log.info("Hybrid PQ identity published (key=\(hybridPub.count)B, spkSig=\(spkHybridSig?.count ?? 0)B, kyberSig=\(kyberHybridSig?.count ?? 0)B)", category: "HybridPQ")
@@ -182,6 +197,23 @@ enum HybridIdentityService {
     static func recordHybridPublished(spkPublic: Data) {
         UserDefaults.standard.set(true, forKey: hybridIdentityPublishedFlagKey)
         UserDefaults.standard.set(fingerprint(spkPublic), forKey: hybridIdentitySpkFingerprintKey)
+    }
+
+    /// One-time migration (fixed 2026-07-21): devices that published a hybrid identity bundle before
+    /// the SPK-signature fix recorded a fingerprint for a bundle whose SPK hybrid signature is missing
+    /// server-side, so `publishIfNeeded` skips re-publishing and the bundle stays unverifiable. Clear
+    /// the recorded fingerprint exactly once (keeping `published=true`) so the next `publishIfNeeded`
+    /// re-publishes via the fixed `publish()` and re-attaches the signature. Idempotent thereafter.
+    private static let hybridSpkSigHealVersionKey = "hybrid_spk_sig_heal_v1"
+    private static func healMissingSpkSignatureOnce() {
+        guard !UserDefaults.standard.bool(forKey: hybridSpkSigHealVersionKey) else { return }
+        UserDefaults.standard.set(true, forKey: hybridSpkSigHealVersionKey)
+        // Only forces a re-publish for already-published devices; a never-published device publishes
+        // normally regardless.
+        if UserDefaults.standard.bool(forKey: hybridIdentityPublishedFlagKey) {
+            UserDefaults.standard.removeObject(forKey: hybridIdentitySpkFingerprintKey)
+            Log.info("Hybrid PQ: one-time heal — cleared stale SPK fingerprint to re-attach the SPK hybrid signature", category: "HybridPQ")
+        }
     }
 
     /// Clear the "hybrid identity published" flags. MUST be called when the device switches to a
