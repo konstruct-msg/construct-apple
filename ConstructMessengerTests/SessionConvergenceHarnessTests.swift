@@ -63,6 +63,9 @@ private final class Network {
     private(set) var inFlight: [Envelope] = []
     var dropPolicy: (Envelope) -> Bool = { _ in false }
     var duplicate = false
+    /// Deliver each pump's batch back-to-front — deterministic adversarial reordering (control
+    /// frames vs DATA, and DATA within a burst, arrive permuted).
+    var reorder = false
 
     func send(_ env: Envelope) {
         if dropPolicy(env) { return }
@@ -70,10 +73,11 @@ private final class Network {
         if duplicate { inFlight.append(env) }
     }
 
-    /// Pop everything currently in flight (FIFO) for delivery this pump.
+    /// Pop everything currently in flight for delivery this pump (FIFO, or reversed if `reorder`).
     func drain() -> [Envelope] {
-        let batch = inFlight
+        var batch = inFlight
         inFlight.removeAll()
+        if reorder { batch.reverse() }
         return batch
     }
 
@@ -189,18 +193,26 @@ private final class Peer {
         case .initMsg:
             if isInitiator(over: peerId) {
                 // We WIN the tie-break: keep/establish our INITIATOR session, announce via SRI,
-                // and open the confirm gate (buffer outgoing until RESPONDER acks).
+                // and open the confirm gate (buffer outgoing until RESPONDER acks). A dup/reordered
+                // init that lands on an ALREADY-live session must NOT re-arm the confirm gate — that
+                // would re-buffer a healthy session for a whole TTL (a stale-frame desync class). A
+                // genuine peer re-init arrives only after an END_SESSION reset our phase to nil, so
+                // an init-on-active is by construction a duplicate/stale frame — ignore it.
+                if isActive { break }
                 if phase == nil { phase = SessionReducer.reduce(phase, on: .initStarted).0 }
                 confirmPendingSince = now
                 for op in SessionReducer.controlsToEmit(on: .tieBreakWin) { emit(op, to: peerId) }
             } else {
-                // We LOSE: become RESPONDER immediately and acknowledge (ready + ping).
+                // We LOSE: become RESPONDER and acknowledge. An active RESPONDER still honours a
+                // fresh init (the peer may have torn down and re-inited — cf. post-storm re-init).
                 becomeResponder(to: peerId, now: now)
             }
 
         case .resetInit:
-            // INITIATOR announced. As RESPONDER, establish and acknowledge.
-            if !isInitiator(over: peerId) {
+            // INITIATOR announced. As RESPONDER, establish and acknowledge. A resetInit for a
+            // session we've already established is a dup/stale announcement — ignore it (don't
+            // re-emit a fresh ready every time); only a not-yet-active RESPONDER acts on it.
+            if !isInitiator(over: peerId), !isActive {
                 becomeResponder(to: peerId, now: now)
             }
 
@@ -498,6 +510,48 @@ final class SessionConvergenceHarnessTests: XCTestCase {
         h.settle()
         XCTAssertTrue(h.a.isActive && h.b.isActive, "clean re-init after the storm")
         XCTAssertTrue(h.b.delivered.contains("a2"), "post-storm message delivered")
+    }
+
+    // Idempotency under duplication: every frame is delivered twice (retransmit / at-least-once
+    // wire). Convergence must be unaffected — a duplicated init must not re-gate a live session, a
+    // duplicated ready/resetInit must not storm, and a duplicated DATA must land exactly once (ids
+    // dedup, as real messages do). This exercises the `Network.duplicate` path the header names but
+    // no test drove, and pins the "stale/dup frame can't re-buffer a healthy session" guard.
+    @MainActor
+    func testDuplicatedFrames_Idempotent_Converges() {
+        let h = Harness()
+        h.net.duplicate = true                    // at-least-once: every frame delivered twice
+        h.a.enqueueSend("a1", to: h.b.id, now: h.now)
+        h.b.enqueueSend("b1", to: h.a.id, now: h.now)
+        h.settle()
+
+        XCTAssertTrue(h.a.isActive && h.b.isActive, "duplication must not prevent convergence")
+        XCTAssertTrue(h.b.delivered.contains("a1"))
+        XCTAssertTrue(h.a.delivered.contains("b1"))
+        XCTAssertTrue(h.a.outbox.isEmpty && h.b.outbox.isEmpty, "nothing left buffered under duplication")
+        XCTAssertNil(h.a.confirmPendingSince, "a duplicate/stale init must NOT re-gate the live session")
+        XCTAssertNil(h.b.confirmPendingSince)
+    }
+
+    // Convergence under reordering: each pump delivers its batch back-to-front, so control frames
+    // and DATA arrive permuted (e.g. DATA before the RESPONDER's ready, resetInit after the session
+    // is live). With multiple DATA each way, both peers must still reach `active` and every DATA
+    // must be delivered — no ordering assumption in the handshake or the confirm-gate release.
+    @MainActor
+    func testReorderedFrames_Converges_AllDataDelivered() {
+        let h = Harness()
+        h.net.reorder = true
+        h.a.enqueueSend("a1", to: h.b.id, now: h.now)
+        h.a.enqueueSend("a2", to: h.b.id, now: h.now)   // buffered behind the init (phase != nil)
+        h.b.enqueueSend("b1", to: h.a.id, now: h.now)
+        h.b.enqueueSend("b2", to: h.a.id, now: h.now)
+        h.settle()
+
+        XCTAssertTrue(h.a.isActive && h.b.isActive, "reordering must not prevent convergence")
+        XCTAssertTrue(h.b.delivered.isSuperset(of: ["a1", "a2"]), "all of A's DATA delivered despite reorder")
+        XCTAssertTrue(h.a.delivered.isSuperset(of: ["b1", "b2"]), "all of B's DATA delivered despite reorder")
+        XCTAssertTrue(h.a.outbox.isEmpty && h.b.outbox.isEmpty, "no message left buffered after reorder settle")
+        XCTAssertNil(h.a.confirmPendingSince, "confirm gate released even with ready reordered")
     }
 }
 
