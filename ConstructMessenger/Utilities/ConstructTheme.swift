@@ -741,6 +741,28 @@ struct CTStatusBadge: View {
     }
 }
 
+/// Compact orange **BETA** chip for Debug / Beta / INTERNAL_TOOLS builds.
+/// Renders nothing on App Store Release so production stays clean.
+struct CTBetaBadge: View {
+    var compact: Bool = false
+
+    var body: some View {
+        if AppConstants.isNonProductionBuild {
+            Text(NSLocalizedString("build_channel_beta", comment: "").uppercased())
+                .font(CTFont.bold(compact ? 9 : 10))
+                .tracking(compact ? 1.5 : 2)
+                .foregroundStyle(.orange)
+                .padding(.horizontal, compact ? 5 : 7)
+                .padding(.vertical, compact ? 2 : 3)
+                .overlay(
+                    RoundedRectangle(cornerRadius: CTRadius.badge, style: .continuous)
+                        .stroke(Color.orange.opacity(0.55), lineWidth: 1)
+                )
+                .accessibilityLabel(Text(NSLocalizedString("build_channel_beta_a11y", comment: "")))
+        }
+    }
+}
+
 // MARK: - Settings Components
 
 struct CTSettingsSectionHeader: View {

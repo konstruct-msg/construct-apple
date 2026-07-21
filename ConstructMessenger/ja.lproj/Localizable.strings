@@ -74,6 +74,8 @@
 "user" = "ユーザー";
 "preferences" = "基本設定";
 "version" = "バージョン";
+"build_channel_beta" = "ベータ";
+"build_channel_beta_a11y" = "App Store本番ではないベータ／内部ビルドです";
 "about" = "このアプリについて";
 "account" = "アイデンティティ";
 "appearance" = "外観";

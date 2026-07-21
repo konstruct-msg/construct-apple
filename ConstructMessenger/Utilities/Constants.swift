@@ -238,6 +238,24 @@ struct AppConstants {
     // Debug Settings
     static let enableDebugLogging = BuildConfiguration.current == .debug
     static let enableVerboseWebSocketLogging = false // Включить для детальных логов
+
+    /// True for local Debug and Beta archives (`SWIFT_ACTIVE_COMPILATION_CONDITIONS`
+    /// includes `DEBUG`) and future `INTERNAL_TOOLS` TestFlight. False for App Store Release.
+    static var isNonProductionBuild: Bool {
+        #if DEBUG || INTERNAL_TOOLS
+        true
+        #else
+        false
+        #endif
+    }
+
+    /// e.g. `v0.17.0 (537)` or `v0.17.0 (537) · BETA` on non-production builds.
+    static var versionDisplayString: String {
+        let base = "v\(appVersion) (\(buildNumber))"
+        guard isNonProductionBuild else { return base }
+        let beta = NSLocalizedString("build_channel_beta", comment: "Non-production build channel label")
+        return "\(base) · \(beta.uppercased())"
+    }
 }
 
 // MARK: - Feature Flags

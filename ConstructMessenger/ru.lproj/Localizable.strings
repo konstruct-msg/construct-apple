@@ -81,6 +81,8 @@
 "user" = "Пользователь";
 "preferences" = "Настройки";
 "version" = "Версия";
+"build_channel_beta" = "Бета";
+"build_channel_beta_a11y" = "Это бета или внутренняя сборка, не production App Store";
 "about" = "О приложении";
 "account" = "Идентичность";
 "appearance" = "Внешний вид";

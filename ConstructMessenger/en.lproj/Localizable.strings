@@ -82,6 +82,8 @@
 "user" = "User";
 "preferences" = "Preferences";
 "version" = "Version";
+"build_channel_beta" = "Beta";
+"build_channel_beta_a11y" = "This is a beta or internal build, not App Store production";
 "about" = "About";
 "account" = "Identity";
 "appearance" = "Appearance";

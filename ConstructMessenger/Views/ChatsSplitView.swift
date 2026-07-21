@@ -151,6 +151,9 @@ struct ChatsSplitView: View {
 
             Spacer(minLength: CTLayout.sectionGap)
 
+            // Debug / Beta only — empty view on Release.
+            CTBetaBadge(compact: true)
+
             railQRButton
             connectionRailBadge
         }

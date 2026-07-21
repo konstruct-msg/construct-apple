@@ -138,8 +138,13 @@ struct ChatsListView: View {
 
     private var navBar: some View {
         HStack(spacing: CTLayout.chromeGap) {
+            // Center the 8pt status dot on the same vertical axis as medium
+            // chat-row avatars (40pt), so the header chrome lines up with the list.
             ConnectionStatusIndicator()
+                .frame(width: CTHexAvatar.AvatarSize.medium.rawValue, alignment: .center)
             Spacer()
+            // Always-visible on Debug/Beta so TF builds are not confused with production.
+            CTBetaBadge(compact: true)
             Button { showingQRScanner = true } label: {
                 Image(systemName: "qrcode.viewfinder")
                     .font(.system(size: CTLayout.navIconSize, weight: .medium))
@@ -228,6 +233,9 @@ struct ChatsListView: View {
         .scrollDismissesKeyboard(.immediately)
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        // Align avatar column with nav chrome (edgePad) without zeroing vertical
+        // list spacing — explicit listRowInsets(top/bottom: 0) had crushed the rows.
+        .contentMargins(.horizontal, CTLayout.edgePad, for: .scrollContent)
         // ASCII matrix watermark behind the rows (base #090909 comes from .ctBackground()).
         .background(CTMatrixBackground())
     }

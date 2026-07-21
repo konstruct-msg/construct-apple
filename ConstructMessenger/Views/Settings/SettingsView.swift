@@ -47,6 +47,8 @@ struct SettingsView: View {
                         .foregroundColor(Color.CT.text)
                         .tracking(4)
                     Spacer()
+                    // Debug / Beta archives only — orange chrome, never on App Store Release.
+                    CTBetaBadge()
                 }
                 .padding(.horizontal, CTLayout.edgePad)
                 .frame(height: CTLayout.navBarHeight)
@@ -322,7 +324,12 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             CTSep(style: .thin)
-            CTSettingsRow(label: NSLocalizedString("version", comment: "").uppercased(), value: "v\(AppConstants.appVersion) (\(AppConstants.buildNumber))", icon: "info.circle")
+            CTSettingsRow(
+                label: NSLocalizedString("version", comment: "").uppercased(),
+                value: AppConstants.versionDisplayString,
+                icon: "info.circle",
+                valueColor: AppConstants.isNonProductionBuild ? .orange : Color.CT.textDim
+            )
                 .contentShape(Rectangle())
                 .onTapGesture {
                     versionTapCount += 1
