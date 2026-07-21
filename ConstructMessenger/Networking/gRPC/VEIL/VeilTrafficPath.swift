@@ -31,6 +31,8 @@ enum TrafficPath: Equatable {
     }
 
     var displayDetail: String {
+        #if DEBUG || INTERNAL_TOOLS
+        // Internal builds: full transport detail for diagnostics.
         switch self {
         case .direct:                  return "TLS 1.3 ams.konstruct.cc:443"
         case .veilFront(let relay):     return "TLS 1.3 → veil-front → \(relay)"
@@ -38,6 +40,17 @@ enum TrafficPath: Equatable {
         case .veilCooldown:             return "Reconnecting via VEIL…"
         case .veilConnecting:           return "Establishing veil-front tunnel…"
         }
+        #else
+        // External build (silent-transport-ui decision): never disclose transport, path, host, or
+        // whether the user is routing around censorship. Direct and VEIL collapse to one neutral
+        // state so the UI is an identical, information-free "Protected".
+        switch self {
+        case .direct, .veilFront, .veilWebTunnel:
+            return NSLocalizedString("net_status_protected", comment: "Neutral connected indicator — no transport disclosed")
+        case .veilCooldown, .veilConnecting:
+            return NSLocalizedString("net_status_connecting", comment: "Neutral connecting indicator")
+        }
+        #endif
     }
 
     /// Color name for SwiftUI consumers without importing SwiftUI into every caller.

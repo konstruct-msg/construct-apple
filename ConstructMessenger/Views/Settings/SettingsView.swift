@@ -21,6 +21,13 @@ struct SettingsView: View {
     @State private var showingOrientation = false
     @State private var recoveryBannerDismissed = UserDefaults.standard.bool(forKey: "recovery_banner_dismissed")
     @State private var navigationPath = NavigationPath()
+    // Silent-transport (decisions/silent-transport-ui): the only external escape hatch for a
+    // relay capability when the automatic delivery channel is fully blocked. Hidden behind N taps
+    // on the version row — invisible in casual use, discoverable when a trusted party instructs.
+    @State private var versionTapCount = 0
+    @State private var showEmergencyImport = false
+    @State private var emergencyPasteText = ""
+    @State private var emergencyImportMsg: String?
 
     private let inviteGenerator = InviteGenerator()
 
@@ -64,7 +71,10 @@ struct SettingsView: View {
                                 VStack(spacing: SettingsRootLayout.listSpacing) {
                                     shareSection
                                     aboutSection
+                                    // Diagnostics disclose reachability (active relay, cert) — internal only.
+                                    #if DEBUG || INTERNAL_TOOLS
                                     developerSection
+                                    #endif
                                 }
                                 .frame(maxWidth: .infinity, alignment: .top)
                             }
@@ -73,7 +83,9 @@ struct SettingsView: View {
                             shareSection
                             mainSettingsSection
                             aboutSection
+                            #if DEBUG || INTERNAL_TOOLS
                             developerSection
+                            #endif
                         }
 
                         // Spacer for floating tab capsule
@@ -291,6 +303,21 @@ struct SettingsView: View {
         }
     }
 
+    /// Emergency relay-capability import (hidden version-tap escape hatch). The blob is still
+    /// Ed25519 manifest-verified inside `VeilConfigImporter`, so this is not a blind-trust input.
+    private func handleEmergencyImport() {
+        switch VeilConfigImporter.importScannedOrPasted(emergencyPasteText) {
+        case .success:
+            emergencyImportMsg = NSLocalizedString("veil_config_import_ok", comment: "")
+            Task {
+                let vm = VeilProxyManager.shared
+                if vm.mode != .off { vm.stop(); await vm.startIfEnabled() }
+            }
+        case .failure(let e):
+            emergencyImportMsg = e.localizedDescription
+        }
+    }
+
     private var aboutSection: some View {
         CTSectionGroup {
             Button { showingOrientation = true } label: {
@@ -304,6 +331,23 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             CTSep(style: .thin)
             CTSettingsRow(label: NSLocalizedString("version", comment: "").uppercased(), value: "v\(AppConstants.appVersion) (\(AppConstants.buildNumber))", icon: "info.circle")
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    versionTapCount += 1
+                    if versionTapCount >= 10 {
+                        versionTapCount = 0
+                        emergencyPasteText = ""
+                        emergencyImportMsg = nil
+                        showEmergencyImport = true
+                    }
+                }
+        }
+        .alert(NSLocalizedString("veil_config_paste", comment: ""), isPresented: $showEmergencyImport) {
+            TextField(NSLocalizedString("veil_config_paste", comment: ""), text: $emergencyPasteText)
+            Button(NSLocalizedString("veil_config_import", comment: "")) { handleEmergencyImport() }
+            Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {}
+        } message: {
+            if let m = emergencyImportMsg { Text(m) }
         }
     }
 

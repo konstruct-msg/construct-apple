@@ -963,3 +963,7 @@
 "account_discard_changes_discard" = "破棄";
 "account_discard_changes_keep_editing" = "編集を続ける";
 "account_editing_profile" = "> プロフィール編集中です。✓ で保存、x でキャンセルします。";
+
+/* Silent-transport neutral network indicator (silent-transport-ui decision) */
+"net_status_protected" = "保護済み";
+"net_status_connecting" = "接続中…";

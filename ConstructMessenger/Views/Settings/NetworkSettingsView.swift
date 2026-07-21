@@ -76,6 +76,7 @@ struct NetworkSettingsView: View {
                             Text(connectionManager.connectionStatus.text(localized: true))
                                 .font(CTFont.regular(14))
                                 .foregroundStyle(Color.CT.text)
+                            #if DEBUG || INTERNAL_TOOLS
                             if connectionManager.connectionStatus != .connected,
                                let phase = connectionManager.connectingPhase {
                                 Text(phase)
@@ -84,6 +85,9 @@ struct NetworkSettingsView: View {
                                     .textSelection(.enabled)
                                     .transition(.opacity)
                             }
+                            #endif
+                            // Neutral, information-free route indicator ("Защищено"/"Protected") in
+                            // the external build; full transport detail only on internal builds.
                             Text(path.displayDetail)
                                 .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.textDim)
@@ -92,6 +96,7 @@ struct NetworkSettingsView: View {
 
                         Spacer()
 
+                        #if DEBUG || INTERNAL_TOOLS
                         let displayTransport = streamManager.activeTransport.isEmpty
                             ? streamManager.lastActiveTransport
                             : streamManager.activeTransport
@@ -124,6 +129,7 @@ struct NetworkSettingsView: View {
                                     (isLive ? Color.CT.accent : Color.CT.textDim).opacity(NetworkSettingsLayout.transportBadgeStrokeOpacity),
                                     lineWidth: NetworkSettingsLayout.transportBadgeStrokeWidth))
                         }
+                        #endif
                     }
                     .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                     .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
@@ -144,6 +150,7 @@ struct NetworkSettingsView: View {
                         .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
                     }
 
+                    #if DEBUG || INTERNAL_TOOLS
                     if let error = connectionManager.lastError {
                         CTSep(style: .thin)
                         Text(error)
@@ -153,8 +160,13 @@ struct NetworkSettingsView: View {
                             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                             .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
                     }
+                    #endif
                 }
 
+                // Silent-transport (decisions/silent-transport-ui): the external build discloses
+                // NO reachability data — no relay address, path, transport, VEIL toggle, or manual
+                // import. VEIL runs invisibly in `auto`. Everything below is internal-only.
+                #if DEBUG || INTERNAL_TOOLS
                 // MARK: - Traffic Protection (VEIL)
                 CTSettingsSectionHeader(title: NSLocalizedString("traffic_protection", comment: "").uppercased())
                 CTSectionGroup {
@@ -304,10 +316,10 @@ struct NetworkSettingsView: View {
                 }
 //                #endif
 
-                #if DEBUG
-                // Debug-only: live FSM diagnostics. Every transport routing decision flows
-                // through one place; this screen is that place.
-                CTSettingsSectionHeader(title: "DIAGNOSTICS (DEBUG)", color: .orange)
+                #if DEBUG || INTERNAL_TOOLS
+                // Live FSM diagnostics (internal builds only). Every transport routing decision
+                // flows through one place; this screen is that place.
+                CTSettingsSectionHeader(title: "DIAGNOSTICS (INTERNAL)", color: .orange)
                 CTSectionGroup {
                     NavigationLink {
                         TransportDiagnosticsView()
@@ -345,6 +357,7 @@ struct NetworkSettingsView: View {
                         .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                         .padding(.vertical, NetworkSettingsLayout.footerVerticalPadding)
                 }
+                #endif
             }
             .padding(.vertical, NetworkSettingsLayout.sectionVerticalPadding)
             #if os(iOS)

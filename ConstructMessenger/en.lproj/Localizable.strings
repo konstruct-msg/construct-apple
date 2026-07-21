@@ -1056,3 +1056,7 @@
 "liquid_logo.haptics" = "Haptics";
 "liquid_logo.replay" = "REPLAY";
 "liquid_logo.hint" = "tap anywhere to replay";
+
+/* Silent-transport neutral network indicator (silent-transport-ui decision) */
+"net_status_protected" = "Protected";
+"net_status_connecting" = "Connecting…";
