@@ -172,9 +172,8 @@ enum TransportReducer {
             return (.veilActive(relay: relay, port: port, since: now), effects)
 
         case .proxyStartFailed:
-            // The single `veil_start` ran the full coordinator probe (happy-eyeballs +
-            // internal retries) and still failed — it's a real failure, so back off in
-            // cooldown rather than re-firing `veil_start` (the old retry loop = churn).
+            // Single probe cycle failed (happy-eyeballs inside Rust). Host owns the
+            // backoff — do not re-fire `veil_start` immediately (that was the churn).
             let until = now.addingTimeInterval(config.veilCooldownDuration)
             return (.veilCooldown(until: until), [.setVeilPort(nil), .scheduleCooldownEnd(at: until)])
 
