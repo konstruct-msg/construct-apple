@@ -197,12 +197,25 @@ final class MessageStreamManager {
         return Date().timeIntervalSince(start) >= degradedModeThreshold
     }
 
-    /// Clears prolonged-offline backoff state when the network interface changes.
+    /// Clears prolonged-offline backoff state AND the fast-UDP (QUIC/H3) suppression ladder when the
+    /// network interface changes. A genuine path switch (WiFi↔cellular, VPN on/off, region change)
+    /// invalidates the "QUIC is blocked on this network" conclusion — UDP/443 may be throttled on
+    /// one network and clean on another — so the next `openStream()` must re-probe QUIC instead of
+    /// staying sticky-H2 until app restart. This is the correct re-enable trigger: a real
+    /// path-change event, not a timer. It fires only on `.networkPathChanged`, which
+    /// `NetworkReachabilityManager` gates on an actual interface/topology change, so a
+    /// still-QUIC-blocked network is re-probed at most once per switch — never on every reconnect
+    /// (the per-reconnect thrash the suppression ladder itself exists to stop). Mirrors the clear an
+    /// explicit transport toggle does in `performTransportReconnect`.
     /// Reconnect is owned by `scheduleReconnectAfterRoutingChange` (StreamLifecycle + grpcServerChanged).
     func resetDegradedModeOnNetworkChange() {
         continuousFailureStreakStart = nil
         isInDegradedMode = false
-        Log.debug("Network path — cleared degraded-mode window", category: "MessageStream")
+        // Re-arm fast-UDP: the new network may not block QUIC even if the old one did (and vice-versa).
+        fastUdpUnhealthyUntil = nil
+        consecutiveH3OpenFailures = 0
+        shouldFallbackToH2Direct = false
+        Log.debug("Network path — cleared degraded-mode window + fast-UDP suppression (QUIC re-probe on next open)", category: "MessageStream")
     }
 
     /// Single entry for routing-driven reconnects. Bursts (network flap + VEIL port + invalidate)
