@@ -259,6 +259,10 @@ struct ChatView: View {
                         return
                     }
 
+                    // Never auto-scroll on a count *drop* (FRC thrash in logs: 83→51→67…).
+                    // That path animated to bottom while LazyVStack dematerialized → black flash.
+                    guard count > oldCount else { return }
+
                     let delay = ChatViewConstants.MessageDelay.mediaRender
                     Task { @MainActor in
                         try? await Task.sleep(for: .seconds(delay))
@@ -409,12 +413,15 @@ struct ChatView: View {
                     // asynchronously, so its height settles in several steps — we pin on this
                     // event and once more after a short delay to catch the final height.
                     guard newHeight.isFinite, newHeight >= 0 else { return }
-                    let changed = abs(newHeight - composerHeight) > 1
+                    // Ignore sub-point thrash from keyboard/glass; large jumps only (reply bar,
+                    // media strip, multiline growth) need a re-pin.
+                    let changed = abs(newHeight - composerHeight) > 8
                     composerHeight = newHeight
                     if changed {
                         if scrollManager.shouldScrollToBottom {
                             // Reply/edit/media growth must re-pin without animation (same black-flash path).
-                            scrollManager.pinToBottomCorrective(delaysMs: [0, 80, 180])
+                            // Fewer passes — pinTask coalesces concurrent height events.
+                            scrollManager.pinToBottomCorrective(delaysMs: [0, 120])
                         } else if let anchorId = (replyingTo ?? viewModel.editingMessage)?.id {
                             // Reading history and starting a reply/edit: the bar grew the bottom
                             // inset. Without a corrective the LazyVStack dematerializes into a
@@ -758,9 +765,10 @@ struct ChatView: View {
     private func setComposeReplyFocus(messageId: String) {
         replyFocusPeekTask?.cancel()
         replyFocusPeekTask = nil
-        withAnimation(.easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration)) {
-            replyFocusIds = [messageId.lowercased()]
-        }
+        // Do not wrap in withAnimation — each bubble already has
+        // `.animation(..., value: replyFocusIds)`. A second transaction here
+        // animated the whole LazyVStack with composer inset change → flash.
+        replyFocusIds = [messageId.lowercased()]
     }
 
     /// Tap on in-bubble reply strip: scroll to parent, keep parent + child bright briefly.
