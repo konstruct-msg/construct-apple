@@ -1396,6 +1396,10 @@ final class SessionCoordinator: MessageRouterDelegate {
                 return
             }
 
+            // Resolve the recipient identity key once so resent bodies are SEALED — never downgraded
+            // to identified on retry (the server-influence deanonymisation vector).
+            let recipientIdentityKey = StealthSenderService.recipientIdentityKey(recipientId: userId, context: context)
+
             for msg in candidates {
                 let plaintext = msg.displayText
                 guard !plaintext.isEmpty else { continue }
@@ -1419,7 +1423,8 @@ final class SessionCoordinator: MessageRouterDelegate {
                         senderId: myId,
                         recipientId: userId,
                         conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
-                        timestamp: UInt64(msg.timestamp.timeIntervalSince1970)
+                        timestamp: UInt64(msg.timestamp.timeIntervalSince1970),
+                        recipientIdentityKey: recipientIdentityKey
                     )
 
                     let response = responses.first ?? SendMessageResponse(messageId: msg.id, status: "sent")
@@ -1433,6 +1438,12 @@ final class SessionCoordinator: MessageRouterDelegate {
                     msg.deliveryStatus = newStatus
                     context.saveAndLog()
                     Log.info("Auto-resend: message \(msg.id.prefix(8))… status=\(newStatus)", category: "SessionInit")
+                } catch is StealthDowngradeBlocked {
+                    // Stealth on but could not seal — keep queued, never send identified.
+                    msg.deliveryStatus = .queued
+                    context.saveAndLog()
+                    Log.info("Auto-resend: sealed send blocked (cannot seal) for \(msg.id.prefix(8))… — queued, nudging fetch", category: "SessionInit")
+                    SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: userId)
                 } catch {
                     msg.deliveryStatus = .failed
                     context.saveAndLog()

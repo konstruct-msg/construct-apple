@@ -52,21 +52,27 @@ class MessageRetryManager {
         let capturedSenderId = message.fromUserId
         let capturedTimestamp = UInt64(message.safeTimestamp.timeIntervalSince1970)
 
+        // Resolve the recipient identity key up front (on MainActor) so retried chunks can be
+        // RE-SEALED — a retry must never downgrade a sealed send to identified (server-influence
+        // deanonymisation). nil under stealth-on makes resealAndSend throw → we queue + nudge a fetch.
+        let recipientIdentityKey = StealthSenderService.recipientIdentityKey(recipientId: recipientId, context: context)
+
         // Prefer re-sending the exact same encrypted payload bytes.
         if let chunks = OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: capturedMessageId) {
-            Task {
+            Task { [weak self] in
+                guard let self else { return }
                 do {
                     var finalStatus: DeliveryStatus = .sent
                     var maxRetryAfterMs: Int64 = 0
                     var finalErrorCode: String = ""
                     for (chunkId, wirePayload) in chunks {
-                        let response = try await MessagingServiceClient.shared.sendMessage(
-                            messageId: chunkId,
+                        let response = try await self.resealAndSend(
+                            chunkId: chunkId,
+                            wirePayload: wirePayload,
                             recipientId: recipientId,
                             senderId: capturedSenderId,
-                            conversationId: ConversationId.direct(myUserId: capturedSenderId, theirUserId: recipientId),
-                            encryptedPayload: wirePayload,
-                            timestamp: capturedTimestamp
+                            timestamp: capturedTimestamp,
+                            recipientIdentityKey: recipientIdentityKey
                         )
                         if finalErrorCode.isEmpty, !response.errorCode.isEmpty {
                             finalErrorCode = response.errorCode
@@ -100,6 +106,18 @@ class MessageRetryManager {
                         if finalStatus == .queued, maxRetryAfterMs > 0 {
                             Log.info("Rate-limited retry — will reschedule in \(maxRetryAfterMs)ms for \(capturedMessageId.prefix(8))", category: "MessageRetryManager")
                         }
+                    }
+                } catch is StealthDowngradeBlocked {
+                    await MainActor.run {
+                        let fetchRequest = Message.fetchRequest()
+                        fetchRequest.predicate = NSPredicate(format: "id == %@", capturedMessageId)
+                        fetchRequest.fetchLimit = 1
+                        guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
+                        // Keep the stored payload; re-seal on the next retry once a bundle/IK exists.
+                        liveMsg.deliveryStatus = .queued
+                        context.saveAndLog()
+                        Log.info("Retry: sealed send blocked (cannot seal) — queued \(capturedMessageId.prefix(8))…, nudging bundle fetch", category: "MessageRetryManager")
+                        SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
                     }
                 } catch {
                     await MainActor.run {
@@ -155,6 +173,54 @@ class MessageRetryManager {
         }
     }
     
+    /// Re-send one stored chunk. Under stealth-on this RE-SEALS the stored Double-Ratchet ciphertext
+    /// (a fresh `SealedInner` + fresh token — the stored bytes are the ratchet ciphertext, not the
+    /// outer envelope, so there is no double-spend) and NEVER downgrades to an identified send.
+    /// Throws `StealthDowngradeBlocked` when stealth is on but sealing is impossible (no recipient
+    /// identity key / cert) — the caller queues + nudges a fetch. Identified send only when stealth
+    /// is genuinely off (DEBUG override / feature disabled).
+    private func resealAndSend(
+        chunkId: String,
+        wirePayload: Data,
+        recipientId: String,
+        senderId: String,
+        timestamp: UInt64,
+        recipientIdentityKey: Data?
+    ) async throws -> SendMessageResponse {
+        let conversationId = ConversationId.direct(myUserId: senderId, theirUserId: recipientId)
+
+        guard StealthPolicy.shared.shouldUseSealedSender() else {
+            return try await MessagingServiceClient.shared.sendMessage(
+                messageId: chunkId, recipientId: recipientId, senderId: senderId,
+                conversationId: conversationId, encryptedPayload: wirePayload, timestamp: timestamp)
+        }
+        guard let recipientIK = recipientIdentityKey else {
+            throw StealthDowngradeBlocked(reason: "retry: no recipient identity key for \(recipientId.prefix(8))…")
+        }
+        let sealedInner: Data
+        do {
+            sealedInner = try await StealthSenderService.buildSealedInner(
+                recipientUserId: recipientId, recipientIdentityKey: recipientIK,
+                encryptedPayload: wirePayload, contentType: .e2EeSignal)
+        } catch {
+            throw StealthDowngradeBlocked(reason: "retry seal failed: \(error)")
+        }
+        return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+            try await StealthSenderService.buildSealedInner(
+                recipientUserId: recipientId, recipientIdentityKey: recipientIK,
+                encryptedPayload: wirePayload, contentType: .e2EeSignal)
+        }, send: { inner in
+            if FeatureFlags.sealedSenderUnauthenticatedTransport {
+                return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)
+            } else {
+                return try await MessagingServiceClient.shared.sendMessage(
+                    messageId: chunkId, recipientId: recipientId, senderId: senderId,
+                    conversationId: conversationId, encryptedPayload: wirePayload,
+                    timestamp: timestamp, sealedInnerBytes: inner)
+            }
+        })
+    }
+
     // MARK: - Global Queued Messages Processing
 
     /// Process queued messages for ALL chats — called from the background service layer
@@ -262,23 +328,28 @@ class MessageRetryManager {
         Log.info("Sending \(pendingIds.count) queued (stored ciphertext) + \(reencryptIds.count) re-encrypted message(s) (sequential to preserve ratchet state)", category: "MessageRetryManager")
         context.saveAndLog()
 
+        // Resolve the recipient identity key once (all pendingIds target this recipient) so stored
+        // chunks are RE-SEALED on resend — never downgraded to identified (server-influence).
+        let recipientIdentityKey = StealthSenderService.recipientIdentityKey(recipientId: recipientId, context: context)
+
         // Send SEQUENTIALLY inside a single Task — Double Ratchet encryption must not run
         // concurrently for the same recipient to prevent ratchet state divergence and
         // concurrent Keychain write failures. Stored-ciphertext resends (no ratchet mutation)
         // go first, then re-encrypted messages (which advance the ratchet to the newest numbers).
         Task { [weak self] in
+            guard let self else { return }
             for messageId in pendingIds {
                 do {
                     var finalStatus: DeliveryStatus = .sent
                     if let chunks = OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: messageId) {
                         for (chunkId, wirePayload) in chunks {
-                            let response = try await MessagingServiceClient.shared.sendMessage(
-                                messageId: chunkId,
+                            let response = try await self.resealAndSend(
+                                chunkId: chunkId,
+                                wirePayload: wirePayload,
                                 recipientId: recipientId,
                                 senderId: currentUserId,
-                                conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
-                                encryptedPayload: wirePayload,
-                                timestamp: UInt64(Date().timeIntervalSince1970)
+                                timestamp: UInt64(Date().timeIntervalSince1970),
+                                recipientIdentityKey: recipientIdentityKey
                             )
                             switch response.status.lowercased() {
                             case "failed":
@@ -310,6 +381,17 @@ class MessageRetryManager {
                         }
                         Log.debug("Re-sent queued message via gRPC: \(messageId) status=\(finalStatus) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
                     }
+                } catch is StealthDowngradeBlocked {
+                    await MainActor.run {
+                        let fr = Message.fetchRequest()
+                        fr.predicate = NSPredicate(format: "id == %@", messageId)
+                        fr.fetchLimit = 1
+                        guard let liveMsg = try? context.fetch(fr).first else { return }
+                        liveMsg.deliveryStatus = .queued
+                        context.saveAndLog()
+                        Log.info("Batch retry: sealed send blocked (cannot seal) — queued \(messageId.prefix(8))…, nudging bundle fetch", category: "MessageRetryManager")
+                        SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
+                    }
                 } catch {
                     await MainActor.run {
                         Log.error("Failed to re-send queued message \(messageId): \(error)", category: "MessageRetryManager")
@@ -332,7 +414,6 @@ class MessageRetryManager {
 
             // Re-encrypt pass: messages whose ciphertext was orphaned by a dead session.
             for messageId in reencryptIds {
-                guard let self else { break }
                 let status = await self.reencryptAndSend(messageId: messageId, recipientId: recipientId, senderId: currentUserId, context: context)
                 await MainActor.run {
                     let fr = Message.fetchRequest()
@@ -419,6 +500,10 @@ class MessageRetryManager {
             return .failed
         }
 
+        // Resolve the recipient identity key so the re-encrypted chunks are sealed — a retry must
+        // never downgrade to identified. nil under stealth-on makes sendChunks throw below.
+        let recipientIdentityKey = StealthSenderService.recipientIdentityKey(recipientId: recipientId, context: context)
+
         do {
             let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
                 plan: plan,
@@ -426,7 +511,8 @@ class MessageRetryManager {
                 senderId: senderId,
                 recipientId: recipientId,
                 conversationId: ConversationId.direct(myUserId: senderId, theirUserId: recipientId),
-                timestamp: UInt64(Date().timeIntervalSince1970)
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                recipientIdentityKey: recipientIdentityKey
             )
             switch aggregated.status.lowercased() {
             case "failed":    return aggregated.retryable ? .queued : .failed
@@ -434,6 +520,10 @@ class MessageRetryManager {
             case "delivered": return .delivered
             default:          return .sent
             }
+        } catch is StealthDowngradeBlocked {
+            Log.info("reencryptAndSend: sealed send blocked (cannot seal) for \(messageId.prefix(8))… — queueing, nudging bundle fetch", category: "MessageRetryManager")
+            SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
+            return .queued
         } catch {
             let isRetryableTransport: Bool = {
                 if error is GRPCClientError { return true }

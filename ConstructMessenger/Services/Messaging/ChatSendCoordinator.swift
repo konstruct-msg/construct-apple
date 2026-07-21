@@ -434,6 +434,13 @@ final class ChatSendCoordinator {
                     Log.info("Message sent via gRPC: \(messageId) status=\(aggregated.status)\(ecStr)\(traceTag)", category: "ChatViewModel")
                     SessionActivityTracker.shared.recordActivity(for: recipientId)
                     self.viewModel?.isSending = false
+                } catch let blocked as StealthDowngradeBlocked {
+                    // Stealth on but could not seal — NEVER downgrade to identified. Queue and nudge
+                    // the recipient bundle/IK so a later retry can seal.
+                    Log.info("Stealth: send blocked (\(blocked.reason)) — queueing \(messageId.prefix(8))…, will retry when sealable", category: "ChatViewModel")
+                    self.updateMessageStatus(messageId: messageId, status: .queued)
+                    SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
+                    self.viewModel?.isSending = false
                 } catch {
                     let isRetryableTransportFailure: Bool = {
                         if let rpcError = error as? RPCError {
@@ -713,6 +720,10 @@ final class ChatSendCoordinator {
                     in: viewContext
                 )
                 editingBinding()
+            } catch is StealthDowngradeBlocked {
+                // Stealth on but the edit could not be sealed — fail closed, never send identified.
+                Log.info("Stealth: edit send blocked (cannot seal) — not downgrading for \(message.id.prefix(8))…", category: "ChatSendCoordinator")
+                ErrorRouter.shared.report(.unknown(NSLocalizedString("edit_message_failed", comment: "")))
             } catch {
                 ErrorRouter.shared.report(.unknown(String(format: NSLocalizedString("edit_message_failed", comment: ""), error.localizedDescription)))
             }
@@ -720,15 +731,7 @@ final class ChatSendCoordinator {
     }
 
     private func fetchRecipientIdentityKeyForEdit(recipientId: String, context: NSManagedObjectContext) async -> Data? {
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", recipientId)
-        req.fetchLimit = 1
-        do {
-            return try context.fetch(req).first?.knownIdentityKey
-        } catch {
-            Log.error("Failed to load identity key for stealth edit to \(recipientId.prefix(8))…: \(error)", category: "ChatSendCoordinator")
-            return nil
-        }
+        StealthSenderService.recipientIdentityKey(recipientId: recipientId, context: context)
     }
 
     // MARK: - Retry

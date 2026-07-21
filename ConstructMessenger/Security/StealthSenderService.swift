@@ -363,6 +363,18 @@ final class StealthSenderService {
             contentType: contentType
         )
     }
+
+    /// Resolve the recipient's Curve25519 identity public key (for sealing) from the persisted `User`
+    /// row, or nil if not known yet. Keyed strictly by `recipientId` so it is unambiguous from any
+    /// send path (the shared source used by both the live-send and retry paths). Callers gate on
+    /// `StealthPolicy.shared.shouldUseSealedSender()` and, when this returns nil under stealth-on,
+    /// MUST queue rather than send identified (see `StealthDowngradeBlocked`). Call on `context`'s queue.
+    static func recipientIdentityKey(recipientId: String, context: NSManagedObjectContext) -> Data? {
+        let req = User.fetchRequest()
+        req.predicate = NSPredicate(format: "id == %@", recipientId)
+        req.fetchLimit = 1
+        return (try? context.fetch(req))?.first?.knownIdentityKey
+    }
 }
 
 enum StealthError: Error {

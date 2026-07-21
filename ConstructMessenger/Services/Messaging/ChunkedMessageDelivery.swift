@@ -41,9 +41,16 @@ final class ChunkedMessageSender {
             )
             onWirePayloadEncoded?(chunkMessageId, encryptedPayload)
 
-            // Build sealed inner bytes if policy says we should use stealth and we have the key.
+            // Under stealth-on, sealing is MANDATORY. If we lack the recipient identity key or
+            // buildSealedInner throws (sender cert unavailable), we must NOT fall back to an
+            // identified send — that is the server-influence deanonymisation vector the sealed path
+            // exists to prevent. Fail closed (StealthDowngradeBlocked) so the caller queues + retries.
+            let stealthOn = await StealthPolicy.shared.shouldUseSealedSender()
             var sealedInner: Data? = nil
-            if let recipientIK = recipientIdentityKey, await StealthPolicy.shared.shouldUseSealedSender() {
+            if stealthOn {
+                guard let recipientIK = recipientIdentityKey else {
+                    throw StealthDowngradeBlocked(reason: "no recipient identity key for \(recipientId.prefix(8))…")
+                }
                 do {
                     sealedInner = try await StealthSenderService.buildSealedInner(
                         recipientUserId: recipientId,
@@ -52,8 +59,9 @@ final class ChunkedMessageSender {
                         contentType: .e2EeSignal
                     )
                 } catch {
-                    Log.error("STEALTH: seal failed, sending without stealth: \(error)", category: "ChunkedDelivery")
+                    Log.error("STEALTH: seal failed under stealth-on — refusing identified downgrade, queueing: \(error)", category: "ChunkedDelivery")
                     PerformanceMetrics.shared.record(.stealthSealFailure, label: "chunked")
+                    throw StealthDowngradeBlocked(reason: "seal failed: \(error)")
                 }
             }
 
@@ -87,6 +95,9 @@ final class ChunkedMessageSender {
                     }
                 })
             } else {
+                // Reached ONLY when stealth is off (DEBUG override / feature disabled) — under
+                // stealth-on we always sealed above or threw StealthDowngradeBlocked. Identified
+                // send is legal here.
                 response = try await MessagingServiceClient.shared.sendMessage(
                     messageId: chunkMessageId,
                     recipientId: recipientId,
