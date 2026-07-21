@@ -5,110 +5,102 @@
 
 import SwiftUI
 
-/// Compact connection status badge for the chat list header.
+/// Compact connection indicator for the chat-list header — a single dot, no text.
 ///
-/// States: Connected (auto-hides, except on VEIL) / Connecting... (with phase) / Paused / Disconnected.
-/// When VEIL is active the connected badge stays visible permanently.
+/// - **Connecting** (incl. cold start / unknown): a soft pulsing dot.
+/// - **Connected**: a brief accent glow that then fades away, so a healthy connection adds no
+///   permanent chrome (the calm the old dot had).
+/// - **Disconnected**: a steady danger dot — but only *after* a first successful connect, so a
+///   cold start reads as "connecting", never a scary "Disconnected" flash.
+///
+/// No transport/VEIL is disclosed here (silent-transport-ui decision): the dot is identical whether
+/// the connection is direct or routed through a relay.
 struct ConnectionStatusIndicator: View {
     var connectionManager = ConnectionStatusManager.shared
-    @ObservedObject var veilManager = VeilProxyManager.shared
 
-    @State private var textOpacity: Double = 1
-    @State private var visible: Bool = true
+    @State private var visible = true
+    @State private var dotScale: CGFloat = 1
+    @State private var dotOpacity: Double = 1
+    @State private var hasConnectedOnce = false
     @State private var hideTask: Task<Void, Never>? = nil
 
-    var body: some View {
-        Group {
-            if visible {
-                Text(connectionManager.statusIndicatorText)
-                    .opacity(textOpacity)
-            }
-        }
-        .font(CTFont.regular(11))
-        .foregroundStyle(labelColor)
-        .animation(.easeInOut(duration: 0.5), value: connectionManager.connectionStatus)
-        .onAppear { handleStatusChange(connectionManager.connectionStatus) }
-        .onChange(of: connectionManager.connectionStatus) { _, newStatus in
-            handleStatusChange(newStatus)
-        }
-        .onChange(of: connectionManager.isStreamPaused) { _, isPaused in
-            handlePauseChange(isPaused)
-        }
-        .onChange(of: veilManager.isRunning) { _, isRunning in
-            if case .connected = connectionManager.connectionStatus {
-                if isRunning {
-                    // VEIL activated while connected — cancel hide timer, stay visible.
-                    hideTask?.cancel()
-                    hideTask = nil
-                    visible = true
-                    withAnimation(.easeOut(duration: 0.4)) { textOpacity = 1 }
-                } else {
-                    // VEIL stopped while connected — start normal hide timer.
-                    handleStatusChange(.connected)
-                }
-            }
-        }
-    }
+    private enum DisplayState { case connecting, connected, disconnected, paused }
 
-    private var labelColor: Color {
-        if connectionManager.isStreamPaused {
-            return Color.CT.textDim.opacity(0.45)
-        }
+    private var displayState: DisplayState {
+        if connectionManager.isStreamPaused { return .paused }
         switch connectionManager.connectionStatus {
-        case .connected:
-            return veilManager.isRunning ? Color.CT.accent : Color.CT.textDim
-        case .connecting, .unknown:
-            return Color.CT.textDim
-        case .disconnected:
-            return Color.CT.danger.opacity(0.7)
+        case .connected:            return .connected
+        case .connecting, .unknown: return .connecting
+        // Before the first successful connect a drop is just "still trying" — never alarm on launch.
+        case .disconnected:         return hasConnectedOnce ? .disconnected : .connecting
         }
     }
 
-    // MARK: - Visibility / Animation
-
-    private func handleStatusChange(_ status: ConnectionStatusManager.ConnectionStatus) {
-        guard !connectionManager.isStreamPaused else { return }
-        hideTask?.cancel()
-        hideTask = nil
-
-        switch status {
-        case .connected:
-            visible = true
-            withAnimation(.easeOut(duration: 0.4)) { textOpacity = 1 }
-            // Keep indicator visible permanently when VEIL is active.
-            if !veilManager.isRunning {
-                hideTask = Task {
-                    try? await Task.sleep(nanoseconds: 4_000_000_000)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run {
-                        withAnimation(.easeIn(duration: 0.8)) { textOpacity = 0 }
-                    }
-                    try? await Task.sleep(nanoseconds: 900_000_000)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run { visible = false }
-                }
-            }
-
-        case .connecting, .unknown:
-            visible = true
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                textOpacity = 0.55
-            }
-
-        case .disconnected:
-            visible = true
-            withAnimation(.easeOut(duration: 0.3)) { textOpacity = 1 }
+    private var dotColor: Color {
+        switch displayState {
+        case .connected:    return Color.CT.accent
+        case .connecting:   return Color.CT.textDim
+        case .disconnected: return Color.CT.danger.opacity(0.8)
+        case .paused:       return Color.CT.textDim.opacity(0.45)
         }
     }
 
-    private func handlePauseChange(_ isPaused: Bool) {
+    var body: some View {
+        Circle()
+            .fill(dotColor)
+            .frame(width: 8, height: 8)
+            .scaleEffect(dotScale)
+            .opacity(visible ? dotOpacity : 0)
+            .shadow(color: displayState == .connected ? Color.CT.accent.opacity(0.7) : .clear, radius: 4)
+            .animation(.easeInOut(duration: 0.4), value: dotColor)
+            .onAppear { apply(displayState) }
+            .onChange(of: connectionManager.connectionStatus) { _, newStatus in
+                if newStatus == .connected { hasConnectedOnce = true }
+                apply(displayState)
+            }
+            .onChange(of: connectionManager.isStreamPaused) { _, _ in apply(displayState) }
+    }
+
+    private func apply(_ state: DisplayState) {
         hideTask?.cancel()
         hideTask = nil
         visible = true
-        if isPaused {
-            withAnimation(.easeOut(duration: 0.3)) { textOpacity = 0.45 }
-        } else {
-            handleStatusChange(connectionManager.connectionStatus)
+
+        switch state {
+        case .connecting:
+            dotOpacity = 1
+            dotScale = 1
+            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                dotScale = 0.6
+                dotOpacity = 0.5
+            }
+
+        case .connected:
+            // Stop the pulse, settle to a full accent dot, glow, then fade out.
+            withAnimation(.easeOut(duration: 0.35)) {
+                dotScale = 1
+                dotOpacity = 1
+            }
+            hideTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeIn(duration: 0.8)) { dotOpacity = 0 }
+                try? await Task.sleep(nanoseconds: 850_000_000)
+                guard !Task.isCancelled else { return }
+                visible = false
+            }
+
+        case .disconnected:
+            withAnimation(.easeOut(duration: 0.3)) {
+                dotScale = 1
+                dotOpacity = 1
+            }
+
+        case .paused:
+            withAnimation(.easeOut(duration: 0.3)) {
+                dotScale = 1
+                dotOpacity = 0.6
+            }
         }
     }
 }
