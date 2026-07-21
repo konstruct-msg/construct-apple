@@ -291,6 +291,18 @@ final class SessionCoordinator: MessageRouterDelegate {
 
     /// Single rate-limited END_SESSION entry point for storm-prone recovery paths
     /// (DR-diverge). Suppresses repeats within `endSessionCooldown` per peer via the pure
+    /// Single authority for the outbound END_SESSION per-peer cooldown: consults
+    /// `SessionReducer.shouldSendEndSession` and, iff allowed, records the send time. Returns whether
+    /// the caller may proceed. Both the general rate-limited path and the typed-OTPK reset path gate
+    /// through this, so the cooldown read-and-record can't drift between the two sites.
+    private func recordEndSessionSendIfAllowed(_ userId: String, now: Date = Date()) -> Bool {
+        guard SessionReducer.shouldSendEndSession(
+            lastSentAt: endSessionSentAt[userId], now: now, cooldown: endSessionCooldown
+        ) else { return false }
+        endSessionSentAt[userId] = now
+        return true
+    }
+
     /// `SessionReducer.shouldSendEndSession` decision, and records the attempt time.
     /// Returns `true` iff a send was attempted (records + proceeds even if the network send
     /// throws, matching the prior inline behaviour). Must-send paths — logout broadcast,
@@ -298,14 +310,10 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// intentionally not rate-limited.
     @discardableResult
     private func sendEndSessionRateLimited(to userId: String, reason: String) async -> Bool {
-        let now = Date()
-        guard SessionReducer.shouldSendEndSession(
-            lastSentAt: endSessionSentAt[userId], now: now, cooldown: endSessionCooldown
-        ) else {
+        guard recordEndSessionSendIfAllowed(userId) else {
             Log.info("END_SESSION cooldown active for \(userId.prefix(8))…, skipping (\(reason))", category: "SessionCoordinator")
             return false
         }
-        endSessionSentAt[userId] = now
         Log.info("Sending END_SESSION to \(userId.prefix(8))… (\(reason))", category: "SessionCoordinator")
         do {
             try await sendEndSession(to: userId, reason: reason)
@@ -773,13 +781,7 @@ final class SessionCoordinator: MessageRouterDelegate {
 
                     case .sendTypedOtpk:
                         // Must carry the typed reason; still respect per-peer cooldown.
-                        let now = Date()
-                        if SessionReducer.shouldSendEndSession(
-                            lastSentAt: self.endSessionSentAt[userId],
-                            now: now,
-                            cooldown: self.endSessionCooldown
-                        ) {
-                            self.endSessionSentAt[userId] = now
+                        if self.recordEndSessionSendIfAllowed(userId) {
                             do {
                                 try await self.sendEndSession(
                                     to: userId,
