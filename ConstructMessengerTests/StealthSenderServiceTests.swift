@@ -211,3 +211,72 @@ final class StealthSenderServiceTests: XCTestCase {
         }
     }
 }
+
+/// Locks the core sealed-sender wire invariant: a sealed send never carries the real `senderId`
+/// (or `conversationID` / `contentType`) on the outer envelope, and an identified send always does.
+/// This is the structural foundation every sealed-eligible sender (bodies, retries, receipts,
+/// call-signals) relies on — if `buildEnvelope` ever leaked the sender under a sealed send, every
+/// upstream fail-closed guard would be moot.
+final class SealedSenderEnvelopeTests: XCTestCase {
+
+    func testSealedSend_omitsSenderConversationAndContentType() {
+        let env = MessagingServiceClient.buildEnvelope(
+            messageId: "m1",
+            recipientId: "recipient-abc",
+            senderId: "SECRET-SENDER-must-not-leak",
+            conversationId: "conv-xyz",
+            encryptedPayload: Data([0x01, 0x02, 0x03]),
+            timestamp: 42,
+            senderDeviceId: "sdev",
+            recipientDeviceId: "rdev",
+            contentType: .e2EeSignal,
+            sealedInnerBytes: Data([0x09, 0x09, 0x09])
+        )
+        // The whole point of sealed sender: none of the sender-identifying metadata on the wire.
+        XCTAssertFalse(env.hasSender, "sealed send leaked sender on the outer envelope")
+        XCTAssertTrue(env.conversationID.isEmpty, "sealed send leaked conversationId")
+        XCTAssertTrue(env.hasSealedSender, "sealed send must carry the SealedSenderEnvelope")
+        XCTAssertEqual(env.sealedSender.sealedInner, Data([0x09, 0x09, 0x09]))
+        // Routing metadata the server legitimately needs is still present.
+        XCTAssertEqual(env.recipient.userID, "recipient-abc")
+        XCTAssertEqual(env.encryptedPayload, Data([0x01, 0x02, 0x03]))
+    }
+
+    func testIdentifiedSend_populatesSender() {
+        let env = MessagingServiceClient.buildEnvelope(
+            messageId: "m1",
+            recipientId: "recipient-abc",
+            senderId: "sender-visible",
+            conversationId: "conv-xyz",
+            encryptedPayload: Data([0x01]),
+            timestamp: 42,
+            senderDeviceId: nil,
+            recipientDeviceId: nil,
+            contentType: .e2EeSignal,
+            sealedInnerBytes: nil
+        )
+        XCTAssertTrue(env.hasSender)
+        XCTAssertEqual(env.sender.userID, "sender-visible")
+        XCTAssertEqual(env.conversationID, "conv-xyz")
+        XCTAssertFalse(env.hasSealedSender)
+    }
+
+    func testEmptySealedBytesFallsBackToIdentified_neverSilentlyDropsSender() {
+        // Empty sealed bytes must NOT be treated as a sealed send — otherwise the sender would be
+        // silently dropped, producing an unroutable envelope with no sender AND no seal.
+        let env = MessagingServiceClient.buildEnvelope(
+            messageId: "m1",
+            recipientId: "r",
+            senderId: "sender-visible",
+            conversationId: "c",
+            encryptedPayload: Data(),
+            timestamp: 1,
+            senderDeviceId: nil,
+            recipientDeviceId: nil,
+            contentType: .e2EeSignal,
+            sealedInnerBytes: Data()
+        )
+        XCTAssertTrue(env.hasSender)
+        XCTAssertFalse(env.hasSealedSender)
+    }
+}

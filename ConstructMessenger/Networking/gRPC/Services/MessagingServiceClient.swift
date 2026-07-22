@@ -19,6 +19,64 @@ final class MessagingServiceClient: Sendable {
 
     private init() {}
 
+    /// Builds the outgoing message envelope.
+    ///
+    /// Extracted from `sendMessage` so the sealed-sender invariant is unit-testable without a live
+    /// gRPC channel. **Invariant:** a sealed send (non-empty `sealedInnerBytes`) MUST NOT populate
+    /// `sender`, `conversationID`, or `contentType` on the outer envelope — those are exactly the
+    /// metadata sealed sender hides (the real content_type travels inside `SealedInner`). The
+    /// identified fields are set ONLY on the non-sealed path. Empty sealed bytes are treated as
+    /// identified (never silently drop the sender).
+    static func buildEnvelope(
+        messageId: String,
+        recipientId: String,
+        senderId: String,
+        conversationId: String,
+        encryptedPayload: Data,
+        timestamp: UInt64,
+        senderDeviceId: String?,
+        recipientDeviceId: String?,
+        contentType: Shared_Proto_Core_V1_ContentType,
+        sealedInnerBytes: Data?
+    ) -> Shared_Proto_Core_V1_Envelope {
+        var recipient = Shared_Proto_Core_V1_UserId()
+        recipient.userID = recipientId
+
+        var envelope = Shared_Proto_Core_V1_Envelope()
+        envelope.messageID = messageId
+        envelope.recipient = recipient
+        envelope.encryptedPayload = encryptedPayload
+        envelope.timestamp = Int64(timestamp)
+
+        if let sealedInner = sealedInnerBytes, !sealedInner.isEmpty {
+            // STEALTH (stealth-sealed-sender-v2 Phase 3): do not populate sender, conversation_id,
+            // or the real content_type on the outer envelope — the real content_type travels inside
+            // SealedInner (see StealthSenderService.buildSealedInner) and is recovered by the
+            // recipient after unsealing.
+            var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
+            sealedEnvelope.sealedInner = sealedInner
+            envelope.sealedSender = sealedEnvelope
+        } else {
+            var sender = Shared_Proto_Core_V1_UserId()
+            sender.userID = senderId
+            envelope.sender = sender
+            envelope.conversationID = conversationId
+            envelope.contentType = contentType
+        }
+
+        if let senderDeviceId, !senderDeviceId.isEmpty {
+            var senderDevice = Shared_Proto_Core_V1_DeviceId()
+            senderDevice.deviceID = senderDeviceId
+            envelope.senderDevice = senderDevice
+        }
+        if let recipientDeviceId, !recipientDeviceId.isEmpty {
+            var recipientDevice = Shared_Proto_Core_V1_DeviceId()
+            recipientDevice.deviceID = recipientDeviceId
+            envelope.recipientDevice = recipientDevice
+        }
+        return envelope
+    }
+
     // MARK: - Send Message (replaces MessagingAPI.sendMessage)
 
     func sendMessage(
@@ -44,42 +102,18 @@ final class MessagingServiceClient: Sendable {
         return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
-            var sender = Shared_Proto_Core_V1_UserId()
-            sender.userID = senderId
-
-            var recipient = Shared_Proto_Core_V1_UserId()
-            recipient.userID = recipientId
-
-            var envelope = Shared_Proto_Core_V1_Envelope()
-            envelope.messageID = messageId
-            envelope.recipient = recipient
-            envelope.encryptedPayload = encryptedPayload
-            envelope.timestamp = Int64(timestamp)
-
-            if let sealedInner = sealedInnerBytes, !sealedInner.isEmpty {
-                // STEALTH (stealth-sealed-sender-v2 Phase 3): do not populate sender,
-                // conversation_id, or the real content_type on the outer envelope — the
-                // real content_type travels inside SealedInner (see StealthSenderService.
-                // buildSealedInner) and is recovered by the recipient after unsealing.
-                var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
-                sealedEnvelope.sealedInner = sealedInner
-                envelope.sealedSender = sealedEnvelope
-            } else {
-                envelope.sender = sender
-                envelope.conversationID = conversationId
-                envelope.contentType = contentType
-            }
-
-            if let senderDeviceId, !senderDeviceId.isEmpty {
-                var senderDevice = Shared_Proto_Core_V1_DeviceId()
-                senderDevice.deviceID = senderDeviceId
-                envelope.senderDevice = senderDevice
-            }
-            if let recipientDeviceId, !recipientDeviceId.isEmpty {
-                var recipientDevice = Shared_Proto_Core_V1_DeviceId()
-                recipientDevice.deviceID = recipientDeviceId
-                envelope.recipientDevice = recipientDevice
-            }
+            let envelope = Self.buildEnvelope(
+                messageId: messageId,
+                recipientId: recipientId,
+                senderId: senderId,
+                conversationId: conversationId,
+                encryptedPayload: encryptedPayload,
+                timestamp: timestamp,
+                senderDeviceId: senderDeviceId,
+                recipientDeviceId: recipientDeviceId,
+                contentType: contentType,
+                sealedInnerBytes: sealedInnerBytes
+            )
 
             let attemptId = UUID().uuidString.lowercased()
 
