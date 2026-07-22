@@ -86,6 +86,15 @@ struct ContentView: View {
                     await BlindTokenService.shared.bootstrapInitialBatch()
                 }
             }
+
+            // Heal degraded (at-risk) sessions whose peer has rotated back to a fresh SPK — closes
+            // the stale-peer Phase 3B loop (server wake → peer rotates → sender auto-upgrades) without
+            // requiring the user to open each affected chat. Self-throttled per contact.
+            if AuthSessionManager.shared.isSessionValid, CryptoManager.shared.isInitialized {
+                Task {
+                    await SessionInitializationService.shared.upgradeAllAtRiskSessionsOnForeground()
+                }
+            }
         }
         .onChange(of: deepLinkHandler.deepLink) { _, newDeepLink in
             handleDeepLink(newDeepLink)
