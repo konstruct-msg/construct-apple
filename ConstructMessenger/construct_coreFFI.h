@@ -1110,6 +1110,11 @@ RustBuffer uniffi_construct_core_fn_func_pp_seal_token_bytes(RustBuffer token, R
 int8_t uniffi_construct_core_fn_func_pp_verify_client(RustBuffer evaluated_bytes, RustBuffer nonce, RustBuffer server_pubkey_bytes, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_VERIFY_DLEQ
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_VERIFY_DLEQ
+int8_t uniffi_construct_core_fn_func_pp_verify_dleq(RustBuffer blinded, RustBuffer evaluated, RustBuffer proof, RustBuffer issuer_public, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RANDOM_SEND_DELAY_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RANDOM_SEND_DELAY_MS
 uint64_t uniffi_construct_core_fn_func_random_send_delay_ms(uint64_t max_delay_ms, RustCallStatus *_Nonnull out_status
@@ -1667,6 +1672,12 @@ uint16_t uniffi_construct_core_checksum_func_pp_seal_token_bytes(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_VERIFY_CLIENT
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_VERIFY_CLIENT
 uint16_t uniffi_construct_core_checksum_func_pp_verify_client(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_VERIFY_DLEQ
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_VERIFY_DLEQ
+uint16_t uniffi_construct_core_checksum_func_pp_verify_dleq(void
     
 );
 #endif

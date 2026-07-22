@@ -203,6 +203,36 @@ final class BlindTokenService {
         await replenish(count: Self.batchSize)
     }
 
+    // MARK: - Phase C: pinned issuer keys (verifiable VOPRF)
+
+    /// Client-pinned issuer public keys `K = k·G` (compressed Ristretto, 32 bytes), keyed by
+    /// `issuer_key_version`. The batched DLEQ proof in `IssueTokensResponse` is verified against
+    /// the PIN — never the echoed `serverPubkey`, which a malicious/coerced issuer could vary per
+    /// user to key-tag. A pin is an out-of-band constant, like the VEIL bundle-signing-key pin:
+    /// obtain it once from the `serverPubkey` of a trusted `IssueTokens` response (there is no
+    /// well-known — everything reaches the client over gRPC) and bake it in here.
+    ///
+    /// **Rollout safety:** when no pin exists for the returned version, DLEQ verification is skipped
+    /// and issuance falls back to the legacy per-point check — a not-yet-pinned or freshly-rotated
+    /// key never bricks token issuance. Verification activates the moment the matching pin lands.
+    /// Rotation: ship the next key here alongside the current one (a set), then retire the old.
+    // Pinned issuer public key(s) K = k·G, base64-decoded from identity-service's boot log
+    // ("Privacy Pass issuer commitment initialized (DLEQ verifiable) issuer_public=… version=…").
+    // Add the next key alongside the current one when rotating, then retire the old.
+    private static let issuerKeyPins: [UInt32: [UInt8]] = [
+        // v1 — zFQy29lYJWV8AkJPtya3/P+xlS/t9bDJqHWuGG5qKTM=
+        1: [
+            0xcc, 0x54, 0x32, 0xdb, 0xd9, 0x58, 0x25, 0x65,
+            0x7c, 0x02, 0x42, 0x4f, 0xb7, 0x26, 0xb7, 0xfc,
+            0xff, 0xb1, 0x95, 0x2f, 0xed, 0xf5, 0xb0, 0xc9,
+            0xa8, 0x75, 0xae, 0x18, 0x6e, 0x6a, 0x29, 0x33,
+        ],
+    ]
+
+    static func pinnedIssuerKey(version: UInt32) -> [UInt8]? {
+        issuerKeyPins[version]
+    }
+
     // MARK: - Core OPRF flow
 
     /// Run the full blind → issue → finalize pipeline and return valid tokens.
@@ -240,6 +270,33 @@ final class BlindTokenService {
         }
 
         let serverPubkey = response.serverPubkey.isEmpty ? [UInt8](repeating: 0, count: 32) : Array(response.serverPubkey)
+
+        // 2b. Phase C — verifiable issuance. When this issuer key version is pinned, verify the
+        // batched DLEQ proof against the PINNED K (never the echoed serverPubkey, which a
+        // malicious/coerced issuer could vary per user to key-tag). This proves every evaluated
+        // point used the single committed k. No pin for this version ⇒ skip, so a not-yet-pinned
+        // or freshly-rotated key never bricks issuance (the legacy per-point check below still runs).
+        if let pinnedK = Self.pinnedIssuerKey(version: response.issuerKeyVersion) {
+            if !response.serverPubkey.isEmpty && Array(response.serverPubkey) != pinnedK {
+                Log.error("BlindToken: serverPubkey ≠ pinned issuer key v\(response.issuerKeyVersion) — rejecting batch (key-tag?)", category: "BlindToken")
+                throw BlindTokenError.allPointsRejected
+            }
+            guard !response.dleqProof.isEmpty else {
+                Log.error("BlindToken: pinned issuer key v\(response.issuerKeyVersion) but response carried no DLEQ proof — rejecting batch", category: "BlindToken")
+                throw BlindTokenError.allPointsRejected
+            }
+            let verified = ppVerifyDleq(
+                blinded: blindedPoints.map { [UInt8]($0) },
+                evaluated: response.evaluatedPoints.map { [UInt8]($0) },
+                proof: [UInt8](response.dleqProof),
+                issuerPublic: pinnedK
+            )
+            guard verified else {
+                Log.error("BlindToken: DLEQ proof FAILED against pinned issuer key v\(response.issuerKeyVersion) — rejecting batch (issuer key-tag)", category: "BlindToken")
+                throw BlindTokenError.allPointsRejected
+            }
+            Log.info("BlindToken: DLEQ verified against pinned issuer key v\(response.issuerKeyVersion) (\(count) pts)", category: "BlindToken")
+        }
 
         // 3. Finalize each evaluated point.
         var tokens: [BlindToken] = []

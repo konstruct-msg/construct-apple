@@ -6548,6 +6548,31 @@ fileprivate struct FfiConverterSequenceTypeCfeAction: FfiConverterRustBuffer {
         return seq
     }
 }
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceSequenceUInt8: FfiConverterRustBuffer {
+    typealias SwiftType = [[UInt8]]
+
+    public static func write(_ value: [[UInt8]], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterSequenceUInt8.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [[UInt8]] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [[UInt8]]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterSequenceUInt8.read(from: &buf))
+        }
+        return seq
+    }
+}
 public func batteryAwareJitterMs(baseMs: UInt64, maxJitterMs: UInt64, batteryLevel: Float) -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
     uniffi_construct_core_fn_func_battery_aware_jitter_ms(
@@ -6861,6 +6886,24 @@ public func ppVerifyClient(evaluatedBytes: [UInt8], nonce: [UInt8], serverPubkey
         FfiConverterSequenceUInt8.lower(evaluatedBytes),
         FfiConverterSequenceUInt8.lower(nonce),
         FfiConverterSequenceUInt8.lower(serverPubkeyBytes),$0
+    )
+})
+}
+/**
+ * Verify a batched DLEQ proof (IssueTokensResponse.dleq_proof) against the
+ * client-pinned issuer public key K. Returns true iff the same k links
+ * K = k*G and every evaluated[i] = k*blinded[i] — closes malicious-issuer
+ * key-tagging (Phase C). blinded/evaluated are the batch of 32-byte points
+ * (blinded as sent to IssueTokens, evaluated as returned); proof is 64 bytes;
+ * issuer_public is the pinned 32-byte K. False on any malformed input.
+ */
+public func ppVerifyDleq(blinded: [[UInt8]], evaluated: [[UInt8]], proof: [UInt8], issuerPublic: [UInt8]) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_pp_verify_dleq(
+        FfiConverterSequenceSequenceUInt8.lower(blinded),
+        FfiConverterSequenceSequenceUInt8.lower(evaluated),
+        FfiConverterSequenceUInt8.lower(proof),
+        FfiConverterSequenceUInt8.lower(issuerPublic),$0
     )
 })
 }
@@ -7179,6 +7222,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_pp_verify_client() != 14654) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_pp_verify_dleq() != 9036) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_random_send_delay_ms() != 9943) {
