@@ -107,6 +107,20 @@ struct OnboardingView: View {
                         }
                         .buttonStyle(.plain)
                     }
+
+                    // Pre-login diagnostics escape hatch (DEBUG/internal only): lets onboarding /
+                    // recovery failures be diagnosed without an account. Absent in Release —
+                    // production collects no logs, so there is nothing to share and no debug surface.
+                    #if DEBUG || INTERNAL_TOOLS
+                    Button { DiagnosticLogShare.present() } label: {
+                        Label(NSLocalizedString("diagnostics_share_logs", comment: ""),
+                              systemImage: "square.and.arrow.up")
+                            .font(CTFont.regular(11))
+                            .foregroundColor(Color.CT.textDim)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 12)
+                    #endif
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 52)

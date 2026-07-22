@@ -277,18 +277,7 @@ struct DiagnosticsView: View {
     }
 
     private func shareArchive() {
-        guard let url = try? LogCollector.shared.createLogArchive() else {
-            Log.error("Failed to create log archive", category: "Diagnostics")
-            return
-        }
-#if canImport(UIKit)
-        // Must use ActivityShare on iPad — bare present() crashes without popover source
-        // (UIPopoverPresentationController presentationTransitionWillBegin).
-        ActivityShare.present(items: [url])
-#elseif os(macOS)
-        NSSharingServicePicker(items: [url])
-            .show(relativeTo: .zero, of: NSApp.keyWindow?.contentView ?? NSView(), preferredEdge: .minY)
-#endif
+        DiagnosticLogShare.present()
     }
 
     private func clearLogs() {

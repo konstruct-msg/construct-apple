@@ -172,7 +172,7 @@ struct RecoveryEntryView: View {
     private var doneView: some View {
         VStack(spacing: 24) {
             Spacer()
-            Image(systemName: "checknmark.circle.fill")
+            Image(systemName: "checkmark.circle.fill")
                 .font(CTFont.regular(48))
                 .foregroundColor(Color.CT.accent)
                 .lineLimit(1).fixedSize()
@@ -233,6 +233,21 @@ struct RecoveryEntryView: View {
             }
             .padding(.horizontal)
             .padding(.bottom)
+
+            // Escape hatch (DEBUG/internal only): recovery is the one flow that fails before
+            // login, so the Settings → Diagnostics log export is unreachable. Surface it here so a
+            // failed recovery can be diagnosed. Not shown in Release — production keeps no logs.
+            #if DEBUG || INTERNAL_TOOLS
+            Button {
+                DiagnosticLogShare.present()
+            } label: {
+                Label(NSLocalizedString("diagnostics_share_logs", comment: ""),
+                      systemImage: "square.and.arrow.up")
+                    .font(CTFont.regular(12))
+                    .foregroundColor(Color.CT.textDim)
+            }
+            .padding(.bottom)
+            #endif
         }
     }
 }
