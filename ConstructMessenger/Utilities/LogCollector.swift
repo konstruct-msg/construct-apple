@@ -26,8 +26,17 @@ class LogCollector {
     /// Current log file
     private let currentLogFile: URL
     
-    /// Whether logging to file is enabled (always on for diagnostics)
+    /// Whether logging to file is enabled.
+    /// PRIVACY: never persist a log file in App Store Release — it would leave rolling
+    /// on-disk plaintext of crypto/session/network metadata on a privacy-first messenger.
+    /// File logging is limited to DEBUG / internal builds; production writes nothing to disk.
+    /// (os_log in Logger.swift still runs, but its dynamic `%@` strings are redacted as
+    /// <private> in Release and are system-managed, not a file we persist.)
+    #if DEBUG || INTERNAL_TOOLS
     let isEnabled: Bool = true
+    #else
+    let isEnabled: Bool = false
+    #endif
     
     private let queue = DispatchQueue(label: "cc.konstruct.logcollector", qos: .utility)
     
