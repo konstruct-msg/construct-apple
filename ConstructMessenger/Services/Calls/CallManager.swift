@@ -1050,6 +1050,17 @@ final class CallManager: CallUIManaging {
                         // Uses dedicated helper with cache + proper logging.
                         let sealedInnerBytes = await buildSealedForCallSignalIfNeeded(recipient: to, payload: payload)
 
+                        // Fail-closed: while stealth is on a call signal is sealed or dropped — never
+                        // sent identified. The signal carries the real senderId to the server; leaking
+                        // it defeats sealed sender. Privacy over availability: a call that cannot be
+                        // established anonymously fails rather than silently deanonymizing the caller.
+                        // The identified `else` below is therefore reachable only when stealth is off.
+                        if StealthPolicy.shared.shouldUseSealedSender() && sealedInnerBytes == nil {
+                            Log.error("Call signal: cannot seal (recipient IK/cert unavailable) — NOT sent identified, dropped to=\(to.prefix(8))… callId=\(callId.prefix(8))…", category: "Calls")
+                            PerformanceMetrics.shared.record(.stealthSealFailure, label: "callSignal-dropped")
+                            return
+                        }
+
                         do {
                             if let sealedInnerBytes {
                                 // Sealed call signal with one-shot enforce recovery: fresh
