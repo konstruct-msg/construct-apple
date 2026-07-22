@@ -1,4 +1,5 @@
 import Foundation
+import CoreData
 import os.log
 
 /// Errors specific to the session-init layer (distinct from CryptoManagerError).
