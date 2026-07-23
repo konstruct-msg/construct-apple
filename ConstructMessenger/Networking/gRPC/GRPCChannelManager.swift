@@ -694,6 +694,25 @@ final class GRPCChannelManager: Sendable {
         )
     }
 
+    /// Route an RPC over the unauthenticated sealed channel (`sealed == true`) or the
+    /// authenticated channel. Lets a sensitive read RPC — the prekey bundle fetch that
+    /// precedes a session init — move to the anonymous transport under the Phase-4 flag
+    /// without duplicating the call site. The sealed channel carries no `AuthInterceptor`,
+    /// so no `x-user-id`/Bearer is sent and the server/gateway never learns who is fetching
+    /// whose bundle (closes the session-init correlation leak; see
+    /// construct-docs/client/specs/SEALED_SENDER_PRODUCTION_PLAN.md Phase 6).
+    func performRPC<Result: Sendable>(
+        sealed: Bool,
+        timeout: TimeInterval? = nil,
+        _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.TransportServices>) async throws -> Result
+    ) async throws -> Result {
+        if sealed {
+            return try await performSealedRPC(timeout: timeout, operation)
+        } else {
+            return try await performRPC(timeout: timeout, operation)
+        }
+    }
+
     /// Execute a gRPC operation on the unauthenticated sealed-sender channel
     /// (stealth-sealed-sender-v2 Phase 2).
     ///

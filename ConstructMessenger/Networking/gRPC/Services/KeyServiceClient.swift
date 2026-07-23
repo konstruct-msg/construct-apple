@@ -85,7 +85,11 @@ final class KeyServiceClient: Sendable {
     /// Fetch pre-key bundles for ALL active devices of a user (or specific device IDs).
     /// Returns one bundle per device — caller must encrypt separately for each.
     func getPreKeyBundles(userId: String, deviceIds: [String] = []) async throws -> [DeviceBundleData] {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPreKeyBundles) { grpcClient in
+        // Under the Phase-4 unauthenticated-transport flag, fetch over the sealed channel so the
+        // server/gateway does not learn who is fetching whose bundle. Bundles are public keys, and
+        // key-service's GetPreKeyBundles reads no caller identity (IP-only rate limiting), so the
+        // unauthenticated fetch is safe end-to-end. Off → authenticated (current behaviour).
+        try await GRPCChannelManager.shared.performRPC(sealed: FeatureFlags.sealedSenderUnauthenticatedTransport, timeout: GRPCTimeouts.getPreKeyBundles) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetPreKeyBundlesRequest()
@@ -183,7 +187,9 @@ final class KeyServiceClient: Sendable {
 
     /// Fetch a user's pre-key bundle for establishing an E2EE session.
     func getPreKeyBundle(userId: String, deviceId: String? = nil) async throws -> PublicKeyBundleData {
-        let fetched = try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPreKeyBundle) { grpcClient -> PreKeyBundleFetchResult in
+        // See getPreKeyBundles: sealed (unauthenticated) channel under the Phase-4 flag so the
+        // server/gateway can't correlate (caller, target) at session-init time.
+        let fetched = try await GRPCChannelManager.shared.performRPC(sealed: FeatureFlags.sealedSenderUnauthenticatedTransport, timeout: GRPCTimeouts.getPreKeyBundle) { grpcClient -> PreKeyBundleFetchResult in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetPreKeyBundleRequest()
