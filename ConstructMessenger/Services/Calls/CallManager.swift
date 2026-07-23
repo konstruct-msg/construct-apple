@@ -299,6 +299,20 @@ final class CallManager: CallUIManaging {
         let callData = (payload["construct_call"] as? [AnyHashable: Any]) ?? payload
         let callId  = (callData["call_id"]  as? String) ?? reportedUUID.uuidString
         let callerId = (callData["caller_id"] as? String) ?? "Unknown"
+
+        // Client-side block enforcement on the VoIP path. iOS already forced us to report the
+        // call to CallKit synchronously in the PushKit delegate (or the app is terminated), so
+        // we cannot simply drop it — instead report it ended immediately so a blocked contact
+        // never actually rings. Mirrors the busy-guard above and the signal-path block drop.
+        // See decisions/sealed-sender-authenticated-transitional.md.
+        if BlockedContacts.isBlocked(callerId, in: PersistenceController.shared.container.viewContext) {
+            Log.info("SECURITY[block_drop]: incoming call from blocked \(callerId.prefix(8))… — reporting ended (callId=\(callId.prefix(8))…)", category: "Calls")
+            #if os(iOS)
+            CallKitProvider.shared.reportCallEnded(uuid: reportedUUID)
+            #endif
+            return
+        }
+
         // Privacy: do NOT use caller_name from push payload (exposed to APNs infrastructure).
         // Resolve from local CoreData via `resolvedDisplayName` (profile-shared name →
         // server username → deterministic generated fallback). Never shows raw UUID.
@@ -1188,6 +1202,15 @@ final class CallManager: CallUIManaging {
         // Note: if the original wire message was sealed, the real sender was already resolved
         // in MessageRouter before the Rust decrypt action produced this .callSignalDecrypted.
         Log.debug("STEALTH: call signal received (sender resolution happened upstream if sealed)", category: "Calls")
+
+        // Client-side block enforcement. Under sealed sender the server can't see the caller,
+        // so it does not stop a blocked contact from ringing you — drop every call signal
+        // (offer/answer/ICE/hangup) from a blocked sender here. Mirrors the message-body block
+        // drop in MessageRouter. See decisions/sealed-sender-authenticated-transitional.md.
+        if BlockedContacts.isBlocked(senderUserId, in: PersistenceController.shared.container.viewContext) {
+            Log.info("SECURITY[block_drop]: dropped call signal from blocked \(senderUserId.prefix(8))… (callId=\(signal.callID.prefix(8))…)", category: "Calls")
+            return
+        }
 
         switch signal.signal {
         case .offer(let offer):

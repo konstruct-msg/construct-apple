@@ -471,6 +471,17 @@ class BackgroundFetchManager: NSObject {
 
                 let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) } ?? ""
 
+                // Client-side block enforcement (decrypt-but-suppress). The ratchet already
+                // advanced during decryption above; for a blocked sender we drop the transcript,
+                // the unread bump, and the preview. Server-side block is bypassed under sealed
+                // sender, so this client drop is the load-bearing block. markProcessed keeps the
+                // server from re-delivering. See decisions/sealed-sender-authenticated-transitional.md.
+                if BlockedContacts.isBlocked(item.messageData.from, in: backgroundContext) {
+                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
+                    Log.info("SECURITY[block_drop]: suppressed push message \(item.messageData.id.prefix(8))… from blocked \(item.messageData.from.prefix(8))…", category: "BackgroundFetch")
+                    continue
+                }
+
                 // Modern edit via MessageContent.edit (stealth/sealed path, and any direct chunked edit).
                 // The target message id travels inside the encrypted content, never a wire-envelope field.
                 if let targetID = modernEditTarget, let newT = modernEditText, !newT.isEmpty {

@@ -630,8 +630,23 @@ final class MessageRouter {
         // chat, message, context, and delegate. Handled inline.
         for action in actions {
             if case .messageDecrypted(let contactId, _, let plaintext) = action {
-                _ = contactId.isEmpty ? otherUserId : contactId
+                let resolvedSender = contactId.isEmpty ? otherUserId : contactId
                 checkUsernameUpdate(for: otherUserId, chat: chat, in: context)
+
+                // Client-side block enforcement (decrypt-but-suppress). The ratchet has
+                // already advanced (handleOrchestratorEvent + SessionActionExecutor above),
+                // so unblocking later resumes the session seamlessly. For a blocked sender we
+                // suppress the transcript, the notification, AND the E2E delivery receipt — a
+                // receipt would leak delivered/read status to the blocked peer and spend a
+                // Privacy Pass token. Server-side block is bypassed under sealed sender, so this
+                // client drop is the load-bearing block. The server stream cursor still advances
+                // (.durable) + markProcessed dedups, so the queue drains and there is no redelivery.
+                // See decisions/sealed-sender-authenticated-transitional.md.
+                if BlockedContacts.isBlocked(resolvedSender, in: context) {
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    Log.info("SECURITY[block_drop]: suppressed message \(message.id.prefix(8))… from blocked \(resolvedSender.prefix(8))… (ratchet advanced; no store/notify/receipt)", category: "MessageRouter")
+                    continue
+                }
 
                 // DELIVERY_RECEIPT (content_type=14): intercept raw bytes before reassembler.
                 // The payload is either legacy JSON (starts with `{`) or binary proto (starts with 0x0A).
@@ -1849,6 +1864,31 @@ final class MessageRouter {
         } catch {
             Log.error("SENDER_SYNC: initReceivingSession failed for \(contactId.prefix(20))…: \(error)", category: "MessageRouter")
         }
+    }
+}
+
+/// Client-side block enforcement lookup.
+///
+/// Under Ghost Mode (sealed sender) the server cannot see the sender of a sealed message,
+/// so it does NOT apply server-side block/ban on the default send path — the sealed branch
+/// returns before the block check (construct-server messaging-service/grpc.rs). Blocking is
+/// therefore enforced client-side, by dropping incoming messages from blocked contacts AFTER
+/// they are unsealed/decrypted (the ratchet still advances, so unblocking resumes cleanly).
+/// This is the load-bearing block mechanism and the shape the unauthenticated sealed-sender
+/// endgame requires — the server can never enforce it there.
+///
+/// See: construct-docs/decisions/sealed-sender-authenticated-transitional.md
+enum BlockedContacts {
+    /// Whether `userId` is a blocked contact in the given context. Cheap indexed count on the
+    /// `User` entity; safe on the incoming-message hot path. Empty/unknown ids → not blocked
+    /// (fail-open: a block is a user-initiated suppression, not a boundary whose lookup failure
+    /// should drop legitimate traffic).
+    static func isBlocked(_ userId: String, in context: NSManagedObjectContext) -> Bool {
+        guard !userId.isEmpty else { return false }
+        let fetch = User.fetchRequest()
+        fetch.predicate = NSPredicate(format: "id == %@ AND isBlocked == YES", userId)
+        fetch.fetchLimit = 1
+        return ((try? context.count(for: fetch)) ?? 0) > 0
     }
 }
 
