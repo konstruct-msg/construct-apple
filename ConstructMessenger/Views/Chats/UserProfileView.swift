@@ -48,6 +48,7 @@ struct UserProfileView: View {
     @State private var viewModel = ProfileShareViewModel()
     @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
     @State private var showingBlockConfirmation = false
+    @State private var showingReportConfirmation = false
     @State private var showResetSessionConfirm = false
     @State private var showingShareAlert = false
     @State private var shareAlertMessage = ""
@@ -108,6 +109,12 @@ struct UserProfileView: View {
             ) { handleBlockToggle() }
         } message: {
             Text(LocalizedStringKey(user.isBlocked ? "unblock_user_confirmation_message" : "block_user_confirmation_message"))
+        }
+        .alert(LocalizedStringKey("report_spam_confirmation"), isPresented: $showingReportConfirmation) {
+            Button(LocalizedStringKey("cancel"), role: .cancel) {}
+            Button(LocalizedStringKey("report_spam"), role: .destructive) { handleReportSpam() }
+        } message: {
+            Text(LocalizedStringKey("report_spam_confirmation_message"))
         }
         .alert(LocalizedStringKey("share_my_data_alert"), isPresented: $showingShareAlert) {
             Button(LocalizedStringKey("ok")) {}
@@ -359,6 +366,12 @@ struct UserProfileView: View {
             flatRowDivider()
 
             actionRow(
+                label: NSLocalizedString("report_spam", comment: ""),
+                color: Color.CT.danger
+            ) { showingReportConfirmation = true }
+            flatRowDivider()
+
+            actionRow(
                 label: NSLocalizedString("reset_session", comment: ""),
                 color: Color.CT.danger
             ) { showResetSessionConfirm = true }
@@ -500,9 +513,59 @@ struct UserProfileView: View {
         }
     }
 
+    /// Report the contact for spam and block them. Reporting feeds the server-side
+    /// auto-escalation (flag/ban) engine; we also block (report-and-block is the safe default —
+    /// you should not keep receiving messages from someone you reported). The reported device id
+    /// is derived locally from the peer's identity key (`SHA256(identity_public)[0..16]`, the same
+    /// value the server keys sentinel on), so it works even under sealed sender.
+    private func handleReportSpam() {
+        let userId = user.id
+        let reportedDeviceId: String? = user.knownIdentityKey.map { deriveDeviceId(identityPublicKey: [UInt8]($0)) }
+
+        // Block immediately (local drop + durable server-side); report best-effort alongside.
+        user.isBlocked = true
+        viewContext.saveAndLog(category: "UserProfileView")
+
+        Task {
+            var reported = false
+            if let reportedDeviceId, !reportedDeviceId.isEmpty {
+                do {
+                    reported = try await SentinelServiceClient.shared.reportSpam(reportedDeviceId: reportedDeviceId)
+                } catch {
+                    Log.error("reportSpam failed for \(userId.prefix(8))…: \(error)", category: "UserProfileView")
+                }
+            } else {
+                Log.error("reportSpam skipped for \(userId.prefix(8))… — no known identity key to derive device id", category: "UserProfileView")
+            }
+            do { _ = try await UserServiceClient.shared.blockUser(userId: userId, reason: "spam") }
+            catch { Log.error("Block sync failed after report for \(userId.prefix(8))…: \(error)", category: "UserProfileView") }
+
+            await MainActor.run {
+                shareAlertMessage = NSLocalizedString(reported ? "report_spam_success" : "report_spam_failed", comment: "")
+                showingShareAlert = true
+            }
+        }
+    }
+
     private func handleBlockToggle() {
         user.isBlocked.toggle()
+        let nowBlocked = user.isBlocked
+        let userId = user.id
         viewContext.saveAndLog(category: "UserProfileView")
+        // Persist the block server-side (durable across reinstall; the authoritative
+        // `user_blocks` row used on the identified path). The local `isBlocked` already drives
+        // the client-side drop, so a failed RPC must NOT revert the local state — best-effort sync.
+        Task {
+            do {
+                if nowBlocked {
+                    _ = try await UserServiceClient.shared.blockUser(userId: userId)
+                } else {
+                    _ = try await UserServiceClient.shared.unblockUser(userId: userId)
+                }
+            } catch {
+                Log.error("Block sync failed for \(userId.prefix(8))… (local state kept): \(error)", category: "UserProfileView")
+            }
+        }
     }
 
     /// Persist the local alias. Empty/whitespace clears it (falls back to the resolved name).

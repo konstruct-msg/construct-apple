@@ -228,6 +228,11 @@
 "share_my_data" = "Share My Data";
 "block_user" = "Block User";
 "unblock_user" = "Unblock User";
+"report_spam" = "Report Spam";
+"report_spam_confirmation" = "Report Spam?";
+"report_spam_confirmation_message" = "This person will be reported and blocked. Reports help us stop abuse — we never see your messages.";
+"report_spam_success" = "Report sent. This person is now blocked.";
+"report_spam_failed" = "Couldn't send the report, but this person is now blocked.";
 "actions" = "Actions";
 "user_is_blocked_footer" = "This user is blocked. They cannot send you messages.";
 "block_user_confirmation" = "Block User";

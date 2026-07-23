@@ -543,6 +543,12 @@ struct ChatView: View {
         if let user = viewModel.chat.otherUser {
             user.isBlocked = true
             try? user.managedObjectContext?.save()
+            let userId = user.id
+            // Durable server-side block (best-effort; local isBlocked already drives the drop).
+            Task {
+                do { _ = try await UserServiceClient.shared.blockUser(userId: userId) }
+                catch { Log.error("Flood block sync failed for \(userId.prefix(8))… (local kept): \(error)", category: "ChatView") }
+            }
         }
         IncomingFloodGuard.shared.unsuppress(senderId: floodSenderId)
     }

@@ -210,6 +210,11 @@
 "share_my_data" = "自分のデータを共有";
 "block_user" = "ユーザーをブロック";
 "unblock_user" = "ユーザーのブロックを解除";
+"report_spam" = "スパムを報告";
+"report_spam_confirmation" = "スパムを報告しますか？";
+"report_spam_confirmation_message" = "この相手を報告してブロックします。報告は不正利用の防止に役立ちます。メッセージの内容が見られることはありません。";
+"report_spam_success" = "報告を送信しました。相手をブロックしました。";
+"report_spam_failed" = "報告を送信できませんでしたが、相手をブロックしました。";
 "actions" = "アクション";
 "user_is_blocked_footer" = "このユーザーはブロックされています。メッセージを送信することはできません。";
 "block_user_confirmation" = "ユーザーをブロック";

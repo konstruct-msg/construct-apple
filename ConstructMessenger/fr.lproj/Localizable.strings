@@ -228,6 +228,11 @@
 "share_my_data" = "Partager mes données";
 "block_user" = "Bloquer l'utilisateur";
 "unblock_user" = "Débloquer l'utilisateur";
+"report_spam" = "Signaler un spam";
+"report_spam_confirmation" = "Signaler un spam ?";
+"report_spam_confirmation_message" = "Cette personne sera signalée et bloquée. Les signalements nous aident à lutter contre les abus — nous ne voyons jamais vos messages.";
+"report_spam_success" = "Signalement envoyé. Cette personne est désormais bloquée.";
+"report_spam_failed" = "Impossible d'envoyer le signalement, mais cette personne est désormais bloquée.";
 "actions" = "Actions";
 "user_is_blocked_footer" = "Cet utilisateur est bloqué. Il ne peut pas vous envoyer de messages.";
 "block_user_confirmation" = "Bloquer l'utilisateur";
