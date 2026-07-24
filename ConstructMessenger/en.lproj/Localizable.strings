@@ -394,6 +394,19 @@
 "paste_invite_link" = "Paste invite link";
 "clipboard_no_valid_invite" = "No valid invite link found in clipboard.";
 
+// Invite / contact links
+"invite_error_invalid_url" = "The provided URL is invalid.";
+"invite_error_unsupported_link" = "This is not a supported Construct invite link.";
+"invite_error_expired" = "This invite has expired. Ask for a new one.";
+"invite_error_invalid_fmt" = "Invalid invite: %@";
+"invite_error_already_used" = "This invite was already used. Ask for a new one.";
+"invite_error_verification_failed_fmt" = "Could not verify invite: %@";
+"invite_error_legacy_unsupported" = "This link format is no longer supported. Ask for a fresh invite QR or link.";
+"invite_error_malformed" = "Malformed invite data";
+"invite_redeem_safety_message_fmt" = "Connected with %@. Not who you expected?";
+"invite_redeem_safety_block" = "Block";
+"invite_accepted_inviter_message" = "Someone connected via your invite.";
+
 // iPad Split View
 "select_chat" = "Select a Chat";
 "select_chat_description" = "Choose a conversation from the sidebar to start messaging.";
@@ -881,6 +894,22 @@
 "kt_status" = "merkle log";
 "kt_verified" = "verified";
 "kt_warning" = "warning";
+
+// Key-change trust event (thread 5.4)
+"key_change_banner_title" = "Security key changed";
+"key_change_banner_title_failed" = "Identity check failed";
+"key_change_banner_subtitle_fmt" = "%@'s security key is different from before. Compare Safety Numbers before you trust this chat.";
+"key_change_banner_subtitle_failed" = "We could not confirm this person's security key with the transparency log. Verify in person if you can.";
+"key_change_verify" = "Verify";
+"key_change_accept" = "Accept new key";
+"key_change_toast_fmt" = "%@'s security key changed. Open the chat to verify.";
+"key_change_toast_open" = "Open";
+
+// Identity fingerprint (thread 5.3 — external identity form)
+"identity_fingerprint" = "Fingerprint";
+"identity_fingerprint_unknown" = "Not pinned yet";
+"identity_fingerprint_copy_hint" = "Copies fingerprint to clipboard";
+"identity_fingerprint_copied" = "Copied";
 "kt_no_data" = "no data";
 "kt_hint" = "Public identity keys are recorded in an append-only log so tampering can be detected.";
 "kt_failure_hint" = "key transparency verification failed — possible tampering detected.";

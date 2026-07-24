@@ -116,8 +116,8 @@ class ChatsViewModel {
 
     // MARK: - Chat operations
 
-    func startChat(with user: PublicUserInfo) -> Chat? {
-        let chat = chatManagementService.startChat(with: user)
+    func startChat(with user: PublicUserInfo, identityPublicKey: Data? = nil) -> Chat? {
+        let chat = chatManagementService.startChat(with: user, identityPublicKey: identityPublicKey)
         streamLifecycle.reconnectIfSubscriptionsChanged()
         if !CryptoManager.shared.hasSession(for: user.id) {
             CryptoManager.shared.clearArchivedSessions(for: user.id)

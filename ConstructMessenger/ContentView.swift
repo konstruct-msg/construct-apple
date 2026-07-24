@@ -99,6 +99,16 @@ struct ContentView: View {
         .onChange(of: deepLinkHandler.deepLink) { _, newDeepLink in
             handleDeepLink(newDeepLink)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openChatForKeyChange)) { note in
+            guard let userId = note.userInfo?["userId"] as? String, !userId.isEmpty else { return }
+            let ctx = viewContext
+            let fetch = User.fetchRequest()
+            fetch.predicate = NSPredicate(format: "id == %@", userId)
+            fetch.fetchLimit = 1
+            if let user = try? ctx.fetch(fetch).first {
+                chatsViewModel.openOrCreateChat(with: user)
+            }
+        }
         .onOpenURL { url in
             // Handle Universal Links in SwiftUI (iOS 13+)
             Log.info("ContentView: Received URL via onOpenURL: \(url.absoluteString)", category: "DeepLink")
@@ -121,9 +131,13 @@ struct ContentView: View {
                 deviceId: contactInfo.deviceId
             )
 
-            if let chat = chatsViewModel.startChat(with: publicUserInfo) {
+            if let chat = chatsViewModel.startChat(
+                with: publicUserInfo,
+                identityPublicKey: contactInfo.identityPublicKey
+            ) {
                 Log.info("ContentView: Chat created successfully, opening chat with id: \(chat.id)", category: "DeepLink")
                 chatsViewModel.chatToOpen = chat.id
+                InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
             } else {
                 Log.error("ContentView: Failed to create chat for userId: \(contactInfo.userId)", category: "DeepLink")
             }

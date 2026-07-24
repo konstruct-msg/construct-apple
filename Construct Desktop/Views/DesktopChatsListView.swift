@@ -180,7 +180,12 @@ struct DesktopChatsListView: View {
             bio: nil,
             deviceId: contactInfo.deviceId
         )
-        _ = chatsViewModel.startChat(with: publicUserInfo)
+        if chatsViewModel.startChat(
+            with: publicUserInfo,
+            identityPublicKey: contactInfo.identityPublicKey
+        ) != nil {
+            InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
+        }
     }
 
     private func showErrorAfterDismiss(_ message: String) {

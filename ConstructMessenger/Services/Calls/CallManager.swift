@@ -146,6 +146,18 @@ final class CallManager: CallUIManaging {
             return
         }
 
+        // Client-authoritative mutuality (sealed-sender future): only local contacts.
+        // Server reciprocity cannot survive when the server does not see the caller.
+        let ctx = PersistenceController.shared.container.viewContext
+        if !ContactPolicy.isCallableContact(userId, in: ctx) {
+            Log.info(
+                "SECURITY[call_gate]: outgoing call blocked — not a local contact \(userId.prefix(8))…",
+                category: "Calls"
+            )
+            lastError = NSLocalizedString("call_error_not_contacts", comment: "")
+            return
+        }
+
         // Busy / glare guard. Without this, `begin()` → `active?.close()` would tear down
         // an existing call to start the new outgoing one, and the subsequent
         // CXStartCallAction fails with maximumCallGroupsReached (Code 7) — orphaning the
@@ -300,13 +312,17 @@ final class CallManager: CallUIManaging {
         let callId  = (callData["call_id"]  as? String) ?? reportedUUID.uuidString
         let callerId = (callData["caller_id"] as? String) ?? "Unknown"
 
-        // Client-side block enforcement on the VoIP path. iOS already forced us to report the
+        // Client-side block + mutuality on the VoIP path. iOS already forced us to report the
         // call to CallKit synchronously in the PushKit delegate (or the app is terminated), so
-        // we cannot simply drop it — instead report it ended immediately so a blocked contact
-        // never actually rings. Mirrors the busy-guard above and the signal-path block drop.
-        // See decisions/sealed-sender-authenticated-transitional.md.
-        if BlockedContacts.isBlocked(callerId, in: PersistenceController.shared.container.viewContext) {
-            Log.info("SECURITY[block_drop]: incoming call from blocked \(callerId.prefix(8))… — reporting ended (callId=\(callId.prefix(8))…)", category: "Calls")
+        // we cannot simply drop it — instead report it ended immediately so a blocked /
+        // non-contact never actually rings. See sealed-sender-authenticated-transitional.
+        let pushCtx = PersistenceController.shared.container.viewContext
+        if BlockedContacts.isBlocked(callerId, in: pushCtx)
+            || !ContactPolicy.isCallableContact(callerId, in: pushCtx) {
+            Log.info(
+                "SECURITY[call_gate]: incoming push from non-callable \(callerId.prefix(8))… — reporting ended (callId=\(callId.prefix(8))…)",
+                category: "Calls"
+            )
             #if os(iOS)
             CallKitProvider.shared.reportCallEnded(uuid: reportedUUID)
             #endif
@@ -1203,12 +1219,15 @@ final class CallManager: CallUIManaging {
         // in MessageRouter before the Rust decrypt action produced this .callSignalDecrypted.
         Log.debug("STEALTH: call signal received (sender resolution happened upstream if sealed)", category: "Calls")
 
-        // Client-side block enforcement. Under sealed sender the server can't see the caller,
-        // so it does not stop a blocked contact from ringing you — drop every call signal
-        // (offer/answer/ICE/hangup) from a blocked sender here. Mirrors the message-body block
-        // drop in MessageRouter. See decisions/sealed-sender-authenticated-transitional.md.
-        if BlockedContacts.isBlocked(senderUserId, in: PersistenceController.shared.container.viewContext) {
-            Log.info("SECURITY[block_drop]: dropped call signal from blocked \(senderUserId.prefix(8))… (callId=\(signal.callID.prefix(8))…)", category: "Calls")
+        // Client-side block + mutuality. Under sealed sender the server can't see the caller,
+        // so it does not stop a non-contact from ringing you — drop every call signal here.
+        let signalCtx = PersistenceController.shared.container.viewContext
+        if BlockedContacts.isBlocked(senderUserId, in: signalCtx)
+            || !ContactPolicy.isCallableContact(senderUserId, in: signalCtx) {
+            Log.info(
+                "SECURITY[call_gate]: dropped call signal from non-callable \(senderUserId.prefix(8))… (callId=\(signal.callID.prefix(8))…)",
+                category: "Calls"
+            )
             return
         }
 

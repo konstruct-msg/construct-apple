@@ -623,19 +623,26 @@ final class KeyServiceClient: Sendable {
             user.ktStatus = .keyChanged
             user.knownIdentityKey = identityKey
             Log.error("KT: identity key changed for user \(userId)", category: "KT")
+            if context.hasChanges {
+                try? context.save()
+            }
             NotificationCenter.default.post(
                 name: .contactKeyChanged,
                 object: nil,
                 userInfo: ["userId": userId]
+            )
+            KeyChangeUX.notifyKeyChange(
+                userId: userId,
+                displayName: user.resolvedDisplayName
             )
         } else {
             user.ktStatus = newStatus
             if newStatus == .verified {
                 user.knownIdentityKey = identityKey
             }
-        }
-        if context.hasChanges {
-            try? context.save()
+            if context.hasChanges {
+                try? context.save()
+            }
         }
     }
 

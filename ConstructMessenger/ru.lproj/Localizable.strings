@@ -354,6 +354,19 @@
 "paste_invite_link" = "Вставить ссылку-приглашение";
 "clipboard_no_valid_invite" = "В буфере обмена не найдено действительной ссылки-приглашения.";
 
+// Invite / contact links
+"invite_error_invalid_url" = "Указан некорректный URL.";
+"invite_error_unsupported_link" = "Это не поддерживаемая ссылка-приглашение Construct.";
+"invite_error_expired" = "Срок действия приглашения истёк. Попросите новое.";
+"invite_error_invalid_fmt" = "Недействительное приглашение: %@";
+"invite_error_already_used" = "Это приглашение уже использовано. Попросите новое.";
+"invite_error_verification_failed_fmt" = "Не удалось проверить приглашение: %@";
+"invite_error_legacy_unsupported" = "Этот формат ссылки больше не поддерживается. Попросите свежий QR или ссылку.";
+"invite_error_malformed" = "Повреждённые данные приглашения";
+"invite_redeem_safety_message_fmt" = "Вы соединились с %@. Не тот человек?";
+"invite_redeem_safety_block" = "Блок";
+"invite_accepted_inviter_message" = "Кто-то подключился по вашему приглашению.";
+
 // iPad Split View
 "select_chat" = "Выберите чат";
 "select_chat_description" = "Выберите разговор на боковой панели, чтобы начать общение.";
@@ -892,6 +905,22 @@
 "kt_status" = "merkle-лог";
 "kt_verified" = "подтверждено";
 "kt_warning" = "внимание";
+
+// Key-change trust event (thread 5.4)
+"key_change_banner_title" = "Ключ безопасности изменился";
+"key_change_banner_title_failed" = "Проверка личности не удалась";
+"key_change_banner_subtitle_fmt" = "У %@ другой ключ, чем раньше. Сверьте Safety Numbers, прежде чем доверять чату.";
+"key_change_banner_subtitle_failed" = "Не удалось подтвердить ключ этого человека в журнале прозрачности. По возможности проверьте лично.";
+"key_change_verify" = "Проверить";
+"key_change_accept" = "Принять новый ключ";
+"key_change_toast_fmt" = "У %@ изменился ключ безопасности. Откройте чат, чтобы проверить.";
+"key_change_toast_open" = "Открыть";
+
+// Identity fingerprint (thread 5.3)
+"identity_fingerprint" = "Отпечаток";
+"identity_fingerprint_unknown" = "Ещё не закреплён";
+"identity_fingerprint_copy_hint" = "Копирует отпечаток в буфер";
+"identity_fingerprint_copied" = "Скопировано";
 "kt_no_data" = "нет данных";
 "kt_hint" = "каждый ключ идентификации постоянно записывается в append-only merkle-лог. подделка криптографически обнаруживаема.";
 "kt_failure_hint" = "проверка прозрачности ключей не прошла — возможна подделка.";

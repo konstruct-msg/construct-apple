@@ -32,9 +32,11 @@ class ChatManagementService {
     // MARK: - Chat Creation
     
     /// Start a new chat with a user (from invite link or QR code)
-    /// - Parameter user: Public user information from invite
+    /// - Parameters:
+    ///   - user: Public user information from invite
+    ///   - identityPublicKey: Optional TOFU pin from a verified invite (thread 5.1)
     /// - Returns: Created or existing chat, nil if context is unavailable
-    func startChat(with user: PublicUserInfo) -> Chat? {
+    func startChat(with user: PublicUserInfo, identityPublicKey: Data? = nil) -> Chat? {
         guard let context = viewContext else { 
             Log.error("ChatManagementService: No viewContext available", category: "ChatManagementService")
             return nil 
@@ -56,6 +58,14 @@ class ChatManagementService {
         
         if let existingChat = try? context.fetch(fetchRequest).first {
             Log.debug("Chat already exists with user: \(user.username)", category: "ChatManagementService")
+            // Still ensure contact flag + TOFU pin (re-scan of same invite).
+            if let other = existingChat.otherUser {
+                other.isContact = true
+                if let key = identityPublicKey, !key.isEmpty {
+                    ContactLinkService.shared.pinKnownIdentityKey(on: other, identityKey: key)
+                }
+                if context.hasChanges { try? context.save() }
+            }
             return existingChat
         }
         
@@ -92,6 +102,10 @@ class ChatManagementService {
             dbUser.addedAt = Date()
             dbUser.applyServerUsername(user.username, userId: user.id)
             Log.debug("Created new user: id=\(user.id), username=\(user.username), displayName=\(dbUser.displayName)", category: "ChatManagementService")
+        }
+
+        if let key = identityPublicKey, !key.isEmpty {
+            ContactLinkService.shared.pinKnownIdentityKey(on: dbUser, identityKey: key)
         }
         
         // Create new chat — set lastMessageTime so it sorts to the top of the list immediately

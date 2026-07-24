@@ -84,6 +84,15 @@ struct DesktopRootView: View {
             wireCommandBridge()
             handleDeepLink(deepLinkHandler.deepLink)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openChatForKeyChange)) { note in
+            guard let userId = note.userInfo?["userId"] as? String, !userId.isEmpty else { return }
+            let fetch = User.fetchRequest()
+            fetch.predicate = NSPredicate(format: "id == %@", userId)
+            fetch.fetchLimit = 1
+            if let user = try? viewContext.fetch(fetch).first {
+                chatsViewModel.openOrCreateChat(with: user)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .appWillEnterForeground)) { _ in
             if AuthSessionManager.shared.sessionToken == nil || !AuthSessionManager.shared.isSessionValid
                 || !CryptoManager.shared.isInitialized {
@@ -379,8 +388,12 @@ struct DesktopRootView: View {
                 bio: nil,
                 deviceId: contactInfo.deviceId
             )
-            if let chat = chatsViewModel.startChat(with: publicUserInfo) {
+            if let chat = chatsViewModel.startChat(
+                with: publicUserInfo,
+                identityPublicKey: contactInfo.identityPublicKey
+            ) {
                 chatsViewModel.chatToOpen = chat.id
+                InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
             } else {
                 Log.error("DesktopRootView: Failed to create chat for userId: \(contactInfo.userId)", category: "DeepLink")
             }

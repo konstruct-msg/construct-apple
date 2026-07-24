@@ -22,6 +22,8 @@ struct ChatNavBarView: View {
     /// `CallsFeature.isVideoEnabled` is true.
     let onStartVideoCall: () -> Void
     let onToggleSearch: () -> Void
+    /// Optional: tap the KT warning badge to jump to verify (key-change banner).
+    var onKTWarningTap: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: CTLayout.chromeGap) {
@@ -145,10 +147,18 @@ struct ChatNavBarView: View {
                 .foregroundColor(Color.CT.accent)
                 .accessibilityLabel(Text(LocalizedStringKey("kt_verified")))
         case .keyChanged, .failed:
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(CTFont.bold(11))
-                .foregroundColor(Color.CT.danger)
-                .accessibilityLabel(Text(LocalizedStringKey("kt_warning")))
+            Button {
+                onKTWarningTap?()
+            } label: {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .font(CTFont.bold(14))
+                    .foregroundColor(Color.CT.danger)
+                    .frame(width: CTLayout.hitTarget * 0.7, height: CTLayout.hitTarget * 0.7)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(LocalizedStringKey("kt_warning")))
+            .accessibilityHint(Text(LocalizedStringKey("key_change_verify")))
         case .unverified:
             EmptyView()
         }

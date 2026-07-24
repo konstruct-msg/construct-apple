@@ -28,6 +28,9 @@ struct SettingsView: View {
     @State private var showEmergencyImport = false
     @State private var emergencyPasteText = ""
     @State private var emergencyImportMsg: String?
+    /// Short identity-key fingerprint (user-facing external identity, thread 5.3).
+    @State private var ownFingerprint: String?
+    @State private var fingerprintCopied = false
 
     private let inviteGenerator = InviteGenerator()
 
@@ -47,8 +50,6 @@ struct SettingsView: View {
                         .foregroundColor(Color.CT.text)
                         .tracking(4)
                     Spacer()
-                    // Debug / Beta archives only — orange chrome, never on App Store Release.
-                    CTBetaBadge()
                 }
                 .padding(.horizontal, CTLayout.edgePad)
                 .frame(height: CTLayout.navBarHeight)
@@ -108,6 +109,7 @@ struct SettingsView: View {
                 if viewModel.needsUserInfoRefresh(from: authViewModel) {
                     viewModel.loadUserInfo(from: authViewModel)
                 }
+                refreshOwnFingerprint()
             }
             .task { await recoveryVM.loadStatus() }
             .sheet(isPresented: $showingRecoverySetup) {
@@ -242,6 +244,27 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .disabled(linkCopied)
+
+            if let ownFingerprint {
+                CTSep(style: .thin)
+                Button {
+                    PlatformClipboard.copy(ownFingerprint)
+                    fingerprintCopied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        fingerprintCopied = false
+                    }
+                } label: {
+                    CTSettingsRow(
+                        label: NSLocalizedString("identity_fingerprint", comment: "").uppercased(),
+                        value: fingerprintCopied
+                            ? NSLocalizedString("identity_fingerprint_copied", comment: "")
+                            : ownFingerprint,
+                        icon: "touchid",
+                        valueColor: Color.CT.accent
+                    )
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -421,6 +444,19 @@ struct SettingsView: View {
         return String(name.prefix(2)).uppercased()
     }
 
+    private func refreshOwnFingerprint() {
+        guard CryptoManager.shared.isInitialized else {
+            ownFingerprint = nil
+            return
+        }
+        do {
+            let (ik, _) = try CryptoManager.shared.localBundlePublicKeys()
+            ownFingerprint = IdentityFingerprint.short(from: ik)
+        } catch {
+            ownFingerprint = nil
+        }
+    }
+
     private func copyContactLink() {
         Task { await copyContactLinkAsync() }
     }
@@ -430,10 +466,11 @@ struct SettingsView: View {
         guard authViewModel.currentUserId != nil else { return }
         guard let deviceId = KeychainManager.shared.loadDeviceID() else { return }
         let serverHostname = ServerConfig.inviteHost
+        // HTTPS share can land in third-party messenger logs/previews — never embed `un`.
         guard let link = try? inviteGenerator.generateDeepLink(
             userId: viewModel.userId,
             deviceId: deviceId,
-            username: viewModel.resolvedDisplayName,
+            username: nil,
             server: serverHostname,
             useHTTPS: true
         ) else { return }

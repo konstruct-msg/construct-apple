@@ -212,6 +212,27 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
+        // Someone redeemed our invite QR/link — create local contact for call mutuality.
+        // conversation_id carries the accepter's ServerUserId (see AcceptInvite server path).
+        if activityType == "invite_accepted" {
+            let peerUserId = construct?["conversation_id"] as? String
+            Log.info("invite_accepted push — peer=\(peerUserId?.prefix(8) ?? "nil")…", category: "Push")
+            Task {
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        if let peerUserId, !peerUserId.isEmpty {
+                            _ = await ContactLinkService.shared.handleInviteAccepted(peerUserId: peerUserId)
+                        }
+                    }
+                    group.addTask { try? await Task.sleep(nanoseconds: 27_000_000_000) }
+                    await group.next()
+                    group.cancelAll()
+                }
+                completionHandler(.newData)
+            }
+            return
+        }
+
         if activityType == "contact_request_received" {
             let requestId = construct?["conversation_id"] as? String
             Log.info("contact_request_received push — requestId: \(requestId ?? "nil")", category: "Push")

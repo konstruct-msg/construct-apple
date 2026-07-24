@@ -140,10 +140,18 @@ struct UserProfileView: View {
             Text(LocalizedStringKey("reset_session_message"))
         }
         .sheet(isPresented: $showingSafetyNumbers) {
-            SafetyNumberView(
-                theirDeviceId: user.id,
-                theirDisplayName: user.resolvedDisplayName
-            )
+            if let deviceId = KeyChangeUX.safetyDeviceId(for: user) {
+                SafetyNumberView(
+                    theirDeviceId: deviceId,
+                    theirDisplayName: user.resolvedDisplayName
+                )
+            } else {
+                // Fallback: no pinned identity yet — show unavailable state inside SafetyNumberView
+                SafetyNumberView(
+                    theirDeviceId: "",
+                    theirDisplayName: user.resolvedDisplayName
+                )
+            }
         }
         .alert(LocalizedStringKey("local_name"), isPresented: $showingLocalNameEditor) {
             TextField(NSLocalizedString("local_name_placeholder", comment: ""), text: $draftLocalName)
@@ -231,13 +239,45 @@ struct UserProfileView: View {
             .buttonStyle(.plain)
             flatRowDivider()
 
+            // External identity = key fingerprint (thread 5.3). UUID is internal addressing only.
+            if let fp = user.knownIdentityKey.flatMap({ IdentityFingerprint.short(from: $0) }) {
+                Button {
+                    PlatformClipboard.copy(fp)
+                } label: {
+                    profileRow(label: NSLocalizedString("identity_fingerprint", comment: "")) {
+                        HStack(spacing: 6) {
+                            Text(fp)
+                                .font(CTFont.regular(12))
+                                .foregroundStyle(Color.CT.accent)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 11, weight: .regular))
+                                .foregroundStyle(Color.CT.textDim)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(NSLocalizedString("identity_fingerprint", comment: ""))
+                .accessibilityHint(NSLocalizedString("identity_fingerprint_copy_hint", comment: ""))
+            } else {
+                profileRow(label: NSLocalizedString("identity_fingerprint", comment: "")) {
+                    Text(NSLocalizedString("identity_fingerprint_unknown", comment: ""))
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.textDim)
+                }
+            }
+            // Internal ServerUserId kept off the primary identity surface (addressing only).
+            #if DEBUG
+            flatRowDivider()
             profileRow(label: NSLocalizedString("user_id", comment: "")) {
                 let uid = user.id
                 let short = uid.count > 12 ? "\(uid.prefix(8))...\(uid.suffix(2))" : uid
                 Text(short)
                     .font(CTFont.regular(13))
-                    .foregroundStyle(Color.CT.textDim)
+                    .foregroundStyle(Color.CT.textDim.opacity(0.7))
             }
+            #endif
         }
     }
 
@@ -318,6 +358,11 @@ struct UserProfileView: View {
             sectionHeader(NSLocalizedString("security", comment: ""))
             flatRowDivider()
 
+            if user.ktStatus == .keyChanged || user.ktStatus == .failed {
+                keyChangeWarningBlock
+                flatRowDivider()
+            }
+
             profileRow(label: NSLocalizedString("session_crypto_suite", comment: "")) {
                 HStack(spacing: 8) {
                     Text(hasSession ? "[ENC]" : "[---]")
@@ -350,6 +395,70 @@ struct UserProfileView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    /// Persistent trust warning until the user verifies or accepts the new key.
+    private var keyChangeWarningBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .foregroundStyle(Color.CT.danger)
+                Text(NSLocalizedString(
+                    user.ktStatus == .failed ? "key_change_banner_title_failed" : "key_change_banner_title",
+                    comment: ""
+                ))
+                .font(CTFont.bold(12))
+                .foregroundStyle(Color.CT.danger)
+            }
+
+            Text(user.ktStatus == .failed
+                 ? NSLocalizedString("key_change_banner_subtitle_failed", comment: "")
+                 : String(
+                    format: NSLocalizedString("key_change_banner_subtitle_fmt", comment: ""),
+                    user.resolvedDisplayName
+                 )
+            )
+            .font(CTFont.regular(11))
+            .foregroundStyle(Color.CT.textDim)
+
+            HStack(spacing: 10) {
+                Button {
+                    showingSafetyNumbers = true
+                } label: {
+                    Text(NSLocalizedString("key_change_verify", comment: ""))
+                        .font(CTFont.bold(12))
+                        .foregroundStyle(Color.CT.bg)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.CT.danger)
+                        .clipShape(CTShape.control())
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    if KeyChangeUX.acknowledgeKeyChange(userId: user.id, context: viewContext) {
+                        // @ObservedObject user will refresh ktStatus from Core Data object
+                    }
+                } label: {
+                    Text(NSLocalizedString("key_change_accept", comment: ""))
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.accent)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.CT.bgMsg)
+                        .clipShape(CTShape.control())
+                        .overlay(
+                            CTShape.control()
+                                .strokeBorder(Color.CT.accent.opacity(0.5), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.CT.danger.opacity(0.08))
     }
 
     // MARK: - Danger section

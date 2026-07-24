@@ -68,6 +68,32 @@ final class ErrorRouter: ObservableObject {
         }
     }
 
+    /// Informational banner (not an error). Logs at info level.
+    /// - Parameters:
+    ///   - message: User-visible text
+    ///   - actionTitle: Optional toast button label (e.g. "Block")
+    ///   - autoDismissAfter: If set, dismiss even when an action is present (safety window)
+    ///   - recovery: Action button handler
+    func presentNotice(
+        _ message: String,
+        actionTitle: String? = nil,
+        autoDismissAfter: TimeInterval? = nil,
+        recovery: (() -> Void)? = nil
+    ) {
+        Log.info("ErrorRouter notice: \(message)", category: "ErrorRouter")
+        currentError = .notice(message: message, actionTitle: actionTitle)
+        recoveryHandler = recovery
+        errorToken += 1
+
+        let delay = autoDismissAfter ?? (recovery == nil ? autoDismissDelay : nil)
+        if let delay {
+            scheduleDismiss(after: delay)
+        } else {
+            dismissTask?.cancel()
+            dismissTask = nil
+        }
+    }
+
     // MARK: - Recovery
 
     /// Called when the user taps the toast action button. Runs the handler then dismisses.
@@ -88,10 +114,11 @@ final class ErrorRouter: ObservableObject {
 
     // MARK: - Private
 
-    private func scheduleDismiss() {
+    private func scheduleDismiss(after delay: TimeInterval? = nil) {
+        let seconds = delay ?? autoDismissDelay
         dismissTask?.cancel()
         dismissTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64((self?.autoDismissDelay ?? 4) * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             guard !Task.isCancelled else { return }
             await MainActor.run { self?.dismiss() }
         }

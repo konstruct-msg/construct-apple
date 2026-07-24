@@ -143,8 +143,6 @@ struct ChatsListView: View {
             ConnectionStatusIndicator()
                 .frame(width: CTHexAvatar.AvatarSize.medium.rawValue, alignment: .center)
             Spacer()
-            // Always-visible on Debug/Beta so TF builds are not confused with production.
-            CTBetaBadge(compact: true)
             Button { showingQRScanner = true } label: {
                 Image(systemName: "qrcode.viewfinder")
                     .font(.system(size: CTLayout.navIconSize, weight: .medium))
@@ -391,7 +389,12 @@ struct ChatsListView: View {
             bio: nil,
             deviceId: contactInfo.deviceId
         )
-        _ = chatsViewModel.startChat(with: publicUserInfo)
+        if chatsViewModel.startChat(
+            with: publicUserInfo,
+            identityPublicKey: contactInfo.identityPublicKey
+        ) != nil {
+            InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
+        }
     }
 
     private func showErrorAfterDismiss(_ message: String) {

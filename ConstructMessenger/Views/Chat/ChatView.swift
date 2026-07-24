@@ -50,6 +50,8 @@ struct ChatView: View {
     @State private var contactKTStatus: KTStatus = .unverified
     /// True when the session with this contact was established via a degraded (stale-SPK) init.
     @State private var isSessionAtRisk = false
+    /// Safety Numbers sheet after key-change "Verify".
+    @State private var showingSafetyNumbers = false
 
     @State private var containerWidth: CGFloat = ChatUIConstants.Bubble.defaultContainerWidth
     /// Current height of the bottom composer (safeAreaInset). Tracked so we can re-pin the
@@ -378,6 +380,8 @@ struct ChatView: View {
 
                 floodBurstBanner
 
+                keyChangeBanner
+
                 atRiskBanner
 
                 deleteButtonBar
@@ -458,6 +462,15 @@ struct ChatView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+        .sheet(isPresented: $showingSafetyNumbers) {
+            if let user = viewModel.chat.otherUser,
+               let deviceId = KeyChangeUX.safetyDeviceId(for: user) {
+                SafetyNumberView(
+                    theirDeviceId: deviceId,
+                    theirDisplayName: user.resolvedDisplayName
+                )
+            }
+        }
         .sheet(item: $quotingMessage) { msg in
             QuoteSelectionSheet(message: msg) { selectedQuote in
                 replyingTo = msg
@@ -516,6 +529,25 @@ struct ChatView: View {
     /// Informational banner shown when the session was established via degraded (stale-SPK) init.
     private var atRiskBanner: some View {
         ChatAtRiskBannerView(isVisible: isSessionAtRisk)
+    }
+
+    /// First-class trust event: identity key changed or KT verification failed.
+    private var keyChangeBanner: some View {
+        ChatKeyChangeBannerView(
+            status: contactKTStatus,
+            contactName: viewModel.chat.otherUser?.resolvedDisplayName
+                ?? NSLocalizedString("chat", comment: ""),
+            onVerify: { showingSafetyNumbers = true },
+            onAccept: { acknowledgeContactKeyChange() }
+        )
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: contactKTStatus)
+    }
+
+    private func acknowledgeContactKeyChange() {
+        guard let userId = viewModel.chat.otherUser?.id else { return }
+        if KeyChangeUX.acknowledgeKeyChange(userId: userId, context: viewContext) {
+            loadContactKTStatus()
+        }
     }
 
     /// Refresh the at-risk state from the per-peer Keychain flag set by degraded init.
@@ -668,6 +700,11 @@ struct ChatView: View {
                 withAnimation {
                     isSearchActive.toggle()
                     if !isSearchActive { searchText = "" }
+                }
+            },
+            onKTWarningTap: {
+                if contactKTStatus == .keyChanged || contactKTStatus == .failed {
+                    showingSafetyNumbers = true
                 }
             }
         )
@@ -870,6 +907,7 @@ struct ChatView: View {
 
     private func setActiveChatState(isActive: Bool) {
         guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else { return }
+        KeyChangeUX.setActiveChatContact(isActive ? contactId : nil)
         _ = try? CryptoManager.shared.handleOrchestratorEvent(
             .activeChatChanged(contactId: contactId, isActive: isActive),
             tag: isActive ? "chat_active_true" : "chat_active_false"

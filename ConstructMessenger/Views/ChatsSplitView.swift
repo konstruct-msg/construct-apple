@@ -151,9 +151,6 @@ struct ChatsSplitView: View {
 
             Spacer(minLength: CTLayout.sectionGap)
 
-            // Debug / Beta only — empty view on Release.
-            CTBetaBadge(compact: true)
-
             railQRButton
             connectionRailBadge
         }
@@ -522,9 +519,13 @@ struct ChatsSplitView: View {
             bio: nil,
             deviceId: contactInfo.deviceId
         )
-        if let chat = chatsViewModel.startChat(with: publicUserInfo) {
+        if let chat = chatsViewModel.startChat(
+            with: publicUserInfo,
+            identityPublicKey: contactInfo.identityPublicKey
+        ) {
             selectedChatId = chat.id
             selectTab(.chats, clearChatSelection: false)
+            InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
         }
     }
 
