@@ -63,15 +63,13 @@ struct ServerConfig {
 
 // MARK: - Invite Configuration
 struct InviteConfig {
-    /// Versions the client can DECODE and accept (forward-compatible with V3).
-    static let supportedVersions: Set<Int> = [1, 2, 3]
+    /// Versions the client can DECODE and accept.
+    /// v4 drops dead `ephKey` (F2); v1–v3 remain for dual-read within TTL.
+    static let supportedVersions: Set<Int> = [1, 2, 3, 4]
 
     /// Version used when GENERATING new invites.
-    ///
-    /// Currently set to 2 for server compatibility during the V3 rollout.
-    /// The server must support V3 canonical string (`…|ts|un`) before this is bumped.
-    /// Upgrade path: change this single constant to 3 once server is deployed.
-    static let currentVersion: Int = 3
+    /// v4: no ephKey in canonical string / wire; server crypto-agility must accept v4.
+    static let currentVersion: Int = 4
     static let ttlSeconds: TimeInterval = 300 // 5 minutes
     static let maxFutureSkewSeconds: TimeInterval = 300 // 5 minutes
     static let deviceIdLength = 32
@@ -81,6 +79,13 @@ struct InviteConfig {
     static let qrWarningThresholdSeconds: TimeInterval = 60
     static let qrCodePrefixScheme = "konstruct://add"
     static let qrCountdownTickSeconds: TimeInterval = 1
+    /// While the invite QR is on-screen, rotate jti this often to defeat screenshot-of-screen.
+    static let qrRotateIntervalSeconds: TimeInterval = 30
+    /// How long the post-redeem safety toast stays visible (with Block action).
+    static let postRedeemSafetyToastSeconds: TimeInterval = 8
+
+    /// Invite protocol versions that still carry a (unused) ephemeral X25519 pub.
+    static func carriesEphKey(version: Int) -> Bool { version <= 3 }
 }
 
 
@@ -249,12 +254,12 @@ struct AppConstants {
         #endif
     }
 
-    /// e.g. `v0.17.0 (537)` or `v0.17.0 (537) · BETA` on non-production builds.
+    /// e.g. `v0.17.0 (537)` or `v0.17.0 (537) BETA` on non-production builds.
     static var versionDisplayString: String {
         let base = "v\(appVersion) (\(buildNumber))"
         guard isNonProductionBuild else { return base }
         let beta = NSLocalizedString("build_channel_beta", comment: "Non-production build channel label")
-        return "\(base) · \(beta.uppercased())"
+        return "\(base) \(beta.uppercased())"
     }
 }
 

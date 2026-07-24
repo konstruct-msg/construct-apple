@@ -10,126 +10,153 @@ import Foundation
 /// Dynamic contact invite with cryptographic security
 ///
 /// Security model:
-/// - Ephemeral X25519 public key (unique per invite)
-/// - Ed25519 signature from sender's identity key
+/// - Ed25519 signature from sender's identity key (client verifies locally)
 /// - JTI (JWT ID) for one-time use tracking
 /// - 3-5 minute time-to-live (TTL)
-/// - Server-side validation and invalidation
+/// - v4+: no unused ephKey; pure signed capability
 ///
-/// Format:
-/// ```json
-/// {
-///   "v": 3,
-///   "jti": "550e8400-e29b-41d4-a716-446655440000",
-///   "uuid": "550e8400-e29b-41d4-a716-446655440000",  // userId (UUID)
-///   "deviceId": "4e1f9dbe209c1bedb33ee32dda5a28f0",  // deviceId (hex)
-///   "server": "konstruct.cc",
-///   "ephKey": "base64-x25519-public-key",
-///   "ts": 1738156800,
-///   "sig": "base64-ed25519-signature",
-///   "un": "alice"  // optional sender username (V3+, included in signature)
-/// }
-/// ```
+/// On-the-wire transport (not the in-memory field model):
+/// - QR: compact binary (`CIv1…`) in QR **byte mode**
+/// - URL/deep link: `base64url(compact binary)` on the text boundary
+/// - Dual-read: legacy base64(JSON) still decodes for the short TTL window
 struct InviteObject: Codable, Equatable {
-    /// Protocol version (1, 2, or 3)
+    /// Protocol version (1–4)
     let v: Int
-    
+
     /// JTI - unique invite ID for one-time use tracking
     /// UUIDv4 format, tracked by server to prevent reuse
     let jti: String
-    
+
     /// Sender's user UUID (for chat creation)
     let uuid: String
-    
+
     /// Sender's device ID (for fetching public keys)
     /// 32-char hex string from SHA256(identity_public)[0..16]
     let deviceId: String
-    
+
     /// Server FQDN (e.g., "konstruct.cc")
     /// Enables federation support
     let server: String
-    
-    /// Ephemeral X25519 public key (Base64)
-    /// Generated fresh for each invite, 32 bytes
+
+    /// Ephemeral X25519 public key (Base64) — **v1–v3 only**, unused for ECDH.
+    /// Empty string on v4+ (field dropped from wire and canonical string).
     let ephKey: String
-    
+
     /// Unix timestamp when invite was created
     /// Used to calculate expiry (current + TTL)
     let ts: Int
-    
+
     /// Ed25519 signature (Base64)
     /// Signs all fields above with sender's identity key
     /// 64 bytes, proves authenticity
     let sig: String
-    
+
     /// Sender's username or display name (V3+, optional)
     /// Included in the Ed25519 canonical string — cryptographically authenticated.
     /// Allows the recipient to see the sender's name immediately without a server roundtrip.
     /// Server stores only a username hash, so the plaintext travels here peer-to-peer.
     let un: String?
 
-    // MARK: - Codable (custom encode to omit nil `un` and keep QR payload compact)
+    // MARK: - Codable (omit nil `un` and empty v4 `ephKey`)
 
     enum CodingKeys: String, CodingKey {
         case v, jti, uuid, deviceId, server, ephKey, ts, sig, un
     }
 
+    init(
+        v: Int,
+        jti: String,
+        uuid: String,
+        deviceId: String,
+        server: String,
+        ephKey: String,
+        ts: Int,
+        sig: String,
+        un: String?
+    ) {
+        self.v = v
+        self.jti = jti
+        self.uuid = uuid
+        self.deviceId = deviceId
+        self.server = server
+        self.ephKey = ephKey
+        self.ts = ts
+        self.sig = sig
+        self.un = un
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        v = try c.decode(Int.self, forKey: .v)
+        jti = try c.decode(String.self, forKey: .jti)
+        uuid = try c.decode(String.self, forKey: .uuid)
+        deviceId = try c.decode(String.self, forKey: .deviceId)
+        server = try c.decode(String.self, forKey: .server)
+        ephKey = try c.decodeIfPresent(String.self, forKey: .ephKey) ?? ""
+        ts = try c.decode(Int.self, forKey: .ts)
+        sig = try c.decode(String.self, forKey: .sig)
+        un = try c.decodeIfPresent(String.self, forKey: .un)
+    }
+
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(v,        forKey: .v)
-        try c.encode(jti,      forKey: .jti)
-        try c.encode(uuid,     forKey: .uuid)
+        try c.encode(v, forKey: .v)
+        try c.encode(jti, forKey: .jti)
+        try c.encode(uuid, forKey: .uuid)
         try c.encode(deviceId, forKey: .deviceId)
-        try c.encode(server,   forKey: .server)
-        try c.encode(ephKey,   forKey: .ephKey)
-        try c.encode(ts,       forKey: .ts)
-        try c.encode(sig,      forKey: .sig)
-        try c.encodeIfPresent(un, forKey: .un)  // omit key entirely when nil
+        try c.encode(server, forKey: .server)
+        if InviteConfig.carriesEphKey(version: v), !ephKey.isEmpty {
+            try c.encode(ephKey, forKey: .ephKey)
+        }
+        try c.encode(ts, forKey: .ts)
+        try c.encode(sig, forKey: .sig)
+        try c.encodeIfPresent(un, forKey: .un)
     }
-    
+
     // MARK: - Validation
-    
+
     /// Validate invite object structure
     /// - Throws: InviteValidationError if invalid
     func validate() throws {
         guard InviteConfig.supportedVersions.contains(v) else {
             throw InviteValidationError.unsupportedVersion(v)
         }
-        
-        // JTI format (UUID)
+
         guard UUID(uuidString: jti) != nil else {
             throw InviteValidationError.invalidJTI
         }
-        
-        // User UUID format
+
         guard UUID(uuidString: uuid) != nil else {
             throw InviteValidationError.invalidUserUUID
         }
-        
-        // Device ID format (32-char hex string)
-        guard deviceId.count == InviteConfig.deviceIdLength,
-              deviceId.range(of: InviteConfig.deviceIdRegex, options: .regularExpression) != nil else {
-            throw InviteValidationError.invalidDeviceID
+
+        // Device ID required for v2+
+        if v >= 2 {
+            guard deviceId.count == InviteConfig.deviceIdLength,
+                  deviceId.range(of: InviteConfig.deviceIdRegex, options: .regularExpression) != nil else {
+                throw InviteValidationError.invalidDeviceID
+            }
         }
-        
-        // Server FQDN (basic check)
+
         guard !server.isEmpty, server.contains(".") else {
             throw InviteValidationError.invalidServer
         }
-        
-        // Ephemeral key format (Base64, should decode to 32 bytes)
-        guard let ephKeyData = Data(base64Encoded: ephKey),
-              ephKeyData.count == InviteConfig.ephKeyLengthBytes else {
+
+        if InviteConfig.carriesEphKey(version: v) {
+            guard let ephKeyData = Data(base64Encoded: ephKey),
+                  ephKeyData.count == InviteConfig.ephKeyLengthBytes else {
+                throw InviteValidationError.invalidEphemeralKey
+            }
+        } else if !ephKey.isEmpty {
+            // v4+ must not carry dead crypto material
             throw InviteValidationError.invalidEphemeralKey
         }
-        
-        // Timestamp (must be positive, not too far in future)
+
         let now = Int(Date().timeIntervalSince1970)
         guard ts > 0, ts <= now + Int(InviteConfig.maxFutureSkewSeconds) else {
             throw InviteValidationError.invalidTimestamp
         }
-        
-        // Signature format (Base64, should decode to 64 bytes)
+
         guard let sigData = Data(base64Encoded: sig),
               sigData.count == InviteConfig.signatureLengthBytes else {
             throw InviteValidationError.invalidSignature
@@ -161,22 +188,25 @@ struct InviteObject: Codable, Equatable {
     /// Fields are concatenated in order:
     /// - v1: v|jti|uuid|server|ephKey|ts
     /// - v2: v|jti|uuid|deviceId|server|ephKey|ts
-    /// - v3: v|jti|uuid|deviceId|server|ephKey|ts|un  (un is empty string if nil)
+    /// - v3: v|jti|uuid|deviceId|server|ephKey|ts|un  (un empty if nil)
+    /// - v4: v|jti|uuid|deviceId|server|ts|un  (no ephKey)
     /// This exact order must be used for both signing and verification.
-    ///
-    /// - Returns: String to sign/verify
     func canonicalString() -> String {
         // Rust's Uuid formats with lowercase hex — match that to ensure
         // client-signed canonical string matches server-verified canonical string.
         let jtiLower = jti.lowercased()
         let uuidLower = uuid.lowercased()
-        if v == 1 {
+        switch v {
+        case 1:
             return "\(v)|\(jtiLower)|\(uuidLower)|\(server)|\(ephKey)|\(ts)"
-        } else if v == 2 {
+        case 2:
             return "\(v)|\(jtiLower)|\(uuidLower)|\(deviceId)|\(server)|\(ephKey)|\(ts)"
+        case 3:
+            return "\(v)|\(jtiLower)|\(uuidLower)|\(deviceId)|\(server)|\(ephKey)|\(ts)|\(un ?? "")"
+        default:
+            // v4+: signed capability without dead ephKey
+            return "\(v)|\(jtiLower)|\(uuidLower)|\(deviceId)|\(server)|\(ts)|\(un ?? "")"
         }
-        // V3: username is included in the signature (empty string if absent)
-        return "\(v)|\(jtiLower)|\(uuidLower)|\(deviceId)|\(server)|\(ephKey)|\(ts)|\(un ?? "")"
     }
 }
 
@@ -215,45 +245,193 @@ enum InviteValidationError: LocalizedError {
 }
 
 // MARK: - Encoding/Decoding Helpers
+//
+// Production transport (F1 fix):
+//   QR path  → raw compact binary (QR byte mode) — no base64
+//   URL path → base64url(compact binary) — text boundary only
+//
+// Compact layout ("CIv1"):
+//   magic[4] "CIv1" | flags u8 | v u8
+//   jti[16] | uuid[16] | deviceId[16]
+//   [ephKey[32] if v<=3] | ts u64 BE | sig[64]
+//   serverLen u8 | server UTF-8 | [unLen u8 | un UTF-8 if flags.hasUn]
+//
+// Legacy base64(JSON) still decodes for the short TTL dual-read window.
 
 extension InviteObject {
-    /// Encode to binary (JSON-based, used for QR codes and deep links)
-    func toMessagePack() throws -> Data {
-        try JSONEncoder().encode(self)
+
+    /// Wire magic for the compact binary invite container (encoding version, not invite protocol `v`).
+    static let binaryMagic = Data([0x43, 0x49, 0x76, 0x31]) // "CIv1"
+    private static let flagHasUsername: UInt8 = 0x01
+
+    /// True when `data` starts with the compact-binary magic.
+    static func isCompactBinary(_ data: Data) -> Bool {
+        data.starts(with: binaryMagic)
     }
-    
-    /// Decode from binary (JSON-based)
-    static func fromMessagePack(_ data: Data) throws -> InviteObject {
-        try JSONDecoder().decode(InviteObject.self, from: data)
+
+    // MARK: Compact binary (production)
+
+    /// Encode to compact binary for QR byte mode and as the inner payload of base64url links.
+    func encodeBinary() throws -> Data {
+        try validate()
+
+        guard let jtiBytes = Self.uuidBytes(from: jti),
+              let uuidBytes = Self.uuidBytes(from: uuid) else {
+            throw InviteBinaryError.invalidUUID
+        }
+        guard let deviceBytes = InviteBinaryCodec.data(hex: deviceId), deviceBytes.count == 16 else {
+            throw InviteBinaryError.invalidDeviceId
+        }
+        let ephBytes: Data?
+        if InviteConfig.carriesEphKey(version: v) {
+            guard let bytes = Data(base64Encoded: ephKey), bytes.count == InviteConfig.ephKeyLengthBytes else {
+                throw InviteBinaryError.invalidEphemeralKey
+            }
+            ephBytes = bytes
+        } else {
+            ephBytes = nil
+        }
+        guard let sigBytes = Data(base64Encoded: sig), sigBytes.count == InviteConfig.signatureLengthBytes else {
+            throw InviteBinaryError.invalidSignature
+        }
+
+        let serverData = Data(server.utf8)
+        guard serverData.count <= Int(UInt8.max) else {
+            throw InviteBinaryError.fieldTooLong("server")
+        }
+
+        let unData: Data?
+        if let un, !un.isEmpty {
+            let d = Data(un.utf8)
+            guard d.count <= Int(UInt8.max) else {
+                throw InviteBinaryError.fieldTooLong("un")
+            }
+            unData = d
+        } else {
+            unData = nil
+        }
+
+        var out = Data()
+        out.reserveCapacity(
+            4 + 1 + 1 + 16 + 16 + 16
+            + (ephBytes?.count ?? 0) + 8 + 64 + 1 + serverData.count
+            + (unData.map { 1 + $0.count } ?? 0)
+        )
+
+        out.append(Self.binaryMagic)
+        out.append(unData == nil ? 0 : Self.flagHasUsername)
+        out.append(UInt8(v))
+        out.append(jtiBytes)
+        out.append(uuidBytes)
+        out.append(deviceBytes)
+        if let ephBytes {
+            out.append(ephBytes)
+        }
+        out.append(Self.u64BE(UInt64(ts)))
+        out.append(sigBytes)
+        out.append(UInt8(serverData.count))
+        out.append(serverData)
+        if let unData {
+            out.append(UInt8(unData.count))
+            out.append(unData)
+        }
+        return out
     }
-    
-    /// Encode to Base64-encoded MessagePack (for QR codes and links)
-    /// - Returns: Base64 string
-    /// - Throws: EncodingError
-    func toBase64() throws -> String {
-        let msgpackData = try toMessagePack()
-        return msgpackData.base64EncodedString()
+
+    /// Decode compact binary produced by `encodeBinary()`.
+    static func decodeBinary(_ data: Data) throws -> InviteObject {
+        var r = InviteBinaryReader(data)
+        let magic = try r.take(4)
+        guard magic == binaryMagic else {
+            throw InviteBinaryError.badMagic
+        }
+        let flags = try r.u8()
+        let version = Int(try r.u8())
+        let jti = try uuidString(from: r.take(16))
+        let uuid = try uuidString(from: r.take(16))
+        let deviceId = InviteBinaryCodec.hex(try r.take(16))
+        let ephKey: String
+        if InviteConfig.carriesEphKey(version: version) {
+            ephKey = try r.take(InviteConfig.ephKeyLengthBytes).base64EncodedString()
+        } else {
+            ephKey = ""
+        }
+        let ts = Int(try r.u64BE())
+        let sig = try r.take(InviteConfig.signatureLengthBytes).base64EncodedString()
+        let serverLen = Int(try r.u8())
+        let serverData = try r.take(serverLen)
+        guard let server = String(data: serverData, encoding: .utf8), !server.isEmpty else {
+            throw InviteBinaryError.invalidServer
+        }
+
+        var un: String?
+        if flags & flagHasUsername != 0 {
+            let unLen = Int(try r.u8())
+            let unData = try r.take(unLen)
+            un = String(data: unData, encoding: .utf8)
+        }
+        guard r.isAtEnd else {
+            throw InviteBinaryError.trailingBytes
+        }
+
+        let invite = InviteObject(
+            v: version,
+            jti: jti,
+            uuid: uuid,
+            deviceId: deviceId,
+            server: server,
+            ephKey: ephKey,
+            ts: ts,
+            sig: sig,
+            un: un
+        )
+        try invite.validate()
+        return invite
     }
-    
-    /// Decode from Base64-encoded MessagePack
-    /// - Parameter base64: Base64 string
-    /// - Returns: InviteObject
-    /// - Throws: DecodingError
-    static func fromBase64(_ base64: String) throws -> InviteObject {
-        guard let data = Data(base64Encoded: base64) else {
+
+    /// Decode any supported on-the-wire blob: compact binary, or legacy JSON (dual-read window).
+    static func decodePayload(_ data: Data) throws -> InviteObject {
+        if isCompactBinary(data) {
+            return try decodeBinary(data)
+        }
+        // Legacy dual-read: base64(JSON) era stored JSON bytes after outer base64 decode.
+        if let invite = try? JSONDecoder().decode(InviteObject.self, from: data) {
+            try invite.validate()
+            return invite
+        }
+        throw InviteBinaryError.unrecognizedPayload
+    }
+
+    // MARK: Text-boundary encoding (deep links / clipboard)
+
+    /// base64url (no padding) over compact binary — URL/deep-link only.
+    func toBase64URL() throws -> String {
+        InviteBinaryCodec.base64URLEncode(try encodeBinary())
+    }
+
+    /// Decode from base64url or standard base64 of compact binary (or legacy JSON).
+    static func fromBase64(_ encoded: String) throws -> InviteObject {
+        guard let data = InviteBinaryCodec.base64URLOrStdDecode(encoded) else {
             throw DecodingError.dataCorrupted(DecodingError.Context(
                 codingPath: [],
-                debugDescription: "Invalid Base64 encoding"
+                debugDescription: "Invalid Base64 / base64url encoding"
             ))
         }
-        return try fromMessagePack(data)
+        return try decodePayload(data)
     }
-    
-    // MARK: - Legacy JSON Support (for debugging)
-    
-    /// Encode to JSON string (legacy, use toMessagePack for production)
-    /// - Returns: JSON string
-    /// - Throws: EncodingError
+
+    // MARK: Compatibility aliases (old MessagePack-misnamed API)
+
+    /// - Note: Name is historical. Produces compact binary, not MessagePack/JSON.
+    func toMessagePack() throws -> Data { try encodeBinary() }
+
+    static func fromMessagePack(_ data: Data) throws -> InviteObject { try decodePayload(data) }
+
+    /// - Note: Prefer `toBase64URL()` for new call sites.
+    func toBase64() throws -> String { try toBase64URL() }
+
+    // MARK: Legacy JSON (debug / dual-read only)
+
     func toJSON() throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
@@ -266,11 +444,7 @@ extension InviteObject {
         }
         return json
     }
-    
-    /// Decode from JSON string (legacy, use fromMessagePack for production)
-    /// - Parameter json: JSON string
-    /// - Returns: InviteObject
-    /// - Throws: DecodingError
+
     static func fromJSON(_ json: String) throws -> InviteObject {
         guard let data = json.data(using: .utf8) else {
             throw DecodingError.dataCorrupted(DecodingError.Context(
@@ -278,6 +452,152 @@ extension InviteObject {
                 debugDescription: "Invalid UTF-8 in JSON string"
             ))
         }
-        return try JSONDecoder().decode(InviteObject.self, from: data)
+        return try decodePayload(data)
+    }
+
+    // MARK: - Binary helpers
+
+    private static func uuidBytes(from string: String) -> Data? {
+        guard let uuid = UUID(uuidString: string) else { return nil }
+        var tuple = uuid.uuid
+        return withUnsafeBytes(of: &tuple) { Data($0) }
+    }
+
+    private static func uuidString(from data: Data) throws -> String {
+        guard data.count == 16 else { throw InviteBinaryError.invalidUUID }
+        var bytes = [UInt8](repeating: 0, count: 16)
+        data.copyBytes(to: &bytes, count: 16)
+        let tuple: uuid_t = (
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[12], bytes[13], bytes[14], bytes[15]
+        )
+        return UUID(uuid: tuple).uuidString.lowercased()
+    }
+
+    private static func u64BE(_ value: UInt64) -> Data {
+        var be = value.bigEndian
+        return withUnsafeBytes(of: &be) { Data($0) }
+    }
+}
+
+// MARK: - Compact binary errors
+
+enum InviteBinaryError: LocalizedError {
+    case badMagic
+    case invalidUUID
+    case invalidDeviceId
+    case invalidEphemeralKey
+    case invalidSignature
+    case invalidServer
+    case fieldTooLong(String)
+    case truncated
+    case trailingBytes
+    case unrecognizedPayload
+
+    var errorDescription: String? {
+        switch self {
+        case .badMagic: return "Invite binary magic mismatch"
+        case .invalidUUID: return "Invalid UUID in invite binary"
+        case .invalidDeviceId: return "Invalid deviceId in invite binary"
+        case .invalidEphemeralKey: return "Invalid ephKey in invite binary"
+        case .invalidSignature: return "Invalid signature in invite binary"
+        case .invalidServer: return "Invalid server in invite binary"
+        case .fieldTooLong(let f): return "Invite field too long: \(f)"
+        case .truncated: return "Invite binary truncated"
+        case .trailingBytes: return "Invite binary has trailing bytes"
+        case .unrecognizedPayload: return "Unrecognized invite payload encoding"
+        }
+    }
+}
+
+// MARK: - Binary reader
+
+private struct InviteBinaryReader {
+    private let data: Data
+    private var offset: Int = 0
+
+    init(_ data: Data) { self.data = data }
+
+    var isAtEnd: Bool { offset >= data.count }
+
+    mutating func take(_ n: Int) throws -> Data {
+        guard n >= 0, offset + n <= data.count else { throw InviteBinaryError.truncated }
+        let slice = data.subdata(in: offset..<(offset + n))
+        offset += n
+        return slice
+    }
+
+    mutating func u8() throws -> UInt8 {
+        try take(1)[0]
+    }
+
+    mutating func u64BE() throws -> UInt64 {
+        let bytes = try take(8)
+        var raw: UInt64 = 0
+        _ = withUnsafeMutableBytes(of: &raw) { dest in
+            bytes.copyBytes(to: dest)
+        }
+        return UInt64(bigEndian: raw)
+    }
+}
+
+// MARK: - Invite binary codec helpers (file-scoped to avoid Data extension clashes)
+
+enum InviteBinaryCodec {
+    static func hex(_ data: Data) -> String {
+        data.map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func data(hex: String) -> Data? {
+        let hex = hex.lowercased()
+        guard hex.count % 2 == 0, !hex.isEmpty else { return nil }
+        var data = Data(capacity: hex.count / 2)
+        var index = hex.startIndex
+        while index < hex.endIndex {
+            let next = hex.index(index, offsetBy: 2)
+            guard let byte = UInt8(hex[index..<next], radix: 16) else { return nil }
+            data.append(byte)
+            index = next
+        }
+        return data
+    }
+
+    /// base64url without padding (RFC 4648 §5).
+    static func base64URLEncode(_ data: Data) -> String {
+        data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    static func base64URLDecode(_ string: String) -> Data? {
+        var base64 = string
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let remainder = base64.count % 4
+        if remainder > 0 {
+            base64 += String(repeating: "=", count: 4 - remainder)
+        }
+        return Data(base64Encoded: base64)
+    }
+
+    static func base64URLOrStdDecode(_ string: String) -> Data? {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let data = base64URLDecode(trimmed) { return data }
+        if let data = Data(base64Encoded: trimmed) { return data }
+        return nil
+    }
+
+    /// Recover raw QR byte-mode payload when AVFoundation exposes it as a Latin-1 string.
+    static func dataFromLatin1QRString(_ string: String) -> Data? {
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(string.unicodeScalars.count)
+        for scalar in string.unicodeScalars {
+            guard scalar.value <= 0xFF else { return nil }
+            bytes.append(UInt8(scalar.value))
+        }
+        return Data(bytes)
     }
 }

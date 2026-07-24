@@ -32,13 +32,23 @@ enum QRCodeGenerator {
     // MARK: - Public API
 
     #if canImport(UIKit)
+    /// Text / URL QR (UTF-8). Prefer `generate(from: Data)` for invite binary payloads.
     static func generate(from string: String) -> UIImage? {
-        guard let qr = generateBase(from: string) else { return nil }
+        generate(from: Data(string.utf8))
+    }
+
+    /// Binary QR (byte mode). Used for compact invite payloads — no base64 layer.
+    static func generate(from data: Data) -> UIImage? {
+        guard let qr = generateBase(from: data) else { return nil }
         return UIImage(cgImage: composited(qr))
     }
     #else
     static func generate(from string: String) -> NSImage? {
-        guard let qr = generateBase(from: string) else { return nil }
+        generate(from: Data(string.utf8))
+    }
+
+    static func generate(from data: Data) -> NSImage? {
+        guard let qr = generateBase(from: data) else { return nil }
         let composited = composited(qr)
         return NSImage(cgImage: composited, size: NSSize(width: composited.width, height: composited.height))
     }
@@ -46,10 +56,11 @@ enum QRCodeGenerator {
 
     // MARK: - Private
 
-    private static func generateBase(from string: String) -> CGImage? {
+    private static func generateBase(from data: Data) -> CGImage? {
         let context = CIContext()
         let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(string.utf8)
+        // Raw bytes → QR byte mode (no UTF-8 / base64 wrapping).
+        filter.message = data
         // H = 30% error recovery — required to survive the logo occlusion.
         filter.correctionLevel = "H"
         guard let raw = filter.outputImage else { return nil }

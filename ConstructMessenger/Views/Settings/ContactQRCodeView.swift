@@ -16,7 +16,7 @@ struct ContactQRCodeView: View {
     let userId: String
     let username: String
     
-    @State private var qrPayload: String?
+    @State private var qrPayloadBytes: Data?
     @State private var qrImage: UIImage?
     @State private var timeRemaining: TimeInterval = InviteConfig.ttlSeconds
     @State private var generationError: String?
@@ -25,9 +25,10 @@ struct ContactQRCodeView: View {
     private let timer = Timer.publish(every: InviteConfig.qrCountdownTickSeconds, on: .main, in: .common).autoconnect()
     private let generator = InviteGenerator()
     
-    private let previewPayload: String?
+    /// Preview-only compact binary (or empty → live generate).
+    private let previewPayload: Data?
     
-    init(userId: String, username: String, previewPayload: String? = nil) {
+    init(userId: String, username: String, previewPayload: Data? = nil) {
         self.userId = userId
         self.username = username
         self.previewPayload = previewPayload
@@ -95,15 +96,18 @@ struct ContactQRCodeView: View {
         )
         .onAppear {
             if let preview = previewPayload {
-                qrPayload = preview
-                qrImage = generateQRCode(from: preview)
+                qrPayloadBytes = preview
+                qrImage = QRCodeGenerator.generate(from: preview)
                 timeRemaining = InviteConfig.ttlSeconds
                 generatedAt = Date()
             } else {
                 generateInitialQRCode()
             }
         }
-        .onReceive(timer) { _ in updateTimeRemaining() }
+        .onReceive(timer) { _ in
+            updateTimeRemaining()
+            maybeRotateQR()
+        }
     }
 
     // MARK: - QR block
@@ -112,7 +116,7 @@ struct ContactQRCodeView: View {
     private var qrBlock: some View {
         let size = QRCodeSize.standard(in: containerWidth)
 
-        if qrPayload != nil, let qrImage {
+        if qrPayloadBytes != nil, let qrImage {
             // White bg required for camera readability; bordered with CT noise
             Image(uiImage: qrImage)
                 .interpolation(.none)
@@ -213,33 +217,34 @@ struct ContactQRCodeView: View {
                 generationError = "Device ID not found"
                 return
             }
-            let deepLink = try generator.generateDeepLink(
+            // Compact binary in QR byte mode (no base64 / deep-link wrapper).
+            // Metadata minimization (thread 5): do not embed plaintext username in the
+            // signed invite by default — identity chrome stays in UI only (`displayName`).
+            let binary = try generator.generateQRBinary(
                 userId: userId,
                 deviceId: deviceId,
-                username: username.isEmpty ? nil : username,
-                server: serverHostname,
-                useHTTPS: false
+                username: nil,
+                server: serverHostname
             )
-            qrPayload = deepLink
-            qrImage = generateQRCode(from: deepLink)
+            qrPayloadBytes = binary
+            qrImage = QRCodeGenerator.generate(from: binary)
             generatedAt = Date()
             timeRemaining = InviteConfig.ttlSeconds
             generationError = nil
+            #if DEBUG
+            Log.debug("Invite QR binary bytes=\(binary.count)", category: "ContactQR")
+            #endif
         } catch {
             generationError = "Failed to generate code"
         }
     }
 
     private func regenerateQRCode() {
-        qrPayload = nil
+        qrPayloadBytes = nil
         qrImage = nil
         generationError = nil
         generatedAt = nil
         generateInitialQRCode()
-    }
-
-    private func generateQRCode(from string: String) -> UIImage? {
-        QRCodeGenerator.generate(from: string)
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
@@ -252,13 +257,26 @@ struct ContactQRCodeView: View {
         guard let generatedAt else { return }
         timeRemaining = max(InviteConfig.ttlSeconds - Date().timeIntervalSince(generatedAt), 0)
     }
+
+    /// Rotate jti every `qrRotateIntervalSeconds` while the code is still live.
+    private func maybeRotateQR() {
+        guard previewPayload == nil else { return }
+        guard generationError == nil, qrPayloadBytes != nil else { return }
+        guard let generatedAt else { return }
+        let elapsed = Date().timeIntervalSince(generatedAt)
+        guard elapsed >= InviteConfig.qrRotateIntervalSeconds else { return }
+        // Still within overall TTL window after rotation would reset the clock —
+        // always rotate; each code is one-time and short-lived by design.
+        Log.debug("Rotating invite QR after \(Int(elapsed))s", category: "ContactQR")
+        regenerateQRCode()
+    }
 }
 
 #Preview {
     ContactQRCodeView(
         userId: "user123",
         username: "john_doe",
-        previewPayload: "konstrukt://invite?userId=user123&username=john_doe&deviceId=device456&server=ams.konstruct.cc"
+        previewPayload: Data("CIv1-preview".utf8)
     )
     .preferredColorScheme(.dark)
 }

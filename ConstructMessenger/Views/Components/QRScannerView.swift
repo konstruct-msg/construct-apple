@@ -259,9 +259,17 @@ struct QRScannerView: View {
         let normalized = normalizeScannedCode(code)
         Log.debug("QRScannerView: scanned=\(code.prefix(120)), normalized=\(normalized.prefix(120))", category: "QRScannerView")
 
+        // Compact binary invite in QR byte mode (AVFoundation often surfaces Latin-1 string).
+        if let binary = InviteBinaryCodec.dataFromLatin1QRString(code),
+           InviteObject.isCompactBinary(binary) {
+            let encoded = InviteBinaryCodec.base64URLEncode(binary)
+            onCodeScanned("konstruct://add?invite=\(encoded)")
+            return
+        }
+
         let lower = normalized.lowercased()
-        if lower.hasPrefix("https://konstruct.cc/c/") ||
-           lower.hasPrefix("https://konstruct.cc/add") ||
+        // Signed dynamic invites + device-link QR only (legacy /c/ is rejected by LinkParser).
+        if lower.hasPrefix("https://konstruct.cc/add") ||
            lower.hasPrefix("https://web.konstruct.cc/add") ||
            lower.hasPrefix(InviteConfig.qrCodePrefixScheme) ||
            // Device link flows (Settings → Link Replica, onboarding join-request from Desktop)
