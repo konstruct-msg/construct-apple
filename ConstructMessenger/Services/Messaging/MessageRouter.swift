@@ -247,11 +247,9 @@ final class MessageRouter {
         Log.debug("   messageNumber: \(message.messageNumber)", category: "MessageRouter")
         Log.debug("   oneTimePreKeyId: \(message.oneTimePreKeyId)", category: "MessageRouter")
         Log.debug("   ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "MessageRouter")
-        let ephemeralPreview = message.ephemeralPublicKey.prefix(16).map { String(format: "%02x", $0) }.joined()
-        Log.debug("   ephemeralPublicKey preview: \(ephemeralPreview)...", category: "MessageRouter")
+        Log.debug("   ephemeralPublicKey preview: \(message.ephemeralPublicKey.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "MessageRouter")
         Log.debug("   content (padded): \(message.content.count) bytes", category: "MessageRouter")
-        let contentPreview = message.content.prefix(16).map { String(format: "%02x", $0) }.joined()
-        Log.debug("   content preview: \(contentPreview)…", category: "MessageRouter")
+        Log.debug("   content preview: \(message.content.prefix(16).map { String(format: "%02x", $0) }.joined())…", category: "MessageRouter")
         Log.debug("   isEndSession: \(message.isEndSession)", category: "MessageRouter")
         #endif
         
@@ -810,29 +808,15 @@ final class MessageRouter {
             return
         }
 
-        // Silently discard session establishment pings received on the normal message path.
-        // These are sent after a tie-break win to trigger RESPONDER init on the peer.
-        // Legacy plaintext form; typed (content_type=25) form is handled before the reassembler.
-        if decryptedContent.hasPrefix("__session_ping") && decryptedContent.hasSuffix("__") {
-            handleSessionControlSignal(.ping, for: message, from: otherUserId, chat: chat, in: context)
-            return
-        }
-
-        // Silently discard binary-init sentinels — these appear when a legacy msgNum=0 payload
-        // couldn't be decoded as UTF-8. The session was established; there's nothing to display.
-        if decryptedContent.hasPrefix("__binary_init_") {
+        // Legacy plaintext control magic (typed content_type 24/25/26 handled pre-reassembler).
+        if SessionControlCodec.isBinaryInitSentinel(decryptedContent) {
             Log.info("SESSION_STATE[binary_init_discarded_normal_path]: discarding binary init sentinel from \(otherUserId.prefix(8))…", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
             return
         }
-
-        // Silently discard two-phase handshake confirmation signals.
-        // __session_ready_<UUID>__ is sent by the RESPONDER after initReceivingSession succeeds.
-        // Also handle legacy format without __ markers (older client versions).
-        // Typed (content_type=26) form is handled before the reassembler.
-        if decryptedContent.hasPrefix("__session_ready") || decryptedContent.hasPrefix("session_ready_") {
-            handleSessionControlSignal(.ready, for: message, from: otherUserId, chat: chat, in: context)
+        if let op = SessionControlCodec.legacyOp(plaintext: decryptedContent) {
+            handleSessionControlSignal(op, for: message, from: otherUserId, chat: chat, in: context)
             return
         }
 
@@ -1784,9 +1768,7 @@ final class MessageRouter {
         if SessionControlCodec.op(forContentType: Int(original.contentType)) != nil {
             return
         }
-        if decrypted.hasPrefix("__session_ping") || decrypted.hasPrefix("__session_reset_init")
-            || decrypted.hasPrefix("__session_ready") || decrypted.hasPrefix("session_ready_")
-        {
+        if SessionControlCodec.legacyOp(plaintext: decrypted) != nil {
             return
         }
 

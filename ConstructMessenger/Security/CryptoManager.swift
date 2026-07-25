@@ -1018,7 +1018,11 @@ class CryptoManager {
             }
         )
 
-        Log.debug("ENCRYPT: msgNum=\(components.messageNumber), otpkId=\(components.oneTimePreKeyId), ephemKey=\(components.ephemeralPublicKey.prefix(8).map { String(format: "%02x", $0) }.joined()), content=\(components.content.count) bytes", category: "CryptoManager")
+        // Hex preview only materializes when Log.debug evaluates (DEBUG builds).
+        Log.debug(
+            "ENCRYPT: msgNum=\(components.messageNumber), otpkId=\(components.oneTimePreKeyId), ephemKey=\(components.ephemeralPublicKey.prefix(8).map { String(format: "%02x", $0) }.joined()), content=\(components.content.count) bytes",
+            category: "CryptoManager"
+        )
 
         return components
     }

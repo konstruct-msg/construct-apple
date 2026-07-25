@@ -243,7 +243,14 @@ final class ChunkedMessageReassembler {
         if ProfileShareData.fromBinaryData(data) != nil {
             return .profile(data)
         }
-        // Session control strings, legacy plain-text messages
+        // Session control magic: prefix match on bytes (E8) then one UTF-8 decode for handlers.
+        if SessionControlCodec.isLegacyControlPlaintext(data) {
+            if let text = String(data: data, encoding: .utf8), !text.isEmpty {
+                return .legacy(text)
+            }
+            return .invalid("control magic not valid UTF-8")
+        }
+        // Legacy plain-text chat messages
         if let text = String(data: data, encoding: .utf8) {
             return text.isEmpty ? .invalid("empty plaintext") : .legacy(text)
         }

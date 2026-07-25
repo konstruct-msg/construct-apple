@@ -1400,14 +1400,21 @@ final class SessionCoordinator: MessageRouterDelegate {
             // to identified on retry (the server-influence deanonymisation vector).
             let recipientIdentityKey = StealthSenderService.recipientIdentityKey(recipientId: userId, context: context)
 
+            // E14: one save for all "sending" marks instead of save-per-message before network.
+            var resendQueue: [(Message, String)] = []
+            resendQueue.reserveCapacity(candidates.count)
             for msg in candidates {
                 let plaintext = msg.displayText
                 guard !plaintext.isEmpty else { continue }
-
                 msg.deliveryStatus = .sending
                 msg.retryCount += 1
+                resendQueue.append((msg, plaintext))
+            }
+            if context.hasChanges {
                 context.saveAndLog()
+            }
 
+            for (msg, plaintext) in resendQueue {
                 do {
                     let messageUUID = UUID(uuidString: msg.id) ?? UUID()
                     let plan = ChunkedMessageSender.shared.buildPlan(plaintext: Data(plaintext.utf8), messageId: messageUUID)
