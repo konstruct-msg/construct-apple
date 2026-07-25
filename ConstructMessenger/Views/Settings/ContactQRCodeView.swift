@@ -217,7 +217,10 @@ struct ContactQRCodeView: View {
                 generationError = "Device ID not found"
                 return
             }
-            // Compact binary in QR byte mode (no base64 / deep-link wrapper).
+            // Text-safe base64url(CIv1) in UTF-8 QR — AVFoundation reliably returns
+            // stringValue for this. Pure byte-mode CIv1 often yields nil stringValue
+            // on device (no haptic, no redeem). Scanner still dual-reads Latin-1
+            // byte-mode for already-printed binary QRs.
             // Metadata minimization (thread 5): do not embed plaintext username in the
             // signed invite by default — identity chrome stays in UI only (`displayName`).
             let binary = try generator.generateQRBinary(
@@ -226,13 +229,17 @@ struct ContactQRCodeView: View {
                 username: nil,
                 server: serverHostname
             )
+            let textPayload = InviteBinaryCodec.base64URLEncode(binary)
             qrPayloadBytes = binary
-            qrImage = QRCodeGenerator.generate(from: binary)
+            qrImage = QRCodeGenerator.generate(from: textPayload)
             generatedAt = Date()
             timeRemaining = InviteConfig.ttlSeconds
             generationError = nil
             #if DEBUG
-            Log.debug("Invite QR binary bytes=\(binary.count)", category: "ContactQR")
+            Log.debug(
+                "Invite QR binary=\(binary.count)B textPayload=\(textPayload.count) chars",
+                category: "ContactQR"
+            )
             #endif
         } catch {
             generationError = "Failed to generate code"

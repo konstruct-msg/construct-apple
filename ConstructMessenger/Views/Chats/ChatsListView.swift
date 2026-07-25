@@ -389,10 +389,12 @@ struct ChatsListView: View {
             bio: nil,
             deviceId: contactInfo.deviceId
         )
-        if chatsViewModel.startChat(
+        if let chat = chatsViewModel.startChat(
             with: publicUserInfo,
             identityPublicKey: contactInfo.identityPublicKey
-        ) != nil {
+        ) {
+            // Open the new/existing chat so scan feels like a completed action.
+            chatsViewModel.chatToOpen = chat.id
             InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
         }
     }

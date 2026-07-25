@@ -725,10 +725,12 @@ struct SynapsView: View {
                         bio: nil,
                         deviceId: contactInfo.deviceId
                     )
-                    if chatsViewModel.startChat(
+                    if let chat = chatsViewModel.startChat(
                         with: publicUserInfo,
                         identityPublicKey: contactInfo.identityPublicKey
-                    ) != nil {
+                    ) {
+                        chatsViewModel.selectedTab = 0
+                        chatsViewModel.chatToOpen = chat.id
                         InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
                     }
                 }

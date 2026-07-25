@@ -82,9 +82,17 @@ class ProfileSharingManager {
             return
         }
         
-        // Update user's display name
-        user.displayName = profileData.displayName
-        
+        // Update display name immediately so chat list / headers show the real name
+        // even while the avatar is still downloading.
+        let trimmedName = profileData.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedName.isEmpty {
+            user.displayName = trimmedName
+        }
+
+        // Always mark sharing now — name is already trusted; avatar may arrive async.
+        user.isSharingWithMe = true
+        user.sharedWithMeAt = Date()
+
         // Update avatar if provided
         // Priority: new format (Media Upload API) > old format (base64)
         if let avatarMediaId = profileData.avatarMediaId,
@@ -95,6 +103,7 @@ class ProfileSharingManager {
             // Use viewContext for the save — the passed `context` may be a short-lived
             // background context that's deallocated before the download completes.
             let userObjectID = user.objectID
+            let nameSnapshot = trimmedName
             Task {
                 do {
                     Log.info("Downloading avatar from Media Upload API: \(avatarMediaId)", category: "ProfileSharingManager")
@@ -108,9 +117,13 @@ class ProfileSharingManager {
                     await MainActor.run {
                         let viewContext = PersistenceController.shared.container.viewContext
                         guard let liveUser = viewContext.object(with: userObjectID) as? User else { return }
+                        // Re-apply name in case a server username refresh raced the download.
+                        if !nameSnapshot.isEmpty {
+                            liveUser.displayName = nameSnapshot
+                        }
                         liveUser.avatarData = decryptedData
                         liveUser.isSharingWithMe = true
-                        liveUser.sharedWithMeAt = Date()
+                        liveUser.sharedWithMeAt = liveUser.sharedWithMeAt ?? Date()
 
                         do {
                             try viewContext.save()
@@ -128,13 +141,7 @@ class ProfileSharingManager {
             // Old format: base64 data (backward compatibility)
             user.avatarData = avatarData
         }
-        
-        // Mark as sharing with us — for async avatar download, isSharingWithMe is set inside the Task
-        if profileData.avatarMediaId == nil {
-            user.isSharingWithMe = true
-            user.sharedWithMeAt = Date()
-        }
-        
+
         do {
             try context.save()
             Log.info("Profile data updated for user \(userId): displayName=\(profileData.displayName)", category: "ProfileSharingManager")

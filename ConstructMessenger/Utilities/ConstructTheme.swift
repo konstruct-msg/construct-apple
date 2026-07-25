@@ -810,10 +810,12 @@ struct CTSettingsRow: View {
                     .frame(width: 28, alignment: .center)
                     .padding(.trailing, 4)
             }
+            // Label may shrink; trailing value keeps one line (fingerprints, status).
             Text(label)
                 .font(CTFont.regular(13))
                 .foregroundColor(isDestructive ? Color.CT.danger : labelColor)
-                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                .lineLimit(1)
+                .layoutPriority(0)
             Spacer(minLength: 8)
             if !value.isEmpty {
                 Text(value)
@@ -823,6 +825,9 @@ struct CTSettingsRow: View {
                         isAction      ? Color.CT.accent : valueColor
                     )
                     .multilineTextAlignment(.trailing)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .layoutPriority(1)
             }
             if let status {
                 CTStatusBadge(status: status)

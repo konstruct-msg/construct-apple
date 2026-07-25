@@ -274,7 +274,8 @@ private struct MyQRTab: View {
             return
         }
         do {
-            // Compact binary in QR byte mode (same path as iOS ContactQRCodeView).
+            // Text-safe base64url(CIv1) — same path as iOS ContactQRCodeView so
+            // AVFoundation / Vision always get a UTF-8 stringValue on scan.
             // username omitted (metadata minimization).
             let binary = try generator.generateQRBinary(
                 userId: userId,
@@ -282,7 +283,8 @@ private struct MyQRTab: View {
                 username: nil,
                 server: ServerConfig.inviteHost
             )
-            qrImage = QRCodeGenerator.generate(from: binary) ?? makeQRImage(from: binary)
+            let textPayload = InviteBinaryCodec.base64URLEncode(binary)
+            qrImage = QRCodeGenerator.generate(from: textPayload) ?? makeQRImage(from: Data(textPayload.utf8))
             generatedAt = Date()
             timeRemaining = InviteConfig.ttlSeconds
         } catch {

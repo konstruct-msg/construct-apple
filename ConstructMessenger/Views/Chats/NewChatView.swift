@@ -106,6 +106,7 @@ struct NewChatView: View {
             identityPublicKey: contactInfo.identityPublicKey
         ) {
             Log.info("NewChatView: Chat created with @\(username), chat.id=\(chat.id)", category: "NewChatView")
+            chatsViewModel.chatToOpen = chat.id
             InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
         } else {
             Log.error("NewChatView: Failed to create chat with @\(username)", category: "NewChatView")

@@ -259,11 +259,11 @@ struct QRScannerView: View {
         let normalized = normalizeScannedCode(code)
         Log.debug("QRScannerView: scanned=\(code.prefix(120)), normalized=\(normalized.prefix(120))", category: "QRScannerView")
 
-        // Compact binary invite in QR byte mode (AVFoundation often surfaces Latin-1 string).
+        // Compact binary invite in QR byte mode (AVFoundation may surface as Latin-1 string).
         if let binary = InviteBinaryCodec.dataFromLatin1QRString(code),
            InviteObject.isCompactBinary(binary) {
             let encoded = InviteBinaryCodec.base64URLEncode(binary)
-            onCodeScanned("konstruct://add?invite=\(encoded)")
+            deliverScannedInvite("konstruct://add?invite=\(encoded)")
             return
         }
 
@@ -274,13 +274,24 @@ struct QRScannerView: View {
            lower.hasPrefix(InviteConfig.qrCodePrefixScheme) ||
            // Device link flows (Settings → Link Replica, onboarding join-request from Desktop)
            lower.hasPrefix("konstruct://link") {
-            onCodeScanned(normalized)
+            deliverScannedInvite(normalized)
         } else if isBase64Like(normalized) {
-            onCodeScanned("konstruct://add?invite=\(normalized)")
+            deliverScannedInvite("konstruct://add?invite=\(normalized)")
         } else {
+            #if os(iOS)
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            #endif
             dismiss()
             ErrorRouter.shared.report(.unknown(NSLocalizedString("invalid_qr_code_construct", comment: "")))
         }
+    }
+
+    /// Haptic success + hand off to parent. Parent dismisses sheet after redeem/navigation.
+    private func deliverScannedInvite(_ payload: String) {
+        #if os(iOS)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        #endif
+        onCodeScanned(payload)
     }
 
     private func isBase64Like(_ value: String) -> Bool {
@@ -421,16 +432,25 @@ class QRCodeScanner: NSObject, AVCaptureMetadataOutputObjectsDelegate {
     }
 
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
-        if let metadataObject = metadataObjects.first {
-            guard let readableObject = metadataObject as? AVMetadataMachineReadableCodeObject else { return }
-            guard let stringValue = readableObject.stringValue else { return }
+        guard scannedCode == nil else { return }
+        guard let metadataObject = metadataObjects.first,
+              let readableObject = metadataObject as? AVMetadataMachineReadableCodeObject else { return }
 
-            // Only trigger once
-            if scannedCode == nil {
-                AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
-                scannedCode = stringValue
-            }
+        // Prefer stringValue (UTF-8 text / base64url invite QR). For legacy byte-mode
+        // CIv1 codes, AVFoundation may still surface a Latin-1 stringValue — recovery
+        // happens in handleScannedCode. If both are nil, the frame is a no-op.
+        guard let stringValue = readableObject.stringValue, !stringValue.isEmpty else {
+            #if DEBUG
+            Log.debug(
+                "QRScanner: QR detected but stringValue nil/empty (byte-mode without Latin-1 surface?)",
+                category: "QRScannerView"
+            )
+            #endif
+            return
         }
+
+        AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
+        scannedCode = stringValue
     }
 
     func getPreviewLayer() -> AVCaptureVideoPreviewLayer? {
