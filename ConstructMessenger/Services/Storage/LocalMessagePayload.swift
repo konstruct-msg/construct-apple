@@ -14,7 +14,7 @@ enum LocalMessagePayloadKind: UInt8 {
     case utf8Text = 0x01
     /// Serialized `Shared_Proto_Messaging_V1_MediaAlbumMessage`.
     case mediaAlbum = 0x02
-    /// Serialized `Shared_Proto_Messaging_V1_MessageContent` (voice/file/edit future).
+    /// Serialized `Shared_Proto_Messaging_V1_MessageContent` (text/media/voice/…).
     case messageContent = 0x03
     /// `ProfileShareData.toBinaryData()` if a profile row is ever persisted.
     case profileBinary = 0x04
@@ -57,6 +57,11 @@ enum LocalMessagePayload: Equatable {
         return encode(kind: .messageContent, body: body)
     }
 
+    /// Prefer storing the full wire `MessageContent` as CTM1 when available.
+    static func storagePayload(forWireContent content: Shared_Proto_Messaging_V1_MessageContent) -> Data {
+        encodeMessageContent(content)
+    }
+
     static func encodeProfileBinary(_ data: Data) -> Data {
         encode(kind: .profileBinary, body: data)
     }
@@ -97,8 +102,8 @@ enum LocalMessagePayload: Equatable {
 
     // MARK: - Display helpers
 
-    /// Best-effort UTF-8 string for text bubbles, previews, and dual-read parsers.
-    /// Media albums rehydrate to the legacy media JSON shape so existing UI keeps working.
+    /// Best-effort UTF-8 string for text bubbles and dual-read parsers.
+    /// Binary kinds rehydrate to the legacy JSON shapes the UI already understands.
     var displayString: String {
         switch self {
         case .text(let s):
@@ -106,58 +111,102 @@ enum LocalMessagePayload: Equatable {
         case .legacyUTF8(let data):
             return String(data: data, encoding: .utf8) ?? ""
         case .mediaAlbum(let body):
-            if let album = try? Shared_Proto_Messaging_V1_MediaAlbumMessage(serializedBytes: body),
-               let json = MediaWireCodec.mediaJSON(from: album) {
-                return json
-            }
-            return ""
+            return Self.displayString(forMediaAlbumBody: body)
         case .messageContent(let body):
-            if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: body) {
-                switch content.content {
-                case .text(let msg):
-                    return msg.text
-                case .mediaAlbum(let album):
-                    return MediaWireCodec.mediaJSON(from: album) ?? ""
-                default:
-                    return ""
-                }
+            guard let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: body) else {
+                return ""
             }
-            return ""
+            return Self.displayString(forMessageContent: content)
         case .profileBinary:
-            // Not rendered as text; empty keeps control/preview paths quiet.
             return ""
         }
     }
 
-    /// Short preview for chat list (avoids dumping JSON into `lastMessageText` when possible).
+    /// Short preview for chat list.
     var previewHint: String {
         switch self {
         case .text(let s):
             return s
         case .legacyUTF8(let data):
-            return String(data: data, encoding: .utf8) ?? ""
+            let s = String(data: data, encoding: .utf8) ?? ""
+            if s.contains("\"type\":\"voice\"") {
+                return NSLocalizedString("voice_message", comment: "")
+            }
+            if s.contains("\"type\":\"file\"") {
+                return NSLocalizedString("file", comment: "")
+            }
+            return s
         case .mediaAlbum(let body):
-            if let album = try? Shared_Proto_Messaging_V1_MediaAlbumMessage(serializedBytes: body) {
-                let caption = album.hasCaption ? album.caption : ""
-                if !caption.isEmpty { return caption }
-                return NSLocalizedString("photo", comment: "")
-            }
-            return NSLocalizedString("photo", comment: "")
+            return Self.previewHint(forMediaAlbumBody: body)
         case .messageContent(let body):
-            if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: body) {
-                switch content.content {
-                case .text(let msg): return msg.text
-                case .mediaAlbum(let album):
-                    let caption = album.hasCaption ? album.caption : ""
-                    if !caption.isEmpty { return caption }
-                    return NSLocalizedString("photo", comment: "")
-                default:
-                    return NSLocalizedString("message_unavailable", comment: "")
-                }
+            guard let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: body) else {
+                return ""
             }
-            return ""
+            return Self.previewHint(forMessageContent: content)
         case .profileBinary:
             return ""
+        }
+    }
+
+    // MARK: - Private display
+
+    private static func displayString(forMediaAlbumBody body: Data) -> String {
+        guard let album = try? Shared_Proto_Messaging_V1_MediaAlbumMessage(serializedBytes: body) else {
+            return ""
+        }
+        if MediaWireCodec.looksLikeFileAlbum(album) {
+            return MediaWireCodec.fileJSON(from: album) ?? ""
+        }
+        return MediaWireCodec.mediaJSON(from: album) ?? ""
+    }
+
+    private static func displayString(forMessageContent content: Shared_Proto_Messaging_V1_MessageContent) -> String {
+        switch content.content {
+        case .text(let msg):
+            return msg.text
+        case .mediaAlbum(let album):
+            if MediaWireCodec.looksLikeFileAlbum(album) {
+                return MediaWireCodec.fileJSON(from: album) ?? ""
+            }
+            return MediaWireCodec.mediaJSON(from: album) ?? ""
+        case .media(let m):
+            // Single media item → one-item album JSON for existing media UI.
+            var album = Shared_Proto_Messaging_V1_MediaAlbumMessage()
+            album.items = [m]
+            if m.hasCaption { album.caption = m.caption }
+            return MediaWireCodec.mediaJSON(from: album) ?? ""
+        case .voice(let v):
+            return MediaWireCodec.voiceJSON(from: v) ?? ""
+        default:
+            return ""
+        }
+    }
+
+    private static func previewHint(forMediaAlbumBody body: Data) -> String {
+        guard let album = try? Shared_Proto_Messaging_V1_MediaAlbumMessage(serializedBytes: body) else {
+            return NSLocalizedString("photo", comment: "")
+        }
+        let caption = album.hasCaption ? album.caption : ""
+        if !caption.isEmpty { return caption }
+        if MediaWireCodec.looksLikeFileAlbum(album) {
+            return NSLocalizedString("file", comment: "")
+        }
+        return NSLocalizedString("photo", comment: "")
+    }
+
+    private static func previewHint(forMessageContent content: Shared_Proto_Messaging_V1_MessageContent) -> String {
+        switch content.content {
+        case .text(let msg):
+            return msg.text
+        case .mediaAlbum(let album):
+            return previewHint(forMediaAlbumBody: (try? album.serializedData()) ?? Data())
+        case .media(let m):
+            if m.hasCaption, !m.caption.isEmpty { return m.caption }
+            return NSLocalizedString("photo", comment: "")
+        case .voice:
+            return NSLocalizedString("voice_message", comment: "")
+        default:
+            return NSLocalizedString("message_unavailable", comment: "")
         }
     }
 }

@@ -113,52 +113,40 @@ class MediaUploadManager {
     // MARK: - File Upload
 
     struct FileUploadResult {
+        /// Legacy dual-read JSON for UI / multi-device until peers consume CTM1.
         let messageContent: String
+        /// Binary album items for wire + CTM1 local store.
+        let mediaList: [MediaMessageData]
     }
 
-    /// Uploads file attachments and builds a `{"type":"file",...}` message JSON.
-    /// Text-based files are ZLIB-compressed before AES encryption if beneficial.
+    /// Uploads file attachments. Wire/local prefer mediaAlbum proto (CTM1); JSON remains for dual-read.
     func uploadFilesAndBuildContent(urls: [URL], caption: String) async throws -> FileUploadResult {
-        var fileDataList: [FileMessageEntry] = []
+        var mediaList: [MediaMessageData] = []
+        mediaList.reserveCapacity(urls.count)
 
         for url in urls {
             Log.info("Uploading file: \(url.lastPathComponent)", category: "MediaUploadManager")
             let mediaData = try await MediaManager.shared.uploadFile(url)
-            fileDataList.append(FileMessageEntry(
+            mediaList.append(MediaMessageData(
                 mediaId: mediaData.mediaId,
                 mediaUrl: mediaData.mediaUrl,
                 mediaKey: mediaData.mediaKey,
                 mediaType: mediaData.mediaType,
                 size: mediaData.size,
+                width: nil,
+                height: nil,
+                duration: nil,
+                thumbnail: nil,
                 hash: mediaData.hash,
                 filename: mediaData.filename ?? url.lastPathComponent,
-                compressed: mediaData.compressed ?? false
+                compressed: mediaData.compressed,
+                blurhash: nil
             ))
         }
 
-        let content = FileMessageContent(type: "file", caption: caption, files: fileDataList)
-        let encoder = JSONEncoder()
-        guard let jsonData = try? encoder.encode(content),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
-            throw MediaUploadError.uploadFailed("Failed to encode file message JSON")
-        }
-        return FileUploadResult(messageContent: jsonString)
-    }
-
-    private struct FileMessageContent: Codable {
-        let type: String
-        let caption: String
-        let files: [FileMessageEntry]
-    }
-
-    private struct FileMessageEntry: Codable {
-        let mediaId: String
-        let mediaUrl: String
-        let mediaKey: Data
-        let mediaType: String
-        let size: Int
-        let hash: String
-        let filename: String
-        let compressed: Bool
+        let wire = MediaWireCodec.fileAlbumContent(mediaList: mediaList, caption: caption)
+        let messageContent = MediaWireCodec.fileJSON(from: wire.mediaAlbum)
+            ?? caption
+        return FileUploadResult(messageContent: messageContent, mediaList: mediaList)
     }
 }

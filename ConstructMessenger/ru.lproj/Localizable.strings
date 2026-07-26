@@ -1113,3 +1113,4 @@
 /* Silent-transport neutral network indicator (silent-transport-ui decision) */
 "net_status_protected" = "Защищено";
 "net_status_connecting" = "Подключение…";
+"file" = "Файл";

@@ -1201,7 +1201,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         let plaintext: String
         let e2eMessageId: String?
         switch initMessageReassembler.process(data: decryptedBytes) {
-        case .assembled(let text, _, let e2eId, _):
+        case .assembled(let text, _, let e2eId, _, _):
             plaintext = text
             e2eMessageId = e2eId
         case .legacy(let text):

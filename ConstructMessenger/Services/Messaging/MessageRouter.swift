@@ -680,11 +680,12 @@ final class MessageRouter {
                 }
 
                 switch chunkReassembler.process(data: plaintext) {
-                case .assembled(let text, let quoted, let e2eMessageId, let mediaAlbum):
+                case .assembled(let text, let quoted, let e2eMessageId, let mediaAlbum, let storagePayload):
                     handleResolvedMessage(
                         text,
                         quotedMessage: quoted,
                         mediaAlbum: mediaAlbum,
+                        storagePayload: storagePayload,
                         e2eMessageId: e2eMessageId,
                         for: message,
                         from: otherUserId,
@@ -795,6 +796,7 @@ final class MessageRouter {
         _ decryptedContent: String,
         quotedMessage: Shared_Proto_Messaging_V1_QuotedMessage?,
         mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage?,
+        storagePayload: Data? = nil,
         e2eMessageId: String?,
         for message: ChatMessage,
         from otherUserId: String,
@@ -849,6 +851,7 @@ final class MessageRouter {
         do {
             canonicalId = try saveMessage(for: chat, with: message, decryptedContent: decryptedContent,
                                           quotedMessage: quotedMessage, mediaAlbum: mediaAlbum,
+                                          storagePayload: storagePayload,
                                           e2eMessageId: e2eMessageId, in: context)
             if let mediaAlbum {
                 MediaWireCodec.storeThumbnails(from: mediaAlbum, for: canonicalId)
@@ -1529,22 +1532,21 @@ final class MessageRouter {
         decryptedContent: String,
         quotedMessage: Shared_Proto_Messaging_V1_QuotedMessage?,
         mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage? = nil,
+        storagePayload incomingStorage: Data? = nil,
         e2eMessageId: String? = nil,
         in context: NSManagedObjectContext
     ) throws -> String {
-        // Local at-rest payload: CTM1 media album when available (E1); else legacy UTF-8 text/JSON.
+        // Prefer reassembler CTM1 (messageContent / mediaAlbum); fall back to album encode or UTF-8.
         let storagePayload: Data = {
+            if let incomingStorage, !incomingStorage.isEmpty {
+                return incomingStorage
+            }
             if let album = mediaAlbum {
                 return LocalMessagePayload.encodeMediaAlbum(album)
             }
-            return Data(decryptedContent.utf8)
+            return LocalMessagePayload.encodeText(decryptedContent)
         }()
-        let previewSource: String = {
-            if mediaAlbum != nil {
-                return LocalMessagePayload.decode(storagePayload).previewHint
-            }
-            return decryptedContent
-        }()
+        let previewSource = LocalMessagePayload.decode(storagePayload).previewHint
 
         var canonicalId = (e2eMessageId ?? messageData.id).lowercased()
         let fetchRequest = Message.fetchRequest()
@@ -1762,7 +1764,7 @@ final class MessageRouter {
         // Decode raw bytes through the binary pipeline (same as normal messages).
         let decrypted: String
         switch ChunkedMessageReassembler().process(data: decryptedBytes) {
-        case .assembled(let text, _, _, _):
+        case .assembled(let text, _, _, _, _):
             decrypted = text
         case .legacy(let text):
             decrypted = text

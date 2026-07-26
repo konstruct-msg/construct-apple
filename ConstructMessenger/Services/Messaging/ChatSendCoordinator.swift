@@ -601,13 +601,20 @@ final class ChatSendCoordinator {
             guard let self else { return }
             do {
                 let voiceContent = try await MediaManager.shared.uploadAudio(url, duration: duration, waveform: waveform)
-                let jsonData = try JSONEncoder().encode(voiceContent)
-                guard let json = String(data: jsonData, encoding: .utf8) else {
-                    throw MediaUploadError.uploadFailed("JSON encode failed")
-                }
+                let wireContent = MediaWireCodec.voiceMessageContent(from: voiceContent)
+                let wirePlaintext = try wireContent.serializedData()
+                let storagePayload = LocalMessagePayload.storagePayload(forWireContent: wireContent)
+                let displayJSON = MediaWireCodec.voiceJSON(from: wireContent.voice)
+                    ?? (try? JSONEncoder().encode(voiceContent)).flatMap { String(data: $0, encoding: .utf8) }
+                    ?? ""
                 try? FileManager.default.removeItem(at: url)
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
-                sendTextMessage(text: json, replyTo: nil)
+                sendTextMessage(
+                    text: displayJSON,
+                    replyTo: nil,
+                    wirePlaintext: wirePlaintext,
+                    storagePayload: storagePayload
+                )
             } catch {
                 Log.error("Voice upload failed: \(error.localizedDescription)", category: "ChatViewModel")
                 updateMessageStatus(messageId: placeholderId, status: .failed)
@@ -653,7 +660,19 @@ final class ChatSendCoordinator {
                 )
                 pendingMediaUploads.removeValue(forKey: placeholderId)
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
-                sendTextMessage(text: result.messageContent, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
+                let wireContent = MediaWireCodec.fileAlbumContent(
+                    mediaList: result.mediaList,
+                    caption: caption
+                )
+                let wirePlaintext = try? wireContent.serializedData()
+                let storagePayload = LocalMessagePayload.storagePayload(forWireContent: wireContent)
+                sendTextMessage(
+                    text: result.messageContent,
+                    replyTo: replyTo,
+                    replyToContentOverride: replyToContentOverride,
+                    wirePlaintext: wirePlaintext,
+                    storagePayload: storagePayload
+                )
             } catch {
                 Log.error("File upload failed: \(error.localizedDescription)", category: "ChatViewModel")
                 updateMessageStatus(messageId: placeholderId, status: .failed)

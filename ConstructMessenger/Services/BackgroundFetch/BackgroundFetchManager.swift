@@ -434,6 +434,7 @@ class BackgroundFetchManager: NSObject {
                 let binaryMagic = Data([0x4B, 0x4E, 0x53, 0x54]) // "KNST"
                 var assembled: String? = nil
                 var assembledE2EId: String? = nil
+                var assembledStorage: Data? = nil
                 var assembledProfile: Data? = nil
                 var modernEditTarget: String? = nil
                 var modernEditText: String? = nil
@@ -441,10 +442,13 @@ class BackgroundFetchManager: NSObject {
                    dc.starts(with: binaryMagic) || dc.starts(with: legacyPrefixBytes) {
                     DispatchQueue.main.sync {
                         switch ChunkedMessageReassembler.shared.process(data: dc) {
-                        case .assembled(let text, _, let e2eId, _):
+                        case .assembled(let text, _, let e2eId, _, let storage):
                             assembled = text
                             assembledE2EId = e2eId
-                        case .legacy(let text):        assembled = text
+                            assembledStorage = storage
+                        case .legacy(let text):
+                            assembled = text
+                            assembledStorage = LocalMessagePayload.encodeText(text)
                         case .profile(let data):       assembledProfile = data
                         case .edit(let target, let nt, _):
                             modernEditTarget = target
@@ -453,12 +457,13 @@ class BackgroundFetchManager: NSObject {
                         }
                     }
                     PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
-                    if let text = assembled {
+                    if let storage = assembledStorage {
                         Log.debug("Chunk assembled in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
-                        decryptedContent = Data(text.utf8)
+                        decryptedContent = storage
+                    } else if let text = assembled {
+                        Log.debug("Chunk assembled (text) in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
+                        decryptedContent = LocalMessagePayload.encodeText(text)
                     } else if let profile = assembledProfile {
-                        // Reassembled binary profile share → surface as the raw profile bytes so the
-                        // profile-defer path below renders it as a profile, not a placeholder string.
                         Log.debug("Chunk assembled profile in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
                         decryptedContent = profile
                     } else if modernEditTarget != nil {
@@ -467,9 +472,25 @@ class BackgroundFetchManager: NSObject {
                         Log.debug("Chunk fragment \(item.messageData.id.prefix(8)) ACK'd; waiting for remaining chunks", category: "BackgroundFetch")
                         continue
                     }
+                } else if let dc = decryptedContent, !LocalMessagePayload.isEnvelope(dc) {
+                    // Single-frame MessageContent or legacy UTF-8 without KNST framing.
+                    DispatchQueue.main.sync {
+                        switch ChunkedMessageReassembler.shared.process(data: dc) {
+                        case .assembled(_, _, _, _, let storage):
+                            if let storage { decryptedContent = storage }
+                        case .legacy(let text):
+                            decryptedContent = LocalMessagePayload.encodeText(text)
+                        case .profile(let data):
+                            assembledProfile = data
+                            decryptedContent = data
+                        default:
+                            break
+                        }
+                    }
                 }
 
-                let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+                let storageBytes = decryptedContent ?? Data()
+                let decryptedString = LocalMessagePayload.decode(storageBytes).displayString
 
                 // Client-side block enforcement (decrypt-but-suppress). The ratchet already
                 // advanced during decryption above; for a blocked sender we drop the transcript,
@@ -531,7 +552,7 @@ class BackgroundFetchManager: NSObject {
                 dedupFetch.fetchLimit = 1
                 if let existing = try? backgroundContext.fetch(dedupFetch).first {
                     if existing.fromUserId == item.messageData.from, !existing.hasDecryptedContent {
-                        existing.applyStoredEncryption(plaintext: decryptedString, contactId: item.messageData.from)
+                        existing.applyStoredEncryption(plaintextData: storageBytes, contactId: item.messageData.from)
                     }
                     continue  // already stored (live stream or an earlier delivery of the same message)
                 }
@@ -547,12 +568,12 @@ class BackgroundFetchManager: NSObject {
                 message.deliveryStatus = .delivered
                 message.retryCount = 0
                 message.chat = item.chat
-                message.applyStoredEncryption(plaintext: decryptedString, contactId: item.messageData.from)
+                message.applyStoredEncryption(plaintextData: storageBytes, contactId: item.messageData.from)
 
                 newMessagesCount += 1
                 item.chat.unreadCount += 1
 
-                lastDecryptedByChatId[item.chatId] = (text: decryptedString, timestamp: item.messageData.timestamp)
+                lastDecryptedByChatId[item.chatId] = (text: LocalMessagePayload.decode(storageBytes).previewHint, timestamp: item.messageData.timestamp)
             }
 
             // Apply last-message preview to each chat.
