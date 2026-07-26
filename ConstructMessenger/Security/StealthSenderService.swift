@@ -24,6 +24,13 @@ final class StealthSenderService {
     // Cache key in UserDefaults
     private static let certCacheKey = "construct.sealed_sender_cert"
     private static let certExpiryKey = "construct.sealed_sender_cert_expiry"
+    /// The `currentUserId` the cached cert was issued for. The cert embeds a server-attested
+    /// `senderUserID`; if the local identity changes (delete account → re-register) without the
+    /// cache being cleared, a stale cert would keep sealing outgoing messages under the OLD user
+    /// id — recipients then attribute them to a "ghost" identity and they never reach the new
+    /// chat (the 2026-07-26 emulator→device failure). Binding the cache to its owner makes a
+    /// mismatched cert self-invalidate regardless of whether `clearCertCache()` was called.
+    private static let certOwnerKey = "construct.sealed_sender_cert_owner"
 
     private init() {}
 
@@ -59,18 +66,29 @@ final class StealthSenderService {
             let expiry = UserDefaults.standard.object(forKey: Self.certExpiryKey) as? Double,
             Date().timeIntervalSince1970 < expiry - 300 // 5-min leeway
         else { return nil }
+        // Identity binding: reject a cert cached under a DIFFERENT user id (stale after a
+        // delete-account → re-register without clearCertCache). Sealing with it would attribute
+        // our messages to the old "ghost" identity. A nil/empty owner means legacy cache written
+        // before this key existed — treat as stale and refetch (cheap, once).
+        let owner = UserDefaults.standard.string(forKey: Self.certOwnerKey)
+        guard let owner, !owner.isEmpty, owner == AuthSessionManager.shared.currentUserId else {
+            Log.info("Stealth: discarding cached sender cert — owner \(owner?.prefix(8).description ?? "nil") ≠ current \(AuthSessionManager.shared.currentUserId?.prefix(8).description ?? "nil"); refetching", category: "Stealth")
+            return nil
+        }
         return data
     }
 
     private func cacheCert(_ cert: Data, expiresAt: Int64) {
         UserDefaults.standard.set(cert, forKey: Self.certCacheKey)
         UserDefaults.standard.set(Double(expiresAt), forKey: Self.certExpiryKey)
+        UserDefaults.standard.set(AuthSessionManager.shared.currentUserId, forKey: Self.certOwnerKey)
     }
 
-    /// Call when logging out / identity changes.
+    /// Call when logging out / identity changes (delete account, re-register, local reset).
     func clearCertCache() {
         UserDefaults.standard.removeObject(forKey: Self.certCacheKey)
         UserDefaults.standard.removeObject(forKey: Self.certExpiryKey)
+        UserDefaults.standard.removeObject(forKey: Self.certOwnerKey)
     }
 
     // MARK: - Seal (send path)

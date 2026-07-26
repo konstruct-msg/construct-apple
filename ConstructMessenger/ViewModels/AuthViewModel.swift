@@ -554,6 +554,7 @@ class AuthViewModel {
         Log.info("[Auth] User chose to wipe and re-register", category: "Auth")
         cancelTimeouts()
         AuthSessionManager.shared.clearSession()
+        StealthSenderService.shared.clearCertCache()   // drop the old identity's sealed-sender cert
 
         // Nullify in-memory cores before Keychain deletions so no stale reference survives.
         CryptoManager.shared.deleteAllCryptoKeys()
@@ -600,6 +601,7 @@ class AuthViewModel {
         cancelTimeouts()
         MessageStreamManager.shared.disconnect()
         AuthSessionManager.shared.clearSession()
+        StealthSenderService.shared.clearCertCache()   // drop the old identity's sealed-sender cert
         CryptoManager.shared.deleteAllCryptoKeys()
         KeychainManager.shared.deleteDeviceKeys()
         KeychainManager.shared.deleteOtpks()
@@ -826,6 +828,7 @@ class AuthViewModel {
         
         // Clear all user data
         AuthSessionManager.shared.clearSession()
+        StealthSenderService.shared.clearCertCache()   // drop the old identity's sealed-sender cert
         CryptoManager.shared.deleteAllCryptoKeys()
         KeychainManager.shared.deleteDeviceKeys()
         KeychainManager.shared.deleteOtpks()
