@@ -150,7 +150,13 @@ class AuthSessionManager {
         KeychainManager.shared.deleteRefreshToken()
         KeychainManager.shared.deleteUserID()
         UserDefaults.standard.removeObject(forKey: UserDefaultsKey.sessionExpires.key)
-        
+        // Ghost-identity audit (2026-07-26): identity-scoped local state that must not survive a
+        // session/identity change — a re-registered identity would otherwise inherit the old
+        // display name and resume the old Redis stream cursor.
+        UserDefaults.standard.removeObject(forKey: "local_display_name")
+        UserDefaults.standard.removeObject(forKey: "construct.stream.cursor")
+        UserDefaults.standard.removeObject(forKey: "construct.pendingCursor")
+
         // Clear published properties
         self.sessionToken = nil
         self.refreshToken = nil

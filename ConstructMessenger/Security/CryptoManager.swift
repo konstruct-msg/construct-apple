@@ -748,6 +748,11 @@ class CryptoManager {
         KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.public")
         KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.secret")
         KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.id")
+        // Ghost-identity audit (2026-07-26): session-scoped state that must not survive an
+        // identity change, else a re-registered identity inherits the old one's PQ session state
+        // and heal queue. (deleteData clears items written via saveData OR saveRawData — same key.)
+        KeychainManager.shared.deleteData(forKey: "construct.kyber_session_state")
+        SessionHealingService.shared.clearAll()
 
         // MLS store is signed by the identity key being deleted — a fresh identity
         // can never operate the old groups, so drop the snapshot with the keys.

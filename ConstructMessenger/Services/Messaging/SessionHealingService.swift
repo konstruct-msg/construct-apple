@@ -46,7 +46,9 @@ final class SessionHealingService {
     private let healingTTLHours = 24
 
     /// Rust-backed attempt tracker. Keyed by senderId (one healing slot per contact).
-    private let rustQueue = RustHealingQueue()
+    /// `var` so `clearAll()` can drop the whole queue on identity teardown (RustHealingQueue only
+    /// exposes per-contact `clear`, and a stale queue must not survive a re-registration).
+    private var rustQueue = RustHealingQueue()
 
     private static let queueStateKey = "construct.healing_queue_state"
 
@@ -66,6 +68,16 @@ final class SessionHealingService {
         guard let data = KeychainManager.shared.loadRawData(forKey: Self.queueStateKey) else { return }
         rustQueue.importState(data: [UInt8](data))
         Log.info("SessionHealingService: restored queue state (\(data.count) bytes)", category: "SessionHealing")
+    }
+
+    /// Drop the entire healing queue — in-memory AND persisted — on identity teardown
+    /// (delete account / logout / re-register). Otherwise a re-registered identity inherits the
+    /// old one's heal queue (ghost-identity audit 2026-07-26; the old queue was observed restored
+    /// on a fresh identity at startup). A fresh `RustHealingQueue` is the only whole-queue reset
+    /// the Rust API allows (it exposes per-contact `clear` only).
+    func clearAll() {
+        rustQueue = RustHealingQueue()
+        KeychainManager.shared.deleteRawData(forKey: Self.queueStateKey)
     }
 
     // MARK: - Canary
