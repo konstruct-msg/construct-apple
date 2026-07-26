@@ -282,8 +282,8 @@ final class ChatSendCoordinator {
 
     /// - Parameter wirePlaintext: pre-serialized `MessageContent` for the wire (used by
     ///   media to send the binary `.mediaAlbum` proto). When nil, a `.text` MessageContent
-    ///   is built from `text`. `text` is always what's stored locally (`decryptedContent`)
-    ///   and synced to own devices — for media that's the local JSON.
+    ///   is built from `text`. Local row may use CTM1 `storagePayload`; multi-device
+    ///   SenderSync uses the same wire `plaintextData` (not display JSON) — C1c.
     func sendTextMessage(
         text: String,
         replyTo: Message?,
@@ -375,10 +375,13 @@ final class ChatSendCoordinator {
                     )
                     TrafficProtectionService.shared.recordRealMessageSent()
                     if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
+                        // C1c: sync the same wire bytes as the primary send (MessageContent / pre-KNST),
+                        // not display JSON. Coordinator re-applies KNST framing per own device.
+                        let wireForSync = plaintextData
                         Task { [weak self] in
                             _ = self
                             await MultiDeviceSendCoordinator.shared.sendSenderSync(
-                                plaintext: Data(text.utf8),
+                                plaintext: wireForSync,
                                 messageId: messageId,
                                 originalRecipientUserId: recipientId,
                                 senderUserId: currentUserId,

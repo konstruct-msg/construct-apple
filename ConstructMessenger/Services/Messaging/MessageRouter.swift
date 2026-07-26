@@ -1746,6 +1746,9 @@ final class MessageRouter {
     }
 
     /// Save a decrypted SENDER_SYNC message as an outgoing bubble.
+    ///
+    /// Wire payload is the same binary path as a normal receive (KNST → MessageContent).
+    /// Local store uses CTM1 `storagePayload` when the reassembler provides it (C1c).
     private func saveSenderSyncMessage(
         _ decryptedBytes: Data,
         original: ChatMessage,
@@ -1761,50 +1764,76 @@ final class MessageRouter {
             return
         }
 
-        // Decode raw bytes through the binary pipeline (same as normal messages).
-        let decrypted: String
-        switch ChunkedMessageReassembler().process(data: decryptedBytes) {
-        case .assembled(let text, _, _, _, _):
-            decrypted = text
+        // Decode wire bytes through the same pipeline as inbound chat messages.
+        let storagePayload: Data
+        let previewText: String
+        let e2eRowId: String?
+        let mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage?
+
+        switch ChunkedMessageReassembler.shared.process(data: decryptedBytes) {
+        case .assembled(let text, _, let e2eId, let album, let storage):
+            e2eRowId = e2eId
+            mediaAlbum = album
+            if let storage, !storage.isEmpty {
+                storagePayload = storage
+                previewText = LocalMessagePayload.decode(storage).previewHint
+            } else {
+                storagePayload = LocalMessagePayload.encodeText(text)
+                previewText = text
+            }
+            // Control magic that arrived as legacy UTF-8 assembled text.
+            if SessionControlCodec.legacyOp(plaintext: text) != nil {
+                return
+            }
         case .legacy(let text):
-            decrypted = text
+            if SessionControlCodec.legacyOp(plaintext: text) != nil {
+                return
+            }
+            e2eRowId = nil
+            mediaAlbum = nil
+            storagePayload = LocalMessagePayload.encodeText(text)
+            previewText = text
         case .profile:
-            // A profile share synced from our own other device — never persist a placeholder.
-            // (Rendering it as an outgoing profile bubble on the synced device is not needed here.)
             Log.info("SENDER_SYNC: profile-share carrier, not persisting as text", category: "MessageRouter")
             return
         case .edit:
-            // edits shouldn't appear in SENDER_SYNC init carrier
-            Log.info("SENDER_SYNC: edit in init-carrier, ignoring", category: "MessageRouter")
+            Log.info("SENDER_SYNC: edit in sync payload, ignoring", category: "MessageRouter")
             return
-        case .incomplete, .invalid:
-            Log.info("SENDER_SYNC: could not decode init-carrier payload for \(partnerUserId.prefix(8))… — session established, no user content", category: "MessageRouter")
+        case .incomplete:
+            // Multi-chunk SENDER_SYNC: wait for remaining KNST fragments (same reassembler state).
+            Log.debug("SENDER_SYNC: chunk incomplete — waiting for more", category: "MessageRouter")
+            return
+        case .invalid:
+            Log.info(
+                "SENDER_SYNC: could not decode payload for \(partnerUserId.prefix(8))… — no user content",
+                category: "MessageRouter"
+            )
             return
         }
 
-        // Discard session control signals — they carry no user-visible content.
-        // Typed (content_type 24/25/26) first, then legacy plaintext fallback.
+        // Typed session-control content types (should not appear as SENDER_SYNC body).
         if SessionControlCodec.op(forContentType: Int(original.contentType)) != nil {
             return
         }
-        if SessionControlCodec.legacyOp(plaintext: decrypted) != nil {
-            return
-        }
+
+        // Canonical row id: E2E id from KNST when present, else strip multi-device wire suffixes
+        // (`-ss-…`, `-ss-…-cN`) so edits/receipts still match the originating device's message id.
+        let rowId = Self.senderSyncRowId(e2eMessageId: e2eRowId, wireMessageId: original.id)
 
         let fetch = Message.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@", original.id)
+        fetch.predicate = NSPredicate(format: "id ==[c] %@", rowId)
         fetch.fetchLimit = 1
         do {
             if try context.fetch(fetch).first != nil {
-                return // already saved (duplicate delivery)
+                return // already saved (duplicate delivery / other chunk path)
             }
         } catch {
-            Log.error("SENDER_SYNC: failed to deduplicate message \(original.id.prefix(8))…: \(error)", category: "MessageRouter")
+            Log.error("SENDER_SYNC: failed to deduplicate message \(rowId.prefix(8))…: \(error)", category: "MessageRouter")
             return
         }
 
         let msg = Message(context: context)
-        msg.id = original.id
+        msg.id = rowId
         msg.fromUserId = original.from
         msg.toUserId = partnerUserId
         msg.timestamp = Date(timeIntervalSince1970: TimeInterval(original.timestamp))
@@ -1813,9 +1842,12 @@ final class MessageRouter {
         msg.retryCount = 0
         msg.chat = chat
 
-        msg.applyStoredEncryption(plaintext: decrypted, contactId: partnerUserId)
+        msg.applyStoredEncryption(plaintextData: storagePayload, contactId: partnerUserId)
+        if let mediaAlbum {
+            MediaWireCodec.storeThumbnails(from: mediaAlbum, for: rowId)
+        }
 
-        chat.lastMessageText = Chat.formatPreviewText(decrypted)
+        chat.lastMessageText = Chat.formatPreviewText(previewText)
         chat.lastMessageTime = msg.timestamp
         context.saveAndLog()
 
@@ -1825,6 +1857,19 @@ final class MessageRouter {
             )
         }
         Log.info("SENDER_SYNC: saved outgoing message in conversation with \(partnerUserId.prefix(8))…", category: "MessageRouter")
+    }
+
+    /// Map SENDER_SYNC wire id → local row id (E2E id preferred).
+    private static func senderSyncRowId(e2eMessageId: String?, wireMessageId: String) -> String {
+        if let e2eMessageId, !e2eMessageId.isEmpty {
+            return e2eMessageId.lowercased()
+        }
+        var id = wireMessageId.lowercased()
+        // Strip `-ss-<device>` and optional `-cN` chunk suffix used by MultiDeviceSendCoordinator.
+        if let range = id.range(of: "-ss-") {
+            id = String(id[..<range.lowerBound])
+        }
+        return id
     }
 
     /// Async helper: fetch sender device bundle, init receiving session, then save.
