@@ -78,10 +78,12 @@ final class MessageRouter {
         return true
     }
 
-    /// Receive-side coalesce for END_SESSION / SESSION_RESET_INIT storms (server re-delivers
-    /// dozens of control msgs for one peer per reconnect). First handle wins; rest are ACK-only.
+    /// Receive-side coalesce for END_SESSION storms (server re-delivers dozens of control msgs for
+    /// one peer per reconnect). First handle wins; rest are ACK-only. SESSION_RESET_INIT is NOT
+    /// coalesced by this time window — it carries a fresh X3DH init and is filtered by content
+    /// freshness instead (`isResetInitSuperseded`); a handled SRI still arms this window so a
+    /// trailing END_SESSION for the same reset is coalesced.
     private var lastInboundEndSessionAt: [String: Date] = [:]
-    private var lastInboundSessionResetInitAt: [String: Date] = [:]
     /// Long enough to cover a full pending-queue flush + stream reconnect without re-tearing
     /// a session we just rebuilt; short enough that a real second reset later still lands.
     private static let inboundControlCooldown: TimeInterval = 45.0
@@ -93,19 +95,6 @@ final class MessageRouter {
             now: now,
             cooldown: Self.inboundControlCooldown
         ) else { return false }
-        lastInboundEndSessionAt[userId] = now
-        return true
-    }
-
-    private func shouldHandleInboundSessionResetInit(for userId: String) -> Bool {
-        let now = Date()
-        // SRI also counts as "we just reset this peer" for END_SESSION coalesce.
-        guard SessionReducer.shouldHandleInboundControl(
-            lastHandledAt: lastInboundSessionResetInitAt[userId],
-            now: now,
-            cooldown: Self.inboundControlCooldown
-        ) else { return false }
-        lastInboundSessionResetInitAt[userId] = now
         lastInboundEndSessionAt[userId] = now
         return true
     }
@@ -295,9 +284,14 @@ final class MessageRouter {
         //     Must be checked BEFORE the END_SESSION path (it carries a real X3DH payload).
         if message.isSessionResetInit {
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            if !shouldHandleInboundSessionResetInit(for: otherUserId) {
+            // Coalesce by *content freshness*, not a blanket time window: a SESSION_RESET_INIT
+            // carries a fresh X3DH init, so only one that pre-dates/exactly-matches our current
+            // establishment (a server backlog replay) is a duplicate to ACK-only. A *newer* init
+            // is a live re-init and MUST be applied even while a session is active — dropping it
+            // strands the RESPONDER on a dead ratchet → END_SESSION storm (2026-07-26 desync).
+            if delegate?.messageRouter(self, isResetInitSuperseded: otherUserId, timestamp: message.timestamp) == true {
                 Log.info(
-                    "SESSION_RESET_INIT coalesced for \(otherUserId.prefix(8))… — ACK only (inbound control cooldown)",
+                    "SESSION_RESET_INIT superseded for \(otherUserId.prefix(8))… — ACK only (pre-dates current session)",
                     category: "MessageRouter"
                 )
                 delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
@@ -305,6 +299,9 @@ final class MessageRouter {
             }
             Log.info("SESSION_RESET_INIT from \(otherUserId.prefix(8))…", category: "MessageRouter")
             handleSessionResetInit(message: message, from: otherUserId, in: context)
+            // A handled SRI also counts as "we just reset this peer" for the END_SESSION coalescer
+            // (preserves the cross-arm the removed inbound-control time-window provided).
+            lastInboundEndSessionAt[otherUserId] = Date()
             delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
             return
         }

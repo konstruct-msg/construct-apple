@@ -82,6 +82,10 @@ private struct Envelope: Equatable {
     let from: String
     let to: String
     let frame: Frame
+    /// Establishment epoch this frame belongs to — a monotonic per-peer generation bumped on every
+    /// fresh INITIATOR ratchet (models the SESSION_RESET_INIT server timestamp vs `establishedAt`).
+    /// Only `.resetInit` / `.data` carry a meaningful epoch; other frames leave it 0.
+    var epoch: UInt64 = 0
 }
 
 // MARK: - Adversarial network
@@ -140,6 +144,13 @@ private final class Peer {
     /// Natural RESPONDER waiting for the INITIATOR (e.g. post-END_SESSION): suppresses our own
     /// proactive init until the responder-fallback overrides. Cleared once we initiate or go active.
     var awaitingInitiator = false
+    /// Monotonic ratchet generation this peer has minted as INITIATOR (bumped per fresh re-init).
+    /// Stamped onto the SESSION_RESET_INIT it emits — the model's establishment "timestamp".
+    var initGeneration: UInt64 = 0
+    /// The generation of the init that established our current active session. A RESPONDER adopts
+    /// the incoming init's epoch; the INITIATOR uses its own `initGeneration`. Drives the
+    /// production `SessionReducer.isResetInitSuperseded` decision on an inbound SESSION_RESET_INIT.
+    var establishedFromEpoch: UInt64 = 0
 
     init(id: String, net: Network, confirmWindow: TimeInterval) {
         self.id = id
@@ -156,8 +167,8 @@ private final class Peer {
     var isActive: Bool { if case .active = phase { return true }; return false }
     var isInitializing: Bool { phase == .initializing }
 
-    private func send(_ frame: Frame, to peerId: String) {
-        net.send(Envelope(from: id, to: peerId, frame: frame))
+    private func send(_ frame: Frame, to peerId: String, epoch: UInt64 = 0) {
+        net.send(Envelope(from: id, to: peerId, frame: frame, epoch: epoch))
     }
 
     /// Emit a control op the production `SessionReducer.controlsToEmit` prescribed.
@@ -251,7 +262,7 @@ private final class Peer {
 
     // MARK: Wire ingress
 
-    func receive(_ frame: Frame, from peerId: String, now: Date) {
+    func receive(_ frame: Frame, from peerId: String, epoch: UInt64 = 0, now: Date) {
         switch frame {
         case .initMsg:
             if isInitiator(over: peerId) {
@@ -268,15 +279,19 @@ private final class Peer {
             } else {
                 // We LOSE: become RESPONDER and acknowledge. An active RESPONDER still honours a
                 // fresh init (the peer may have torn down and re-inited — cf. post-storm re-init).
-                becomeResponder(to: peerId, now: now)
+                becomeResponder(to: peerId, now: now, epoch: epoch)
             }
 
         case .resetInit:
-            // INITIATOR announced. As RESPONDER, establish and acknowledge. A resetInit for a
-            // session we've already established is a dup/stale announcement — ignore it (don't
-            // re-emit a fresh ready every time); only a not-yet-active RESPONDER acts on it.
-            if !isInitiator(over: peerId), !isActive {
-                becomeResponder(to: peerId, now: now)
+            // INITIATOR announced. As RESPONDER, establish and acknowledge. Coalescing is by
+            // *content freshness*, via the production `SessionReducer.isResetInitSuperseded`
+            // (fudge 0 in the clock-free model): an init that pre-dates/exactly-matches our current
+            // establishment is a superseded backlog replay → ignore; a NEWER init is a live re-init
+            // and MUST be applied even while active — dropping it is the 2026-07-26 stranding bug.
+            guard !isInitiator(over: peerId) else { break }
+            let currentEpoch: UInt64? = isActive ? establishedFromEpoch : nil
+            if !SessionReducer.isResetInitSuperseded(establishedAt: currentEpoch, timestamp: epoch, fudgeSeconds: 0) {
+                becomeResponder(to: peerId, now: now, epoch: epoch)
             }
 
         case .ready, .ping:
@@ -302,13 +317,27 @@ private final class Peer {
         }
     }
 
-    private func becomeResponder(to peerId: String, now: Date) {
+    private func becomeResponder(to peerId: String, now: Date, epoch: UInt64 = 0) {
         phase = SessionReducer.reduce(phase, on: .markActive(at: UInt64(now.timeIntervalSince1970))).0
+        establishedFromEpoch = epoch
         confirmPendingSince = nil
         // Emission via the production authority — canonically just session_ready (ping is legacy).
         for op in SessionReducer.controlsToEmit(on: .becameResponder) { emit(op, to: peerId) }
         // Now active — release any of our own buffered sends.
         flushOrInit(to: peerId, now: now)
+    }
+
+    /// Model the INITIATOR re-initing with a FRESH ratchet — the production tie-break re-announce /
+    /// dr-diverge / watchdog path, each of which builds a new session (new ephemeral + one-time
+    /// prekey) and emits a SESSION_RESET_INIT with a higher establishment epoch. Stays active on the
+    /// new ratchet and re-opens the confirm gate awaiting the RESPONDER's re-ack. The RESPONDER MUST
+    /// adopt this even while active (2026-07-26 fix) or it strands on the previous ratchet.
+    func reannounceInit(to peerId: String, now: Date) {
+        initGeneration += 1
+        establishedFromEpoch = initGeneration
+        phase = SessionReducer.reduce(phase, on: .markActive(at: UInt64(now.timeIntervalSince1970))).0
+        confirmPendingSince = now
+        send(.resetInit, to: peerId, epoch: initGeneration)
     }
 }
 
@@ -338,7 +367,7 @@ private final class Harness {
         let batch = net.drain()
         for env in batch {
             moved = true
-            peer(env.to).receive(env.frame, from: env.from, now: now)
+            peer(env.to).receive(env.frame, from: env.from, epoch: env.epoch, now: now)
         }
         // Re-evaluate confirm gates against the current clock (TTL release, resend init).
         a.flushOrInit(to: b.id, now: now)
@@ -385,6 +414,39 @@ final class SessionConvergenceHarnessTests: XCTestCase {
         XCTAssertTrue(h.b.delivered.contains("a1"), "A's message must be delivered to B")
         XCTAssertTrue(h.a.delivered.contains("b1"), "B's message must be delivered to A")
         XCTAssertTrue(h.a.outbox.isEmpty && h.b.outbox.isEmpty, "no message left buffered")
+    }
+
+    // Regression: SESSION_RESET_INIT coalescing must key on CONTENT FRESHNESS, not a time window.
+    // The 2026-07-26 two-device desync: the INITIATOR re-inits (fresh ratchet) while the RESPONDER
+    // is still active on the previous one; the old 45s inbound-control time-window DROPPED that
+    // live re-init as a "storm replay", stranding the RESPONDER → AEAD-fail → END_SESSION storm.
+    // The RESPONDER must adopt a NEWER init while active, yet still coalesce a genuinely-OLDER one
+    // (a real server backlog replay). Both halves are the production `isResetInitSuperseded`.
+    @MainActor
+    func testResetInit_NewerInitWhileActive_Reestablishes_OlderCoalesced() {
+        let h = Harness()
+
+        // 1. INITIATOR announces (gen 1); RESPONDER establishes as RESPONDER from it.
+        h.a.reannounceInit(to: h.b.id, now: h.now)
+        h.settle()
+        XCTAssertTrue(h.a.isActive && h.b.isActive, "initial handshake converges")
+        XCTAssertEqual(h.b.establishedFromEpoch, 1, "B established from the first init")
+
+        // 2. INITIATOR re-inits with a FRESH ratchet (gen 2) while B is STILL active — the exact
+        //    case the time-window coalescer used to drop. B MUST re-establish from gen 2, or it
+        //    strands on gen 1 and every following msgNum≥1 AEAD-fails (the storm).
+        h.a.reannounceInit(to: h.b.id, now: h.now)
+        h.settle()
+        XCTAssertEqual(h.b.establishedFromEpoch, 2,
+            "RESPONDER must re-establish from a newer init while active — dropping it strands the ratchet")
+        XCTAssertTrue(h.a.isActive && h.b.isActive, "converged on the new ratchet")
+        XCTAssertNil(h.a.confirmPendingSince, "INITIATOR gate released by the new RESPONDER ack")
+
+        // 3. Backlog replay: the server re-delivers an OLD init (gen 1) on reconnect. It MUST be
+        //    coalesced (superseded), NOT re-applied — otherwise the fix re-opens the storm.
+        h.b.receive(.resetInit, from: h.a.id, epoch: 1, now: h.now)
+        h.settle()
+        XCTAssertEqual(h.b.establishedFromEpoch, 2, "stale backlog init is coalesced, not re-applied")
     }
 
     // P2: RESPONDER's ready+ping are dropped for the whole handshake. The INITIATOR's confirm gate

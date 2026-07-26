@@ -358,4 +358,30 @@ enum SessionReducer {
         guard let establishedAt else { return false }
         return timestamp + fudgeSeconds < establishedAt
     }
+
+    /// Whether a received SESSION_RESET_INIT is *superseded* by our current session and should be
+    /// coalesced (ACK-only), versus applied (archive old session + RESPONDER re-init).
+    ///
+    /// This is the SESSION_RESET_INIT sibling of `isEndSessionStale`, and it is deliberately a
+    /// *distinct* predicate, not a reuse — the two control types must NOT be filtered identically:
+    ///
+    /// - `END_SESSION` carries no ratchet material, so a re-delivered one is idempotent; filtering
+    ///   is purely "is it older than my session?".
+    /// - `SESSION_RESET_INIT` carries a fresh X3DH init (new ephemeral + one-time prekey). A *newer*
+    ///   one is a live re-init the INITIATOR made after our current session was built (tie-break
+    ///   re-announce / dr-diverge / watchdog), so it MUST be applied **even while a session is
+    ///   active** — the INITIATOR has ratcheted onto the new session and its next `msgNum≥1` will
+    ///   only decrypt against it. Dropping it (as the old blanket 45s inbound-control time-window
+    ///   did) strands the RESPONDER on a dead ratchet → AEAD-fail → DR-diverge → END_SESSION storm
+    ///   (the 2026-07-26 two-device desync).
+    ///
+    /// So we coalesce ONLY inits that pre-date or exactly match the current establishment (a server
+    /// backlog replay re-delivered on reconnect): boundary is `<=` (an exact redelivery of the
+    /// establishing init is idempotent → coalesce), and the fudge errs toward *applying* (a
+    /// near-boundary init is applied, never stranding — a redundant re-init is cheap and
+    /// self-limiting, a dropped live init is a permanent storm). `nil` establishment → apply.
+    static func isResetInitSuperseded(establishedAt: UInt64?, timestamp: UInt64, fudgeSeconds: UInt64) -> Bool {
+        guard let establishedAt else { return false }
+        return timestamp + fudgeSeconds <= establishedAt
+    }
 }

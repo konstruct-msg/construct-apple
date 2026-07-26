@@ -496,6 +496,22 @@ final class SessionCoordinator: MessageRouterDelegate {
         return stale
     }
 
+    func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64) -> Bool {
+        let established = establishedAt(for: userId)
+        let superseded = SessionReducer.isResetInitSuperseded(
+            establishedAt: established, timestamp: timestamp, fudgeSeconds: Self.endSessionStaleFudge
+        )
+        // `established == nil` → apply (never strand a possibly-live re-init on a missing record).
+        // A *newer* init (superseded == false) is applied even while a session is active: the peer
+        // has ratcheted onto it and its next msgNum≥1 only decrypts against the new session.
+        if established == nil {
+            Log.info("SESSION_STATE[reset_init_supersede_check]: \(userId.prefix(8))… ts=\(timestamp) established=nil → apply (no establishment record)", category: "SessionInit")
+        } else {
+            Log.info("SESSION_STATE[reset_init_supersede_check]: \(userId.prefix(8))… ts=\(timestamp) established=\(established!) → \(superseded ? "SUPERSEDED (coalesced)" : "fresh (apply re-init)")", category: "SessionInit")
+        }
+        return superseded
+    }
+
     func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64) {
         lastInboundEndSessionAt[userId] = Date()
         let myId = AuthSessionManager.shared.currentUserId ?? ""
