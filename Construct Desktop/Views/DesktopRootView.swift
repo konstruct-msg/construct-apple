@@ -26,7 +26,7 @@ struct DesktopRootView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.commandBridge) private var commandBridge
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
-    @AppStorage(OrientationStore.completedKey) private var orientationCompleted = false
+    @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showAddContact = false
@@ -36,6 +36,13 @@ struct DesktopRootView: View {
     @State private var historySyncPendingDeviceId: String? = nil
 
     private enum SidebarMode { case chats, synaps }
+
+    private var orientationCompletedForCurrentUser: Bool {
+        OrientationStore.isCompleted(
+            for: authViewModel.currentUserId ?? AuthSessionManager.shared.currentUserId,
+            rawList: orientationCompletedUserIds
+        )
+    }
 
     /// Derives the Nearby-transfer PIN for the post-link history sync. The `pendingDeviceId` the
     /// phone hashed is THIS device's freshly-linked deviceId (it generated the join request under
@@ -63,7 +70,7 @@ struct DesktopRootView: View {
                 KeysRecoveryView(reason: .deviceDeregistered)
                     .environment(authViewModel)
             } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
-                if orientationCompleted {
+                if orientationCompletedForCurrentUser {
                     mainContent
                 } else {
                     OrientationView(openSynapsOnFinish: true)

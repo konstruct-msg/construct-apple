@@ -13,9 +13,18 @@ struct ContentView: View {
     @Environment(DeepLinkHandler.self) var deepLinkHandler
     @Environment(\.managedObjectContext) private var viewContext
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
-    @AppStorage(OrientationStore.completedKey) private var orientationCompleted = false
+    /// Per-identity orientation completion list (see `OrientationStore`).
+    @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var chatsViewModel = ChatsViewModel()
+
+    /// Orientation is product education for **this** ServerUserId — not a global device flag.
+    private var orientationCompletedForCurrentUser: Bool {
+        OrientationStore.isCompleted(
+            for: authViewModel.currentUserId ?? AuthSessionManager.shared.currentUserId,
+            rawList: orientationCompletedUserIds
+        )
+    }
 
     var body: some View {
         Group {
@@ -41,8 +50,8 @@ struct ContentView: View {
                 // the user's session is still valid in memory.
                 //
                 // Orientation is product education (not identity init). Skip always available.
-                // Existing installs see it once after upgrade until completed/skipped.
-                if orientationCompleted {
+                // Shown once per identity on this device (new registration always sees it).
+                if orientationCompletedForCurrentUser {
                     MainTabView()
                         .environment(authViewModel)
                         .environment(chatsViewModel)

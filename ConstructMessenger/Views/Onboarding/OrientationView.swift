@@ -51,7 +51,8 @@ struct OrientationView: View {
     /// Optional dismiss hook (e.g. Settings sheet replay).
     var onFinished: (() -> Void)? = nil
 
-    @AppStorage(OrientationStore.completedKey) private var orientationCompleted = false
+    @Environment(AuthViewModel.self) private var authViewModel
+    @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
     @State private var page: OrientationPage = .identity
 
     private var isLastPage: Bool { page == .map }
@@ -321,7 +322,10 @@ struct OrientationView: View {
     }
 
     private func finish() {
-        orientationCompleted = true
+        let userId = authViewModel.currentUserId
+            ?? AuthSessionManager.shared.currentUserId
+            ?? ""
+        OrientationStore.markCompleted(userId: userId, rawList: &orientationCompletedUserIds)
         if openSynapsOnFinish {
             // Deliver after MainTab mounts so the subscriber exists.
             DispatchQueue.main.async {

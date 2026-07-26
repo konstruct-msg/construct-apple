@@ -433,8 +433,15 @@ class AuthViewModel {
         currentUserId = userId
         isAuthenticated = true
         hasRegisteredDeviceKeys = true
+        // New identity: ensure orientation is not skipped due to a previous identity
+        // that already finished the guide on this device (per-user store handles this;
+        // no global reset needed — new userId is simply absent from the completed set).
         scheduleTokenRefresh()
         loadUserFromCoreData(userId: userId, username: username)
+        Log.info(
+            "Registration finalized userId=\(userId.prefix(8))… orientationPending=\(!OrientationStore.isCompleted(for: userId, rawList: UserDefaults.standard.string(forKey: OrientationStore.completedUserIdsKey) ?? ""))",
+            category: "Auth"
+        )
     }
 
     /// Unified post-link bootstrap for Flow A (confirm) and Flow B (join request / approve).
