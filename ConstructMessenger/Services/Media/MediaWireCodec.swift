@@ -16,6 +16,7 @@
 //
 
 import Foundation
+import SwiftProtobuf   // Shared_Proto_* serializedData / init(serializedBytes:) — explicit under #MemberImportVisibility (macOS/beta toolchain)
 
 enum MediaWireCodec {
 
