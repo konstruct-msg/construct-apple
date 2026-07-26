@@ -135,6 +135,31 @@ enum MediaWireCodec {
         return json
     }
 
+    /// Rebuild local storage payload after a caption edit (CTM1 album or legacy JSON string).
+    static func editedCaptionPayload(storedPlaintext: Data, newCaption: String)
+        -> (storagePayload: Data, wire: Shared_Proto_Messaging_V1_MessageContent, displayPreview: String)?
+    {
+        switch LocalMessagePayload.decode(storedPlaintext) {
+        case .mediaAlbum(let body):
+            guard var album = try? Shared_Proto_Messaging_V1_MediaAlbumMessage(serializedBytes: body) else {
+                return nil
+            }
+            album.caption = newCaption
+            let storage = LocalMessagePayload.encodeMediaAlbum(album)
+            var wire = Shared_Proto_Messaging_V1_MessageContent()
+            wire.mediaAlbum = album
+            let preview = newCaption.isEmpty ? NSLocalizedString("photo", comment: "") : newCaption
+            return (storage, wire, preview)
+        case .legacyUTF8, .text:
+            let localJSON = LocalMessagePayload.decode(storedPlaintext).displayString
+            guard let edited = editedCaption(localJSON: localJSON, newCaption: newCaption) else { return nil }
+            let preview = newCaption.isEmpty ? NSLocalizedString("photo", comment: "") : newCaption
+            return (Data(edited.localJSON.utf8), edited.wire, preview)
+        default:
+            return nil
+        }
+    }
+
     @MainActor
     static func storeThumbnails(
         from album: Shared_Proto_Messaging_V1_MediaAlbumMessage,

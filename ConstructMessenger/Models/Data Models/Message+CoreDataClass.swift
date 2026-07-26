@@ -66,20 +66,25 @@ public class Message: NSManagedObject {
     ///
     /// Falls back to writing `decryptedContent` if encryption fails (should never happen
     /// on a supported device, but keeps the message visible in any case).
+    /// Encrypt UTF-8 text for at-rest storage. Prefer `plaintextData` when the caller
+    /// already holds binary (CTM1 envelope / media album).
     func applyStoredEncryption(plaintext: String, contactId: String) {
-        guard !plaintext.isEmpty else {
+        applyStoredEncryption(plaintextData: Data(plaintext.utf8), contactId: contactId)
+    }
+
+    /// Encrypt opaque local payload bytes (CTM1 envelope or legacy UTF-8) for at-rest storage.
+    /// See `LocalMessagePayload` / client/specs/local-message-payload-binary.md (E1/E2).
+    func applyStoredEncryption(plaintextData: Data, contactId: String) {
+        guard !plaintextData.isEmpty else {
             // encryptedContent must always be non-null (Core Data required attribute).
-            // Empty content is valid — use empty Data() as sentinel.
             encryptedContent = Data()
             decryptedContent = nil
             return
         }
         let msgId = id
 
-        // Stamp the content type so the chat FRC (`contentTypeRaw == 0`) excludes any
-        // session-control payload that slipped past a router's discard check. Only
-        // control payloads are re-typed; regular text and media JSON stay `.regular` (0).
-        let inferredType = MessageContentType.infer(from: plaintext)
+        // Stamp content type for FRC filters (control leak guard + media).
+        let inferredType = MessageContentType.infer(from: plaintextData)
         if inferredType != .regular { contentType = inferredType }
 
         var keyBytes = Data(count: 32)
@@ -87,12 +92,12 @@ public class Message: NSManagedObject {
             SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!)
         }
         guard status == errSecSuccess,
-              let plainData = plaintext.data(using: .utf8),
-              let encrypted = try? MessageStorageCrypto.encrypt(plaintext: plainData, key: keyBytes)
+              let encrypted = try? MessageStorageCrypto.encrypt(plaintext: plaintextData, key: keyBytes)
         else {
             Log.error("applyStoredEncryption failed for \(msgId.prefix(8))… — falling back to plaintext", category: "Storage")
             encryptedContent = Data()
-            decryptedContent = plaintext
+            // Fallback column is String — only valid for UTF-8 legacy bodies.
+            decryptedContent = String(data: plaintextData, encoding: .utf8)
             return
         }
 
@@ -101,6 +106,6 @@ public class Message: NSManagedObject {
         decryptedContent = nil
 
         MessageKeyStore.shared.storeSync(messageId: msgId, key: keyBytes, contactId: contactId)
-        MessageDisplayCache.shared.store(messageId: msgId, plaintext: plaintext)
+        MessageDisplayCache.shared.store(messageId: msgId, plaintextData: plaintextData)
     }
 }

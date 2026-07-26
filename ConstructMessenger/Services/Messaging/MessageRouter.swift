@@ -720,10 +720,11 @@ final class MessageRouter {
                     if let original = try? context.fetch(fetch).first {
                         let captionOrText = newText.text
                         if !captionOrText.isEmpty {
-                            if let rebuilt = MediaWireCodec.editedCaption(localJSON: original.decryptedContent, newCaption: captionOrText)?.localJSON {
-                                original.decryptedContent = rebuilt
+                            let stored = MessageDisplayCache.shared.payloadData(for: original)
+                            if let edited = MediaWireCodec.editedCaptionPayload(storedPlaintext: stored, newCaption: captionOrText) {
+                                original.applyStoredEncryption(plaintextData: edited.storagePayload, contactId: otherUserId)
                             } else {
-                                original.decryptedContent = captionOrText
+                                original.applyStoredEncryption(plaintext: captionOrText, contactId: otherUserId)
                             }
                         }
                         // Future: if newMedia populated, convert via MediaWireCodec + album wrapper here.
@@ -847,7 +848,8 @@ final class MessageRouter {
         let canonicalId: String
         do {
             canonicalId = try saveMessage(for: chat, with: message, decryptedContent: decryptedContent,
-                                          quotedMessage: quotedMessage, e2eMessageId: e2eMessageId, in: context)
+                                          quotedMessage: quotedMessage, mediaAlbum: mediaAlbum,
+                                          e2eMessageId: e2eMessageId, in: context)
             if let mediaAlbum {
                 MediaWireCodec.storeThumbnails(from: mediaAlbum, for: canonicalId)
             }
@@ -1526,9 +1528,24 @@ final class MessageRouter {
         with messageData: ChatMessage,
         decryptedContent: String,
         quotedMessage: Shared_Proto_Messaging_V1_QuotedMessage?,
+        mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage? = nil,
         e2eMessageId: String? = nil,
         in context: NSManagedObjectContext
     ) throws -> String {
+        // Local at-rest payload: CTM1 media album when available (E1); else legacy UTF-8 text/JSON.
+        let storagePayload: Data = {
+            if let album = mediaAlbum {
+                return LocalMessagePayload.encodeMediaAlbum(album)
+            }
+            return Data(decryptedContent.utf8)
+        }()
+        let previewSource: String = {
+            if mediaAlbum != nil {
+                return LocalMessagePayload.decode(storagePayload).previewHint
+            }
+            return decryptedContent
+        }()
+
         var canonicalId = (e2eMessageId ?? messageData.id).lowercased()
         let fetchRequest = Message.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", canonicalId)
@@ -1540,8 +1557,8 @@ final class MessageRouter {
                 // Update encrypted content if message wasn't previously decrypted
                 if !existingMessage.hasDecryptedContent {
                     Log.debug("Updating decrypted content for message \(canonicalId)", category: "MessageRouter")
-                    existingMessage.applyStoredEncryption(plaintext: decryptedContent, contactId: messageData.from)
-                    let preview = Chat.formatPreviewText(decryptedContent)
+                    existingMessage.applyStoredEncryption(plaintextData: storagePayload, contactId: messageData.from)
+                    let preview = Chat.formatPreviewText(previewSource)
                     if let currentLastTime = chat.lastMessageTime {
                         if existingMessage.timestamp >= currentLastTime || (chat.lastMessageText ?? "").isEmpty {
                             chat.lastMessageText = preview
@@ -1580,7 +1597,7 @@ final class MessageRouter {
         message.retryCount = 0
         message.chat = chat
 
-        message.applyStoredEncryption(plaintext: decryptedContent, contactId: messageData.from)
+        message.applyStoredEncryption(plaintextData: storagePayload, contactId: messageData.from)
 
         // Restore reply-to context so the receiver sees the same reply bubble as the sender.
         // Priority: QuotedMessage from proto plaintext (privacy-safe, no server visibility).
@@ -1603,7 +1620,7 @@ final class MessageRouter {
             }
         }
 
-        chat.lastMessageText = Chat.formatPreviewText(decryptedContent)
+        chat.lastMessageText = Chat.formatPreviewText(previewSource)
         chat.lastMessageTime = message.timestamp
         if InAppNotificationService.shared.activeChatId != chat.id {
             chat.unreadCount += 1
@@ -1631,7 +1648,7 @@ final class MessageRouter {
                             .flatMap { $0.isEmpty ? nil : $0 }
                         ?? chat.otherUser?.username
                         ?? "Unknown"
-        let preview   = Chat.formatPreviewText(decryptedContent)
+        let preview   = Chat.formatPreviewText(previewSource)
 
         switch floodResult {
         case .burstDetected(let count):

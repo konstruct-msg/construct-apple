@@ -289,7 +289,8 @@ final class ChatSendCoordinator {
         replyTo: Message?,
         replyToContentOverride: String? = nil,
         localThumbnails: [Data] = [],
-        wirePlaintext: Data? = nil
+        wirePlaintext: Data? = nil,
+        storagePayload: Data? = nil
     ) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = AuthSessionManager.shared.currentUserId else {
@@ -347,7 +348,8 @@ final class ChatSendCoordinator {
             Log.debug("Sending message with ID: \(messageId)", category: "ChatViewModel")
             saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending,
                         replyTo: replyTo, replyToContentOverride: replyToContentOverride,
-                        localThumbnails: localThumbnails, suiteId: 0)
+                        localThumbnails: localThumbnails, suiteId: 0,
+                        storagePayload: storagePayload)
 
             Log.info("Sending message via gRPC (direct core path): \(messageId)", category: "ChatViewModel")
             Task { [weak self] in
@@ -555,12 +557,15 @@ final class ChatSendCoordinator {
                     quoted: buildQuoted(replyTo: replyTo, replyToContentOverride: replyToContentOverride)
                 )
                 let wirePlaintext = try? wireContent.serializedData()
+                // Local row: CTM1 media album (proto bytes) — not base64 JSON (E1).
+                let localPayload = LocalMessagePayload.encodeMediaAlbum(wireContent.mediaAlbum)
                 sendTextMessage(
                     text: result.messageContent,
                     replyTo: replyTo,
                     replyToContentOverride: replyToContentOverride,
                     localThumbnails: result.thumbnails,
-                    wirePlaintext: wirePlaintext
+                    wirePlaintext: wirePlaintext,
+                    storagePayload: localPayload
                 )
             } catch {
                 Log.error("Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
@@ -670,15 +675,19 @@ final class ChatSendCoordinator {
         // For a media message, editing the caption must rebuild the album (binary wire +
         // local JSON) — sending plain text would replace the descriptor and destroy the media.
         // Read displayText here (current actor) before hopping onto the Task.
-        let mediaEdit = MediaWireCodec.editedCaption(localJSON: message.displayText, newCaption: newText)
+        let storedPayload = MessageDisplayCache.shared.payloadData(for: message)
+        let mediaEdit = MediaWireCodec.editedCaptionPayload(storedPlaintext: storedPayload, newCaption: newText)
         Task { [weak self] in
             guard let self else { return }
             do {
                 let localContent: String
+                let storagePayload: Data?
                 if let mediaEdit {
-                    localContent = mediaEdit.localJSON
+                    localContent = mediaEdit.displayPreview
+                    storagePayload = mediaEdit.storagePayload
                 } else {
                     localContent = newText
+                    storagePayload = nil
                 }
                 // Use modern edit (MessageContent.edit) so it goes through the normal send path
                 // and can use stealth when enabled.
@@ -717,6 +726,7 @@ final class ChatSendCoordinator {
                     newContent: localContent,
                     isEdited: true,
                     editedAt: editedDate,
+                    storagePayload: storagePayload,
                     in: viewContext
                 )
                 editingBinding()
@@ -791,7 +801,8 @@ final class ChatSendCoordinator {
         replyTo: Message? = nil,
         replyToContentOverride: String? = nil,
         localThumbnails: [Data] = [],
-        suiteId: UInt16
+        suiteId: UInt16,
+        storagePayload: Data? = nil
     ) {
         do {
             _ = try persistenceService.saveMessage(
@@ -804,6 +815,7 @@ final class ChatSendCoordinator {
                 replyToContentOverride: replyToContentOverride,
                 localThumbnails: localThumbnails,
                 suiteId: suiteId,
+                storagePayload: storagePayload,
                 in: viewContext
             )
         } catch {

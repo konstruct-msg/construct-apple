@@ -490,13 +490,12 @@ class BackgroundFetchManager: NSObject {
                     fr.predicate = NSPredicate(format: "id ==[c] %@ AND fromUserId == %@", targetID, item.messageData.from)
                     fr.fetchLimit = 1
                     if let original = try? backgroundContext.fetch(fr).first {
-                        let contentToStore: String
-                        if let rebuilt = MediaWireCodec.editedCaption(localJSON: original.decryptedContent, newCaption: newT)?.localJSON {
-                            contentToStore = rebuilt
+                        let stored = MessageDisplayCache.shared.payloadData(for: original)
+                        if let edited = MediaWireCodec.editedCaptionPayload(storedPlaintext: stored, newCaption: newT) {
+                            original.applyStoredEncryption(plaintextData: edited.storagePayload, contactId: item.messageData.from)
                         } else {
-                            contentToStore = newT
+                            original.applyStoredEncryption(plaintext: newT, contactId: item.messageData.from)
                         }
-                        original.decryptedContent = contentToStore
                         original.isEdited = true
                         original.editedAt = Date(timeIntervalSince1970: TimeInterval(item.messageData.timestamp))
                         Log.info("BG fetch: applied modern edit to \(targetID.prefix(8))…", category: "BackgroundFetch")
