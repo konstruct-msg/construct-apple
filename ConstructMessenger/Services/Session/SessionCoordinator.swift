@@ -1037,7 +1037,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 let msgId = UUID().uuidString.lowercased()
                 let convId = ConversationId.direct(myUserId: myId, theirUserId: userId)
                 let ts = UInt64(Date().timeIntervalSince1970)
-                let encryptedPayload = try await OutboundSessionService.shared.encryptSessionControl(
+                let encryptedPayload = try OutboundSessionService.shared.encryptSessionControl(
                     payload: SessionControlCodec.encodePayload(op: codecOp, nonce: nonce),
                     messageId: msgId,
                     recipientId: userId
@@ -1050,7 +1050,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // control send — that is the server-observable session-graph leak the sealed path
                 // exists to close (decisions/sealed-sender-session-control-channel.md). A blocked
                 // send just fails this attempt; the tie-break watchdog re-drives the handshake.
-                if await StealthPolicy.shared.shouldUseSealedSender() {
+                if StealthPolicy.shared.shouldUseSealedSender() {
                     let ctx = viewContext ?? PersistenceController.shared.container.viewContext
                     guard let recipientIK = StealthSenderService.recipientIdentityKey(recipientId: userId, context: ctx) else {
                         throw StealthDowngradeBlocked(reason: "no recipient identity key for \(logTag) → \(userId.prefix(8))…")
