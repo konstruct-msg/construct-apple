@@ -25,7 +25,6 @@ struct ChatsListView: View {
     @State private var navigationPath = NavigationPath()
     @State private var showingDrafts = false
     @State private var searchQuery = ""
-    @State private var listRevision = 0
 
     init() {
         let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
@@ -112,14 +111,18 @@ struct ChatsListView: View {
                           let chat = chats.first(where: { $0.id == chatId }) else { return }
                     Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
             }
+            // Total-unread badge only. Do NOT force-invalidate the List here (no
+            // `.id(revision)`): the `@FetchRequest(animation: .default)` already drives
+            // row inserts/deletes/reordering, and each `ChatRowView` observes its own
+            // `chat`/`user`. Swapping the List's identity mid-animation raced the
+            // coalesced UICollectionView batch update → "invalid number of items"
+            // crash (device log 2026-07-19, during END_SESSION re-init + openOrCreateChat).
             .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
                     guard notificationContainsChatChanges(note) else { return }
-                    listRevision &+= 1
                     updateTotalUnreadCount()
             }
             .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { note in
                     guard notificationContainsChatChanges(note) else { return }
-                    listRevision &+= 1
                     updateTotalUnreadCount()
             }
         }
@@ -135,7 +138,10 @@ struct ChatsListView: View {
 
     private var navBar: some View {
         HStack(spacing: CTLayout.chromeGap) {
+            // Center the 8pt status dot on the same vertical axis as medium
+            // chat-row avatars (40pt), so the header chrome lines up with the list.
             ConnectionStatusIndicator()
+                .frame(width: CTHexAvatar.AvatarSize.medium.rawValue, alignment: .center)
             Spacer()
             Button { showingQRScanner = true } label: {
                 Image(systemName: "qrcode.viewfinder")
@@ -154,9 +160,20 @@ struct ChatsListView: View {
     // MARK: - Chat List
 
     private var filteredChats: [Chat] {
+        // Dedupe by `id` before the `ForEach`: `@FetchRequest(animation:)` can transiently
+        // surface the same Chat twice while a background-context merge (push-driven chat
+        // insert) races the animated list update. A `ForEach` over a duplicate Identifiable
+        // id trips UICollectionView's "invalid number of items" diff assertion → hard crash.
+        let all = Self.dedupedByID(Array(chats))
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return Array(chats) }
-        return chats.filter { chatMatchesQuery($0, query: query) }
+        guard !query.isEmpty else { return all }
+        return all.filter { chatMatchesQuery($0, query: query) }
+    }
+
+    /// Order-preserving dedupe of chats by `id` — the crash guard for the List diff assertion.
+    private static func dedupedByID(_ items: [Chat]) -> [Chat] {
+        var seen = Set<String>()
+        return items.filter { seen.insert($0.id).inserted }
     }
 
     private func chatList(chats renderedChats: [Chat]) -> some View {
@@ -219,13 +236,15 @@ struct ChatsListView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
         }
-        .id(listRevision)
         .refreshable {
             await BackgroundFetchManager.shared.fetchPendingMessages()
         }
         .scrollDismissesKeyboard(.immediately)
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        // Align avatar column with nav chrome (edgePad) without zeroing vertical
+        // list spacing — explicit listRowInsets(top/bottom: 0) had crushed the rows.
+        .contentMargins(.horizontal, CTLayout.edgePad, for: .scrollContent)
         // ASCII matrix watermark behind the rows (base #090909 comes from .ctBackground()).
         .background(CTMatrixBackground())
     }
@@ -381,7 +400,14 @@ struct ChatsListView: View {
             bio: nil,
             deviceId: contactInfo.deviceId
         )
-        _ = chatsViewModel.startChat(with: publicUserInfo)
+        if let chat = chatsViewModel.startChat(
+            with: publicUserInfo,
+            identityPublicKey: contactInfo.identityPublicKey
+        ) {
+            // Open the new/existing chat so scan feels like a completed action.
+            chatsViewModel.chatToOpen = chat.id
+            InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
+        }
     }
 
     private func showErrorAfterDismiss(_ message: String) {

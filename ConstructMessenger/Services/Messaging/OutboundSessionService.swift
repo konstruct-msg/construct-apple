@@ -216,10 +216,26 @@ final class OutboundSessionService {
                         contentType: .deliveryReceipt
                     )
                 } catch {
-                    Log.error("E2E receipt: seal failed, sending without stealth: \(error)", category: "OutboundSession")
+                    Log.error("E2E receipt: seal failed: \(error)", category: "OutboundSession")
                     PerformanceMetrics.shared.record(.stealthSealFailure, label: "receipt")
                 }
             }
+
+            // Fail-closed: while stealth is on a receipt is sealed or dropped — NEVER sent identified.
+            // A delivery receipt is best-effort; revealing the real senderId to deliver one would hand
+            // the server the exact deanonymization sealed sender exists to prevent. Same invariant as
+            // message bodies (ChunkedMessageSender / StealthSendRecovery); the identified `else` below
+            // is therefore reachable only when stealth is off.
+            if StealthPolicy.shared.shouldUseSealedSender() && sealedInner == nil {
+                Log.error("E2E receipt: cannot seal (recipient IK/cert unavailable) — DROPPED, sender not revealed → \(contactId.prefix(8))…", category: "OutboundSession")
+                PerformanceMetrics.shared.record(.stealthSealFailure, label: "receipt-dropped")
+                if recipientIdentityKey == nil {
+                    // No recipient identity key → nudge bundle/session so a later receipt can seal.
+                    SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: contactId)
+                }
+                return
+            }
+
             if let sealedInner, let identityKey = recipientIdentityKey {
                 // Sealed receipt with one-shot enforce recovery (fresh token + tag on
                 // privacy_pass rejection; DR payload reused). Receipts carry tokens like

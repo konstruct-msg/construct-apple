@@ -5,15 +5,17 @@
 
 import SwiftUI
 import Combine
+import CoreData
 
 struct ChatRowView: View {
     @ObservedObject var chat: Chat
 
     var body: some View {
         // Profile shares update `User` (displayName, avatarData), not `Chat`.
-        // @ObservedObject on Chat alone does not refresh when a related User changes.
-        if let user = chat.otherUser {
-            ChatRowBody(chat: chat, user: user)
+        // Observing Chat alone does not refresh when a related User changes.
+        // Fetch the peer by id so Core Data attribute updates drive the row.
+        if let userId = chat.otherUser?.id, !userId.isEmpty {
+            ChatRowBody(chat: chat, userId: userId)
         } else {
             ChatRowOrphanBody(chat: chat)
         }
@@ -32,10 +34,40 @@ struct ChatRowView: View {
 
 private struct ChatRowBody: View {
     @ObservedObject var chat: Chat
+    @FetchRequest private var users: FetchedResults<User>
+
+    init(chat: Chat, userId: String) {
+        self.chat = chat
+        _users = FetchRequest(
+            sortDescriptors: [],
+            predicate: NSPredicate(format: "id == %@", userId),
+            animation: .default
+        )
+    }
+
+    var body: some View {
+        if let user = users.first {
+            ChatRowWithUser(chat: chat, user: user)
+        } else if let fallback = chat.otherUser {
+            ChatRowWithUser(chat: chat, user: fallback)
+        } else {
+            ChatRowOrphanBody(chat: chat)
+        }
+    }
+}
+
+private struct ChatRowWithUser: View {
+    @ObservedObject var chat: Chat
     @ObservedObject var user: User
 
     var body: some View {
         ChatRowLayout(chat: chat, user: user)
+            // Bust any stale SwiftUI identity when profile fields change.
+            .id(rowIdentity)
+    }
+
+    private var rowIdentity: String {
+        "\(chat.id)|\(user.resolvedDisplayName)|\(user.avatarData?.count ?? 0)|\(user.isSharingWithMe)|\(chat.unreadCount)|\(chat.isPinned)"
     }
 }
 
@@ -63,6 +95,12 @@ private struct ChatRowLayout: View {
                     if let user {
                         displayNameView(for: user)
                             .lineLimit(1)
+                        if user.ktStatus == .keyChanged || user.ktStatus == .failed {
+                            Image(systemName: "exclamationmark.shield.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Color.CT.danger)
+                                .accessibilityLabel(Text(LocalizedStringKey("kt_warning")))
+                        }
                     }
                     Spacer(minLength: 4)
 
@@ -115,16 +153,9 @@ private struct ChatRowLayout: View {
             Text(alias)
                 .font(CTFont.bold(13))
                 .foregroundColor(Color.CT.text)
-        } else if !user.displayName.isEmpty {
-            Text(user.displayName)
-                .font(CTFont.bold(13))
-                .foregroundColor(Color.CT.text)
-        } else if !user.username.isEmpty {
-            Text("@\(user.username.lowercased())")
-                .font(CTFont.bold(13))
-                .foregroundColor(Color.CT.text)
         } else {
-            Text(user.resolvedDisplayName.uppercased())
+            // Profile-shared name → username → generated (see User.resolvedDisplayName).
+            Text(user.resolvedDisplayName)
                 .font(CTFont.bold(13))
                 .foregroundColor(Color.CT.text)
         }

@@ -93,6 +93,26 @@ final class GRPCCallExecutor: Sendable {
                 // The router decides on rotation / probe restart / cooldown via effects;
                 // here we only decide whether to retry the local for-loop.
                 let kind = RPCFailureClassifier.classify(error)
+
+                // Channel yanked out from under this RPC: some other event invalidated the
+                // persistent connection mid-call (a routing change, a VEIL relay rotation, or
+                // the experimental QUIC/H3 stream tearing down the shared H2 client on its own
+                // handshake timeout). The RPC then throws `unavailable: "channel is closed"` —
+                // a LOCAL lifecycle artifact, NOT evidence the direct path is blocked. Feeding
+                // it to the FSM spuriously escalates auto-mode to the VEIL relay (observed: a
+                // launch-time engine-QUIC handshake timeout cascading direct → veil-active while
+                // H2-direct was healthy). Detect it via the generation counter — the same signal
+                // handleConnectionCleanup uses to skip invalidation — and retry on the fresh
+                // channel instead of counting a self-inflicted failure against the direct path.
+                if usingPersistent {
+                    let currentGen = cm.captureConnectionGeneration()
+                    if currentGen != capturedGen {
+                        Log.debug("gRPC failure not fed to router — persistent channel invalidated mid-RPC (gen \(capturedGen)→\(currentGen), kind=\(kind))", category: "GRPCChannel")
+                        if attempt < 2 { continue }
+                        throw error
+                    }
+                }
+
                 let target: TransportTarget
                 if usingVEIL, let port = cm.veilProxyPort(), let addr = capturedRelayAddr {
                     target = .veil(port: port, relay: addr)
@@ -356,13 +376,20 @@ final class GRPCCallExecutor: Sendable {
                     // Router rotation is requested by the caller of handleAuthRetry on .suspectRejection.
                     return .suspectRejection
                 }
-                Log.info("Refresh rejected across \(attempts) VEIL relay rotations — honoring as a real rejection, triggering device re-auth", category: "GRPCChannel")
+                Log.info("Refresh rejected across \(attempts) VEIL relay rotations — honoring as real, device re-auth", category: "GRPCChannel")
                 await TokenRefreshCoordinator.shared.resetInvalidation()
-                await MainActor.run { AuthSessionManager.shared.invalidateTokensForReauth() }
-                return .serverRejected
+            } else {
+                Log.info("Refresh rejected by server — device re-auth", category: "GRPCChannel")
             }
-            Log.info("Refresh rejected by server — triggering device re-auth", category: "GRPCChannel")
+            // Single-flight device auth: concurrent push/VoIP/stream/gRPC callers join one mint
+            // instead of each failing with UNAUTH while AuthViewModel alone recovers.
             await MainActor.run { AuthSessionManager.shared.invalidateTokensForReauth() }
+            let outcome = await DeviceAuthCoordinator.shared.authenticateIfPossible()
+            if case .success = outcome {
+                Log.info("Device re-auth recovered session after dead refresh — retrying RPC", category: "GRPCChannel")
+                return .retry
+            }
+            Log.error("Device re-auth failed after dead refresh — \(String(describing: outcome))", category: "GRPCChannel")
             return .serverRejected
         } else {
             Log.info("Refresh failed (network error) — keeping tokens for retry when online", category: "GRPCChannel")

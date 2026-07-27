@@ -20,11 +20,17 @@ final class ChatMessageStore: NSObject {
 
     private var fetchedResultsController: NSFetchedResultsController<Message>?
     private var frcDebounceTask: Task<Void, Never>?
+    /// Serial generation so only the latest scheduled apply runs (debounce races).
+    private var frcApplyGeneration: UInt64 = 0
     private var oldestLoadedTimestamp: Date?
     private var allLoadedMessageIds: Set<String> = []
+    /// Last published transcript fingerprint — skip no-op FRC storms (status-spam / receipt).
+    private var lastSnapshotFingerprint: UInt64 = 0
 
     private let initialMessageLimit = 30
     private let loadMoreBatchSize = 20
+    /// Coalesce Core Data save bursts (send → sent → delivered → peer echo).
+    private let frcDebounceMilliseconds: UInt64 = 120
 
     /// Coarse Core Data pre-filter. Note: messages are encrypted at rest
     /// (`decryptedContent == nil`), so the `BEGINSWITH` clauses only catch legacy
@@ -82,6 +88,7 @@ final class ChatMessageStore: NSObject {
             viewModel?.messages = messages
             oldestLoadedTimestamp = messages.first?.timestamp
             allLoadedMessageIds = Set(messages.map { $0.id })
+            lastSnapshotFingerprint = Self.fingerprint(messages)
             Log.debug("FRC initial fetch: \(messages.count) messages (reversed to oldest-first)", category: "ChatViewModel")
         } catch {
             Log.error("FRC fetch failed: \(error)", category: "ChatViewModel")
@@ -114,6 +121,7 @@ final class ChatMessageStore: NSObject {
             vm.messages = newMessages + vm.messages
             oldestLoadedTimestamp = vm.messages.first?.timestamp
             allLoadedMessageIds.formUnion(Set(newMessages.map { $0.id }))
+            lastSnapshotFingerprint = Self.fingerprint(vm.messages)
             checkIfHasMoreMessages()
             Log.debug("Loaded \(newMessages.count) more messages (total: \(vm.messages.count))", category: "ChatViewModel")
         } else {
@@ -162,6 +170,7 @@ final class ChatMessageStore: NSObject {
         guard let vm = viewModel else { return }
         guard !chat.isDeleted, chat.managedObjectContext != nil else {
             vm.messages = []
+            lastSnapshotFingerprint = 0
             return
         }
         func isValid(_ msg: Message) -> Bool {
@@ -174,12 +183,54 @@ final class ChatMessageStore: NSObject {
         let historicMessages = vm.messages.filter {
             isValid($0) && !fetchedIds.contains($0.id)
         }
-        vm.messages = historicMessages + fetchedMessages
-        Log.debug("FRC updated: \(fetchedMessages.count) recent + \(historicMessages.count) historic = \(vm.messages.count) total", category: "ChatViewModel")
-        if let first = vm.messages.first, isValid(first) {
+        let merged = historicMessages + fetchedMessages
+
+        // Skip identical transcripts — FRC fires on every receipt/status write; reassigning
+        // `messages` forces LazyVStack identity churn and black flashes (log storm: 10×
+        // "FRC updated" in one second with oscillating recent counts).
+        let fp = Self.fingerprint(merged)
+        guard fp != lastSnapshotFingerprint else { return }
+        lastSnapshotFingerprint = fp
+
+        vm.messages = merged
+        Log.debug(
+            "FRC updated: \(fetchedMessages.count) recent + \(historicMessages.count) historic = \(merged.count) total",
+            category: "ChatViewModel"
+        )
+        if let first = merged.first, isValid(first) {
             oldestLoadedTimestamp = first.timestamp
         }
-        allLoadedMessageIds = Set(vm.messages.compactMap { isValid($0) ? $0.id : nil })
+        allLoadedMessageIds = Set(merged.compactMap { isValid($0) ? $0.id : nil })
+    }
+
+    /// Cheap structural fingerprint: ordered ids + delivery status + edit flag.
+    /// Ignores pure fault refreshes that don't change what the user sees.
+    private static func fingerprint(_ messages: [Message]) -> UInt64 {
+        var hasher = Hasher()
+        hasher.combine(messages.count)
+        for msg in messages {
+            hasher.combine(msg.id)
+            hasher.combine(msg.deliveryStatusRaw)
+            hasher.combine(msg.isEdited)
+            hasher.combine(msg.timestamp.timeIntervalSince1970)
+            // Transcript / display can land after STT without changing delivery status.
+            hasher.combine(msg.transcriptText as String?)
+        }
+        return UInt64(bitPattern: Int64(hasher.finalize()))
+    }
+
+    /// Schedule a coalesced snapshot apply. Cancels prior debounce so only the last
+    /// FRC burst in a ~120ms window publishes to the UI.
+    private func scheduleFRCApply(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
+        frcDebounceTask?.cancel()
+        frcApplyGeneration &+= 1
+        let generation = frcApplyGeneration
+        frcDebounceTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(self?.frcDebounceMilliseconds ?? 120))
+            guard !Task.isCancelled, let self else { return }
+            guard generation == self.frcApplyGeneration else { return }
+            self.applyFRCSnapshot(controller)
+        }
     }
 }
 
@@ -187,14 +238,9 @@ final class ChatMessageStore: NSObject {
 
 extension ChatMessageStore: NSFetchedResultsControllerDelegate {
     nonisolated func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
+        // Hop to MainActor once — don't nest Task-in-Task races that each schedule a debounce.
         Task { @MainActor [weak self] in
-            guard let self else { return }
-            self.frcDebounceTask?.cancel()
-            self.frcDebounceTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .milliseconds(40))
-                guard !Task.isCancelled, let self else { return }
-                self.applyFRCSnapshot(controller)
-            }
+            self?.scheduleFRCApply(controller)
         }
     }
 }

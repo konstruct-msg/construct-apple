@@ -566,8 +566,21 @@ class CryptoManager {
     /// paths need. Moving this here lifts logic from HybridIdentityService.
     @MainActor
     func currentHybridPrekeySignatures() -> (spk: Data?, kyber: Data?) {
-        // The flag is still in UserDefaults (app state), but the signing is core-routed.
+        // Rotation path: attach the SPK/Kyber hybrid signatures only once the hybrid identity key is
+        // already published server-side (rotation does NOT re-upload that key, so the server would
+        // have nothing to verify these against otherwise).
         guard HybridIdentityService.isHybridIdentityPublished else { return (nil, nil) }
+        return hybridPrekeySignaturesForPublish()
+    }
+
+    /// Hybrid SPK + Kyber-SPK signatures for the ATOMIC publish path
+    /// (`HybridIdentityService.publish`), which uploads the hybrid identity key in the SAME request.
+    /// The server (`key-service store_hybrid_identity`) verifies these against that same-request key,
+    /// so there is NO "must already be published" precondition here — unlike
+    /// `currentHybridPrekeySignatures()`, this does not gate on `isHybridIdentityPublished`. Gating
+    /// the publish path was the bug: the first-ever publish sent nil SPK signatures, shipping a
+    /// "hybrid key present, SPK signature missing" bundle that peers hard-reject → classic X3DH.
+    func hybridPrekeySignaturesForPublish() -> (spk: Data?, kyber: Data?) {
         let spk: Data? = (try? localBundlePublicKeys().signedPrekeyPublic).flatMap { pub in
             try? signHybridPrekey(suiteId: 0x01, publicKey: pub)
         }
@@ -735,6 +748,11 @@ class CryptoManager {
         KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.public")
         KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.secret")
         KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.id")
+        // Ghost-identity audit (2026-07-26): session-scoped state that must not survive an
+        // identity change, else a re-registered identity inherits the old one's PQ session state
+        // and heal queue. (deleteData clears items written via saveData OR saveRawData — same key.)
+        KeychainManager.shared.deleteData(forKey: "construct.kyber_session_state")
+        SessionHealingService.shared.clearAll()
 
         // MLS store is signed by the identity key being deleted — a fresh identity
         // can never operate the old groups, so drop the snapshot with the keys.
@@ -1005,7 +1023,11 @@ class CryptoManager {
             }
         )
 
-        Log.debug("ENCRYPT: msgNum=\(components.messageNumber), otpkId=\(components.oneTimePreKeyId), ephemKey=\(components.ephemeralPublicKey.prefix(8).map { String(format: "%02x", $0) }.joined()), content=\(components.content.count) bytes", category: "CryptoManager")
+        // Hex preview only materializes when Log.debug evaluates (DEBUG builds).
+        Log.debug(
+            "ENCRYPT: msgNum=\(components.messageNumber), otpkId=\(components.oneTimePreKeyId), ephemKey=\(components.ephemeralPublicKey.prefix(8).map { String(format: "%02x", $0) }.joined()), content=\(components.content.count) bytes",
+            category: "CryptoManager"
+        )
 
         return components
     }

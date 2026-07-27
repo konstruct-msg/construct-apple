@@ -13,3 +13,6 @@
 
 GRPC_HOST = ams.konstruct.cc
 GRPC_PORT = 443
+
+// APNs: local Xcode installs use the sandbox (development) push environment.
+APS_ENVIRONMENT = development

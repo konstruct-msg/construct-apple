@@ -146,6 +146,61 @@ enum SessionReducer {
         return now.timeIntervalSince(lastSentAt) >= cooldown
     }
 
+    /// What to do about END_SESSION after a RESPONDER `initReceivingSession` failure — the single
+    /// authority for the grace/otpk/plain branch that used to be nested inline `if`s in
+    /// `SessionCoordinator`. Cooldown is still applied separately by `shouldSendEndSession` at the
+    /// send site; this only chooses the *branch*.
+    enum InitFailureAction: Equatable {
+        /// Plain AEAD fail right after we *received* END_SESSION — usually a stale-wire race.
+        /// Do not amplify the reset storm; wait for the peer's SRI / next msg0 (responder
+        /// fallback still covers a stuck INITIATOR).
+        case suppressWithinGrace
+        /// Peer used a 4-DH OTPK we cannot reproduce → send a typed END_SESSION carrying
+        /// `.otpkUnreproducible` so they re-init WITHOUT one (3-DH is always reproducible,
+        /// breaking the 4-DH retry loop). Bypasses the inbound grace — the hint must reach them.
+        case sendTypedOtpk
+        /// Plain init failure outside the inbound-END_SESSION grace → ordinary rate-limited
+        /// END_SESSION so the peer re-inits.
+        case sendPlain
+    }
+
+    static func initFailureAction(
+        otpkUnreproducible: Bool,
+        withinInboundGrace: Bool
+    ) -> InitFailureAction {
+        if otpkUnreproducible { return .sendTypedOtpk }
+        if withinInboundGrace { return .suppressWithinGrace }
+        return .sendPlain
+    }
+
+    /// What to do when an END_SESSION is *received* from a peer — the single branch authority for
+    /// `SessionCoordinator.messageRouter(_:receivedEndSession:)`.
+    enum EndSessionReceiptAction: Equatable {
+        /// We are the natural RESPONDER (lower userId): don't re-init, wait for the INITIATOR's
+        /// fresh X3DH (responder fallback covers a stuck INITIATOR).
+        case waitAsResponder
+        /// We are the natural INITIATOR but a debounced re-init is already pending — a server
+        /// backlog flush delivers several END_SESSIONs at once; one pending re-init per peer is
+        /// enough (each extra one destroyed the session the previous just created → storm).
+        case coalesce
+        /// We are the natural INITIATOR with no pending re-init: schedule the debounced re-init.
+        case scheduleReinit
+    }
+
+    static func endSessionReceiptAction(
+        isNaturalInitiator: Bool,
+        hasPendingReinit: Bool
+    ) -> EndSessionReceiptAction {
+        guard isNaturalInitiator else { return .waitAsResponder }
+        return hasPendingReinit ? .coalesce : .scheduleReinit
+    }
+
+    /// After the END_SESSION re-init debounce elapses: only proceed if no session exists yet.
+    /// A session present NOW was established *after* the END_SESSION (typically the peer's fresh
+    /// init from the same stream flush made us RESPONDER); re-initing over it would destroy a
+    /// working session and re-open the desync it just closed.
+    static func endSessionReinitStillNeeded(hasSession: Bool) -> Bool { !hasSession }
+
     /// Receive-side control-message coalesce. Server offline queues re-deliver batches of
     /// END_SESSION / SESSION_RESET_INIT for the same peer; acting on each one re-archives
     /// Keychain + requeues + reopens streams. After the first handled control message in a
@@ -159,6 +214,138 @@ enum SessionReducer {
         return now.timeIntervalSince(lastHandledAt) >= cooldown
     }
 
+    // MARK: - Tie-break role (the single Swift authority)
+
+    /// Role in a concurrent-init tie-break.
+    enum Role: Equatable { case initiator, responder }
+
+    /// Deterministic tie-break role, **matching the Rust core byte-for-byte**
+    /// (`construct-core` `message_router.rs::tie_break_role`): plain string comparison of the two
+    /// `ServerUserId`s, **higher id = INITIATOR**. Both peers compute this independently over the
+    /// same pair, so any disagreement means both-initiator / both-responder → permanent deadlock.
+    /// This is why it must be one authority and must not normalise (lowercasing here would diverge
+    /// from Rust). For canonical lowercase dashed UUIDs, string order == UUID-byte order, so this
+    /// supersedes the old `DeviceIdOrdering` UUID-byte compare (which diverged from Rust only on
+    /// non-canonical / mixed-case ids — a latent fragility, now removed).
+    ///
+    /// - Note: operands are `ServerUserId`s (36-char UUID), **not** `CryptoDeviceId`s — the old
+    ///   "deviceId" naming was a misnomer; the AD and the Rust rule both key on userId.
+    static func tieBreakRole(myId: String, peerId: String) -> Role {
+        myId > peerId ? .initiator : .responder
+    }
+
+    /// Whether we are the natural INITIATOR (higher userId) for this peer — the proactive-prewarm
+    /// and responder-fallback predicate. Equal ids (self / echo) are not an initiator.
+    static func isNaturalInitiator(myId: String, peerId: String) -> Bool {
+        myId != peerId && tieBreakRole(myId: myId, peerId: peerId) == .initiator
+    }
+
+    // MARK: - Confirmation gate (INITIATOR awaiting RESPONDER session_ready)
+
+    /// A handshake control op, modelled dependency-free (the proto `SessionControlOp` maps 1:1).
+    /// Kept local so the reducer stays pure — no proto/gRPC imports.
+    enum ControlOp: Equatable {
+        case resetInit  // ct24 — X3DH carrier for a session reset
+        case ping       // ct25 — "I am now a RESPONDER for you"
+        case ready      // ct26 — "my RESPONDER session is confirmed"
+        case endSession // teardown
+        case other
+    }
+
+    /// The INITIATOR (tie-break winner) buffers outgoing and drops the peer's stale msgNum=0 while
+    /// awaiting the RESPONDER's `session_ready`. This gate is a **hint, never a permanent lock**:
+    /// it self-releases after `confirmWindow` so a lost SESSION_RESET_INIT / lost ping / lost
+    /// session_ready can't deadlock (the class fixed piecemeal in `3f166e61` + `04f16211`, now a
+    /// single tested decision `SessionConfirmationTracker` delegates to).
+    ///
+    /// - Returns: true iff a pending mark exists AND the confirm window has not elapsed — i.e.
+    ///   outgoing should still buffer and the peer's msgNum=0 should still be `stale_init_drop`'d.
+    static func isConfirmBuffering(pendingSince: Date?, now: Date, confirmWindow: TimeInterval) -> Bool {
+        guard let pendingSince else { return false }
+        return now.timeIntervalSince(pendingSince) < confirmWindow
+    }
+
+    // MARK: - Handshake control emission (the send-side authority)
+
+    /// A handshake transition that emits control message(s) to the peer.
+    enum HandshakeTransition: Equatable {
+        /// We kept the INITIATOR session after a tie-break win → announce it so the loser can
+        /// atomically become RESPONDER.
+        case tieBreakWin
+        /// We just established the RESPONDER session (`initReceivingSession` ok) → acknowledge so
+        /// the INITIATOR cancels its watchdog and flushes.
+        case becameResponder
+    }
+
+    /// Which control op(s) to emit on a handshake transition — the single authority for the
+    /// handshake's *send* side (the *receive* side is `confirmReleases` + the transition table in
+    /// SESSION_COORDINATOR_REFACTOR_SPEC §"Confirm protocol"). INITIATOR announces via
+    /// SESSION_RESET_INIT; RESPONDER acknowledges via session_ready. `.ping` is **not** in the
+    /// canonical set — it survives only as the SRI two-step fallback (a legacy trigger), so it is
+    /// emitted by that fallback directly, not prescribed here.
+    static func controlsToEmit(on transition: HandshakeTransition) -> [ControlOp] {
+        switch transition {
+        case .tieBreakWin:     return [.resetInit]
+        case .becameResponder: return [.ready]
+        }
+    }
+
+    // MARK: - OTPK-unreproducible recovery (the 3-DH loop-breaker)
+
+    /// DH mode for a session init. 4-DH mixes a one-time prekey (OTPK) into X3DH; 3-DH omits it.
+    enum DHMode: Equatable { case fourDH, threeDH }
+
+    /// The DH mode for the *next* INITIATOR init. Normally 4-DH; but when a force-3-DH hint is
+    /// pending — the peer, as our RESPONDER, told us via END_SESSION(`.otpkUnreproducible`) that it
+    /// could not reproduce the 4-DH one-time-prekey our last X3DH used — the recovery init MUST drop
+    /// the OTPK and use 3-DH. **This is the loop-breaker:** re-fetching another OTPK (4-DH) would
+    /// hand the responder yet another key it also cannot back, looping forever; 3-DH derives from
+    /// identity + signed prekey only, which the responder can always reproduce. The hint is consumed
+    /// once (a later clean init uses 4-DH again). See `SessionReinitHintStore` / L2 of the
+    /// otpk-session-init-deadlock fix.
+    static func nextInitDHMode(forceThreeDHHintPending: Bool) -> DHMode {
+        forceThreeDHHintPending ? .threeDH : .fourDH
+    }
+
+    /// Responder-fallback override gate — the mirror of the tie-break watchdog. The two are the
+    /// role-split halves of one liveness guarantee ("a stalled handshake gets re-driven by
+    /// *someone*"): the INITIATOR re-sends SRI (`tieBreakWatchdogTick`); the natural RESPONDER, if
+    /// the INITIATOR stays silent past the fallback timeout, **overrides** the tie-break and takes
+    /// the INITIATOR role itself. They are mutually exclusive by role, so they never dueling-init.
+    ///
+    /// Override iff, when the fallback fires, there is still no session and none in flight — i.e. the
+    /// INITIATOR never showed up. If either is true the handshake already progressed; stand down.
+    static func shouldResponderOverride(hasSession: Bool, isInitializing: Bool) -> Bool {
+        !hasSession && !isInitializing
+    }
+
+    /// What the tie-break watchdog should do on a tick.
+    enum WatchdogTick: Equatable {
+        /// Re-send SESSION_RESET_INIT — still within the confirm window, RESPONDER hasn't acked.
+        case retry
+        /// The confirm window has lapsed — stop retrying, release the gate, flush the buffer.
+        case giveUp
+    }
+
+    /// Tie-break watchdog policy: after the INITIATOR sends SESSION_RESET_INIT it waits for the
+    /// RESPONDER's ack (ready/ping); if none comes it re-sends the SRI — but only while still within
+    /// the confirm window (`isConfirmBuffering`). This makes the watchdog **re-arming and bounded**;
+    /// it was previously single-shot (one retry at 30 s, then silence forever — the confirm-deadlock
+    /// root, patched piecemeal in `04f16211`). Folding the retry lifetime onto the confirm window
+    /// keeps the two liveness mechanisms coherent: they give up together, and give-up proactively
+    /// releases the gate + flushes instead of waiting for a lazy TTL read / the next reconnect.
+    static func tieBreakWatchdogTick(pendingSince: Date?, now: Date, confirmWindow: TimeInterval) -> WatchdogTick {
+        isConfirmBuffering(pendingSince: pendingSince, now: now, confirmWindow: confirmWindow) ? .retry : .giveUp
+    }
+
+    /// Does receiving this control op release the confirm gate (RESPONDER acknowledged)?
+    /// PING and READY both prove a bidirectional session exists (see the transition table in
+    /// SESSION_COORDINATOR_REFACTOR_SPEC §"Confirm protocol"); RESET_INIT only cancels the
+    /// watchdog, it is not itself an acknowledgement.
+    static func confirmReleases(on op: ControlOp) -> Bool {
+        op == .ping || op == .ready
+    }
+
     /// Whether a received END_SESSION pre-dates our established session and should be discarded.
     ///
     /// `establishedAt` is now persisted per-peer in the Keychain (see
@@ -170,5 +357,31 @@ enum SessionReducer {
     static func isEndSessionStale(establishedAt: UInt64?, timestamp: UInt64, fudgeSeconds: UInt64) -> Bool {
         guard let establishedAt else { return false }
         return timestamp + fudgeSeconds < establishedAt
+    }
+
+    /// Whether a received SESSION_RESET_INIT is *superseded* by our current session and should be
+    /// coalesced (ACK-only), versus applied (archive old session + RESPONDER re-init).
+    ///
+    /// This is the SESSION_RESET_INIT sibling of `isEndSessionStale`, and it is deliberately a
+    /// *distinct* predicate, not a reuse — the two control types must NOT be filtered identically:
+    ///
+    /// - `END_SESSION` carries no ratchet material, so a re-delivered one is idempotent; filtering
+    ///   is purely "is it older than my session?".
+    /// - `SESSION_RESET_INIT` carries a fresh X3DH init (new ephemeral + one-time prekey). A *newer*
+    ///   one is a live re-init the INITIATOR made after our current session was built (tie-break
+    ///   re-announce / dr-diverge / watchdog), so it MUST be applied **even while a session is
+    ///   active** — the INITIATOR has ratcheted onto the new session and its next `msgNum≥1` will
+    ///   only decrypt against it. Dropping it (as the old blanket 45s inbound-control time-window
+    ///   did) strands the RESPONDER on a dead ratchet → AEAD-fail → DR-diverge → END_SESSION storm
+    ///   (the 2026-07-26 two-device desync).
+    ///
+    /// So we coalesce ONLY inits that pre-date or exactly match the current establishment (a server
+    /// backlog replay re-delivered on reconnect): boundary is `<=` (an exact redelivery of the
+    /// establishing init is idempotent → coalesce), and the fudge errs toward *applying* (a
+    /// near-boundary init is applied, never stranding — a redundant re-init is cheap and
+    /// self-limiting, a dropped live init is a permanent storm). `nil` establishment → apply.
+    static func isResetInitSuperseded(establishedAt: UInt64?, timestamp: UInt64, fudgeSeconds: UInt64) -> Bool {
+        guard let establishedAt else { return false }
+        return timestamp + fudgeSeconds <= establishedAt
     }
 }

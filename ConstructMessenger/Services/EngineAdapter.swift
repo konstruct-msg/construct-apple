@@ -409,8 +409,24 @@ extension EngineAdapter: EngineCallback {
                 return
             }
 
-            // Find or create the Chat entity (id = conversationId = other user's userId for DMs).
-            let chat = self.findOrCreateChat(conversationId: conversationId, in: bgCtx)
+            // 1:1 Chat per peer User. conversationId is the other user's server id for DMs.
+            // Chat.row id stays a local UUID (never the server user id) so this path
+            // cannot diverge from MessageRouter / openOrCreateChat.
+            let chat: Chat
+            do {
+                guard let result = try Chat.findOrCreate(
+                    forUserId: conversationId,
+                    in: bgCtx,
+                    missingUserPolicy: .createContact
+                ) else {
+                    Log.error("EngineAdapter: findOrCreateChat returned nil for \(conversationId.prefix(8))…", category: "Engine")
+                    return
+                }
+                chat = result.chat
+            } catch {
+                Log.error("EngineAdapter: findOrCreateChat failed: \(error)", category: "Engine")
+                return
+            }
 
             let message = Message(context: bgCtx)
             message.id = messageId.lowercased()
@@ -448,26 +464,6 @@ extension EngineAdapter: EngineCallback {
                 Log.error("EngineAdapter: CoreData save failed: \(error)", category: "Engine")
             }
         }
-    }
-
-    /// Finds the Chat entity for the given conversationId, or creates it if not found.
-    /// Must be called on the context's queue.
-    private nonisolated func findOrCreateChat(
-        conversationId: String,
-        in context: NSManagedObjectContext
-    ) -> Chat {
-        let req = Chat.fetchRequest()
-        req.predicate = NSPredicate(format: "id ==[c] %@", conversationId)
-        req.fetchLimit = 1
-        if let existing = try? context.fetch(req).first {
-            return existing
-        }
-        let chat = Chat(context: context)
-        chat.id = conversationId
-        chat.unreadCount = 0
-        chat.isPinned = false
-        chat.isMuted = false
-        return chat
     }
 
     /// Updates delivery status of an existing message in CoreData.

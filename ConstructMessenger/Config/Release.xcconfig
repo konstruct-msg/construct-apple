@@ -1,3 +1,7 @@
 // gRPC endpoint (Envoy proxy — all services via single host)
 GRPC_HOST = ams.konstruct.cc
 GRPC_PORT = 443
+
+// APNs: App Store AND TestFlight (incl. the Beta config, which #includes this file)
+// use the production push environment. Referenced by aps-environment in the entitlements.
+APS_ENVIRONMENT = production

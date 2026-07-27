@@ -96,164 +96,57 @@ class MediaUploadManager {
             index = end
         }
         
-        // Build message content with media references
-        let messageContent = buildMediaMessageContent(
+        // Local display JSON from the same album shape as the wire path (MediaWireCodec).
+        // Wire still uses binary `.mediaAlbum` in ChatSendCoordinator; this string is only
+        // for Core Data / multi-device sync / bubbles (E1 residual — not re-encrypted as JSON).
+        let album = MediaWireCodec.albumContent(
+            mediaList: mediaDataList,
             caption: caption,
-            mediaList: mediaDataList
+            quoted: nil
         )
-        
+        let messageContent = MediaWireCodec.mediaJSON(from: album.mediaAlbum) ?? caption
+        Log.debug("Local media JSON \(messageContent.utf8.count)B for \(mediaDataList.count) item(s)", category: "MediaUploadManager")
+
         return MediaUploadResult(messageContent: messageContent, mediaList: mediaDataList, thumbnails: thumbnails)
-    }
-    
-    // MARK: - Media Content Builder
-    
-    /// Builds JSON content for media message
-    /// - Parameters:
-    ///   - caption: Text caption
-    ///   - mediaList: List of uploaded media data
-    /// - Returns: JSON string for message content
-    private func buildMediaMessageContent(caption: String, mediaList: [MediaMessageData]) -> String {
-        // Build JSON content for media message
-        // Format: {"type":"media","caption":"...","media":[...]}
-        // Remove thumbnails from JSON to avoid exceeding 64KB limit
-        // Thumbnails can be generated client-side from downloaded media
-        struct MediaContent: Codable {
-            let type: String
-            let caption: String
-            let media: [MediaMessageDataWithoutThumbnail]
-        }
-        
-        // MediaMessageData without thumbnail to reduce JSON size
-        struct MediaMessageDataWithoutThumbnail: Codable {
-            let mediaId: String
-            let mediaUrl: String
-            let mediaKey: Data
-            let mediaType: String
-            let size: Int
-            let width: Int?
-            let height: Int?
-            let duration: TimeInterval?
-            let hash: String
-            // thumbnail excluded to keep JSON under 64KB
-        }
-        
-        let mediaWithoutThumbnails = mediaList.map { media in
-            MediaMessageDataWithoutThumbnail(
-                mediaId: media.mediaId,
-                mediaUrl: media.mediaUrl,
-                mediaKey: media.mediaKey,
-                mediaType: media.mediaType,
-                size: media.size,
-                width: media.width,
-                height: media.height,
-                duration: media.duration,
-                hash: media.hash
-            )
-        }
-        
-        let content = MediaContent(
-            type: "media",
-            caption: caption,
-            media: mediaWithoutThumbnails
-        )
-        
-        let encoder = JSONEncoder()
-        // Use camelCase for consistency with messaging-service API
-        
-        guard let jsonData = try? encoder.encode(content),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
-            Log.error("Failed to encode media message content", category: "MediaUploadManager")
-            return caption
-        }
-        
-        // Debug: Log the actual JSON we're creating
-        Log.debug("Created media JSON (\(jsonString.count) chars): \(jsonString.prefix(200))...", category: "MediaUploadManager")
-        
-        // Check JSON size before sending
-        let jsonSize = jsonString.utf8.count
-        let maxSize = 64 * 1024 // 64KB limit
-        if jsonSize > maxSize {
-            Log.error("Media message JSON too large: \(jsonSize) bytes (max \(maxSize))", category: "MediaUploadManager")
-            // Try without some optional fields
-            let minimalMedia = mediaWithoutThumbnails.map { media in
-                MediaMessageDataWithoutThumbnail(
-                    mediaId: media.mediaId,
-                    mediaUrl: media.mediaUrl,
-                    mediaKey: media.mediaKey,
-                    mediaType: media.mediaType,
-                    size: media.size,
-                    width: nil,
-                    height: nil,
-                    duration: nil,
-                    hash: media.hash
-                )
-            }
-            
-            let minimalContent = MediaContent(
-                type: "media",
-                caption: caption.prefix(100).description, // Truncate caption if needed
-                media: minimalMedia
-            )
-            
-            if let minimalJsonData = try? encoder.encode(minimalContent),
-               let minimalJsonString = String(data: minimalJsonData, encoding: .utf8) {
-                Log.info("Using minimal media JSON: \(minimalJsonString.utf8.count) bytes", category: "MediaUploadManager")
-                return minimalJsonString
-            }
-        }
-        
-        return jsonString
     }
 
     // MARK: - File Upload
 
     struct FileUploadResult {
+        /// Legacy dual-read JSON for UI / multi-device until peers consume CTM1.
         let messageContent: String
+        /// Binary album items for wire + CTM1 local store.
+        let mediaList: [MediaMessageData]
     }
 
-    /// Uploads file attachments and builds a `{"type":"file",...}` message JSON.
-    /// Text-based files are ZLIB-compressed before AES encryption if beneficial.
+    /// Uploads file attachments. Wire/local prefer mediaAlbum proto (CTM1); JSON remains for dual-read.
     func uploadFilesAndBuildContent(urls: [URL], caption: String) async throws -> FileUploadResult {
-        var fileDataList: [FileMessageEntry] = []
+        var mediaList: [MediaMessageData] = []
+        mediaList.reserveCapacity(urls.count)
 
         for url in urls {
             Log.info("Uploading file: \(url.lastPathComponent)", category: "MediaUploadManager")
             let mediaData = try await MediaManager.shared.uploadFile(url)
-            fileDataList.append(FileMessageEntry(
+            mediaList.append(MediaMessageData(
                 mediaId: mediaData.mediaId,
                 mediaUrl: mediaData.mediaUrl,
                 mediaKey: mediaData.mediaKey,
                 mediaType: mediaData.mediaType,
                 size: mediaData.size,
+                width: nil,
+                height: nil,
+                duration: nil,
+                thumbnail: nil,
                 hash: mediaData.hash,
                 filename: mediaData.filename ?? url.lastPathComponent,
-                compressed: mediaData.compressed ?? false
+                compressed: mediaData.compressed,
+                blurhash: nil
             ))
         }
 
-        let content = FileMessageContent(type: "file", caption: caption, files: fileDataList)
-        let encoder = JSONEncoder()
-        guard let jsonData = try? encoder.encode(content),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
-            throw MediaUploadError.uploadFailed("Failed to encode file message JSON")
-        }
-        return FileUploadResult(messageContent: jsonString)
-    }
-
-    private struct FileMessageContent: Codable {
-        let type: String
-        let caption: String
-        let files: [FileMessageEntry]
-    }
-
-    private struct FileMessageEntry: Codable {
-        let mediaId: String
-        let mediaUrl: String
-        let mediaKey: Data
-        let mediaType: String
-        let size: Int
-        let hash: String
-        let filename: String
-        let compressed: Bool
+        let wire = MediaWireCodec.fileAlbumContent(mediaList: mediaList, caption: caption)
+        let messageContent = MediaWireCodec.fileJSON(from: wire.mediaAlbum)
+            ?? caption
+        return FileUploadResult(messageContent: messageContent, mediaList: mediaList)
     }
 }

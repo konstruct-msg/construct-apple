@@ -16,6 +16,7 @@
 //
 
 import Foundation
+import SwiftProtobuf   // Shared_Proto_* serializedData / init(serializedBytes:) — explicit under #MemberImportVisibility (macOS/beta toolchain)
 
 enum MediaWireCodec {
 
@@ -135,6 +136,31 @@ enum MediaWireCodec {
         return json
     }
 
+    /// Rebuild local storage payload after a caption edit (CTM1 album or legacy JSON string).
+    static func editedCaptionPayload(storedPlaintext: Data, newCaption: String)
+        -> (storagePayload: Data, wire: Shared_Proto_Messaging_V1_MessageContent, displayPreview: String)?
+    {
+        switch LocalMessagePayload.decode(storedPlaintext) {
+        case .mediaAlbum(let body):
+            guard var album = try? Shared_Proto_Messaging_V1_MediaAlbumMessage(serializedBytes: body) else {
+                return nil
+            }
+            album.caption = newCaption
+            let storage = LocalMessagePayload.encodeMediaAlbum(album)
+            var wire = Shared_Proto_Messaging_V1_MessageContent()
+            wire.mediaAlbum = album
+            let preview = newCaption.isEmpty ? NSLocalizedString("photo", comment: "") : newCaption
+            return (storage, wire, preview)
+        case .legacyUTF8, .text:
+            let localJSON = LocalMessagePayload.decode(storedPlaintext).displayString
+            guard let edited = editedCaption(localJSON: localJSON, newCaption: newCaption) else { return nil }
+            let preview = newCaption.isEmpty ? NSLocalizedString("photo", comment: "") : newCaption
+            return (Data(edited.localJSON.utf8), edited.wire, preview)
+        default:
+            return nil
+        }
+    }
+
     @MainActor
     static func storeThumbnails(
         from album: Shared_Proto_Messaging_V1_MediaAlbumMessage,
@@ -170,5 +196,90 @@ enum MediaWireCodec {
 
     private static func dataToHex(_ data: Data) -> String {
         data.map { String(format: "%02x", $0) }.joined()
+    }
+
+    // MARK: - Voice / file dual-read JSON (UI parsers)
+
+    /// Encode app `VoiceMessageContent` as wire `MessageContent.voice` + CTM1 storage blob.
+    /// `codec` carries `mime|mediaId|size` so mediaId survives the proto (no dedicated field).
+    static func voiceMessageContent(from voice: VoiceMessageContent) -> Shared_Proto_Messaging_V1_MessageContent {
+        var v = Shared_Proto_Messaging_V1_VoiceMessage()
+        v.fileURL = voice.mediaUrl
+        v.encryptionKey = voice.mediaKey
+        v.fileHash = hexToData(voice.hash) ?? Data()
+        v.durationMs = UInt32(max(0, voice.duration * 1000))
+        v.waveform = voice.waveform.map { sample in
+            UInt32(max(0, min(255, Int((sample * 255).rounded()))))
+        }
+        v.codec = "\(voice.mediaType)|\(voice.mediaId)|\(voice.size)"
+        var content = Shared_Proto_Messaging_V1_MessageContent()
+        content.voice = v
+        return content
+    }
+
+    /// Rehydrate legacy voice JSON for `parseVoiceContent` / bubbles.
+    static func voiceJSON(from voice: Shared_Proto_Messaging_V1_VoiceMessage) -> String? {
+        let parts = voice.codec.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        let mediaType = parts.count > 0 && !parts[0].isEmpty ? parts[0] : "audio/m4a"
+        let mediaId = parts.count > 1 ? parts[1] : ""
+        let size = parts.count > 2 ? (Int(parts[2]) ?? 0) : 0
+        let content = VoiceMessageContent(
+            type: "voice",
+            mediaId: mediaId,
+            mediaUrl: voice.fileURL,
+            mediaKey: voice.encryptionKey,
+            mediaType: mediaType,
+            size: size,
+            duration: Double(voice.durationMs) / 1000.0,
+            waveform: voice.waveform.map { Float($0) / 255.0 },
+            hash: dataToHex(voice.fileHash)
+        )
+        guard let data = try? JSONEncoder().encode(content),
+              let json = String(data: data, encoding: .utf8) else { return nil }
+        return json
+    }
+
+    /// Build wire MessageContent.mediaAlbum from file uploads (each file → MediaMessage).
+    static func fileAlbumContent(
+        mediaList: [MediaMessageData],
+        caption: String
+    ) -> Shared_Proto_Messaging_V1_MessageContent {
+        albumContent(mediaList: mediaList, caption: caption, quoted: nil)
+    }
+
+    /// Legacy `{"type":"file",…}` for dual-read UI when stored as media album of documents.
+    static func fileJSON(from album: Shared_Proto_Messaging_V1_MediaAlbumMessage) -> String? {
+        let files: [[String: Any]] = album.items.map { m in
+            let dict: [String: Any] = [
+                "mediaId": m.mediaID,
+                "mediaUrl": m.fileURL,
+                "mediaKey": m.encryptionKey.base64EncodedString(),
+                "mediaType": m.mimeType,
+                "size": Int(m.fileSize),
+                "hash": dataToHex(m.fileHash),
+                "filename": m.hasFilename ? m.filename : "file",
+                "compressed": false,
+            ]
+            return dict
+        }
+        guard !files.isEmpty else { return nil }
+        let obj: [String: Any] = [
+            "type": "file",
+            "caption": album.hasCaption ? album.caption : "",
+            "files": files,
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: obj),
+              let json = String(data: data, encoding: .utf8) else { return nil }
+        return json
+    }
+
+    /// Prefer album of non-image/video items as file JSON for dual-read parsers.
+    static func looksLikeFileAlbum(_ album: Shared_Proto_Messaging_V1_MediaAlbumMessage) -> Bool {
+        guard !album.items.isEmpty else { return false }
+        return album.items.allSatisfy { item in
+            let mime = item.mimeType.lowercased()
+            return !mime.hasPrefix("image/") && !mime.hasPrefix("video/")
+                && !mime.hasPrefix("audio/")
+        }
     }
 }

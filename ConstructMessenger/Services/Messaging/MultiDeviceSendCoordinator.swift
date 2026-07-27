@@ -101,6 +101,12 @@ final class MultiDeviceSendCoordinator {
     /// SenderSync: send a copy of an outgoing message to all of the sender's OWN
     /// other devices, encrypted with per-device sessions, content type = senderSync.
     ///
+    /// `plaintext` MUST be the same **wire** bytes used for the primary send
+    /// (`MessageContent` / pre-KNST payload), NOT display JSON or CTM1. This coordinator
+    /// applies the same KNST chunking as `ChunkedMessageSender` so large albums and voice
+    /// descriptors reassemble on the peer device. Receiving side stores CTM1 via the
+    /// normal reassembler (`storagePayload`). See local-message-payload-binary.md C1c.
+    ///
     /// Receiving devices show this as an outgoing bubble (sent by the local user)
     /// in the conversation with `originalRecipientUserId`.
     ///
@@ -119,6 +125,10 @@ final class MultiDeviceSendCoordinator {
         timestamp: UInt64
     ) async {
         guard !senderDeviceId.isEmpty else { return }
+        guard !plaintext.isEmpty else {
+            Log.info("SenderSync: empty wire plaintext — skip", category: "MultiDevice")
+            return
+        }
         do {
             let otherDevices = try await fetchOwnOtherDevices(
                 myUserId: senderUserId,
@@ -126,21 +136,36 @@ final class MultiDeviceSendCoordinator {
             )
             guard !otherDevices.isEmpty else { return }
 
+            // Same framing as the primary send path so the peer reassembler can rebuild
+            // MessageContent → CTM1. UUID from base messageId when well-formed.
+            let planId = UUID(uuidString: messageId) ?? UUID()
+            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: plaintext, messageId: planId)
+            guard !plan.payloads.isEmpty else {
+                Log.info("SenderSync: chunk plan empty (payload too large?) — skip", category: "MultiDevice")
+                return
+            }
+
             for device in otherDevices {
                 let contactId = Self.sessionKey(userId: senderUserId, deviceId: device.deviceId)
-                await sendToDevice(
-                    plaintext: plaintext,
-                    messageId: "\(messageId)-ss-\(device.deviceId.prefix(8))",
-                    networkRecipientUserId: senderUserId,
-                    contactId: contactId,
-                    bundle: device.bundle,
-                    senderUserId: senderUserId,
-                    senderDeviceId: senderDeviceId,
-                    recipientDeviceId: device.deviceId,
-                    conversationId: conversationId,
-                    timestamp: timestamp,
-                    contentType: .senderSync
-                )
+                let deviceTag = String(device.deviceId.prefix(8))
+                for (index, payload) in plan.payloads.enumerated() {
+                    let chunkWireId: String = plan.payloads.count == 1
+                        ? "\(messageId)-ss-\(deviceTag)"
+                        : "\(messageId)-ss-\(deviceTag)-c\(index)"
+                    await sendToDevice(
+                        plaintext: payload,
+                        messageId: chunkWireId,
+                        networkRecipientUserId: senderUserId,
+                        contactId: contactId,
+                        bundle: device.bundle,
+                        senderUserId: senderUserId,
+                        senderDeviceId: senderDeviceId,
+                        recipientDeviceId: device.deviceId,
+                        conversationId: conversationId,
+                        timestamp: timestamp,
+                        contentType: .senderSync
+                    )
+                }
             }
         } catch {
             Log.info(

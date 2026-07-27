@@ -146,6 +146,18 @@ final class CallManager: CallUIManaging {
             return
         }
 
+        // Client-authoritative mutuality (sealed-sender future): only local contacts.
+        // Server reciprocity cannot survive when the server does not see the caller.
+        let ctx = PersistenceController.shared.container.viewContext
+        if !ContactPolicy.isCallableContact(userId, in: ctx) {
+            Log.info(
+                "SECURITY[call_gate]: outgoing call blocked — not a local contact \(userId.prefix(8))…",
+                category: "Calls"
+            )
+            lastError = NSLocalizedString("call_error_not_contacts", comment: "")
+            return
+        }
+
         // Busy / glare guard. Without this, `begin()` → `active?.close()` would tear down
         // an existing call to start the new outgoing one, and the subsequent
         // CXStartCallAction fails with maximumCallGroupsReached (Code 7) — orphaning the
@@ -299,6 +311,24 @@ final class CallManager: CallUIManaging {
         let callData = (payload["construct_call"] as? [AnyHashable: Any]) ?? payload
         let callId  = (callData["call_id"]  as? String) ?? reportedUUID.uuidString
         let callerId = (callData["caller_id"] as? String) ?? "Unknown"
+
+        // Client-side block + mutuality on the VoIP path. iOS already forced us to report the
+        // call to CallKit synchronously in the PushKit delegate (or the app is terminated), so
+        // we cannot simply drop it — instead report it ended immediately so a blocked /
+        // non-contact never actually rings. See sealed-sender-authenticated-transitional.
+        let pushCtx = PersistenceController.shared.container.viewContext
+        if BlockedContacts.isBlocked(callerId, in: pushCtx)
+            || !ContactPolicy.isCallableContact(callerId, in: pushCtx) {
+            Log.info(
+                "SECURITY[call_gate]: incoming push from non-callable \(callerId.prefix(8))… — reporting ended (callId=\(callId.prefix(8))…)",
+                category: "Calls"
+            )
+            #if os(iOS)
+            CallKitProvider.shared.reportCallEnded(uuid: reportedUUID)
+            #endif
+            return
+        }
+
         // Privacy: do NOT use caller_name from push payload (exposed to APNs infrastructure).
         // Resolve from local CoreData via `resolvedDisplayName` (profile-shared name →
         // server username → deterministic generated fallback). Never shows raw UUID.
@@ -1050,6 +1080,17 @@ final class CallManager: CallUIManaging {
                         // Uses dedicated helper with cache + proper logging.
                         let sealedInnerBytes = await buildSealedForCallSignalIfNeeded(recipient: to, payload: payload)
 
+                        // Fail-closed: while stealth is on a call signal is sealed or dropped — never
+                        // sent identified. The signal carries the real senderId to the server; leaking
+                        // it defeats sealed sender. Privacy over availability: a call that cannot be
+                        // established anonymously fails rather than silently deanonymizing the caller.
+                        // The identified `else` below is therefore reachable only when stealth is off.
+                        if StealthPolicy.shared.shouldUseSealedSender() && sealedInnerBytes == nil {
+                            Log.error("Call signal: cannot seal (recipient IK/cert unavailable) — NOT sent identified, dropped to=\(to.prefix(8))… callId=\(callId.prefix(8))…", category: "Calls")
+                            PerformanceMetrics.shared.record(.stealthSealFailure, label: "callSignal-dropped")
+                            return
+                        }
+
                         do {
                             if let sealedInnerBytes {
                                 // Sealed call signal with one-shot enforce recovery: fresh
@@ -1177,6 +1218,18 @@ final class CallManager: CallUIManaging {
         // Note: if the original wire message was sealed, the real sender was already resolved
         // in MessageRouter before the Rust decrypt action produced this .callSignalDecrypted.
         Log.debug("STEALTH: call signal received (sender resolution happened upstream if sealed)", category: "Calls")
+
+        // Client-side block + mutuality. Under sealed sender the server can't see the caller,
+        // so it does not stop a non-contact from ringing you — drop every call signal here.
+        let signalCtx = PersistenceController.shared.container.viewContext
+        if BlockedContacts.isBlocked(senderUserId, in: signalCtx)
+            || !ContactPolicy.isCallableContact(senderUserId, in: signalCtx) {
+            Log.info(
+                "SECURITY[call_gate]: dropped call signal from non-callable \(senderUserId.prefix(8))… (callId=\(signal.callID.prefix(8))…)",
+                category: "Calls"
+            )
+            return
+        }
 
         switch signal.signal {
         case .offer(let offer):

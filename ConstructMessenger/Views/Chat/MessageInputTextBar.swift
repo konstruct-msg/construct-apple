@@ -20,12 +20,12 @@ struct MessageInputTextBar: View {
     @FocusState private var focused: Bool
 
     /// Matches the attach `plus.circle` control (``CTLayout.controlHeight`` + pill).
-    private static let controlSize: CGFloat = CTLayout.controlHeight
-    private static let trailingIconSize: CGFloat = 28
+    private static let controlSize: CGFloat = ChatUIConstants.InputBar.height
+    private static let trailingIconSize: CGFloat = ChatUIConstants.InputBar.trailingIconSize
 
     var body: some View {
         // Center trailing controls with the single-line text row. Multi-line growth
-        // keeps send/mic vertically centered in the capsule (not bottom-hanging).
+        // keeps send/mic vertically centered (not bottom-hanging).
         HStack(alignment: .center, spacing: 0) {
             textField
             charCounter
@@ -34,7 +34,9 @@ struct MessageInputTextBar: View {
         }
         .frame(minHeight: Self.controlSize)
         .fixedSize(horizontal: false, vertical: true)
-        .glassCapsule()
+        // Fixed radius (half of controlHeight): stadium when 1-line, soft rect when
+        // multi-line — same family, no pill↔control jump on height change.
+        .glassCapsule(cornerRadius: ChatUIConstants.InputBar.cornerRadius)
     }
 
     // MARK: - Text field
@@ -51,10 +53,10 @@ struct MessageInputTextBar: View {
             .textFieldStyle(.plain)
             .lineLimit(1...8)
             .focused($focused)
-            .padding(.leading, 16)
-            .padding(.trailing, canSend ? 4 : 8)
-            // Vertical padding keeps single-line height ≈ attach circle (42).
-            .padding(.vertical, 11)
+            .padding(.leading, ChatUIConstants.InputBar.textLeadingPad)
+            .padding(.trailing, canSend ? ChatUIConstants.Bubble.tightVerticalPadding : CTLayout.inlinePad)
+            // Vertical padding keeps single-line height ≈ attach circle (controlHeight).
+            .padding(.vertical, ChatUIConstants.InputBar.textVerticalPad)
             #if os(macOS)
             .onKeyPress(keys: [.return], phases: .down) { press in
                 guard !press.modifiers.contains(.shift) else { return .ignored }

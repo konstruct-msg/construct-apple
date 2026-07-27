@@ -30,9 +30,19 @@ class MessagePersistenceService {
         replyToContentOverride: String? = nil,
         localThumbnails: [Data] = [],
         suiteId: UInt16,
+        /// Optional CTM1 / binary local payload (E1). When nil, stores UTF-8 of `decryptedContent`.
+        storagePayload: Data? = nil,
         in context: NSManagedObjectContext
     ) throws -> Bool {
         Log.debug("Saving message \(message.id), isSentByMe: \(isSentByMe), status: \(status)", category: "MessagePersistence")
+
+        let payload = storagePayload ?? Data(decryptedContent.utf8)
+        let previewText: String = {
+            if storagePayload != nil {
+                return LocalMessagePayload.decode(payload).previewHint
+            }
+            return decryptedContent
+        }()
         
         let fetchRequest = Message.fetchRequest()
         let messagePredicate = NSPredicate(format: "id ==[c] %@", message.id)
@@ -47,12 +57,12 @@ class MessagePersistenceService {
             // Recover a previously undecryptable message: if the sender re-sent the same
             // message (same UUID) after a session heal, update the content so the "unavailable"
             // bubble is replaced with the actual text.
-            if !existing.hasDecryptedContent, !decryptedContent.isEmpty {
+            if !existing.hasDecryptedContent, !payload.isEmpty {
                 let contactId = isSentByMe ? message.to : message.from
-                existing.applyStoredEncryption(plaintext: decryptedContent, contactId: contactId)
+                existing.applyStoredEncryption(plaintextData: payload, contactId: contactId)
                 Log.info("Recovered undecryptable message \(message.id.prefix(8))… — content now available", category: "MessagePersistence")
                 // Update chat preview if this was the last message showing "unavailable"
-                try? updateChatMetadata(chat: chat, lastMessageText: decryptedContent, lastMessageTime: existing.timestamp, in: context)
+                try? updateChatMetadata(chat: chat, lastMessageText: previewText, lastMessageTime: existing.timestamp, in: context)
             }
             isNewMessage = false
         } else {
@@ -70,7 +80,7 @@ class MessagePersistenceService {
             newMessage.suiteId = suiteId
 
             let contactId = isSentByMe ? message.to : message.from
-            newMessage.applyStoredEncryption(plaintext: decryptedContent, contactId: contactId)
+            newMessage.applyStoredEncryption(plaintextData: payload, contactId: contactId)
 
             // Set reply information
             if let replyMessage = replyTo {
@@ -94,7 +104,7 @@ class MessagePersistenceService {
             if !isSentByMe { chat.unreadCount += 1 }
             try updateChatMetadata(
                 chat: chat,
-                lastMessageText: decryptedContent,
+                lastMessageText: previewText,
                 lastMessageTime: messageTimestamp,
                 in: context
             )
@@ -116,6 +126,7 @@ class MessagePersistenceService {
         newContent: String,
         isEdited: Bool,
         editedAt: Date,
+        storagePayload: Data? = nil,
         in context: NSManagedObjectContext
     ) {
         let fetchRequest = Message.fetchRequest()
@@ -126,7 +137,11 @@ class MessagePersistenceService {
             return
         }
         let contactId = message.isSentByMe ? message.toUserId : message.fromUserId
-        message.applyStoredEncryption(plaintext: newContent, contactId: contactId)
+        if let storagePayload {
+            message.applyStoredEncryption(plaintextData: storagePayload, contactId: contactId)
+        } else {
+            message.applyStoredEncryption(plaintext: newContent, contactId: contactId)
+        }
         message.isEdited = isEdited
         message.editedAt = editedAt
         context.saveAndLog()

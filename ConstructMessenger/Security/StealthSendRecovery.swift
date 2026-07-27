@@ -21,6 +21,15 @@
 import Foundation
 import GRPCCore
 
+/// Thrown when stealth is on but a message could not be sealed (no recipient identity key, or the
+/// sender certificate is unavailable). The send MUST NOT fall back to an identified send — that is
+/// the server-influence deanonymisation vector the sealed path exists to prevent
+/// (decisions/sealed-sender-anti-abuse-economics.md). Callers hold the message queued and retry once
+/// sealing becomes possible.
+struct StealthDowngradeBlocked: Error {
+    let reason: String
+}
+
 enum StealthSendRecovery {
 
     /// True when the error is the server's Privacy Pass enforce rejection.

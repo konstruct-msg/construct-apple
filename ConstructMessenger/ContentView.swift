@@ -13,9 +13,18 @@ struct ContentView: View {
     @Environment(DeepLinkHandler.self) var deepLinkHandler
     @Environment(\.managedObjectContext) private var viewContext
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
-    @AppStorage(OrientationStore.completedKey) private var orientationCompleted = false
+    /// Per-identity orientation completion list (see `OrientationStore`).
+    @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var chatsViewModel = ChatsViewModel()
+
+    /// Orientation is product education for **this** ServerUserId — not a global device flag.
+    private var orientationCompletedForCurrentUser: Bool {
+        OrientationStore.isCompleted(
+            for: authViewModel.currentUserId ?? AuthSessionManager.shared.currentUserId,
+            rawList: orientationCompletedUserIds
+        )
+    }
 
     var body: some View {
         Group {
@@ -41,8 +50,8 @@ struct ContentView: View {
                 // the user's session is still valid in memory.
                 //
                 // Orientation is product education (not identity init). Skip always available.
-                // Existing installs see it once after upgrade until completed/skipped.
-                if orientationCompleted {
+                // Shown once per identity on this device (new registration always sees it).
+                if orientationCompletedForCurrentUser {
                     MainTabView()
                         .environment(authViewModel)
                         .environment(chatsViewModel)
@@ -86,9 +95,28 @@ struct ContentView: View {
                     await BlindTokenService.shared.bootstrapInitialBatch()
                 }
             }
+
+            // Heal degraded (at-risk) sessions whose peer has rotated back to a fresh SPK — closes
+            // the stale-peer Phase 3B loop (server wake → peer rotates → sender auto-upgrades) without
+            // requiring the user to open each affected chat. Self-throttled per contact.
+            if AuthSessionManager.shared.isSessionValid, CryptoManager.shared.isInitialized {
+                Task {
+                    await SessionInitializationService.shared.upgradeAllAtRiskSessionsOnForeground()
+                }
+            }
         }
         .onChange(of: deepLinkHandler.deepLink) { _, newDeepLink in
             handleDeepLink(newDeepLink)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openChatForKeyChange)) { note in
+            guard let userId = note.userInfo?["userId"] as? String, !userId.isEmpty else { return }
+            let ctx = viewContext
+            let fetch = User.fetchRequest()
+            fetch.predicate = NSPredicate(format: "id == %@", userId)
+            fetch.fetchLimit = 1
+            if let user = try? ctx.fetch(fetch).first {
+                chatsViewModel.openOrCreateChat(with: user)
+            }
         }
         .onOpenURL { url in
             // Handle Universal Links in SwiftUI (iOS 13+)
@@ -112,9 +140,13 @@ struct ContentView: View {
                 deviceId: contactInfo.deviceId
             )
 
-            if let chat = chatsViewModel.startChat(with: publicUserInfo) {
+            if let chat = chatsViewModel.startChat(
+                with: publicUserInfo,
+                identityPublicKey: contactInfo.identityPublicKey
+            ) {
                 Log.info("ContentView: Chat created successfully, opening chat with id: \(chat.id)", category: "DeepLink")
                 chatsViewModel.chatToOpen = chat.id
+                InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
             } else {
                 Log.error("ContentView: Failed to create chat for userId: \(contactInfo.userId)", category: "DeepLink")
             }

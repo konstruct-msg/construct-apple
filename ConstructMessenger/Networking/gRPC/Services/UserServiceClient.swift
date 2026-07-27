@@ -267,3 +267,32 @@ final class UserServiceClient: Sendable {
             || desc.contains("connection")
     }
 }
+
+/// gRPC SentinelService client — user-driven spam reports that feed the server-side
+/// auto-escalation (flag/ban) engine. The reporter identity is derived server-side from
+/// the authenticated caller; the client supplies only the reported device id + a coarse
+/// category (never message content). See construct-server `sentinel/grpc.rs`.
+final class SentinelServiceClient: Sendable {
+    static let shared = SentinelServiceClient()
+    private init() {}
+
+    /// Report a device for spam/abuse. `reportedDeviceId` is the peer's crypto device id
+    /// (`deriveDeviceId(identityPublicKey:)` — the same `SHA256(identity_public)[0..16]` the
+    /// server uses as its sentinel key). Returns whether the report was accepted.
+    @discardableResult
+    func reportSpam(
+        reportedDeviceId: String,
+        category: Shared_Proto_Sentinel_V1_SpamCategory = .unwanted
+    ) async throws -> Bool {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.reportSpam) { grpcClient in
+            let client = Shared_Proto_Sentinel_V1_SentinelService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Sentinel_V1_ReportSpamRequest()
+            request.reportedDeviceID = reportedDeviceId
+            request.category = category
+
+            let response = try await client.reportSpam(request: .init(message: request))
+            return response.accepted
+        }
+    }
+}

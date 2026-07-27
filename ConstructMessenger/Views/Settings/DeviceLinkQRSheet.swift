@@ -17,6 +17,14 @@ struct DeviceLinkQRSheet: View {
     @State private var countdown: String = ""
     @State private var countdownTimer: Timer? = nil
 
+    // History-sync offer (Flow A): the token shower doesn't know who scanned, so it
+    // polls the device list and offers to send history once a new device appears.
+    @State private var baselineDeviceIds: Set<String> = []
+    @State private var newlyLinkedDeviceId: String? = nil
+    @State private var showHistorySyncOffer = false
+    @State private var showSendHistorySync = false
+    @State private var linkPollTask: Task<Void, Never>? = nil
+
     var body: some View {
         VStack(spacing: DeviceLinkQRLayout.rootSpacing) {
             CTNavBar(
@@ -43,8 +51,63 @@ struct DeviceLinkQRSheet: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .task { await vm.generateLinkCode() }
-        .onDisappear { stopCountdown() }
+        .task {
+            await vm.generateLinkCode()
+            await startWatchingForNewDevice()
+        }
+        .onDisappear {
+            stopCountdown()
+            linkPollTask?.cancel()
+        }
+        // A new device linked via this token — offer to send it our history.
+        .alert(
+            NSLocalizedString("history_sync_send_offer_title", comment: ""),
+            isPresented: $showHistorySyncOffer
+        ) {
+            Button(NSLocalizedString("history_sync_send_offer_yes", comment: "")) {
+                showHistorySyncOffer = false
+                showSendHistorySync = true
+            }
+            Button(NSLocalizedString("history_sync_send_offer_skip", comment: ""), role: .cancel) {
+                showHistorySyncOffer = false
+                dismiss()
+            }
+        } message: {
+            Text(NSLocalizedString("history_sync_send_offer_message", comment: ""))
+        }
+        .sheet(isPresented: $showSendHistorySync) {
+            SendBackupNearbyView(mode: .historySync, autoPairingPIN: historySyncPIN)
+                .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+                .onDisappear { dismiss() }
+        }
+    }
+
+    /// PIN derived from the newly-linked device id — matches the receiver, which derives the
+    /// same value from its own device id (`HistorySyncPairing`).
+    private var historySyncPIN: String? {
+        guard let deviceId = newlyLinkedDeviceId,
+              let userId = AuthSessionManager.shared.currentUserId else { return nil }
+        return HistorySyncPairing.pin(pendingDeviceId: deviceId, userId: userId)
+    }
+
+    /// Snapshot the current devices, then poll until a new one appears (the scanner that just
+    /// linked) so we can offer to send history. Best-effort — network errors just keep polling.
+    private func startWatchingForNewDevice() async {
+        baselineDeviceIds = Set((try? await AuthServiceClient.shared.listDevices())?.map(\.id) ?? [])
+        linkPollTask?.cancel()
+        linkPollTask = Task {
+            let deadline = Date().addingTimeInterval(10 * 60)
+            while !Task.isCancelled, Date() < deadline {
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled else { return }
+                guard let devices = try? await AuthServiceClient.shared.listDevices() else { continue }
+                if let fresh = devices.first(where: { !$0.isCurrent && !baselineDeviceIds.contains($0.id) }) {
+                    newlyLinkedDeviceId = fresh.id
+                    showHistorySyncOffer = true
+                    return
+                }
+            }
+        }
     }
 
     // MARK: - Loading

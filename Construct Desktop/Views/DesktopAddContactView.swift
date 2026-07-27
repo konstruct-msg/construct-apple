@@ -250,12 +250,19 @@ private struct MyQRTab: View {
         .onReceive(timer) { _ in
             guard let at = generatedAt else { return }
             timeRemaining = max(InviteConfig.ttlSeconds - Date().timeIntervalSince(at), 0)
+            // Self-refreshing jti while the QR is on-screen (screenshot resistance).
+            if errorMessage == nil,
+               qrImage != nil,
+               Date().timeIntervalSince(at) >= InviteConfig.qrRotateIntervalSeconds {
+                generate()
+            }
         }
     }
 
     private func generate() {
         qrImage = nil
         errorMessage = nil
+        generatedAt = nil
         Task { await generateAsync() }
     }
 
@@ -267,11 +274,17 @@ private struct MyQRTab: View {
             return
         }
         do {
-            let link = try generator.generateDeepLink(
-                userId: userId, deviceId: deviceId,
-                server: ServerConfig.inviteHost, useHTTPS: false
+            // Text-safe base64url(CIv1) — same path as iOS ContactQRCodeView so
+            // AVFoundation / Vision always get a UTF-8 stringValue on scan.
+            // username omitted (metadata minimization).
+            let binary = try generator.generateQRBinary(
+                userId: userId,
+                deviceId: deviceId,
+                username: nil,
+                server: ServerConfig.inviteHost
             )
-            qrImage = makeQRImage(from: link)
+            let textPayload = InviteBinaryCodec.base64URLEncode(binary)
+            qrImage = QRCodeGenerator.generate(from: textPayload) ?? makeQRImage(from: Data(textPayload.utf8))
             generatedAt = Date()
             timeRemaining = InviteConfig.ttlSeconds
         } catch {
@@ -279,9 +292,9 @@ private struct MyQRTab: View {
         }
     }
 
-    private func makeQRImage(from string: String) -> NSImage? {
+    private func makeQRImage(from data: Data) -> NSImage? {
         let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(string.utf8)
+        filter.message = data
         filter.correctionLevel = "M"
         guard let output = filter.outputImage else { return nil }
         let scaled = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
@@ -544,7 +557,7 @@ private struct PasteTab: View {
                     .foregroundStyle(DesktopTheme.textTertiary)
                     .tracking(1.5)
 
-                TextField("https://konstruct.cc/c/…  or  konstruct://…", text: $text)
+                TextField("https://konstruct.cc/add?invite=…  or  konstruct://add?…", text: $text)
                     .textFieldStyle(.plain)
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(DesktopTheme.textPrimary)
@@ -583,7 +596,7 @@ private struct PasteTab: View {
                     .keyboardShortcut(.return, modifiers: .command)
             }
 
-            Text("Supported formats: konstrukt:// deep link or https://konstruct.cc/c/ invite URL")
+            Text("Supported: konstruct://add?invite=… or https://konstruct.cc/add?invite=…")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(DesktopTheme.textTertiary)
 

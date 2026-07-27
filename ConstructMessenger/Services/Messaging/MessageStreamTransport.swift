@@ -487,15 +487,24 @@ extension MessageStreamManager {
                 // immediately.  beginGracefulShutdown() (used by invalidatePersistentClient) does
                 // not close a stuck QUIC handshake — task cancellation does.
                 if isH3Transport {
+                    // The stream rode the engine-QUIC / H3 connection, NOT the shared H2 client.
+                    // Tear down only that fast-UDP connection. Invalidating the H2 persistent
+                    // client here (as this path used to, unconditionally) yanks it out from under
+                    // concurrent unary RPCs (VoIP register, END_SESSION, OTPK), which then fail
+                    // "channel is closed" and — reported via GRPCCallExecutor — falsely escalate
+                    // auto-mode direct → VEIL even though H2-direct is healthy. See
+                    // sessions/2026-07-18-veil-false-escalation-channel-invalidation.
                     invalidateFastUdpConnection()
+                } else {
+                    // H2 stream timeout: the underlying TCP may have been RST'd (server keepalive
+                    // timeout, NAT expiry). The gRPC runConnections() error handler fires
+                    // asynchronously; without invalidating here the immediate retry calls
+                    // acquireChannel() before that async cleanup completes, gets the dead
+                    // connection back, and GRPCStreamStateMachine asserts "Client is closed: can't
+                    // send metadata" — a fatalError that kills the app. Only the H2 path can hit
+                    // this, so only the H2 path invalidates the H2 client.
+                    GRPCChannelManager.shared.invalidatePersistentClient()
                 }
-                // Always invalidate the persistent client on stream timeout.
-                // If the underlying TCP connection was RST'd (server keepalive timeout, NAT expiry,
-                // etc.) the gRPC runConnections() error handler fires asynchronously. Without this
-                // invalidation the immediate retry calls acquireChannel() before that async cleanup
-                // completes, gets the dead connection back, and GRPCStreamStateMachine asserts
-                // "Client is closed: can't send metadata" — a fatalError that kills the app.
-                GRPCChannelManager.shared.invalidatePersistentClient()
                 throw RPCError(code: .unavailable, message: "Stream open timed out — retrying with VEIL")
             }
         }

@@ -78,10 +78,12 @@ final class MessageRouter {
         return true
     }
 
-    /// Receive-side coalesce for END_SESSION / SESSION_RESET_INIT storms (server re-delivers
-    /// dozens of control msgs for one peer per reconnect). First handle wins; rest are ACK-only.
+    /// Receive-side coalesce for END_SESSION storms (server re-delivers dozens of control msgs for
+    /// one peer per reconnect). First handle wins; rest are ACK-only. SESSION_RESET_INIT is NOT
+    /// coalesced by this time window — it carries a fresh X3DH init and is filtered by content
+    /// freshness instead (`isResetInitSuperseded`); a handled SRI still arms this window so a
+    /// trailing END_SESSION for the same reset is coalesced.
     private var lastInboundEndSessionAt: [String: Date] = [:]
-    private var lastInboundSessionResetInitAt: [String: Date] = [:]
     /// Long enough to cover a full pending-queue flush + stream reconnect without re-tearing
     /// a session we just rebuilt; short enough that a real second reset later still lands.
     private static let inboundControlCooldown: TimeInterval = 45.0
@@ -93,19 +95,6 @@ final class MessageRouter {
             now: now,
             cooldown: Self.inboundControlCooldown
         ) else { return false }
-        lastInboundEndSessionAt[userId] = now
-        return true
-    }
-
-    private func shouldHandleInboundSessionResetInit(for userId: String) -> Bool {
-        let now = Date()
-        // SRI also counts as "we just reset this peer" for END_SESSION coalesce.
-        guard SessionReducer.shouldHandleInboundControl(
-            lastHandledAt: lastInboundSessionResetInitAt[userId],
-            now: now,
-            cooldown: Self.inboundControlCooldown
-        ) else { return false }
-        lastInboundSessionResetInitAt[userId] = now
         lastInboundEndSessionAt[userId] = now
         return true
     }
@@ -247,11 +236,9 @@ final class MessageRouter {
         Log.debug("   messageNumber: \(message.messageNumber)", category: "MessageRouter")
         Log.debug("   oneTimePreKeyId: \(message.oneTimePreKeyId)", category: "MessageRouter")
         Log.debug("   ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "MessageRouter")
-        let ephemeralPreview = message.ephemeralPublicKey.prefix(16).map { String(format: "%02x", $0) }.joined()
-        Log.debug("   ephemeralPublicKey preview: \(ephemeralPreview)...", category: "MessageRouter")
+        Log.debug("   ephemeralPublicKey preview: \(message.ephemeralPublicKey.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "MessageRouter")
         Log.debug("   content (padded): \(message.content.count) bytes", category: "MessageRouter")
-        let contentPreview = message.content.prefix(16).map { String(format: "%02x", $0) }.joined()
-        Log.debug("   content preview: \(contentPreview)…", category: "MessageRouter")
+        Log.debug("   content preview: \(message.content.prefix(16).map { String(format: "%02x", $0) }.joined())…", category: "MessageRouter")
         Log.debug("   isEndSession: \(message.isEndSession)", category: "MessageRouter")
         #endif
         
@@ -297,9 +284,14 @@ final class MessageRouter {
         //     Must be checked BEFORE the END_SESSION path (it carries a real X3DH payload).
         if message.isSessionResetInit {
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            if !shouldHandleInboundSessionResetInit(for: otherUserId) {
+            // Coalesce by *content freshness*, not a blanket time window: a SESSION_RESET_INIT
+            // carries a fresh X3DH init, so only one that pre-dates/exactly-matches our current
+            // establishment (a server backlog replay) is a duplicate to ACK-only. A *newer* init
+            // is a live re-init and MUST be applied even while a session is active — dropping it
+            // strands the RESPONDER on a dead ratchet → END_SESSION storm (2026-07-26 desync).
+            if delegate?.messageRouter(self, isResetInitSuperseded: otherUserId, timestamp: message.timestamp) == true {
                 Log.info(
-                    "SESSION_RESET_INIT coalesced for \(otherUserId.prefix(8))… — ACK only (inbound control cooldown)",
+                    "SESSION_RESET_INIT superseded for \(otherUserId.prefix(8))… — ACK only (pre-dates current session)",
                     category: "MessageRouter"
                 )
                 delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
@@ -307,6 +299,9 @@ final class MessageRouter {
             }
             Log.info("SESSION_RESET_INIT from \(otherUserId.prefix(8))…", category: "MessageRouter")
             handleSessionResetInit(message: message, from: otherUserId, in: context)
+            // A handled SRI also counts as "we just reset this peer" for the END_SESSION coalescer
+            // (preserves the cross-arm the removed inbound-control time-window provided).
+            lastInboundEndSessionAt[otherUserId] = Date()
             delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
             return
         }
@@ -630,8 +625,23 @@ final class MessageRouter {
         // chat, message, context, and delegate. Handled inline.
         for action in actions {
             if case .messageDecrypted(let contactId, _, let plaintext) = action {
-                _ = contactId.isEmpty ? otherUserId : contactId
+                let resolvedSender = contactId.isEmpty ? otherUserId : contactId
                 checkUsernameUpdate(for: otherUserId, chat: chat, in: context)
+
+                // Client-side block enforcement (decrypt-but-suppress). The ratchet has
+                // already advanced (handleOrchestratorEvent + SessionActionExecutor above),
+                // so unblocking later resumes the session seamlessly. For a blocked sender we
+                // suppress the transcript, the notification, AND the E2E delivery receipt — a
+                // receipt would leak delivered/read status to the blocked peer and spend a
+                // Privacy Pass token. Server-side block is bypassed under sealed sender, so this
+                // client drop is the load-bearing block. The server stream cursor still advances
+                // (.durable) + markProcessed dedups, so the queue drains and there is no redelivery.
+                // See decisions/sealed-sender-authenticated-transitional.md.
+                if BlockedContacts.isBlocked(resolvedSender, in: context) {
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    Log.info("SECURITY[block_drop]: suppressed message \(message.id.prefix(8))… from blocked \(resolvedSender.prefix(8))… (ratchet advanced; no store/notify/receipt)", category: "MessageRouter")
+                    continue
+                }
 
                 // DELIVERY_RECEIPT (content_type=14): intercept raw bytes before reassembler.
                 // The payload is either legacy JSON (starts with `{`) or binary proto (starts with 0x0A).
@@ -667,11 +677,12 @@ final class MessageRouter {
                 }
 
                 switch chunkReassembler.process(data: plaintext) {
-                case .assembled(let text, let quoted, let e2eMessageId, let mediaAlbum):
+                case .assembled(let text, let quoted, let e2eMessageId, let mediaAlbum, let storagePayload):
                     handleResolvedMessage(
                         text,
                         quotedMessage: quoted,
                         mediaAlbum: mediaAlbum,
+                        storagePayload: storagePayload,
                         e2eMessageId: e2eMessageId,
                         for: message,
                         from: otherUserId,
@@ -707,10 +718,11 @@ final class MessageRouter {
                     if let original = try? context.fetch(fetch).first {
                         let captionOrText = newText.text
                         if !captionOrText.isEmpty {
-                            if let rebuilt = MediaWireCodec.editedCaption(localJSON: original.decryptedContent, newCaption: captionOrText)?.localJSON {
-                                original.decryptedContent = rebuilt
+                            let stored = MessageDisplayCache.shared.payloadData(for: original)
+                            if let edited = MediaWireCodec.editedCaptionPayload(storedPlaintext: stored, newCaption: captionOrText) {
+                                original.applyStoredEncryption(plaintextData: edited.storagePayload, contactId: otherUserId)
                             } else {
-                                original.decryptedContent = captionOrText
+                                original.applyStoredEncryption(plaintext: captionOrText, contactId: otherUserId)
                             }
                         }
                         // Future: if newMedia populated, convert via MediaWireCodec + album wrapper here.
@@ -763,6 +775,17 @@ final class MessageRouter {
             }
         default: // .ping (and any other non-ready signal routed here)
             Log.info("SESSION_STATE[session_ping_received]: discarding session ping from \(otherUserId.prefix(8))…", category: "MessageRouter")
+            // A ping means the peer initiated and a RESPONDER session is established on our side,
+            // so stop buffering outgoing messages that were waiting for a session_ready.
+            SessionConfirmationTracker.shared.markConfirmed(otherUserId)
+            if let myId = AuthSessionManager.shared.currentUserId {
+                MessageRetryManager.shared.sendQueuedMessages(
+                    for: chat,
+                    recipientId: otherUserId,
+                    currentUserId: myId,
+                    context: context
+                )
+            }
         }
     }
 
@@ -770,6 +793,7 @@ final class MessageRouter {
         _ decryptedContent: String,
         quotedMessage: Shared_Proto_Messaging_V1_QuotedMessage?,
         mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage?,
+        storagePayload: Data? = nil,
         e2eMessageId: String?,
         for message: ChatMessage,
         from otherUserId: String,
@@ -784,29 +808,15 @@ final class MessageRouter {
             return
         }
 
-        // Silently discard session establishment pings received on the normal message path.
-        // These are sent after a tie-break win to trigger RESPONDER init on the peer.
-        // Legacy plaintext form; typed (content_type=25) form is handled before the reassembler.
-        if decryptedContent.hasPrefix("__session_ping") && decryptedContent.hasSuffix("__") {
-            handleSessionControlSignal(.ping, for: message, from: otherUserId, chat: chat, in: context)
-            return
-        }
-
-        // Silently discard binary-init sentinels — these appear when a legacy msgNum=0 payload
-        // couldn't be decoded as UTF-8. The session was established; there's nothing to display.
-        if decryptedContent.hasPrefix("__binary_init_") {
+        // Legacy plaintext control magic (typed content_type 24/25/26 handled pre-reassembler).
+        if SessionControlCodec.isBinaryInitSentinel(decryptedContent) {
             Log.info("SESSION_STATE[binary_init_discarded_normal_path]: discarding binary init sentinel from \(otherUserId.prefix(8))…", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
             return
         }
-
-        // Silently discard two-phase handshake confirmation signals.
-        // __session_ready_<UUID>__ is sent by the RESPONDER after initReceivingSession succeeds.
-        // Also handle legacy format without __ markers (older client versions).
-        // Typed (content_type=26) form is handled before the reassembler.
-        if decryptedContent.hasPrefix("__session_ready") || decryptedContent.hasPrefix("session_ready_") {
-            handleSessionControlSignal(.ready, for: message, from: otherUserId, chat: chat, in: context)
+        if let op = SessionControlCodec.legacyOp(plaintext: decryptedContent) {
+            handleSessionControlSignal(op, for: message, from: otherUserId, chat: chat, in: context)
             return
         }
 
@@ -837,7 +847,9 @@ final class MessageRouter {
         let canonicalId: String
         do {
             canonicalId = try saveMessage(for: chat, with: message, decryptedContent: decryptedContent,
-                                          quotedMessage: quotedMessage, e2eMessageId: e2eMessageId, in: context)
+                                          quotedMessage: quotedMessage, mediaAlbum: mediaAlbum,
+                                          storagePayload: storagePayload,
+                                          e2eMessageId: e2eMessageId, in: context)
             if let mediaAlbum {
                 MediaWireCodec.storeThumbnails(from: mediaAlbum, for: canonicalId)
             }
@@ -891,69 +903,24 @@ final class MessageRouter {
         for userId: String,
         in context: NSManagedObjectContext
     ) throws -> (Chat, Bool) {
-        let fetchRequest = Chat.fetchRequest()
-        let otherUserPredicate = NSPredicate(format: "otherUser.id == %@", userId)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [otherUserPredicate])
-
         do {
-            if let existingChat = try context.fetch(fetchRequest).first {
-                return (existingChat, false)
+            guard let result = try Chat.findOrCreate(
+                forUserId: userId,
+                in: context,
+                missingUserPolicy: .createContact
+            ) else {
+                // createContact never returns nil — defensive
+                throw NSError(
+                    domain: "MessageRouter",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "findOrCreateChat returned nil for \(userId)"]
+                )
             }
+            return (result.chat, result.created)
         } catch {
-            Log.error("Failed to fetch chat for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
+            Log.error("Failed to findOrCreate chat for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
             throw error
         }
-
-        // Create new user and chat
-        let user = try findOrCreateUser(for: userId, in: context)
-
-        let newChat = Chat(context: context)
-        newChat.id = UUID().uuidString
-        newChat.otherUser = user
-
-        return (newChat, true)
-    }
-    
-    /// Find or create user
-    /// - Parameters:
-    ///   - userId: User ID
-    ///   - context: Core Data context
-    /// - Returns: User entity
-    private func findOrCreateUser(
-        for userId: String,
-        in context: NSManagedObjectContext
-    ) throws -> User {
-        let userFetchRequest = User.fetchRequest()
-        let userIdPredicate = NSPredicate(format: "id == %@", userId)
-        var predicates: [NSPredicate] = [userIdPredicate]
-        if let existingPredicate = userFetchRequest.predicate {
-            predicates.insert(existingPredicate, at: 0)
-        }
-        userFetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
-
-        do {
-            if let existingUser = try context.fetch(userFetchRequest).first {
-                Log.debug("Using existing user: id=\(userId)", category: "MessageRouter")
-                return existingUser
-            }
-        } catch {
-            Log.error("Failed to fetch user \(userId.prefix(8))…: \(error)", category: "MessageRouter")
-            throw error
-        }
-
-        // Create new user with temporary username (will be updated from publicKeyBundle)
-        let newUser = User(context: context)
-        newUser.id = userId
-        newUser.username = ""
-        newUser.displayName = DisplayNameGenerator.generate(from: userId)
-        newUser.isSharingWithMe = false
-        newUser.isBlocked = false
-        newUser.amISharingWith = false
-        newUser.isContact = true
-        newUser.addedAt = Date()
-        
-        Log.debug("Created new user: id=\(userId)", category: "MessageRouter")
-        return newUser
     }
     
     // MARK: - First Message Handling
@@ -1081,7 +1048,7 @@ final class MessageRouter {
         let suiteId = Int(KeychainManager.shared.loadSessionSuiteId(userId: contactId) ?? 0)
 
         if role == "Initiator" {
-            // We are INITIATOR (higher deviceId) — WE WIN the tie-break.
+            // We are INITIATOR (higher userId — see SessionReducer.tieBreakRole) — WE WIN the tie-break.
             // The Rust session is already intact thanks to the DR snapshot/rollback.
             Log.info("SESSION_STATE[tie_break_win]: kept INITIATOR (my=\(myUserId.prefix(8))… > peer=\(contactId.prefix(8))…), suiteId=\(suiteId)", category: "SessionInit")
             PersistentACKStore.shared.markProcessed(message.id, senderId: contactId, in: context)
@@ -1516,9 +1483,23 @@ final class MessageRouter {
         with messageData: ChatMessage,
         decryptedContent: String,
         quotedMessage: Shared_Proto_Messaging_V1_QuotedMessage?,
+        mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage? = nil,
+        storagePayload incomingStorage: Data? = nil,
         e2eMessageId: String? = nil,
         in context: NSManagedObjectContext
     ) throws -> String {
+        // Prefer reassembler CTM1 (messageContent / mediaAlbum); fall back to album encode or UTF-8.
+        let storagePayload: Data = {
+            if let incomingStorage, !incomingStorage.isEmpty {
+                return incomingStorage
+            }
+            if let album = mediaAlbum {
+                return LocalMessagePayload.encodeMediaAlbum(album)
+            }
+            return LocalMessagePayload.encodeText(decryptedContent)
+        }()
+        let previewSource = LocalMessagePayload.decode(storagePayload).previewHint
+
         var canonicalId = (e2eMessageId ?? messageData.id).lowercased()
         let fetchRequest = Message.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", canonicalId)
@@ -1530,8 +1511,8 @@ final class MessageRouter {
                 // Update encrypted content if message wasn't previously decrypted
                 if !existingMessage.hasDecryptedContent {
                     Log.debug("Updating decrypted content for message \(canonicalId)", category: "MessageRouter")
-                    existingMessage.applyStoredEncryption(plaintext: decryptedContent, contactId: messageData.from)
-                    let preview = Chat.formatPreviewText(decryptedContent)
+                    existingMessage.applyStoredEncryption(plaintextData: storagePayload, contactId: messageData.from)
+                    let preview = Chat.formatPreviewText(previewSource)
                     if let currentLastTime = chat.lastMessageTime {
                         if existingMessage.timestamp >= currentLastTime || (chat.lastMessageText ?? "").isEmpty {
                             chat.lastMessageText = preview
@@ -1570,7 +1551,7 @@ final class MessageRouter {
         message.retryCount = 0
         message.chat = chat
 
-        message.applyStoredEncryption(plaintext: decryptedContent, contactId: messageData.from)
+        message.applyStoredEncryption(plaintextData: storagePayload, contactId: messageData.from)
 
         // Restore reply-to context so the receiver sees the same reply bubble as the sender.
         // Priority: QuotedMessage from proto plaintext (privacy-safe, no server visibility).
@@ -1593,7 +1574,7 @@ final class MessageRouter {
             }
         }
 
-        chat.lastMessageText = Chat.formatPreviewText(decryptedContent)
+        chat.lastMessageText = Chat.formatPreviewText(previewSource)
         chat.lastMessageTime = message.timestamp
         if InAppNotificationService.shared.activeChatId != chat.id {
             chat.unreadCount += 1
@@ -1621,7 +1602,7 @@ final class MessageRouter {
                             .flatMap { $0.isEmpty ? nil : $0 }
                         ?? chat.otherUser?.username
                         ?? "Unknown"
-        let preview   = Chat.formatPreviewText(decryptedContent)
+        let preview   = Chat.formatPreviewText(previewSource)
 
         switch floodResult {
         case .burstDetected(let count):
@@ -1717,6 +1698,9 @@ final class MessageRouter {
     }
 
     /// Save a decrypted SENDER_SYNC message as an outgoing bubble.
+    ///
+    /// Wire payload is the same binary path as a normal receive (KNST → MessageContent).
+    /// Local store uses CTM1 `storagePayload` when the reassembler provides it (C1c).
     private func saveSenderSyncMessage(
         _ decryptedBytes: Data,
         original: ChatMessage,
@@ -1732,52 +1716,76 @@ final class MessageRouter {
             return
         }
 
-        // Decode raw bytes through the binary pipeline (same as normal messages).
-        let decrypted: String
-        switch ChunkedMessageReassembler().process(data: decryptedBytes) {
-        case .assembled(let text, _, _, _):
-            decrypted = text
+        // Decode wire bytes through the same pipeline as inbound chat messages.
+        let storagePayload: Data
+        let previewText: String
+        let e2eRowId: String?
+        let mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage?
+
+        switch ChunkedMessageReassembler.shared.process(data: decryptedBytes) {
+        case .assembled(let text, _, let e2eId, let album, let storage):
+            e2eRowId = e2eId
+            mediaAlbum = album
+            if let storage, !storage.isEmpty {
+                storagePayload = storage
+                previewText = LocalMessagePayload.decode(storage).previewHint
+            } else {
+                storagePayload = LocalMessagePayload.encodeText(text)
+                previewText = text
+            }
+            // Control magic that arrived as legacy UTF-8 assembled text.
+            if SessionControlCodec.legacyOp(plaintext: text) != nil {
+                return
+            }
         case .legacy(let text):
-            decrypted = text
+            if SessionControlCodec.legacyOp(plaintext: text) != nil {
+                return
+            }
+            e2eRowId = nil
+            mediaAlbum = nil
+            storagePayload = LocalMessagePayload.encodeText(text)
+            previewText = text
         case .profile:
-            // A profile share synced from our own other device — never persist a placeholder.
-            // (Rendering it as an outgoing profile bubble on the synced device is not needed here.)
             Log.info("SENDER_SYNC: profile-share carrier, not persisting as text", category: "MessageRouter")
             return
         case .edit:
-            // edits shouldn't appear in SENDER_SYNC init carrier
-            Log.info("SENDER_SYNC: edit in init-carrier, ignoring", category: "MessageRouter")
+            Log.info("SENDER_SYNC: edit in sync payload, ignoring", category: "MessageRouter")
             return
-        case .incomplete, .invalid:
-            Log.info("SENDER_SYNC: could not decode init-carrier payload for \(partnerUserId.prefix(8))… — session established, no user content", category: "MessageRouter")
+        case .incomplete:
+            // Multi-chunk SENDER_SYNC: wait for remaining KNST fragments (same reassembler state).
+            Log.debug("SENDER_SYNC: chunk incomplete — waiting for more", category: "MessageRouter")
+            return
+        case .invalid:
+            Log.info(
+                "SENDER_SYNC: could not decode payload for \(partnerUserId.prefix(8))… — no user content",
+                category: "MessageRouter"
+            )
             return
         }
 
-        // Discard session control signals — they carry no user-visible content.
-        // Typed (content_type 24/25/26) first, then legacy plaintext fallback.
+        // Typed session-control content types (should not appear as SENDER_SYNC body).
         if SessionControlCodec.op(forContentType: Int(original.contentType)) != nil {
             return
         }
-        if decrypted.hasPrefix("__session_ping") || decrypted.hasPrefix("__session_reset_init")
-            || decrypted.hasPrefix("__session_ready") || decrypted.hasPrefix("session_ready_")
-        {
-            return
-        }
+
+        // Canonical row id: E2E id from KNST when present, else strip multi-device wire suffixes
+        // (`-ss-…`, `-ss-…-cN`) so edits/receipts still match the originating device's message id.
+        let rowId = Self.senderSyncRowId(e2eMessageId: e2eRowId, wireMessageId: original.id)
 
         let fetch = Message.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@", original.id)
+        fetch.predicate = NSPredicate(format: "id ==[c] %@", rowId)
         fetch.fetchLimit = 1
         do {
             if try context.fetch(fetch).first != nil {
-                return // already saved (duplicate delivery)
+                return // already saved (duplicate delivery / other chunk path)
             }
         } catch {
-            Log.error("SENDER_SYNC: failed to deduplicate message \(original.id.prefix(8))…: \(error)", category: "MessageRouter")
+            Log.error("SENDER_SYNC: failed to deduplicate message \(rowId.prefix(8))…: \(error)", category: "MessageRouter")
             return
         }
 
         let msg = Message(context: context)
-        msg.id = original.id
+        msg.id = rowId
         msg.fromUserId = original.from
         msg.toUserId = partnerUserId
         msg.timestamp = Date(timeIntervalSince1970: TimeInterval(original.timestamp))
@@ -1786,9 +1794,12 @@ final class MessageRouter {
         msg.retryCount = 0
         msg.chat = chat
 
-        msg.applyStoredEncryption(plaintext: decrypted, contactId: partnerUserId)
+        msg.applyStoredEncryption(plaintextData: storagePayload, contactId: partnerUserId)
+        if let mediaAlbum {
+            MediaWireCodec.storeThumbnails(from: mediaAlbum, for: rowId)
+        }
 
-        chat.lastMessageText = Chat.formatPreviewText(decrypted)
+        chat.lastMessageText = Chat.formatPreviewText(previewText)
         chat.lastMessageTime = msg.timestamp
         context.saveAndLog()
 
@@ -1798,6 +1809,19 @@ final class MessageRouter {
             )
         }
         Log.info("SENDER_SYNC: saved outgoing message in conversation with \(partnerUserId.prefix(8))…", category: "MessageRouter")
+    }
+
+    /// Map SENDER_SYNC wire id → local row id (E2E id preferred).
+    private static func senderSyncRowId(e2eMessageId: String?, wireMessageId: String) -> String {
+        if let e2eMessageId, !e2eMessageId.isEmpty {
+            return e2eMessageId.lowercased()
+        }
+        var id = wireMessageId.lowercased()
+        // Strip `-ss-<device>` and optional `-cN` chunk suffix used by MultiDeviceSendCoordinator.
+        if let range = id.range(of: "-ss-") {
+            id = String(id[..<range.lowerBound])
+        }
+        return id
     }
 
     /// Async helper: fetch sender device bundle, init receiving session, then save.
@@ -1838,6 +1862,31 @@ final class MessageRouter {
         } catch {
             Log.error("SENDER_SYNC: initReceivingSession failed for \(contactId.prefix(20))…: \(error)", category: "MessageRouter")
         }
+    }
+}
+
+/// Client-side block enforcement lookup.
+///
+/// Under Ghost Mode (sealed sender) the server cannot see the sender of a sealed message,
+/// so it does NOT apply server-side block/ban on the default send path — the sealed branch
+/// returns before the block check (construct-server messaging-service/grpc.rs). Blocking is
+/// therefore enforced client-side, by dropping incoming messages from blocked contacts AFTER
+/// they are unsealed/decrypted (the ratchet still advances, so unblocking resumes cleanly).
+/// This is the load-bearing block mechanism and the shape the unauthenticated sealed-sender
+/// endgame requires — the server can never enforce it there.
+///
+/// See: construct-docs/decisions/sealed-sender-authenticated-transitional.md
+enum BlockedContacts {
+    /// Whether `userId` is a blocked contact in the given context. Cheap indexed count on the
+    /// `User` entity; safe on the incoming-message hot path. Empty/unknown ids → not blocked
+    /// (fail-open: a block is a user-initiated suppression, not a boundary whose lookup failure
+    /// should drop legitimate traffic).
+    static func isBlocked(_ userId: String, in context: NSManagedObjectContext) -> Bool {
+        guard !userId.isEmpty else { return false }
+        let fetch = User.fetchRequest()
+        fetch.predicate = NSPredicate(format: "id == %@ AND isBlocked == YES", userId)
+        fetch.fetchLimit = 1
+        return ((try? context.count(for: fetch)) ?? 0) > 0
     }
 }
 

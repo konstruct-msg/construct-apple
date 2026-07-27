@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import CoreData
 import GRPCCore
 import GRPCNIOTransportHTTP2
 import SwiftProtobuf
@@ -18,6 +19,64 @@ final class MessagingServiceClient: Sendable {
     static let shared = MessagingServiceClient()
 
     private init() {}
+
+    /// Builds the outgoing message envelope.
+    ///
+    /// Extracted from `sendMessage` so the sealed-sender invariant is unit-testable without a live
+    /// gRPC channel. **Invariant:** a sealed send (non-empty `sealedInnerBytes`) MUST NOT populate
+    /// `sender`, `conversationID`, or `contentType` on the outer envelope — those are exactly the
+    /// metadata sealed sender hides (the real content_type travels inside `SealedInner`). The
+    /// identified fields are set ONLY on the non-sealed path. Empty sealed bytes are treated as
+    /// identified (never silently drop the sender).
+    static func buildEnvelope(
+        messageId: String,
+        recipientId: String,
+        senderId: String,
+        conversationId: String,
+        encryptedPayload: Data,
+        timestamp: UInt64,
+        senderDeviceId: String?,
+        recipientDeviceId: String?,
+        contentType: Shared_Proto_Core_V1_ContentType,
+        sealedInnerBytes: Data?
+    ) -> Shared_Proto_Core_V1_Envelope {
+        var recipient = Shared_Proto_Core_V1_UserId()
+        recipient.userID = recipientId
+
+        var envelope = Shared_Proto_Core_V1_Envelope()
+        envelope.messageID = messageId
+        envelope.recipient = recipient
+        envelope.encryptedPayload = encryptedPayload
+        envelope.timestamp = Int64(timestamp)
+
+        if let sealedInner = sealedInnerBytes, !sealedInner.isEmpty {
+            // STEALTH (stealth-sealed-sender-v2 Phase 3): do not populate sender, conversation_id,
+            // or the real content_type on the outer envelope — the real content_type travels inside
+            // SealedInner (see StealthSenderService.buildSealedInner) and is recovered by the
+            // recipient after unsealing.
+            var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
+            sealedEnvelope.sealedInner = sealedInner
+            envelope.sealedSender = sealedEnvelope
+        } else {
+            var sender = Shared_Proto_Core_V1_UserId()
+            sender.userID = senderId
+            envelope.sender = sender
+            envelope.conversationID = conversationId
+            envelope.contentType = contentType
+        }
+
+        if let senderDeviceId, !senderDeviceId.isEmpty {
+            var senderDevice = Shared_Proto_Core_V1_DeviceId()
+            senderDevice.deviceID = senderDeviceId
+            envelope.senderDevice = senderDevice
+        }
+        if let recipientDeviceId, !recipientDeviceId.isEmpty {
+            var recipientDevice = Shared_Proto_Core_V1_DeviceId()
+            recipientDevice.deviceID = recipientDeviceId
+            envelope.recipientDevice = recipientDevice
+        }
+        return envelope
+    }
 
     // MARK: - Send Message (replaces MessagingAPI.sendMessage)
 
@@ -44,42 +103,18 @@ final class MessagingServiceClient: Sendable {
         return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
-            var sender = Shared_Proto_Core_V1_UserId()
-            sender.userID = senderId
-
-            var recipient = Shared_Proto_Core_V1_UserId()
-            recipient.userID = recipientId
-
-            var envelope = Shared_Proto_Core_V1_Envelope()
-            envelope.messageID = messageId
-            envelope.recipient = recipient
-            envelope.encryptedPayload = encryptedPayload
-            envelope.timestamp = Int64(timestamp)
-
-            if let sealedInner = sealedInnerBytes, !sealedInner.isEmpty {
-                // STEALTH (stealth-sealed-sender-v2 Phase 3): do not populate sender,
-                // conversation_id, or the real content_type on the outer envelope — the
-                // real content_type travels inside SealedInner (see StealthSenderService.
-                // buildSealedInner) and is recovered by the recipient after unsealing.
-                var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
-                sealedEnvelope.sealedInner = sealedInner
-                envelope.sealedSender = sealedEnvelope
-            } else {
-                envelope.sender = sender
-                envelope.conversationID = conversationId
-                envelope.contentType = contentType
-            }
-
-            if let senderDeviceId, !senderDeviceId.isEmpty {
-                var senderDevice = Shared_Proto_Core_V1_DeviceId()
-                senderDevice.deviceID = senderDeviceId
-                envelope.senderDevice = senderDevice
-            }
-            if let recipientDeviceId, !recipientDeviceId.isEmpty {
-                var recipientDevice = Shared_Proto_Core_V1_DeviceId()
-                recipientDevice.deviceID = recipientDeviceId
-                envelope.recipientDevice = recipientDevice
-            }
+            let envelope = Self.buildEnvelope(
+                messageId: messageId,
+                recipientId: recipientId,
+                senderId: senderId,
+                conversationId: conversationId,
+                encryptedPayload: encryptedPayload,
+                timestamp: timestamp,
+                senderDeviceId: senderDeviceId,
+                recipientDeviceId: recipientDeviceId,
+                contentType: contentType,
+                sealedInnerBytes: sealedInnerBytes
+            )
 
             let attemptId = UUID().uuidString.lowercased()
 
@@ -225,50 +260,95 @@ final class MessagingServiceClient: Sendable {
         resetReason: Shared_Proto_Messaging_V1_SessionResetReason = .unspecified
     ) async throws -> EndSessionResponse {
         let myUserId = await MainActor.run { AuthSessionManager.shared.currentUserId } ?? ""
-        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession) { grpcClient in
-            let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
+        let messageId = UUID().uuidString
 
-            let messageId = UUID().uuidString
+        // Control payload: typed SessionControl when a reason is set, else the legacy 16-byte
+        // sentinel (server validates the payload is non-empty either way). No nonce: END_SESSION
+        // dedup is by message id/timestamp, and omitting it keeps the payload tiny.
+        let controlPayload: Data
+        if resetReason != .unspecified {
+            var control = Shared_Proto_Messaging_V1_SessionControl()
+            control.op = .end
+            control.reason = resetReason
+            controlPayload = (try? control.serializedData()).flatMap { $0.isEmpty ? nil : $0 } ?? Data(count: 16)
+        } else {
+            controlPayload = Data(count: 16)
+        }
 
-            var sender = Shared_Proto_Core_V1_UserId()
-            sender.userID = myUserId
-
-            var recipient = Shared_Proto_Core_V1_UserId()
-            recipient.userID = recipientId
-
-            var envelope = Shared_Proto_Core_V1_Envelope()
-            envelope.messageID = messageId
-            envelope.sender = sender
-            envelope.recipient = recipient
-            envelope.contentType = .sessionReset
-            envelope.timestamp = Int64(Date().timeIntervalSince1970)
-            // Carry a typed reason hint when one is set; otherwise keep the legacy 16-byte
-            // sentinel (server validates the payload is non-empty either way).
-            if resetReason != .unspecified {
-                var control = Shared_Proto_Messaging_V1_SessionControl()
-                control.op = .end
-                control.reason = resetReason
-                // No nonce: END_SESSION dedup is by message id/timestamp, and omitting it
-                // keeps the payload tiny (< headerSize) for the receiver's size heuristic.
-                envelope.encryptedPayload = (try? control.serializedData()).flatMap { $0.isEmpty ? nil : $0 } ?? Data(count: 16)
-            } else {
-                envelope.encryptedPayload = Data(count: 16)
+        // Stealth: seal END_SESSION like a message body — the real content type (.sessionReset)
+        // rides inside SealedInner and is recovered on receive, so the outer envelope leaks no
+        // sender. Sealing is X25519 cert-based, independent of the (possibly broken) DR session, so
+        // it works during teardown. Fail-closed under stealth-on: never emit an identified
+        // END_SESSION (decisions/sealed-sender-session-control-channel.md). If we can't seal, the
+        // peer recovers via its own decrypt-fail path — anonymity over an eager teardown signal.
+        func resolveRecipientIK() async -> Data? {
+            await MainActor.run {
+                StealthSenderService.recipientIdentityKey(
+                    recipientId: recipientId,
+                    context: PersistenceController.shared.container.viewContext
+                )
             }
-
-            var request = Shared_Proto_Services_V1_SendMessageRequest()
-            request.message = envelope
-            request.idempotencyKey = messageId
-
-            let response = try await msgClient.sendMessage(
-                request: .init(message: request)
-            )
-
-            return EndSessionResponse(
-                status: response.success ? "ok" : "failed",
-                messageId: response.messageID,
-                type: "END_SESSION"
+        }
+        var sealedInner: Data? = nil
+        if await StealthPolicy.shared.shouldUseSealedSender() {
+            guard let recipientIK = await resolveRecipientIK() else {
+                throw StealthDowngradeBlocked(reason: "no recipient identity key for END_SESSION → \(recipientId.prefix(8))…")
+            }
+            sealedInner = try await StealthSenderService.buildSealedInner(
+                recipientUserId: recipientId,
+                recipientIdentityKey: recipientIK,
+                encryptedPayload: controlPayload,
+                contentType: .sessionReset
             )
         }
+
+        let sendOnce: (Data?) async throws -> EndSessionResponse = { inner in
+            try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession) { grpcClient in
+                let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
+
+                let envelope = Self.buildEnvelope(
+                    messageId: messageId,
+                    recipientId: recipientId,
+                    senderId: myUserId,
+                    conversationId: ConversationId.direct(myUserId: myUserId, theirUserId: recipientId),
+                    encryptedPayload: controlPayload,
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    senderDeviceId: nil,
+                    recipientDeviceId: nil,
+                    contentType: .sessionReset,
+                    sealedInnerBytes: inner
+                )
+
+                var request = Shared_Proto_Services_V1_SendMessageRequest()
+                request.message = envelope
+                request.idempotencyKey = messageId
+
+                let response = try await msgClient.sendMessage(
+                    request: .init(message: request)
+                )
+
+                return EndSessionResponse(
+                    status: response.success ? "ok" : "failed",
+                    messageId: response.messageID,
+                    type: "END_SESSION"
+                )
+            }
+        }
+
+        // Sealed path gets the same one-shot Privacy-Pass enforce recovery as message bodies
+        // (rebuild = fresh token + delivery tag around the same control payload).
+        if let sealedInner {
+            return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+                guard let ik = await resolveRecipientIK() else { return nil }
+                return try await StealthSenderService.buildSealedInner(
+                    recipientUserId: recipientId,
+                    recipientIdentityKey: ik,
+                    encryptedPayload: controlPayload,
+                    contentType: .sessionReset
+                )
+            }, send: sendOnce)
+        }
+        return try await sendOnce(nil)
     }
 
     // MARK: - Get Pending Messages (for background fetch)

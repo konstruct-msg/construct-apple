@@ -19,7 +19,7 @@ struct ProfileShareBubbleView: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: CTLayout.chromeGap) {
             // Avatar
             if let avatarData = profileData.avatarData,
                let imageData = Data(base64Encoded: avatarData),
@@ -46,15 +46,22 @@ struct ProfileShareBubbleView: View {
                     .lineLimit(1)
 
                 Text(LocalizedStringKey("shared_profile"))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.regular(ChatUIConstants.Typography.systemSize))
                     .foregroundColor(Color.CT.textDim)
             }
 
             Spacer(minLength: 0)
         }
-        .padding(10)
+        .padding(ChatUIConstants.Bubble.horizontalPadding)
         .background(CTMessageBubbleTheme.incomingBackground)
-        .ctNoiseBorder()
+        // Control radius — not Capsule: tall content would oval-clip like voice+transcript.
+        .clipShape(CTShape.control())
+        .overlay(
+            CTShape.control().stroke(
+                Color.CT.noise,
+                lineWidth: ChatUIConstants.Bubble.strokeWidth
+            )
+        )
     }
 }
 

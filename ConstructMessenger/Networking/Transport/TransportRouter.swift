@@ -48,6 +48,12 @@ actor TransportRouter {
     private var transitionLog: [TransitionLogEntry] = []
     private let transitionLogCapacity = 200
     private var cooldownTask: Task<Void, Never>?
+    /// Bumps on every `requestProxyStart` / `requestProxyStop` so a late
+    /// `proxyStarted` from a superseded or cancelled start is not adopted.
+    private var proxyStartGeneration: UInt64 = 0
+    /// In-flight proxy start. Kept so stop can cancel the Swift Task; Rust
+    /// `veil_stop` still runs via the effector for the actual abort.
+    private var proxyStartTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -117,11 +123,13 @@ actor TransportRouter {
         // before any external observer (e.g. the next RPC) reads it.
         await applySync(effects)
 
-        // Asynchronous follow-ups. A proxy-start request triggers an async dance with
-        // the proxy effector; we feed the outcome back into the router via `send`.
+        // Proxy start runs OFF the router actor. Awaiting `veil_start` here used to
+        // freeze the entire FSM for the full probe (8s+ network, previously +30s
+        // internal Rust cooldown) — mode changes, path changes, and RPC outcomes
+        // piled up on the actor, and the UI stuck on `veil-probing` for minutes
+        // under iOS suspension (device heat log 2026-07-21).
         if effects.contains(.requestProxyStart) {
-            let outcomeEvent = await proxyEffector.start()
-            await send(outcomeEvent)
+            beginProxyStart()
         }
     }
 
@@ -132,9 +140,48 @@ actor TransportRouter {
         Log.info("Transport: bootstrap (state=\(state.shortLabel))", category: "Transport")
         if case .veilProbing = state {
             // Reducer.initial(...) put us in probing; fire the initial proxy start.
-            let outcome = await proxyEffector.start()
-            await send(outcome)
+            beginProxyStart()
         }
+    }
+
+    // MARK: - Proxy start (non-blocking)
+
+    /// Start (or restart) the VEIL proxy without blocking the router actor.
+    private func beginProxyStart() {
+        proxyStartTask?.cancel()
+        proxyStartGeneration &+= 1
+        let generation = proxyStartGeneration
+        // Capture the effector so the Task does not re-enter this actor for the
+        // whole duration of `veil_start` (which would re-serialize the FSM freeze).
+        let effector = proxyEffector
+        Log.info("Transport: proxy start gen=\(generation) (async)", category: "Transport")
+        proxyStartTask = Task { [weak self] in
+            let outcome = await effector.start()
+            await self?.finishProxyStart(generation: generation, outcome: outcome)
+        }
+    }
+
+    /// Adopt a proxy-start outcome only if it still matches the latest generation.
+    private func finishProxyStart(generation: UInt64, outcome: TransportEvent) async {
+        guard generation == proxyStartGeneration else {
+            // Superseded by stop or a newer start. If this attempt still brought a
+            // proxy up, tear it down so we don't leak a listening socket.
+            if case .proxyStarted = outcome {
+                Log.info(
+                    "Transport: stale proxy start gen=\(generation) (current=\(proxyStartGeneration)) — stopping stray proxy",
+                    category: "Transport"
+                )
+                await proxyEffector.stop()
+            } else {
+                Log.info(
+                    "Transport: ignoring stale proxy outcome gen=\(generation) (current=\(proxyStartGeneration))",
+                    category: "Transport"
+                )
+            }
+            return
+        }
+        proxyStartTask = nil
+        await send(outcome)
     }
 
     /// Snapshot of the current state and recent transitions for diagnostics / support.
@@ -167,13 +214,17 @@ actor TransportRouter {
 
             case .requestProxyStop:
                 cancelCooldownTimer()
+                // Invalidate any in-flight start so its eventual proxyStarted is dropped.
+                proxyStartGeneration &+= 1
+                proxyStartTask?.cancel()
+                proxyStartTask = nil
                 await proxyEffector.stop()
 
             case .scheduleCooldownEnd(let date):
                 scheduleCooldown(at: date)
 
             case .requestProxyStart:
-                // Handled as an async follow-up in `send`.
+                // Handled as an async follow-up in `send` via `beginProxyStart()`.
                 break
             }
         }
@@ -238,6 +289,31 @@ enum ConnectionLoopRelayBridge {
     /// independent of ConnectionLoop. Once ConnectionLoop is deleted in Chunk 3 this
     /// becomes the canonical implementation.
     private static func buildRelay(address: String, bridgeCert: String) -> VeilRelay {
+        // EntryDirectory Source 3: a LAN-discovered island relay. Its identity was already
+        // trust-gated by VeilLocalDiscovery (advertised SPKI matched a seed pin or a signed-
+        // manifest pin), so we build it directly from the trust-gated fields — with the pin
+        // ALWAYS applied. Handled as an explicit first case so the anti-redirection invariant
+        // never depends on the SNI-coupled resolution below (which drops the pin when no SNI
+        // is known). The discovered address is new by definition, so it appears in neither the
+        // server manifest cache nor the hardcoded seed maps.
+        if let disc = DiscoveredRelayStore.shared.relay(for: address) {
+            let host = address.components(separatedBy: ":").first.flatMap { $0.isEmpty ? nil : $0 }
+            return VeilRelay(
+                address: address,
+                bridgeCert: "",
+                iatMode: .enabled,
+                tlsServerName: disc.sni ?? host,
+                pinnedSpki: disc.spki,
+                wtPath: disc.wtPath,
+                wtHostHeader: nil,
+                alternativeSNIs: [],
+                manifestId: nil,
+                veilFrontTicket: VeilTicketStore.ticket(for: address),
+                veilCapabilityV2: VeilCapabilityV2Store.capability(for: address),
+                veilSkHex: VeilAccessKeyStore.shared.veilSkHex
+            )
+        }
+
         let resolvedCert = VeilCertFetcher.bridgeCertSync(for: address) ?? bridgeCert
         let serverPushedSNI = VeilCertFetcher.sniSync(for: address)
         let hardcodedSNI    = VEILConfig.hardcodedRelaySNIs[address]

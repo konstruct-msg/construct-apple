@@ -26,6 +26,10 @@ struct ChatView: View {
     @State private var replyQuoteText: String? = nil
     /// Message opened for "Quote & Reply" selection sheet.
     @State private var quotingMessage: Message? = nil
+    /// Soft reply focus — lowercased message ids that stay full-opacity; others dim.
+    /// Empty = idle chat (no visual change). See ``ChatUIConstants.ReplyFocus``.
+    @State private var replyFocusIds: Set<String> = []
+    @State private var replyFocusPeekTask: Task<Void, Never>?
     @State private var showingUserProfile = false
     @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
 
@@ -46,29 +50,34 @@ struct ChatView: View {
     @State private var contactKTStatus: KTStatus = .unverified
     /// True when the session with this contact was established via a degraded (stale-SPK) init.
     @State private var isSessionAtRisk = false
+    /// Safety Numbers sheet after key-change "Verify".
+    @State private var showingSafetyNumbers = false
 
-    @State private var containerWidth: CGFloat = 390
+    @State private var containerWidth: CGFloat = ChatUIConstants.Bubble.defaultContainerWidth
     /// Current height of the bottom composer (safeAreaInset). Tracked so we can re-pin the
     /// scroll when it changes — see the composer's `.onGeometryChange` below.
     @State private var composerHeight: CGFloat = 0
+    /// False until the multi-pass open pin finishes — during this window all auto-scrolls
+    /// stay non-animated so LazyVStack does not dematerialize into a blank list.
+    @State private var didStabilizeInitialScroll = false
 
     private enum Layout {
-        static let composerHorizontalPadding: CGFloat = 8
-        static let composerBottomPadding: CGFloat = 8
-        static let messageBottomClearance: CGFloat = 12
+        static let composerHorizontalPadding = ChatUIConstants.Shell.composerHorizontalPadding
+        static let composerBottomPadding = ChatUIConstants.Shell.composerBottomPadding
+        static let messageBottomClearance = ChatUIConstants.Shell.messageBottomClearance
         /// Extra band below the status-bar safe area (≈ nav capsule height + margin) covered
         /// by the top scrim so scrolling text blurs/fades before it reaches the clock & signal.
-        static let topScrimUnderSafeArea: CGFloat = CTLayout.navBarHeight + 24
+        static let topScrimUnderSafeArea = ChatUIConstants.Shell.topScrimUnderSafeArea
     }
 
     /// Combined scroll metrics so a single `onScrollGeometryChange` drives both
     /// offset tracking and container width (two modifiers caused multi-update-per-frame).
     private struct ChatScrollGeometry: Equatable {
-        var offsetFromBottom: CGFloat
+        /// Points of content below the visible rect (0 ≈ at bottom). Uses `visibleRect`,
+        /// not the inset-blind `contentOffset + container − contentSize` formula.
+        var distanceFromBottom: CGFloat
         var width: CGFloat
         /// Content shorter than the viewport ⇒ nothing to jump to — the FAB must never show.
-        /// Also guards against spurious negative offsets produced mid keyboard/layout animation
-        /// in short chats (contentOffset and containerSize change in different frames).
         var contentFits: Bool
     }
 
@@ -93,7 +102,7 @@ struct ChatView: View {
             // Message list — base layer, scrolls underneath the floating capsules
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: ChatUIConstants.Shell.listSpacing) {
                         // Load more indicator at TOP of list (oldest messages)
                         if viewModel.hasMoreMessages && !renderedMessages.isEmpty {
                             HStack {
@@ -106,9 +115,9 @@ struct ChatView: View {
                                         viewModel.loadMoreMessages()
                                     } label: {
                                         Text(NSLocalizedString("load_older_messages", comment: "Load older messages button"))
-                                            .font(CTFont.regular(12))
+                                            .font(CTFont.regular(ChatUIConstants.Typography.captionSize))
                                             .foregroundColor(Color.CT.accentDim)
-                                            .padding(.vertical, 8)
+                                            .padding(.vertical, ChatUIConstants.Shell.listSpacing)
                                     }
                                 }
                                 Spacer()
@@ -135,6 +144,7 @@ struct ChatView: View {
                                     onReply: { msg in
                                         replyingTo = msg
                                         replyQuoteText = nil
+                                        setComposeReplyFocus(messageId: msg.id)
                                     },
                                     onDelete: { msg in
                                         viewModel.deleteMessage(msg)
@@ -150,17 +160,25 @@ struct ChatView: View {
                                         }
                                         selectedMessages.insert(msg.id)
                                     },
-                                    onTapMedia: { msg in
-                                        galleryStartItem = GalleryStartItem(id: msg.id)
+                                    onTapMedia: { msg, itemIndex in
+                                        galleryStartItem = GalleryStartItem(id: msg.id, itemIndex: itemIndex)
                                     },
                                     onEdit: { msg in
                                         viewModel.editingMessage = msg
                                     },
                                     onReplyWithQuote: { msg, _ in
                                         quotingMessage = msg
+                                    },
+                                    onJumpToReply: { msg in
+                                        peekReplyChain(for: msg)
                                     }
                                 )
                                 .id(message.id)
+                                .opacity(replyFocusOpacity(for: message))
+                                .animation(
+                                    .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
+                                    value: replyFocusIds
+                                )
 
                                 // Add spacing after each message
                                 if index < renderedMessages.count - 1 {
@@ -179,7 +197,7 @@ struct ChatView: View {
                             .id("bottom")
                     }
                     // Top space for floating nav capsule (+ call mini-bar when a call is active).
-                    .padding(.top, 70 + callBarInset)
+                    .padding(.top, ChatUIConstants.Shell.scrollContentTopPad + callBarInset)
                     .padding(.horizontal)
                 }
                 .background(Color.CT.bg) // base under glass
@@ -190,13 +208,19 @@ struct ChatView: View {
                     hideKeyboard()
                 }
                 .onScrollGeometryChange(for: ChatScrollGeometry.self) { geo in
-                    ChatScrollGeometry(
-                        offsetFromBottom: geo.contentOffset.y + geo.containerSize.height - geo.contentSize.height,
+                    // visibleRect is in content coordinates and already reflects safeAreaInset
+                    // (composer). Subtracting maxY from content height is the true "how far up".
+                    let distance = geo.contentSize.height - geo.visibleRect.maxY
+                    return ChatScrollGeometry(
+                        distanceFromBottom: distance,
                         width: geo.containerSize.width,
-                        contentFits: geo.contentSize.height <= geo.containerSize.height
+                        contentFits: geo.contentSize.height <= geo.visibleRect.height + 8
                     )
                 } action: { _, metrics in
-                    scrollManager.updateScrollOffset(metrics.offsetFromBottom, contentFits: metrics.contentFits)
+                    scrollManager.updateScrollOffset(
+                        distanceFromBottom: metrics.distanceFromBottom,
+                        contentFits: metrics.contentFits
+                    )
                     // Ignore zero-width passes during mid-layout; avoid thrashing on sub-pixel noise.
                     if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
                         containerWidth = metrics.width
@@ -206,20 +230,21 @@ struct ChatView: View {
                     scrollManager.registerProxy(proxy)
                     LocalNotificationManager.shared.clearBadge()
                     scrollManager.hasScrolledToBottom = true
-                    // .defaultScrollAnchor(.bottom) alone occasionally lands the initial
-                    // layout out of range (composer inset applied after first content pass),
-                    // leaving the list blank until a scroll event — the "opens empty then
-                    // scrolls in from nowhere" symptom. Force a valid bottom offset once the
-                    // first content pass has rendered. Non-animated so it never flashes in.
-                    if !renderedMessages.isEmpty {
+                    didStabilizeInitialScroll = false
+                    // .defaultScrollAnchor(.bottom) + LazyVStack + composer safeAreaInset often
+                    // lands the first offset out of range → blank list until a gesture.
+                    // Multi-pass non-animated pin covers inset settle and FRC load-more churn.
+                    if !renderedMessages.isEmpty || !viewModel.messages.isEmpty {
+                        scrollManager.pinToBottomCorrective()
                         Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(60))
-                            guard scrollManager.shouldScrollToBottom else { return }
-                            scrollManager.scrollToBottom(animated: false)
+                            try? await Task.sleep(for: .milliseconds(400))
+                            didStabilizeInitialScroll = true
                         }
+                    } else {
+                        didStabilizeInitialScroll = true
                     }
                 }
-                .onChange(of: viewModel.messages.count) { _, count in
+                .onChange(of: viewModel.messages.count) { oldCount, count in
                     if AppConstants.enableDebugLogging {
                         Log.info("ChatView: messages count changed to \(count)")
                     }
@@ -227,14 +252,24 @@ struct ChatView: View {
                     // Auto-scroll when new messages arrive — only if user is at the bottom.
                     // `shouldScrollToBottom` is automatically managed by ChatScrollManager
                     // based on scroll position, so this won't fight the user reading history.
-                    if scrollManager.shouldScrollToBottom && !isSearchActive && !viewModel.messages.isEmpty {
-                        let delay = ChatViewConstants.MessageDelay.mediaRender
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .seconds(delay))
-                            // Use the virtual bottom anchor so the last real message ends up
-                            // visually above the composer inset.
-                            scrollManager.scrollToBottom()
-                        }
+                    guard scrollManager.shouldScrollToBottom, !isSearchActive, count > 0 else { return }
+
+                    // Opening path: FRC 0→N or N→N+loadMore — corrective pin only.
+                    // Animated scroll here was a top contributor to the empty-first-paint bug.
+                    if !didStabilizeInitialScroll || oldCount == 0 {
+                        scrollManager.pinToBottomCorrective(delaysMs: [0, 80, 200])
+                        return
+                    }
+
+                    // Never auto-scroll on a count *drop* (FRC thrash in logs: 83→51→67…).
+                    // That path animated to bottom while LazyVStack dematerialized → black flash.
+                    guard count > oldCount else { return }
+
+                    let delay = ChatViewConstants.MessageDelay.mediaRender
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(delay))
+                        guard scrollManager.shouldScrollToBottom else { return }
+                        scrollManager.scrollToBottom(animated: true)
                     }
                 }
                 .onChange(of: viewModel.voicePlaybackScrollTarget) { _, target in
@@ -338,12 +373,14 @@ struct ChatView: View {
 
             // === Floating capsule glass panels (Apple capsulization) ===
             // Top: nav + banners (capsule style)
-            VStack(spacing: 8) {
+            VStack(spacing: ChatUIConstants.Shell.floatingChromeSpacing) {
                 chatNavBar
-                    .padding(.horizontal, 8)
-                    .padding(.top, 4 + callBarInset)
+                    .padding(.horizontal, ChatUIConstants.Shell.floatingChromeHorizontal)
+                    .padding(.top, ChatUIConstants.Shell.floatingChromeTop + callBarInset)
 
                 floodBurstBanner
+
+                keyChangeBanner
 
                 atRiskBanner
 
@@ -380,14 +417,21 @@ struct ChatView: View {
                     // asynchronously, so its height settles in several steps — we pin on this
                     // event and once more after a short delay to catch the final height.
                     guard newHeight.isFinite, newHeight >= 0 else { return }
-                    let changed = abs(newHeight - composerHeight) > 1
+                    // Ignore sub-point thrash from keyboard/glass; large jumps only (reply bar,
+                    // media strip, multiline growth) need a re-pin.
+                    let changed = abs(newHeight - composerHeight) > 8
                     composerHeight = newHeight
-                    if changed && scrollManager.shouldScrollToBottom {
-                        scrollManager.scrollToBottom(animated: false)
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(120))
-                            guard scrollManager.shouldScrollToBottom else { return }
-                            scrollManager.scrollToBottom(animated: false)
+                    if changed {
+                        if scrollManager.shouldScrollToBottom {
+                            // Reply/edit/media growth must re-pin without animation (same black-flash path).
+                            // Fewer passes — pinTask coalesces concurrent height events.
+                            scrollManager.pinToBottomCorrective(delaysMs: [0, 120])
+                        } else if let anchorId = (replyingTo ?? viewModel.editingMessage)?.id {
+                            // Reading history and starting a reply/edit: the bar grew the bottom
+                            // inset. Without a corrective the LazyVStack dematerializes into a
+                            // blank list ("chat disappears"). Re-pin around the targeted message
+                            // instead of the bottom — keeps it visible without yanking the reader.
+                            scrollManager.scrollTo(messageId: anchorId, anchor: .center, animated: false)
                         }
                     }
                 }
@@ -418,10 +462,20 @@ struct ChatView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+        .sheet(isPresented: $showingSafetyNumbers) {
+            if let user = viewModel.chat.otherUser,
+               let deviceId = KeyChangeUX.safetyDeviceId(for: user) {
+                SafetyNumberView(
+                    theirDeviceId: deviceId,
+                    theirDisplayName: user.resolvedDisplayName
+                )
+            }
+        }
         .sheet(item: $quotingMessage) { msg in
             QuoteSelectionSheet(message: msg) { selectedQuote in
                 replyingTo = msg
                 replyQuoteText = selectedQuote
+                setComposeReplyFocus(messageId: msg.id)
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -441,7 +495,8 @@ struct ChatView: View {
         .fullScreenCover(item: $galleryStartItem) { item in
                 MediaGalleryViewer(
                     messages: mediaMessages(in: renderedMessages),
-                    initialMessageId: item.id,
+                    initialMessageId: item.messageId,
+                    initialItemIndex: item.itemIndex,
                     isPresented: Binding(
                     get: { galleryStartItem != nil },
                     set: { if !$0 { galleryStartItem = nil } }
@@ -476,6 +531,25 @@ struct ChatView: View {
         ChatAtRiskBannerView(isVisible: isSessionAtRisk)
     }
 
+    /// First-class trust event: identity key changed or KT verification failed.
+    private var keyChangeBanner: some View {
+        ChatKeyChangeBannerView(
+            status: contactKTStatus,
+            contactName: viewModel.chat.otherUser?.resolvedDisplayName
+                ?? NSLocalizedString("chat", comment: ""),
+            onVerify: { showingSafetyNumbers = true },
+            onAccept: { acknowledgeContactKeyChange() }
+        )
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: contactKTStatus)
+    }
+
+    private func acknowledgeContactKeyChange() {
+        guard let userId = viewModel.chat.otherUser?.id else { return }
+        if KeyChangeUX.acknowledgeKeyChange(userId: userId, context: viewContext) {
+            loadContactKTStatus()
+        }
+    }
+
     /// Refresh the at-risk state from the per-peer Keychain flag set by degraded init.
     private func refreshSessionAtRiskState() {
         guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else {
@@ -501,6 +575,12 @@ struct ChatView: View {
         if let user = viewModel.chat.otherUser {
             user.isBlocked = true
             try? user.managedObjectContext?.save()
+            let userId = user.id
+            // Durable server-side block (best-effort; local isBlocked already drives the drop).
+            Task {
+                do { _ = try await UserServiceClient.shared.blockUser(userId: userId) }
+                catch { Log.error("Flood block sync failed for \(userId.prefix(8))… (local kept): \(error)", category: "ChatView") }
+            }
         }
         IncomingFloodGuard.shared.unsuppress(senderId: floodSenderId)
     }
@@ -539,6 +619,7 @@ struct ChatView: View {
                     DraftStore.shared.clear(for: viewModel.chat.id)
                     replyingTo = nil
                     replyQuoteText = nil
+                    clearReplyFocus(animated: true)
 
                     // ✅ Enable auto-scroll for new message
                     scrollManager.shouldScrollToBottom = true
@@ -564,6 +645,7 @@ struct ChatView: View {
             onCancelReply: {
                 replyingTo = nil
                 replyQuoteText = nil
+                clearReplyFocus(animated: true)
             },
             onCancelEdit: {
                 viewModel.editingMessage = nil
@@ -587,7 +669,7 @@ struct ChatView: View {
                         .glassCapsule()
                 }
                 .padding(.trailing, CTLayout.edgePad)
-                .padding(.bottom, 100) // Lift well above the (variable height) input glass
+                .padding(.bottom, ChatUIConstants.Shell.scrollToBottomLift)
                 .transition(.move(edge: .trailing).combined(with: .opacity))
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: scrollManager.shouldShowScrollToBottomButton)
             }
@@ -618,6 +700,11 @@ struct ChatView: View {
                 withAnimation {
                     isSearchActive.toggle()
                     if !isSearchActive { searchText = "" }
+                }
+            },
+            onKTWarningTap: {
+                if contactKTStatus == .keyChanged || contactKTStatus == .failed {
+                    showingSafetyNumbers = true
                 }
             }
         )
@@ -704,6 +791,68 @@ struct ChatView: View {
         }
     }
 
+    // MARK: - Soft reply focus (dim non-related bubbles)
+
+    private func replyFocusOpacity(for message: Message) -> Double {
+        guard !isEditMode, !replyFocusIds.isEmpty else {
+            return ChatUIConstants.ReplyFocus.focusedOpacity
+        }
+        let id = message.id.lowercased()
+        if replyFocusIds.contains(id) {
+            return ChatUIConstants.ReplyFocus.focusedOpacity
+        }
+        return ChatUIConstants.ReplyFocus.dimmedOpacity
+    }
+
+    /// Compose-reply focus: keep the quoted parent bright while the reply bar is up.
+    private func setComposeReplyFocus(messageId: String) {
+        replyFocusPeekTask?.cancel()
+        replyFocusPeekTask = nil
+        // Do not wrap in withAnimation — each bubble already has
+        // `.animation(..., value: replyFocusIds)`. A second transaction here
+        // animated the whole LazyVStack with composer inset change → flash.
+        replyFocusIds = [messageId.lowercased()]
+    }
+
+    /// Tap on in-bubble reply strip: scroll to parent, keep parent + child bright briefly.
+    private func peekReplyChain(for message: Message) {
+        let childId = message.id.lowercased()
+        let parentId = (message.replyToMessageId ?? "").lowercased()
+        guard !parentId.isEmpty else { return }
+
+        replyFocusPeekTask?.cancel()
+        withAnimation(.easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration)) {
+            replyFocusIds = [parentId, childId]
+        }
+        // Prefer scrolling to the parent (what the user is looking for).
+        scrollManager.scrollTo(messageId: parentId, anchor: .center, animated: true)
+
+        // Hold while composing a reply to this parent; otherwise auto-clear.
+        let holdParent = parentId
+        replyFocusPeekTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: ChatUIConstants.ReplyFocus.peekHoldNanoseconds)
+            guard !Task.isCancelled else { return }
+            if replyingTo?.id.lowercased() == holdParent {
+                // Compose focus owns the set now.
+                return
+            }
+            clearReplyFocus(animated: true)
+        }
+    }
+
+    private func clearReplyFocus(animated: Bool) {
+        replyFocusPeekTask?.cancel()
+        replyFocusPeekTask = nil
+        guard !replyFocusIds.isEmpty else { return }
+        if animated {
+            withAnimation(.easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration)) {
+                replyFocusIds = []
+            }
+        } else {
+            replyFocusIds = []
+        }
+    }
+
     // MARK: - Lifecycle
 
     private var isPreviewRuntime: Bool {
@@ -738,6 +887,8 @@ struct ChatView: View {
     }
 
     private func handleViewDisappear() {
+        replyFocusPeekTask?.cancel()
+        replyFocusPeekTask = nil
         guard !isPreviewRuntime else { return }
         // Preserve a half-typed message across navigation. Skip while editing,
         // so the edit buffer never leaks into the new-message draft.
@@ -756,6 +907,7 @@ struct ChatView: View {
 
     private func setActiveChatState(isActive: Bool) {
         guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else { return }
+        KeyChangeUX.setActiveChatContact(isActive ? contactId : nil)
         _ = try? CryptoManager.shared.handleOrchestratorEvent(
             .activeChatChanged(contactId: contactId, isActive: isActive),
             tag: isActive ? "chat_active_true" : "chat_active_false"

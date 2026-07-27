@@ -44,10 +44,18 @@ final class VeilLocalDiscoveryTests: XCTestCase {
     // MARK: - parseAdvert — TXT record
 
     func testParseFullAdvert() {
-        let parsed = VeilLocalDiscovery.parseAdvert(["spki": "aabbcc", "sni": "relay.local", "v": "1"])
+        let parsed = VeilLocalDiscovery.parseAdvert(
+            ["spki": "aabbcc", "sni": "relay.local", "wt": "/api/stream", "v": "1"])
         XCTAssertEqual(parsed?.spki, "aabbcc")
         XCTAssertEqual(parsed?.sni, "relay.local")
+        XCTAssertEqual(parsed?.wtPath, "/api/stream")
         XCTAssertEqual(parsed?.version, 1)
+    }
+
+    func testParseAdvertOptionalWTPath() {
+        // Absent or empty `wt` → nil (plain-TLS island relay, no WebTunnel path).
+        XCTAssertNil(VeilLocalDiscovery.parseAdvert(["spki": "aabbcc"])?.wtPath)
+        XCTAssertNil(VeilLocalDiscovery.parseAdvert(["spki": "aabbcc", "wt": ""])?.wtPath)
     }
 
     func testParseAdvertWithoutSPKIIsNil() {
@@ -60,6 +68,7 @@ final class VeilLocalDiscoveryTests: XCTestCase {
         let parsed = VeilLocalDiscovery.parseAdvert(["spki": "aabbcc"])
         XCTAssertEqual(parsed?.spki, "aabbcc")
         XCTAssertNil(parsed?.sni)                        // absent SNI → nil (caller falls back)
+        XCTAssertNil(parsed?.wtPath)                     // absent wt → nil (plain-TLS)
         XCTAssertEqual(parsed?.version, 1)               // absent v → defaults to 1
     }
 
@@ -90,5 +99,42 @@ final class VeilLocalDiscoveryTests: XCTestCase {
         XCTAssertFalse(VeilLocalDiscovery.accept(
             spki: "00000000000000000000000000000000000000000000000000000000deadbeef",
             trusted: trusted))
+    }
+
+    // MARK: - DiscoveredRelayStore — the nonisolated producer→consumer bridge
+
+    func testDiscoveredRelayStorePublishLookupClear() {
+        let store = DiscoveredRelayStore.shared
+        store.clear()
+        defer { store.clear() }
+
+        let relay = DiscoveredRelay(
+            host: "192.168.1.42", port: 443, sni: "relay.local", spki: "aabbcc", wtPath: "/api/stream")
+        store.publish([relay])
+
+        // Keyed by host:port identity, carrying the trust-gated fields for buildRelay.
+        XCTAssertEqual(store.relay(for: "192.168.1.42:443"), relay)
+        XCTAssertEqual(store.addresses(), ["192.168.1.42:443"])
+        XCTAssertEqual(store.relay(for: "192.168.1.42:443")?.spki, "aabbcc")
+        XCTAssertEqual(store.relay(for: "192.168.1.42:443")?.wtPath, "/api/stream")
+
+        store.clear()
+        XCTAssertNil(store.relay(for: "192.168.1.42:443"))
+        XCTAssertTrue(store.addresses().isEmpty)
+    }
+
+    /// publish replaces the whole snapshot (LAN reachability is not additive across scans).
+    func testDiscoveredRelayStorePublishReplacesSnapshot() {
+        let store = DiscoveredRelayStore.shared
+        store.clear()
+        defer { store.clear() }
+
+        let a = DiscoveredRelay(host: "10.0.0.1", port: 443, sni: nil, spki: "aa", wtPath: nil)
+        let b = DiscoveredRelay(host: "10.0.0.2", port: 443, sni: nil, spki: "bb", wtPath: nil)
+        store.publish([a])
+        store.publish([b])
+
+        XCTAssertNil(store.relay(for: "10.0.0.1:443"), "prior snapshot entry must be dropped")
+        XCTAssertEqual(store.relay(for: "10.0.0.2:443"), b)
     }
 }

@@ -41,9 +41,16 @@ final class ChunkedMessageSender {
             )
             onWirePayloadEncoded?(chunkMessageId, encryptedPayload)
 
-            // Build sealed inner bytes if policy says we should use stealth and we have the key.
+            // Under stealth-on, sealing is MANDATORY. If we lack the recipient identity key or
+            // buildSealedInner throws (sender cert unavailable), we must NOT fall back to an
+            // identified send — that is the server-influence deanonymisation vector the sealed path
+            // exists to prevent. Fail closed (StealthDowngradeBlocked) so the caller queues + retries.
+            let stealthOn = await StealthPolicy.shared.shouldUseSealedSender()
             var sealedInner: Data? = nil
-            if let recipientIK = recipientIdentityKey, await StealthPolicy.shared.shouldUseSealedSender() {
+            if stealthOn {
+                guard let recipientIK = recipientIdentityKey else {
+                    throw StealthDowngradeBlocked(reason: "no recipient identity key for \(recipientId.prefix(8))…")
+                }
                 do {
                     sealedInner = try await StealthSenderService.buildSealedInner(
                         recipientUserId: recipientId,
@@ -52,8 +59,9 @@ final class ChunkedMessageSender {
                         contentType: .e2EeSignal
                     )
                 } catch {
-                    Log.error("STEALTH: seal failed, sending without stealth: \(error)", category: "ChunkedDelivery")
+                    Log.error("STEALTH: seal failed under stealth-on — refusing identified downgrade, queueing: \(error)", category: "ChunkedDelivery")
                     PerformanceMetrics.shared.record(.stealthSealFailure, label: "chunked")
+                    throw StealthDowngradeBlocked(reason: "seal failed: \(error)")
                 }
             }
 
@@ -87,6 +95,9 @@ final class ChunkedMessageSender {
                     }
                 })
             } else {
+                // Reached ONLY when stealth is off (DEBUG override / feature disabled) — under
+                // stealth-on we always sealed above or threw StealthDowngradeBlocked. Identified
+                // send is legal here.
                 response = try await MessagingServiceClient.shared.sendMessage(
                     messageId: chunkMessageId,
                     recipientId: recipientId,
@@ -201,7 +212,14 @@ final class ChunkedMessageReassembler {
                 return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: editMsg.newMedia)
             }
             let (text, quoted, mediaAlbum) = extract(content)
-            return .assembled(text: text, quoted: quoted, e2eMessageId: e2eMessageId, mediaAlbum: mediaAlbum)
+            let storage = LocalMessagePayload.storagePayload(forWireContent: content)
+            return .assembled(
+                text: text,
+                quoted: quoted,
+                e2eMessageId: e2eMessageId,
+                mediaAlbum: mediaAlbum,
+                storagePayload: storage
+            )
         }
         // Binary profile share before the UTF-8 fallback — it's a more specific, structured format,
         // and must surface as a profile (not a "__PROFILE_BINARY__" placeholder string).
@@ -211,7 +229,7 @@ final class ChunkedMessageReassembler {
         if let text = String(data: data, encoding: .utf8) {
             return text.isEmpty
                 ? .invalid("empty plaintext")
-                : .assembled(text: text, quoted: nil, e2eMessageId: e2eMessageId, mediaAlbum: nil)
+                : .assembled(text: text, quoted: nil, e2eMessageId: e2eMessageId, mediaAlbum: nil, storagePayload: LocalMessagePayload.encodeText(text))
         }
         return .invalid("non-decodable binary (\(data.count) bytes)")
     }
@@ -225,14 +243,27 @@ final class ChunkedMessageReassembler {
                 return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: editMsg.newMedia)
             }
             let (text, quoted, mediaAlbum) = extract(content)
-            return .assembled(text: text, quoted: quoted, e2eMessageId: nil, mediaAlbum: mediaAlbum)
+            return .assembled(
+                text: text,
+                quoted: quoted,
+                e2eMessageId: nil,
+                mediaAlbum: mediaAlbum,
+                storagePayload: LocalMessagePayload.storagePayload(forWireContent: content)
+            )
         }
         // Binary profile share (new format, no JSON) — check before the UTF-8 fallback so it
         // surfaces as a profile, not a "__PROFILE_BINARY__" placeholder text message.
         if ProfileShareData.fromBinaryData(data) != nil {
             return .profile(data)
         }
-        // Session control strings, legacy plain-text messages
+        // Session control magic: prefix match on bytes (E8) then one UTF-8 decode for handlers.
+        if SessionControlCodec.isLegacyControlPlaintext(data) {
+            if let text = String(data: data, encoding: .utf8), !text.isEmpty {
+                return .legacy(text)
+            }
+            return .invalid("control magic not valid UTF-8")
+        }
+        // Legacy plain-text chat messages
         if let text = String(data: data, encoding: .utf8) {
             return text.isEmpty ? .invalid("empty plaintext") : .legacy(text)
         }
@@ -246,8 +277,17 @@ final class ChunkedMessageReassembler {
         case .text(let msg):
             return (msg.text, msg.hasQuoted ? msg.quoted : nil, nil)
         case .mediaAlbum(let album):
-            // Binary media → re-serialize to the local media JSON the views parse.
+            if MediaWireCodec.looksLikeFileAlbum(album) {
+                return (MediaWireCodec.fileJSON(from: album) ?? "", album.hasQuoted ? album.quoted : nil, album)
+            }
             return (MediaWireCodec.mediaJSON(from: album) ?? "", album.hasQuoted ? album.quoted : nil, album)
+        case .media(let m):
+            var album = Shared_Proto_Messaging_V1_MediaAlbumMessage()
+            album.items = [m]
+            if m.hasCaption { album.caption = m.caption }
+            return (MediaWireCodec.mediaJSON(from: album) ?? "", nil, album)
+        case .voice(let v):
+            return (MediaWireCodec.voiceJSON(from: v) ?? "", nil, nil)
         default:
             return ("", nil, nil)
         }
@@ -281,7 +321,7 @@ final class ChunkedMessageReassembler {
             guard let text = String(data: trimmed, encoding: .utf8) else {
                 return .invalid("Failed to decode plaintext")
             }
-            return .assembled(text: text, quoted: nil, e2eMessageId: Self.e2eId(from: parsed.messageId), mediaAlbum: nil)
+            return .assembled(text: text, quoted: nil, e2eMessageId: Self.e2eId(from: parsed.messageId), mediaAlbum: nil, storagePayload: LocalMessagePayload.encodeText(text))
         }
 
         if parsed.totalChunks > ChunkedDeliveryConfig.maxChunks {
@@ -320,7 +360,7 @@ final class ChunkedMessageReassembler {
         guard let text = String(data: trimmed, encoding: .utf8) else {
             return .invalid("Failed to decode assembled plaintext")
         }
-        return .assembled(text: text, quoted: nil, e2eMessageId: Self.e2eId(from: parsed.messageId), mediaAlbum: nil)
+        return .assembled(text: text, quoted: nil, e2eMessageId: Self.e2eId(from: parsed.messageId), mediaAlbum: nil, storagePayload: LocalMessagePayload.encodeText(text))
     }
 
     private func cleanupExpired() {
@@ -340,7 +380,9 @@ enum ChunkedMessageResult {
         text: String,
         quoted: Shared_Proto_Messaging_V1_QuotedMessage?,
         e2eMessageId: String?,
-        mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage?
+        mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage?,
+        /// CTM1 (or nil for pure legacy string) bytes for `applyStoredEncryption(plaintextData:)`.
+        storagePayload: Data?
     )
     /// Non-KNST data decoded as plain UTF-8 (session control strings, legacy messages).
     case legacy(String)

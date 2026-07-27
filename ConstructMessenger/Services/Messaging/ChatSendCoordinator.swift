@@ -282,14 +282,15 @@ final class ChatSendCoordinator {
 
     /// - Parameter wirePlaintext: pre-serialized `MessageContent` for the wire (used by
     ///   media to send the binary `.mediaAlbum` proto). When nil, a `.text` MessageContent
-    ///   is built from `text`. `text` is always what's stored locally (`decryptedContent`)
-    ///   and synced to own devices — for media that's the local JSON.
+    ///   is built from `text`. Local row may use CTM1 `storagePayload`; multi-device
+    ///   SenderSync uses the same wire `plaintextData` (not display JSON) — C1c.
     func sendTextMessage(
         text: String,
         replyTo: Message?,
         replyToContentOverride: String? = nil,
         localThumbnails: [Data] = [],
-        wirePlaintext: Data? = nil
+        wirePlaintext: Data? = nil,
+        storagePayload: Data? = nil
     ) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = AuthSessionManager.shared.currentUserId else {
@@ -347,7 +348,8 @@ final class ChatSendCoordinator {
             Log.debug("Sending message with ID: \(messageId)", category: "ChatViewModel")
             saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending,
                         replyTo: replyTo, replyToContentOverride: replyToContentOverride,
-                        localThumbnails: localThumbnails, suiteId: 0)
+                        localThumbnails: localThumbnails, suiteId: 0,
+                        storagePayload: storagePayload)
 
             Log.info("Sending message via gRPC (direct core path): \(messageId)", category: "ChatViewModel")
             Task { [weak self] in
@@ -373,10 +375,13 @@ final class ChatSendCoordinator {
                     )
                     TrafficProtectionService.shared.recordRealMessageSent()
                     if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
+                        // C1c: sync the same wire bytes as the primary send (MessageContent / pre-KNST),
+                        // not display JSON. Coordinator re-applies KNST framing per own device.
+                        let wireForSync = plaintextData
                         Task { [weak self] in
                             _ = self
                             await MultiDeviceSendCoordinator.shared.sendSenderSync(
-                                plaintext: Data(text.utf8),
+                                plaintext: wireForSync,
                                 messageId: messageId,
                                 originalRecipientUserId: recipientId,
                                 senderUserId: currentUserId,
@@ -433,6 +438,13 @@ final class ChatSendCoordinator {
                     }
                     Log.info("Message sent via gRPC: \(messageId) status=\(aggregated.status)\(ecStr)\(traceTag)", category: "ChatViewModel")
                     SessionActivityTracker.shared.recordActivity(for: recipientId)
+                    self.viewModel?.isSending = false
+                } catch let blocked as StealthDowngradeBlocked {
+                    // Stealth on but could not seal — NEVER downgrade to identified. Queue and nudge
+                    // the recipient bundle/IK so a later retry can seal.
+                    Log.info("Stealth: send blocked (\(blocked.reason)) — queueing \(messageId.prefix(8))…, will retry when sealable", category: "ChatViewModel")
+                    self.updateMessageStatus(messageId: messageId, status: .queued)
+                    SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
                     self.viewModel?.isSending = false
                 } catch {
                     let isRetryableTransportFailure: Bool = {
@@ -548,12 +560,15 @@ final class ChatSendCoordinator {
                     quoted: buildQuoted(replyTo: replyTo, replyToContentOverride: replyToContentOverride)
                 )
                 let wirePlaintext = try? wireContent.serializedData()
+                // Local row: CTM1 media album (proto bytes) — not base64 JSON (E1).
+                let localPayload = LocalMessagePayload.encodeMediaAlbum(wireContent.mediaAlbum)
                 sendTextMessage(
                     text: result.messageContent,
                     replyTo: replyTo,
                     replyToContentOverride: replyToContentOverride,
                     localThumbnails: result.thumbnails,
-                    wirePlaintext: wirePlaintext
+                    wirePlaintext: wirePlaintext,
+                    storagePayload: localPayload
                 )
             } catch {
                 Log.error("Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
@@ -589,13 +604,20 @@ final class ChatSendCoordinator {
             guard let self else { return }
             do {
                 let voiceContent = try await MediaManager.shared.uploadAudio(url, duration: duration, waveform: waveform)
-                let jsonData = try JSONEncoder().encode(voiceContent)
-                guard let json = String(data: jsonData, encoding: .utf8) else {
-                    throw MediaUploadError.uploadFailed("JSON encode failed")
-                }
+                let wireContent = MediaWireCodec.voiceMessageContent(from: voiceContent)
+                let wirePlaintext = try wireContent.serializedData()
+                let storagePayload = LocalMessagePayload.storagePayload(forWireContent: wireContent)
+                let displayJSON = MediaWireCodec.voiceJSON(from: wireContent.voice)
+                    ?? (try? JSONEncoder().encode(voiceContent)).flatMap { String(data: $0, encoding: .utf8) }
+                    ?? ""
                 try? FileManager.default.removeItem(at: url)
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
-                sendTextMessage(text: json, replyTo: nil)
+                sendTextMessage(
+                    text: displayJSON,
+                    replyTo: nil,
+                    wirePlaintext: wirePlaintext,
+                    storagePayload: storagePayload
+                )
             } catch {
                 Log.error("Voice upload failed: \(error.localizedDescription)", category: "ChatViewModel")
                 updateMessageStatus(messageId: placeholderId, status: .failed)
@@ -641,7 +663,19 @@ final class ChatSendCoordinator {
                 )
                 pendingMediaUploads.removeValue(forKey: placeholderId)
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
-                sendTextMessage(text: result.messageContent, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
+                let wireContent = MediaWireCodec.fileAlbumContent(
+                    mediaList: result.mediaList,
+                    caption: caption
+                )
+                let wirePlaintext = try? wireContent.serializedData()
+                let storagePayload = LocalMessagePayload.storagePayload(forWireContent: wireContent)
+                sendTextMessage(
+                    text: result.messageContent,
+                    replyTo: replyTo,
+                    replyToContentOverride: replyToContentOverride,
+                    wirePlaintext: wirePlaintext,
+                    storagePayload: storagePayload
+                )
             } catch {
                 Log.error("File upload failed: \(error.localizedDescription)", category: "ChatViewModel")
                 updateMessageStatus(messageId: placeholderId, status: .failed)
@@ -663,15 +697,19 @@ final class ChatSendCoordinator {
         // For a media message, editing the caption must rebuild the album (binary wire +
         // local JSON) — sending plain text would replace the descriptor and destroy the media.
         // Read displayText here (current actor) before hopping onto the Task.
-        let mediaEdit = MediaWireCodec.editedCaption(localJSON: message.displayText, newCaption: newText)
+        let storedPayload = MessageDisplayCache.shared.payloadData(for: message)
+        let mediaEdit = MediaWireCodec.editedCaptionPayload(storedPlaintext: storedPayload, newCaption: newText)
         Task { [weak self] in
             guard let self else { return }
             do {
                 let localContent: String
+                let storagePayload: Data?
                 if let mediaEdit {
-                    localContent = mediaEdit.localJSON
+                    localContent = mediaEdit.displayPreview
+                    storagePayload = mediaEdit.storagePayload
                 } else {
                     localContent = newText
+                    storagePayload = nil
                 }
                 // Use modern edit (MessageContent.edit) so it goes through the normal send path
                 // and can use stealth when enabled.
@@ -710,9 +748,14 @@ final class ChatSendCoordinator {
                     newContent: localContent,
                     isEdited: true,
                     editedAt: editedDate,
+                    storagePayload: storagePayload,
                     in: viewContext
                 )
                 editingBinding()
+            } catch is StealthDowngradeBlocked {
+                // Stealth on but the edit could not be sealed — fail closed, never send identified.
+                Log.info("Stealth: edit send blocked (cannot seal) — not downgrading for \(message.id.prefix(8))…", category: "ChatSendCoordinator")
+                ErrorRouter.shared.report(.unknown(NSLocalizedString("edit_message_failed", comment: "")))
             } catch {
                 ErrorRouter.shared.report(.unknown(String(format: NSLocalizedString("edit_message_failed", comment: ""), error.localizedDescription)))
             }
@@ -720,15 +763,7 @@ final class ChatSendCoordinator {
     }
 
     private func fetchRecipientIdentityKeyForEdit(recipientId: String, context: NSManagedObjectContext) async -> Data? {
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", recipientId)
-        req.fetchLimit = 1
-        do {
-            return try context.fetch(req).first?.knownIdentityKey
-        } catch {
-            Log.error("Failed to load identity key for stealth edit to \(recipientId.prefix(8))…: \(error)", category: "ChatSendCoordinator")
-            return nil
-        }
+        StealthSenderService.recipientIdentityKey(recipientId: recipientId, context: context)
     }
 
     // MARK: - Retry
@@ -788,7 +823,8 @@ final class ChatSendCoordinator {
         replyTo: Message? = nil,
         replyToContentOverride: String? = nil,
         localThumbnails: [Data] = [],
-        suiteId: UInt16
+        suiteId: UInt16,
+        storagePayload: Data? = nil
     ) {
         do {
             _ = try persistenceService.saveMessage(
@@ -801,6 +837,7 @@ final class ChatSendCoordinator {
                 replyToContentOverride: replyToContentOverride,
                 localThumbnails: localThumbnails,
                 suiteId: suiteId,
+                storagePayload: storagePayload,
                 in: viewContext
             )
         } catch {

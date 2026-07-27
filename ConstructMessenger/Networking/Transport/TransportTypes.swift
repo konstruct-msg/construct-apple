@@ -213,10 +213,10 @@ struct TransportConfig: Sendable, Equatable {
     /// Disabled when the user explicitly sets VEIL mode to `.off`.
     var allowDirectToVeilEscalation: Bool = true
 
-    /// Seconds spent in cooldown after a failed `veil_start` before dropping to direct.
-    /// One `veil_start` = the full probe (the Rust coordinator does happy-eyeballs +
-    /// retries internally); a failure here is real, so we back off rather than
-    /// re-firing `veil_start` back-to-back (the old retry loop was the connection churn).
+    /// Seconds spent in cooldown after a failed `veil_start` before retrying / dropping
+    /// to direct. One `veil_start` is a single probe cycle (happy-eyeballs inside Rust);
+    /// the coordinator does **not** sleep its own cooldown anymore — this is the sole
+    /// backoff so we don't re-fire `veil_start` back-to-back (that churn burned CPU).
     var veilCooldownDuration: TimeInterval = 30
 
     static let `default` = TransportConfig()

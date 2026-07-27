@@ -300,74 +300,24 @@ class AuthViewModel {
             }
         }
         
-        // Step 2: No session token - try device-based auth
-        guard let deviceId = KeychainManager.shared.loadDeviceID(),
-              let rawSigningKey = KeychainManager.shared.loadDeviceSigningKey() else {
+        // Step 2: No session token — device-based auth via single-flight coordinator
+        // (shared with gRPC auth-retry / MessageStream so push/VoIP join the same mint).
+        Log.info("Attempting device-based authentication (via DeviceAuthCoordinator)", category: "Auth")
+        let outcome = await DeviceAuthCoordinator.shared.authenticateIfPossible()
+        switch outcome {
+        case .success(let userId):
+            Log.info("Device-based authentication successful", category: "Auth")
+            finishAuth(userId: userId)
+        case .noDeviceKeys:
             Log.info("No device keys found - user needs to register")
-            // Definitively mark as unregistered so ContentView routes to OnboardingView.
-            // refreshDeviceKeyState() uses only deviceId (AfterFirstUnlock) which may have
-            // been nil at init time; this async confirmation is the source of truth.
             hasRegisteredDeviceKeys = false
-            return
-        }
-        
-        Log.info("Device keys found - authenticating with device ID: \(deviceId)")
-        
-        do {
-            // Create signature: Sign("{device_id}{timestamp}") with Ed25519 — must match server format
-            let timestamp = Int64(Date().timeIntervalSince1970)
-            let message = "\(deviceId)\(timestamp)"
-            guard let messageData = message.data(using: .utf8) else {
-                throw NetworkError.encodingFailed
-            }
-
-            // Prefer CryptoCore signing; fall back to raw Keychain key when core is not yet
-            // initialized (e.g. CFE snapshot lost but device keys still in Keychain).
-            let signingKeyBytes: [UInt8]
-            do {
-                signingKeyBytes = try CryptoManager.shared.exportSigningSecretKey()
-            } catch {
-                Log.info("[Auth] CryptoCore unavailable for signing — using raw Keychain key: \(error)", category: "Auth")
-                signingKeyBytes = [UInt8](rawSigningKey)
-            }
-            let privateKey = try Curve25519.Signing.PrivateKey(rawRepresentation: Data(signingKeyBytes))
-            let signatureData = try privateKey.signature(for: messageData)
-            
-            let response = try await AuthServiceClient.shared.authenticateDevice(
-                    deviceId: deviceId,
-                    timestamp: timestamp,
-                    signature: signatureData
-                )
-            
-            // Save tokens
-            let expiresInSeconds: Int
-            if let expiresAt = response.expiresAt {
-                expiresInSeconds = max(Int(expiresAt - Int64(Date().timeIntervalSince1970)), 0)
-            } else if let expiresIn = response.expiresIn {
-                expiresInSeconds = expiresIn
-            } else {
-                expiresInSeconds = 3600
-            }
-            
-            AuthSessionManager.shared.saveTokens(
-                accessToken: response.accessToken,
-                refreshToken: response.refreshToken,
-                expiresIn: expiresInSeconds,
-                userId: response.userId
-            )
-            
-            VeilProxyManager.shared.configureFromServer(cert: response.veilBridgeCert ?? "")
-            Log.info("Device-based authentication successful")
-            finishAuth(userId: response.userId)
-            
-        } catch {
-            Log.info("Device authentication failed: \(error)")
+        case .failed(let description):
+            Log.info("Device authentication failed: \(description)", category: "Auth")
 
             // Only wipe device keys when the server explicitly rejects this device
             // (unauthenticated / permission-denied gRPC codes = device not registered).
             // Transient network errors, timeouts, or server outages must NOT delete keys —
             // that would permanently log out the user on a bad Wi-Fi reconnect.
-            let description = "\(error)"
             let lower = description.lowercased()
             let isDeviceRejected = description.contains("unauthenticated")
                 || description.contains("permission_denied")
@@ -400,7 +350,7 @@ class AuthViewModel {
                     }
                 }
             } else {
-                Log.error("Device auth failed (transient error) — keeping keys: \(error)", category: "Auth")
+                Log.error("Device auth failed (transient error) — keeping keys: \(description)", category: "Auth")
             }
         }
     }
@@ -483,8 +433,15 @@ class AuthViewModel {
         currentUserId = userId
         isAuthenticated = true
         hasRegisteredDeviceKeys = true
+        // New identity: ensure orientation is not skipped due to a previous identity
+        // that already finished the guide on this device (per-user store handles this;
+        // no global reset needed — new userId is simply absent from the completed set).
         scheduleTokenRefresh()
         loadUserFromCoreData(userId: userId, username: username)
+        Log.info(
+            "Registration finalized userId=\(userId.prefix(8))… orientationPending=\(!OrientationStore.isCompleted(for: userId, rawList: UserDefaults.standard.string(forKey: OrientationStore.completedUserIdsKey) ?? ""))",
+            category: "Auth"
+        )
     }
 
     /// Unified post-link bootstrap for Flow A (confirm) and Flow B (join request / approve).
@@ -597,6 +554,7 @@ class AuthViewModel {
         Log.info("[Auth] User chose to wipe and re-register", category: "Auth")
         cancelTimeouts()
         AuthSessionManager.shared.clearSession()
+        StealthSenderService.shared.clearCertCache()   // drop the old identity's sealed-sender cert
 
         // Nullify in-memory cores before Keychain deletions so no stale reference survives.
         CryptoManager.shared.deleteAllCryptoKeys()
@@ -643,6 +601,7 @@ class AuthViewModel {
         cancelTimeouts()
         MessageStreamManager.shared.disconnect()
         AuthSessionManager.shared.clearSession()
+        StealthSenderService.shared.clearCertCache()   // drop the old identity's sealed-sender cert
         CryptoManager.shared.deleteAllCryptoKeys()
         KeychainManager.shared.deleteDeviceKeys()
         KeychainManager.shared.deleteOtpks()
@@ -869,6 +828,7 @@ class AuthViewModel {
         
         // Clear all user data
         AuthSessionManager.shared.clearSession()
+        StealthSenderService.shared.clearCertCache()   // drop the old identity's sealed-sender cert
         CryptoManager.shared.deleteAllCryptoKeys()
         KeychainManager.shared.deleteDeviceKeys()
         KeychainManager.shared.deleteOtpks()

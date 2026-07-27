@@ -1,4 +1,5 @@
 import Foundation
+import CoreData
 import os.log
 
 /// Errors specific to the session-init layer (distinct from CryptoManagerError).
@@ -120,7 +121,8 @@ class SessionInitializationService {
         // do 3-DH, which the responder can always reproduce from identity + signed prekey —
         // instead of handing it another OTPK it will also reject and looping. Consumed once; a
         // later clean init uses 4-DH again. (The Kyber OTPK is a separate store and is left as-is.)
-        if SessionReinitHintStore.shared.consumeThreeDHReinit(for: userId) {
+        let hintPending = SessionReinitHintStore.shared.consumeThreeDHReinit(for: userId)
+        if SessionReducer.nextInitDHMode(forceThreeDHHintPending: hintPending) == .threeDH {
             Log.info("SESSION_STATE[force_3dh_reinit]: \(userId.prefix(8))… — dropping one-time-prekey, using 3-DH", category: "SessionInit")
             otpkPublic = Data()
             otpkId = 0
@@ -287,6 +289,31 @@ class SessionInitializationService {
             }
         } catch {
             Log.info("SESSION_STATE[at_risk_upgrade_failed]: \(error.localizedDescription) for \(userId.prefix(8))… — will retry later", category: "SessionInit")
+        }
+    }
+
+    /// Foreground sweep: try to upgrade every at-risk (degraded-init) session whose peer has since
+    /// rotated back to a fresh SPK. Complements the per-chat-open trigger — after the Phase 3B server
+    /// wake nudges a dormant peer to rotate (SPK_WAKE_PUSH_SERVER_SPEC), the sender's degraded session
+    /// heals on the next foreground instead of only when the user happens to open that specific chat.
+    ///
+    /// Cheap by construction: only contacts whose at-risk flag is set are checked, and each
+    /// `upgradeAtRiskSessionIfPeerFresh` call is self-throttled (1h/contact) and no-ops while the peer
+    /// is still stale — so a repeated foreground doesn't churn or burst bundle fetches.
+    func upgradeAllAtRiskSessionsOnForeground() async {
+        guard AuthSessionManager.shared.isSessionValid, CryptoManager.shared.isInitialized else { return }
+
+        let ctx = PersistenceController.shared.container.viewContext
+        let req = User.fetchRequest()
+        req.predicate = NSPredicate(format: "isContact == YES")
+        let contactIds: [String] = ((try? ctx.fetch(req)) ?? []).map { $0.id }.filter { !$0.isEmpty }
+
+        let atRisk = contactIds.filter { KeychainManager.shared.loadSessionAtRiskFlag(for: $0) }
+        guard !atRisk.isEmpty else { return }
+
+        Log.info("SESSION_STATE[at_risk_sweep]: \(atRisk.count) at-risk session(s) on foreground — checking peer freshness", category: "SessionInit")
+        for userId in atRisk {
+            await upgradeAtRiskSessionIfPeerFresh(userId: userId)
         }
     }
 }

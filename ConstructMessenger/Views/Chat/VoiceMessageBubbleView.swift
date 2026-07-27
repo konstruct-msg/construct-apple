@@ -30,6 +30,9 @@ struct VoiceMessageBubbleView: View {
     /// user can still collapse it via the inline toggle.
     @State private var isTranscriptExpanded: Bool = true
 
+    /// True when the transcript is actually rendered below the waveform.
+    private var isTranscriptShown: Bool { (transcript?.isEmpty == false) && isTranscriptExpanded }
+
     private var isPlaying: Bool { player.isPlaying(voiceContent.mediaId) }
     private var isUploading: Bool { deliveryStatus == .sending && voiceContent.mediaUrl.isEmpty }
     private var uploadFailed: Bool { deliveryStatus == .failed && voiceContent.mediaUrl.isEmpty }
@@ -65,7 +68,7 @@ struct VoiceMessageBubbleView: View {
 
     private var playerBody: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
+            HStack(spacing: ChatUIConstants.Voice.playerSpacing) {
                 Button {
                     if isPlaying {
                         // Active track — may have been started by continuous playback, so this
@@ -83,12 +86,12 @@ struct VoiceMessageBubbleView: View {
                             .progressViewStyle(.circular)
                             .scaleEffect(0.7)
                             .tint(isSentByMe ? Color.CT.outMsgText : Color.CT.accent)
-                            .frame(minWidth: 38)
+                            .frame(minWidth: ChatUIConstants.Voice.controlWidth)
                     } else {
                         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 14, weight: .regular))
+                            .font(.system(size: ChatUIConstants.Voice.playIconSize, weight: .regular))
                             .foregroundColor(isSentByMe ? Color.CT.outMsgText : Color.CT.accent)
-                            .frame(minWidth: 38)
+                            .frame(minWidth: ChatUIConstants.Voice.controlWidth)
                     }
                 }
                 .buttonStyle(.plain)
@@ -98,25 +101,30 @@ struct VoiceMessageBubbleView: View {
                     samples: voiceContent.waveform,
                     style: .playback(progress: isPlaying ? player.progress : 0, isSentByMe: isSentByMe)
                 )
-                .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: ChatUIConstants.Voice.waveformHeight,
+                    maxHeight: ChatUIConstants.Voice.waveformHeight
+                )
 
                 transcribeToggle
 
                 Text(durationLabel)
-                    .font(CTFont.regular(11))
+                    .font(CTFont.regular(ChatUIConstants.Typography.durationSize))
                     .foregroundColor(isSentByMe ? Color.CT.outMsgText.opacity(0.85) : Color.CT.textDim)
                     .monospacedDigit()
-                    .frame(width: 34, alignment: .trailing)
+                    .frame(width: ChatUIConstants.Voice.durationWidth, alignment: .trailing)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, ChatUIConstants.Voice.horizontalPadding)
+            .padding(.vertical, ChatUIConstants.Voice.verticalPadding)
 
             transcriptSection
         }
-        .frame(maxWidth: 360)
+        .frame(maxWidth: ChatUIConstants.Bubble.maxWidth)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe))
-        .clipShape(CTShape.pill())
-        .overlay(CTShape.pill().stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(ChatUIConstants.Voice.shape)
+        .overlay(ChatUIConstants.Voice.shape.stroke(Color.CT.noise, lineWidth: ChatUIConstants.Voice.strokeWidth))
+        .animation(.easeInOut(duration: 0.2), value: isTranscriptShown)
         .onChange(of: transcript) { _, newTranscript in
             // Auto-reveal a fresh transcript so the user sees what they
             // triggered. They can still collapse via the inline toggle.
@@ -149,12 +157,12 @@ struct VoiceMessageBubbleView: View {
                         .progressViewStyle(.circular)
                         .scaleEffect(0.5)
                         .tint(isSentByMe ? Color.CT.outMsgText : Color.CT.accent)
-                        .frame(width: 20, height: 20)
+                        .frame(width: ChatUIConstants.Voice.toggleSize, height: ChatUIConstants.Voice.toggleSize)
                 } else {
                     Image(systemName: "textformat")
-                        .font(.system(size: 13, weight: .regular))
+                        .font(.system(size: ChatUIConstants.Voice.toggleIconSize, weight: .regular))
                         .foregroundColor(toggleTint(hasTranscript: hasTranscript))
-                        .frame(width: 20, height: 20)
+                        .frame(width: ChatUIConstants.Voice.toggleSize, height: ChatUIConstants.Voice.toggleSize)
                 }
             }
             .buttonStyle(.plain)
@@ -184,54 +192,58 @@ struct VoiceMessageBubbleView: View {
         if let text = transcript, !text.isEmpty, isTranscriptExpanded {
             Rectangle().fill(Color.CT.noise).frame(height: 1)
             Text(text)
-                .font(CTFont.regular(12))
+                .font(CTFont.regular(ChatUIConstants.Typography.transcriptSize))
                 .foregroundColor(isSentByMe ? Color.CT.outMsgText.opacity(0.85) : Color.CT.textDim)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                .padding(.horizontal, ChatUIConstants.Voice.horizontalPadding)
+                .padding(.vertical, ChatUIConstants.Voice.verticalPadding)
         }
     }
 
     // MARK: - Uploading state
 
     private var uploadingBody: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ChatUIConstants.Voice.playerSpacing) {
             ProgressView()
                 .progressViewStyle(.circular)
                 .scaleEffect(0.7)
                 .tint(isSentByMe ? Color.CT.outMsgText : Color.CT.textDim)
-                .frame(minWidth: 38)
+                .frame(minWidth: ChatUIConstants.Voice.controlWidth)
 
             VoiceWaveformView(
                 samples: voiceContent.waveform,
                 style: .playback(progress: 0, isSentByMe: isSentByMe)
             )
-            .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: ChatUIConstants.Voice.waveformHeight,
+                maxHeight: ChatUIConstants.Voice.waveformHeight
+            )
             .opacity(0.4)
 
             Text(durationLabel)
-                .font(CTFont.regular(11))
+                .font(CTFont.regular(ChatUIConstants.Typography.durationSize))
                 .foregroundColor(isSentByMe ? Color.CT.outMsgText.opacity(0.7) : Color.CT.textDim)
                 .monospacedDigit()
-                .frame(width: 34, alignment: .trailing)
+                .frame(width: ChatUIConstants.Voice.durationWidth, alignment: .trailing)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: 360)
+        .padding(.horizontal, ChatUIConstants.Voice.horizontalPadding)
+        .padding(.vertical, ChatUIConstants.Voice.verticalPadding)
+        .frame(maxWidth: ChatUIConstants.Bubble.maxWidth)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe).opacity(0.7))
-        .clipShape(CTShape.pill())
-        .overlay(CTShape.pill().stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(ChatUIConstants.Voice.shape)
+        .overlay(ChatUIConstants.Voice.shape.stroke(Color.CT.noise, lineWidth: ChatUIConstants.Voice.strokeWidth))
     }
 
     // MARK: - Failed state
 
     private var failedBody: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ChatUIConstants.Voice.playerSpacing) {
             Button { onRetry?() } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 14, weight: .regular))
+                    .font(.system(size: ChatUIConstants.Voice.playIconSize, weight: .regular))
                     .foregroundColor(Color(hex: 0xE05555))
-                    .frame(width: 38)
+                    .frame(width: ChatUIConstants.Voice.controlWidth)
             }
             .buttonStyle(.plain)
 
@@ -239,51 +251,59 @@ struct VoiceMessageBubbleView: View {
                 samples: voiceContent.waveform,
                 style: .playback(progress: 0, isSentByMe: isSentByMe)
             )
-            .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: ChatUIConstants.Voice.waveformHeight,
+                maxHeight: ChatUIConstants.Voice.waveformHeight
+            )
             .opacity(0.35)
 
             Text(durationLabel)
-                .font(CTFont.regular(11))
+                .font(CTFont.regular(ChatUIConstants.Typography.durationSize))
                 .foregroundColor(Color(hex: 0xE05555).opacity(0.8))
                 .monospacedDigit()
-                .frame(width: 34, alignment: .trailing)
+                .frame(width: ChatUIConstants.Voice.durationWidth, alignment: .trailing)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: 360)
+        .padding(.horizontal, ChatUIConstants.Voice.horizontalPadding)
+        .padding(.vertical, ChatUIConstants.Voice.verticalPadding)
+        .frame(maxWidth: ChatUIConstants.Bubble.maxWidth)
         .background(Color.CT.bgMsg)
-        .clipShape(CTShape.pill())
-        .overlay(CTShape.pill().stroke(Color(hex: 0xE05555).opacity(0.5), lineWidth: 1))
+        .clipShape(ChatUIConstants.Voice.shape)
+        .overlay(ChatUIConstants.Voice.shape.stroke(Color(hex: 0xE05555).opacity(0.5), lineWidth: 1))
     }
 
     // MARK: - Unavailable state
 
     private var unavailableBody: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ChatUIConstants.Voice.playerSpacing) {
             Image(systemName: "waveform.slash")
-                .font(.system(size: 14, weight: .regular))
+                .font(.system(size: ChatUIConstants.Voice.playIconSize, weight: .regular))
                 .foregroundColor(Color.CT.textDim)
-                .frame(width: 38)
+                .frame(width: ChatUIConstants.Voice.controlWidth)
 
             VoiceWaveformView(
                 samples: voiceContent.waveform,
                 style: .playback(progress: 0, isSentByMe: isSentByMe)
             )
-            .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: ChatUIConstants.Voice.waveformHeight,
+                maxHeight: ChatUIConstants.Voice.waveformHeight
+            )
             .opacity(0.2)
 
             Text(durationLabel)
-                .font(CTFont.regular(11))
+                .font(CTFont.regular(ChatUIConstants.Typography.durationSize))
                 .foregroundColor(Color.CT.textDim)
                 .monospacedDigit()
-                .frame(width: 34, alignment: .trailing)
+                .frame(width: ChatUIConstants.Voice.durationWidth, alignment: .trailing)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: 360)
+        .padding(.horizontal, ChatUIConstants.Voice.horizontalPadding)
+        .padding(.vertical, ChatUIConstants.Voice.verticalPadding)
+        .frame(maxWidth: ChatUIConstants.Bubble.maxWidth)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe).opacity(0.35))
-        .clipShape(CTShape.pill())
-        .overlay(CTShape.pill().stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(ChatUIConstants.Voice.shape)
+        .overlay(ChatUIConstants.Voice.shape.stroke(Color.CT.noise, lineWidth: ChatUIConstants.Voice.strokeWidth))
     }
 
     // MARK: - Duration
@@ -331,7 +351,7 @@ struct VoiceMessageBubbleView: View {
 // MARK: - Preview
 
 #Preview {
-    VStack(spacing: 8) {
+    VStack(spacing: ChatUIConstants.Shell.listSpacing) {
         VoiceMessageBubbleView(
             voiceContent: VoiceMessageContent(type: "voice", mediaId: "t1", mediaUrl: "x", mediaKey: Data(), mediaType: "audio/m4a", size: 120_000, duration: 47, waveform: (0..<100).map { _ in Float.random(in: 0.1...1.0) }, hash: ""),
             isSentByMe: true, deliveryStatus: .delivered, onRetry: nil

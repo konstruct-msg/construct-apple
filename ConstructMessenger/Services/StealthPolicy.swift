@@ -59,11 +59,15 @@ final class StealthPolicy {
     /// - E2E delivery receipts (to prevent correlation)
     /// - Profile shares
     /// - Call signaling (high privacy value)
+    /// - Peer session control: session_ready / tie-break ping / SESSION_RESET_INIT / END_SESSION
+    ///   (2026-07-27 — decisions/sealed-sender-session-control-channel.md). These carry a directed
+    ///   sender→recipient+conversation tuple; with all user traffic sealed they are now the primary
+    ///   cleartext session-graph leak, so they are sealed too. Enforced fail-closed at the send
+    ///   chokepoints (SessionCoordinator.sendSessionControlCore / MessagingServiceClient.sendEndSession).
     ///
     /// **Explicitly excluded (even when enabled):**
     /// - E2E heartbeats (ct=13) — see decisions/stealth-heartbeat-exclusion.md
     /// - Multi-device internal traffic (SenderSync, fan-out to own devices, reset broadcasts)
-    /// - Pure session control messages (END_SESSION, sessionReset*, etc.)
     func shouldUseSealedSender() -> Bool {
         isEnabled
     }

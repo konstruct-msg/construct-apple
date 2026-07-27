@@ -18,9 +18,8 @@ struct OnboardingView: View {
     @State private var isCheckingUsername = false
     @State private var usernameIsAvailable: Bool? = nil
     @State private var showingRegistration = false
-    @State private var showingRecovery = false
+    @State private var showingExistingIdentity = false
     @State private var showingNetworkSettings = false
-    @State private var showingDeviceLink = false
     @State private var availabilityTask: Task<Void, Never>? = nil
     
     var body: some View {
@@ -64,15 +63,18 @@ struct OnboardingView: View {
                     }
 
                     if let errorKey = usernameErrorKey {
-                        Text((NSLocalizedString(errorKey, comment: "")))
+                        Text(NSLocalizedString(errorKey, comment: ""))
                             .font(CTFont.regular(11))
                             .foregroundColor(Color.CT.danger)
                     } else if isCheckingUsername {
-                        Text("checking...")
+                        Text(NSLocalizedString("username_checking", comment: ""))
                             .font(CTFont.regular(11))
                             .foregroundColor(Color.CT.textDim)
                     } else if let available = usernameIsAvailable {
-                        Text(available ? "available" : "taken")
+                        Text(NSLocalizedString(
+                            available ? "username_available" : "username_unavailable",
+                            comment: ""
+                        ))
                             .font(CTFont.regular(11))
                             .foregroundColor(available ? Color.CT.accentDim : Color.CT.danger)
                     }
@@ -81,7 +83,9 @@ struct OnboardingView: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 16)
 
-                // Actions
+                // Actions — Create is the only primary path.
+                // Restore / link live behind a single secondary entry so they share equal weight
+                // and never read as a preselected pair under Create.
                 VStack(spacing: 8) {
                     CTButton(
                         label: NSLocalizedString("onboarding_create_identity", comment: "").uppercased(),
@@ -90,23 +94,30 @@ struct OnboardingView: View {
                         showingRegistration = true
                     }
                     .frame(maxWidth: 360)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 12)
 
-                    HStack(spacing: 32) {
-                        Button { showingRecovery = true } label: {
-                            Text("restore")
-                                .font(CTFont.regular(13))
-                                .foregroundColor(Color.CT.accentDim)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button { showingDeviceLink = true } label: {
-                            Text("link device")
-                                .font(CTFont.regular(13))
-                                .foregroundColor(Color.CT.textDim)
-                        }
-                        .buttonStyle(.plain)
+                    Button { showingExistingIdentity = true } label: {
+                        Text(NSLocalizedString("onboarding_already_have", comment: ""))
+                            .font(CTFont.regular(13))
+                            .foregroundColor(Color.CT.textDim)
+                            .multilineTextAlignment(.center)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(NSLocalizedString("onboarding_existing_intro", comment: ""))
+
+                    // Pre-login diagnostics escape hatch (DEBUG/internal only): lets onboarding /
+                    // recovery failures be diagnosed without an account. Absent in Release —
+                    // production collects no logs, so there is nothing to share and no debug surface.
+                    #if DEBUG || INTERNAL_TOOLS
+                    Button { DiagnosticLogShare.present() } label: {
+                        Label(NSLocalizedString("diagnostics_share_logs", comment: ""),
+                              systemImage: "square.and.arrow.up")
+                            .font(CTFont.regular(11))
+                            .foregroundColor(Color.CT.textDim)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 12)
+                    #endif
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 52)
@@ -119,16 +130,9 @@ struct OnboardingView: View {
             .navigationDestination(isPresented: $showingRegistration) {
                 RegistrationFlowView(username: username.isEmpty ? nil : username)
             }
-            .sheet(isPresented: $showingRecovery) {
-                RecoveryEntryView()
+            .sheet(isPresented: $showingExistingIdentity) {
+                ExistingIdentityChooserView()
                     .environment(recoveryVM)
-            }
-            .sheet(isPresented: $showingDeviceLink) {
-                #if os(iOS)
-                DeviceLinkScanView()
-                #else
-                DesktopLinkRequestView()
-                #endif
             }
             .sheet(isPresented: $showingNetworkSettings) {
                 NavigationStack {

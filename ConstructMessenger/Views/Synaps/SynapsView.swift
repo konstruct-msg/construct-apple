@@ -3,7 +3,7 @@
 //  Construct Messenger
 //
 //  Synaps — persistent contact network, independent of chats.
-//  Layout: Zoomable/pannable honeycomb cloud of round avatars.
+//  Layout: Zoomable/pannable honeycomb cloud of round avatars + name labels.
 //  Gestures: pinch-to-zoom + drag-to-pan. Contacts near the screen
 //  center appear larger; peripheral contacts are dimmer — Apple Watch style.
 //
@@ -18,6 +18,10 @@ import UIKit
 // MARK: - SynapsView
 
 struct SynapsView: View {
+
+    /// Hosts a scan-QR action in the nav bar. The iPad regular shell already exposes
+    /// a global QR scan in its rail, so it passes `false` to avoid a duplicate entry point.
+    var showsScanAction: Bool = true
 
     @Environment(\.managedObjectContext) private var context
     @Environment(ChatsViewModel.self) private var chatsViewModel
@@ -294,7 +298,7 @@ struct SynapsView: View {
             return
         }
 
-        var drafts: [(id: String, count: Int, lastMessage: Date?)] = []
+        var drafts: [(id: String, count: Int, lastMessage: Date?, unread: Int)] = []
         var maxCount = 0
 
         for user in users {
@@ -302,7 +306,8 @@ struct SynapsView: View {
             let count = userChats.map { $0.messages?.count ?? 0 }.max() ?? 0
             maxCount = max(maxCount, count)
             let lastMessage = userChats.compactMap { $0.lastMessageTime }.max()
-            drafts.append((id: user.id, count: count, lastMessage: lastMessage))
+            let unread = userChats.reduce(0) { $0 + Int($1.unreadCount) }
+            drafts.append((id: user.id, count: count, lastMessage: lastMessage, unread: unread))
         }
 
         let now = Date()
@@ -316,7 +321,11 @@ struct SynapsView: View {
             } else {
                 recency = .none
             }
-            nextMap[draft.id] = ContactMetrics(frequencyScore: score, recency: recency)
+            nextMap[draft.id] = ContactMetrics(
+                frequencyScore: score,
+                recency: recency,
+                unreadCount: draft.unread
+            )
         }
         contactMetricsByUser = nextMap
     }
@@ -382,10 +391,12 @@ struct SynapsView: View {
                 .tracking(4)
             Spacer()
             #if os(iOS)
-            Button { showingQRScanner = true } label: {
-                Image(systemName: "qrcode.viewfinder")
-                    .font(.system(size: CTLayout.navIconSize, weight: .medium))
-                    .foregroundColor(Color.CT.accent)
+            if showsScanAction {
+                Button { showingQRScanner = true } label: {
+                    Image(systemName: "qrcode.viewfinder")
+                        .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                        .foregroundColor(Color.CT.accent)
+                }
             }
             #endif
         }
@@ -430,60 +441,17 @@ struct SynapsView: View {
                 .foregroundStyle(Color.CT.text)
                 .multilineTextAlignment(.center)
 
+            // The QR scan (nav bar / iPad rail) and the search bar above are the
+            // real entry points; the subtitle already names both. No duplicate
+            // action buttons here.
             Text(LocalizedStringKey("synapses_empty_subtitle"))
                 .font(CTFont.regular(13))
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, CTLayout.sectionGap)
-
-            VStack(spacing: CTLayout.chromeGap) {
-                #if os(iOS)
-                emptyActionRow(
-                    titleKey: "synapses_empty_scan_qr",
-                    systemImage: "qrcode.viewfinder"
-                ) {
-                    showingQRScanner = true
-                }
-                #endif
-                emptyActionRow(
-                    titleKey: "synapses_empty_focus_search",
-                    systemImage: "magnifyingglass"
-                ) {
-                    isSearchFocused = true
-                }
-            }
-            .padding(.top, CTLayout.inlinePad)
-            .frame(maxWidth: 320)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, CTLayout.edgePad)
-    }
-
-    private func emptyActionRow(
-        titleKey: String,
-        systemImage: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: CTLayout.chromeGap) {
-                Image(systemName: systemImage)
-                    .font(.system(size: CTLayout.navIconSize, weight: .medium))
-                Text(NSLocalizedString(titleKey, comment: "").uppercased())
-                    .font(CTFont.bold(12))
-                    .tracking(1)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.CT.textDim)
-            }
-            .foregroundStyle(Color.CT.accent)
-            .padding(.horizontal, CTLayout.edgePad)
-            .frame(minHeight: CTLayout.controlHeight)
-            .background(Color.CT.bgMsg)
-            .clipShape(CTShape.card())
-            .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Remote Search Card
@@ -757,7 +725,14 @@ struct SynapsView: View {
                         bio: nil,
                         deviceId: contactInfo.deviceId
                     )
-                    _ = chatsViewModel.startChat(with: publicUserInfo)
+                    if let chat = chatsViewModel.startChat(
+                        with: publicUserInfo,
+                        identityPublicKey: contactInfo.identityPublicKey
+                    ) {
+                        chatsViewModel.selectedTab = 0
+                        chatsViewModel.chatToOpen = chat.id
+                        InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -830,32 +805,68 @@ private struct ContactCircle: View {
 
     @State private var touchMoved = false
 
+    /// cellWidth recovered from engine mapping (cellSize = cellWidth × 0.74).
+    private var cellWidth: CGFloat { cellSize / 0.74 }
+
     // MARK: Size
     //
-    // Frequency score drives rendered diameter in the range [0.55 … 0.75] × cellWidth.
-    // Upper bound kept well below the hex vertical step (cellWidth × 0.866) so that
-    // even with the proximity scale boost circles never visually overlap.
+    // Frequency score drives rendered diameter in the range [0.50 … 0.66] × cellWidth.
+    // Slightly smaller than pure-avatar layout so a name label fits under each circle
+    // without colliding with the next honeycomb row (vStep ≈ 1.02 × cellWidth).
     private var effectiveSize: CGFloat {
-        let f = 0.55 + 0.20 * metrics.frequencyScore  // [0.55 … 0.75]
-        return cellSize / 0.74 * f                     // remap: cellSize = cellWidth×0.74
+        let f = 0.50 + 0.16 * metrics.frequencyScore  // [0.50 … 0.66]
+        return cellWidth * f
+    }
+
+    /// Max width for the name under the avatar — slightly wider than the circle.
+    private var labelWidth: CGFloat {
+        min(cellWidth * 0.92, max(effectiveSize * 1.35, 56))
     }
 
     var body: some View {
-        ZStack {
-            if let data = user.avatarData, let img = PlatformImage(data: data) {
-                Image(platformImage: img)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Circle().fill(accentColor.opacity(0.12))
-                IdenticonView(seed: user.id)
+        VStack(spacing: 4) {
+            ZStack {
+                // Soft halo — ambient “this node is live” (not a feed preview).
+                if metrics.showsActivityHalo && !user.isBlocked {
+                    Circle()
+                        .stroke(Color.CT.accent.opacity(0.28), lineWidth: 3)
+                        .frame(width: effectiveSize * 1.14, height: effectiveSize * 1.14)
+                }
+
+                ZStack {
+                    if let data = user.avatarData, let img = PlatformImage(data: data) {
+                        Image(platformImage: img)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Circle().fill(accentColor.opacity(0.12))
+                        IdenticonView(seed: user.id)
+                    }
+                }
+                .frame(width: effectiveSize, height: effectiveSize)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(borderColor, lineWidth: metrics.activityRingLineWidth))
+
+                if metrics.unreadCount > 0 {
+                    unreadBadge
+                        .offset(x: effectiveSize * 0.34, y: -effectiveSize * 0.34)
+                }
             }
+            .frame(width: effectiveSize * 1.2, height: effectiveSize * 1.2)
+            .opacity(proximityOpacity)
+
+            Text(user.resolvedDisplayName)
+                .font(CTFont.medium(10))
+                .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .truncationMode(.tail)
+                .multilineTextAlignment(.center)
+                .frame(width: labelWidth)
+                // Names stay a bit more readable than peripheral avatars.
+                .opacity(min(1.0, proximityOpacity + 0.35))
         }
-        .frame(width: effectiveSize, height: effectiveSize)
-        .clipShape(Circle())
-        .overlay(Circle().stroke(borderColor, lineWidth: 1.5))
         .scaleEffect(proximityScale)
-        .opacity(proximityOpacity)
         // Use DragGesture(minimumDistance: 0) so we can distinguish a stationary
         // tap from a drag that happens to end over the contact. Only fire onTap
         // when the finger hasn't moved more than 8 pt — matching the parent
@@ -874,6 +885,33 @@ private struct ContactCircle: View {
                     onTap()
                 }
         )
+        .accessibilityLabel(Text(accessibilityLabel))
+    }
+
+    private var unreadBadge: some View {
+        let n = metrics.unreadCount
+        let label = n > 99 ? "99+" : "\(n)"
+        return Text(label)
+            .font(CTFont.bold(n > 9 ? 8 : 9))
+            .foregroundStyle(Color.CT.bg)
+            .padding(.horizontal, n > 9 ? 4 : 0)
+            .frame(minWidth: 15, minHeight: 15)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.CT.accent)
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(Color.CT.bg.opacity(0.35), lineWidth: 0.5)
+            )
+    }
+
+    private var accessibilityLabel: String {
+        let name = user.resolvedDisplayName
+        if metrics.unreadCount > 0 {
+            return "\(name), \(metrics.unreadCount)"
+        }
+        return name
     }
 
     // MARK: Proximity effect
@@ -914,7 +952,8 @@ private struct ContactCircle: View {
 
     private var accentColor: Color { .hexagonAccent(for: user.id) }
     private var borderColor: Color {
-        user.isBlocked ? Color.red.opacity(0.55) : Color.CT.textDim.opacity(0.5)
+        if user.isBlocked { return Color.red.opacity(0.55) }
+        return metrics.activityRingColor
     }
 }
 

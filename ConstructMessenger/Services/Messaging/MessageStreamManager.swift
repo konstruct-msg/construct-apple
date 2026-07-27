@@ -129,8 +129,64 @@ final class MessageStreamManager {
     /// ~30s because DPI throttles UDP. Without this, each reconnect re-tries QUIC, dies, falls to
     /// H2, and (on a clean H2 end) resets the counter → endless QUIC thrash. While set in the
     /// future, `openStream()` goes straight to H2. Reset by an explicit transport toggle.
-    var fastUdpUnhealthyUntil: Date?
+    ///
+    /// **Persisted across cold starts** (write-through, keyed by the network fingerprint): on a
+    /// censored network the old in-memory-only suppression meant every launch re-probed QUIC and
+    /// paid the "open → die at idle → fall to H2" tax before going sticky-H2. Persisting the window
+    /// (scoped to the same network) skips that on relaunch. A genuine network change clears it
+    /// (`resetDegradedModeOnNetworkChange` sets nil → write-through removes it; restore also requires
+    /// a fingerprint match).
+    private var _fastUdpUnhealthyUntil: Date?
+    var fastUdpUnhealthyUntil: Date? {
+        get { _fastUdpUnhealthyUntil }
+        set {
+            _fastUdpUnhealthyUntil = newValue
+            Self.persistQuicSuppression(until: newValue)
+        }
+    }
     static let fastUdpCooldown: TimeInterval = 300
+
+    private static let quicSuppressedUntilKey = "quic_suppressed_until_v1"
+    private static let quicSuppressedNetworkKey = "quic_suppressed_network_v1"
+    /// One-shot guard so the persisted suppression is restored at most once per launch (at the first
+    /// connect, by when the network monitor has reported a fingerprint).
+    private var didRestoreQuicSuppression = false
+
+    /// Write-through the suppression window to `UserDefaults`, tagged with the current network
+    /// fingerprint. A nil / past value clears it.
+    private static func persistQuicSuppression(until: Date?) {
+        let d = UserDefaults.standard
+        if let until, until > Date() {
+            d.set(until, forKey: quicSuppressedUntilKey)
+            d.set(NetworkReachabilityManager.shared.currentPathFingerprint, forKey: quicSuppressedNetworkKey)
+        } else {
+            d.removeObject(forKey: quicSuppressedUntilKey)
+            d.removeObject(forKey: quicSuppressedNetworkKey)
+        }
+    }
+
+    /// Restore a persisted QUIC suppression once per launch — but ONLY if it is still in the future
+    /// AND on the same network fingerprint. A different (or unknown) network must re-probe QUIC, so
+    /// a stale suppression from another network never wrongly forces H2.
+    private func restoreQuicSuppressionOnceIfNeeded() {
+        guard !didRestoreQuicSuppression else { return }
+        didRestoreQuicSuppression = true
+
+        let d = UserDefaults.standard
+        guard let until = d.object(forKey: Self.quicSuppressedUntilKey) as? Date, until > Date() else {
+            Self.persistQuicSuppression(until: nil)
+            return
+        }
+        let persistedNet = d.string(forKey: Self.quicSuppressedNetworkKey) ?? ""
+        let currentNet = NetworkReachabilityManager.shared.currentPathFingerprint
+        if !persistedNet.isEmpty, persistedNet == currentNet {
+            _fastUdpUnhealthyUntil = until   // set backing directly — already persisted, same value
+            Log.info("QUIC suppression restored from prior session (same network, \(Int(until.timeIntervalSinceNow))s left) — starting on H2", category: "MessageStream")
+        } else {
+            // Different / unknown network → drop the stale suppression and re-probe QUIC.
+            Self.persistQuicSuppression(until: nil)
+        }
+    }
     /// Debounce for `reconnectForTransportChange`. A transport toggle does a full teardown +
     /// reconnect; toggling rapidly (or SwiftUI firing `.onChange` twice) stacks teardowns and
     /// creates connect→immediate-invalidate races. We coalesce bursts into a single reconnect to
@@ -197,12 +253,25 @@ final class MessageStreamManager {
         return Date().timeIntervalSince(start) >= degradedModeThreshold
     }
 
-    /// Clears prolonged-offline backoff state when the network interface changes.
+    /// Clears prolonged-offline backoff state AND the fast-UDP (QUIC/H3) suppression ladder when the
+    /// network interface changes. A genuine path switch (WiFi↔cellular, VPN on/off, region change)
+    /// invalidates the "QUIC is blocked on this network" conclusion — UDP/443 may be throttled on
+    /// one network and clean on another — so the next `openStream()` must re-probe QUIC instead of
+    /// staying sticky-H2 until app restart. This is the correct re-enable trigger: a real
+    /// path-change event, not a timer. It fires only on `.networkPathChanged`, which
+    /// `NetworkReachabilityManager` gates on an actual interface/topology change, so a
+    /// still-QUIC-blocked network is re-probed at most once per switch — never on every reconnect
+    /// (the per-reconnect thrash the suppression ladder itself exists to stop). Mirrors the clear an
+    /// explicit transport toggle does in `performTransportReconnect`.
     /// Reconnect is owned by `scheduleReconnectAfterRoutingChange` (StreamLifecycle + grpcServerChanged).
     func resetDegradedModeOnNetworkChange() {
         continuousFailureStreakStart = nil
         isInDegradedMode = false
-        Log.debug("Network path — cleared degraded-mode window", category: "MessageStream")
+        // Re-arm fast-UDP: the new network may not block QUIC even if the old one did (and vice-versa).
+        fastUdpUnhealthyUntil = nil
+        consecutiveH3OpenFailures = 0
+        shouldFallbackToH2Direct = false
+        Log.debug("Network path — cleared degraded-mode window + fast-UDP suppression (QUIC re-probe on next open)", category: "MessageStream")
     }
 
     /// Single entry for routing-driven reconnects. Bursts (network flap + VEIL port + invalidate)
@@ -259,6 +328,11 @@ final class MessageStreamManager {
 
     func connect(contactUserIds: [String] = [], trigger: String = "?", onMessageReceived: @escaping (ChatMessage) -> Void) {
         self.onMessageReceived = onMessageReceived
+
+        // Restore a prior-session QUIC suppression (same network only) before the first transport
+        // decision, so a cold start on a still-blocked network goes straight to H2 instead of
+        // re-paying the QUIC open-then-die tax.
+        restoreQuicSuppressionOnceIfNeeded()
 
         // Use Set comparison: currentConversationIds() builds from Array(Set) whose order is
         // non-deterministic across calls, so the same 3 IDs may arrive in a different order on
@@ -395,9 +469,11 @@ final class MessageStreamManager {
         backgroundFetchTask = nil
         retryCount = 0
 
-        shouldFallbackToH2Direct = false
-        lastStreamTransportWasH3 = false
-        consecutiveH3OpenFailures = 0
+        // Preserve QUIC/H3 health signals across force-reconnect.
+        // Resetting consecutiveH3OpenFailures / shouldFallbackToH2Direct here forced a fresh
+        // QUIC handshake every time polling/status scheduled forceReconnect mid-open — device
+        // logs showed openStream QUIC → forceReconnect → QUIC again → double timeout → only
+        // then H2. fastUdpUnhealthyUntil was already preserved; keep the rest of the ladder too.
         continuousFailureStreakStart = nil
         isInDegradedMode = false
         connect(contactUserIds: contactUserIds, trigger: "forceReconnect", onMessageReceived: onMessageReceived)
@@ -437,7 +513,8 @@ final class MessageStreamManager {
         streamTask = nil
         retryCount = 0
 
-        shouldFallbackToH2Direct = false
+        // Do not clear consecutiveH3OpenFailures / shouldFallbackToH2Direct /
+        // fastUdpUnhealthyUntil — UDP health is network-session state, not stream-instance state.
         lastStreamTransportWasH3 = false
         continuousFailureStreakStart = nil
         isInDegradedMode = false
@@ -623,8 +700,18 @@ final class MessageStreamManager {
                 await TransportRouter.shared.send(.rpcSucceeded(via: okTarget, latencyMs: 0))
                 retryCount = 0
                 shouldFallbackToH2Direct = false
+                // Only clear the fast-UDP failure counter when the stream that just ended cleanly
+                // actually ran over fast-UDP (H3/QUIC). Clearing it on a clean *H2* end (H2 was
+                // chosen because QUIC failed to open) re-arms QUIC for the next reconnect, so
+                // networks that block QUIC via DPI (e.g. RU — FR/AU connect over QUIC fine) re-probe
+                // dead QUIC on every reconnect and pay the ~3s handshake-timeout tax before falling
+                // back. That is the endless thrash this counter + fastUdpUnhealthyUntil cooldown
+                // were meant to stop; the unconditional reset here defeated them. A QUIC-good
+                // network leaves lastStreamTransportWasH3 == true, so QUIC is still cleared normally.
+                if lastStreamTransportWasH3 {
+                    consecutiveH3OpenFailures = 0
+                }
                 lastStreamTransportWasH3 = false
-                consecutiveH3OpenFailures = 0
                 continuousFailureStreakStart = nil
                 isInDegradedMode = false
                 try await Task.sleep(for: .seconds(NetworkTiming.Stream.cleanEndReconnectDelay))
@@ -676,8 +763,15 @@ final class MessageStreamManager {
                                 )
                             }
                         } else {
-                            Log.info("MessageStream refresh rejected by server — triggering device re-auth", category: "MessageStream")
+                            Log.info("MessageStream refresh rejected by server — device re-auth", category: "MessageStream")
                             AuthSessionManager.shared.invalidateTokensForReauth()
+                            let outcome = await DeviceAuthCoordinator.shared.authenticateIfPossible()
+                            if case .success = outcome {
+                                Log.info("MessageStream: device re-auth recovered session — reconnecting", category: "MessageStream")
+                                retryCount = 0
+                                continue
+                            }
+                            Log.error("MessageStream: device re-auth failed after dead refresh — \(String(describing: outcome))", category: "MessageStream")
                         }
                     } else {
                         Log.info("MessageStream refresh failed (network error) — keeping tokens, will retry later", category: "MessageStream")
@@ -765,7 +859,11 @@ final class MessageStreamManager {
                 )
                 if lastStreamTransportWasH3 {
                     consecutiveH3OpenFailures += 1
-                    Log.info("H3 failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold)", category: "MessageStream")
+                    // First open failure → next connectLoop iteration uses H2 immediately
+                    // (shouldFallbackToH2Direct), without waiting for a second full QUIC
+                    // handshake timeout (often 3s each) before the stream is usable.
+                    shouldFallbackToH2Direct = true
+                    Log.info("H3 failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold) — next open prefers H2", category: "MessageStream")
                     if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
                         fastUdpUnhealthyUntil = Date().addingTimeInterval(Self.fastUdpCooldown)
                         Log.info("Fast-UDP (QUIC/H3) suppressed \(Int(Self.fastUdpCooldown))s — DPI/idle death on this network, using H2", category: "MessageStream")

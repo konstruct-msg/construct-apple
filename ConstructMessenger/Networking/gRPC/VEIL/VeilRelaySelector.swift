@@ -28,7 +28,13 @@ enum VeilRelaySelector {
         let veilHost = "ice.\(currentHost)"
         var seen = Set<String>()
         var candidates: [String] = []
-        let allAddresses = ["\(veilHost):443"] + VEILConfig.hardcodedRelayAddresses + VeilProxyStore.cachedRelayList()
+        // EntryDirectory sources: in-band (ice.host) + Source 2 (bundled seed pool) +
+        // server manifest cache + Source 3 (LAN-discovered island relays). Discovered
+        // relays are LAN-local, so the latency sort naturally floats them to the front.
+        let allAddresses = ["\(veilHost):443"]
+            + VEILConfig.hardcodedRelayAddresses
+            + VeilProxyStore.cachedRelayList()
+            + DiscoveredRelayStore.shared.addresses()
         for address in allAddresses where seen.insert(address).inserted {
             candidates.append(address)
         }
@@ -36,7 +42,11 @@ enum VeilRelaySelector {
     }
 
     static func cachedRelayAddresses() -> [String] {
-        VeilProxyStore.cachedRelayAddresses(fallback: VEILConfig.hardcodedRelayAddresses)
+        let base = VeilProxyStore.cachedRelayAddresses(fallback: VEILConfig.hardcodedRelayAddresses)
+        let discovered = DiscoveredRelayStore.shared.addresses()
+        guard !discovered.isEmpty else { return base }
+        var seen = Set(base)
+        return base + discovered.filter { seen.insert($0).inserted }
     }
 
     static func certificateExpiryAddresses() -> Set<String> {

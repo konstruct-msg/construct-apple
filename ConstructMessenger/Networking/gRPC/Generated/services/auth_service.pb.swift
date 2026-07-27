@@ -1524,8 +1524,18 @@ public struct Shared_Proto_Services_V1_IssueTokensResponse: Sendable {
   public var evaluatedPoints: [Data] = []
 
   /// 32-byte compressed Ristretto255 public key: K = k * G.
-  /// Client uses this to verify the evaluation (DLEQ proof in future version).
+  /// Clients pin this from well-known (token_issuer_public) and verify dleq_proof against it.
   public var serverPubkey: Data = Data()
+
+  /// Batched Chaum-Pedersen DLEQ proof (Phase C verifiable VOPRF): 64 bytes,
+  /// challenge(32) ‖ response(32). Proves every evaluated_point[i] = k * blinded_points[i]
+  /// under the same committed k (K = k*G) — rejects a malicious per-user key_u. Empty only if
+  /// the issuer key is unset. Transcript spec: construct-docs/cryptocore/privacy-pass-dleq-v1.md.
+  public var dleqProof: Data = Data()
+
+  /// Version of the committed issuer key (matches token_issuer_key_version in well-known), so key
+  /// rotation is not a flag-day: the client pins K per version.
+  public var issuerKeyVersion: UInt32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3635,7 +3645,7 @@ extension Shared_Proto_Services_V1_IssueTokensRequest: SwiftProtobuf.Message, Sw
 
 extension Shared_Proto_Services_V1_IssueTokensResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IssueTokensResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}evaluated_points\0\u{3}server_pubkey\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}evaluated_points\0\u{3}server_pubkey\0\u{3}dleq_proof\0\u{3}issuer_key_version\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3645,6 +3655,8 @@ extension Shared_Proto_Services_V1_IssueTokensResponse: SwiftProtobuf.Message, S
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedBytesField(value: &self.evaluatedPoints) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.serverPubkey) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.dleqProof) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.issuerKeyVersion) }()
       default: break
       }
     }
@@ -3657,12 +3669,20 @@ extension Shared_Proto_Services_V1_IssueTokensResponse: SwiftProtobuf.Message, S
     if !self.serverPubkey.isEmpty {
       try visitor.visitSingularBytesField(value: self.serverPubkey, fieldNumber: 2)
     }
+    if !self.dleqProof.isEmpty {
+      try visitor.visitSingularBytesField(value: self.dleqProof, fieldNumber: 3)
+    }
+    if self.issuerKeyVersion != 0 {
+      try visitor.visitSingularUInt32Field(value: self.issuerKeyVersion, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_IssueTokensResponse, rhs: Shared_Proto_Services_V1_IssueTokensResponse) -> Bool {
     if lhs.evaluatedPoints != rhs.evaluatedPoints {return false}
     if lhs.serverPubkey != rhs.serverPubkey {return false}
+    if lhs.dleqProof != rhs.dleqProof {return false}
+    if lhs.issuerKeyVersion != rhs.issuerKeyVersion {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

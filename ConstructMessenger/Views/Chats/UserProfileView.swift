@@ -48,6 +48,7 @@ struct UserProfileView: View {
     @State private var viewModel = ProfileShareViewModel()
     @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
     @State private var showingBlockConfirmation = false
+    @State private var showingReportConfirmation = false
     @State private var showResetSessionConfirm = false
     @State private var showingShareAlert = false
     @State private var shareAlertMessage = ""
@@ -109,6 +110,12 @@ struct UserProfileView: View {
         } message: {
             Text(LocalizedStringKey(user.isBlocked ? "unblock_user_confirmation_message" : "block_user_confirmation_message"))
         }
+        .alert(LocalizedStringKey("report_spam_confirmation"), isPresented: $showingReportConfirmation) {
+            Button(LocalizedStringKey("cancel"), role: .cancel) {}
+            Button(LocalizedStringKey("report_spam"), role: .destructive) { handleReportSpam() }
+        } message: {
+            Text(LocalizedStringKey("report_spam_confirmation_message"))
+        }
         .alert(LocalizedStringKey("share_my_data_alert"), isPresented: $showingShareAlert) {
             Button(LocalizedStringKey("ok")) {}
         } message: {
@@ -133,10 +140,18 @@ struct UserProfileView: View {
             Text(LocalizedStringKey("reset_session_message"))
         }
         .sheet(isPresented: $showingSafetyNumbers) {
-            SafetyNumberView(
-                theirDeviceId: user.id,
-                theirDisplayName: user.resolvedDisplayName
-            )
+            if let deviceId = KeyChangeUX.safetyDeviceId(for: user) {
+                SafetyNumberView(
+                    theirDeviceId: deviceId,
+                    theirDisplayName: user.resolvedDisplayName
+                )
+            } else {
+                // Fallback: no pinned identity yet — show unavailable state inside SafetyNumberView
+                SafetyNumberView(
+                    theirDeviceId: "",
+                    theirDisplayName: user.resolvedDisplayName
+                )
+            }
         }
         .alert(LocalizedStringKey("local_name"), isPresented: $showingLocalNameEditor) {
             TextField(NSLocalizedString("local_name_placeholder", comment: ""), text: $draftLocalName)
@@ -224,13 +239,45 @@ struct UserProfileView: View {
             .buttonStyle(.plain)
             flatRowDivider()
 
+            // External identity = key fingerprint (thread 5.3). UUID is internal addressing only.
+            if let fp = user.knownIdentityKey.flatMap({ IdentityFingerprint.short(from: $0) }) {
+                Button {
+                    PlatformClipboard.copy(fp)
+                } label: {
+                    profileRow(label: NSLocalizedString("identity_fingerprint", comment: "")) {
+                        HStack(spacing: 6) {
+                            Text(fp)
+                                .font(CTFont.regular(12))
+                                .foregroundStyle(Color.CT.accent)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 11, weight: .regular))
+                                .foregroundStyle(Color.CT.textDim)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(NSLocalizedString("identity_fingerprint", comment: ""))
+                .accessibilityHint(NSLocalizedString("identity_fingerprint_copy_hint", comment: ""))
+            } else {
+                profileRow(label: NSLocalizedString("identity_fingerprint", comment: "")) {
+                    Text(NSLocalizedString("identity_fingerprint_unknown", comment: ""))
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.textDim)
+                }
+            }
+            // Internal ServerUserId kept off the primary identity surface (addressing only).
+            #if DEBUG
+            flatRowDivider()
             profileRow(label: NSLocalizedString("user_id", comment: "")) {
                 let uid = user.id
                 let short = uid.count > 12 ? "\(uid.prefix(8))...\(uid.suffix(2))" : uid
                 Text(short)
                     .font(CTFont.regular(13))
-                    .foregroundStyle(Color.CT.textDim)
+                    .foregroundStyle(Color.CT.textDim.opacity(0.7))
             }
+            #endif
         }
     }
 
@@ -311,6 +358,11 @@ struct UserProfileView: View {
             sectionHeader(NSLocalizedString("security", comment: ""))
             flatRowDivider()
 
+            if user.ktStatus == .keyChanged || user.ktStatus == .failed {
+                keyChangeWarningBlock
+                flatRowDivider()
+            }
+
             profileRow(label: NSLocalizedString("session_crypto_suite", comment: "")) {
                 HStack(spacing: 8) {
                     Text(hasSession ? "[ENC]" : "[---]")
@@ -345,6 +397,70 @@ struct UserProfileView: View {
         }
     }
 
+    /// Persistent trust warning until the user verifies or accepts the new key.
+    private var keyChangeWarningBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .foregroundStyle(Color.CT.danger)
+                Text(NSLocalizedString(
+                    user.ktStatus == .failed ? "key_change_banner_title_failed" : "key_change_banner_title",
+                    comment: ""
+                ))
+                .font(CTFont.bold(12))
+                .foregroundStyle(Color.CT.danger)
+            }
+
+            Text(user.ktStatus == .failed
+                 ? NSLocalizedString("key_change_banner_subtitle_failed", comment: "")
+                 : String(
+                    format: NSLocalizedString("key_change_banner_subtitle_fmt", comment: ""),
+                    user.resolvedDisplayName
+                 )
+            )
+            .font(CTFont.regular(11))
+            .foregroundStyle(Color.CT.textDim)
+
+            HStack(spacing: 10) {
+                Button {
+                    showingSafetyNumbers = true
+                } label: {
+                    Text(NSLocalizedString("key_change_verify", comment: ""))
+                        .font(CTFont.bold(12))
+                        .foregroundStyle(Color.CT.bg)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.CT.danger)
+                        .clipShape(CTShape.control())
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    if KeyChangeUX.acknowledgeKeyChange(userId: user.id, context: viewContext) {
+                        // @ObservedObject user will refresh ktStatus from Core Data object
+                    }
+                } label: {
+                    Text(NSLocalizedString("key_change_accept", comment: ""))
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.accent)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.CT.bgMsg)
+                        .clipShape(CTShape.control())
+                        .overlay(
+                            CTShape.control()
+                                .strokeBorder(Color.CT.accent.opacity(0.5), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.CT.danger.opacity(0.08))
+    }
+
     // MARK: - Danger section
 
     private var dangerSection: some View {
@@ -356,6 +472,12 @@ struct UserProfileView: View {
                 label: NSLocalizedString(user.isBlocked ? "unblock_user" : "block_user", comment: ""),
                 color: user.isBlocked ? Color.CT.text : Color.CT.danger
             ) { showingBlockConfirmation = true }
+            flatRowDivider()
+
+            actionRow(
+                label: NSLocalizedString("report_spam", comment: ""),
+                color: Color.CT.danger
+            ) { showingReportConfirmation = true }
             flatRowDivider()
 
             actionRow(
@@ -500,9 +622,59 @@ struct UserProfileView: View {
         }
     }
 
+    /// Report the contact for spam and block them. Reporting feeds the server-side
+    /// auto-escalation (flag/ban) engine; we also block (report-and-block is the safe default —
+    /// you should not keep receiving messages from someone you reported). The reported device id
+    /// is derived locally from the peer's identity key (`SHA256(identity_public)[0..16]`, the same
+    /// value the server keys sentinel on), so it works even under sealed sender.
+    private func handleReportSpam() {
+        let userId = user.id
+        let reportedDeviceId: String? = user.knownIdentityKey.map { deriveDeviceId(identityPublicKey: [UInt8]($0)) }
+
+        // Block immediately (local drop + durable server-side); report best-effort alongside.
+        user.isBlocked = true
+        viewContext.saveAndLog(category: "UserProfileView")
+
+        Task {
+            var reported = false
+            if let reportedDeviceId, !reportedDeviceId.isEmpty {
+                do {
+                    reported = try await SentinelServiceClient.shared.reportSpam(reportedDeviceId: reportedDeviceId)
+                } catch {
+                    Log.error("reportSpam failed for \(userId.prefix(8))…: \(error)", category: "UserProfileView")
+                }
+            } else {
+                Log.error("reportSpam skipped for \(userId.prefix(8))… — no known identity key to derive device id", category: "UserProfileView")
+            }
+            do { _ = try await UserServiceClient.shared.blockUser(userId: userId, reason: "spam") }
+            catch { Log.error("Block sync failed after report for \(userId.prefix(8))…: \(error)", category: "UserProfileView") }
+
+            await MainActor.run {
+                shareAlertMessage = NSLocalizedString(reported ? "report_spam_success" : "report_spam_failed", comment: "")
+                showingShareAlert = true
+            }
+        }
+    }
+
     private func handleBlockToggle() {
         user.isBlocked.toggle()
+        let nowBlocked = user.isBlocked
+        let userId = user.id
         viewContext.saveAndLog(category: "UserProfileView")
+        // Persist the block server-side (durable across reinstall; the authoritative
+        // `user_blocks` row used on the identified path). The local `isBlocked` already drives
+        // the client-side drop, so a failed RPC must NOT revert the local state — best-effort sync.
+        Task {
+            do {
+                if nowBlocked {
+                    _ = try await UserServiceClient.shared.blockUser(userId: userId)
+                } else {
+                    _ = try await UserServiceClient.shared.unblockUser(userId: userId)
+                }
+            } catch {
+                Log.error("Block sync failed for \(userId.prefix(8))… (local state kept): \(error)", category: "UserProfileView")
+            }
+        }
     }
 
     /// Persist the local alias. Empty/whitespace clears it (falls back to the resolved name).

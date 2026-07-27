@@ -223,6 +223,39 @@ final class VeilProxyManager: ObservableObject {
         }
     }
 
+    /// User-facing enable path for `.auto` / `.on`.
+    ///
+    /// Always pulls the latest signed relay config (addresses + cert material) from the
+    /// server first — silent, no UI surface for coordinates — then starts the proxy if
+    /// the current mode actually needs VEIL. Failures fall back to cache / seed relays.
+    ///
+    /// - `.on`: fetches config, then forces a VEIL probe via the transport router.
+    /// - `.auto`: fetches config so the pool is warm; only starts the proxy when the
+    ///   transport layer already prefers VEIL (direct path is blocked).
+    func refreshConfigAndStartIfNeeded() async {
+        migrateToModeIfNeeded()
+        guard mode != .off else {
+            Log.info("VEIL enable skipped — mode is off", category: "VEIL")
+            return
+        }
+        guard KeychainManager.shared.isDeviceRegistered() else {
+            Log.info("VEIL enable skipped — device not registered", category: "VEIL")
+            return
+        }
+
+        Log.info("VEIL enable — refreshing server relay config (mode=\(mode.rawValue))", category: "VEIL")
+        // Pull addresses + SPKI/SNI/cert material from the signed well-known manifest.
+        // Seeds remain the floor if the fetch fails (censored first hop, offline, etc.).
+        await fetchConfigAndEvictIfRemoved()
+
+        // In-band capability renew/bootstrap over whatever transport is up (typically
+        // direct right after the user toggles). No-ops without a prior ticket / path.
+        VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
+        VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
+
+        await startIfNeeded()
+    }
+
     /// Start or refresh VEIL when the transport layer actually needs it.
     /// In `.auto` mode this is a no-op on a healthy direct path — avoids spinning up
     /// the local proxy (and its CPU cost) on every foreground transition.
@@ -243,6 +276,11 @@ final class VeilProxyManager: ObservableObject {
                 return
             }
         }
+
+        // EntryDirectory Source 3: VEIL is genuinely active now. In the censored/island
+        // regime, browse the LAN for domestic island relays (this is the only place that
+        // raises the local-network prompt — never at launch). Off-regime: no-op.
+        startLocalDiscoveryIfCensored()
         // ConnectionLoop handles proxy lifecycle. iOS is veil-front-only (SPKI pin +
         // per-user ticket); the obfs4 bridge cert is not used, so we no longer fetch it
         // here — that fetch only added two 8s .well-known/ice-cert timeouts on censored
@@ -266,6 +304,29 @@ final class VeilProxyManager: ObservableObject {
     func stop() {
         isRunning = false; proxyPort = 0; isWebTunnelActive = false
         activeRelay = nil
+        // Tear down Source 3 discovery when VEIL is torn down: discovered relays are only
+        // valid on the current LAN, and browsing costs battery + keeps the local-net prompt live.
+        VeilLocalDiscovery.shared.stop()
+    }
+
+    // MARK: - EntryDirectory Source 3 (local discovery)
+
+    /// Begin browsing the LAN for domestic island relays, but only in the censored/island
+    /// regime — off-regime it stays dark so we never raise the local-network prompt or spend
+    /// battery where local relays cannot exist. Idempotent (VeilLocalDiscovery.start guards).
+    private func startLocalDiscoveryIfCensored() {
+        guard CensoredNetworkDetector.isCensored else { return }
+        VeilLocalDiscovery.shared.onDiscoveredRelaysChanged = { [weak self] in
+            Task { @MainActor in await self?.refreshRelayPoolFromDiscovery() }
+        }
+        VeilLocalDiscovery.shared.start()
+    }
+
+    /// Re-snapshot the relay pool (now including any LAN-discovered relays) and push it into
+    /// the router's proxy pool so the next probe race can pick a discovered island relay.
+    private func refreshRelayPoolFromDiscovery() async {
+        let freshRelays = ConnectionLoopRelayBridge.snapshotRelays()
+        await TransportRouter.shared.updateRelays(freshRelays)
     }
 
     /// Foreground hook: the TransportRouter FSM detects stale proxies via the next failed RPC

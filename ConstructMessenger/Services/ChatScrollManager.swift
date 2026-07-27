@@ -49,10 +49,10 @@ class ChatScrollManager {
 
     // MARK: - High-frequency / private state
 
-    /// Current offset from bottom (≈ 0 at bottom; large negative = scrolled up).
+    /// Distance from the bottom of the content in points (≈ 0 at bottom; large positive = scrolled up).
     /// Not observed — reading/writing must not invalidate the view every frame.
     @ObservationIgnored
-    private(set) var scrollOffset: CGFloat = 0
+    private(set) var distanceFromBottom: CGFloat = 0
 
     /// Reference to ScrollViewProxy for programmatic scrolling
     @ObservationIgnored
@@ -66,13 +66,21 @@ class ChatScrollManager {
     @ObservationIgnored
     private var cancellables = Set<AnyCancellable>()
 
+    /// Coalesces multi-pass pin / keyboard re-pin so concurrent triggers (composer height +
+    /// message count + keyboard) don't stack animated scrolls (black flash / jerky chat).
+    @ObservationIgnored
+    private var pinTask: Task<Void, Never>?
+
+    @ObservationIgnored
+    private var animatedScrollTask: Task<Void, Never>?
+
     // MARK: - Thresholds
 
     private enum Threshold {
-        /// Near bottom → keep auto-scroll on for new messages.
-        static let nearBottom: CGFloat = -60
-        /// Far enough up to show the jump-to-bottom button.
-        static let showJumpButton: CGFloat = -200
+        /// Within this many points of the bottom → auto-scroll stays on; FAB hidden.
+        static let nearBottom: CGFloat = 60
+        /// Need at least this much content below the viewport to show the jump FAB.
+        static let showJumpButton: CGFloat = 200
     }
 
     // MARK: - Initialization
@@ -105,18 +113,61 @@ class ChatScrollManager {
         }
 
         if animated {
-            withAnimation(.easeOut(duration: 0.3)) {
-                proxy.scrollTo(messageId, anchor: .bottom)
+            // Coalesce animated jumps — send/status/FRC storms used to fire 2+ per event.
+            animatedScrollTask?.cancel()
+            animatedScrollTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(50))
+                guard !Task.isCancelled, let self, let proxy = self.proxy else { return }
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(messageId, anchor: .bottom)
+                }
+                self.hasScrolledToBottom = true
+                self.shouldScrollToBottom = true
+                if self.shouldShowScrollToBottomButton {
+                    self.shouldShowScrollToBottomButton = false
+                }
+                Log.debug("Scrolled to bottom (messageId: \(messageId), animated: true)", category: "ChatScrollManager")
             }
-        } else {
-            proxy.scrollTo(messageId, anchor: .bottom)
+            return
         }
 
+        proxy.scrollTo(messageId, anchor: .bottom)
         hasScrolledToBottom = true
-        // Corrective re-pins fire often (composer height, keyboard); keep the log
-        // for intentional animated scrolls only to cut console noise.
-        if animated {
-            Log.debug("Scrolled to bottom (messageId: \(messageId), animated: true)", category: "ChatScrollManager")
+        shouldScrollToBottom = true
+        // Programmatic jump always clears the FAB — don't wait for the next geometry tick.
+        if shouldShowScrollToBottomButton {
+            shouldShowScrollToBottomButton = false
+        }
+    }
+
+    /// Multi-pass non-animated pin used when the composer inset / first layout is still
+    /// settling. Stops early if the user scrolls away (`shouldScrollToBottom == false`).
+    /// Default delays cover: immediate · after first inset · after load-more/FRC churn.
+    /// Concurrent calls cancel the previous pin series (composer + keyboard + reply).
+    func pinToBottomCorrective(
+        delaysMs: [UInt64] = [0, 50, 160, 350],
+        messageId: String = "bottom"
+    ) {
+        // Prefer non-animated corrective pin over any pending animated jump.
+        animatedScrollTask?.cancel()
+        animatedScrollTask = nil
+        pinTask?.cancel()
+        pinTask = Task { @MainActor [weak self] in
+            for (index, ms) in delaysMs.enumerated() {
+                if ms > 0 {
+                    try? await Task.sleep(for: .milliseconds(ms))
+                }
+                guard !Task.isCancelled, let self else { return }
+                guard self.shouldScrollToBottom else { return }
+                guard self.proxy != nil else { return }
+                self.scrollToBottom(messageId: messageId, animated: false)
+                // First tick is often a no-op if LazyVStack has not produced the anchor yet.
+                if index == 0 {
+                    try? await Task.sleep(for: .milliseconds(16))
+                    guard !Task.isCancelled, self.shouldScrollToBottom else { return }
+                    self.scrollToBottom(messageId: messageId, animated: false)
+                }
+            }
         }
     }
 
@@ -141,18 +192,20 @@ class ChatScrollManager {
         Log.debug("Scrolled to message: \(messageId)", category: "ChatScrollManager")
     }
 
-    /// Update scroll offset (called from onScrollGeometryChange).
-    /// `offset` ≈ 0 when at the bottom; large negative means scrolled far up.
-    /// Only mutates observed flags when crossing thresholds so the chat view
-    /// does not re-render on every scroll pixel.
-    /// `contentFits` — content is shorter than the viewport: there is nothing to jump to,
-    /// so the FAB is force-hidden. This runs even while the keyboard is visible, because a
-    /// spurious mid-animation offset can latch the button ON right before the keyboard gate
-    /// freezes threshold updates (seen as a jump-FAB in a two-message chat).
-    func updateScrollOffset(_ offset: CGFloat, contentFits: Bool = false) {
-        guard offset.isFinite else { return }
+    /// Update scroll metrics (from `onScrollGeometryChange`).
+    ///
+    /// - Parameter distanceFromBottom: points of content **below** the visible rect
+    ///   (`contentSize.height - visibleRect.maxY`). ≈ 0 at bottom; large when scrolled up.
+    ///   Prefer this over `contentOffset + containerHeight - contentSize` — that formula
+    ///   ignores `contentInsets` from the composer `safeAreaInset`, so with keyboard/composer
+    ///   open the chat looked "at bottom" while the metric stayed ≤ −200 and the FAB stuck on.
+    /// - Parameter contentFits: content shorter than the viewport → nothing to jump to.
+    ///
+    /// Only mutates observed flags when crossing thresholds (not every pixel).
+    func updateScrollOffset(distanceFromBottom distance: CGFloat, contentFits: Bool = false) {
+        guard distance.isFinite else { return }
 
-        scrollOffset = offset
+        distanceFromBottom = distance
 
         if contentFits {
             if shouldShowScrollToBottomButton {
@@ -164,21 +217,32 @@ class ChatScrollManager {
             return
         }
 
-        // Ignore threshold updates while keyboard is animating — container height
-        // changes during animation produce spurious offset values.
+        let nearBottom = distance <= Threshold.nearBottom
+        let farUp = distance >= Threshold.showJumpButton
+
+        // Keyboard / composer-height animation produces transient distances.
+        // Never latch the FAB ON while the keyboard is up; still allow hide + near-bottom.
         if isKeyboardVisible {
+            if nearBottom {
+                if !shouldScrollToBottom { shouldScrollToBottom = true }
+                if shouldShowScrollToBottomButton { shouldShowScrollToBottomButton = false }
+            }
             return
         }
 
-        let nearBottom = offset >= Threshold.nearBottom
         if nearBottom != shouldScrollToBottom {
             shouldScrollToBottom = nearBottom
         }
 
-        let showButton = offset < Threshold.showJumpButton
-        if showButton != shouldShowScrollToBottomButton {
-            shouldShowScrollToBottomButton = showButton
+        if farUp != shouldShowScrollToBottomButton {
+            shouldShowScrollToBottomButton = farUp
         }
+    }
+
+    /// Legacy alias — treats argument as **signed** bottom offset (0 at bottom, negative up).
+    func updateScrollOffset(_ offset: CGFloat, contentFits: Bool = false) {
+        // Convert old convention (negative = up) to distance-from-bottom (positive = up).
+        updateScrollOffset(distanceFromBottom: -offset, contentFits: contentFits)
     }
 
     /// Update drag offset for pull-to-refresh
@@ -189,10 +253,14 @@ class ChatScrollManager {
 
     /// Reset scroll state (e.g., when switching chats)
     func reset() {
+        pinTask?.cancel()
+        pinTask = nil
+        animatedScrollTask?.cancel()
+        animatedScrollTask = nil
         shouldScrollToBottom = true
         hasScrolledToBottom = false
         shouldShowScrollToBottomButton = false
-        scrollOffset = 0
+        distanceFromBottom = 0
         dragOffset = 0
         proxy = nil
 
@@ -210,15 +278,15 @@ class ChatScrollManager {
             }
             .sink { [weak self] height in
                 self?.keyboardHeight = height
-                // Scroll to bottom when keyboard appears, but only if user was already near bottom.
-                // The shouldScrollToBottom flag is managed by updateScrollOffset based on
-                // actual scroll position before keyboard animation started.
-                Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .milliseconds(150))
-                    guard let self else { return }
-                    if self.shouldScrollToBottom {
-                        self.scrollToBottom()
-                    }
+                // Corrective pin only — animated scroll during keyboard animation
+                // dematerializes LazyVStack (empty chat flash). Single multi-pass pin
+                // replaces stacked ad-hoc Tasks from concurrent keyboard + composer events.
+                guard let self else { return }
+                if self.shouldShowScrollToBottomButton {
+                    self.shouldShowScrollToBottomButton = false
+                }
+                if self.shouldScrollToBottom {
+                    self.pinToBottomCorrective(delaysMs: [150, 280])
                 }
             }
             .store(in: &cancellables)
@@ -226,14 +294,13 @@ class ChatScrollManager {
         // Observe keyboard will hide
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
             .sink { [weak self] _ in
-                self?.keyboardHeight = 0
-                // After keyboard dismisses, re-enable auto-scroll since user
-                // is likely back at the input area.
-                Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .milliseconds(100))
-                    self?.shouldScrollToBottom = true
-                    self?.scrollToBottom()
-                }
+                guard let self else { return }
+                self.keyboardHeight = 0
+                // After keyboard dismisses, re-enable auto-scroll and clear any FAB that
+                // latched during the keyboard geometry thrash.
+                self.shouldScrollToBottom = true
+                self.shouldShowScrollToBottomButton = false
+                self.pinToBottomCorrective(delaysMs: [100, 220])
             }
             .store(in: &cancellables)
         #endif

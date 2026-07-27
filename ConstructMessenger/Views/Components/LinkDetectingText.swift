@@ -50,8 +50,7 @@ struct LinkDetectingText: View {
         
         // Check if it's a konstruct link (deep link or invite)
         if urlString.hasPrefix("konstruct://") ||
-           urlString.contains("konstruct.cc/add") ||
-           urlString.contains("konstruct.cc/c/") {
+           urlString.contains("konstruct.cc/add") {
             
             Log.info("Opening konstruct link in-app: \(urlString)", category: "LinkDetectingText")
             

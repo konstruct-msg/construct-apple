@@ -27,6 +27,13 @@ protocol MessageRouterDelegate: AnyObject {
     /// (pre-dates the currently established session) and should be silently discarded.
     func messageRouter(_ router: MessageRouter, isEndSessionStale userId: String, timestamp: UInt64) -> Bool
 
+    /// Return `true` when a SESSION_RESET_INIT from `userId` carrying `timestamp` is *superseded*
+    /// (pre-dates or exactly matches the current session's establishment — a server backlog replay)
+    /// and should be coalesced (ACK-only). A *newer* init returns `false` and MUST be applied, even
+    /// while a session is active, or the RESPONDER strands on a stale ratchet (see
+    /// `SessionReducer.isResetInitSuperseded`).
+    func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64) -> Bool
+
     // MARK: - Session initialisation
 
     /// No DR session exists yet — the caller must fetch the sender's public-key bundle

@@ -41,11 +41,32 @@ enum MessageContentType: Int16 {
     /// Infer the content type from a decrypted plaintext string.
     /// Used as a fallback for messages in the DB that predate `contentTypeRaw`.
     static func infer(from plaintext: String) -> MessageContentType {
+        infer(from: Data(plaintext.utf8))
+    }
+
+    /// Infer type from stored/decrypted payload bytes (CTM1 or legacy UTF-8).
+    static func infer(from data: Data) -> MessageContentType {
+        switch LocalMessagePayload.decode(data) {
+        // Keep media/profile as `.regular` so ChatMessageStore FRC (`contentTypeRaw == 0`) still
+        // shows them. `.media` / `.profileShare` exist for future typed filtering — not used yet.
+        case .mediaAlbum, .profileBinary:
+            return .regular
+        case .messageContent:
+            return .regular
+        case .text(let plaintext):
+            return inferLegacyControl(plaintext)
+        case .legacyUTF8(let raw):
+            return inferLegacyControl(String(data: raw, encoding: .utf8) ?? "")
+        }
+    }
+
+    private static func inferLegacyControl(_ plaintext: String) -> MessageContentType {
         if plaintext.hasPrefix("__session_ping") { return .sessionPing }
         if plaintext.hasPrefix("__session_ready") || plaintext.hasPrefix("session_ready_") { return .sessionReady }
         if plaintext.hasPrefix("__END_SESSION")
             || plaintext.hasPrefix("__session_reset_init") || plaintext.hasPrefix("session_reset_init_")
             || plaintext.hasPrefix("__binary_init_") { return .sessionReset }
+        // Legacy media / voice / file JSON remain `.regular` for FRC (contentTypeRaw == 0).
         return .regular
     }
 

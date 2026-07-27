@@ -62,8 +62,8 @@ struct MainTabView: View {
                 if isActive { isCallExpanded = true }
             }
             .onReceive(NotificationCenter.default.publisher(for: .openSynapsTab)) { _ in
-                // Compact tab bar only — regular/iPad uses split chrome, but setting
-                // selectedTab is still harmless and keeps Synaps selection consistent.
+                // Compact: TabView selection. Regular: ChatsSplitView also listens and
+                // switches its sidebar tab; keep selectedTab in sync for SynapsView guards.
                 chatsViewModel.selectedTab = 1
             }
     }

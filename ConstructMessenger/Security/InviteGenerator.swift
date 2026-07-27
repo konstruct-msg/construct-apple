@@ -31,18 +31,18 @@ class InviteGenerator {
     
     // MARK: - Generation
     
-    /// Generate a new invite object
+    /// Generate a new invite object (protocol v4: signed capability, no dead ephKey).
     ///
     /// Process:
-    /// 1. Generate fresh ephemeral X25519 keypair
-    /// 2. Create JTI (UUIDv4)
-    /// 3. Build invite data structure
-    /// 4. Sign with user's Ed25519 identity key
+    /// 1. Create JTI (UUIDv4)
+    /// 2. Build invite data structure (no ephemeral keypair)
+    /// 3. Sign with user's Ed25519 identity key
     ///
     /// - Parameters:
     ///   - userId: Sender's user UUID (for chat creation)
     ///   - deviceId: Sender's device ID (for fetching keys)
-    ///   - username: Sender's username or display name (optional, embedded in V3 signature)
+    ///   - username: Optional plaintext @alias in the signed payload. **Default nil**
+    ///     (metadata minimization). Never pass for HTTPS deep links.
     ///   - serverFQDN: Server FQDN (optional, uses default if nil)
     /// - Returns: Signed InviteObject
     /// - Throws: InviteGenerationError
@@ -52,7 +52,6 @@ class InviteGenerator {
         username: String? = nil,
         serverFQDN: String? = nil
     ) throws -> InviteObject {
-        // Validate inputs
         guard UUID(uuidString: userId) != nil else {
             throw InviteGenerationError.invalidUserId
         }
@@ -60,140 +59,132 @@ class InviteGenerator {
               deviceId.range(of: InviteConfig.deviceIdRegex, options: .regularExpression) != nil else {
             throw InviteGenerationError.invalidDeviceId
         }
-        
+
         let server = normalizeServer(serverFQDN ?? defaultServer)
-        
-        // Step 1: Generate ephemeral keypair
-        let ephemeralKeypair = try generateEphemeralKeypair()
-        Log.debug("Generated ephemeral keypair for invite", category: "InviteGenerator")
-        
-        // Step 2: Generate JTI
         let jti = UUID().uuidString.lowercased()
-        
-        // Step 3: Current timestamp
         let timestamp = Int(Date().timeIntervalSince1970)
-        
-        // Step 4: Encode ephemeral public key to Base64
-        let ephKeyBase64 = Data(ephemeralKeypair.publicKey).base64EncodedString()
-        
-        // Step 5: Get user's identity secret key from CryptoManager
+
         guard let signingSecretKey = try? getSigningSecretKey() else {
             throw InviteGenerationError.missingIdentityKey
         }
-        
-        // Step 6: Create unsigned invite
-        let normalizedUsername = username.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+
+        let normalizedUsername = username
+            .flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { $0.isEmpty ? nil : $0 }
+
+        // v4: empty ephKey — pure signed capability (F2).
         let unsignedInvite = InviteObject(
             v: InviteConfig.currentVersion,
             jti: jti,
             uuid: userId.lowercased(),
             deviceId: deviceId,
             server: server,
-            ephKey: ephKeyBase64,
+            ephKey: "",
             ts: timestamp,
-            sig: "", // Will be filled after signing
+            sig: "",
             un: normalizedUsername
         )
-        
-        // Step 7: Get canonical string for signing
+
         let dataToSign = unsignedInvite.canonicalString()
-        
         Log.debug("Canonical string for signing: \(dataToSign)", category: "InviteGenerator")
-        
-        // Step 8: Sign with identity key
-        Log.debug("SIGN: Calling Rust signInviteData", category: "InviteGenerator")
-        Log.debug("Data bytes: \(dataToSign.utf8.count)", category: "InviteGenerator")
-        Log.debug("Signing secret key bytes: \(signingSecretKey.count)", category: "InviteGenerator")
-        
-        // DEBUG: Derive public key from this secret key to verify it matches server
+
         let expectedVerifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: signingSecretKey)
-        let expectedVerifyingKeyBase64 = Data(expectedVerifyingKey).base64EncodedString()
-        Log.debug("SIGN: Expected verifying key from our secret: \(expectedVerifyingKeyBase64)", category: "InviteGenerator")
-        
         let signature = try signInviteData(
             data: dataToSign,
             identitySecretKey: signingSecretKey
         )
-        
-        Log.debug("SIGN: Rust returned signature bytes: \(signature.signature.count)", category: "InviteGenerator")
 
-        // Step 8b: Self-verify signature using derived verifying key (debug safety)
         let isSelfValid = try verifyInviteSignature(
             data: dataToSign,
             signature: [UInt8](signature.signature),
             verifyingKey: [UInt8](expectedVerifyingKey)
         )
-        Log.debug("SIGN: Self-verify result: \(isSelfValid)", category: "InviteGenerator")
         if !isSelfValid {
             Log.error("Invite self-verify failed (signing key mismatch)", category: "InviteGenerator")
             throw InviteGenerationError.signingFailed
         }
-        
-        // Step 9: Encode signature to Base64
+
         let signatureBase64 = Data(signature.signature).base64EncodedString()
-        
-        Log.debug("Generated signature: \(signatureBase64)", category: "InviteGenerator")
-        
-        // Step 10: Create final signed invite — use the same lowercased UUID that was signed
         let signedInvite = InviteObject(
             v: InviteConfig.currentVersion,
             jti: jti,
             uuid: userId.lowercased(),
             deviceId: deviceId,
             server: server,
-            ephKey: ephKeyBase64,
+            ephKey: "",
             ts: timestamp,
             sig: signatureBase64,
             un: normalizedUsername
         )
-        
-        // Validate before returning
+
         try signedInvite.validate()
-        
+
         let ttlMinutes = Int(InviteConfig.ttlSeconds / 60)
-        Log.info("Generated invite: jti=\(jti.prefix(8))..., expires in \(ttlMinutes) minutes", category: "InviteGenerator")
-        
+        Log.info(
+            "Generated invite v\(InviteConfig.currentVersion): jti=\(jti.prefix(8))..., expires in \(ttlMinutes) minutes",
+            category: "InviteGenerator"
+        )
         return signedInvite
     }
     
     // MARK: - QR Code & Link Generation
-    
-    /// Generate QR code payload (Base64-encoded MessagePack)
+
+    /// Generate compact binary payload for QR **byte mode** (no base64).
     ///
-    /// This is the optimized format for QR codes:
-    /// - MessagePack encoding: 35% smaller than JSON
-    /// - Base64: Safe for QR code encoding
-    /// - Result: QR Version 9 instead of 10 (easier to scan)
-    ///
-    /// - Parameters:
-    ///   - userId: Current user's UUID
-    ///   - deviceId: Current device ID
-    ///   - username: Sender's username or display name (optional)
-    ///   - server: Server FQDN (optional, uses default)
-    /// - Returns: Base64 string ready for QR code
-    /// - Throws: InviteGenerationError or EncodingError
-    func generateQRPayload(userId: String, deviceId: String, username: String? = nil, server: String? = nil) throws -> String {
-        let invite = try generate(userId: userId, deviceId: deviceId, username: username, serverFQDN: normalizeServer(server ?? defaultServer))
-        return try invite.toBase64()
+    /// Smaller than legacy base64(JSON) deep links; pair with `QRCodeGenerator.generate(from:)`.
+    func generateQRBinary(
+        userId: String,
+        deviceId: String,
+        username: String? = nil,
+        server: String? = nil
+    ) throws -> Data {
+        let invite = try generate(
+            userId: userId,
+            deviceId: deviceId,
+            username: username,
+            serverFQDN: normalizeServer(server ?? defaultServer)
+        )
+        return try invite.encodeBinary()
     }
-    
+
+    /// Generate text-safe payload for clipboard / base64-like QR fallbacks.
+    /// base64url over compact binary (not JSON).
+    func generateQRPayload(
+        userId: String,
+        deviceId: String,
+        username: String? = nil,
+        server: String? = nil
+    ) throws -> String {
+        let binary = try generateQRBinary(
+            userId: userId,
+            deviceId: deviceId,
+            username: username,
+            server: server
+        )
+        return InviteBinaryCodec.base64URLEncode(binary)
+    }
+
     /// Generate deep link URL for sharing
     ///
-    /// Format: `konstruct://add?invite=<base64>`
-    /// Also supports: `https://konstruct.cc/add?invite=<base64>`
+    /// Format: `konstruct://add?invite=<base64url>`
+    /// Also supports: `https://konstruct.cc/add?invite=<base64url>`
     ///
-    /// - Parameters:
-    ///   - userId: Current user's UUID
-    ///   - deviceId: Current device ID
-    ///   - username: Sender's username or display name (optional)
-    ///   - server: Server FQDN (optional, uses default)
-    ///   - useHTTPS: Use HTTPS URL instead of custom scheme (default: false)
-    /// - Returns: Deep link URL string
-    /// - Throws: InviteGenerationError or EncodingError
-    func generateDeepLink(userId: String, deviceId: String, username: String? = nil, server: String? = nil, useHTTPS: Bool = false) throws -> String {
+    /// The invite query value is base64url(compact binary) — URLs are a text boundary.
+    func generateDeepLink(
+        userId: String,
+        deviceId: String,
+        username: String? = nil,
+        server: String? = nil,
+        useHTTPS: Bool = false
+    ) throws -> String {
         let normalizedServer = normalizeServer(server ?? defaultServer)
-        let payload = try generateQRPayload(userId: userId, deviceId: deviceId, username: username, server: normalizedServer)
-        
+        let payload = try generateQRPayload(
+            userId: userId,
+            deviceId: deviceId,
+            username: username,
+            server: normalizedServer
+        )
+
         if useHTTPS {
             return "https://\(normalizedServer)/add?invite=\(payload)"
         } else {

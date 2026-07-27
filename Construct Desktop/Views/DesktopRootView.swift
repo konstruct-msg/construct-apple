@@ -26,7 +26,7 @@ struct DesktopRootView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.commandBridge) private var commandBridge
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
-    @AppStorage(OrientationStore.completedKey) private var orientationCompleted = false
+    @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showAddContact = false
@@ -36,6 +36,13 @@ struct DesktopRootView: View {
     @State private var historySyncPendingDeviceId: String? = nil
 
     private enum SidebarMode { case chats, synaps }
+
+    private var orientationCompletedForCurrentUser: Bool {
+        OrientationStore.isCompleted(
+            for: authViewModel.currentUserId ?? AuthSessionManager.shared.currentUserId,
+            rawList: orientationCompletedUserIds
+        )
+    }
 
     /// Derives the Nearby-transfer PIN for the post-link history sync. The `pendingDeviceId` the
     /// phone hashed is THIS device's freshly-linked deviceId (it generated the join request under
@@ -63,7 +70,7 @@ struct DesktopRootView: View {
                 KeysRecoveryView(reason: .deviceDeregistered)
                     .environment(authViewModel)
             } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
-                if orientationCompleted {
+                if orientationCompletedForCurrentUser {
                     mainContent
                 } else {
                     OrientationView(openSynapsOnFinish: true)
@@ -83,6 +90,15 @@ struct DesktopRootView: View {
             chatsViewModel.setContext(viewContext)
             wireCommandBridge()
             handleDeepLink(deepLinkHandler.deepLink)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openChatForKeyChange)) { note in
+            guard let userId = note.userInfo?["userId"] as? String, !userId.isEmpty else { return }
+            let fetch = User.fetchRequest()
+            fetch.predicate = NSPredicate(format: "id == %@", userId)
+            fetch.fetchLimit = 1
+            if let user = try? viewContext.fetch(fetch).first {
+                chatsViewModel.openOrCreateChat(with: user)
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .appWillEnterForeground)) { _ in
             if AuthSessionManager.shared.sessionToken == nil || !AuthSessionManager.shared.isSessionValid
@@ -379,8 +395,12 @@ struct DesktopRootView: View {
                 bio: nil,
                 deviceId: contactInfo.deviceId
             )
-            if let chat = chatsViewModel.startChat(with: publicUserInfo) {
+            if let chat = chatsViewModel.startChat(
+                with: publicUserInfo,
+                identityPublicKey: contactInfo.identityPublicKey
+            ) {
                 chatsViewModel.chatToOpen = chat.id
+                InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
             } else {
                 Log.error("DesktopRootView: Failed to create chat for userId: \(contactInfo.userId)", category: "DeepLink")
             }

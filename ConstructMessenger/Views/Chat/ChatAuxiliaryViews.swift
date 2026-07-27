@@ -55,7 +55,7 @@ struct ChatSelectionBarView: View {
         .background(Color.CT.bgMsg)
         .clipShape(CTShape.card())
         .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
-        .padding(.horizontal, 4)
+        .padding(.horizontal, ChatUIConstants.Shell.auxOuterPad)
     }
 }
 

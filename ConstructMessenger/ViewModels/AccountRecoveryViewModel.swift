@@ -215,9 +215,14 @@ final class AccountRecoveryViewModel {
             publicKeys.signedPrekeySignature = Data(bundle.signature)
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
-            // 4. Call RecoverAccount (no auth header)
+            // 4. Call RecoverAccount (no auth header).
+            // Normalize the identifier to match registration (server hashes
+            // `username.trim().to_lowercase()`); a UUID is unaffected by lowercasing.
+            // Defense-in-depth: the server now normalizes too, but this makes recovery work
+            // against an older server and mirrors what the user actually registered.
+            let identifier = recoverIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             let response = try await AuthServiceClient.shared.recoverAccount(
-                identifier: recoverIdentifier,
+                identifier: identifier,
                 challenge: challenge,
                 recoverySignature: Data(sigBytes),
                 deviceId: deviceId,

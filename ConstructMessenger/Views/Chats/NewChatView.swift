@@ -101,8 +101,13 @@ struct NewChatView: View {
             bio: nil,
             deviceId: contactInfo.deviceId
         )
-        if let chat = chatsViewModel.startChat(with: publicUserInfo) {
+        if let chat = chatsViewModel.startChat(
+            with: publicUserInfo,
+            identityPublicKey: contactInfo.identityPublicKey
+        ) {
             Log.info("NewChatView: Chat created with @\(username), chat.id=\(chat.id)", category: "NewChatView")
+            chatsViewModel.chatToOpen = chat.id
+            InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
         } else {
             Log.error("NewChatView: Failed to create chat with @\(username)", category: "NewChatView")
         }

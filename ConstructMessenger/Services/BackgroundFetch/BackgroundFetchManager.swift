@@ -434,6 +434,7 @@ class BackgroundFetchManager: NSObject {
                 let binaryMagic = Data([0x4B, 0x4E, 0x53, 0x54]) // "KNST"
                 var assembled: String? = nil
                 var assembledE2EId: String? = nil
+                var assembledStorage: Data? = nil
                 var assembledProfile: Data? = nil
                 var modernEditTarget: String? = nil
                 var modernEditText: String? = nil
@@ -441,10 +442,13 @@ class BackgroundFetchManager: NSObject {
                    dc.starts(with: binaryMagic) || dc.starts(with: legacyPrefixBytes) {
                     DispatchQueue.main.sync {
                         switch ChunkedMessageReassembler.shared.process(data: dc) {
-                        case .assembled(let text, _, let e2eId, _):
+                        case .assembled(let text, _, let e2eId, _, let storage):
                             assembled = text
                             assembledE2EId = e2eId
-                        case .legacy(let text):        assembled = text
+                            assembledStorage = storage
+                        case .legacy(let text):
+                            assembled = text
+                            assembledStorage = LocalMessagePayload.encodeText(text)
                         case .profile(let data):       assembledProfile = data
                         case .edit(let target, let nt, _):
                             modernEditTarget = target
@@ -453,12 +457,13 @@ class BackgroundFetchManager: NSObject {
                         }
                     }
                     PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
-                    if let text = assembled {
+                    if let storage = assembledStorage {
                         Log.debug("Chunk assembled in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
-                        decryptedContent = Data(text.utf8)
+                        decryptedContent = storage
+                    } else if let text = assembled {
+                        Log.debug("Chunk assembled (text) in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
+                        decryptedContent = LocalMessagePayload.encodeText(text)
                     } else if let profile = assembledProfile {
-                        // Reassembled binary profile share → surface as the raw profile bytes so the
-                        // profile-defer path below renders it as a profile, not a placeholder string.
                         Log.debug("Chunk assembled profile in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
                         decryptedContent = profile
                     } else if modernEditTarget != nil {
@@ -467,9 +472,36 @@ class BackgroundFetchManager: NSObject {
                         Log.debug("Chunk fragment \(item.messageData.id.prefix(8)) ACK'd; waiting for remaining chunks", category: "BackgroundFetch")
                         continue
                     }
+                } else if let dc = decryptedContent, !LocalMessagePayload.isEnvelope(dc) {
+                    // Single-frame MessageContent or legacy UTF-8 without KNST framing.
+                    DispatchQueue.main.sync {
+                        switch ChunkedMessageReassembler.shared.process(data: dc) {
+                        case .assembled(_, _, _, _, let storage):
+                            if let storage { decryptedContent = storage }
+                        case .legacy(let text):
+                            decryptedContent = LocalMessagePayload.encodeText(text)
+                        case .profile(let data):
+                            assembledProfile = data
+                            decryptedContent = data
+                        default:
+                            break
+                        }
+                    }
                 }
 
-                let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+                let storageBytes = decryptedContent ?? Data()
+                let decryptedString = LocalMessagePayload.decode(storageBytes).displayString
+
+                // Client-side block enforcement (decrypt-but-suppress). The ratchet already
+                // advanced during decryption above; for a blocked sender we drop the transcript,
+                // the unread bump, and the preview. Server-side block is bypassed under sealed
+                // sender, so this client drop is the load-bearing block. markProcessed keeps the
+                // server from re-delivering. See decisions/sealed-sender-authenticated-transitional.md.
+                if BlockedContacts.isBlocked(item.messageData.from, in: backgroundContext) {
+                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
+                    Log.info("SECURITY[block_drop]: suppressed push message \(item.messageData.id.prefix(8))… from blocked \(item.messageData.from.prefix(8))…", category: "BackgroundFetch")
+                    continue
+                }
 
                 // Modern edit via MessageContent.edit (stealth/sealed path, and any direct chunked edit).
                 // The target message id travels inside the encrypted content, never a wire-envelope field.
@@ -479,13 +511,12 @@ class BackgroundFetchManager: NSObject {
                     fr.predicate = NSPredicate(format: "id ==[c] %@ AND fromUserId == %@", targetID, item.messageData.from)
                     fr.fetchLimit = 1
                     if let original = try? backgroundContext.fetch(fr).first {
-                        let contentToStore: String
-                        if let rebuilt = MediaWireCodec.editedCaption(localJSON: original.decryptedContent, newCaption: newT)?.localJSON {
-                            contentToStore = rebuilt
+                        let stored = MessageDisplayCache.shared.payloadData(for: original)
+                        if let edited = MediaWireCodec.editedCaptionPayload(storedPlaintext: stored, newCaption: newT) {
+                            original.applyStoredEncryption(plaintextData: edited.storagePayload, contactId: item.messageData.from)
                         } else {
-                            contentToStore = newT
+                            original.applyStoredEncryption(plaintext: newT, contactId: item.messageData.from)
                         }
-                        original.decryptedContent = contentToStore
                         original.isEdited = true
                         original.editedAt = Date(timeIntervalSince1970: TimeInterval(item.messageData.timestamp))
                         Log.info("BG fetch: applied modern edit to \(targetID.prefix(8))…", category: "BackgroundFetch")
@@ -521,7 +552,7 @@ class BackgroundFetchManager: NSObject {
                 dedupFetch.fetchLimit = 1
                 if let existing = try? backgroundContext.fetch(dedupFetch).first {
                     if existing.fromUserId == item.messageData.from, !existing.hasDecryptedContent {
-                        existing.applyStoredEncryption(plaintext: decryptedString, contactId: item.messageData.from)
+                        existing.applyStoredEncryption(plaintextData: storageBytes, contactId: item.messageData.from)
                     }
                     continue  // already stored (live stream or an earlier delivery of the same message)
                 }
@@ -537,12 +568,12 @@ class BackgroundFetchManager: NSObject {
                 message.deliveryStatus = .delivered
                 message.retryCount = 0
                 message.chat = item.chat
-                message.applyStoredEncryption(plaintext: decryptedString, contactId: item.messageData.from)
+                message.applyStoredEncryption(plaintextData: storageBytes, contactId: item.messageData.from)
 
                 newMessagesCount += 1
                 item.chat.unreadCount += 1
 
-                lastDecryptedByChatId[item.chatId] = (text: decryptedString, timestamp: item.messageData.timestamp)
+                lastDecryptedByChatId[item.chatId] = (text: LocalMessagePayload.decode(storageBytes).previewHint, timestamp: item.messageData.timestamp)
             }
 
             // Apply last-message preview to each chat.
@@ -606,37 +637,35 @@ class BackgroundFetchManager: NSObject {
         }
     }
     
-    /// Find or create chat for a user
+    /// Find or create chat for a user.
+    /// Only creates a chat when the User already exists — must not bootstrap unknowns.
     func findOrCreateChat(
         for userId: String,
         in context: NSManagedObjectContext,
         currentUserId: String
     ) -> String? {
-        let chatFetch = Chat.fetchRequest()
-        chatFetch.predicate = NSPredicate(format: "otherUser.id == %@", userId)
-
-        if let existingChat = try? context.fetch(chatFetch).first {
-            return existingChat.id
-        }
-
-        // Only create a new chat when the User already exists in Core Data.
-        // BackgroundFetch must not bootstrap contacts: if the sender is unknown
-        // (pruned or first-ever contact) return nil so the message is skipped.
-        // The foreground stream handles session init, user creation, and decryption.
-        // Creating ghost User+Chat objects here causes Core Data validation errors
-        // (encryptedContent required) and recreates pruned contacts on every cycle.
-        let userFetch = User.fetchRequest()
-        userFetch.predicate = NSPredicate(format: "id == %@", userId)
-        guard let existingUser = try? context.fetch(userFetch).first else {
-            Log.info("BackgroundFetch: unknown sender \(userId.prefix(8))… — skipping (no contact record)", category: "BackgroundFetch")
+        do {
+            // requireExisting: BackgroundFetch must not mint ghost contacts.
+            // Foreground stream handles session init + first-ever user creation.
+            guard let result = try Chat.findOrCreate(
+                forUserId: userId,
+                in: context,
+                missingUserPolicy: .requireExisting
+            ) else {
+                Log.info(
+                    "BackgroundFetch: unknown sender \(userId.prefix(8))… — skipping (no contact record)",
+                    category: "BackgroundFetch"
+                )
+                return nil
+            }
+            return result.chat.id
+        } catch {
+            Log.error(
+                "BackgroundFetch: findOrCreateChat failed for \(userId.prefix(8))…: \(error)",
+                category: "BackgroundFetch"
+            )
             return nil
         }
-
-        let newChat = Chat(context: context)
-        newChat.id = UUID().uuidString
-        newChat.otherUser = existingUser
-
-        return newChat.id
     }
     
     /// Show notifications for new messages

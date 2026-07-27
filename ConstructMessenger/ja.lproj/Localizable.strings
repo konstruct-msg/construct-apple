@@ -43,6 +43,7 @@
 "retry" = "再試行";
 "message" = "メッセージ";
 "reply_to_colon" = "返信先:";
+"jump_to_replied_message" = "返信元のメッセージへ";
 "message_placeholder" = "メッセージ...";
     
 // MARK: - Message Info
@@ -73,6 +74,8 @@
 "user" = "ユーザー";
 "preferences" = "基本設定";
 "version" = "バージョン";
+"build_channel_beta" = "ベータ";
+"build_channel_beta_a11y" = "App Store本番ではないベータ／内部ビルドです";
 "about" = "このアプリについて";
 "account" = "アイデンティティ";
 "appearance" = "外観";
@@ -207,6 +210,11 @@
 "share_my_data" = "自分のデータを共有";
 "block_user" = "ユーザーをブロック";
 "unblock_user" = "ユーザーのブロックを解除";
+"report_spam" = "スパムを報告";
+"report_spam_confirmation" = "スパムを報告しますか？";
+"report_spam_confirmation_message" = "この相手を報告してブロックします。報告は不正利用の防止に役立ちます。メッセージの内容が見られることはありません。";
+"report_spam_success" = "報告を送信しました。相手をブロックしました。";
+"report_spam_failed" = "報告を送信できませんでしたが、相手をブロックしました。";
 "actions" = "アクション";
 "user_is_blocked_footer" = "このユーザーはブロックされています。メッセージを送信することはできません。";
 "block_user_confirmation" = "ユーザーをブロック";
@@ -301,6 +309,13 @@
 "onboarding_tagline" = "インターネットは自由な思考の空間。\nアイデンティティは構築物。";
 "onboarding_username_placeholder" = "公開エイリアスを選択 (任意)";
 "onboarding_create_identity" = "アイデンティティを作成";
+"onboarding_already_have" = "すでにアイデンティティがありますか？";
+"onboarding_existing_title" = "既存のアイデンティティを使う";
+"onboarding_existing_intro" = "このデバイスへ持ち込む方法を選んでください。";
+"onboarding_restore_title" = "復旧フレーズから復元";
+"onboarding_restore_subtitle" = "共創のある他のデバイスがない場合。12語のフレーズを使います。";
+"onboarding_link_title" = "このデバイスを連携";
+"onboarding_link_subtitle" = "別のスマホやパソコンに共創が残っている場合。";
 "onboarding_restore" = "復旧キーから復元";
 "onboarding_recovery_coming_soon" = "復旧機能は近日公開";
 "onboarding_network_settings" = "ネットワーク設定";
@@ -318,12 +333,12 @@
 "orientation_page1_caption" = "公開 @エイリアスは任意。鍵はこの端末から出ません。";
 "orientation_page1_visual_label" = "このデバイス上";
 "orientation_page2_title" = "つながり";
-"orientation_page2_body" = "全体の名簿はなく、気づかれずにあなたを見つけることはできません。会話を始めるには、どちらかが招待します：QR コードを見せる、リンクを送る、@エイリアスを探してリクエストを送る。";
-"orientation_page2_caption" = "同意なしにメッセージが届くことはありません。";
+"orientation_page2_body" = "相手を追加するには QR を見せるかリンクを共有します。@エイリアス検索は、相手がセキュリティでオンにした場合だけ（既定はオフ）。";
+"orientation_page2_caption" = "同意なしにメッセージは届きません。";
 "orientation_page2_path_qr_title" = "QR / リンク";
 "orientation_page2_path_qr_sub" = "見せる・スキャン。有効 5 分。";
 "orientation_page2_path_search_title" = "検索";
-"orientation_page2_path_search_sub" = "@エイリアスを探してリクエスト。";
+"orientation_page2_path_search_sub" = "セキュリティでオンにした相手のみ。";
 "orientation_page3_title" = "3 つの場所";
 "orientation_page3_body" = "チャットは会話の場。Synaps は人と受信リクエストのネットワーク。設定には QR・復元・端末があります。";
 "orientation_page3_caption" = "まず Synaps — QR を見せるか相手を探す。";
@@ -441,6 +456,12 @@
 "veil_retry" = "VEIL接続を再試行";
 "traffic_protection" = "トラフィック保護";
 "veil_footer_short" = "VEILはトラフィックを標準のHTTPSとして偽装します。設定は自動的に行われます。";
+
+// 検閲対策（本番向け soft-control — VEIL / リレー住所は出さない）
+"censorship_protection" = "検閲対策";
+"censorship_protection_footer_off" = "オフ。Constructへ直接接続します。";
+"censorship_protection_footer_auto" = "遮断が検出されると自動で有効になります。設定はバックグラウンドで行われます。";
+"censorship_protection_footer_on" = "常にネットワーク遮断を回避します。設定はバックグラウンドで行われます。";
 
 // VEIL mode (tri-state)
 "veil_mode_off" = "オフ";
@@ -912,12 +933,18 @@
 "history_sync_send_offer_yes" = "履歴を同期";
 "history_sync_send_offer_skip" = "スキップ";
 "history_sync_user_mismatch" = "履歴の転送に失敗しました：この履歴は別のアイデンティティのものです。";
+"history_sync_auto_connecting" = "電話に接続中…";
+"history_sync_auto_sending" = "履歴をコンピュータに送信中…";
 "call_error_not_contacts" = "つながっている相手にだけ発信できます。";
 "call_error_peer_offline" = "相手はオフラインです。後でもう一度お試しください。";
-/* タブバーラベル */
-"tab_chats" = "チャット";
-"tab_synapses" = "シナプス";
-"tab_settings" = "設定";
+"call_error_busy" = "すでに通話中です。";
+"call_audio_route" = "音声";
+"call_e2ee_badge" = "エンドツーエンド暗号化";
+"call_minibar_connecting" = "接続中";
+"call_minibar_in_call" = "通話中";
+"call_minimize" = "最小化";
+"call_reconnecting" = "再接続中…";
+"call_video" = "ビデオ通話";
 
 // MARK: - Key parity with en
 "notification.new_message.title" = "新着メッセージ";
@@ -962,3 +989,112 @@
 "account_discard_changes_discard" = "破棄";
 "account_discard_changes_keep_editing" = "編集を続ける";
 "account_editing_profile" = "> プロフィール編集中です。✓ で保存、x でキャンセルします。";
+
+/* Silent-transport neutral network indicator (silent-transport-ui decision) */
+"net_status_protected" = "保護済み";
+"net_status_connecting" = "接続中…";
+
+// MARK: - App loading
+"app_loading_state" = "保護状態を初期化中";
+"app_loading_stage_transport" = "トランスポートを準備中";
+"app_loading_stage_identity" = "アイデンティティを復元中";
+"app_loading_stage_streams" = "保護チャットを準備中";
+
+// MARK: - Status / sidebar
+"status_paused" = "バックグラウンド";
+"show_chat_list" = "チャット一覧を表示";
+"hide_chat_list" = "チャット一覧を隠す";
+
+// MARK: - Local name (contact nickname)
+"local_name" = "ローカル名";
+"local_name_unset" = "未設定";
+"local_name_placeholder" = "名前を入力";
+"local_name_clear" = "クリア";
+"local_name_footer" = "あなただけに表示されます。相手には見えません。";
+
+// MARK: - PIN reset / unlock
+"cant_unlock" = "サインインできない場合";
+"pin_reset_title" = "このデバイスをリセットしますか？";
+"pin_reset_explain" = "このデバイス上のローカルデータはすべて消去されます。復旧が設定済みの場合のみ、シードフレーズでアイデンティティを後から復元できます。";
+"pin_reset_action" = "リセット";
+"pin_reset_countdown" = "%d秒後にリセット… キャンセルするにはPINを入力";
+
+// MARK: - Identity edit
+"edit_identity" = "アイデンティティを編集";
+"delete_account_abort_hint" = "タップで中止 · %d秒";
+
+// MARK: - Media quality / picker
+"send_original_quality" = "オリジナル画質";
+"quality_label" = "画質";
+"quality_compressed" = "圧縮";
+"quality_original" = "オリジナル";
+"media_picker_recents" = "最近";
+"media_picker_add" = "追加";
+"media_picker_send_n" = "%d件を送信";
+"media_picker_tab_gallery" = "ギャラリー";
+"media_picker_allow_access" = "写真と動画を添付するには、写真ライブラリへのアクセスを許可してください。";
+"media_picker_allow_access_action" = "アクセスを許可";
+"media_picker_access_denied" = "写真ライブラリへのアクセスがオフです。メディアを添付するには設定で有効にしてください。";
+"media_picker_open_settings" = "設定を開く";
+"media_picker_empty" = "写真や動画はまだありません。";
+"media_picker_limit_reached" = "選択上限に達しました。";
+"media_picker_item_too_large" = "サイズ制限を超える項目があります。";
+"media_picker_export_failed" = "メディアを準備できませんでした。もう一度お試しください。";
+"media_picker_hd" = "HD";
+"media_picker_hd_hint" = "再圧縮せずに写真を送信";
+"media_picker_quality_photo" = "写真の画質";
+"media_picker_quality_video" = "動画の画質";
+"media_picker_estimate_n" = "%d件 · 約%@";
+"media_picker_video_720" = "720p";
+"media_picker_video_1080" = "1080p";
+"media_picker_confirm" = "選択を確定";
+
+// MARK: - Link device method picker
+"link_method_title" = "デバイスを連携";
+"link_method_intro" = "既存の共創アイデンティティにこのデバイスを追加します。カメラを向けやすい方のデバイスを選んでください。";
+"link_method_scan_title" = "コードをスキャン";
+"link_method_scan_subtitle" = "もう一方のデバイスがQRコードを表示";
+"link_method_show_title" = "コードを表示";
+"link_method_show_subtitle" = "もう一方のデバイスがこちらをスキャン";
+
+// MARK: - Session at risk
+"session_at_risk_title" = "相手の鍵が古くなっています";
+"session_at_risk_subtitle" = "相手がしばらくオフラインです。メッセージは引き続き安全に送信され、復帰時に鍵が更新されます。";
+
+// MARK: - Voice messages
+"voice_section_title" = "ボイスメッセージ";
+"voice_continuous_playback" = "連続再生";
+"voice_continuous_playback_footer" = "ボイスメッセージが連続で届いたとき、最後まで自動で順に再生します。";
+
+// MARK: - STT extras
+"stt_show_transcript" = "文字起こしを表示";
+"stt_hide_transcript" = "文字起こしを隠す";
+"stt_section_header" = "文字起こし";
+"stt_section_footer" = "ボイスメッセージは端末上で文字起こしできます。モデルは一度だけダウンロードされ、端末外に出ません。";
+"stt_retry_download" = "再試行";
+"stt_engine_label" = "エンジン";
+"stt_engine_auto" = "自動";
+"stt_engine_whisper" = "Whisper";
+"stt_engine_apple" = "Apple Speech";
+
+// MARK: - VEIL config import
+"veil_config_import_ok" = "VEILアクセスを設定しました";
+"veil_config_scan" = "設定用QRをスキャン";
+"veil_config_paste" = "設定コードを貼り付け";
+"veil_config_import" = "インポート";
+"veil_config_section" = "VEILアクセス";
+"veil_config_active" = "%@ 用のアクセス設定済み";
+"veil_config_none" = "アクセス未設定";
+"veil_footer_off_obf_active" = "VEILオフ — 直接トラフィックはQUIC（Salamander）で難読化されています。";
+"veil_footer_off_obf_fallback" = "VEILオフ — QUIC難読化は有効ですが、現在はH2フォールバック（難読化なし）です。";
+"veil_import_err_expired" = "この設定は期限切れです — 新しいものを取得してください";
+"veil_import_err_malformed" = "設定コードが無効です";
+"veil_import_err_signature" = "設定の署名が無効です";
+"veil_import_err_unknown_relay" = "不明なリレー向けの設定です";
+
+// MARK: - Liquid logo (debug)
+"liquid_logo.title" = "リキッドロゴ";
+"liquid_logo.size" = "サイズ";
+"liquid_logo.haptics" = "触覚";
+"liquid_logo.replay" = "再生";
+"liquid_logo.hint" = "画面をタップして再生";

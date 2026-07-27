@@ -50,6 +50,7 @@
 "retry" = "Повторить";
 "message" = "Сообщение";
 "reply_to_colon" = "Ответ на:";
+"jump_to_replied_message" = "Перейти к исходному сообщению";
 "message_placeholder" = "Сообщение...";
 
 // MARK: - Message Info
@@ -80,6 +81,8 @@
 "user" = "Пользователь";
 "preferences" = "Настройки";
 "version" = "Версия";
+"build_channel_beta" = "Бета";
+"build_channel_beta_a11y" = "Это бета или внутренняя сборка, не production App Store";
 "about" = "О приложении";
 "account" = "Идентичность";
 "appearance" = "Внешний вид";
@@ -219,6 +222,11 @@
 "share_my_data" = "Поделиться моими данными";
 "block_user" = "Заблокировать пользователя";
 "unblock_user" = "Разблокировать пользователя";
+"report_spam" = "Пожаловаться на спам";
+"report_spam_confirmation" = "Пожаловаться на спам?";
+"report_spam_confirmation_message" = "На этого человека будет отправлена жалоба, и он будет заблокирован. Жалобы помогают останавливать злоупотребления — ваши сообщения мы не видим.";
+"report_spam_success" = "Жалоба отправлена. Пользователь заблокирован.";
+"report_spam_failed" = "Не удалось отправить жалобу, но пользователь заблокирован.";
 "actions" = "Действия";
 "user_is_blocked_footer" = "Этот пользователь заблокирован. Он не может отправлять вам сообщения.";
 "block_user_confirmation" = "Заблокировать пользователя";
@@ -277,6 +285,13 @@
 "onboarding_tagline" = "интернет — пространство свободы выражения мысли.\nидентичность — конструкт.";
 "onboarding_username_placeholder" = "публичный псевдоним (опционально)";
 "onboarding_create_identity" = "Создать идентичность";
+"onboarding_already_have" = "Уже есть идентичность?";
+"onboarding_existing_title" = "Существующая идентичность";
+"onboarding_existing_intro" = "Выберите, как перенести её на это устройство.";
+"onboarding_restore_title" = "Восстановить по фразе";
+"onboarding_restore_subtitle" = "Нет другого устройства с Konstruct. Используйте вашу фразу из 12 слов.";
+"onboarding_link_title" = "Привязать это устройство";
+"onboarding_link_subtitle" = "Konstruct ещё есть на другом телефоне или компьютере.";
 "onboarding_restore" = "Восстановить из ключа восстановления";
 "onboarding_recovery_coming_soon" = "Восстановление скоро будет доступно";
 "onboarding_network_settings" = "Настройки сети";
@@ -294,12 +309,12 @@
 "orientation_page1_caption" = "Публичный @псевдоним необязателен. Ключи не покидают телефон.";
 "orientation_page1_visual_label" = "на этом устройстве";
 "orientation_page2_title" = "Люди";
-"orientation_page2_body" = "Общего каталога нет, и вас нельзя найти без вашего ведома. Чтобы начать общение, один приглашает другого: покажите QR-код, отправьте ссылку или найдите @псевдоним и отправьте запрос.";
+"orientation_page2_body" = "Чтобы добавить собеседника, покажите QR-код или поделитесь ссылкой. Поиск по @псевдониму работает только если он включён в настройках безопасности.";
 "orientation_page2_caption" = "Никто не напишет вам без вашего согласия.";
 "orientation_page2_path_qr_title" = "QR / ссылка";
 "orientation_page2_path_qr_sub" = "Показать или сканировать. Действует 5 минут.";
 "orientation_page2_path_search_title" = "Поиск";
-"orientation_page2_path_search_sub" = "Найти @псевдоним → отправить запрос.";
+"orientation_page2_path_search_sub" = "Только если включили в настройсках безопасности.";
 "orientation_page3_title" = "Три места";
 "orientation_page3_body" = "Чаты — переписка. Synaps — ваши люди и входящие запросы. Настройки — ваш QR-код, восстановление и устройства.";
 "orientation_page3_caption" = "Начните с Synaps — покажите QR или найдите человека.";
@@ -346,9 +361,24 @@
 "paste_invite_link" = "Вставить ссылку-приглашение";
 "clipboard_no_valid_invite" = "В буфере обмена не найдено действительной ссылки-приглашения.";
 
+// Invite / contact links
+"invite_error_invalid_url" = "Указан некорректный URL.";
+"invite_error_unsupported_link" = "Это не поддерживаемая ссылка-приглашение Construct.";
+"invite_error_expired" = "Срок действия приглашения истёк. Попросите новое.";
+"invite_error_invalid_fmt" = "Недействительное приглашение: %@";
+"invite_error_already_used" = "Это приглашение уже использовано. Попросите новое.";
+"invite_error_verification_failed_fmt" = "Не удалось проверить приглашение: %@";
+"invite_error_legacy_unsupported" = "Этот формат ссылки больше не поддерживается. Попросите свежий QR или ссылку.";
+"invite_error_malformed" = "Повреждённые данные приглашения";
+"invite_redeem_safety_message_fmt" = "Вы соединились с %@. Не тот человек?";
+"invite_redeem_safety_block" = "Блок";
+"invite_accepted_inviter_message" = "Кто-то подключился по вашему приглашению.";
+
 // iPad Split View
 "select_chat" = "Выберите чат";
 "select_chat_description" = "Выберите разговор на боковой панели, чтобы начать общение.";
+"show_chat_list" = "Показать список чатов";
+"hide_chat_list" = "Скрыть список чатов";
 
 // Security — Recovery & Duress (from EN)
 "account_recovery" = "Восстановление аккаунта";
@@ -470,6 +500,12 @@
 "veil_config_none" = "Доступ не настроен";
 "traffic_protection" = "Защита трафика";
 "veil_footer_short" = "VEIL маскирует трафик под обычный HTTPS. Конфигурация предоставляется автоматически.";
+
+// Защита от блокировок (продуктовый soft-control — без VEIL / адресов релеев)
+"censorship_protection" = "Защита от блокировок";
+"censorship_protection_footer_off" = "Выкл. Подключение напрямую к Construct.";
+"censorship_protection_footer_auto" = "Включается автоматически при обнаружении блокировки. Настройка идёт в фоне.";
+"censorship_protection_footer_on" = "Всегда обходит сетевые блокировки. Настройка идёт в фоне.";
 
 // VEIL mode (tri-state)
 "veil_mode_off" = "выкл";
@@ -609,6 +645,12 @@
 // MARK: - Device Linking
 "onboarding_link_device" = "Привязать существующую идентичность";
 "device_link_scan_title" = "Сканировать для привязки";
+"link_method_title" = "Привязать устройство";
+"link_method_intro" = "Добавьте это устройство к вашей существующей идентичности Konstruct. Выберите способ по тому, какой камерой удобнее навести.";
+"link_method_scan_title" = "Сканировать код";
+"link_method_scan_subtitle" = "Другое устройство показывает QR-код";
+"link_method_show_title" = "Показать код";
+"link_method_show_subtitle" = "Другое устройство сканирует это";
 "device_link_scan_instructions" = "Откройте существующее устройство → Настройки → Устройства → Привязать новое устройство, затем отсканируйте QR-код.";
 "device_link_linking" = "Привязка устройства…";
 "device_link_success" = "Устройство успешно привязано";
@@ -870,6 +912,22 @@
 "kt_status" = "merkle-лог";
 "kt_verified" = "подтверждено";
 "kt_warning" = "внимание";
+
+// Key-change trust event (thread 5.4)
+"key_change_banner_title" = "Ключ безопасности изменился";
+"key_change_banner_title_failed" = "Проверка личности не удалась";
+"key_change_banner_subtitle_fmt" = "У %@ другой ключ, чем раньше. Сверьте Safety Numbers, прежде чем доверять чату.";
+"key_change_banner_subtitle_failed" = "Не удалось подтвердить ключ этого человека в журнале прозрачности. По возможности проверьте лично.";
+"key_change_verify" = "Проверить";
+"key_change_accept" = "Принять новый ключ";
+"key_change_toast_fmt" = "У %@ изменился ключ безопасности. Откройте чат, чтобы проверить.";
+"key_change_toast_open" = "Открыть";
+
+// Identity fingerprint (thread 5.3)
+"identity_fingerprint" = "Отпечаток";
+"identity_fingerprint_unknown" = "Ещё не закреплён";
+"identity_fingerprint_copy_hint" = "Копирует отпечаток в буфер";
+"identity_fingerprint_copied" = "Скопировано";
 "kt_no_data" = "нет данных";
 "kt_hint" = "каждый ключ идентификации постоянно записывается в append-only merkle-лог. подделка криптографически обнаруживаема.";
 "kt_failure_hint" = "проверка прозрачности ключей не прошла — возможна подделка.";
@@ -1058,3 +1116,8 @@
 "liquid_logo.haptics" = "Виброотклик";
 "liquid_logo.replay" = "ПОВТОР";
 "liquid_logo.hint" = "коснитесь экрана для повтора";
+
+/* Silent-transport neutral network indicator (silent-transport-ui decision) */
+"net_status_protected" = "Защищено";
+"net_status_connecting" = "Подключение…";
+"file" = "Файл";

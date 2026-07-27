@@ -32,9 +32,11 @@ class ChatManagementService {
     // MARK: - Chat Creation
     
     /// Start a new chat with a user (from invite link or QR code)
-    /// - Parameter user: Public user information from invite
+    /// - Parameters:
+    ///   - user: Public user information from invite
+    ///   - identityPublicKey: Optional TOFU pin from a verified invite (thread 5.1)
     /// - Returns: Created or existing chat, nil if context is unavailable
-    func startChat(with user: PublicUserInfo) -> Chat? {
+    func startChat(with user: PublicUserInfo, identityPublicKey: Data? = nil) -> Chat? {
         guard let context = viewContext else { 
             Log.error("ChatManagementService: No viewContext available", category: "ChatManagementService")
             return nil 
@@ -43,20 +45,6 @@ class ChatManagementService {
         if user.id == AuthSessionManager.shared.currentUserId {
             Log.info("Self-chat detected — use Drafts instead", category: "ChatManagementService")
             return nil
-        }
-        
-        // Check if chat already exists
-        let fetchRequest = Chat.fetchRequest()
-        let otherUserPredicate = NSPredicate(format: "otherUser.id == %@", user.id)
-        var chatPredicates: [NSPredicate] = [otherUserPredicate]
-        if let chatOwnerPredicate = fetchRequest.predicate {
-            chatPredicates.insert(chatOwnerPredicate, at: 0)
-        }
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: chatPredicates)
-        
-        if let existingChat = try? context.fetch(fetchRequest).first {
-            Log.debug("Chat already exists with user: \(user.username)", category: "ChatManagementService")
-            return existingChat
         }
         
         // If this user was previously deleted, remove from deleted store so messages
@@ -71,7 +59,7 @@ class ChatManagementService {
             userPredicates.insert(userOwnerPredicate, at: 0)
         }
         userFetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: userPredicates)
-        
+
         let dbUser: User
         if let existingUser = try? context.fetch(userFetchRequest).first {
             existingUser.applyServerUsername(user.username, userId: user.id)
@@ -82,7 +70,6 @@ class ChatManagementService {
             dbUser = existingUser
             Log.debug("Using existing user: id=\(user.id), username=\(user.username), displayName=\(existingUser.displayName)", category: "ChatManagementService")
         } else {
-            // Create new user
             dbUser = User(context: context)
             dbUser.id = user.id
             dbUser.isSharingWithMe = false
@@ -93,25 +80,32 @@ class ChatManagementService {
             dbUser.applyServerUsername(user.username, userId: user.id)
             Log.debug("Created new user: id=\(user.id), username=\(user.username), displayName=\(dbUser.displayName)", category: "ChatManagementService")
         }
-        
-        // Create new chat — set lastMessageTime so it sorts to the top of the list immediately
-        let chat = Chat(context: context)
-        chat.id = UUID().uuidString
-        chat.otherUser = dbUser
-        chat.lastMessageTime = Date()
-        
+
+        if let key = identityPublicKey, !key.isEmpty {
+            ContactLinkService.shared.pinKnownIdentityKey(on: dbUser, identityKey: key)
+        }
+
+        // 1:1 Chat per User — shared finder (also collapses accidental duplicates).
+        let result = Chat.findOrCreate(
+            for: dbUser,
+            in: context,
+            touchLastMessageTimeOnCreate: true
+        )
+        // Re-scan / re-open should still surface the row at the top of the list.
+        if !result.created, result.chat.lastMessageTime == nil {
+            result.chat.lastMessageTime = Date()
+        }
+
         do {
             try context.save()
-            Log.debug("Chat saved successfully", category: "ChatManagementService")
-            Log.debug("   chat.id = \(chat.id)", category: "ChatManagementService")
-            Log.debug("   chat.otherUser?.id = \(chat.otherUser?.id ?? "nil")", category: "ChatManagementService")
-            Log.debug("   chat.otherUser?.username = \(chat.otherUser?.username ?? "nil")", category: "ChatManagementService")
-            Log.debug("   chat.otherUser?.displayName = \(chat.otherUser?.displayName ?? "nil")", category: "ChatManagementService")
-            
-            // Notify via callback
-            onChatCreated?(chat)
-            
-            return chat
+            Log.debug(
+                "Chat \(result.created ? "created" : "reused"): id=\(result.chat.id) user=\(user.username)",
+                category: "ChatManagementService"
+            )
+            if result.created {
+                onChatCreated?(result.chat)
+            }
+            return result.chat
         } catch {
             Log.error("Failed to save chat: \(error)", category: "ChatManagementService")
             return nil

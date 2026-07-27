@@ -51,6 +51,9 @@ enum AppError: LocalizedError {
     // MARK: - Generic
     /// Catch-all for unmapped errors; use sparingly
     case unknown(String)
+
+    /// Non-error informational banner (invite safety, etc.). Optional action title for the toast button.
+    case notice(message: String, actionTitle: String?)
 }
 
 // MARK: - Severity
@@ -69,6 +72,7 @@ extension AppError {
         switch self {
         case .validation:              return .info
         case .mediaOptimizationFailed: return .info
+        case .notice:                  return .info
         case .decryptionFailed:        return .warning
         case .streamDisconnected:      return .warning
         case .network:                 return .warning
@@ -106,11 +110,16 @@ extension AppError {
 
     /// User-visible label for the recovery button, nil if no action available.
     var recoveryActionTitle: String? {
-        switch recovery {
-        case .none:       return nil
-        case .retry:      return "Retry"
-        case .reconnect:  return "Reconnect"
-        case .relogin:    return "Log in again"
+        switch self {
+        case .notice(_, let actionTitle):
+            return actionTitle
+        default:
+            switch recovery {
+            case .none:       return nil
+            case .retry:      return "Retry"
+            case .reconnect:  return "Reconnect"
+            case .relogin:    return "Log in again"
+            }
         }
     }
 }
@@ -146,6 +155,8 @@ extension AppError {
             return "Session expired, please log in again"
         case .unknown(let detail):
             return detail.isEmpty ? "An unexpected error occurred" : detail
+        case .notice(let message, _):
+            return message
         }
     }
 
@@ -205,6 +216,8 @@ extension AppError {
     /// Whether this error should be reported to the user or silently logged only.
     var shouldDisplay: Bool {
         switch self {
+        case .notice:
+            return true
         case .decryptionFailed:
             return false   // session self-heals; no user noise
         case .sessionInitFailed:

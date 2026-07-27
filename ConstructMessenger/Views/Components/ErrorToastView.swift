@@ -112,6 +112,8 @@ struct ErrorToastView: View {
             return Image(systemName: "exclamationmark.bubble.fill")
         case .authFailed, .sessionExpired:
             return Image(systemName: "lock.rotation")
+        case .notice:
+            return Image(systemName: "person.badge.plus")
         case .unknown:
             return Image(systemName: "exclamationmark.bubble.fill")
         }

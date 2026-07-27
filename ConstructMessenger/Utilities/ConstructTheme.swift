@@ -741,6 +741,28 @@ struct CTStatusBadge: View {
     }
 }
 
+/// Compact orange **BETA** chip for Debug / Beta / INTERNAL_TOOLS builds.
+/// Renders nothing on App Store Release so production stays clean.
+struct CTBetaBadge: View {
+    var compact: Bool = false
+
+    var body: some View {
+        if AppConstants.isNonProductionBuild {
+            Text(NSLocalizedString("build_channel_beta", comment: "").uppercased())
+                .font(CTFont.bold(compact ? 9 : 10))
+                .tracking(compact ? 1.5 : 2)
+                .foregroundStyle(.orange)
+                .padding(.horizontal, compact ? 5 : 7)
+                .padding(.vertical, compact ? 2 : 3)
+                .overlay(
+                    RoundedRectangle(cornerRadius: CTRadius.badge, style: .continuous)
+                        .stroke(Color.orange.opacity(0.55), lineWidth: 1)
+                )
+                .accessibilityLabel(Text(NSLocalizedString("build_channel_beta_a11y", comment: "")))
+        }
+    }
+}
+
 // MARK: - Settings Components
 
 struct CTSettingsSectionHeader: View {
@@ -788,10 +810,12 @@ struct CTSettingsRow: View {
                     .frame(width: 28, alignment: .center)
                     .padding(.trailing, 4)
             }
+            // Label may shrink; trailing value keeps one line (fingerprints, status).
             Text(label)
                 .font(CTFont.regular(13))
                 .foregroundColor(isDestructive ? Color.CT.danger : labelColor)
-                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                .lineLimit(1)
+                .layoutPriority(0)
             Spacer(minLength: 8)
             if !value.isEmpty {
                 Text(value)
@@ -801,6 +825,9 @@ struct CTSettingsRow: View {
                         isAction      ? Color.CT.accent : valueColor
                     )
                     .multilineTextAlignment(.trailing)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .layoutPriority(1)
             }
             if let status {
                 CTStatusBadge(status: status)

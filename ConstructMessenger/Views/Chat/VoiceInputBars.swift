@@ -23,17 +23,17 @@ struct VoiceRecordingBar: View {
         HStack(spacing: 0) {
             Button(action: onCancel) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 22))
+                    .font(.system(size: ChatUIConstants.InputBar.voiceChromeIconSize))
                     .foregroundStyle(Color.CT.danger)
             }
             .buttonStyle(.plain)
-            .padding(.leading, 12)
+            .padding(.leading, CTLayout.edgePad)
 
             // Live waveform
             VoiceWaveformView(samples: waveform, style: .liveInput)
                 .frame(maxWidth: .infinity)
-                .frame(height: 28)
-                .padding(.horizontal, 12)
+                .frame(height: ChatUIConstants.Voice.waveformHeight)
+                .padding(.horizontal, CTLayout.edgePad)
 
             // Timer
             timerLabel(duration)
@@ -41,12 +41,12 @@ struct VoiceRecordingBar: View {
             // Stop
             Button(action: onStop) {
                 Image(systemName: "stop.circle.fill")
-                    .font(.system(size: 22))
+                    .font(.system(size: ChatUIConstants.InputBar.voiceChromeIconSize))
                     .foregroundStyle(Color.CT.accent)
             }
             .buttonStyle(.plain)
-            .padding(.leading, 10)
-            .padding(.trailing, 12)
+            .padding(.leading, CTLayout.chromeGap)
+            .padding(.trailing, CTLayout.edgePad)
         }
         .ctBar
     }
@@ -65,17 +65,17 @@ struct VoicePreviewBar: View {
             // Discard
             Button(action: onDiscard) {
                 Image(systemName: "trash.circle.fill")
-                    .font(.system(size: 22))
+                    .font(.system(size: ChatUIConstants.InputBar.voiceChromeIconSize))
                     .foregroundStyle(Color.CT.danger)
             }
             .buttonStyle(.plain)
-            .padding(.leading, 12)
+            .padding(.leading, CTLayout.edgePad)
 
             // Static waveform
             VoiceWaveformView(samples: waveform, style: .staticAccent())
                 .frame(maxWidth: .infinity)
-                .frame(height: 28)
-                .padding(.horizontal, 12)
+                .frame(height: ChatUIConstants.Voice.waveformHeight)
+                .padding(.horizontal, CTLayout.edgePad)
 
             // Duration
             timerLabel(duration)
@@ -83,12 +83,12 @@ struct VoicePreviewBar: View {
             // Send
             Button(action: onSend) {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 24))
+                    .font(.system(size: CTLayout.callIconSize))
                     .foregroundStyle(Color.CT.accent)
             }
             .buttonStyle(.plain)
-            .padding(.leading, 10)
-            .padding(.trailing, 12)
+            .padding(.leading, CTLayout.chromeGap)
+            .padding(.trailing, CTLayout.edgePad)
         }
         .ctBar
     }
@@ -106,11 +106,11 @@ private func timerLabel(_ duration: TimeInterval) -> some View {
 private extension View {
     var ctBar: some View {
         self
-            .frame(height: 52)
+            .frame(height: ChatUIConstants.InputBar.voiceChromeHeight)
             .background(Color.CT.outMsgBg)
             .clipShape(CTShape.pill())
             .overlay(CTShape.pill().strokeBorder(Color.CT.accent.opacity(0.25), lineWidth: 1))
-            .padding(.horizontal, 8)
+            .padding(.horizontal, CTLayout.inlinePad)
     }
 }
 

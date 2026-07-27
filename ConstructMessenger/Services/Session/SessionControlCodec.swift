@@ -33,11 +33,53 @@ enum SessionControlCodec {
 
     /// Legacy fallback: detect a control op from a decrypted plaintext magic string.
     /// Kept until the fleet has upgraded past the typed-producer phase.
+    /// Does **not** map `__binary_init_*` sentinels (those are discard-only, not a real op).
     static func legacyOp(plaintext: String) -> Op? {
         if plaintext.hasPrefix("__session_ping") { return .ping }
         if plaintext.hasPrefix("__session_ready") || plaintext.hasPrefix("session_ready_") { return .ready }
         if plaintext.hasPrefix("__session_reset_init") || plaintext.hasPrefix("session_reset_init_") { return .resetInit }
         return nil
+    }
+
+    // MARK: - Binary prefix match (E8 — sniff control without full-string work)
+
+    /// ASCII magic prefixes for legacy control plaintext (matched on raw `Data`).
+    private static let pingPrefix = Data("__session_ping".utf8)
+    private static let readyPrefix = Data("__session_ready".utf8)
+    private static let readyLegacyPrefix = Data("session_ready_".utf8)
+    private static let resetInitPrefix = Data("__session_reset_init".utf8)
+    private static let resetInitLegacyPrefix = Data("session_reset_init_".utf8)
+    private static let binaryInitPrefix = Data("__binary_init_".utf8)
+    private static let endSessionMarker = Data("__END_SESSION__".utf8)
+
+    /// Detect legacy control op from decrypted **bytes** without allocating a String.
+    /// Prefer this on receive paths that still hold `Data` (pre-reassembler / raw).
+    static func legacyOp(plaintextData data: Data) -> Op? {
+        if data.starts(with: pingPrefix) { return .ping }
+        if data.starts(with: readyPrefix) || data.starts(with: readyLegacyPrefix) { return .ready }
+        if data.starts(with: resetInitPrefix) || data.starts(with: resetInitLegacyPrefix) { return .resetInit }
+        return nil
+    }
+
+    /// True when plaintext is the magic END_SESSION marker (or starts with it).
+    static func isEndSessionMarker(_ data: Data) -> Bool {
+        data == endSessionMarker || data.starts(with: endSessionMarker)
+    }
+
+    /// Discard-only legacy sentinel (failed UTF-8 decode of msgNum=0 init payload).
+    static func isBinaryInitSentinel(_ data: Data) -> Bool {
+        data.starts(with: binaryInitPrefix)
+    }
+
+    static func isBinaryInitSentinel(_ plaintext: String) -> Bool {
+        plaintext.hasPrefix("__binary_init_")
+    }
+
+    /// True when decrypted bytes are known control / sentinel magic, not chat text.
+    static func isLegacyControlPlaintext(_ data: Data) -> Bool {
+        legacyOp(plaintextData: data) != nil
+            || isEndSessionMarker(data)
+            || isBinaryInitSentinel(data)
     }
 
     /// Parse a typed `SessionControl` payload (Phase 2+ producers). Returns nil if the bytes

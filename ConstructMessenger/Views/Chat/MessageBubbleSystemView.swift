@@ -15,14 +15,20 @@ struct MessageBubbleSystemView: View {
         HStack {
             Spacer()
             Text(content)
-                .font(CTFont.regular(11))
+                .font(CTFont.regular(ChatUIConstants.Typography.systemSize))
                 .foregroundColor(Color.CT.textDim)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
+                .padding(.horizontal, ChatUIConstants.Bubble.horizontalPadding)
+                .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding + 1)
                 .background(CTMessageBubbleTheme.incomingBackground)
-                .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 0.5))
+                .clipShape(CTShape.control())
+                .overlay(
+                    CTShape.control().stroke(
+                        Color.CT.noise,
+                        lineWidth: ChatUIConstants.Bubble.strokeWidth
+                    )
+                )
             Spacer()
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
     }
 }

@@ -51,6 +51,7 @@
 "retry" = "Retry";
 "message" = "Message";
 "reply_to_colon" = "Reply to:";
+"jump_to_replied_message" = "Jump to replied message";
 "message_placeholder" = "Message...";
 
 // MARK: - Message Info
@@ -81,6 +82,8 @@
 "user" = "User";
 "preferences" = "Preferences";
 "version" = "Version";
+"build_channel_beta" = "Beta";
+"build_channel_beta_a11y" = "This is a beta or internal build, not App Store production";
 "about" = "About";
 "account" = "Identity";
 "appearance" = "Appearance";
@@ -225,6 +228,11 @@
 "share_my_data" = "Share My Data";
 "block_user" = "Block User";
 "unblock_user" = "Unblock User";
+"report_spam" = "Report Spam";
+"report_spam_confirmation" = "Report Spam?";
+"report_spam_confirmation_message" = "This person will be reported and blocked. Reports help us stop abuse — we never see your messages.";
+"report_spam_success" = "Report sent. This person is now blocked.";
+"report_spam_failed" = "Couldn't send the report, but this person is now blocked.";
 "actions" = "Actions";
 "user_is_blocked_footer" = "This user is blocked. They cannot send you messages.";
 "block_user_confirmation" = "Block User";
@@ -317,6 +325,13 @@
 "onboarding_tagline" = "the internet is a space of free thought.\nidentity is a construct.";
 "onboarding_username_placeholder" = "choose a public alias (optional)";
 "onboarding_create_identity" = "Create identity";
+"onboarding_already_have" = "Already have an identity?";
+"onboarding_existing_title" = "Use existing identity";
+"onboarding_existing_intro" = "Choose how to bring it to this device.";
+"onboarding_restore_title" = "Restore from recovery phrase";
+"onboarding_restore_subtitle" = "You don’t have another device with Konstruct. Use your 12-word phrase.";
+"onboarding_link_title" = "Link this device";
+"onboarding_link_subtitle" = "You still have Konstruct on another phone or computer.";
 "onboarding_restore" = "Restore from recovery key";
 "onboarding_recovery_coming_soon" = "Recovery coming soon";
 "onboarding_network_settings" = "Network settings";
@@ -334,12 +349,12 @@
 "orientation_page1_caption" = "A public @alias is optional. Your keys never leave this phone.";
 "orientation_page1_visual_label" = "on this device";
 "orientation_page2_title" = "People";
-"orientation_page2_body" = "There is no global directory, and nobody can find you without your knowledge. To start talking, one of you invites the other: show a QR code, share a link, or find an @alias and send a request.";
+"orientation_page2_body" = "To add someone, show a QR code or share a link. Search by @alias only works if they turned it on in Security — off by default.";
 "orientation_page2_caption" = "Nobody can message you without your consent.";
 "orientation_page2_path_qr_title" = "QR / link";
 "orientation_page2_path_qr_sub" = "Show or scan. Valid for 5 minutes.";
 "orientation_page2_path_search_title" = "Search";
-"orientation_page2_path_search_sub" = "Find an @alias → send a request.";
+"orientation_page2_path_search_sub" = "Only if they enabled it in Security.";
 "orientation_page3_title" = "Three places";
 "orientation_page3_body" = "Chats is where you talk. Synaps is your web of people and incoming requests. Settings holds your QR code, recovery and devices.";
 "orientation_page3_caption" = "Start in Synaps — show a QR or find someone.";
@@ -386,9 +401,24 @@
 "paste_invite_link" = "Paste invite link";
 "clipboard_no_valid_invite" = "No valid invite link found in clipboard.";
 
+// Invite / contact links
+"invite_error_invalid_url" = "The provided URL is invalid.";
+"invite_error_unsupported_link" = "This is not a supported Construct invite link.";
+"invite_error_expired" = "This invite has expired. Ask for a new one.";
+"invite_error_invalid_fmt" = "Invalid invite: %@";
+"invite_error_already_used" = "This invite was already used. Ask for a new one.";
+"invite_error_verification_failed_fmt" = "Could not verify invite: %@";
+"invite_error_legacy_unsupported" = "This link format is no longer supported. Ask for a fresh invite QR or link.";
+"invite_error_malformed" = "Malformed invite data";
+"invite_redeem_safety_message_fmt" = "Connected with %@. Not who you expected?";
+"invite_redeem_safety_block" = "Block";
+"invite_accepted_inviter_message" = "Someone connected via your invite.";
+
 // iPad Split View
 "select_chat" = "Select a Chat";
 "select_chat_description" = "Choose a conversation from the sidebar to start messaging.";
+"show_chat_list" = "Show chat list";
+"hide_chat_list" = "Hide chat list";
 
 // QR Code
 
@@ -469,6 +499,12 @@
 "veil_config_none" = "No access configured";
 "traffic_protection" = "Traffic Protection";
 "veil_footer_short" = "VEIL masks traffic as standard HTTPS. Configuration is provided automatically.";
+
+// Censorship protection (production soft control — no VEIL / relay disclosure)
+"censorship_protection" = "Censorship protection";
+"censorship_protection_footer_off" = "Off. Connection goes directly to Construct.";
+"censorship_protection_footer_auto" = "Turns on automatically when blocking is detected. Setup happens in the background.";
+"censorship_protection_footer_on" = "Always routes around network blocks. Setup happens in the background.";
 
 // VEIL mode (tri-state)
 "veil_mode_off" = "off";
@@ -608,6 +644,12 @@
 // MARK: - Device Linking
 "onboarding_link_device" = "Link Existing Identity";
 "device_link_scan_title" = "Scan to Link";
+"link_method_title" = "Link Device";
+"link_method_intro" = "Add this device to your existing Konstruct identity. Use whichever device is easiest to point a camera with.";
+"link_method_scan_title" = "Scan a code";
+"link_method_scan_subtitle" = "Your other device shows a QR code";
+"link_method_show_title" = "Show a code";
+"link_method_show_subtitle" = "Your other device scans this one";
 "device_link_scan_instructions" = "Open your existing device → Settings → Linked Devices → Link New Device, then scan the QR code.";
 "device_link_linking" = "Linking device…";
 "device_link_success" = "Device linked successfully";
@@ -859,6 +901,22 @@
 "kt_status" = "merkle log";
 "kt_verified" = "verified";
 "kt_warning" = "warning";
+
+// Key-change trust event (thread 5.4)
+"key_change_banner_title" = "Security key changed";
+"key_change_banner_title_failed" = "Identity check failed";
+"key_change_banner_subtitle_fmt" = "%@'s security key is different from before. Compare Safety Numbers before you trust this chat.";
+"key_change_banner_subtitle_failed" = "We could not confirm this person's security key with the transparency log. Verify in person if you can.";
+"key_change_verify" = "Verify";
+"key_change_accept" = "Accept new key";
+"key_change_toast_fmt" = "%@'s security key changed. Open the chat to verify.";
+"key_change_toast_open" = "Open";
+
+// Identity fingerprint (thread 5.3 — external identity form)
+"identity_fingerprint" = "Fingerprint";
+"identity_fingerprint_unknown" = "Not pinned yet";
+"identity_fingerprint_copy_hint" = "Copies fingerprint to clipboard";
+"identity_fingerprint_copied" = "Copied";
 "kt_no_data" = "no data";
 "kt_hint" = "Public identity keys are recorded in an append-only log so tampering can be detected.";
 "kt_failure_hint" = "key transparency verification failed — possible tampering detected.";
@@ -1047,3 +1105,8 @@
 "liquid_logo.haptics" = "Haptics";
 "liquid_logo.replay" = "REPLAY";
 "liquid_logo.hint" = "tap anywhere to replay";
+
+/* Silent-transport neutral network indicator (silent-transport-ui decision) */
+"net_status_protected" = "Protected";
+"net_status_connecting" = "Connecting…";
+"file" = "File";

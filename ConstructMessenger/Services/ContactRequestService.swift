@@ -62,7 +62,7 @@ final class ContactRequestService {
                     )
                 } catch {
                     Log.error(
-                        "⚠️ Failed to create contact for request \(requestId): \(error)",
+                        "Failed to create contact for request \(requestId): \(error)",
                         category: "ContactRequests"
                     )
                     // Restore mapping so the next check can retry.
@@ -82,7 +82,7 @@ final class ContactRequestService {
             return newContacts
         } catch {
             Log.error(
-                "⚠️ ContactRequestService.checkAndCreateContacts failed: \(error)",
+                "ContactRequestService.checkAndCreateContacts failed: \(error)",
                 category: "ContactRequests"
             )
             return []

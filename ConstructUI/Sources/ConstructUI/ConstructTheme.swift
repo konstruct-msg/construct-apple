@@ -736,7 +736,8 @@ struct CTSettingsRow: View {
             Text(label)
                 .font(CTFont.regular(13))
                 .foregroundColor(isDestructive ? Color.CT.danger : labelColor)
-                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                .lineLimit(1)
+                .layoutPriority(0)
             Spacer(minLength: 8)
             Text(value)
                 .font(isAction ? CTFont.bold(13) : CTFont.regular(13))
@@ -744,7 +745,10 @@ struct CTSettingsRow: View {
                     isDestructive ? Color.CT.danger :
                     isAction      ? Color.CT.accent : valueColor
                 )
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .layoutPriority(1)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)

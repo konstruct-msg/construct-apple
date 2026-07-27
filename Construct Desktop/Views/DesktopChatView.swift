@@ -23,6 +23,8 @@ struct DesktopChatView: View {
     @State private var replyingTo: Message?
     @State private var replyQuoteText: String? = nil
     @State private var quotingMessage: Message? = nil
+    @State private var replyFocusIds: Set<String> = []
+    @State private var replyFocusPeekTask: Task<Void, Never>?
     @State private var showingUserProfile = false
     @State private var callManager = CallManager.shared
 
@@ -42,7 +44,8 @@ struct DesktopChatView: View {
     @State private var containerWidth: CGFloat = 800
 
     private struct ChatScrollGeometry: Equatable {
-        var offsetFromBottom: CGFloat
+        /// Points of content below the visible rect (0 ≈ at bottom).
+        var distanceFromBottom: CGFloat
         var width: CGFloat
         /// Content shorter than the viewport ⇒ nothing to jump to — the FAB must never show.
         var contentFits: Bool
@@ -95,6 +98,7 @@ struct DesktopChatView: View {
                                     onReply: { msg in
                                         replyingTo = msg
                                         replyQuoteText = nil
+                                        setComposeReplyFocus(messageId: msg.id)
                                     },
                                     onDelete: { msg in viewModel.deleteMessage(msg) },
                                     onSelect: { msg in toggleMessageSelection(msg) },
@@ -106,13 +110,19 @@ struct DesktopChatView: View {
                                         }
                                         selectedMessages.insert(msg.id)
                                     },
-                                    onTapMedia: { msg in
-                                        galleryStartItem = GalleryStartItem(id: msg.id)
+                                    onTapMedia: { msg, itemIndex in
+                                        galleryStartItem = GalleryStartItem(id: msg.id, itemIndex: itemIndex)
                                     },
                                     onEdit: { msg in viewModel.editingMessage = msg },
-                                    onReplyWithQuote: { msg, _ in quotingMessage = msg }
+                                    onReplyWithQuote: { msg, _ in quotingMessage = msg },
+                                    onJumpToReply: { msg in peekReplyChain(for: msg) }
                                 )
                                 .id(message.id)
+                                .opacity(replyFocusOpacity(for: message))
+                                .animation(
+                                    .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
+                                    value: replyFocusIds
+                                )
 
                                 if index < filteredMessages.count - 1 {
                                     Spacer()
@@ -138,13 +148,17 @@ struct DesktopChatView: View {
                 .environment(\.containerWidth, containerWidth)
                 .onTapGesture { hideKeyboard() }
                 .onScrollGeometryChange(for: ChatScrollGeometry.self) { geo in
-                    ChatScrollGeometry(
-                        offsetFromBottom: geo.contentOffset.y + geo.containerSize.height - geo.contentSize.height,
+                    let distance = geo.contentSize.height - geo.visibleRect.maxY
+                    return ChatScrollGeometry(
+                        distanceFromBottom: distance,
                         width: geo.containerSize.width,
-                        contentFits: geo.contentSize.height <= geo.containerSize.height
+                        contentFits: geo.contentSize.height <= geo.visibleRect.height + 8
                     )
                 } action: { _, metrics in
-                    scrollManager.updateScrollOffset(metrics.offsetFromBottom, contentFits: metrics.contentFits)
+                    scrollManager.updateScrollOffset(
+                        distanceFromBottom: metrics.distanceFromBottom,
+                        contentFits: metrics.contentFits
+                    )
                     if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
                         containerWidth = metrics.width
                     }
@@ -253,6 +267,7 @@ struct DesktopChatView: View {
                 QuoteSelectionSheet(message: msg) { selectedQuote in
                     replyingTo = msg
                     replyQuoteText = selectedQuote
+                    setComposeReplyFocus(messageId: msg.id)
                 }
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
@@ -260,7 +275,8 @@ struct DesktopChatView: View {
             .sheet(item: $galleryStartItem) { item in
                 MediaGalleryViewer(
                     messages: mediaMessages,
-                    initialMessageId: item.id,
+                    initialMessageId: item.messageId,
+                    initialItemIndex: item.itemIndex,
                     isPresented: Binding(
                         get: { galleryStartItem != nil },
                         set: { if !$0 { galleryStartItem = nil } }
@@ -302,6 +318,8 @@ struct DesktopChatView: View {
                 loadContactKTStatus()
             }
             .onDisappear {
+                replyFocusPeekTask?.cancel()
+                replyFocusPeekTask = nil
                 guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
                 if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
                     _ = try? CryptoManager.shared.handleOrchestratorEvent(
@@ -435,6 +453,7 @@ struct DesktopChatView: View {
                     messageText = ""
                     replyingTo = nil
                     replyQuoteText = nil
+                    clearReplyFocus(animated: true)
                     scrollManager.shouldScrollToBottom = true
                     Task { @MainActor in
                         try? await Task.sleep(for: .seconds(ChatViewConstants.MessageDelay.scrollAfterSend))
@@ -451,6 +470,7 @@ struct DesktopChatView: View {
             onCancelReply: {
                 replyingTo = nil
                 replyQuoteText = nil
+                clearReplyFocus(animated: true)
             },
             onCancelEdit: {
                 viewModel.editingMessage = nil
@@ -609,6 +629,59 @@ struct DesktopChatView: View {
                 return (mc.media["_placeholder"] as? Bool) != true
             }
             return false
+        }
+    }
+
+    // MARK: - Soft reply focus
+
+    private func replyFocusOpacity(for message: Message) -> Double {
+        guard !isEditMode, !replyFocusIds.isEmpty else {
+            return ChatUIConstants.ReplyFocus.focusedOpacity
+        }
+        if replyFocusIds.contains(message.id.lowercased()) {
+            return ChatUIConstants.ReplyFocus.focusedOpacity
+        }
+        return ChatUIConstants.ReplyFocus.dimmedOpacity
+    }
+
+    private func setComposeReplyFocus(messageId: String) {
+        replyFocusPeekTask?.cancel()
+        replyFocusPeekTask = nil
+        withAnimation(.easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration)) {
+            replyFocusIds = [messageId.lowercased()]
+        }
+    }
+
+    private func peekReplyChain(for message: Message) {
+        let childId = message.id.lowercased()
+        let parentId = (message.replyToMessageId ?? "").lowercased()
+        guard !parentId.isEmpty else { return }
+
+        replyFocusPeekTask?.cancel()
+        withAnimation(.easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration)) {
+            replyFocusIds = [parentId, childId]
+        }
+        scrollManager.scrollTo(messageId: parentId, anchor: .center, animated: true)
+
+        let holdParent = parentId
+        replyFocusPeekTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: ChatUIConstants.ReplyFocus.peekHoldNanoseconds)
+            guard !Task.isCancelled else { return }
+            if replyingTo?.id.lowercased() == holdParent { return }
+            clearReplyFocus(animated: true)
+        }
+    }
+
+    private func clearReplyFocus(animated: Bool) {
+        replyFocusPeekTask?.cancel()
+        replyFocusPeekTask = nil
+        guard !replyFocusIds.isEmpty else { return }
+        if animated {
+            withAnimation(.easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration)) {
+                replyFocusIds = []
+            }
+        } else {
+            replyFocusIds = []
         }
     }
 

@@ -35,6 +35,10 @@ struct DesktopMessageInputView: View {
     var body: some View {
         VStack(spacing: 0) {
             replyOrEditBars
+            if replyingTo != nil || editingMessage != nil {
+                Color.clear
+                    .frame(height: ChatUIConstants.InputBar.auxBarGap)
+            }
             attachmentPreviews
             voiceOrInputRow
         }
