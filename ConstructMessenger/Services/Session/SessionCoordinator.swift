@@ -1035,19 +1035,61 @@ final class SessionCoordinator: MessageRouterDelegate {
             do {
                 let nonce = UUID().uuidString
                 let msgId = UUID().uuidString.lowercased()
-                let _ = try await MessagingServiceClient.shared.sendMessage(
+                let convId = ConversationId.direct(myUserId: myId, theirUserId: userId)
+                let ts = UInt64(Date().timeIntervalSince1970)
+                let encryptedPayload = try await OutboundSessionService.shared.encryptSessionControl(
+                    payload: SessionControlCodec.encodePayload(op: codecOp, nonce: nonce),
                     messageId: msgId,
-                    recipientId: userId,
-                    senderId: myId,
-                    conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
-                    encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
-                        payload: SessionControlCodec.encodePayload(op: codecOp, nonce: nonce),
-                        messageId: msgId,
-                        recipientId: userId
-                    ),
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    contentType: contentType
+                    recipientId: userId
                 )
+
+                // Stealth: seal the control envelope exactly like a message body. The real
+                // content type rides inside SealedInner and is recovered on receive
+                // (MessageRouter rebuilds with `resolved.contentType`, then routes control types via
+                // SessionControlCodec.op). Fail-closed: under stealth-on we NEVER emit an identified
+                // control send — that is the server-observable session-graph leak the sealed path
+                // exists to close (decisions/sealed-sender-session-control-channel.md). A blocked
+                // send just fails this attempt; the tie-break watchdog re-drives the handshake.
+                if await StealthPolicy.shared.shouldUseSealedSender() {
+                    let ctx = viewContext ?? PersistenceController.shared.container.viewContext
+                    guard let recipientIK = StealthSenderService.recipientIdentityKey(recipientId: userId, context: ctx) else {
+                        throw StealthDowngradeBlocked(reason: "no recipient identity key for \(logTag) → \(userId.prefix(8))…")
+                    }
+                    let sealedInner = try await StealthSenderService.buildSealedInner(
+                        recipientUserId: userId,
+                        recipientIdentityKey: recipientIK,
+                        encryptedPayload: encryptedPayload,
+                        contentType: contentType
+                    )
+                    _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+                        try await StealthSenderService.buildSealedInner(
+                            recipientUserId: userId,
+                            recipientIdentityKey: recipientIK,
+                            encryptedPayload: encryptedPayload,
+                            contentType: contentType
+                        )
+                    }, send: { inner in
+                        try await MessagingServiceClient.shared.sendMessage(
+                            messageId: msgId,
+                            recipientId: userId,
+                            senderId: myId,
+                            conversationId: convId,
+                            encryptedPayload: encryptedPayload,
+                            timestamp: ts,
+                            sealedInnerBytes: inner
+                        )
+                    })
+                } else {
+                    let _ = try await MessagingServiceClient.shared.sendMessage(
+                        messageId: msgId,
+                        recipientId: userId,
+                        senderId: myId,
+                        conversationId: convId,
+                        encryptedPayload: encryptedPayload,
+                        timestamp: ts,
+                        contentType: contentType
+                    )
+                }
                 Log.info("SESSION_STATE[\(logTag)_sent]: to \(userId.prefix(8))… (attempt \(attempt))", category: "SessionInit")
                 return
             } catch {
