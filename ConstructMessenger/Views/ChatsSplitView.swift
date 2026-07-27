@@ -34,6 +34,14 @@ struct ChatsSplitView: View {
     )
     private var chats: FetchedResults<Chat>
 
+    /// Order-preserving dedupe of the fetched chats by `id`. `@FetchRequest(animation:)` can
+    /// transiently surface the same Chat twice during a background-context merge; a `ForEach`
+    /// over a duplicate Identifiable id crashes the List with UICollectionView's diff assertion.
+    private var dedupedChats: [Chat] {
+        var seen = Set<String>()
+        return chats.filter { seen.insert($0.id).inserted }
+    }
+
     @State private var selectedChatId: String?
     @State private var showingQRScanner = false
     @State private var activeTab: SidebarTab = .chats
@@ -320,7 +328,7 @@ struct ChatsSplitView: View {
             }
 
             List(selection: $selectedChatId) {
-                ForEach(chats) { chat in
+                ForEach(dedupedChats) { chat in
                     ChatRowView(chat: chat)
                         .tag(chat.id)
                         .listRowBackground(Color.clear)

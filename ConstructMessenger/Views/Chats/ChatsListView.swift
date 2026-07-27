@@ -160,9 +160,20 @@ struct ChatsListView: View {
     // MARK: - Chat List
 
     private var filteredChats: [Chat] {
+        // Dedupe by `id` before the `ForEach`: `@FetchRequest(animation:)` can transiently
+        // surface the same Chat twice while a background-context merge (push-driven chat
+        // insert) races the animated list update. A `ForEach` over a duplicate Identifiable
+        // id trips UICollectionView's "invalid number of items" diff assertion → hard crash.
+        let all = Self.dedupedByID(Array(chats))
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return Array(chats) }
-        return chats.filter { chatMatchesQuery($0, query: query) }
+        guard !query.isEmpty else { return all }
+        return all.filter { chatMatchesQuery($0, query: query) }
+    }
+
+    /// Order-preserving dedupe of chats by `id` — the crash guard for the List diff assertion.
+    private static func dedupedByID(_ items: [Chat]) -> [Chat] {
+        var seen = Set<String>()
+        return items.filter { seen.insert($0.id).inserted }
     }
 
     private func chatList(chats renderedChats: [Chat]) -> some View {
