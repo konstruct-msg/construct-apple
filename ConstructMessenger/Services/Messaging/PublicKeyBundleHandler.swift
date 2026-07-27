@@ -145,35 +145,32 @@ class PublicKeyBundleHandler {
             Log.info("Receiving session initialized for \(data.userId), message decrypted", category: "PublicKeyBundleHandler")
             Log.info("SESSION_STATE[init_receiving_success]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s", category: "SessionInit")
             
-            // Find chat for this user; recreate it if the user deleted it locally while
-            // the remote side still had a valid session and sent a fresh X3DH init.
-            let chatFetchRequest = Chat.fetchRequest()
-            chatFetchRequest.predicate = NSPredicate(format: "otherUser.id == %@", data.userId)
-
-            let chat: Chat
-            if let existing = try? context.fetch(chatFetchRequest).first {
-                chat = existing
-            } else {
-                // Chat was deleted locally but crypto succeeded — recreate it silently.
-                // The user deleted the chat on their side; the remote party initiated a new
-                // valid session. We must NOT send END_SESSION here (that causes an
-                // endless reset loop). Just re-open the conversation.
-                Log.info("Chat not found for \(data.userId.prefix(8))… — recreating after delete", category: "PublicKeyBundleHandler")
-                let userFetchRequest = User.fetchRequest()
-                userFetchRequest.predicate = NSPredicate(format: "id == %@", data.userId)
-                let user: User
-                if let existingUser = try? context.fetch(userFetchRequest).first {
-                    user = existingUser
-                } else {
-                    user = User(context: context)
-                    user.id = data.userId
+            // 1:1 Chat per User. Recreates silently if the user deleted the chat while
+            // the remote still had a valid session and sent a fresh X3DH init.
+            // Must NOT send END_SESSION here (that causes an endless reset loop).
+            let resolved: Chat.FindOrCreateResult
+            do {
+                guard let result = try Chat.findOrCreate(
+                    forUserId: data.userId,
+                    in: context,
+                    missingUserPolicy: .createContact,
+                    touchLastMessageTimeOnCreate: true
+                ) else {
+                    Log.error("findOrCreateChat returned nil for \(data.userId.prefix(8))…", category: "PublicKeyBundleHandler")
+                    return false
                 }
-                let newChat = Chat(context: context)
-                newChat.id = UUID().uuidString
-                newChat.otherUser = user
-                newChat.lastMessageTime = Date()
-                chat = newChat
+                resolved = result
+            } catch {
+                Log.error("findOrCreateChat failed for \(data.userId.prefix(8))…: \(error)", category: "PublicKeyBundleHandler")
+                return false
             }
+            if resolved.created {
+                Log.info(
+                    "Chat not found for \(data.userId.prefix(8))… — recreating after delete",
+                    category: "PublicKeyBundleHandler"
+                )
+            }
+            let chat = resolved.chat
 
             onSuccess(chat, message, decryptedBytes)
             do {

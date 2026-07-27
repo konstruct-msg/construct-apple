@@ -3,7 +3,7 @@
 //  Construct Messenger
 //
 //  Synaps — persistent contact network, independent of chats.
-//  Layout: Zoomable/pannable honeycomb cloud of round avatars.
+//  Layout: Zoomable/pannable honeycomb cloud of round avatars + name labels.
 //  Gestures: pinch-to-zoom + drag-to-pan. Contacts near the screen
 //  center appear larger; peripheral contacts are dimmer — Apple Watch style.
 //
@@ -805,47 +805,68 @@ private struct ContactCircle: View {
 
     @State private var touchMoved = false
 
+    /// cellWidth recovered from engine mapping (cellSize = cellWidth × 0.74).
+    private var cellWidth: CGFloat { cellSize / 0.74 }
+
     // MARK: Size
     //
-    // Frequency score drives rendered diameter in the range [0.55 … 0.75] × cellWidth.
-    // Upper bound kept well below the hex vertical step (cellWidth × 0.866) so that
-    // even with the proximity scale boost circles never visually overlap.
+    // Frequency score drives rendered diameter in the range [0.50 … 0.66] × cellWidth.
+    // Slightly smaller than pure-avatar layout so a name label fits under each circle
+    // without colliding with the next honeycomb row (vStep ≈ 1.02 × cellWidth).
     private var effectiveSize: CGFloat {
-        let f = 0.55 + 0.20 * metrics.frequencyScore  // [0.55 … 0.75]
-        return cellSize / 0.74 * f                     // remap: cellSize = cellWidth×0.74
+        let f = 0.50 + 0.16 * metrics.frequencyScore  // [0.50 … 0.66]
+        return cellWidth * f
+    }
+
+    /// Max width for the name under the avatar — slightly wider than the circle.
+    private var labelWidth: CGFloat {
+        min(cellWidth * 0.92, max(effectiveSize * 1.35, 56))
     }
 
     var body: some View {
-        ZStack {
-            // Soft halo — ambient “this node is live” (not a feed preview).
-            if metrics.showsActivityHalo && !user.isBlocked {
-                Circle()
-                    .stroke(Color.CT.accent.opacity(0.28), lineWidth: 3)
-                    .frame(width: effectiveSize * 1.14, height: effectiveSize * 1.14)
-            }
-
+        VStack(spacing: 4) {
             ZStack {
-                if let data = user.avatarData, let img = PlatformImage(data: data) {
-                    Image(platformImage: img)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Circle().fill(accentColor.opacity(0.12))
-                    IdenticonView(seed: user.id)
+                // Soft halo — ambient “this node is live” (not a feed preview).
+                if metrics.showsActivityHalo && !user.isBlocked {
+                    Circle()
+                        .stroke(Color.CT.accent.opacity(0.28), lineWidth: 3)
+                        .frame(width: effectiveSize * 1.14, height: effectiveSize * 1.14)
+                }
+
+                ZStack {
+                    if let data = user.avatarData, let img = PlatformImage(data: data) {
+                        Image(platformImage: img)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Circle().fill(accentColor.opacity(0.12))
+                        IdenticonView(seed: user.id)
+                    }
+                }
+                .frame(width: effectiveSize, height: effectiveSize)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(borderColor, lineWidth: metrics.activityRingLineWidth))
+
+                if metrics.unreadCount > 0 {
+                    unreadBadge
+                        .offset(x: effectiveSize * 0.34, y: -effectiveSize * 0.34)
                 }
             }
-            .frame(width: effectiveSize, height: effectiveSize)
-            .clipShape(Circle())
-            .overlay(Circle().stroke(borderColor, lineWidth: metrics.activityRingLineWidth))
+            .frame(width: effectiveSize * 1.2, height: effectiveSize * 1.2)
+            .opacity(proximityOpacity)
 
-            if metrics.unreadCount > 0 {
-                unreadBadge
-                    .offset(x: effectiveSize * 0.34, y: -effectiveSize * 0.34)
-            }
+            Text(user.resolvedDisplayName)
+                .font(CTFont.medium(10))
+                .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .truncationMode(.tail)
+                .multilineTextAlignment(.center)
+                .frame(width: labelWidth)
+                // Names stay a bit more readable than peripheral avatars.
+                .opacity(min(1.0, proximityOpacity + 0.35))
         }
-        .frame(width: effectiveSize * 1.2, height: effectiveSize * 1.2)
         .scaleEffect(proximityScale)
-        .opacity(proximityOpacity)
         // Use DragGesture(minimumDistance: 0) so we can distinguish a stationary
         // tap from a drag that happens to end over the contact. Only fire onTap
         // when the finger hasn't moved more than 8 pt — matching the parent
@@ -886,7 +907,7 @@ private struct ContactCircle: View {
     }
 
     private var accessibilityLabel: String {
-        let name = user.displayName
+        let name = user.resolvedDisplayName
         if metrics.unreadCount > 0 {
             return "\(name), \(metrics.unreadCount)"
         }

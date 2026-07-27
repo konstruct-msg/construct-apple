@@ -423,53 +423,72 @@ private struct DesktopContactNode: View {
     @State private var showPopover = false
     @State private var isHovered   = false
 
+    private var cellWidth: CGFloat { cellSize / 0.74 }
+
+    /// Slightly smaller circles so a name label fits under each node (mirrors iOS).
     private var effectiveSize: CGFloat {
-        let f = 0.55 + 0.20 * metrics.frequencyScore
-        return cellSize / 0.74 * f
+        let f = 0.50 + 0.16 * metrics.frequencyScore  // [0.50 … 0.66]
+        return cellWidth * f
+    }
+
+    private var labelWidth: CGFloat {
+        min(cellWidth * 0.92, max(effectiveSize * 1.35, 56))
     }
 
     var body: some View {
-        ZStack {
-            if metrics.showsActivityHalo && !user.isBlocked {
-                Circle()
-                    .stroke(Color.CT.accent.opacity(0.28), lineWidth: 3)
-                    .frame(width: effectiveSize * 1.14, height: effectiveSize * 1.14)
-            }
-
+        VStack(spacing: 4) {
             ZStack {
-                if let data = user.avatarData, let img = PlatformImage(data: data) {
-                    Image(platformImage: img)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Circle().fill(accentColor.opacity(0.12))
-                    IdenticonView(seed: user.id)
+                if metrics.showsActivityHalo && !user.isBlocked {
+                    Circle()
+                        .stroke(Color.CT.accent.opacity(0.28), lineWidth: 3)
+                        .frame(width: effectiveSize * 1.14, height: effectiveSize * 1.14)
+                }
+
+                ZStack {
+                    if let data = user.avatarData, let img = PlatformImage(data: data) {
+                        Image(platformImage: img)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Circle().fill(accentColor.opacity(0.12))
+                        IdenticonView(seed: user.id)
+                    }
+                }
+                .frame(width: effectiveSize, height: effectiveSize)
+                .clipShape(Circle())
+                .overlay(
+                    Circle().stroke(
+                        isHovered ? Color.CT.accent : borderColor,
+                        lineWidth: isHovered ? 2.5 : metrics.activityRingLineWidth
+                    )
+                )
+
+                if metrics.unreadCount > 0 {
+                    let n = metrics.unreadCount
+                    let label = n > 99 ? "99+" : "\(n)"
+                    Text(label)
+                        .font(CTFont.bold(n > 9 ? 8 : 9))
+                        .foregroundStyle(Color.CT.bg)
+                        .padding(.horizontal, n > 9 ? 4 : 0)
+                        .frame(minWidth: 15, minHeight: 15)
+                        .background(Capsule(style: .continuous).fill(Color.CT.accent))
+                        .offset(x: effectiveSize * 0.34, y: -effectiveSize * 0.34)
                 }
             }
-            .frame(width: effectiveSize, height: effectiveSize)
-            .clipShape(Circle())
-            .overlay(
-                Circle().stroke(
-                    isHovered ? Color.CT.accent : borderColor,
-                    lineWidth: isHovered ? 2.5 : metrics.activityRingLineWidth
-                )
-            )
+            .frame(width: effectiveSize * 1.2, height: effectiveSize * 1.2)
+            .opacity(proximityOpacity)
 
-            if metrics.unreadCount > 0 {
-                let n = metrics.unreadCount
-                let label = n > 99 ? "99+" : "\(n)"
-                Text(label)
-                    .font(CTFont.bold(n > 9 ? 8 : 9))
-                    .foregroundStyle(Color.CT.bg)
-                    .padding(.horizontal, n > 9 ? 4 : 0)
-                    .frame(minWidth: 15, minHeight: 15)
-                    .background(Capsule(style: .continuous).fill(Color.CT.accent))
-                    .offset(x: effectiveSize * 0.34, y: -effectiveSize * 0.34)
-            }
+            Text(user.resolvedDisplayName)
+                .font(CTFont.medium(10))
+                .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .truncationMode(.tail)
+                .multilineTextAlignment(.center)
+                .frame(width: labelWidth)
+                .opacity(min(1.0, proximityOpacity + 0.35))
         }
-        .frame(width: effectiveSize * 1.2, height: effectiveSize * 1.2)
         .scaleEffect(proximityScale)
-        .opacity(proximityOpacity)
         .animation(.easeInOut(duration: 0.12), value: isHovered)
         // Hover: ring highlight + pointer cursor
         .onHover { inside in

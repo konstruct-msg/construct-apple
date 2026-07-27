@@ -285,6 +285,13 @@
 "onboarding_tagline" = "интернет — пространство свободы выражения мысли.\nидентичность — конструкт.";
 "onboarding_username_placeholder" = "публичный псевдоним (опционально)";
 "onboarding_create_identity" = "Создать идентичность";
+"onboarding_already_have" = "Уже есть идентичность?";
+"onboarding_existing_title" = "Существующая идентичность";
+"onboarding_existing_intro" = "Выберите, как перенести её на это устройство.";
+"onboarding_restore_title" = "Восстановить по фразе";
+"onboarding_restore_subtitle" = "Нет другого устройства с Konstruct. Используйте вашу фразу из 12 слов.";
+"onboarding_link_title" = "Привязать это устройство";
+"onboarding_link_subtitle" = "Konstruct ещё есть на другом телефоне или компьютере.";
 "onboarding_restore" = "Восстановить из ключа восстановления";
 "onboarding_recovery_coming_soon" = "Восстановление скоро будет доступно";
 "onboarding_network_settings" = "Настройки сети";

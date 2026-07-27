@@ -309,6 +309,13 @@
 "onboarding_tagline" = "インターネットは自由な思考の空間。\nアイデンティティは構築物。";
 "onboarding_username_placeholder" = "公開エイリアスを選択 (任意)";
 "onboarding_create_identity" = "アイデンティティを作成";
+"onboarding_already_have" = "すでにアイデンティティがありますか？";
+"onboarding_existing_title" = "既存のアイデンティティを使う";
+"onboarding_existing_intro" = "このデバイスへ持ち込む方法を選んでください。";
+"onboarding_restore_title" = "復旧フレーズから復元";
+"onboarding_restore_subtitle" = "共創のある他のデバイスがない場合。12語のフレーズを使います。";
+"onboarding_link_title" = "このデバイスを連携";
+"onboarding_link_subtitle" = "別のスマホやパソコンに共創が残っている場合。";
 "onboarding_restore" = "復旧キーから復元";
 "onboarding_recovery_coming_soon" = "復旧機能は近日公開";
 "onboarding_network_settings" = "ネットワーク設定";

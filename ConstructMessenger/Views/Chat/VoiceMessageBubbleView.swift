@@ -30,14 +30,8 @@ struct VoiceMessageBubbleView: View {
     /// user can still collapse it via the inline toggle.
     @State private var isTranscriptExpanded: Bool = true
 
-    /// True when the transcript is actually rendered below the waveform, making
-    /// the bubble tall.
+    /// True when the transcript is actually rendered below the waveform.
     private var isTranscriptShown: Bool { (transcript?.isEmpty == false) && isTranscriptExpanded }
-
-    /// Waveform-only → pill; with transcript → control (see ``ChatUIConstants.Voice``).
-    private var playerBubbleShape: RoundedRectangle {
-        ChatUIConstants.Voice.shape(transcriptShown: isTranscriptShown)
-    }
 
     private var isPlaying: Bool { player.isPlaying(voiceContent.mediaId) }
     private var isUploading: Bool { deliveryStatus == .sending && voiceContent.mediaUrl.isEmpty }
@@ -128,8 +122,8 @@ struct VoiceMessageBubbleView: View {
         }
         .frame(maxWidth: ChatUIConstants.Bubble.maxWidth)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe))
-        .clipShape(playerBubbleShape)
-        .overlay(playerBubbleShape.stroke(Color.CT.noise, lineWidth: ChatUIConstants.Voice.strokeWidth))
+        .clipShape(ChatUIConstants.Voice.shape)
+        .overlay(ChatUIConstants.Voice.shape.stroke(Color.CT.noise, lineWidth: ChatUIConstants.Voice.strokeWidth))
         .animation(.easeInOut(duration: 0.2), value: isTranscriptShown)
         .onChange(of: transcript) { _, newTranscript in
             // Auto-reveal a fresh transcript so the user sees what they
@@ -237,8 +231,8 @@ struct VoiceMessageBubbleView: View {
         .padding(.vertical, ChatUIConstants.Voice.verticalPadding)
         .frame(maxWidth: ChatUIConstants.Bubble.maxWidth)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe).opacity(0.7))
-        .clipShape(CTShape.pill())
-        .overlay(CTShape.pill().stroke(Color.CT.noise, lineWidth: ChatUIConstants.Voice.strokeWidth))
+        .clipShape(ChatUIConstants.Voice.shape)
+        .overlay(ChatUIConstants.Voice.shape.stroke(Color.CT.noise, lineWidth: ChatUIConstants.Voice.strokeWidth))
     }
 
     // MARK: - Failed state
@@ -274,8 +268,8 @@ struct VoiceMessageBubbleView: View {
         .padding(.vertical, ChatUIConstants.Voice.verticalPadding)
         .frame(maxWidth: ChatUIConstants.Bubble.maxWidth)
         .background(Color.CT.bgMsg)
-        .clipShape(CTShape.pill())
-        .overlay(CTShape.pill().stroke(Color(hex: 0xE05555).opacity(0.5), lineWidth: 1))
+        .clipShape(ChatUIConstants.Voice.shape)
+        .overlay(ChatUIConstants.Voice.shape.stroke(Color(hex: 0xE05555).opacity(0.5), lineWidth: 1))
     }
 
     // MARK: - Unavailable state
@@ -308,8 +302,8 @@ struct VoiceMessageBubbleView: View {
         .padding(.vertical, ChatUIConstants.Voice.verticalPadding)
         .frame(maxWidth: ChatUIConstants.Bubble.maxWidth)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe).opacity(0.35))
-        .clipShape(CTShape.pill())
-        .overlay(CTShape.pill().stroke(Color.CT.noise, lineWidth: ChatUIConstants.Voice.strokeWidth))
+        .clipShape(ChatUIConstants.Voice.shape)
+        .overlay(ChatUIConstants.Voice.shape.stroke(Color.CT.noise, lineWidth: ChatUIConstants.Voice.strokeWidth))
     }
 
     // MARK: - Duration

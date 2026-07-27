@@ -637,37 +637,35 @@ class BackgroundFetchManager: NSObject {
         }
     }
     
-    /// Find or create chat for a user
+    /// Find or create chat for a user.
+    /// Only creates a chat when the User already exists — must not bootstrap unknowns.
     func findOrCreateChat(
         for userId: String,
         in context: NSManagedObjectContext,
         currentUserId: String
     ) -> String? {
-        let chatFetch = Chat.fetchRequest()
-        chatFetch.predicate = NSPredicate(format: "otherUser.id == %@", userId)
-
-        if let existingChat = try? context.fetch(chatFetch).first {
-            return existingChat.id
-        }
-
-        // Only create a new chat when the User already exists in Core Data.
-        // BackgroundFetch must not bootstrap contacts: if the sender is unknown
-        // (pruned or first-ever contact) return nil so the message is skipped.
-        // The foreground stream handles session init, user creation, and decryption.
-        // Creating ghost User+Chat objects here causes Core Data validation errors
-        // (encryptedContent required) and recreates pruned contacts on every cycle.
-        let userFetch = User.fetchRequest()
-        userFetch.predicate = NSPredicate(format: "id == %@", userId)
-        guard let existingUser = try? context.fetch(userFetch).first else {
-            Log.info("BackgroundFetch: unknown sender \(userId.prefix(8))… — skipping (no contact record)", category: "BackgroundFetch")
+        do {
+            // requireExisting: BackgroundFetch must not mint ghost contacts.
+            // Foreground stream handles session init + first-ever user creation.
+            guard let result = try Chat.findOrCreate(
+                forUserId: userId,
+                in: context,
+                missingUserPolicy: .requireExisting
+            ) else {
+                Log.info(
+                    "BackgroundFetch: unknown sender \(userId.prefix(8))… — skipping (no contact record)",
+                    category: "BackgroundFetch"
+                )
+                return nil
+            }
+            return result.chat.id
+        } catch {
+            Log.error(
+                "BackgroundFetch: findOrCreateChat failed for \(userId.prefix(8))…: \(error)",
+                category: "BackgroundFetch"
+            )
             return nil
         }
-
-        let newChat = Chat(context: context)
-        newChat.id = UUID().uuidString
-        newChat.otherUser = existingUser
-
-        return newChat.id
     }
     
     /// Show notifications for new messages

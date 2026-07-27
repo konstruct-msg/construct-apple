@@ -332,6 +332,13 @@
 "onboarding_tagline" = "messagerie postmoderne";
 "onboarding_username_placeholder" = "choisissez un alias public (facultatif)";
 "onboarding_create_identity" = "Créer une identité d'appareil";
+"onboarding_already_have" = "Vous avez déjà une identité ?";
+"onboarding_existing_title" = "Utiliser une identité existante";
+"onboarding_existing_intro" = "Choisissez comment l’amener sur cet appareil.";
+"onboarding_restore_title" = "Restaurer avec la phrase de récupération";
+"onboarding_restore_subtitle" = "Vous n’avez pas d’autre appareil avec Konstruct. Utilisez votre phrase de 12 mots.";
+"onboarding_link_title" = "Lier cet appareil";
+"onboarding_link_subtitle" = "Konstruct est encore sur un autre téléphone ou ordinateur.";
 "onboarding_restore" = "Restaurer à partir de la clé de récupération";
 "onboarding_recovery_coming_soon" = "Récupération bientôt disponible";
 "onboarding_network_settings" = "Paramètres réseau";

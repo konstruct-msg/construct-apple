@@ -903,69 +903,24 @@ final class MessageRouter {
         for userId: String,
         in context: NSManagedObjectContext
     ) throws -> (Chat, Bool) {
-        let fetchRequest = Chat.fetchRequest()
-        let otherUserPredicate = NSPredicate(format: "otherUser.id == %@", userId)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [otherUserPredicate])
-
         do {
-            if let existingChat = try context.fetch(fetchRequest).first {
-                return (existingChat, false)
+            guard let result = try Chat.findOrCreate(
+                forUserId: userId,
+                in: context,
+                missingUserPolicy: .createContact
+            ) else {
+                // createContact never returns nil — defensive
+                throw NSError(
+                    domain: "MessageRouter",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "findOrCreateChat returned nil for \(userId)"]
+                )
             }
+            return (result.chat, result.created)
         } catch {
-            Log.error("Failed to fetch chat for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
+            Log.error("Failed to findOrCreate chat for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
             throw error
         }
-
-        // Create new user and chat
-        let user = try findOrCreateUser(for: userId, in: context)
-
-        let newChat = Chat(context: context)
-        newChat.id = UUID().uuidString
-        newChat.otherUser = user
-
-        return (newChat, true)
-    }
-    
-    /// Find or create user
-    /// - Parameters:
-    ///   - userId: User ID
-    ///   - context: Core Data context
-    /// - Returns: User entity
-    private func findOrCreateUser(
-        for userId: String,
-        in context: NSManagedObjectContext
-    ) throws -> User {
-        let userFetchRequest = User.fetchRequest()
-        let userIdPredicate = NSPredicate(format: "id == %@", userId)
-        var predicates: [NSPredicate] = [userIdPredicate]
-        if let existingPredicate = userFetchRequest.predicate {
-            predicates.insert(existingPredicate, at: 0)
-        }
-        userFetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
-
-        do {
-            if let existingUser = try context.fetch(userFetchRequest).first {
-                Log.debug("Using existing user: id=\(userId)", category: "MessageRouter")
-                return existingUser
-            }
-        } catch {
-            Log.error("Failed to fetch user \(userId.prefix(8))…: \(error)", category: "MessageRouter")
-            throw error
-        }
-
-        // Create new user with temporary username (will be updated from publicKeyBundle)
-        let newUser = User(context: context)
-        newUser.id = userId
-        newUser.username = ""
-        newUser.displayName = DisplayNameGenerator.generate(from: userId)
-        newUser.isSharingWithMe = false
-        newUser.isBlocked = false
-        newUser.amISharingWith = false
-        newUser.isContact = true
-        newUser.addedAt = Date()
-        
-        Log.debug("Created new user: id=\(userId)", category: "MessageRouter")
-        return newUser
     }
     
     // MARK: - First Message Handling

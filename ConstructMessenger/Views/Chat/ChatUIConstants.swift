@@ -8,10 +8,9 @@ import SwiftUI
 /// |---------|-------|-----|
 /// | Text / system / file / profile bubbles | ``Bubble.cornerRadius`` → `CTRadius.control` (10) | Readable block, matches CTButton |
 /// | Media / album tiles | ``Media.cornerRadius`` → same control | Align single + grid |
-/// | Voice **waveform-only** | ``Voice.cornerRadius`` → `CTRadius.pill` | Compact chrome peer of composer |
-/// | Voice **with transcript** | ``Voice.transcriptCornerRadius`` → `CTRadius.control` | Pill clamps to height/2 and oval-clips multi-line STT text |
-/// | Composer **single-line** field / attach / FAB | ``InputBar.cornerRadius`` → `CTRadius.pill` | Capsule peer of attach |
-/// | Composer **multi-line** field | ``InputBar.expandedCornerRadius`` → `CTRadius.control` | Pill clamps to height/2 and oval-clips text |
+/// | Voice playback (any height / STT) | ``Voice.cornerRadius`` → `CTRadius.control` | Stable shape — no pill↔control jump on transcript |
+/// | Composer text field (any height) | ``InputBar.cornerRadius`` → half of `controlHeight` | Stadium when 1-line; soft rect when multi — no jump |
+/// | Attach circle / scroll FAB | pill (`CTRadius.pill`) | Fixed-height floating peers only |
 enum ChatUIConstants {
 
     // MARK: - Typography
@@ -97,12 +96,9 @@ enum ChatUIConstants {
     // MARK: - Voice playback bubble
 
     enum Voice {
-        /// Waveform-only (compact height) — full capsule.
-        static let cornerRadius: CGFloat = CTRadius.pill
-        /// With expanded transcript — same as text bubbles.
-        /// **Invariant**: never use ``cornerRadius`` (pill) when transcript is shown;
-        /// ContinuousRoundedRect clamps radius to height/2 and clips multi-line STT text.
-        static let transcriptCornerRadius: CGFloat = CTRadius.control
+        /// Always matches text bubbles. Do not switch on transcript expand —
+        /// pill↔control used to jump the outline when STT appeared.
+        static let cornerRadius: CGFloat = CTRadius.control
 
         static let controlWidth: CGFloat = 38
         static let waveformHeight: CGFloat = 28
@@ -115,16 +111,8 @@ enum ChatUIConstants {
         static let toggleIconSize: CGFloat = 13
         static let strokeWidth: CGFloat = 0.5
 
-        /// Corner radius for the current voice chrome state.
-        static func cornerRadius(transcriptShown: Bool) -> CGFloat {
-            transcriptShown ? transcriptCornerRadius : cornerRadius
-        }
-
-        static func shape(transcriptShown: Bool) -> RoundedRectangle {
-            RoundedRectangle(
-                cornerRadius: cornerRadius(transcriptShown: transcriptShown),
-                style: .continuous
-            )
+        static var shape: RoundedRectangle {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         }
     }
 
@@ -158,11 +146,10 @@ enum ChatUIConstants {
     // MARK: - Composer input bar
 
     enum InputBar {
-        /// Single-line only — attach circle peer. Never use for multi-line height.
-        static let cornerRadius: CGFloat = CTRadius.pill
-        /// Multi-line field radius. Same invariant as ``Voice.transcriptCornerRadius``:
-        /// ContinuousRoundedRect clamps pill to height/2 → oval that clips text.
-        static let expandedCornerRadius: CGFloat = CTRadius.control
+        /// Fixed for all field heights: half of single-line control height.
+        /// One-line bar looks stadium-like; multi-line stays the same family (no
+        /// pill↔control jump). Does not clamp to height/2 so tall text is not oval-clipped.
+        static let cornerRadius: CGFloat = CTLayout.controlHeight / 2
         /// Target single-line control height (attach / send / scroll FAB).
         static let height: CGFloat = CTLayout.controlHeight
         static let horizontalPadding: CGFloat = CTLayout.edgePad
@@ -179,11 +166,5 @@ enum ChatUIConstants {
         /// Voice recording / preview bar height.
         static let voiceChromeHeight: CGFloat = 52
         static let voiceChromeIconSize: CGFloat = 22
-
-        /// Pick field radius from measured bar height (single-line vs multi-line).
-        static func fieldCornerRadius(barHeight: CGFloat) -> CGFloat {
-            // A few points of tolerance for font metrics / padding jitter.
-            barHeight > height + 6 ? expandedCornerRadius : cornerRadius
-        }
     }
 }

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Construct is E2EE and performs no cross-app tracking. -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<!--
+	  NSPrivacyCollectedDataTypes must be reconciled with the App Store Connect
+	  privacy nutrition labels (checklist A2.4). Message content and keys are E2EE
+	  and never collected by the developer; the server holds only routing identifiers
+	  and push tokens for functionality (not tracking). Left empty pending the A2.4
+	  labelling decision — do not ship the store submission until reconciled.
+	-->
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<!-- Required Reason APIs actually used (audited 2026-07-24). -->
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<!-- UserDefaults: app settings / flags, read+write within the app. -->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- File timestamps: media/attachment metadata for display and ordering. -->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

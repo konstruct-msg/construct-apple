@@ -20,8 +20,11 @@ struct HoneycombLayoutEngine {
 
     var cellWidth: CGFloat { canvasSize.width / CGFloat(wideCols) }
     var cellSize:  CGFloat { cellWidth * 0.74 }
-    var vStep:     CGFloat { cellWidth * 0.866 }  // √3/2
-    var totalHeight: CGFloat { CGFloat(rawRows.count) * vStep + cellWidth * 0.6 }
+    /// Vertical pitch between node centres. Classic hex is √3/2 (~0.866), but Synaps
+    /// renders a name under each avatar — stretch slightly so labels clear the next row.
+    var vStep:     CGFloat { cellWidth * 1.02 }
+    /// Bottom pad includes label line under the last row.
+    var totalHeight: CGFloat { CGFloat(rawRows.count) * vStep + cellWidth * 0.85 }
 
     /// Zoom level that fits the whole grid with ~12% breathing room.
     var initialScale: CGFloat {

@@ -325,6 +325,13 @@
 "onboarding_tagline" = "the internet is a space of free thought.\nidentity is a construct.";
 "onboarding_username_placeholder" = "choose a public alias (optional)";
 "onboarding_create_identity" = "Create identity";
+"onboarding_already_have" = "Already have an identity?";
+"onboarding_existing_title" = "Use existing identity";
+"onboarding_existing_intro" = "Choose how to bring it to this device.";
+"onboarding_restore_title" = "Restore from recovery phrase";
+"onboarding_restore_subtitle" = "You don’t have another device with Konstruct. Use your 12-word phrase.";
+"onboarding_link_title" = "Link this device";
+"onboarding_link_subtitle" = "You still have Konstruct on another phone or computer.";
 "onboarding_restore" = "Restore from recovery key";
 "onboarding_recovery_coming_soon" = "Recovery coming soon";
 "onboarding_network_settings" = "Network settings";

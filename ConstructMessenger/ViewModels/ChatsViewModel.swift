@@ -145,18 +145,22 @@ class ChatsViewModel {
 
     func openOrCreateChat(with user: User) {
         selectedTab = 0
-        if let existingChat = (user.chats as? Set<Chat>)?.first {
-            chatToOpen = existingChat.id
-            return
-        }
         guard let context = viewContext else { return }
-        let chat = Chat(context: context)
-        chat.id = UUID().uuidString
-        chat.otherUser = user
-        chat.lastMessageTime = Date()
+        // Always go through the shared 1:1 finder — do not trust `user.chats` alone
+        // (relationship can lag; parallel paths used to mint a second UUID).
+        let result = Chat.findOrCreate(
+            for: user,
+            in: context,
+            touchLastMessageTimeOnCreate: true
+        )
+        if !result.created, result.chat.lastMessageTime == nil {
+            result.chat.lastMessageTime = Date()
+        }
         do {
-            try context.save()
-            chatToOpen = chat.id
+            if context.hasChanges {
+                try context.save()
+            }
+            chatToOpen = result.chat.id
         } catch {
             Log.error("openOrCreateChat: failed to save: \(error)", category: "ChatsViewModel")
         }

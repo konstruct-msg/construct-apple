@@ -250,7 +250,7 @@ enum MediaWireCodec {
     /// Legacy `{"type":"file",…}` for dual-read UI when stored as media album of documents.
     static func fileJSON(from album: Shared_Proto_Messaging_V1_MediaAlbumMessage) -> String? {
         let files: [[String: Any]] = album.items.map { m in
-            var dict: [String: Any] = [
+            let dict: [String: Any] = [
                 "mediaId": m.mediaID,
                 "mediaUrl": m.fileURL,
                 "mediaKey": m.encryptionKey.base64EncodedString(),

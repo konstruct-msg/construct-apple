@@ -31,6 +31,12 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Construct uses the camera to scan invite QR codes and to capture photos and videos for your messages.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Construct needs access to your photo library so you can attach photos and videos to messages.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Construct saves photos and videos to your library when you choose to save them from a chat.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Construct uses the microphone to record voice messages and make encrypted calls.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
@@ -52,6 +58,13 @@
 		<string>_construct-veil._tcp</string>
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<true/>
+	<!--
+	  Construct uses non-exempt encryption (custom E2EE + post-quantum ML-KEM/ML-DSA).
+	  Qualifies for the mass-market exemption under EAR 740.17(b)(1); requires an annual
+	  self-classification report to BIS + NSA (and a French declaration where applicable).
+	  See decisions/export-compliance-encryption.md. Do NOT revert to false.
+	-->
+
 </dict>
 </plist>
