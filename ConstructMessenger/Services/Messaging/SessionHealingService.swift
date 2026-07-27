@@ -60,7 +60,10 @@ final class SessionHealingService {
     private func saveQueueState() {
         let blob = rustQueue.exportState()
         guard !blob.isEmpty else { return }
-        _ = KeychainManager.shared.saveRawData(Data(blob), forKey: Self.queueStateKey)
+        let ok = KeychainManager.shared.saveRawData(Data(blob), forKey: Self.queueStateKey)
+        if !ok {
+            Log.error("PERSIST-FAIL healing queue state (\(blob.count)B) — heal attempt tracking may be lost across restart", category: "SessionHealing")
+        }
     }
 
     /// Restore the Rust healing queue from Keychain. Call on app startup.

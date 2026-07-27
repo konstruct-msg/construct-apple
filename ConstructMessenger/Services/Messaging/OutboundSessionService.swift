@@ -318,7 +318,14 @@ final class OutboundSessionService {
                 Log.debug("Deleted hot session for \(contactId.prefix(8))… (Rust archive_session)", category: "OutboundSession")
                 CryptoManager.shared.saveOrchestratorStateCFE()
             } else {
-                _ = KeychainManager.shared.saveSessionData(Data(rawBytes), for: contactId)
+                // Desync-critical: the Rust ratchet has already advanced in memory. If this
+                // Keychain write fails (e.g. locked-device edge, storage error) and the failure
+                // is swallowed, the persisted session lags the live ratchet → silent, unhealable
+                // desync on the next launch/push. Surface the failure instead of dropping it.
+                let ok = KeychainManager.shared.saveSessionData(Data(rawBytes), for: contactId)
+                if !ok {
+                    Log.error("PERSIST-FAIL hot session \(contactId.prefix(8))… (\(rawBytes.count)B) — ratchet may desync on next launch", category: "OutboundSession")
+                }
                 CryptoManager.shared.saveOrchestratorStateCFE()
             }
         } else if key.hasPrefix("archive_") {
@@ -331,8 +338,16 @@ final class OutboundSessionService {
                 KeychainManager.shared.deleteData(forKey: storageKey)
                 Log.debug("Deleted PQ deferred for key \(storageKey)", category: "OutboundSession")
             } else {
-                _ = KeychainManager.shared.saveData(Data(rawBytes), forKey: storageKey)
-                Log.debug("Persisted PQ deferred for key \(storageKey)", category: "OutboundSession")
+                // NOTE: saveData defaults to WhenUnlockedThisDeviceOnly, so this write fails
+                // during a locked-device background decrypt → the deferred PQ contribution is
+                // lost → session silently downgrades to classical (BS-6). Logging the failure
+                // makes that latent bug observable before we migrate the accessibility class.
+                let ok = KeychainManager.shared.saveData(Data(rawBytes), forKey: storageKey)
+                if ok {
+                    Log.debug("Persisted PQ deferred for key \(storageKey)", category: "OutboundSession")
+                } else {
+                    Log.error("PERSIST-FAIL PQ deferred \(storageKey) (\(rawBytes.count)B) — session may downgrade to classical (BS-6)", category: "OutboundSession")
+                }
             }
         } else if key == "construct.orchestrator_state" {
             if rawBytes.isEmpty {
@@ -340,12 +355,16 @@ final class OutboundSessionService {
             } else {
                 // AfterFirstUnlock: this Rust-driven save also fires during background
                 // push decrypt while locked; WhenUnlocked would drop it → ratchet desync.
-                _ = KeychainManager.shared.saveData(
+                let ok = KeychainManager.shared.saveData(
                     Data(rawBytes),
                     forKey: "construct.orchestrator_state",
                     accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
                 )
-                Log.debug("Orchestrator state persisted (\(rawBytes.count) bytes) via Rust action", category: "OutboundSession")
+                if ok {
+                    Log.debug("Orchestrator state persisted (\(rawBytes.count) bytes) via Rust action", category: "OutboundSession")
+                } else {
+                    Log.error("PERSIST-FAIL orchestrator_state (\(rawBytes.count)B) via Rust action — ratchet coordination may desync on next launch", category: "OutboundSession")
+                }
             }
         } else {
             Log.debug("Unhandled storage key: \(key)", category: "OutboundSession")

@@ -61,7 +61,10 @@ final class PreKeyTrackingStore {
 
     private func save() {
         if let encoded = try? JSONEncoder().encode(tracked) {
-            _ = KeychainManager.shared.saveData(encoded, forKey: storageKey)
+            let ok = KeychainManager.shared.saveData(encoded, forKey: storageKey)
+            if !ok {
+                Log.error("PERSIST-FAIL prekey tracking state (\(encoded.count)B)", category: "PreKeyTracking")
+            }
         }
     }
 }

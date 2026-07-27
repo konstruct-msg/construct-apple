@@ -311,16 +311,24 @@ final class PQCKeyManager {
         let encapsulation = try mlkem768Encapsulate(publicKey: [UInt8](kyberSPKPublic))
         rustContributions.storeDeferred(contactId: contactId, sharedSecret: encapsulation.sharedSecret)
         // Register with OrchestratorCore's PQContributionManager (single source of truth for CFE).
-        // Falls back to per-entry Keychain backup if core is unavailable.
+        // Fall back to a per-entry Keychain backup only when the core could not hold the
+        // deferred contribution (core unavailable → registerPqDeferred returns false).
+        // BUG FIX: the previous guard `!register() == false` was inverted — it wrote the
+        // backup when the core WAS available and skipped it when the core was unavailable,
+        // i.e. it dropped the backup in exactly the case it exists for. A lost deferred PQ
+        // secret silently downgrades the session to classical (BS-6).
         if !CryptoManager.shared.registerPqDeferred(
             contactId: contactId,
             otpkId: 0,   // otpk_id not tracked at this layer; 0 = unknown
             sharedSecret: encapsulation.sharedSecret
-        ) == false {
-            _ = KeychainManager.shared.saveData(
+        ) {
+            let ok = KeychainManager.shared.saveData(
                 Data(encapsulation.sharedSecret),
                 forKey: "construct.pq_deferred.\(contactId)"
             )
+            if !ok {
+                Log.error("PERSIST-FAIL PQ deferred backup \(contactId.prefix(8))… — deferred PQ secret lost, session will downgrade to classical (BS-6)", category: "PQC")
+            }
         }
         Log.info("PQC: PQXDH encapsulated for \(contactId.prefix(8))..., ct=\(encapsulation.ciphertext.count)B (deferred + persisted)", category: "PQC")
         return Data(encapsulation.ciphertext)
@@ -360,10 +368,13 @@ final class PQCKeyManager {
     static func saveCFESnapshot(to core: OrchestratorCore) {
         guard let blob = try? core.exportKyberSessionState(),
               !blob.isEmpty else { return }
-        _ = KeychainManager.shared.saveData(
+        let ok = KeychainManager.shared.saveData(
             Data(blob),
             forKey: kyberSessionStateCFEKey
         )
+        if !ok {
+            Log.error("PERSIST-FAIL Kyber session state CFE (\(blob.count)B) — PQ ratchet state may desync on next launch", category: "PQC")
+        }
     }
 
     /// Restore the Kyber session state from a previously saved CFE blob.
