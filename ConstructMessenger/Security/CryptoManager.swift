@@ -225,10 +225,15 @@ class CryptoManager {
 
     /// Save session to Keychain after state change.
     /// Includes verify-after-write: reads back the blob to confirm integrity.
-    func saveSessionToKeychain(for userId: String) {
+    /// Persists the DR session (sending/receiving chains) for `userId`, with verify-after-write.
+    /// Returns `true` iff the session was durably written and verified. The sender encrypt path
+    /// (`MessageCryptoService.encryptMessage`) gates the release of a ciphertext on this so an
+    /// un-persisted sending-chain advance never reaches the peer (message-number-reuse desync).
+    @discardableResult
+    func saveSessionToKeychain(for userId: String) -> Bool {
         coreLock.lock()
         defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { return }
+        guard let core = orchestratorCore else { return false }
         do {
             let sessionData = Data(try core.exportSession(contactId: userId))
             var saved = false
@@ -242,15 +247,15 @@ class CryptoManager {
                 if let readBack = KeychainManager.shared.loadSessionData(for: userId),
                    readBack.count == sessionData.count {
                     Log.debug("Session saved+verified (\(sessionData.count)B): \(userId)", category: "CryptoManager")
-                    return
+                    return true
                 }
                 Log.error("Session verify-after-write mismatch (attempt \(attempt)/3): \(userId)", category: "CryptoManager")
             }
-            if !saved {
-                Log.error("Failed to save session to Keychain after 3 attempts: \(userId)", category: "CryptoManager")
-            }
+            Log.error("Failed to save session to Keychain after 3 attempts: \(userId)", category: "CryptoManager")
+            return false
         } catch {
             Log.error("Session export failed: \(error)", category: "CryptoManager")
+            return false
         }
     }
 
@@ -332,10 +337,15 @@ class CryptoManager {
     /// Save the full orchestrator coordination state (ACK cache, healing queue,
     /// init locks, archive index) to Keychain as a CFE blob.
     /// Call after any significant state change in the orchestrator.
-    func saveOrchestratorStateCFE() {
+    /// Persists the orchestrator coordination state to the Keychain.
+    /// Returns `true` iff the state was durably written. Callers on the send path
+    /// (`OutboundSessionService.executeStorageActions` → `encryptOutgoing`) gate the release of a
+    /// ciphertext on this: a failed save must not let an un-persisted ratchet advance reach the peer.
+    @discardableResult
+    func saveOrchestratorStateCFE() -> Bool {
         coreLock.lock()
         defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { return }
+        guard let core = orchestratorCore else { return false }
         do {
             let blob = try core.exportOrchestratorState()
             // AfterFirstUnlock (not WhenUnlocked): the Double Ratchet state advances during
@@ -351,8 +361,10 @@ class CryptoManager {
             } else {
                 Log.error("Orchestrator state CFE save failed (Keychain write error)", category: "CryptoManager")
             }
+            return ok
         } catch {
             Log.error("Orchestrator state CFE export failed: \(error)", category: "CryptoManager")
+            return false
         }
     }
 
@@ -1015,7 +1027,7 @@ class CryptoManager {
                 return self?.restoreSession(for: userId) ?? false
             },
             saveSession: { [weak self] userId in
-                self?.saveSessionToKeychain(for: userId)
+                self?.saveSessionToKeychain(for: userId) ?? false
             },
             archiveSession: { [weak self] userId, reason in
                 Log.debug("Archiving session for \(userId) to allow reinitialization", category: "CryptoManager")

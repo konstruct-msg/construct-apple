@@ -13,6 +13,16 @@
 import Foundation
 import SwiftProtobuf
 
+/// Thrown by `encryptOutgoing` when the sending-chain advance for a just-encrypted message could
+/// not be durably persisted. Fail-closed: the caller MUST treat this as a retryable send failure
+/// (queue + retry), never as a delivered message. Emitting the ciphertext anyway would let the peer
+/// observe a ratchet advance that a later crash + stale reload rolls back → message-number reuse →
+/// a mid-session desync that healing (msgNum==0 only) never recovers.
+/// See decisions/sender-state-durability-before-send.md.
+enum SessionStatePersistError: Error {
+    case sendStateNotDurable
+}
+
 @MainActor
 final class OutboundSessionService {
 
@@ -83,7 +93,19 @@ final class OutboundSessionService {
             contentType: contentType
         )
         let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "outgoing_message")
-        executeStorageActions(actions)
+
+        // Fail-closed durability: the encrypt above already advanced the in-memory sending chain.
+        // Only release the ciphertext once that advance is durably persisted. If the session-state
+        // save failed, refuse — otherwise the peer would see an advance that a crash + stale reload
+        // rolls back, and the reloaded chain reuses this message number → mid-session desync that
+        // healing does not cover. Throwing keeps the message queued; retry re-encrypts safely
+        // because nothing was sent. See decisions/sender-state-durability-before-send.md.
+        let sendStateDurable = executeStorageActions(actions)
+        guard sendStateDurable else {
+            Log.error("encryptOutgoing: session-state persist FAILED for \(recipientId.prefix(8))… (msg \(messageId.prefix(8))…) — refusing to release ciphertext (prevents ratchet number reuse)", category: "OutboundSession")
+            throw SessionStatePersistError.sendStateNotDurable
+        }
+
         for action in actions {
             if case .sendEncryptedMessage(let to, let payload, _, _) = action, to == recipientId {
                 return Data(payload)
@@ -287,11 +309,18 @@ final class OutboundSessionService {
 
     /// Processes `saveSessionToSecureStore` and `sessionTerminated` actions from the orchestrator.
     /// Called both internally (after outgoing encryption) and from MessageRouter (after session events).
-    func executeStorageActions(_ actions: [CfeAction]) {
+    ///
+    /// Returns `true` iff every **send-critical** persist succeeded — the hot session (`session_`)
+    /// and orchestrator state, which together carry the sending-chain position. `encryptOutgoing`
+    /// gates the send on this; other callers may ignore it (`@discardableResult`).
+    @discardableResult
+    func executeStorageActions(_ actions: [CfeAction]) -> Bool {
+        var sendStateDurable = true
         for action in actions {
             switch action {
             case .saveSessionToSecureStore(let key, let data):
-                handleStorageAction(key: key, data: [UInt8](data))
+                let ok = handleStorageAction(key: key, data: [UInt8](data))
+                sendStateDurable = sendStateDurable && ok
             case .sessionTerminated(let contactId, let archiveBytes):
                 CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: archiveBytes)
                 CryptoManager.shared.saveOrchestratorStateCFE()
@@ -299,6 +328,7 @@ final class OutboundSessionService {
                 break
             }
         }
+        return sendStateDurable
     }
 
     /// Unified handler for a `SaveSessionToSecureStore` action.
@@ -309,29 +339,37 @@ final class OutboundSessionService {
     /// - `"archive_<contactId>"` + bytes          → accept pre-archived session from Rust
     /// - `"pq_deferred_<contactId>"` + bytes      → persist deferred PQ contribution
     /// - `"pq_deferred_<contactId>"` + empty      → delete stored PQ contribution
-    private func handleStorageAction(key: String, data rawBytes: [UInt8]) {
+    ///
+    /// Returns `true` iff the **send-critical** persist for this action succeeded (`session_` hot
+    /// session + orchestrator state). Non-send-critical saves (`archive_`, `pq_deferred_`) always
+    /// return `true`: their failure is logged and matters, but it cannot cause message-number reuse,
+    /// so it must not block a send.
+    private func handleStorageAction(key: String, data rawBytes: [UInt8]) -> Bool {
         if key.hasPrefix("session_") {
             let contactId = String(key.dropFirst("session_".count))
             if rawBytes.isEmpty {
                 KeychainManager.shared.deleteSession(for: contactId)
                 KeychainManager.shared.deleteSessionSuiteId(userId: contactId)
                 Log.debug("Deleted hot session for \(contactId.prefix(8))… (Rust archive_session)", category: "OutboundSession")
-                CryptoManager.shared.saveOrchestratorStateCFE()
+                return CryptoManager.shared.saveOrchestratorStateCFE()
             } else {
                 // Desync-critical: the Rust ratchet has already advanced in memory. If this
                 // Keychain write fails (e.g. locked-device edge, storage error) and the failure
                 // is swallowed, the persisted session lags the live ratchet → silent, unhealable
-                // desync on the next launch/push. Surface the failure instead of dropping it.
+                // desync on the next launch/push. Surface the failure AND report it so
+                // `encryptOutgoing` can fail-closed instead of releasing an un-persisted advance.
                 let ok = KeychainManager.shared.saveSessionData(Data(rawBytes), for: contactId)
                 if !ok {
                     Log.error("PERSIST-FAIL hot session \(contactId.prefix(8))… (\(rawBytes.count)B) — ratchet may desync on next launch", category: "OutboundSession")
                 }
-                CryptoManager.shared.saveOrchestratorStateCFE()
+                let orchOk = CryptoManager.shared.saveOrchestratorStateCFE()
+                return ok && orchOk
             }
         } else if key.hasPrefix("archive_") {
             let contactId = String(key.dropFirst("archive_".count))
             CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: Data(rawBytes))
             CryptoManager.shared.saveOrchestratorStateCFE()
+            return true // archive is a terminated session — not the active sending chain
         } else if key.hasPrefix("pq_deferred_") {
             let storageKey = "construct.pq_deferred.\(String(key.dropFirst("pq_deferred_".count)))"
             if rawBytes.isEmpty {
@@ -349,9 +387,11 @@ final class OutboundSessionService {
                     Log.error("PERSIST-FAIL PQ deferred \(storageKey) (\(rawBytes.count)B) — session may downgrade to classical (BS-6)", category: "OutboundSession")
                 }
             }
+            return true // PQ deferred failure is BS-6 (downgrade), not number reuse — do not block send
         } else if key == "construct.orchestrator_state" {
             if rawBytes.isEmpty {
                 Log.debug("Orchestrator state save with empty data — ignoring", category: "OutboundSession")
+                return true
             } else {
                 // AfterFirstUnlock: this Rust-driven save also fires during background
                 // push decrypt while locked; WhenUnlocked would drop it → ratchet desync.
@@ -365,9 +405,11 @@ final class OutboundSessionService {
                 } else {
                     Log.error("PERSIST-FAIL orchestrator_state (\(rawBytes.count)B) via Rust action — ratchet coordination may desync on next launch", category: "OutboundSession")
                 }
+                return ok // send-critical: carries the ratchet coordination state
             }
         } else {
             Log.debug("Unhandled storage key: \(key)", category: "OutboundSession")
+            return true
         }
     }
 }
