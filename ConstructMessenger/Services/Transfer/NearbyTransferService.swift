@@ -82,6 +82,54 @@ final class NearbyTransferService {
         case historySync = 0x02  // future: same payload, additive intent
     }
 
+    // MARK: - Handshake Frame
+
+    /// The sender's opening frame, parsed from raw bytes.
+    ///
+    /// Layout: `[4]"CTT1" ‖ [1]version ‖ [32]senderPub ‖ [1]type ‖ [8]payloadLen LE` = 46 bytes.
+    struct HandshakeFrame: Equatable {
+        static let byteCount = 46
+
+        /// Ceiling on the payload length a peer may announce. This frame is parsed *before*
+        /// the PIN-HMAC exchange, so the value is unauthenticated and must be bounded rather
+        /// than trusted. 2 GiB is far above any real backup or history export and stays well
+        /// clear of `Int.max` on every supported architecture.
+        static let maxPayloadBytes: UInt64 = 2 * 1024 * 1024 * 1024
+
+        let senderPub: Data
+        let type: TransferType
+        let payloadLength: Int
+
+        /// Parses the opening frame as hostile input — every field arrives from any peer that
+        /// can reach the Bonjour service, with no authentication yet performed.
+        static func parse(_ frame: Data) throws -> HandshakeFrame {
+            guard frame.count == byteCount else { throw NearbyTransferError.malformedFrame }
+            // Normalise the index origin: `Data` slices carry absolute indices, so a slice
+            // handed to us would trap on the subscripts below.
+            let bytes = frame.startIndex == 0 ? frame : Data(frame)
+
+            guard Data(bytes[0..<4]) == Data("CTT1".utf8), bytes[4] == 0x01 else {
+                throw NearbyTransferError.malformedFrame
+            }
+            guard let type = TransferType(rawValue: bytes[37]) else {
+                throw NearbyTransferError.malformedFrame
+            }
+            // Keep the announced length in UInt64 and bound it before narrowing: `Int(UInt64)`
+            // traps above `Int.max`, which let a malformed 46-byte frame crash the app outright
+            // — before any authentication, from anyone on the same network.
+            let announced = bytes.withUnsafeBytes {
+                $0.loadUnaligned(fromByteOffset: 38, as: UInt64.self).littleEndian
+            }
+            guard announced <= maxPayloadBytes else { throw NearbyTransferError.malformedFrame }
+
+            return HandshakeFrame(
+                senderPub: Data(bytes[5..<37]),
+                type: type,
+                payloadLength: Int(announced)
+            )
+        }
+    }
+
     // MARK: - Observable State
 
     var transferState: TransferState = .idle
@@ -95,6 +143,10 @@ final class NearbyTransferService {
     private let serviceType = "_construct-transfer._tcp"
     private let queue = DispatchQueue(label: "com.construct.transfer", qos: .userInitiated)
     private let chunkSize = 65_536
+
+    /// Ceiling on one sealed chunk on the wire: `ChaChaPoly.combined` is a 12-byte nonce plus
+    /// the ciphertext plus a 16-byte tag, and we never seal more than `chunkSize` at a time.
+    private var maxSealedChunkBytes: Int { chunkSize + 28 }
 
     private var listener: NWListener?
     private var browser: NWBrowser?
@@ -325,13 +377,9 @@ final class NearbyTransferService {
 
     private func receiverHandshake(conn: NWConnection, pin: String) async throws -> (SymmetricKey, TransferType, Int) {
         // Receive: [4]"CTT1" + [1]version + [32]senderPub + [1]type + [8]payloadLen = 46 bytes
-        let frame = try await receiveExact(conn, length: 46)
-        guard Data(frame[0..<4]) == Data("CTT1".utf8) else { throw NearbyTransferError.malformedFrame }
-        let senderPub     = Data(frame[5..<37])
-        let typeRaw       = frame[37]
-        let payloadLength = Int(UInt64(littleEndian: frame[38..<46].withUnsafeBytes { $0.load(as: UInt64.self) }))
-
-        guard let type = TransferType(rawValue: typeRaw) else { throw NearbyTransferError.malformedFrame }
+        let raw = try await receiveExact(conn, length: HandshakeFrame.byteCount)
+        let frame = try HandshakeFrame.parse(raw)
+        let senderPub = frame.senderPub
 
         let myKey = Curve25519.KeyAgreement.PrivateKey()
         let myPub = myKey.publicKey.rawRepresentation
@@ -351,7 +399,7 @@ final class NearbyTransferService {
         }
 
         let sessionKey = try deriveSessionKey(myPrivate: myKey, theirPublic: senderPub)
-        return (sessionKey, type, payloadLength)
+        return (sessionKey, frame.type, frame.payloadLength)
     }
 
     // MARK: - Streaming
@@ -385,8 +433,14 @@ final class NearbyTransferService {
         while true {
             try Task.checkCancellation()
             let lenBytes = try await receiveExact(conn, length: 4)
-            let len = Int(UInt32(littleEndian: lenBytes.withUnsafeBytes { $0.load(as: UInt32.self) }))
+            let len = Int(lenBytes.withUnsafeBytes {
+                $0.loadUnaligned(fromByteOffset: 0, as: UInt32.self).littleEndian
+            })
             if len == 0 { break }  // EOF sentinel
+            // `receiveExact` grows its buffer to whatever length it is handed, so an oversized
+            // prefix would let the peer drive unbounded allocation. We never seal more than
+            // `maxSealedChunkBytes`, so anything larger is malformed by construction.
+            guard len <= maxSealedChunkBytes else { throw NearbyTransferError.malformedFrame }
 
             let combined = try await receiveExact(conn, length: len)
             let box   = try ChaChaPoly.SealedBox(combined: combined)
