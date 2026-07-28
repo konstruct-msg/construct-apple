@@ -180,8 +180,11 @@ final class CryptoSessionInitializationService {
             )
 
             let plaintext = result.decryptedMessage
-            let plaintextPreview = String(bytes: plaintext.prefix(50), encoding: .utf8) ?? "<binary \(plaintext.count)B>"
-            Log.info("Session initialized successfully, decrypted: \(plaintextPreview)...", category: "CryptoManager")
+            // Never log the decrypted body itself. Release is protected by os_log's private-by-
+            // default `%@` and by LogCollector being off, but INTERNAL_TOOLS builds persist this
+            // line to a rotating file the user can export via DiagnosticLogShare — message
+            // plaintext must not be in it. Length alone is enough to diagnose an init.
+            Log.info("Session initialized successfully, decrypted \(plaintext.count)B", category: "CryptoManager")
 
             KeychainManager.shared.saveSessionSuiteId(userId: userId, suiteId: suiteID)
             // NOTE: saveSession deferred until after PQXDH strengthening completes.

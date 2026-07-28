@@ -79,7 +79,7 @@ class KeychainManager {
             Log.error("Failed to convert Keychain data to UTF-8 string", category: "Keychain")
             return nil
         }
-        Log.debug("Session token loaded from Keychain (length: \(token.count), prefix: \(token.prefix(30))...)", category: "Keychain")
+        Log.debug("Session token loaded from Keychain (length: \(token.count))", category: "Keychain")
         return token
     }
 
