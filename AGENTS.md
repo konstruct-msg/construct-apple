@@ -1,7 +1,8 @@
 # AGENTS.md — Construct Messenger
 
-This file provides context and conventions for AI coding agents working in this repository.
-Read it fully before making any changes.
+Operational rules for AI coding agents in this repository. This file holds only the hard
+invariants; details live in the docs vault `~/Code/construct-docs` — follow the links per section
+and read the linked doc **before** working in that area.
 
 ---
 
@@ -11,621 +12,176 @@ Construct Messenger is a privacy-first E2EE messenger with a terminal/ASCII aest
 The cryptographic core is written in Rust (`construct-core`, separate repo) and exposed to
 Swift via UniFFI bindings. The iOS app is SwiftUI-only.
 
----
-
 ## Repository Structure
 
 ```
 construct-messenger/
 ├── ConstructMessenger/          # iOS SwiftUI app
 │   ├── Utilities/               # CT design system tokens (ConstructTheme.swift, ConstructRowComponents.swift)
-│   ├── Views/                   # All SwiftUI views
+│   ├── Views/                   # SwiftUI views
 │   ├── ViewModels/              # @Observable ViewModels
 │   ├── Services/                # Session, messaging, healing, crypto orchestration
 │   ├── Networking/gRPC/         # gRPC channel + generated protobuf Swift files
-│   ├── en.lproj/                # English strings
-│   ├── ru.lproj/                # Russian strings
-│   └── ja.lproj/                # Japanese strings 
-├── ConstructCore.xcframework/   # Built Rust crypto core (NOT in git — see Build Commands)
-├── ConstructEngine.xcframework/ # Built Rust transport engine (NOT in git — see Build Commands)
-├── build_crypto_lib.sh          # Script to rebuild construct-core
-├── construct_engine.swift       # UniFFI auto-generated bindings — DO NOT EDIT
+│   └── en.lproj/ ru.lproj/ ja.lproj/  # Localized strings
+├── ConstructCore.xcframework/      # Built Rust crypto core + VEIL (NOT in git)
+├── ConstructTransport.xcframework/ # Built Rust transport (NOT in git)
 └── AGENTS.md                    # This file
 ```
 
-The Rust core lives at: `~/Code/construct-core`
-The Rust engine lives at: `~/Code/construct-engine`
-The Rust VEIL proxy (obfuscation layer) lives at: `~/Code/construct-veil`
+Sibling repos: `~/Code/construct-core` (crypto), `~/Code/construct-transport` (QUIC/H3/gRPC),
+`~/Code/construct-veil` (obfuscation proxy), `~/Code/construct-docs` (docs vault).
 
----
+**Tools**: `./tools/project_index` — one-line-per-file map of the project (works on other repos too).
 
-### Tools
+## Build
 
-**project_index** — one-line-per-file map of the entire project.
-```bash
-./tools/project_index
-./tools/project_index ~/Code/construct-server   # index another repo
-```
-
-### Prerequisites
-
-All three Rust crates must be cloned alongside this repo:
-```
-~/Code/
-├── construct-core/        # Cryptographic core (X3DH, Double Ratchet, Kyber, etc.)
-├── construct-transport/      # QUIC/H3/gRPC transport engine
-├── construct-veil/        # obfs4/WebTunnel obfuscation proxy (DPI evasion). Was construct-ice.
-└── construct-messenger/   # This repo — iOS/macOS SwiftUI app
-```
-
-### First build
-
-After a fresh clone, the `*.xcframework` directories are empty stubs.
-You MUST build the Rust libraries before Xcode can compile the app.
+**Full guide (first build, target flags, gotchas)**: `~/Code/construct-docs/client/ios/BUILD_GUIDE.md`
 
 ```bash
-# 1. Build construct-core (crypto) — produces ConstructCore.xcframework
-cd ~/Code/construct-messenger
-./build_crypto_lib.sh --all          # iOS + Simulator + macOS in one go
+./build_crypto_lib.sh --all      # first build: ConstructCore.xcframework (iOS+sim+mac)
+./build_transport_lib.sh         # first build: ConstructTransport.xcframework
+./build_crypto_lib.sh --ios      # quick rebuild after Rust changes (~45s)
 
-# 2. Build construct-transport — produces ConstructTransport.xcframework
-cd ~/Code/construct-messenger/
-./build_transport_lib.sh
-
-# 3. Build the iOS app (simulator)
-cd ~/Code/construct-messenger
 xcodebuild -scheme ConstructMessenger \
-  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' build
+  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' build   # or `test`
 ```
 
-### Rebuilding after Rust changes
-
-```bash
-# Rebuild crypto (iOS device only — fastest iteration, ~45s)
-./build_crypto_lib.sh --ios
-
-# Rebuild crypto for everything iOS-side (device + simulator)
-./build_crypto_lib.sh --ios --sim
-
-# Clean Xcode build folder before next build
-# Xcode: ⌘⇧K  or  Product → Clean Build Folder
-```
-
-### Build target flags
-
-Target flags **accumulate** — you can combine them in one invocation.
-Without any flag the script defaults to `--ios`.
-
-```bash
-./build_crypto_lib.sh --ios        # iOS device only (arm64)
-./build_crypto_lib.sh --sim        # Simulator only (arm64 + x86_64 fat)
-./build_crypto_lib.sh --mac        # macOS native (arm64)
-./build_crypto_lib.sh --all        # All three at once (--ios --sim --mac)
-./build_crypto_lib.sh --dist       # macOS universal fat (arm64 + x86_64) for DMG
-./build_crypto_lib.sh --clean      # cargo clean before build (combine with target flags)
-./build_crypto_lib.sh --debug      # Debug profile instead of release (combine with target flags)
-```
-
-After the build, the script updates all three slices of `ConstructCore.xcframework`:
-- `ios-arm64/libconstruct_core.a`
-- `ios-arm64_x86_64-simulator/libconstruct_core_sim.a`
-- `macos-arm64/libconstruct_core_mac.a`
-
-> **Note**: The xcframework binaries are NOT tracked in git.
-> They must be rebuilt locally after cloning.
-> In the future, they will be built in CI (GitHub Actions) and attached to releases.
-
----
+The `*.xcframework` binaries are NOT in git — after a fresh clone they must be built before
+Xcode can compile the app.
 
 ## Design System (CRITICAL — read before touching any UI)
 
-### Design Philosophy: CT + Apple Fusion
+**Full rules (symbols, platform conventions, components, migration)**:
+`~/Code/construct-docs/client/ios/DESIGN_SYSTEM_RULES.md`
 
-Construct uses a **hybrid design language**: the terminal / cyberpunk aesthetic of CT fused with
-Apple's HIG conventions so that users intuitively understand how to interact with the interface.
-The goal is a **bespoke look** that does not clash with iOS / macOS platform norms.
+Hybrid language: CT terminal aesthetic + Apple HIG. Terminal glyphs are **decorative-only**:
+SF Symbols + native controls for anything interactive or stateful (`CTStatusBadge`, `Toggle`,
+`chevron.*`); ASCII only as chrome (`> TITLE` headers, separators). Never regress a converted
+control back to ASCII.
 
-**Keep**: JetBrains Mono, `#090909` background, CT color palette, information density,
-*decorative* terminal chrome (noise, `-`/`=` separators, `>` prefixes, `✷`, hex avatars).  
-**Evolve**: touch affordances, icon legibility for interactive controls, bubble readability.  
-**Never**: sacrifice usability or clash visibly with iOS 26 / macOS guidelines.
-
-> **Terminal glyphs are decorative-only — not functional.** **State and affordance must read
-> instantly**, so `[ok] [err] [on] [off] [✓] [ ] [!] [~] [?]` and similar are replaced by SF
-> Symbols + semantic colour (`CTStatus` / `CTStatusBadge`) or native controls (`Toggle`, selection
-> `checkmark`). ASCII may remain only as unobtrusive *chrome* (separators, `>` prefix on
-> system messages / section headers, decorative `✷`). Migration to SF Symbols is ongoing — never
-> regress a converted control back to ASCII; remaining ASCII affordances (`[→]` rows, `[ BUTTON ]`
-> labels, `CTRowIcon("[x]")`) are pending conversion, not the target state.
-
-### Tokens
-
-Source of truth: `ConstructMessenger/Utilities/ConstructTheme.swift` (mirror layout/radius tokens in
-`ConstructUI` when changing them).
+Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 
 | Kind | API |
 |------|-----|
 | Colors | `Color.CT.bg`, `.text`, `.textDim`, `.accent`, `.accentDim`, `.danger`, `.noise`, `.bgMsg`, `.outMsgBg`, `.outMsgText` |
 | Fonts | `CTFont.regular/medium/bold(size)` — always JetBrains Mono |
-| Radii | **`CTRadius`**: `badge` 6 · `card` 8 · `control` 10 · `pill` 999 |
-| Shapes | **`CTShape.badge/card/control/pill()`** — preferred over raw `RoundedRectangle(cornerRadius: N)` |
-| Layout | **`CTLayout`**: `edgePad` 12 · `navBarHeight` 44 · `controlHeight` 42 · `hitTarget` 44 · `chromeGap` 10 · `sectionGap` 16 · `inlinePad` 8 · icon sizes |
-| Glass | `.glassCapsule()` — **defaults to `CTRadius.pill`**; do not pass 18/22 |
-| Chat | `ChatUIConstants.Bubble/InputBar/Voice` — aliases onto `CTRadius` / `CTLayout` |
-| Symbols | `CTSymbol.*` decorative only; SF Symbols for interactive controls |
+| Radii / Shapes | `CTRadius` (`badge` 6 · `card` 8 · `control` 10 · `pill` 999) via `CTShape.*()` — no magic `cornerRadius: 16|18|22` |
+| Layout | `CTLayout` (`edgePad` 12 · `controlHeight` 42 · `hitTarget` 44 · …) |
+| Glass | `.glassCapsule()` — defaults to pill; do not pass 18/22 |
 
-### Rules
+Hard rules:
 
-#### Symbols
-- **SF Symbols** (`Image(systemName:)`): use for **all interactive controls** on both iOS and macOS —
-  back/close buttons, action buttons, tab bar items, media controls, send, attach (`plus.circle`),
-  mic, search, close (×). This rule applies to both platforms.
-- **`CTSymbol.*` / ASCII glyphs**: use for **decorative chrome only** —
-  section headers (`> TITLE`), `-`/`=` separators, the `>` system-message prefix.
-  Do **not** use ASCII for **state or controls**: status → `CTStatusBadge` (SF Symbol + semantic
-  colour); selection → `checkmark`; on/off → `Toggle`. Do not use `[←]` / `[+]` / `[→]` for
-  back / attach / disclosure — those are SF Symbols (`chevron.*`, `plus.circle`).
-- Dividing line: *conveys state, or is a tappable action?* → SF Symbol / native control.
-  *Purely decorative terminal chrome?* → ASCII.
-- **Status**: `CTStatusBadge(status:)` with the `CTStatus` enum (`.ok .error .warning .on .off
-  .busy .unknown`) — never a `"[ok]"` / `"[err]"` text token. `CTSettingsRow(status:)` renders it.
-
-**Platform-specific SF Symbol conventions (iOS is primary, macOS follows):**
-- Back navigation: iOS → `chevron.backward.circle.fill` (size **`CTLayout.navIconSizeLg` 22**);
-  macOS → `chevron.backward.circle` (size 18)
-- **Modal / sheet close on macOS**: use `xmark.circle` (size 18) — NOT chevron. macOS users expect a close button in sheets. Pass `isModal: true` to `CTNavBar`.
-- iOS modals: `chevron.backward.circle.fill` same as navigation (sheet dismiss via swipe is the primary affordance)
-- Design code is shared: no `#if os(iOS)` / `#else` blocks for the same symbol concept — use `#if os(macOS)` only to swap to the macOS platform variant.
-
-#### Shapes, corners, spacing (CRITICAL)
-
-**Two surface languages — do not mix on the same control:**
-
-| Language | Radius | Material | Examples |
-|----------|--------|----------|----------|
-| **Form / card** | `CTRadius.card` (8) | solid `bgMsg` / `outMsgBg` | settings groups, `CTTextField` / `ctInputChrome`, toasts, recovery fields |
-| **Composer / glass** | `CTRadius.pill` (999) | `.glassCapsule()` | chat input, attach, scroll FAB, chat glass nav, search capsule |
-| **Interactive solid** | `CTRadius.control` (10) | solid accent / bubble fill | `CTButton`, text message bubbles |
-| **Badge** | `CTRadius.badge` (6) | — | unread chips, tiny tags |
-
-- Prefer **`CTShape.*()`** for clip/overlay. Avoid magic `cornerRadius: 16|18|22`.
-- **`Rectangle()`**: structural full-width chrome (list backdrops, thick dividers) when a card stack look is wrong.
-- Floating peers of a circle (attach `+`, send, scroll-to-bottom) share **`CTLayout.controlHeight` (42)** and **pill**.
-- Min tappable side: **`CTLayout.hitTarget` (44)** where layout allows (nav side zones).
-- Horizontal page inset: **`CTLayout.edgePad` (12)** unless a screen documents an exception.
-- Trailing controls next to text: **square frame + center alignment**, not asymmetric vertical padding only (prevents “hanging” send buttons).
-
-**Migration:** new UI must use tokens. When editing a file that still has literal `8`/`10`/`18`,
-switch that call site to `CTRadius` / `CTShape` in the same change.
-
-#### Other rules
-- **NO NavigationStack** inside sheet/modal views — use `CTNavBar(showBack: true, backAction: { dismiss() })` + `@Environment(\.dismiss)`.
-- **Background color**: always `Color.CT.bg` (`#090909`). Use `.ctBackground()` modifier.
-- **Section headers**: `CTSettingsSectionHeader(title:)` — renders `> TITLE` in accent color.
-- **Dividers**: `Rectangle().fill(Color.CT.noise).frame(height: 1)` (full-width) or with `.padding(.horizontal, CTLayout.edgePad)` (between rows).
-- **Action rows**: trailing disclosure via SF Symbol `chevron.right` / `CTSettingsRow(disclosure:)`; do not regress to ASCII `[→]`.
-- **Developer/debug UI**: use `.orange` color for all dev-facing elements.
-- **Tab bar**: standard SwiftUI `TabView` (`MainTabView`). Hide it inside a conversation only via `.toolbar(.hidden, for: .tabBar)` on the `ChatView` destination — see *Tab bar (native `TabView`)* below.
-
-### Components
-- `CTNavBar` — navigation bar with optional back and trailing action (flat; not glass)
-- `CTSearchBar` — floating search capsule (pill)
-- `.glassCapsule()` — floating glass chrome (pill by default)
-- `CTButton` — primary full-width action (`CTRadius.control`)
-- `CTSectionGroup` — settings card (`CTRadius.card`)
-- `CTSettingsSectionHeader` — `> SECTION` header, supports `color:` parameter
-- `CTSettingsRow` — label + value row, supports `labelColor:`, `valueColor:`, `isAction:`, `isDestructive:`, `status:`, `disclosure:`
-- `CTSep` — separator (`.thick` between sections, `.thin` between rows)
-- `CTHexAvatar` / `HexagonAvatarView` — hexagonal avatars, NO circular avatars (prefer hex over `Circle()`)
-
----
+- Two surface languages, never mixed on one control: **form/card** (`CTRadius.card`, solid) vs
+  **composer/glass** (`pill`, `.glassCapsule()`); `CTButton`/bubbles use `CTRadius.control`.
+- **NO NavigationStack** inside sheets — `CTNavBar(showBack: true, backAction: { dismiss() })`.
+- Background always `Color.CT.bg` (`#090909`) via `.ctBackground()`.
+- New UI must use tokens; when editing a file with literal `8`/`10`/`18`, migrate that call site.
+- Debug-only UI: `.orange`, `#if DEBUG`.
+- Tab bar is the standard SwiftUI `TabView`; hide in a conversation only via
+  `.toolbar(.hidden, for: .tabBar)` on the `ChatView` destination.
 
 ## Localization
 
-- **ALL** visible strings MUST use `NSLocalizedString("key", comment: "")`.
-- **NO hardcoded English strings** in any View.
-- When adding a new key, add it to **both** `en.lproj/Localizable.strings` and `ru.lproj/Localizable.strings` in the same commit.
-- Nav titles: `.uppercased()` + `.tracking(4)` applied in `CTNavBar` — pass the raw localized string.
-- Planned: Japanese locale (app name: **共創**, font: Hiragino). All strings must be ready.
+- **ALL** visible strings MUST use `NSLocalizedString("key", comment: "")` — no hardcoded English.
+- New keys go to **both** `en.lproj` and `ru.lproj` `Localizable.strings` in the same commit
+  (`ja.lproj` planned; app name **共創**).
+- Nav titles: `CTNavBar` applies `.uppercased()` + `.tracking(4)` — pass the raw localized string.
 
----
+## Product language & glossary
 
-## Glossary & product language
+**Full glossary**: `~/Code/construct-docs/client/GLOSSARY_PRODUCT_LANGUAGE.md`
 
-Construct’s model is unusual. **User-facing copy must not sound like a research paper.**
-Plain language first; specialized terms only where they earn their place (and after orientation
-has introduced them). Follow the tone of the post-registration **orientation** screens
-(`orientation_page*_body` in Localizable.strings) — short, human, no “node / stream / replica”.
+- UI copy = plain language (orientation-screen tone): "people / chats / device", never
+  "node / stream / replica" in visible strings. Code identifiers keep domain names — no renames.
+- **VEIL vs WebRTC ICE — never confuse**: VEIL = our obfuscation layer (`Veil*` / `veil_*`,
+  `Networking/gRPC/VEIL/`); WebRTC ICE = call NAT traversal (`Services/Calls/`, `Ice*`) and stays
+  named "ICE".
 
-### User-facing (UI strings, empty states, push, onboarding)
+## Architecture
 
-Prefer ordinary words. When in doubt, re-read orientation page 2 (“People”) and page 3 (“Three places”).
+**Full notes (session lifecycle, keychain, tab bar, crypto/transport path)**:
+`~/Code/construct-docs/client/ios/ARCHITECTURE_NOTES.md`
 
-| Prefer in UI | Avoid in UI | Why |
-|--------------|-------------|-----|
-| **People** / someone / person | Node, contact graph jargon | “Node” scares non-technical users |
-| **Chats** | Streams (as a tab/product name) | Users know “chats”; “streams” is opaque |
-| **Identity** (sparingly) | Account (except restore/link edge cases) | Orientation defines it; don’t stack more jargon |
-| **@alias** | Username (in marketing/orientation tone) | Matches onboarding; “username” still OK in forms if needed |
-| **Device** / this phone | Replica | “Replica” is engineer-speak for v1 |
-| **Request** (to connect) | — | Clearer than “node request” |
-| **QR / link** | Invite token, JTI, etc. | Never surface protocol names |
-| **Synaps** | “Synapse graph”, “mesh” | Brand name — keep; explain as “your people & requests” |
-| **Settings** | — | Normal |
-| **Konstruct** / Construct | Server | Product name; don’t say “the server” in consumer copy |
-
-**Do not** force every ordinary word through the old avoid-table. “Contact” in a system dialog is
-fine if it reads naturally; **do not** replace it with “node”.
-
-### Code, architecture, docs (engineers)
-
-Internal names may stay precise. Comments and types can use domain language; **UI localization keys’
-English values** must stay plain.
-
-| Internal / code | Meaning |
-|-----------------|---------|
-| Identity | Keys + registration; not “account” in crypto paths |
-| Session | Auth / messaging session lifecycle |
-| Initialize | Registration / device init (not “sign up”) |
-| Replica | Multi-device peer of an identity (code/docs) |
-| Contact / User (Core Data) | Person the user can message |
-| Stream (legacy name) | 1:1 conversation / chat entity |
-| Cluster | Group (future) |
-| Construct | Our infrastructure (not user-facing “server”) |
-| VEIL | Obfuscation layer (obfs4 / WebTunnel) — never “ICE” |
-| ICE (WebRTC) | Call NAT traversal only — never rename to VEIL |
-
-### Gradual migration
-
-1. **New UI copy** → plain language table above (orientation style).  
-2. **When editing a screen** → drop residual “node / stream / replica” from visible strings.  
-3. **Code identifiers** (`Chat`, `User`, `openSynapsTab`) — no mass rename required.  
-4. **Old glossary rule “Contact → Node” is retired for UI.**
-
-### VEIL vs WebRTC ICE — never confuse them
-
-There are two "ICE"-named concepts in the codebase. They are completely
-unrelated and must NOT be conflated:
-
-| | What | Where it lives |
-|---|---|---|
-| **VEIL** | Our obfuscation layer (obfs4 + WebTunnel pluggable transports for DPI evasion). Renamed 2026-05-29 from "ICE". | `Networking/gRPC/VEIL/`, `VeilProxy*`, `veil_*` C FFI, `construct-veil` Rust crate |
-| **WebRTC ICE** | Interactive Connectivity Establishment (industry-standard P2P NAT traversal for calls). Stays "ICE" — do not rename. | `Services/Calls/`, `IceCandidate`, `iceCandidate`, `iceFlushTask`, WebRTC.framework |
-
-When writing new obfuscation/relay/proxy code, always use `Veil*` / `veil_*`.
-When writing new call signaling code, use industry WebRTC `Ice*` names.
-The `iceBridgeCert` field in `auth_service.pb.swift` is a legacy proto field
-name for VEIL bridge cert (will be renamed when proto regenerates).
-
----
-
-## Architecture Notes
-
-> **Before making any architectural decision**, search the docs vault first:
+> **Before making any architectural decision**, search the vault first:
 > `grep -ril <topic> ~/Code/construct-docs/{architecture,backend,client,cryptocore,security,decisions}`
-> The vault is the authoritative architecture documentation; AGENTS.md is operational rules.
-> The corpus is organised by domain folder (`architecture/`, `backend/`, `client/`, `cryptocore/`,
-> `security/`, `deployment/`, …) — see `~/Code/construct-docs/AGENTS.md` for the full map.
->
-> **Before touching any file in `Networking/gRPC/ICE/`**, check pending decisions:
-> `ls ~/Code/construct-docs/decisions/ | grep ice`
-> In particular: `decisions/ice-connection-loop-complexity.md` — deferred refactor with trigger.
+> Before touching `Networking/gRPC/ICE/`, check `decisions/ice-connection-loop-complexity.md`.
 
-### Session lifecycle
-12 stages: registration → key upload → prewarm → bundle fetch → init → send →
-receive → decrypt → heal → END_SESSION → stream → Kyber OTPK.
-All session operations are `@MainActor`. `usersInitializingSession: Set<String>` prevents parallel inits.
+Invariants you must not violate:
 
-**INITIATOR vs RESPONDER paths** (critical — do not confuse):
-- **INITIATOR**: fetch recipient bundle → X3DH → `init_session(bundle)` → send msgNum=0
-- **RESPONDER**: receive msgNum=0 → fetch sender bundle → X3DH → `init_receiving_session(bundle, first_msg)` → decrypt
-
-**Tie-break** (both sides init simultaneously): higher deviceId wins as INITIATOR.
-WIN side: calls `initializeSessionProactively()` then `sendSessionPing()`.
-LOSE side: wipes own session, waits for INITIATOR's ping.
-
-**PQXDH** (post-quantum extension): Kyber-768 OTPK mixed into root key derivation.
-Deferred PQ contribution applies to RK1 (post-first-ratchet) on both sides.
-RESPONDER stores `pre_pq_root_key=RK1` before 2nd ratchet, re-derives sending chain after PQ.
-
-**Session healing** (broken session recovery without END_SESSION):
-Applicable only when `messageNumber == 0` (session init message decrypt fails).
-`SessionHealingService.shared` — max 3 attempts, 24h TTL per contact.
-On failure: falls through to END_SESSION → full re-init.
-`RustHealingQueue` tracks attempts in Rust (persisted across restarts).
-
-**Keychain accessibility of session keys:**
-- `deviceSigningKey` / `deviceIdentityKey`: `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (changed 2026-06-21 — see below). Together with `crypto_private_keys`, `crypto_otpks`, `identity_key`, `signed_prekey`, `signing_key`, `APIConstants.privateKeyKey` these are the keys needed to (re)build `OrchestratorCore`; use the `KeychainManager.cryptoKeyAccessible` constant for all of them.
-  The hybrid signature key (`hybrid_sig_private_key`) was migrated into the core CFE (`crypto_private_keys`); the separate item is only used temporarily for one-time import during the transition.
-- `deviceId`: `kSecAttrAccessibleAfterFirstUnlock`
-- Per-contact session data (`saveSessionData`): `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (needed for push-driven background decrypt)
-- **Double Ratchet orchestrator state** (`construct.orchestrator_state`) + device/core crypto keys: `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. **INVARIANT**: any crypto state that must survive a background/locked push decrypt MUST use `AfterFirstUnlock*`, never `WhenUnlocked*` — otherwise a locked-device save/read fails → silent session desync or END_SESSION teardown of a healthy session. (Migration helper `KeychainManager.migrateCryptoKeysAccessibility()`. Session archives + PQC OTPK/SPK via generic `saveData` still use `WhenUnlockedThisDeviceOnly` — not yet migrated.) Companion guard: `MessageRouter.routeIncomingMessage` / `SessionCoordinator` DEFER (hold cursor, no ACK, no END_SESSION) when `!CryptoManager.shared.isInitialized`. Full postmortem: construct-docs `security/`.
-- Auth token: `kSecAttrAccessibleAfterFirstUnlock`
-
-**Auth guard**: if `isAuthenticated == true` in memory, skip Keychain re-read.
-Device keys are only deleted on gRPC UNAUTHENTICATED (16) or PERMISSION_DENIED (7) — never on network errors.
-
-### Tab bar (native `TabView`)
-The bottom navigation is the **standard SwiftUI `TabView`** (`MainTabView.callContent`,
-compact size class only — the regular/iPad branch uses `ChatsSplitView`). Icon-only tabs via
-`Image(systemName:)`; selected tint `Color.CT.accent`. (Replaced an old custom `CTTabBar` +
-`ZStack`/`visitedTabs` workaround — do **not** reintroduce that pattern.)
-
-- Tab values match legacy indices: chats `0`, synaps `1`, calls `2` (only when
-  `CallsFeature.isEnabled`), settings `3`-or-`2` (`settingsTab` shifts with the calls tab).
-  `ChatsViewModel.selectedTab: Int` is the selection binding.
-- **Tab-bar hiding inside a conversation**: standard `.toolbar(.hidden, for: .tabBar)` on the
-  `ChatView` destination (the input bar replaces the tab bar). Sub-screens keep it visible.
-- There is **no more** `isInChat` / `isInSettings` state — do not reintroduce it.
-- If a per-tab `@FetchRequest` crash resurfaces on a new OS, fix by lazy-gating that tab's
-  content — not by returning to the ZStack. Prefer `.alert` over `confirmationDialog`.
-
-### construct-engine and EngineAdapter (CRITICAL for macOS/Desktop work)
-
-**Full spec**: `construct-docs/client/specs/DESKTOP_ENGINE_REFACTORING_SPEC.md`
-
-#### Two crypto paths — never confuse them
-
-```
-iOS (ConstructMessenger target)
-└── CryptoManager / Services → ConstructCore.xcframework (UniFFI) → OrchestratorCore
-
-macOS (Construct Desktop target)  ← TARGET ARCHITECTURE
-└── EngineAdapter → construct-engine → [internal OrchestratorCore]
-    ├── Transport (QUIC/H3)      ← already done
-    ├── Auth / token management  ← already done
-    ├── CryptoSession management ← TO DO (Phase 1)
-    ├── Message encrypt/decrypt  ← TO DO (Phase 2)
-    ├── Session healing          ← TO DO (Phase 4)
-    └── PQ key management        ← TO DO (Phase 5)
-```
-
-**Current state (technical debt)**: macOS Desktop still has a *second* path — it compiles the
-shared `CryptoManager.swift` / `MessageCryptoService.swift` / etc. calling `OrchestratorCore`
-directly via `ConstructCore.xcframework`. Goal: route all crypto through `EngineAdapter` and remove
-`ConstructCore.xcframework` from the Desktop target (saves ~83 MB, kills dual-state OrchestratorCore).
-
-#### iOS keeps direct UniFFI path (intentional)
-
-iOS cannot run `construct-engine` with QUIC natively; the iOS direct path is production-stable.
-Do NOT use `EngineAdapter` for crypto on iOS.
-
-#### Compiler guard pattern for crypto code
-
-macOS Desktop now follows the direct iOS path (Strategy B). Guard only for iOS-only features
-(e.g. calls/WebRTC) or future engine-platforms:
-```swift
-#if os(iOS) && canImport(WebRTC)   // iOS-only calls
-#else                              // Direct core path (iOS + macOS Desktop)
-#endif
-```
-
-#### Migration phases (do not skip ahead)
-
-1. **Phase 1** — Session init: `InitSession`, `InitReceivingSession`, `EndSession` via engine
-2. **Phase 2** — Message encrypt/decrypt via engine
-3. **Phase 3** — Offline batch decrypt via engine
-4. **Phase 4** — Session healing via engine
-5. **Phase 5** — PQ key management via engine
-6. **Phase 6** — Remove `ConstructCore.xcframework` + `construct_core.swift` from Desktop target
-
-Before implementing any macOS-only crypto feature, check which phase it belongs to.
-Do not implement a later-phase feature before earlier phases are done.
-
-### UniFFI bindings
-`construct_core.swift` is auto-generated — **never edit it manually**.
-Regenerate with: `./generate_swift_bindings.sh`
-`construct_core.swift` is compiled for **iOS only** — it must not be compiled for macOS once
-Phase 6 is complete. Wrap any new UniFFI call in `#if os(iOS)` if it has no engine equivalent yet.
-
-### gRPC
-Generated protobuf files in `Networking/gRPC/Generated/` — do not edit manually.
-Regenerate with: `./generate_grpc_swift.sh`
-
----
+- **INITIATOR vs RESPONDER init paths are distinct** (`init_session` vs
+  `init_receiving_session`); tie-break: higher deviceId wins as INITIATOR. Read the notes doc
+  before touching session init/healing code.
+- **Keychain**: any crypto state that must survive a background/locked push decrypt uses
+  `kSecAttrAccessibleAfterFirstUnlock*` (`KeychainManager.cryptoKeyAccessible`), never
+  `WhenUnlocked*` — otherwise silent session desync / END_SESSION teardown of healthy sessions.
+- Device keys are deleted only on gRPC UNAUTHENTICATED (16) / PERMISSION_DENIED (7) — never on
+  network errors.
+- **All crypto goes direct via UniFFI (`ConstructCore.xcframework`)** on both iOS and macOS
+  Desktop. The old `construct-engine` / `EngineAdapter` single-binary concept is **retired and
+  removed** (2026-07-28) — do not reintroduce it. The app links three Rust products merged into
+  two xcframeworks: core+veil → `ConstructCore`, transport → `ConstructTransport`.
+- **Generated files are never edited by hand**: `construct_core.swift`
+  (`./generate_swift_bindings.sh`), `Networking/gRPC/Generated/` (`./generate_grpc_swift.sh`).
 
 ## Code Conventions
 
-- Use `@Observable` for ViewModels (not `ObservableObject`)
-- `@MainActor` on all ViewModels and services that touch UI state
-- `#if DEBUG` / `#if os(iOS)` guards where appropriate
-- No inline magic numbers — use `CT.*` tokens or named constants
-- Comment only non-obvious logic; do not comment self-explanatory code
-- Debug-only UI: orange color, `#if DEBUG` blocks, auto-visible in debug builds
-
----
+- `@Observable` for ViewModels (not `ObservableObject`); `@MainActor` on ViewModels and
+  UI-touching services.
+- `#if DEBUG` / `#if os(iOS)` guards where appropriate.
+- No inline magic numbers — `CT.*` tokens or named constants.
+- Comment only non-obvious logic.
 
 ## Binary Data Pipeline (CRITICAL — no redundant encodings)
 
-Construct uses a fully binary data pipeline. Violating this rule introduces unnecessary
-CPU cost, allocation pressure, and potential encoding bugs at every message.
+Construct uses a fully binary pipeline. Full rationale + CFE format:
+`~/Code/construct-docs/client/construct-ffi-binary-format.md`
 
-### Rules
+1. **No base64 in application logic** — only at true text-transport boundaries (QR, deep links,
+   `mailto:`). Never in message processing, session management, or storage.
+2. **No JSON for binary payloads** — keys/ciphertexts/wire payloads are `Data` / `[UInt8]`
+   end-to-end; use protobuf `bytes` or CFE binary.
+3. **UniFFI boundary passes `Data` / `[UInt8]`** — never stringify; UDL fields holding binary are
+   `sequence<u8>`, not `String`.
+4. **Session state persists as CFE envelopes** — every `Action::SaveSessionToSecureStore` data
+   field originates from `export_session_bytes_for`, never `export_session_json_for`.
+5. `Codable` `Data` fields (implicit base64 in JSONEncoder) are fine for UserDefaults persistence;
+   never add manual `.base64EncodedString()` / `Data(base64Encoded:)` around typed `Data`.
+6. Core Data `encryptedContent` is `Binary Data` (external storage); `ChatMessage.content` is
+   `Data` — control messages use `Data()`, never a string literal.
 
-1. **No base64 in application logic.** Base64 is allowed ONLY at true text-transport
-   boundaries: QR codes, deep links/URLs, `mailto:` params. It is NEVER acceptable
-   inside message processing, session management, or storage.
-
-2. **No JSON for binary payloads.** Keys, ciphertexts, sealed boxes, and wire payloads
-   are `Data` / `[UInt8]` end-to-end. `JSONSerialization` / `Codable` must not see raw
-   crypto bytes — use protobuf fields or CFE binary for that.
-
-3. **UniFFI boundary uses `Data` / `[UInt8]`.** All Swift ↔ Rust FFI calls pass binary
-   data as `Data` (Swift) or `[UInt8]` (UniFFI-generated). Never stringify before
-   crossing the boundary. Two patterns to watch:
-   - A UniFFI struct exposing `String` fields that hold base64 is a leak — declare the UDL field
-     as `sequence<u8>` instead.
-   - `[UInt8](data)` / `Data(bytes)` Swift-side wrapping is the current idiomatic UniFFI cost.
-     Acceptable, but minimise — don't double-wrap.
-
-4. **CFE binary format for session state.** Sessions persist as CFE envelopes
-   (`CfeSessionStateV1`) — 16-byte header + MessagePack payload via `rmp_serde`. New session fields
-   go into the binary CFE layer. Do not introduce JSON-bytes-into-Keychain anywhere on the crypto
-   pipeline — every `Action::SaveSessionToSecureStore` data field must originate from
-   `export_session_bytes_for` (CFE), never `export_session_json_for`. (`CfeSessionJsonWrapperV1` is
-   removed from production; survives only in backwards-compat import tests.)
-
-5. **`Codable` `Data` fields are fine.** Swift's `JSONEncoder`/`JSONDecoder` transparently
-   base64-encodes `Data` values in JSON — this is acceptable for UserDefaults persistence
-   (e.g. `OutgoingWirePayloadStore`) because no explicit encode/decode step appears in
-   application code. Never add manual `.base64EncodedString()` / `Data(base64Encoded:)`
-   around values that are already typed as `Data`.
-
-6. **`encryptedContent` in Core Data is `Binary Data`.** The attribute uses
-   `allowsExternalBinaryDataStorage = YES`. Do not change it to String or add base64
-   when reading/writing from `MessagePersistenceService`.
-
-7. **`ChatMessage.content` is `Data`.** The in-memory protocol model carries raw sealed-box
-   bytes. Control messages (END_SESSION, ping) use `Data()` (empty), never a string literal.
-
-### Before adding any new crypto/messaging field, ask:
-- Is it `Data` from source to destination?
-- Does it cross the FFI boundary as `[UInt8]`?
-- Does the proto field hold `bytes`, not `string`?
-- Is there zero `base64EncodedString()` or `Data(base64Encoded:)` in the path?
-
-If any answer is "no", fix the design before merging.
-
----
+Before adding any crypto/messaging field: is it `Data` source-to-destination, `[UInt8]` across FFI,
+proto `bytes`, zero base64 in the path? If not, fix the design before merging.
 
 ## User Identity Spaces (CRITICAL — two distinct ID formats)
 
-There are two separate user identity formats in this codebase. **Never mix them.**
+| Type (`Utilities/UserIdentity.swift`) | Format | Correct use |
+|------|--------|-------------|
+| `ServerUserId` | 36-char UUID `14f28d31-…` | All session addressing: `local_user_id`, `contact_id`, `conversation_id`, contact lists |
+| `CryptoDeviceId` | 32-char hex `6f5e37ac…` | Multi-device linking, QR codes ONLY |
 
-| Type | Swift | Format | Source | Correct use |
-|------|-------|--------|--------|-------------|
-| `ServerUserId` | `Utilities/UserIdentity.swift` | 36-char UUID with dashes `14f28d31-…` | Server-assigned at registration | All session addressing: `local_user_id`, `contact_id`, `conversation_id`, contact lists |
-| `CryptoDeviceId` | `Utilities/UserIdentity.swift` | 32-char hex `6f5e37ac…` | `deriveDeviceId(identityPublicKey)` | Multi-device linking, QR codes ONLY |
-
-### The AD bug (why this matters)
-
-The Double Ratchet AD mixes `local_user_id` + `contact_id`. Mixing the two ID spaces (e.g.
-`cryptoLocalUserId` returning a 32-hex CryptoDeviceId instead of the 36-char ServerUserId) makes
-INITIATOR's and RESPONDER's AD never match → permanent AEAD failure on every session. (Full
-postmortem in construct-docs.)
-
-**Invariant to maintain**: Everything passed to the Rust session layer (`init_session`,
-`init_receiving_session`, `set_local_user_id`) MUST be a `ServerUserId`. The Rust
-`debug_assert!` guards in `new_initiator_session` / `new_responder_session` catch this
-in test builds. The `UserIdentity.swift` types make the distinction compiler-visible.
-
----
+**Invariant**: everything passed to the Rust session layer (`init_session`,
+`init_receiving_session`, `set_local_user_id`) MUST be a `ServerUserId`. Mixing the spaces breaks
+the Double Ratchet AD → permanent AEAD failure on every session (postmortem in construct-docs).
 
 ## Commits
 
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-```
-feat(scope): short description
-fix(scope): short description
-refactor(scope): short description
-chore(scope): short description
-```
+[Conventional Commits](https://www.conventionalcommits.org/): `feat(scope): …`, `fix(scope): …`,
+`refactor(scope): …`, `chore(scope): …`.
 
----
+## Documentation & session notes
 
-## Testing
+All docs live in `~/Code/construct-docs` (Obsidian vault, flat domain folders:
+`architecture/ backend/ client/ cryptocore/ security/ decisions/ sessions/ …`).
+**The vault's `AGENTS.md` is authoritative** for structure and writing rules — read it before
+contributing docs. If a path is missing, search the domain folder rather than trusting old links.
 
-```bash
-# Unit + integration tests
-xcodebuild test -scheme ConstructMessenger \
-  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6'
-```
+After any session with architectural changes, design decisions, root-cause analysis, or
+non-obvious choices:
 
-Key test files:
-- `ConstructMessengerTests/` — unit tests
-- `CryptoWireIntegrationTests.swift` — E2EE crypto integration tests
+1. Write a session note `sessions/YYYY-MM-DD-<topic>.md` (sections: Context / What Changed /
+   **Why** / Decisions / Open Questions) — `## Why` with rejected alternatives is mandatory.
+2. If it constrains future work, add/update `decisions/<slug>.md`.
+3. Patch the affected spec in its domain folder in the **same** session.
+4. Append one line to `~/Code/construct-docs/log.md`: `[YYYY-MM-DD HH:MM] note | <topic>`.
 
----
-
-## Documentation
-
-All project documentation: `~/Code/construct-docs` (Obsidian vault).
-**Authoritative map + writing rules: `~/Code/construct-docs/AGENTS.md`** (read it before contributing
-docs). The vault is a flat domain-folder structure — there is no `raw/` or `wiki/` anymore.
-
-### Vault layout (top-level domain folders)
-
-| Folder | Holds |
-|--------|-------|
-| `overview/` | Vision, philosophy, high-level project overview |
-| `architecture/` | Service map, data flows, server infrastructure, design principles |
-| `backend/` | Server service-specific docs (auth, messaging, federation) |
-| `client/` | Client docs (iOS, Android, desktop, shared); specs in `client/specs/` |
-| `cryptocore/` | Crypto protocol specs and key management |
-| `security/` | Security model, threat model, VEIL anti-censorship |
-| `deployment/` · `testing/` · `compliance/` · `whitepaper/` | as named |
-| `sessions/` | Session logs (this is where your session notes go) |
-| `decisions/` | Architectural decision records (ADRs) |
-| `_archive/` | Superseded docs — read-only |
-
-### Key documents for new developers
-
-| Topic | File |
-|-------|------|
-| Cross-platform protocol spec | `client/specs/construct-protocol-v2-spec.md` |
-| **Android onboarding** | `client/android/ANDROID_ONBOARDING.md` |
-| Account recovery (BIP39) | `client/ACCOUNT_RECOVERY_CLIENT_SPEC.md` |
-| Calls / WebRTC signaling | `client/specs/CALLS_CLIENT_SPEC.md` |
-| VEIL relay fallback (RU) | `client/specs/VEIL_RELAY_FALLBACK_CLIENT_SPEC.md` |
-| Multi-device support | `client/specs/MULTI_DEVICE_CLIENT_SPEC.md` |
-| FFI binary format (CFE) | `client/construct-ffi-binary-format.md` |
-| construct-engine / EngineAdapter | `client/specs/DESKTOP_ENGINE_REFACTORING_SPEC.md` |
-| **iOS App Store / 1.0 readiness** | `client/specs/IOS_1_0_RELEASE_SCOPE.md` · `client/specs/IOS_APPSTORE_AUDIT_CHECKLIST.md` · `decisions/appstore-release-gates.md` |
-| Security architecture | `security/` |
-
-> Paths move as docs are reorganised — if one is missing, search the domain folder
-> (`grep -ril <topic> ~/Code/construct-docs/client`) rather than trusting this table blindly.
-
-### Documentation conventions
-- Session notes go in `sessions/YYYY-MM-DD-<topic>.md` (see workflow below).
-- Patch the affected spec in its domain folder in the same session — do not leave it stale.
-- New client specs go in `client/specs/`.
-
----
-
-## Shared Construct Docs Workflow
-
-The vault's own `~/Code/construct-docs/AGENTS.md` is **authoritative** for how to contribute docs —
-read it. The summary below is the operational subset for coding agents.
-
-> **There is no pipeline anymore.** The old `raw/` → olw → `wiki/` three-way synthesis workflow is
-> gone. Agents patch docs **directly** and write session/decision notes by hand. No olw, no
-> `wiki/.drafts/`, no "let the pipeline cross-link it". `raw/` and `wiki/` no longer exist — the
-> corpus is the flat domain folders (`architecture/`, `backend/`, `client/`, `cryptocore/`,
-> `security/`, …) listed under *Documentation* above.
-
-### Where durable reasoning goes
-
-Any reasoning that informed a code change must survive beyond the chat session — conclusions,
-trade-offs, and "why we didn't do X". After any session involving architectural changes, design
-decisions, API/data-format changes, bug root-cause analysis, or non-obvious implementation choices:
-
-1. **Always** write a session note at `~/Code/construct-docs/sessions/YYYY-MM-DD-<topic>.md`.
-2. **Always** fill in `## Why` — the reasoning, considered alternatives, and why they were rejected.
-   This is the most important section.
-3. If the decision will constrain future work or the same question is likely to recur, also create
-   or update `~/Code/construct-docs/decisions/<slug>.md`.
-4. Patch the affected spec in its domain folder in the **same** session — keep specs current.
-5. Before creating a new note, search for an existing one and extend it rather than duplicating.
-
-Do not skip session notes for "small" changes — if non-trivial reasoning was involved, write it down.
-
-### Session note format
-
-Plain markdown, no YAML frontmatter. `[[wikilinks]]` to other sessions/decisions/specs are welcome
-(Obsidian graph). Sections:
-
-1. `## Context` — what problem prompted this work
-2. `## What Changed` — concrete file/API/behaviour changes
-3. `## Why` — the reasoning: alternatives considered and why rejected
-4. `## Decisions` — discrete decisions, each as a one-liner
-5. `## Open Questions` — known unknowns, deferred work
-
-Decision records (`decisions/<slug>.md`) use: `## Context`, `## Decision`, `## Rationale`,
-`## Consequences`, plus a **Status** (accepted | superseded | deferred) and **Date** header.
-
-### Operational logging
-
-- Append a one-line entry to `~/Code/construct-docs/log.md` after creating/updating a session or
-  decision note. Format: `[YYYY-MM-DD HH:MM] note | <topic>`
-- Keep detailed rationale out of `log.md` — it belongs in the session/decision note.
+There is no raw/→wiki pipeline anymore — patch docs directly.
