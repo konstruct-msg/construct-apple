@@ -84,7 +84,13 @@ final class KeyServiceClient: Sendable {
 
     /// Fetch pre-key bundles for ALL active devices of a user (or specific device IDs).
     /// Returns one bundle per device — caller must encrypt separately for each.
-    func getPreKeyBundles(userId: String, deviceIds: [String] = []) async throws -> [DeviceBundleData] {
+    ///
+    /// `consumeOneTimePrekey` has no default **on purpose** — see `getPreKeyBundle`.
+    func getPreKeyBundles(
+        userId: String,
+        deviceIds: [String] = [],
+        consumeOneTimePrekey: Bool
+    ) async throws -> [DeviceBundleData] {
         // Under the Phase-4 unauthenticated-transport flag, fetch over the sealed channel so the
         // server/gateway does not learn who is fetching whose bundle. Bundles are public keys, and
         // key-service's GetPreKeyBundles reads no caller identity (IP-only rate limiting), so the
@@ -94,6 +100,7 @@ final class KeyServiceClient: Sendable {
 
             var request = Shared_Proto_Services_V1_GetPreKeyBundlesRequest()
             request.userID = userId
+            request.consumeOneTimePrekey = consumeOneTimePrekey
             if !deviceIds.isEmpty {
                 request.deviceIds = deviceIds
             }
@@ -186,7 +193,20 @@ final class KeyServiceClient: Sendable {
     }
 
     /// Fetch a user's pre-key bundle for establishing an E2EE session.
-    func getPreKeyBundle(userId: String, deviceId: String? = nil) async throws -> PublicKeyBundleData {
+    /// Fetch one device's pre-key bundle.
+    ///
+    /// - Parameter consumeOneTimePrekey: whether this fetch may **burn** one of the target's
+    ///   one-time pre-keys. Deliberately has **no default value** so every call site has to
+    ///   state its intent: fetching a bundle is destructive (the server DELETEs an OTPK), and
+    ///   a caller that only needs the identity / verifying / signed pre-key drains the target's
+    ///   pool for nothing. Once that pool hits zero, every new inbound session to that peer is
+    ///   established without a one-time pre-key — weaker X3DH forward secrecy — and the peer
+    ///   re-uploads endlessly to refill it. Pass `true` **only** when about to run X3DH.
+    func getPreKeyBundle(
+        userId: String,
+        deviceId: String? = nil,
+        consumeOneTimePrekey: Bool
+    ) async throws -> PublicKeyBundleData {
         // See getPreKeyBundles: sealed (unauthenticated) channel under the Phase-4 flag so the
         // server/gateway can't correlate (caller, target) at session-init time.
         let fetched = try await GRPCChannelManager.shared.performRPC(sealed: FeatureFlags.sealedSenderUnauthenticatedTransport, timeout: GRPCTimeouts.getPreKeyBundle) { grpcClient -> PreKeyBundleFetchResult in
@@ -194,6 +214,7 @@ final class KeyServiceClient: Sendable {
 
             var request = Shared_Proto_Services_V1_GetPreKeyBundleRequest()
             request.userID = userId
+            request.consumeOneTimePrekey = consumeOneTimePrekey
             if let deviceId, !deviceId.isEmpty {
                 request.deviceID = deviceId
             }

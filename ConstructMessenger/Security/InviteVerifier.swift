@@ -242,9 +242,12 @@ class InviteVerifier {
     ) async throws -> PublicKeyBundleData {
         do {
             // Prefer the invite's device so verifying key matches the signer.
+            // Verifying key only — invite verification must never burn the inviter's OTPKs
+            // (an invite link opened repeatedly would otherwise drain their pool).
             let bundle = try await KeyServiceClient.shared.getPreKeyBundle(
                 userId: userId,
-                deviceId: deviceId
+                deviceId: deviceId,
+                consumeOneTimePrekey: false
             )
             Log.debug(
                 "Fetched key bundle for \(userId.prefix(8))… device=\(deviceId?.prefix(8) ?? "default")",

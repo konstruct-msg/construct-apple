@@ -1170,7 +1170,9 @@ final class CallManager: CallUIManaging {
         }
         do {
             // Same pattern as profile shares / edits.
-            let bundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId)
+            // Identity key only (stealth sealing for call signals) — no OTPK. Calls ride the
+            // existing Double Ratchet session; nothing here runs X3DH.
+            let bundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId, consumeOneTimePrekey: false)
             let key = bundle.identityPublic
             identityKeyCache[userId] = key
             return key

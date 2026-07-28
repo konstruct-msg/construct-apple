@@ -105,12 +105,38 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundleRequest: Sendable {
   /// Clears the value of `preferredSuite`. Subsequent reads from it will return its default value.
   public mutating func clearPreferredSuite() {self._preferredSuite = nil}
 
+  /// Whether this fetch should consume (burn) one of the target's one-time
+  /// pre-keys. Fetching a bundle is DESTRUCTIVE by default: the server deletes an
+  /// OTPK and hands it out, because that is what an X3DH session init needs.
+  ///
+  /// Callers that only need the long-lived material (identity key, verifying key,
+  /// signed pre-key) — profile display, invite verification, key-consistency
+  /// checks, call setup — MUST set this to false. Otherwise every such fetch
+  /// drains the target's OTPK pool, and once it hits zero every new inbound
+  /// session is established WITHOUT a one-time pre-key, weakening X3DH forward
+  /// secrecy. A misbehaving or merely chatty peer could drain a pool just by
+  /// reopening a conversation.
+  ///
+  /// Absent (proto3 default false) is treated as TRUE by the server for wire
+  /// compatibility with clients built before this field existed; new clients must
+  /// set it explicitly. Fetching your own device's bundle never consumes,
+  /// regardless of this field.
+  public var consumeOneTimePrekey: Bool {
+    get {_consumeOneTimePrekey ?? false}
+    set {_consumeOneTimePrekey = newValue}
+  }
+  /// Returns true if `consumeOneTimePrekey` has been explicitly set.
+  public var hasConsumeOneTimePrekey: Bool {self._consumeOneTimePrekey != nil}
+  /// Clears the value of `consumeOneTimePrekey`. Subsequent reads from it will return its default value.
+  public mutating func clearConsumeOneTimePrekey() {self._consumeOneTimePrekey = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _deviceID: String? = nil
   fileprivate var _preferredSuite: Shared_Proto_Core_V1_CryptoSuite? = nil
+  fileprivate var _consumeOneTimePrekey: Bool? = nil
 }
 
 public struct Shared_Proto_Services_V1_GetPreKeyBundleResponse: Sendable {
@@ -448,11 +474,24 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundlesRequest: Sendable {
   /// Clears the value of `preferredSuite`. Subsequent reads from it will return its default value.
   public mutating func clearPreferredSuite() {self._preferredSuite = nil}
 
+  /// Whether this fetch should consume one-time pre-keys — see the field of the
+  /// same name on GetPreKeyBundleRequest. Absent is treated as TRUE for wire
+  /// compatibility; fetching your own account's bundles never consumes.
+  public var consumeOneTimePrekey: Bool {
+    get {_consumeOneTimePrekey ?? false}
+    set {_consumeOneTimePrekey = newValue}
+  }
+  /// Returns true if `consumeOneTimePrekey` has been explicitly set.
+  public var hasConsumeOneTimePrekey: Bool {self._consumeOneTimePrekey != nil}
+  /// Clears the value of `consumeOneTimePrekey`. Subsequent reads from it will return its default value.
+  public mutating func clearConsumeOneTimePrekey() {self._consumeOneTimePrekey = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _preferredSuite: Shared_Proto_Core_V1_CryptoSuite? = nil
+  fileprivate var _consumeOneTimePrekey: Bool? = nil
 }
 
 public struct Shared_Proto_Services_V1_GetPreKeyBundlesResponse: Sendable {
@@ -1020,7 +1059,7 @@ extension Shared_Proto_Services_V1_SignedPreKeyRotationReason: SwiftProtobuf._Pr
 
 extension Shared_Proto_Services_V1_GetPreKeyBundleRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPreKeyBundleRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0\u{3}preferred_suite\0\u{c}\u{4}\u{7}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0\u{3}preferred_suite\0\u{3}consume_one_time_prekey\0\u{c}\u{5}\u{6}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1031,6 +1070,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleRequest: SwiftProtobuf.Message
       case 1: try { try decoder.decodeSingularStringField(value: &self.userID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self._deviceID) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self._preferredSuite) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self._consumeOneTimePrekey) }()
       default: break
       }
     }
@@ -1050,6 +1090,9 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleRequest: SwiftProtobuf.Message
     try { if let v = self._preferredSuite {
       try visitor.visitSingularEnumField(value: v, fieldNumber: 3)
     } }()
+    try { if let v = self._consumeOneTimePrekey {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1057,6 +1100,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleRequest: SwiftProtobuf.Message
     if lhs.userID != rhs.userID {return false}
     if lhs._deviceID != rhs._deviceID {return false}
     if lhs._preferredSuite != rhs._preferredSuite {return false}
+    if lhs._consumeOneTimePrekey != rhs._consumeOneTimePrekey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1404,7 +1448,7 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
 
 extension Shared_Proto_Services_V1_GetPreKeyBundlesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPreKeyBundlesRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_ids\0\u{3}preferred_suite\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_ids\0\u{3}preferred_suite\0\u{3}consume_one_time_prekey\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1415,6 +1459,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundlesRequest: SwiftProtobuf.Messag
       case 1: try { try decoder.decodeSingularStringField(value: &self.userID) }()
       case 2: try { try decoder.decodeRepeatedStringField(value: &self.deviceIds) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self._preferredSuite) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self._consumeOneTimePrekey) }()
       default: break
       }
     }
@@ -1434,6 +1479,9 @@ extension Shared_Proto_Services_V1_GetPreKeyBundlesRequest: SwiftProtobuf.Messag
     try { if let v = self._preferredSuite {
       try visitor.visitSingularEnumField(value: v, fieldNumber: 3)
     } }()
+    try { if let v = self._consumeOneTimePrekey {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1441,6 +1489,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundlesRequest: SwiftProtobuf.Messag
     if lhs.userID != rhs.userID {return false}
     if lhs.deviceIds != rhs.deviceIds {return false}
     if lhs._preferredSuite != rhs._preferredSuite {return false}
+    if lhs._consumeOneTimePrekey != rhs._consumeOneTimePrekey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

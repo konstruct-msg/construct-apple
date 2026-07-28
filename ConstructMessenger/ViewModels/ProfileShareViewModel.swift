@@ -70,7 +70,8 @@ class ProfileShareViewModel {
                 Log.info("No session for \(userId) — initializing before profile share", category: "ProfileShare")
                 let service = SessionInitializationService.shared
                 do {
-                    let bundle = try await service.fetchPublicKeyWithRetry(userId: userId)
+                    // Real X3DH init (no session yet) — legitimately consumes an OTPK.
+                    let bundle = try await service.fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
                     do {
                         try service.initializeSession(userId: userId, bundle: bundle, deleteExisting: false)
                     } catch SessionError.peerSPKStale {
@@ -159,7 +160,8 @@ class ProfileShareViewModel {
     
     private func fetchRecipientIdentityKey(userId: String) async -> Data? {
         do {
-            let bundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId)
+            // Identity key only (stealth sealing) — must not drain the peer's OTPK pool.
+            let bundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId, consumeOneTimePrekey: false)
             return bundle.identityPublic
         } catch {
             Log.error("Profile share: failed to fetch bundle for stealth: \(error)", category: "ProfileShare")

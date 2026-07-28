@@ -62,18 +62,25 @@ enum OtpkReplenishmentService {
         Log.info("OTPK upload (\(mode)): \(pairs.count) keys for device \(deviceId.prefix(8))...", category: "OTPK")
         if replaceExisting {
             CryptoManager.shared.clearNeedsFullOtpkReplacement()
-            // Convergence point: the server now holds exactly the batch we just uploaded.
-            // Prune local privates below (new batch − grace window) so the persisted blob
-            // stays bounded — devices were hoarding 800–2000 keys (60–150 KB Keychain items
-            // rewritten on every replenish), which is both dead weight and the prime suspect
-            // for the historical OTPK-blob corruption.
-            if let minNewId = pairs.map(\.keyId).min() {
-                let cutoff = minNewId > pruneGraceWindow ? minNewId - pruneGraceWindow : 0
-                let pruned = CryptoManager.shared.pruneOneTimePrekeys(below: cutoff)
-                if pruned > 0 {
-                    Log.info("OTPK pruned \(pruned) stale local keys below id \(cutoff) (\(CryptoManager.shared.oneTimePrekeyCount()) remain)", category: "OTPK")
-                    persistOtpks()
-                }
+        }
+
+        // Prune stale local privates on BOTH paths so the persisted blob stays bounded.
+        //
+        // This used to run only under `replaceExisting`, which left the common path — an
+        // append replenish — hoarding forever: a device was observed holding 2294 private
+        // keys (~160 KB re-serialised into the Keychain on every top-up) while the server
+        // reported 0. Appends are in fact the *hot* path, because every consuming bundle
+        // fetch by a contact burns a server-side key and triggers another 20-key append.
+        //
+        // `pruneGraceWindow` keys below the new batch are kept so first messages already in
+        // flight against recently-replaced keys still decrypt; the server soft-expires
+        // replaced keys with a 48 h grace, and anything older can never be referenced again.
+        if let minNewId = pairs.map(\.keyId).min() {
+            let cutoff = minNewId > pruneGraceWindow ? minNewId - pruneGraceWindow : 0
+            let pruned = CryptoManager.shared.pruneOneTimePrekeys(below: cutoff)
+            if pruned > 0 {
+                Log.info("OTPK pruned \(pruned) stale local keys below id \(cutoff) (\(CryptoManager.shared.oneTimePrekeyCount()) remain, mode=\(mode))", category: "OTPK")
+                persistOtpks()
             }
         }
         return pairs.count

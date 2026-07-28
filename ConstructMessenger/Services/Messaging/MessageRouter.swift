@@ -1832,9 +1832,12 @@ final class MessageRouter {
         in context: NSManagedObjectContext
     ) async {
         do {
+            // SENDER_SYNC from one of our own devices. initReceivingSession below uses only
+            // identity / SPK / verifying key — no one-time pre-key — so don't burn one.
             let bundle = try await KeyServiceClient.shared.getPreKeyBundle(
                 userId: message.from,
-                deviceId: message.senderDeviceId
+                deviceId: message.senderDeviceId,
+                consumeOneTimePrekey: false
             )
             let bundleWithSuite = (
                 identityPublic: bundle.identityPublic,

@@ -71,7 +71,9 @@ final class MultiDeviceSendCoordinator {
     ) async {
         guard !senderDeviceId.isEmpty else { return }
         do {
-            let bundles = try await KeyServiceClient.shared.getPreKeyBundles(userId: recipientUserId)
+            // Per-device fan-out to a recipient: a device we have no session with yet needs
+            // X3DH, so this fetch legitimately consumes a one-time pre-key.
+            let bundles = try await KeyServiceClient.shared.getPreKeyBundles(userId: recipientUserId, consumeOneTimePrekey: true)
             guard !bundles.isEmpty else { return }
 
             for device in bundles {
@@ -182,7 +184,9 @@ final class MultiDeviceSendCoordinator {
            Date().timeIntervalSince(cache.fetchedAt) < cacheTTL {
             return cache.bundles.filter { $0.deviceId != myDeviceId }
         }
-        let all = try await KeyServiceClient.shared.getPreKeyBundles(userId: myUserId)
+        // Enumerating OUR OWN devices — never burn our own one-time pre-keys just to
+        // list them. (The server also refuses to consume on a self-fetch.)
+        let all = try await KeyServiceClient.shared.getPreKeyBundles(userId: myUserId, consumeOneTimePrekey: false)
         ownDeviceCache = DeviceCache(bundles: all, fetchedAt: Date())
         // Sync our own SPK upload timestamp from the server-reported value.
         // This corrects stale local UserDefaults (e.g. set to Date.now during

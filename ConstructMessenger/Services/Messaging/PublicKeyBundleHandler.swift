@@ -50,7 +50,8 @@ class PublicKeyBundleHandler {
         for attempt in 1...maxAttempts {
             do {
                 Log.info("SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., maxAttempts=\(maxAttempts)", category: "SessionInit")
-                let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId)
+                // Bundle for an incoming first message → X3DH init, OTPK required.
+                let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId, consumeOneTimePrekey: true)
                 Log.info("SESSION_STATE[fetch_bundle_success]: userId=\(userId.prefix(8))..., attempt=\(attempt)", category: "SessionInit")
                 return keyBundle
             } catch {
