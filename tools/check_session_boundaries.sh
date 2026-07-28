@@ -45,7 +45,6 @@ done
 
 # Also exclude generated and test directories globally
 EXCLUDE_ARGS+=(
-    --glob '!ConstructEngine.xcframework/**'
     --glob '!ConstructCore.xcframework/**'
     --glob '!**/Generated/**'
     --glob '!**/build/**'

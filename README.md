@@ -54,9 +54,9 @@ in-progress Android client run the *same* audited crypto rather than reimplement
 ```
 
 Both iOS and macOS Desktop use the direct UniFFI + gRPC-Swift path
-(`CryptoManager` + `TransportRouter` + `VeilProxyManager`). The `construct-engine`
-/ `EngineAdapter` is paused (Strategy B) and not used on Desktop. See
-`construct-docs/decisions/macos-desktop-strategy.md`.
+(`CryptoManager` + `TransportRouter` + `VeilProxyManager`), built from three Rust
+crates: `construct-core` (crypto, with VEIL merged in), `construct-transport`
+(QUIC/H3), and `construct-veil` (obfuscation).
 
 ---
 
@@ -125,9 +125,9 @@ All three Rust crates must be cloned alongside this repo:
 ```
 ~/Code/
 ├── construct-core/        # crypto core  → ConstructCore.xcframework
-├── construct-engine/      # QUIC/H3/gRPC → ConstructEngine.xcframework
-├── construct-veil/        # obfs4/WebTunnel obfuscation (VEIL)
-└── construct-messenger/         # this repo (SwiftUI app)
+├── construct-transport/   # QUIC/H3/gRPC → ConstructTransport.xcframework
+├── construct-veil/        # obfs4/WebTunnel obfuscation (VEIL, merged into ConstructCore.xcframework)
+└── construct-messenger/   # this repo (SwiftUI app)
 ```
 
 The `*.xcframework` binaries are **not** tracked in git — build them after cloning:
@@ -137,8 +137,8 @@ The `*.xcframework` binaries are **not** tracked in git — build them after clo
 cd ~/Code/construct-messenger
 ./build_crypto_lib.sh --ios --sim        # or --all for + macOS
 
-# 2. Build the transport engine
-cd ~/Code/construct-engine && ./build_engine.sh
+# 2. Build the transport library
+./build_transport_lib.sh                 # wraps construct-transport/build_ios.sh
 
 # 3. Regenerate UniFFI Swift bindings (after any core API change)
 cd ~/Code/construct-messenger
@@ -174,7 +174,7 @@ construct-messenger/
 ```
 
 See **`AGENTS.md`** for design-system rules, the session lifecycle, the binary-data
-pipeline, identity-space invariants, and the EngineAdapter migration plan.
+pipeline, and identity-space invariants.
 
 ---
 
@@ -211,7 +211,7 @@ xcodebuild test -scheme ConstructMessenger \
 ### In progress / planned
 - [ ] Activate hybrid ML-DSA-65 identity signatures on the wire (with smooth migration for existing accounts)
 - [ ] Cluster (group) messaging
-- [x] macOS Desktop uses direct core + gRPC path (Strategy B; engine paused)
+- [x] macOS Desktop uses direct core + gRPC path
 - [ ] Android client
 - [ ] Japanese localization (共創)
 

@@ -81,8 +81,6 @@ struct Construct_MessengerApp: App {
                     // Phase 1: lazily publish the hybrid PQ identity bundle (Ed25519 + ML-DSA-65).
                     await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
                 }
-                // Engine layer (construct-engine) is paused.
-                // Direct gRPC + construct-core path is used for both iOS and macOS Desktop (Strategy B).
             }
         }
     }
