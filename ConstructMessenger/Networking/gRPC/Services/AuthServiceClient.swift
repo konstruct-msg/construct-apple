@@ -373,12 +373,20 @@ final class AuthServiceClient: Sendable {
 
             var payload = Shared_Proto_Services_V1_JoinRequestPayload()
             payload.pendingDeviceID = deviceId
+            payload.identityPublic = Data(bundle.identityPublic)
+            payload.verifyingKey = Data(bundle.verifyingKey)
+            payload.signedPrekeyPublic = Data(bundle.signedPrekeyPublic)
+            payload.signedPrekeySignature = Data(bundle.signature)
+            payload.deviceName = deviceName
+            payload.platform = platform
+            // TRANSITIONAL: also populate the deprecated base64 strings so this build keeps
+            // working against an identity-service that predates the bytes fields. Delete these
+            // four lines (and the fields from the proto) once the server rollout is confirmed —
+            // until then they are the only thing making the deploy order irrelevant.
             payload.identityPublicB64 = Data(bundle.identityPublic).base64EncodedString()
             payload.verifyingKeyB64 = Data(bundle.verifyingKey).base64EncodedString()
             payload.signedPrekeyPublicB64 = Data(bundle.signedPrekeyPublic).base64EncodedString()
             payload.signedPrekeySignatureB64 = Data(bundle.signature).base64EncodedString()
-            payload.deviceName = deviceName
-            payload.platform = platform
 
             _ = try await linkClient.submitJoinRequest(request: .init(message: payload))
         }
