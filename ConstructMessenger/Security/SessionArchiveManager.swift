@@ -88,7 +88,13 @@ final class SessionArchiveManager {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(list)
-            let saved = keychain.saveData(data, forKey: keychainKey(for: userId))
+            // Archives are read to decrypt late-arriving messages, including during a
+            // locked-device background decrypt — must not be WhenUnlocked.
+            let saved = keychain.saveData(
+                data,
+                forKey: keychainKey(for: userId),
+                accessible: KeychainManager.cryptoKeyAccessible
+            )
             if !saved {
                 Log.error("SessionArchiveManager: failed to save archives to Keychain for \(userId.prefix(8))", category: "SessionArchive")
             }

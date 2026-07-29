@@ -376,11 +376,14 @@ final class OutboundSessionService {
                 KeychainManager.shared.deleteData(forKey: storageKey)
                 Log.debug("Deleted PQ deferred for key \(storageKey)", category: "OutboundSession")
             } else {
-                // NOTE: saveData defaults to WhenUnlockedThisDeviceOnly, so this write fails
-                // during a locked-device background decrypt → the deferred PQ contribution is
-                // lost → session silently downgrades to classical (BS-6). Logging the failure
-                // makes that latent bug observable before we migrate the accessibility class.
-                let ok = KeychainManager.shared.saveData(Data(rawBytes), forKey: storageKey)
+                // AfterFirstUnlock: this write also fires during a locked-device background
+                // decrypt. Under the WhenUnlocked default it failed there, losing the deferred
+                // PQ contribution and silently downgrading the session to classical (BS-6).
+                let ok = KeychainManager.shared.saveData(
+                    Data(rawBytes),
+                    forKey: storageKey,
+                    accessible: KeychainManager.cryptoKeyAccessible
+                )
                 if ok {
                     Log.debug("Persisted PQ deferred for key \(storageKey)", category: "OutboundSession")
                 } else {

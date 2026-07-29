@@ -16,12 +16,39 @@ final class NotificationServiceClient: Sendable {
 
     private init() {}
 
+    /// The APNs environment the running binary's token actually belongs to.
+    ///
+    /// Read from `APSEnvironment` in Info.plist, which expands the same
+    /// `$(APS_ENVIRONMENT)` build setting as the `aps-environment` entitlement — so
+    /// what we report is by construction the environment APNs minted the token for.
+    ///
+    /// This must NOT be `#if DEBUG`: the Beta config includes Release.xcconfig
+    /// (`APS_ENVIRONMENT = production`) but defines DEBUG to keep debug UI visible in
+    /// TestFlight. The old check therefore registered production TestFlight tokens as
+    /// `sandbox`, and the server routed them to api.sandbox.push.apple.com, where a
+    /// production token is rejected as BadDeviceToken — every TestFlight push dropped.
     private var pushEnvironment: Shared_Proto_Services_V1_PushEnvironment {
-        #if DEBUG
-        return .sandbox
-        #else
-        return .production
-        #endif
+        let declared = (Bundle.main.object(forInfoDictionaryKey: "APSEnvironment") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        switch declared {
+        case "production":
+            return .production
+        case "development":
+            return .sandbox
+        default:
+            // Missing key or an unexpanded build setting — fall back to the compile-time
+            // guess rather than guessing wrong silently on a target we forgot to configure.
+            Log.error(
+                "APSEnvironment missing from Info.plist (got \(declared ?? "nil")) — falling back to build-config default. Push may be routed to the wrong APNs endpoint.",
+                category: "Notifications"
+            )
+            #if DEBUG
+            return .sandbox
+            #else
+            return .production
+            #endif
+        }
     }
 
     // MARK: - Register / Update Device Token

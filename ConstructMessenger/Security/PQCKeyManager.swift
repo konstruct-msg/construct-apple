@@ -281,7 +281,11 @@ final class PQCKeyManager {
         for keyId in keyIds {
             let kp = try mlkem768Keygen()
             let pubKeyData = Data(kp.publicKey)
-            guard KeychainManager.shared.saveData(Data(kp.secretKey), forKey: otpkKeychainKey(keyId)) else {
+            guard KeychainManager.shared.saveData(
+                Data(kp.secretKey),
+                forKey: otpkKeychainKey(keyId),
+                accessible: KeychainManager.cryptoKeyAccessible
+            ) else {
                 Log.error("PQC: failed to save Kyber OTPK secret keyId=\(keyId)", category: "PQC")
                 continue
             }
@@ -324,7 +328,8 @@ final class PQCKeyManager {
         ) {
             let ok = KeychainManager.shared.saveData(
                 Data(encapsulation.sharedSecret),
-                forKey: "construct.pq_deferred.\(contactId)"
+                forKey: "construct.pq_deferred.\(contactId)",
+                accessible: KeychainManager.cryptoKeyAccessible
             )
             if !ok {
                 Log.error("PERSIST-FAIL PQ deferred backup \(contactId.prefix(8))… — deferred PQ secret lost, session will downgrade to classical (BS-6)", category: "PQC")
@@ -370,7 +375,8 @@ final class PQCKeyManager {
               !blob.isEmpty else { return }
         let ok = KeychainManager.shared.saveData(
             Data(blob),
-            forKey: kyberSessionStateCFEKey
+            forKey: kyberSessionStateCFEKey,
+            accessible: KeychainManager.cryptoKeyAccessible
         )
         if !ok {
             Log.error("PERSIST-FAIL Kyber session state CFE (\(blob.count)B) — PQ ratchet state may desync on next launch", category: "PQC")

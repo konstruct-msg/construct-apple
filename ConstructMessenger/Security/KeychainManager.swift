@@ -27,7 +27,17 @@ class KeychainManager {
         "deviceSigningKey", "deviceIdentityKey",
         APIConstants.privateKeyKey,
         "identity_key", "signed_prekey", "signing_key",
-        "hybrid_sig_private_key", "crypto_private_keys", "crypto_otpks"
+        "hybrid_sig_private_key", "crypto_private_keys", "crypto_otpks",
+        // v2: written by callers that used to rely on the WhenUnlocked default.
+        "construct.kyber_session_state", "tracked_prekey_ids"
+    ]
+
+    /// Account prefixes whose items are created dynamically (per key id / contact / user) and
+    /// therefore cannot be listed by name. Enumerated from the Keychain during migration.
+    private static let cryptoKeyAccountPrefixes: [String] = [
+        "construct.kyber.otpk.sk.",   // per-key-id Kyber OTPK secrets
+        "construct.pq_deferred.",     // per-contact deferred PQ contributions
+        "session_archives_"           // per-user archived sessions
     ]
 
     /// One-time migration of crypto key material from the legacy `WhenUnlockedThisDeviceOnly`
@@ -38,11 +48,15 @@ class KeychainManager {
     /// so the flag is only set once every present item was actually re-added — otherwise it
     /// retries on the next foreground launch.
     func migrateCryptoKeysAccessibility() {
-        let flagKey = "construct.cryptoKeys.afu_migrated.v1"
+        // v2 adds the accounts that were still being written under the WhenUnlocked default
+        // (Kyber OTPK secrets, deferred PQ contributions, Kyber session CFE, session archives,
+        // tracked prekey ids). Devices that already completed v1 must run again for those.
+        let flagKey = "construct.cryptoKeys.afu_migrated.v2"
         guard !UserDefaults.standard.bool(forKey: flagKey) else { return }
 
         var allResolved = true
-        for account in Self.cryptoKeyAccounts {
+        let dynamicAccounts = Self.cryptoKeyAccountPrefixes.flatMap { accounts(withPrefix: $0) }
+        for account in Self.cryptoKeyAccounts + dynamicAccounts {
             // Absent item: nothing to migrate (resolved). Present item: must re-add successfully.
             guard load(forKey: account) != nil else { continue }
             if !migrateAccessibility(forKey: account, to: Self.cryptoKeyAccessible) {
@@ -700,6 +714,26 @@ class KeychainManager {
     }
 
     // MARK: - Generic Helpers
+    /// Every generic-password account this app owns whose name starts with `prefix`.
+    ///
+    /// Items keyed per contact / user / key id cannot be listed statically, so the
+    /// accessibility migration discovers them here. A locked device returns whatever the
+    /// current class allows; the migration only sets its completion flag when every item it
+    /// found was re-added, and it runs in the foreground, so a partial listing just retries.
+    private func accounts(withPrefix prefix: String) -> [String] {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true
+        ]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let items = result as? [[String: Any]] else { return [] }
+
+        return items.compactMap { $0[kSecAttrAccount as String] as? String }
+                    .filter { $0.hasPrefix(prefix) }
+    }
+
     private func save(_ data: Data, forKey key: String, accessible: CFString) -> Bool {
         guard !data.isEmpty else {
             // Treat empty-data saves as deletes to avoid silent Keychain corruption.
