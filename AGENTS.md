@@ -183,5 +183,3 @@ non-obvious choices:
 2. If it constrains future work, add/update `decisions/<slug>.md`.
 3. Patch the affected spec in its domain folder in the **same** session.
 4. Append one line to `~/Code/construct-docs/log.md`: `[YYYY-MM-DD HH:MM] note | <topic>`.
-
-There is no raw/→wiki pipeline anymore — patch docs directly.
