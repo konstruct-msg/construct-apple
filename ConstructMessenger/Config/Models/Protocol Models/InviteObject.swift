@@ -518,7 +518,11 @@ private struct InviteBinaryReader {
     private let data: Data
     private var offset: Int = 0
 
-    init(_ data: Data) { self.data = data }
+    /// Normalises the index origin: this reader counts from 0 and calls `subdata(in:)`, which
+    /// takes absolute indices, so a `Data` slice would trap on the first `take`. Invites arrive
+    /// from QR codes and deep links, so the reader must not depend on how the caller built the
+    /// `Data`. No copy when the input is already zero-origin.
+    init(_ data: Data) { self.data = data.startIndex == 0 ? data : Data(data) }
 
     var isAtEnd: Bool { offset >= data.count }
 

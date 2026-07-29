@@ -281,14 +281,23 @@ struct ProfileShareData: Codable {
         return data
     }
 
-    static func fromBinaryData(_ data: Data) -> ProfileShareData? {
+    static func fromBinaryData(_ raw: Data) -> ProfileShareData? {
+        // This parser indexes from 0, bounds-checks against `count`, and uses `subdata(in:)`,
+        // which takes ABSOLUTE indices. A `Data` slice carries a non-zero `startIndex`, so it
+        // would trap on the first subscript. Normalise the origin once — no copy when the
+        // input is already zero-origin. Same trap documented at MessagePadding.swift:36.
+        // The payload here is peer-controlled decrypted content, so this must not depend on
+        // how the caller happened to build the `Data`.
+        let data = raw.startIndex == 0 ? raw : Data(raw)
         guard data.count > 1, data[0] == binaryVersion else { return nil }
 
         var offset = 1
 
+        // loadUnaligned throughout: these offsets carry no alignment guarantee, and reading a
+        // multi-byte scalar with `load(as:)` off an unaligned address is undefined behaviour.
         func readLenPrefixed() -> Data? {
             guard offset + 2 <= data.count else { return nil }
-            let len = data.subdata(in: offset..<offset+2).withUnsafeBytes { $0.load(as: UInt16.self) }
+            let len = data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt16.self) }
             offset += 2
             guard offset + Int(len) <= data.count else { return nil }
             let bytes = data.subdata(in: offset..<offset+Int(len))
@@ -313,7 +322,7 @@ struct ProfileShareData: Codable {
             let has = data[offset]; offset += 1
             guard has == 1 else { return nil }
             guard offset + 2 <= data.count else { return nil }
-            let len = data.subdata(in: offset..<offset+2).withUnsafeBytes { $0.load(as: UInt16.self) }
+            let len = data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt16.self) }
             offset += 2
             guard offset + Int(len) <= data.count else { return nil }
             let d = data.subdata(in: offset..<offset+Int(len))
@@ -328,8 +337,7 @@ struct ProfileShareData: Codable {
         let avatarMediaType = readOptionalLenPrefixedString()
 
         guard offset + 8 <= data.count else { return nil }
-        let tsData = data.subdata(in: offset..<offset+8)
-        let timestamp = tsData.withUnsafeBytes { $0.load(as: Int64.self) }
+        let timestamp = data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: Int64.self) }
         offset += 8
 
         return ProfileShareData(

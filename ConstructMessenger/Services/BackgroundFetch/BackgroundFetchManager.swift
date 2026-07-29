@@ -275,6 +275,16 @@ class BackgroundFetchManager: NSObject {
         
         // Process messages in background context
         backgroundContext.perform {
+            // This block hops to the main queue *synchronously* several times below: the Rust
+            // crypto core and ChunkedMessageReassembler are @MainActor, so the batch decrypt
+            // has to run there. That is only safe while the main thread is not itself waiting
+            // on this context — it never is, because `backgroundContext` is created per fetch
+            // and its reference never escapes this call. Assert it in development rather than
+            // let a future `performAndWait` from main turn the hop into a silent deadlock
+            // inside a BGAppRefreshTask, where the failure would look like a random expiry.
+            #if DEBUG
+            dispatchPrecondition(condition: .notOnQueue(.main))
+            #endif
             var newMessagesCount = 0
             var messagesByChat: [String: [ChatMessage]] = [:]
             var chatUserIds: [String: String] = [:] // chatId -> userId

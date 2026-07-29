@@ -238,14 +238,26 @@ final class LocalBackupService {
         return Data(bytes: &le, count: 8)
     }
 
+    /// Reads one `[8]length LE ‖ [length]payload` record at `offset` (relative to the start of
+    /// `data`) and returns the payload plus the offset just past it.
+    ///
+    /// `data` comes from an imported backup file or from a Nearby transfer peer, so the length
+    /// prefix is untrusted. Every bound is checked in `UInt64` before anything is narrowed:
+    /// `Int(UInt64)` traps above `Int.max`, and `offset + 8 + length` can overflow `Int` — both
+    /// would happen *before* a naive `end <= data.count` check could reject the record.
     private func readLengthPrefixed(from data: Data, at offset: Int) throws -> (Data, Int) {
-        guard offset + 8 <= data.count else { throw BackupError.invalidFile }
-        let length = Int(UInt64(littleEndian: data[offset ..< offset + 8].withUnsafeBytes {
-            $0.load(as: UInt64.self)
-        }))
-        let end = offset + 8 + length
-        guard end <= data.count else { throw BackupError.invalidFile }
-        return (data[offset + 8 ..< end], end)
+        guard offset >= 0, offset <= data.count - 8 else { throw BackupError.invalidFile }
+
+        // loadUnaligned: `offset` carries no alignment guarantee.
+        let length = data.withUnsafeBytes {
+            $0.loadUnaligned(fromByteOffset: offset, as: UInt64.self).littleEndian
+        }
+        let available = UInt64(data.count - offset - 8)
+        guard length <= available else { throw BackupError.invalidFile }
+
+        // Anchor to startIndex — `data` may be a slice, whose indices are absolute.
+        let start = data.startIndex + offset + 8
+        return (data[start ..< start + Int(length)], offset + 8 + Int(length))
     }
 }
 
