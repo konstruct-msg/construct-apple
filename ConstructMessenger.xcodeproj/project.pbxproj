@@ -1344,8 +1344,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/argmaxinc/argmax-oss-swift";
 			requirement = {
-				branch = main;
-				kind = branch;
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
 			};
 		};
 		BFCB6D912F7C4C4800C59B83 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
