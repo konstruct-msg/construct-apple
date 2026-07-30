@@ -264,6 +264,9 @@ final class ChatSendCoordinator {
             msg.isSentByMe = true
             msg.chat = chat
             msg.applyStoredEncryption(plaintext: queued.text, contactId: recipientId)
+            // These rows bypass MessagePersistenceService, so the preview needs advancing here
+            // too — otherwise the list keeps showing an older message than the transcript does.
+            chat.applyPreview(text: queued.text, timestamp: queued.timestamp)
         }
         viewContext.saveAndLog()
         queuedMessages.removeAll()

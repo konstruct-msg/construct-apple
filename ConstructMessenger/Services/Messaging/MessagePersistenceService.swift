@@ -313,18 +313,9 @@ class MessagePersistenceService {
         lastMessageTime: Date,
         in context: NSManagedObjectContext
     ) throws {
-        // Only update if this message is newer than current last message
-        if let currentLastTime = chat.lastMessageTime {
-            guard lastMessageTime > currentLastTime else {
-                Log.debug("Skipping chat metadata update - message is older", category: "MessagePersistence")
-                return
-            }
-        }
-        
-        chat.lastMessageText = Chat.formatPreviewText(lastMessageText)
-        chat.lastMessageTime = lastMessageTime
+        chat.applyPreview(text: lastMessageText, timestamp: lastMessageTime)
         try context.save()
-        
+
         Log.debug("Updated chat.lastMessageText and lastMessageTime", category: "MessagePersistence")
     }
     
@@ -422,12 +413,10 @@ class MessagePersistenceService {
         fetchRequest.fetchLimit = 1
         
         if let lastMessage = try context.fetch(fetchRequest).first {
-            chat.lastMessageText = Chat.formatPreviewText(lastMessage.displayText)
-            chat.lastMessageTime = lastMessage.timestamp
+            // Recomputed from what survives — this is the one case that may move backwards.
+            chat.applyPreview(text: lastMessage.displayText, timestamp: lastMessage.timestamp, force: true)
         } else {
-            // No messages left, clear metadata
-            chat.lastMessageText = nil
-            chat.lastMessageTime = nil
+            chat.clearPreview()
         }
         
         try context.save()

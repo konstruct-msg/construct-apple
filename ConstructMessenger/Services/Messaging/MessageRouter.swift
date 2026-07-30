@@ -1458,9 +1458,8 @@ final class MessageRouter {
 
         message.applyStoredEncryption(plaintext: text, contactId: userId)
         
-        chat.lastMessageText = Chat.formatPreviewText(text)
-        chat.lastMessageTime = Date()
-        
+        chat.applyPreview(text: text, timestamp: message.timestamp)
+
         do {
             try context.saveOrThrow(category: "MessageRouter")
             Log.debug("System message added to chat with \(userId)", category: "MessageRouter")
@@ -1512,16 +1511,14 @@ final class MessageRouter {
                 if !existingMessage.hasDecryptedContent {
                     Log.debug("Updating decrypted content for message \(canonicalId)", category: "MessageRouter")
                     existingMessage.applyStoredEncryption(plaintextData: storagePayload, contactId: messageData.from)
-                    let preview = Chat.formatPreviewText(previewSource)
-                    if let currentLastTime = chat.lastMessageTime {
-                        if existingMessage.timestamp >= currentLastTime || (chat.lastMessageText ?? "").isEmpty {
-                            chat.lastMessageText = preview
-                            chat.lastMessageTime = existingMessage.timestamp
-                        }
-                    } else {
-                        chat.lastMessageText = preview
-                        chat.lastMessageTime = existingMessage.timestamp
-                    }
+                    // Force when the preview is blank: a message that was stored undecryptable
+                    // left an empty preview behind, and recovering its text must fill that in
+                    // even though a newer message has since moved `lastMessageTime` forward.
+                    chat.applyPreview(
+                        text: previewSource,
+                        timestamp: existingMessage.timestamp,
+                        force: (chat.lastMessageText ?? "").isEmpty
+                    )
                     try context.saveOrThrow(category: "MessageRouter")
                     Log.debug("Updated message decryption", category: "MessageRouter")
                 }
@@ -1574,8 +1571,7 @@ final class MessageRouter {
             }
         }
 
-        chat.lastMessageText = Chat.formatPreviewText(previewSource)
-        chat.lastMessageTime = message.timestamp
+        chat.applyPreview(text: previewSource, timestamp: message.timestamp)
         if InAppNotificationService.shared.activeChatId != chat.id {
             chat.unreadCount += 1
         }
@@ -1799,8 +1795,7 @@ final class MessageRouter {
             MediaWireCodec.storeThumbnails(from: mediaAlbum, for: rowId)
         }
 
-        chat.lastMessageText = Chat.formatPreviewText(previewText)
-        chat.lastMessageTime = msg.timestamp
+        chat.applyPreview(text: previewText, timestamp: msg.timestamp)
         context.saveAndLog()
 
         if !original.senderDeviceId.isEmpty {

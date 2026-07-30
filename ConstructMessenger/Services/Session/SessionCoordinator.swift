@@ -1389,8 +1389,7 @@ final class SessionCoordinator: MessageRouterDelegate {
 
         message.applyStoredEncryption(plaintext: plaintext, contactId: messageData.from)
 
-        chat.lastMessageText = Chat.formatPreviewText(plaintext)
-        chat.lastMessageTime = message.timestamp
+        chat.applyPreview(text: plaintext, timestamp: message.timestamp)
     }
 
     // MARK: - Auto-resend After END_SESSION (sender-side recovery)

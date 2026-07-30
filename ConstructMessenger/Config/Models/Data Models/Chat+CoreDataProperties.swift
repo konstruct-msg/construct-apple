@@ -43,6 +43,40 @@ extension Chat: Identifiable {
 
 }
 
+// MARK: - Conversation Preview
+
+extension Chat {
+    /// Advance the chat-list preview to `text` / `timestamp`.
+    ///
+    /// **The preview must never move backwards.** Messages do not arrive in timestamp order:
+    /// a peer message that sat in the server's offline queue is stored with its *original*
+    /// timestamp long after newer local sends, and background fetch commits whole batches at
+    /// once. Every writer used to assign `lastMessageText` / `lastMessageTime` directly, so one
+    /// late-delivered older message clobbered the preview — the row then showed the peer's stale
+    /// message while the transcript ended with much newer outgoing ones, and it stayed that way
+    /// until the next local send happened to be newer.
+    ///
+    /// `>=` rather than `>`: outgoing timestamps are truncated to whole seconds
+    /// (`UInt64(Date().timeIntervalSince1970)`), so a strict comparison silently drops a message
+    /// sent in the same second as the current preview.
+    ///
+    /// - Parameter force: bypass the ordering check. Only for recomputing the preview from the
+    ///   messages that remain (deletion / clear), which legitimately moves it backwards.
+    func applyPreview(text: String, timestamp: Date, force: Bool = false) {
+        if !force, let current = lastMessageTime, timestamp < current {
+            return
+        }
+        lastMessageText = Chat.formatPreviewText(text)
+        lastMessageTime = timestamp
+    }
+
+    /// Clear the preview — no messages left in the conversation.
+    func clearPreview() {
+        lastMessageText = nil
+        lastMessageTime = nil
+    }
+}
+
 // MARK: - Message Preview Helpers
 extension Chat {
     /// Format message content for chat list preview

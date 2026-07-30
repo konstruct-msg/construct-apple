@@ -589,10 +589,10 @@ class BackgroundFetchManager: NSObject {
             // Apply last-message preview to each chat.
             for (chatId, last) in lastDecryptedByChatId {
                 guard let chat = eligible.first(where: { $0.chatId == chatId })?.chat else { continue }
-                chat.lastMessageText = Chat.formatPreviewText(
-                    last.text.isEmpty ? NSLocalizedString("message_unavailable", comment: "") : last.text
+                chat.applyPreview(
+                    text: last.text.isEmpty ? NSLocalizedString("message_unavailable", comment: "") : last.text,
+                    timestamp: Date(timeIntervalSince1970: TimeInterval(last.timestamp))
                 )
-                chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(last.timestamp))
             }
 
             // Save context — standalone context writes directly to disk.
