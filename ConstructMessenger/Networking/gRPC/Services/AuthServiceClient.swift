@@ -379,14 +379,10 @@ final class AuthServiceClient: Sendable {
             payload.signedPrekeySignature = Data(bundle.signature)
             payload.deviceName = deviceName
             payload.platform = platform
-            // TRANSITIONAL: also populate the deprecated base64 strings so this build keeps
-            // working against an identity-service that predates the bytes fields. Delete these
-            // four lines (and the fields from the proto) once the server rollout is confirmed —
-            // until then they are the only thing making the deploy order irrelevant.
-            payload.identityPublicB64 = Data(bundle.identityPublic).base64EncodedString()
-            payload.verifyingKeyB64 = Data(bundle.verifyingKey).base64EncodedString()
-            payload.signedPrekeyPublicB64 = Data(bundle.signedPrekeyPublic).base64EncodedString()
-            payload.signedPrekeySignatureB64 = Data(bundle.signature).base64EncodedString()
+            // The deprecated `*_b64` string fields are deliberately NOT set: identity-service
+            // has shipped the bytes fields (server 4e4f7f7) and prefers them. It still reads
+            // the strings as a fallback for older builds already in TestFlight, so those keep
+            // working — but nothing new puts base64 on the wire.
 
             _ = try await linkClient.submitJoinRequest(request: .init(message: payload))
         }
