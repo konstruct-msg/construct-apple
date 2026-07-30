@@ -69,14 +69,31 @@ final class SessionQueueWiringTests: XCTestCase {
     private var router: MessageRouter!
     private var delegate: RecordingDelegate!
     private var savedUserId: String?
-    private let me = "me-\(UUID().uuidString)"
+    // ServerUserId space: everything handed to the session layer is a bare 36-char UUID.
+    private let me = UUID().uuidString
 
-    override func setUp() {
-        super.setUp()
+    override func setUpWithError() throws {
+        try super.setUpWithError()
         // MessageRouter reads AuthSessionManager.shared.currentUserId at the top of
         // routeIncomingMessage; set a known local id and restore it afterwards.
         savedUserId = AuthSessionManager.shared.currentUserId
         AuthSessionManager.shared.updateUserId(me)
+
+        // routeIncomingMessage bails out immediately when the crypto core is absent
+        // (`!CryptoManager.shared.isInitialized` → locked-device defer, ccd6ff3a). Without a
+        // core every assertion below silently reads zero, which is how these tests rotted
+        // undetected. Bootstrap a real core so the disposition wiring is actually reached.
+        // Order matters: reloadCoreFromKeychain refuses to build a core until the local user
+        // id is cached, since that id is the Double Ratchet AAD binding.
+        if !CryptoManager.shared.isInitialized {
+            CryptoManager.shared.setLocalUserId(me)
+            _ = try CryptoManager.shared.generateRegistrationBundle()
+            CryptoManager.shared.reloadCoreFromKeychain()
+        }
+        XCTAssertTrue(
+            CryptoManager.shared.isInitialized,
+            "Crypto core failed to bootstrap — MessageRouter would defer every incoming message and every assertion below would vacuously read zero"
+        )
 
         context = PersistenceController(inMemory: true).container.viewContext
         router = MessageRouter()
@@ -112,7 +129,7 @@ final class SessionQueueWiringTests: XCTestCase {
     // MARK: - MessageRouter disposition wiring
 
     func testFirstMessageUnknownPeer_QueuedOnce_BundleRequestedOnce() {
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
 
         router.routeIncomingMessage(incoming(from: peer, msgNum: 0), in: context)
 
@@ -122,7 +139,7 @@ final class SessionQueueWiringTests: XCTestCase {
     }
 
     func testBurstBeforeInit_AllQueued_BundleRequestedExactlyOnce() {
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
 
         router.routeIncomingMessage(incoming(from: peer, msgNum: 0), in: context)
         router.routeIncomingMessage(incoming(from: peer, msgNum: 1), in: context)
@@ -134,7 +151,7 @@ final class SessionQueueWiringTests: XCTestCase {
     }
 
     func testMidRatchetFirstMessage_RequestsEndSession_NotQueued() {
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
 
         // No session AND messageNumber>0 as the first message: cannot init from a mid-ratchet
         // message → the protective guard asks the sender to restart (END_SESSION). It must NOT
@@ -147,7 +164,7 @@ final class SessionQueueWiringTests: XCTestCase {
     }
 
     func testDuplicateMessageId_NotEnqueuedTwice() {
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
         let dup = incoming(from: peer, msgNum: 0)
 
         router.routeIncomingMessage(dup, in: context)
@@ -158,8 +175,8 @@ final class SessionQueueWiringTests: XCTestCase {
     }
 
     func testTwoPeers_Isolated() {
-        let alice = "alice-\(UUID().uuidString)"
-        let bob   = "bob-\(UUID().uuidString)"
+        let alice = UUID().uuidString
+        let bob   = UUID().uuidString
 
         router.routeIncomingMessage(incoming(from: alice, msgNum: 0), in: context)
         router.routeIncomingMessage(incoming(from: bob, msgNum: 0), in: context)
@@ -175,7 +192,7 @@ final class SessionQueueWiringTests: XCTestCase {
 
     func testQueue_DrainIsFIFO_SoSkippingFirstDropsTheInitCarrier() {
         let q = PendingSessionQueue()
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
         let m0 = incoming(from: peer, msgNum: 0)   // the X3DH init carrier
         let m1 = incoming(from: peer, msgNum: 1)
         let m2 = incoming(from: peer, msgNum: 2)
@@ -194,7 +211,7 @@ final class SessionQueueWiringTests: XCTestCase {
 
     func testQueue_RemoveClearsWithoutReturning() {
         let q = PendingSessionQueue()
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
         _ = q.enqueue(incoming(from: peer, msgNum: 0), for: peer)
         _ = q.enqueue(incoming(from: peer, msgNum: 1), for: peer)
 
@@ -206,7 +223,7 @@ final class SessionQueueWiringTests: XCTestCase {
 
     func testQueue_RespectsPerUserCap() {
         let q = PendingSessionQueue()
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
         // Cap is 100; the 101st enqueue is rejected (isInitInFlight stays meaningful).
         for i in 0..<100 {
             XCTAssertTrue(q.enqueue(incoming(from: peer, msgNum: UInt32(i)), for: peer))

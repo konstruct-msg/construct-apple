@@ -2,6 +2,20 @@ import XCTest
 @testable import Construct_Messenger
 
 final class ConnectionLoopTests: XCTestCase {
+
+    /// Polls until the router settles in `.veilActive`. Needed because `requestProxyStart`
+    /// is applied as an async follow-up off the router actor, so `send` returns before the
+    /// proxy has reported back. Returns false on timeout so the caller can fail loudly
+    /// instead of asserting against a half-applied transition.
+    private func waitForVeilActive(_ router: TransportRouter, timeout: TimeInterval = 2) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if case .veilActive = await router.snapshot().state { return true }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return false
+    }
+
     override func setUp() {
         super.setUp()
         VeilProxyStore.saveMode(.auto)
@@ -179,6 +193,14 @@ final class ConnectionLoopTests: XCTestCase {
 
         await router.send(.rpcFailed(kind: .transportUnknown, via: .direct(.h2), foreground: true))
         await router.send(.rpcFailed(kind: .transportUnknown, via: .direct(.h2), foreground: true))
+
+        // Proxy start is an async follow-up off the router actor (6e86300a — the FSM must
+        // stay responsive during a probe), so `send` returns while the state is still
+        // .veilProbing. De-escalation is guarded on .veilActive, so the success has to
+        // arrive after proxyStarted lands — which is also the real ordering on device.
+        let reachedActive = await waitForVeilActive(router)
+        XCTAssertTrue(reachedActive, "Router never reached .veilActive — proxy start did not land")
+
         await router.send(.rpcSucceeded(via: .direct(.h2), latencyMs: 50))
 
         let snapshot = await router.snapshot()
