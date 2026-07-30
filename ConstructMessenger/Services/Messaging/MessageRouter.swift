@@ -1542,7 +1542,7 @@ final class MessageRouter {
         message.fromUserId = messageData.from
         message.toUserId = messageData.to
         message.contentType = .regular
-        message.timestamp = Date(timeIntervalSince1970: TimeInterval(messageData.timestamp))
+        message.timestamp = Date.fromRemoteTimestamp(messageData.timestamp)
         message.isSentByMe = false
         message.deliveryStatus = .delivered
         message.retryCount = 0
@@ -1784,7 +1784,7 @@ final class MessageRouter {
         msg.id = rowId
         msg.fromUserId = original.from
         msg.toUserId = partnerUserId
-        msg.timestamp = Date(timeIntervalSince1970: TimeInterval(original.timestamp))
+        msg.timestamp = Date.fromRemoteTimestamp(original.timestamp)
         msg.isSentByMe = true
         msg.deliveryStatus = .sent
         msg.retryCount = 0

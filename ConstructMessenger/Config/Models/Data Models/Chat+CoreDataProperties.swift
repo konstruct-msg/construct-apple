@@ -64,6 +64,15 @@ extension Chat {
     ///   messages that remain (deletion / clear), which legitimately moves it backwards.
     func applyPreview(text: String, timestamp: Date, force: Bool = false) {
         if !force, let current = lastMessageTime, timestamp < current {
+            // Refusals were silent, which made a stuck row undiagnosable: the logs showed
+            // the message being received and saved, and simply nothing about the preview.
+            // Ordinary out-of-order delivery lands here too, so this is debug-level — but
+            // a *large* gap means `lastMessageTime` is ahead of real traffic, which after
+            // the remote-timestamp clamp should no longer be reachable.
+            Log.debug(
+                "Preview not advanced for \(id.prefix(8))… — incoming ts is \(Int(current.timeIntervalSince(timestamp)))s older than the current preview",
+                category: "Chat"
+            )
             return
         }
         lastMessageText = Chat.formatPreviewText(text)

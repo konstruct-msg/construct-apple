@@ -113,3 +113,62 @@ final class ChatPreviewOrderingTests: XCTestCase {
         XCTAssertEqual(chat.lastMessageText, "")
     }
 }
+
+// MARK: - Remote timestamp clamping
+//
+// The ordering guard above has a sharp edge: a timestamp in the FUTURE freezes the row
+// permanently, because every later message — local or remote — is then "older" and refused.
+// Before the guard existed this was self-correcting (the next writer simply overwrote it), so
+// the guard converted a transient wrong preview into a permanent one. Remote timestamps are
+// skew- and sender-controlled, so they are clamped at ingestion.
+extension ChatPreviewOrderingTests {
+
+    func testRemoteTimestampInTheFutureIsClampedToNow() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let threeHoursAhead = UInt64(now.addingTimeInterval(3 * 3600).timeIntervalSince1970)
+
+        let clamped = Date.fromRemoteTimestamp(threeHoursAhead, now: now)
+
+        XCTAssertEqual(clamped, now, "A message cannot have been sent after we received it")
+    }
+
+    func testRemoteTimestampInThePastIsLeftAlone() {
+        // Legitimate: anything that sat in the server's offline queue keeps its original time.
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let twoDaysAgo = now.addingTimeInterval(-2 * 86_400)
+
+        let clamped = Date.fromRemoteTimestamp(UInt64(twoDaysAgo.timeIntervalSince1970), now: now)
+
+        XCTAssertEqual(clamped.timeIntervalSince1970, twoDaysAgo.timeIntervalSince1970, accuracy: 1)
+    }
+
+    func testClampingKeepsLaterMessagesAbleToAdvanceThePreview() {
+        // The end-to-end property that was broken: a peer with a fast clock must not be able
+        // to freeze the row against every subsequent message.
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let chat = makeChat()
+
+        let skewed = Date.fromRemoteTimestamp(
+            UInt64(now.addingTimeInterval(3 * 3600).timeIntervalSince1970),
+            now: now
+        )
+        chat.applyPreview(text: "from a peer whose clock is ahead", timestamp: skewed)
+
+        // A local send one second later must still win.
+        chat.applyPreview(text: "my newer reply", timestamp: now.addingTimeInterval(1))
+
+        XCTAssertEqual(chat.lastMessageText, "my newer reply")
+    }
+
+    func testUnclampedFutureTimestampWouldFreezeTheRow() {
+        // Pins the exact failure the clamp exists to prevent — if this ever passes with the
+        // newer text, the ordering guard has been weakened rather than the clamp fixed.
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let chat = makeChat()
+
+        chat.applyPreview(text: "future", timestamp: now.addingTimeInterval(3 * 3600))
+        chat.applyPreview(text: "my newer reply", timestamp: now.addingTimeInterval(1))
+
+        XCTAssertEqual(chat.lastMessageText, "future", "guard still refuses to move backwards")
+    }
+}

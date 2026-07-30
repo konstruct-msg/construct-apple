@@ -573,7 +573,7 @@ class BackgroundFetchManager: NSObject {
                 message.fromUserId = item.messageData.from
                 message.toUserId = item.messageData.to
                 message.contentType = .regular
-                message.timestamp = Date(timeIntervalSince1970: TimeInterval(item.messageData.timestamp))
+                message.timestamp = Date.fromRemoteTimestamp(item.messageData.timestamp)
                 message.isSentByMe = false
                 message.deliveryStatus = .delivered
                 message.retryCount = 0
