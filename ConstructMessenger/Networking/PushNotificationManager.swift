@@ -240,6 +240,15 @@ class PushNotificationManager: NSObject {
             Log.info("Device token registration deferred — no session yet", category: "Push")
             return
         }
+        // Registering without a device id is worse than not registering: the server keys
+        // the row on the token instead of the device, so it becomes a duplicate that no
+        // later per-device registration can replace, and it lives until APNs rejects it —
+        // at which point the sender deletes tokens. Retried on the next foreground, which
+        // re-registers unconditionally.
+        guard KeychainManager.shared.loadDeviceID()?.isEmpty == false else {
+            Log.info("Device token registration deferred — device id not available yet", category: "Push")
+            return
+        }
         for attempt in 0..<3 {
             do {
                 Log.info("Registering device token with server", category: "Push")

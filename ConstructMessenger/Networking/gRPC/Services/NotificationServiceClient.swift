@@ -11,6 +11,23 @@ import GRPCCore
 import GRPCNIOTransportHTTP2
 
 
+/// Why registration could not be attempted, as opposed to why it failed.
+enum PushRegistrationError: Error, LocalizedError {
+    /// No device id in the Keychain yet. Registering anyway used to send an empty
+    /// `device_id`, which the server maps to NULL and then upserts on
+    /// `(user_id, device_token_hash)` instead of `(user_id, device_id)` — creating a row
+    /// that per-device registrations can never replace. It survives as a duplicate until
+    /// APNs rejects it, and the sender deletes tokens on rejection.
+    case deviceIdUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .deviceIdUnavailable:
+            return "Device identity is not available yet"
+        }
+    }
+}
+
 final class NotificationServiceClient: Sendable {
     static let shared = NotificationServiceClient()
 
@@ -56,7 +73,12 @@ final class NotificationServiceClient: Sendable {
     /// Registers (or updates) the APNs push token with the server.
     /// Uses NotificationService.RegisterDeviceToken (canonical push endpoint).
     func registerDeviceToken(token: String) async throws -> DeviceTokenResponse {
-        let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+        // Never fall back to "": an empty device_id is not "unknown device", it is a
+        // different upsert key on the server. Fail here and let the caller retry once the
+        // identity exists.
+        guard let deviceId = KeychainManager.shared.loadDeviceID(), !deviceId.isEmpty else {
+            throw PushRegistrationError.deviceIdUnavailable
+        }
 
         let environment = pushEnvironment
 
@@ -87,7 +109,12 @@ final class NotificationServiceClient: Sendable {
 
     /// Registers (or updates) the APNs VoIP token (PushKit) used for incoming calls.
     func registerVoipToken(voipToken: String) async throws -> Bool {
-        let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+        // Never fall back to "": an empty device_id is not "unknown device", it is a
+        // different upsert key on the server. Fail here and let the caller retry once the
+        // identity exists.
+        guard let deviceId = KeychainManager.shared.loadDeviceID(), !deviceId.isEmpty else {
+            throw PushRegistrationError.deviceIdUnavailable
+        }
         let environment = pushEnvironment
 
         return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.registerVoipToken) { grpcClient in
@@ -106,7 +133,12 @@ final class NotificationServiceClient: Sendable {
 
     /// Removes the VoIP token (typically on logout or PushKit token invalidation).
     func unregisterVoipToken() async throws {
-        let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+        // Never fall back to "": an empty device_id is not "unknown device", it is a
+        // different upsert key on the server. Fail here and let the caller retry once the
+        // identity exists.
+        guard let deviceId = KeychainManager.shared.loadDeviceID(), !deviceId.isEmpty else {
+            throw PushRegistrationError.deviceIdUnavailable
+        }
 
         try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.unregisterVoipToken) { grpcClient in
             let client = Shared_Proto_Services_V1_NotificationService.Client(wrapping: grpcClient)
