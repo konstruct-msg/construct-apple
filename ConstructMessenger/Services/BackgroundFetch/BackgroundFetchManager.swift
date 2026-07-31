@@ -528,7 +528,7 @@ class BackgroundFetchManager: NSObject {
                             original.applyStoredEncryption(plaintext: newT, contactId: item.messageData.from)
                         }
                         original.isEdited = true
-                        original.editedAt = Date(timeIntervalSince1970: TimeInterval(item.messageData.timestamp))
+                        original.editedAt = Date.fromRemoteTimestamp(item.messageData.timestamp)
                         Log.info("BG fetch: applied modern edit to \(targetID.prefix(8))…", category: "BackgroundFetch")
                     } else {
                         Log.error("BG fetch: original message to modern-edit not found: \(targetID.prefix(8))…", category: "BackgroundFetch")
@@ -591,7 +591,7 @@ class BackgroundFetchManager: NSObject {
                 guard let chat = eligible.first(where: { $0.chatId == chatId })?.chat else { continue }
                 chat.applyPreview(
                     text: last.text.isEmpty ? NSLocalizedString("message_unavailable", comment: "") : last.text,
-                    timestamp: Date(timeIntervalSince1970: TimeInterval(last.timestamp))
+                    timestamp: Date.fromRemoteTimestamp(last.timestamp)
                 )
             }
 

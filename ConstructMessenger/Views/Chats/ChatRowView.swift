@@ -21,13 +21,35 @@ struct ChatRowView: View {
         }
     }
 
-    static let rowTimeFormatter: DateFormatter = {
+    private static let rowTimeFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.doesRelativeDateFormatting = true
         f.dateStyle = .none
         f.timeStyle = .short
         return f
     }()
+
+    /// Short date for rows that are not from today — "Вчера" / "Yesterday" where the
+    /// system offers it, otherwise a numeric date.
+    private static let rowDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.doesRelativeDateFormatting = true
+        f.dateStyle = .short
+        f.timeStyle = .none
+        return f
+    }()
+
+    /// Time for today's rows, date for everything older.
+    ///
+    /// It used to be time-only for every row: `doesRelativeDateFormatting` is a no-op when
+    /// `dateStyle == .none`, so a week-old conversation and one from a minute ago rendered
+    /// as identical bare clock times — and a row stamped with a *future* time looked
+    /// completely ordinary, which is part of why a frozen preview was so hard to spot.
+    static func rowTimestampText(_ date: Date, now: Date = Date()) -> String {
+        if Calendar.current.isDate(date, inSameDayAs: now) {
+            return rowTimeFormatter.string(from: date)
+        }
+        return rowDateFormatter.string(from: date)
+    }
 }
 
 // MARK: - Row body
@@ -105,7 +127,7 @@ private struct ChatRowLayout: View {
                     Spacer(minLength: 4)
 
                     if let ts = chat.lastMessageTime {
-                        Text(ts, formatter: ChatRowView.rowTimeFormatter)
+                        Text(ChatRowView.rowTimestampText(ts))
                             .font(CTFont.regular(11))
                             .foregroundColor(Color.CT.textDim)
                             .lineLimit(1)
