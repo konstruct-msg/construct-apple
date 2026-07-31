@@ -14,12 +14,17 @@ import UIKit
 struct QueuedMessage {
     let text: String
     let attachments: [MediaAttachment]
+    /// Picked file URLs. Must be carried alongside `attachments`: a send queued while the
+    /// session initialises is replayed through `sendMessage`, and anything this struct drops
+    /// is dropped silently — the caption arrives, the files never do.
+    let fileURLs: [URL]
     let replyTo: Message?
     let timestamp: Date
 
-    init(text: String, attachments: [MediaAttachment] = [], replyTo: Message? = nil) {
+    init(text: String, attachments: [MediaAttachment] = [], fileURLs: [URL] = [], replyTo: Message? = nil) {
         self.text = text
         self.attachments = attachments
+        self.fileURLs = fileURLs
         self.replyTo = replyTo
         self.timestamp = Date()
     }
@@ -116,7 +121,7 @@ final class ChatSendCoordinator {
         let hasSession = CryptoManager.shared.hasSession(for: recipientId)
 
         if !hasSession {
-            let queued = QueuedMessage(text: text, attachments: attachments, replyTo: replyTo)
+            let queued = QueuedMessage(text: text, attachments: attachments, fileURLs: fileURLs, replyTo: replyTo)
             queuedMessages.append(queued)
             viewModel?.isInitializingSession = true
             Log.info("SESSION_STATE[queue_message]: userId=\(recipientId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
@@ -158,7 +163,7 @@ final class ChatSendCoordinator {
             guard let self else { return }
             let ok = await SessionActivityTracker.shared.preflight(for: recipientId)
             guard ok else {
-                let queued = QueuedMessage(text: text, attachments: attachments, replyTo: replyTo)
+                let queued = QueuedMessage(text: text, attachments: attachments, fileURLs: fileURLs, replyTo: replyTo)
                 self.queuedMessages.append(queued)
                 self.viewModel?.isInitializingSession = true
                 Log.info("Pre-flight failed — message queued, triggering proactive reinit for \(recipientId.prefix(8))…", category: "ChatViewModel")
@@ -241,7 +246,12 @@ final class ChatSendCoordinator {
         queuedMessages.removeAll()
         for queued in messagesToSend {
             Log.info("Sending queued message: \"\(queued.text.prefix(30))\"", category: "ChatViewModel")
-            sendMessage(text: queued.text, attachments: queued.attachments, replyTo: queued.replyTo)
+            sendMessage(
+                text: queued.text,
+                attachments: queued.attachments,
+                fileURLs: queued.fileURLs,
+                replyTo: queued.replyTo
+            )
         }
     }
 
@@ -297,10 +307,8 @@ final class ChatSendCoordinator {
     ) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = AuthSessionManager.shared.currentUserId else {
-            viewModel?.isSending = false
             return
         }
-        viewModel?.isSending = true
         do {
             let messageId = UUID().uuidString.lowercased()
             let plaintextData: Data
@@ -316,14 +324,12 @@ final class ChatSendCoordinator {
                 content.text = textMsg
                 guard let d = try? content.serializedData(), !d.isEmpty else {
                     Log.error("Failed to serialize MessageContent proto", category: "ChatViewModel")
-                    viewModel?.isSending = false
                     return
                 }
                 plaintextData = d
             }
             guard !plaintextData.isEmpty else {
                 Log.error("Empty wire plaintext", category: "ChatViewModel")
-                viewModel?.isSending = false
                 return
             }
             let plan = ChunkedMessageSender.shared.buildPlan(
@@ -332,7 +338,6 @@ final class ChatSendCoordinator {
             )
             guard !plan.payloads.isEmpty else {
                 Log.error("Message too large to send", category: "ChatViewModel")
-                viewModel?.isSending = false
                 ErrorRouter.shared.report(.validation(.textTooLarge(currentSize: text.count, maxSize: MessageSizeLimits.maxTextCharacters)))
                 return
             }
@@ -441,14 +446,12 @@ final class ChatSendCoordinator {
                     }
                     Log.info("Message sent via gRPC: \(messageId) status=\(aggregated.status)\(ecStr)\(traceTag)", category: "ChatViewModel")
                     SessionActivityTracker.shared.recordActivity(for: recipientId)
-                    self.viewModel?.isSending = false
                 } catch let blocked as StealthDowngradeBlocked {
                     // Stealth on but could not seal — NEVER downgrade to identified. Queue and nudge
                     // the recipient bundle/IK so a later retry can seal.
                     Log.info("Stealth: send blocked (\(blocked.reason)) — queueing \(messageId.prefix(8))…, will retry when sealable", category: "ChatViewModel")
                     self.updateMessageStatus(messageId: messageId, status: .queued)
                     SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
-                    self.viewModel?.isSending = false
                 } catch {
                     let isRetryableTransportFailure: Bool = {
                         if let rpcError = error as? RPCError {
@@ -481,28 +484,24 @@ final class ChatSendCoordinator {
                             self?.sendTextMessage(text: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: localThumbnails)
                         })
                     }
-                    self.viewModel?.isSending = false
                 }
             }
         } catch {
             if case CryptoManagerError.coreNotInitialized = error {
                 Log.error("coreNotInitialized in sendTextMessage — OrchestratorCore missing, not retrying", category: "ChatViewModel")
                 ErrorRouter.shared.report(error)
-                viewModel?.isSending = false
                 return
             }
             Log.debug("Encryption failed, session was deleted. Reinitializing...", category: "ChatViewModel")
             guard let toUserId = chat.otherUser?.id else {
                 ErrorRouter.shared.report(error)
                 Log.error("Failed to encrypt message: \(error.localizedDescription)", category: "ChatViewModel")
-                viewModel?.isSending = false
                 return
             }
             viewModel?.isSessionReady = false
             let queued = QueuedMessage(text: text, attachments: [], replyTo: replyTo)
             queuedMessages.append(queued)
             viewModel?.isInitializingSession = true
-            viewModel?.isSending = false
             Log.info("Message queued for retry after session reinitialization", category: "ChatViewModel")
             Task { [weak self] in await self?.sessionManager.initializeSessionProactively(userId: toUserId) }
         }
@@ -523,13 +522,20 @@ final class ChatSendCoordinator {
             return
         }
         let placeholderId = UUID().uuidString
-        let thumbnail: Data? = attachments.first?.displayImage.flatMap { MediaManager.shared.generateThumbnail(from: $0) }
+        // One placeholder cell per attachment: the album grid the send will become, visible
+        // from the first frame rather than after the upload finishes.
+        let placeholderItems = attachments.map { attachment in
+            MessagePersistenceService.UploadPlaceholderItem(
+                thumbnail: attachment.displayImage.flatMap { MediaManager.shared.generateThumbnail(from: $0) },
+                mimeType: attachment.mimeType
+            )
+        }
         persistenceService.savePlaceholderMessage(
             id: placeholderId,
             fromUserId: currentUserId,
             toUserId: recipientId,
             caption: caption,
-            thumbnail: thumbnail,
+            items: placeholderItems,
             replyTo: replyTo,
             replyToContentOverride: replyToContentOverride,
             chat: chat,
@@ -537,7 +543,6 @@ final class ChatSendCoordinator {
         )
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
             attachments: attachments, fileURLs: [], caption: caption, replyTo: replyTo)
-        viewModel?.isSending = true
         MediaUploadProgressTracker.shared.set(0, for: placeholderId)
         Log.info("Uploading \(attachments.count) image(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
         Task { [weak self] in
@@ -581,7 +586,6 @@ final class ChatSendCoordinator {
                     AppError.mediaUploadFailed(error.localizedDescription),
                     recovery: { [weak self] in self?.retryMessage_byId(placeholderId) }
                 )
-                viewModel?.isSending = false
             }
         }
     }
@@ -602,7 +606,6 @@ final class ChatSendCoordinator {
             chat: chat,
             in: viewContext
         )
-        viewModel?.isSending = true
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -625,7 +628,6 @@ final class ChatSendCoordinator {
                 Log.error("Voice upload failed: \(error.localizedDescription)", category: "ChatViewModel")
                 updateMessageStatus(messageId: placeholderId, status: .failed)
                 ErrorRouter.shared.report(AppError.mediaUploadFailed(error.localizedDescription))
-                viewModel?.isSending = false
             }
         }
     }
@@ -638,7 +640,6 @@ final class ChatSendCoordinator {
     ) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = AuthSessionManager.shared.currentUserId else {
-            viewModel?.isSending = false
             return
         }
         let placeholderId = UUID().uuidString
@@ -647,7 +648,7 @@ final class ChatSendCoordinator {
             fromUserId: currentUserId,
             toUserId: recipientId,
             caption: caption.isEmpty ? (fileURLs.first?.lastPathComponent ?? "File") : caption,
-            thumbnail: nil,
+            items: [MessagePersistenceService.UploadPlaceholderItem()],
             replyTo: replyTo,
             replyToContentOverride: replyToContentOverride,
             chat: chat,
@@ -655,7 +656,6 @@ final class ChatSendCoordinator {
         )
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
             attachments: [], fileURLs: fileURLs, caption: caption, replyTo: replyTo)
-        viewModel?.isSending = true
         Log.info("Uploading \(fileURLs.count) file(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
         Task { [weak self] in
             guard let self else { return }
@@ -686,7 +686,6 @@ final class ChatSendCoordinator {
                     AppError.mediaUploadFailed(error.localizedDescription),
                     recovery: { [weak self] in self?.retryMessage_byId(placeholderId) }
                 )
-                viewModel?.isSending = false
             }
         }
     }

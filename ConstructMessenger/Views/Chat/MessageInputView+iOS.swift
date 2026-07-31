@@ -16,7 +16,6 @@ struct IOSMessageInputView: View {
 
     @Binding var text: String
     @Binding var droppedImages: [PlatformImage]
-    let isSending: Bool
     let replyingTo: Message?
     let quoteOverride: String?
     let editingMessage: Message?
@@ -139,7 +138,6 @@ struct IOSMessageInputView: View {
             MessageInputTextBar(
                 text: $text,
                 canSend: canSend,
-                isSending: isSending,
                 onSend: sendMessage,
                 onStartVoice: startVoiceRecording
             )
@@ -236,7 +234,6 @@ struct CameraPickerView: UIViewControllerRepresentable {
         IOSMessageInputView(
             text: $text,
             droppedImages: $dropped,
-            isSending: false,
             replyingTo: nil,
             quoteOverride: nil,
             editingMessage: nil,

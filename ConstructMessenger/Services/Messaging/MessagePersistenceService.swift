@@ -149,26 +149,48 @@ class MessagePersistenceService {
 
     // MARK: - Upload Placeholder
 
+    /// One cell of an upload placeholder: the locally generated thumbnail (when the source
+    /// produced one) and the source MIME type, so a video renders as a video cell rather
+    /// than an empty photo cell while it uploads.
+    struct UploadPlaceholderItem {
+        let thumbnail: Data?
+        let mimeType: String?
+
+        init(thumbnail: Data? = nil, mimeType: String? = nil) {
+            self.thumbnail = thumbnail
+            self.mimeType = mimeType
+        }
+    }
+
     /// Save a "pending upload" placeholder that shows the local thumbnail while media is
     /// being uploaded to the server.  The placeholder carries a special sentinel JSON so
     /// `parseMediaContent` renders it as a media bubble (with local thumbnail) rather than
     /// a raw-text bubble.  Call `deleteMessage` on success and `updateMessageStatus(.failed)`
     /// on failure so the existing retry flow can kick in.
+    ///
+    /// - Parameter items: one entry per attachment being uploaded, so an album shows the
+    ///   grid it will become instead of a single cell that then multiplies. Pass a single
+    ///   empty item for sources with no local preview (files).
     func savePlaceholderMessage(
         id: String,
         fromUserId: String,
         toUserId: String,
         caption: String,
-        thumbnail: Data?,
+        items: [UploadPlaceholderItem],
         replyTo: Message?,
         replyToContentOverride: String? = nil,
         chat: Chat,
         in context: NSManagedObjectContext
     ) {
-        // Sentinel JSON — media array contains a single placeholder entry so that
-        // parseMediaContent() returns non-nil and MediaMessageView is rendered.
+        // Sentinel JSON — every entry is flagged `_placeholder` so parseMediaContent()
+        // returns non-nil, MediaMessageView renders the upload badge, and the gallery
+        // (`ChatView.mediaMessages`) skips the row.
+        let entries = (items.isEmpty ? [UploadPlaceholderItem()] : items).map { item -> String in
+            guard let mime = item.mimeType, !mime.isEmpty else { return #"{"_placeholder":true}"# }
+            return #"{"_placeholder":true,"mediaType":\#(jsonStringLiteral(mime))}"#
+        }
         let placeholderJson = """
-        {"type":"media","caption":\(jsonStringLiteral(caption)),"media":[{"_placeholder":true}]}
+        {"type":"media","caption":\(jsonStringLiteral(caption)),"media":[\(entries.joined(separator: ","))]}
         """
 
         let now = Date()
@@ -176,7 +198,12 @@ class MessagePersistenceService {
         newMessage.id = id.lowercased()
         newMessage.fromUserId = fromUserId
         newMessage.toUserId = toUserId
-        newMessage.contentType = .media
+        // MUST stay `.regular`: `ChatMessageStore`'s FRC filters the transcript on
+        // `contentTypeRaw == 0`, so a `.media` row is fetched by nothing and the bubble
+        // never appears — the upload ran invisibly and the media only showed up once the
+        // real (`.regular`) message replaced the placeholder. `MessageContentType.infer`
+        // deliberately maps media payloads to `.regular` for the same reason.
+        newMessage.contentType = .regular
         newMessage.timestamp = now
         newMessage.isSentByMe = true
         newMessage.deliveryStatus = .sending
@@ -191,8 +218,10 @@ class MessagePersistenceService {
             newMessage.replyToContent = replyText.isEmpty ? nil : replyText
         }
 
-        if let thumb = thumbnail {
-            MediaManager.shared.storeThumbnail(thumb, for: id)
+        for (index, item) in items.enumerated() {
+            if let thumb = item.thumbnail {
+                MediaManager.shared.storeThumbnail(thumb, for: id, at: index)
+            }
         }
 
         context.saveAndLog()
@@ -226,7 +255,9 @@ class MessagePersistenceService {
         newMessage.id = id
         newMessage.fromUserId = fromUserId
         newMessage.toUserId = toUserId
-        newMessage.contentType = .media
+        // `.regular` for the same reason as the media placeholder above — the transcript
+        // FRC only fetches `contentTypeRaw == 0`.
+        newMessage.contentType = .regular
         newMessage.timestamp = now
         newMessage.isSentByMe = true
         newMessage.deliveryStatus = .sending

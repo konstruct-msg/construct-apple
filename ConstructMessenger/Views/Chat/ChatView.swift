@@ -599,7 +599,6 @@ struct ChatView: View {
         IOSMessageInputView(
             text: $messageText,
             droppedImages: $chatDropImages,
-            isSending: viewModel.isSending,
             replyingTo: replyingTo,
             quoteOverride: replyQuoteText,
             editingMessage: viewModel.editingMessage,

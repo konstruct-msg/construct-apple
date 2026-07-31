@@ -15,7 +15,6 @@ struct DesktopMessageInputView: View {
     @Binding var text: String
     @Binding var droppedImages: [PlatformImage]
     @Binding var droppedFileURLs: [URL]
-    let isSending: Bool
     let replyingTo: Message?
     let quoteOverride: String?
     let editingMessage: Message?
@@ -130,7 +129,6 @@ struct DesktopMessageInputView: View {
             MessageInputTextBar(
                 text: $text,
                 canSend: canSend,
-                isSending: isSending,
                 onSend: sendMessage,
                 onStartVoice: startVoiceRecording
             )
@@ -290,7 +288,6 @@ struct DesktopMessageInputView: View {
             text: $text,
             droppedImages: $dropped,
             droppedFileURLs: .constant([]),
-            isSending: false,
             replyingTo: nil,
             quoteOverride: nil,
             editingMessage: nil,
@@ -313,7 +310,6 @@ struct DesktopMessageInputView: View {
             text: $text,
             droppedImages: $dropped,
             droppedFileURLs: .constant([]),
-            isSending: false,
             replyingTo: nil,
             quoteOverride: nil,
             editingMessage: nil,

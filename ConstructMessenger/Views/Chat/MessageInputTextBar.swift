@@ -13,7 +13,6 @@ import Combine
 struct MessageInputTextBar: View {
     @Binding var text: String
     let canSend: Bool
-    let isSending: Bool
     let onSend: () -> Void
     let onStartVoice: (() -> Void)?     // nil on macOS
 
@@ -92,6 +91,12 @@ struct MessageInputTextBar: View {
 
     // MARK: - Send button
 
+    /// Always live while there is something to send. It used to be disabled for the whole
+    /// duration of an in-flight send — which on a media send is the entire upload, so the
+    /// composer went dead for minutes with nothing on screen explaining why. Send progress
+    /// belongs on the message: the upload placeholder shows a percentage badge and the
+    /// bubble carries its delivery status. Concurrent sends are safe — each one owns its
+    /// message id and its own task.
     @ViewBuilder
     private var sendButton: some View {
         if canSend {
@@ -106,7 +111,6 @@ struct MessageInputTextBar: View {
                     #endif
             }
             .buttonStyle(.plain)
-            .disabled(isSending)
             .transition(.scale.combined(with: .opacity))
         }
     }
@@ -137,7 +141,6 @@ struct MessageInputTextBar: View {
         MessageInputTextBar(
             text: .constant(""),
             canSend: false,
-            isSending: false,
             onSend: {},
             onStartVoice: {}
         )
@@ -152,7 +155,6 @@ struct MessageInputTextBar: View {
         MessageInputTextBar(
             text: .constant("Hello there!"),
             canSend: true,
-            isSending: false,
             onSend: {},
             onStartVoice: {}
         )

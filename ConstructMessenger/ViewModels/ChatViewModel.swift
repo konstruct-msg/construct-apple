@@ -16,7 +16,6 @@ class ChatViewModel {
     // MARK: - UI state
 
     var messages: [Message] = []
-    var isSending = false
     var isLoadingMore = false
     var hasMoreMessages = true
     var editingMessage: Message?
