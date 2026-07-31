@@ -34,7 +34,7 @@ struct MessageBubbleRegularView: View {
     /// Tap on the in-bubble reply strip — parent jump + soft focus.
     let onJumpToReply: ((Message) -> Void)?
 
-    @State private var swipeOffset: CGFloat = 0
+    @GestureState private var swipeOffset: CGFloat = 0
     @State private var isTranscribingVoice = false
 
     var body: some View {
@@ -290,6 +290,9 @@ struct MessageBubbleRegularView: View {
                 }
             }
             .offset(x: swipeOffset)
+            // Tracks the finger closely while dragging and springs home on release —
+            // `@GestureState` resets instantly, so the animation has to live here.
+            .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.8), value: swipeOffset)
             .gesture(swipeToReplyGesture)
             .overlay(alignment: message.isSentByMe ? .leading : .trailing) { swipeIndicatorOverlay }
 
@@ -392,38 +395,58 @@ struct MessageBubbleRegularView: View {
         }
     }
 
+    /// How far the bubble should trail the finger, or nil when this drag is not a reply
+    /// swipe at all.
+    ///
+    /// Both checks read only `startLocation` and `translation`, so the answer is derived
+    /// fresh from the gesture rather than latched in state — there is no armed/rejected
+    /// flag left behind when the pop gesture or the scroll view takes the drag away.
+    /// Not private: the rules are the whole fix, and `DragGesture.Value` cannot be built in
+    /// a test — so the decision is taken on plain numbers that a test can supply.
+    static func replySwipeOffset(startX: CGFloat, translation: CGSize) -> CGFloat? {
+        // The leading strip belongs to the interactive pop. Never compete for it.
+        guard startX > ChatUIConstants.ReplySwipe.leadingEdgeExclusion else { return nil }
+        let h = translation.width
+        let v = abs(translation.height)
+        guard h > 0, h > v * ChatUIConstants.ReplySwipe.directionRatio else { return nil }
+        return min(h * 0.5, ChatUIConstants.ReplySwipe.maxOffset)
+    }
+
+    private static func replySwipeOffset(for value: DragGesture.Value) -> CGFloat? {
+        replySwipeOffset(startX: value.startLocation.x, translation: value.translation)
+    }
+
     private var swipeToReplyGesture: some Gesture {
-        DragGesture(minimumDistance: 20, coordinateSpace: .local)
-            .onChanged { value in
-                guard !isEditMode else { return }
-                let h = value.translation.width
-                let v = abs(value.translation.height)
-                guard h > 0, h > v else { return }
-                swipeOffset = min(h * 0.5, 60)
-            }
-            .onEnded { _ in
-                guard !isEditMode else { return }
-                if swipeOffset >= 40 {
-                    onReply?(message)
-                    #if canImport(UIKit)
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    #endif
-                }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    swipeOffset = 0
-                }
-            }
+        DragGesture(
+            minimumDistance: ChatUIConstants.ReplySwipe.minimumDistance,
+            coordinateSpace: .global
+        )
+        // `@GestureState` snaps back on its own when the gesture ends *or is cancelled*,
+        // so a drag stolen mid-way can no longer leave the bubble parked off-centre.
+        .updating($swipeOffset) { value, offset, _ in
+            guard !isEditMode else { return }
+            offset = Self.replySwipeOffset(for: value) ?? 0
+        }
+        .onEnded { value in
+            guard !isEditMode,
+                  let offset = Self.replySwipeOffset(for: value),
+                  offset >= ChatUIConstants.ReplySwipe.commitOffset
+            else { return }
+            onReply?(message)
+            #if canImport(UIKit)
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            #endif
+        }
     }
 
     @ViewBuilder
     private var swipeIndicatorOverlay: some View {
-        if swipeOffset > 10 {
+        if swipeOffset > ChatUIConstants.ReplySwipe.indicatorThreshold {
             Image(systemName: "arrow.uturn.right")
                 .font(CTFont.regular(14))
                 .foregroundColor(Color.CT.accent)
-                .opacity(min(max(Double(swipeOffset / 40), 0), 1))
+                .opacity(min(max(Double(swipeOffset / ChatUIConstants.ReplySwipe.commitOffset), 0), 1))
                 .offset(x: message.isSentByMe ? -swipeOffset - 8 : swipeOffset + 8)
-                .animation(.interactiveSpring(), value: swipeOffset)
         }
     }
 }
