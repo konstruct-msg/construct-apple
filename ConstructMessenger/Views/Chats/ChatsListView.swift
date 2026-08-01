@@ -95,6 +95,7 @@ struct ChatsListView: View {
             .onAppear {
                     chatsViewModel.setContext(viewContext)
                     LocalNotificationManager.shared.clearBadge()
+                    reconcileStalePreviews(from: nil)
                     updateTotalUnreadCount()
             }
             .onChange(of: chatsViewModel.chatToOpen) { _, chatId in
@@ -119,6 +120,9 @@ struct ChatsListView: View {
             // crash (device log 2026-07-19, during END_SESSION re-init + openOrCreateChat).
             .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
                     guard notificationContainsChatChanges(note) else { return }
+                    // After a message write, denormalized previews can lag (missed applyPreview
+                    // or observation gap). Touch only chats present in the save.
+                    reconcileStalePreviews(from: note)
                     updateTotalUnreadCount()
             }
             .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { note in
@@ -337,6 +341,43 @@ struct ChatsListView: View {
 
     private func updateTotalUnreadCount() {
         chatsViewModel.totalUnreadCount = chats.reduce(0) { $0 + Int($1.unreadCount) }
+    }
+
+    /// Re-align denormalized list previews with each chat's newest transcript message.
+    /// No-op when already in sync; saves once if any row was repaired.
+    /// - Parameter note: when non-nil, only chats touched by that save are scanned.
+    private func reconcileStalePreviews(from note: Notification?) {
+        let targets: [Chat]
+        if let note {
+            targets = chatsTouchedBySave(note)
+            guard !targets.isEmpty else { return }
+        } else {
+            targets = Array(chats)
+        }
+        var changed = false
+        for chat in targets {
+            if chat.reconcilePreviewFromTranscript(in: viewContext) {
+                changed = true
+            }
+        }
+        if changed {
+            viewContext.saveAndLog()
+        }
+    }
+
+    private func chatsTouchedBySave(_ note: Notification) -> [Chat] {
+        var ids = Set<NSManagedObjectID>()
+        for key in [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey] {
+            guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
+            for obj in objects {
+                if let msg = obj as? Message, let chat = msg.chat {
+                    ids.insert(chat.objectID)
+                } else if obj is Chat {
+                    ids.insert(obj.objectID)
+                }
+            }
+        }
+        return ids.compactMap { try? viewContext.existingObject(with: $0) as? Chat }
     }
 
     private func notificationContainsChatChanges(_ note: Notification) -> Bool {

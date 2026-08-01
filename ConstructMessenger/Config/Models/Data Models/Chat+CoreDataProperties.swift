@@ -64,15 +64,21 @@ extension Chat {
     ///   messages that remain (deletion / clear), which legitimately moves it backwards.
     func applyPreview(text: String, timestamp: Date, force: Bool = false) {
         if !force, let current = lastMessageTime, timestamp < current {
-            // Refusals were silent, which made a stuck row undiagnosable: the logs showed
-            // the message being received and saved, and simply nothing about the preview.
-            // Ordinary out-of-order delivery lands here too, so this is debug-level — but
-            // a *large* gap means `lastMessageTime` is ahead of real traffic, which after
-            // the remote-timestamp clamp should no longer be reachable.
-            Log.debug(
-                "Preview not advanced for \(id.prefix(8))… — incoming ts is \(Int(current.timeIntervalSince(timestamp)))s older than the current preview",
-                category: "Chat"
-            )
+            // Ordinary out-of-order delivery lands here (debug). A large gap means
+            // `lastMessageTime` is ahead of real traffic (future freeze / missed writer)
+            // and will keep the list row stuck until reconcile or wall-clock catch-up.
+            let lag = Int(current.timeIntervalSince(timestamp))
+            if lag >= 300 {
+                Log.info(
+                    "Preview not advanced for \(id.prefix(8))… — incoming ts is \(lag)s older than current preview (possible freeze)",
+                    category: "Chat"
+                )
+            } else {
+                Log.debug(
+                    "Preview not advanced for \(id.prefix(8))… — incoming ts is \(lag)s older than the current preview",
+                    category: "Chat"
+                )
+            }
             return
         }
         lastMessageText = Chat.formatPreviewText(text)
@@ -83,6 +89,58 @@ extension Chat {
     func clearPreview() {
         lastMessageText = nil
         lastMessageTime = nil
+    }
+
+    /// Align denormalized list preview with the newest visible transcript message.
+    ///
+    /// Call when the list appears / after a context save. Covers three stuck-row classes:
+    /// 1. SwiftUI observation gap (Core Data already advanced, row never repainted — still
+    ///    cheap no-op when already in sync).
+    /// 2. Missed `applyPreview` on a write path (message exists, stamp stale).
+    /// 3. Future-timestamp freeze (`lastMessageTime` ahead of every real message).
+    ///
+    /// Uses the same `contentTypeRaw == 0` filter as `ChatMessageStore`'s FRC so control
+    /// rows never become the list subtitle. Returns `true` when fields changed.
+    @discardableResult
+    func reconcilePreviewFromTranscript(in context: NSManagedObjectContext? = nil) -> Bool {
+        let ctx = context ?? managedObjectContext
+        guard let ctx else { return false }
+
+        let req = Message.fetchRequest()
+        req.predicate = NSPredicate(format: "chat == %@ AND contentTypeRaw == 0", self)
+        req.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+        // A few candidates so a leaked service/control row at the tip does not pin us.
+        req.fetchLimit = 8
+
+        let rows = (try? ctx.fetch(req)) ?? []
+        let newest = rows.first { msg in
+            // Cheap type check first; displayText decrypt only for tip candidates.
+            if msg.contentType.isEphemeral { return false }
+            if msg.isServiceArtifact || msg.isControlArtifact { return false }
+            return true
+        }
+
+        guard let newest else {
+            if lastMessageText != nil || lastMessageTime != nil {
+                clearPreview()
+                return true
+            }
+            return false
+        }
+
+        let text = Chat.formatPreviewText(newest.displayText)
+        if let current = lastMessageTime,
+           abs(current.timeIntervalSince(newest.timestamp)) < 0.5,
+           (lastMessageText ?? "") == text {
+            return false
+        }
+
+        applyPreview(text: newest.displayText, timestamp: newest.timestamp, force: true)
+        Log.debug(
+            "Preview reconciled for \(id.prefix(8))… → '\(text.prefix(40))' ts=\(newest.timestamp)",
+            category: "Chat"
+        )
+        return true
     }
 }
 

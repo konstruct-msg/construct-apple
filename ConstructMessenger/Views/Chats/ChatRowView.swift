@@ -84,12 +84,15 @@ private struct ChatRowWithUser: View {
 
     var body: some View {
         ChatRowLayout(chat: chat, user: user)
-            // Bust any stale SwiftUI identity when profile fields change.
+            // Bust any stale SwiftUI identity when profile *or preview* fields change.
+            // Omitting lastMessageText/Time left rows frozen after Core Data advanced
+            // while NSManagedObject objectWillChange stayed silent (list under NavStack).
             .id(rowIdentity)
     }
 
     private var rowIdentity: String {
-        "\(chat.id)|\(user.resolvedDisplayName)|\(user.avatarData?.count ?? 0)|\(user.isSharingWithMe)|\(chat.unreadCount)|\(chat.isPinned)"
+        let previewTs = chat.lastMessageTime.map { String($0.timeIntervalSince1970) } ?? "nil"
+        return "\(chat.id)|\(user.resolvedDisplayName)|\(user.avatarData?.count ?? 0)|\(user.isSharingWithMe)|\(chat.unreadCount)|\(chat.isPinned)|\(chat.lastMessageText ?? "")|\(previewTs)"
     }
 }
 
@@ -99,14 +102,22 @@ private struct ChatRowOrphanBody: View {
 
     var body: some View {
         ChatRowLayout(chat: chat, user: nil)
+            .id(orphanIdentity)
+    }
+
+    private var orphanIdentity: String {
+        let previewTs = chat.lastMessageTime.map { String($0.timeIntervalSince1970) } ?? "nil"
+        return "\(chat.id)|\(chat.unreadCount)|\(chat.lastMessageText ?? "")|\(previewTs)"
     }
 }
 
 // MARK: - Shared layout
 
 private struct ChatRowLayout: View {
-    let chat: Chat
-    let user: User?
+    /// Must observe Chat: preview/pin/unread land on this object. A plain `let` + stable
+    /// `.id` without preview fields left the subtitle stuck after local sends.
+    @ObservedObject var chat: Chat
+    var user: User?
 
     var body: some View {
         HStack(alignment: .center, spacing: CTLayout.chromeGap) {
@@ -145,6 +156,9 @@ private struct ChatRowLayout: View {
                             .font(CTFont.regular(12))
                             .foregroundColor(Color.CT.textDim)
                             .lineLimit(1)
+                            // Explicit dependency so SwiftUI cannot elide the Text when
+                            // only the denormalized preview string changes.
+                            .animation(nil, value: lastMessage)
                     }
                     Spacer(minLength: 4)
                     if chat.unreadCount > 0 {

@@ -112,6 +112,81 @@ final class ChatPreviewOrderingTests: XCTestCase {
 
         XCTAssertEqual(chat.lastMessageText, "")
     }
+
+    /// List self-heal: when denormalized preview lags the transcript (missed writer /
+    /// frozen stamp), `reconcilePreviewFromTranscript` force-aligns to the newest message.
+    func testReconcilePreview_AdvancesStaleStampFromTranscript() {
+        let chat = makeChat()
+        let older = Date(timeIntervalSince1970: 1_700_000_000)
+        let newer = older.addingTimeInterval(3_600)
+
+        chat.applyPreview(text: "Ложное сообщение о доставке", timestamp: older)
+
+        let msg = Message(context: context)
+        msg.id = UUID().uuidString
+        msg.fromUserId = "peer"
+        msg.toUserId = "me"
+        msg.contentType = .regular
+        msg.timestamp = newer
+        msg.isSentByMe = true
+        msg.deliveryStatus = .sent
+        msg.retryCount = 0
+        msg.chat = chat
+        msg.applyStoredEncryption(plaintext: "По прежнему никаких обновлений", contactId: "peer")
+
+        XCTAssertTrue(chat.reconcilePreviewFromTranscript(in: context))
+        XCTAssertEqual(chat.lastMessageText, "По прежнему никаких обновлений")
+        XCTAssertEqual(chat.lastMessageTime, newer)
+    }
+
+    func testReconcilePreview_NoOpWhenAlreadyInSync() {
+        let chat = makeChat()
+        let at = Date(timeIntervalSince1970: 1_700_000_000)
+        chat.applyPreview(text: "hello", timestamp: at)
+
+        let msg = Message(context: context)
+        msg.id = UUID().uuidString
+        msg.fromUserId = "peer"
+        msg.toUserId = "me"
+        msg.contentType = .regular
+        msg.timestamp = at
+        msg.isSentByMe = false
+        msg.deliveryStatus = .delivered
+        msg.retryCount = 0
+        msg.chat = chat
+        msg.applyStoredEncryption(plaintext: "hello", contactId: "peer")
+
+        XCTAssertFalse(chat.reconcilePreviewFromTranscript(in: context))
+        XCTAssertEqual(chat.lastMessageText, "hello")
+    }
+
+    func testReconcilePreview_UnfreezesFutureStamp() {
+        let chat = makeChat()
+        let real = Date(timeIntervalSince1970: 1_700_000_000)
+        let frozen = real.addingTimeInterval(3 * 3600)
+
+        chat.applyPreview(text: "frozen future", timestamp: frozen)
+
+        let msg = Message(context: context)
+        msg.id = UUID().uuidString
+        msg.fromUserId = "peer"
+        msg.toUserId = "me"
+        msg.contentType = .regular
+        msg.timestamp = real
+        msg.isSentByMe = false
+        msg.deliveryStatus = .delivered
+        msg.retryCount = 0
+        msg.chat = chat
+        msg.applyStoredEncryption(plaintext: "real tip", contactId: "peer")
+
+        // Without reconcile, applyPreview would refuse a later real message older than freeze.
+        chat.applyPreview(text: "would be refused", timestamp: real.addingTimeInterval(1))
+        XCTAssertEqual(chat.lastMessageText, "frozen future")
+
+        XCTAssertTrue(chat.reconcilePreviewFromTranscript(in: context))
+        XCTAssertEqual(chat.lastMessageText, "real tip")
+        XCTAssertEqual(chat.lastMessageTime, real)
+    }
 }
 
 // MARK: - Remote timestamp clamping
