@@ -31,8 +31,6 @@ construct-messenger/
 Sibling repos: `~/Code/construct-core` (crypto), `~/Code/construct-transport` (QUIC/H3/gRPC),
 `~/Code/construct-veil` (obfuscation proxy), `~/Code/construct-docs` (docs vault).
 
-**Tools**: `./tools/project_index` — one-line-per-file map of the project (works on other repos too).
-
 ## Build
 
 **Full guide (first build, target flags, gotchas)**: `~/Code/construct-docs/client/ios/BUILD_GUIDE.md`
