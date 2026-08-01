@@ -47,6 +47,12 @@ final class SessionActionExecutor {
             break
         case .initSession:
             break
+        // Needs the KEM ciphertext decapsulated with the right Kyber secret and applied at a
+        // precise point in the ratchet, so it is owned by the two paths that hold that context:
+        // `MessageRouter.applyIncomingPqContribution` (carrier on an existing session) and
+        // `CryptoSessionInitializationService` (RESPONDER init). Both go through
+        // `PQCKeyManager.applyIncomingContribution`. This no-op used to be the whole story on
+        // the router path — the contribution was dropped and the peer's ratchet drifted.
         case .applyPqContribution:
             break
         case .archiveSession:

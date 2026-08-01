@@ -191,26 +191,11 @@ final class CryptoSessionInitializationService {
 
             if !firstMessage.kemCiphertext.isEmpty {
                 do {
-                    let kyberOtpkId = firstMessage.kyberOtpkId
-                    if kyberOtpkId > 0 {
-                        guard let otpkSecret = PQCKeyManager.kyberOtpkSecret(forKeyId: kyberOtpkId) else {
-                            Log.error("PQC: Kyber OTPK id=\(kyberOtpkId) secret MISSING for \(userId.prefix(8))… — failing session init", category: "CryptoManager")
-                            throw CryptoManagerError.pqxdhOtpkMissing(kyberOtpkId)
-                        }
-                        try PQCKeyManager.shared.decapsulateAndStrengthen(
-                            kemCiphertext: firstMessage.kemCiphertext,
-                            contactId: userId,
-                            secretKeyOverride: otpkSecret
-                        )
-                        PQCKeyManager.deleteKyberOtpk(keyId: kyberOtpkId)
-                        Log.info("PQC: PQXDH Kyber OTPK id=\(kyberOtpkId) for \(userId.prefix(8))...", category: "CryptoManager")
-                    } else {
-                        try PQCKeyManager.shared.decapsulateAndStrengthen(
-                            kemCiphertext: firstMessage.kemCiphertext,
-                            contactId: userId
-                        )
-                        Log.info("PQC: PQXDH Kyber SPK for \(userId.prefix(8))...", category: "CryptoManager")
-                    }
+                    try PQCKeyManager.shared.applyIncomingContribution(
+                        kemCiphertext: firstMessage.kemCiphertext,
+                        kyberOtpkId: firstMessage.kyberOtpkId,
+                        contactId: userId
+                    )
                 } catch {
                     Log.error("PQC: PQXDH decapsulation FAILED for \(userId.prefix(8))...: \(error)", category: "CryptoManager")
                     KeychainManager.shared.savePQXDHDowngradeFlag(for: userId)

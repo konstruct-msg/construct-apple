@@ -480,10 +480,14 @@ final class MessageRouter {
             return
         }
 
+        // The action list is a set, not a single verdict — read it by name, never by position or
+        // length. See OrchestratorActionPlan for what `actions.count == 1` used to cost us here.
+        let plan = OrchestratorActionPlan(actions: actions)
+
         // Handle checkAckInDb round-trip synchronously (Rust ACK cache miss after restart).
-        // Rust returns [checkAckInDb(id)] when its in-memory cache misses; Swift checks Core Data
-        // and feeds back ackDbResult so Rust can decide whether to decrypt or drop the message.
-        if actions.count == 1, case .checkAckInDb(let ackMsgId) = actions[0] {
+        // Rust asks whenever its in-memory cache misses; Swift checks Core Data and feeds back
+        // ackDbResult so Rust can decide whether to decrypt or drop the message.
+        if let ackMsgId = plan.ackCheckMessageId {
             let isProcessed = PersistentACKStore.shared.isProcessedInCoreData(ackMsgId, in: context)
             let ackResult = CfeIncomingEvent.ackDbResult(messageId: ackMsgId, isProcessed: isProcessed)
             do {
@@ -502,6 +506,7 @@ final class MessageRouter {
             switch action {
             case .messageDecrypted:
                 executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+                applyIncomingPqContribution(plan.kemCiphertext, for: message, contactId: otherUserId)
                 return
             case .callSignalDecrypted:
                 // ct=12: Rust decrypted the call signal — dispatch to CallManager directly.
@@ -643,6 +648,46 @@ final class MessageRouter {
     }
 
     /// Execute typed actions returned by `OrchestratorCore.handleEvent`.
+    /// Mix the post-quantum contribution the core asked us to decapsulate into the ratchet.
+    ///
+    /// Ordering is the whole content of this function:
+    ///
+    /// * **After the decrypt.** The sender encrypts msg0 against classic-only ratchet state and
+    ///   applies its own contribution immediately afterwards — "both sides must apply PQ at the
+    ///   same moment" (construct-core `RustPqContributions`). Applying before we decrypt the
+    ///   carrier, or on a message the core chose to drop, would drive the root keys apart
+    ///   instead of together, which surfaces as a DR divergence on the peer's *next* message.
+    /// * **After `executeRustActions`.** That is where `saveSessionToSecureStore` lands, carrying
+    ///   session bytes the core exported at decrypt time — i.e. before this mix. Persisting here
+    ///   first would simply be overwritten by those staler bytes.
+    ///
+    /// A no-op unless the core emitted `applyPqContribution`, which it does for every incoming
+    /// X3DH carrier (non-empty KEM ciphertext). The RESPONDER's own session-init path
+    /// decapsulates directly and never reaches here.
+    private func applyIncomingPqContribution(
+        _ kemCiphertext: Data?,
+        for message: ChatMessage,
+        contactId: String
+    ) {
+        guard let kemCiphertext, !kemCiphertext.isEmpty else { return }
+        do {
+            try PQCKeyManager.shared.applyIncomingContribution(
+                kemCiphertext: kemCiphertext,
+                kyberOtpkId: message.kyberOtpkId,
+                contactId: contactId
+            )
+            CryptoManager.shared.saveSessionToKeychain(for: contactId)
+        } catch {
+            // Downgrade rather than tear down: the classic ratchet is intact and the peer stays
+            // reachable. The flag is what stops us claiming a PQ guarantee we do not hold.
+            Log.error(
+                "PQC: incoming contribution FAILED for \(contactId.prefix(8))…: \(error) — session continues classic-only",
+                category: "MessageRouter"
+            )
+            KeychainManager.shared.savePQXDHDowngradeFlag(for: contactId)
+        }
+    }
+
     private func executeRustActions(
         _ actions: [CfeAction],
         for message: ChatMessage,

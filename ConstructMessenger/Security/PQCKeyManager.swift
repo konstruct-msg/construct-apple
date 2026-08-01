@@ -419,6 +419,39 @@ final class PQCKeyManager {
         try CryptoManager.shared.applyPqContribution(contactId: contactId, kemSharedSecret: sharedSecret)
         Log.info("PQC: PQXDH decapsulated for \(contactId.prefix(8))...", category: "PQC")
     }
+
+    /// Receiver-side PQXDH for an incoming X3DH carrier: pick the Kyber secret the sender
+    /// encapsulated to, decapsulate, and mix the shared secret into the Double Ratchet.
+    ///
+    /// Two call sites reach this — the RESPONDER session-init path, which decapsulates from
+    /// `firstMessage.kemCiphertext`, and the orchestrator's `applyPqContribution` action, which
+    /// fires when a carrier arrives on a session we already hold. Both must make the identical
+    /// OTPK-vs-SPK choice and both must burn the one-time key, so that choice lives here rather
+    /// than being spelled out twice.
+    ///
+    /// Callers persist the session afterwards: this mutates in-memory ratchet state only.
+    func applyIncomingContribution(
+        kemCiphertext: Data,
+        kyberOtpkId: UInt32,
+        contactId: String
+    ) throws {
+        guard kyberOtpkId > 0 else {
+            try decapsulateAndStrengthen(kemCiphertext: kemCiphertext, contactId: contactId)
+            Log.info("PQC: PQXDH Kyber SPK for \(contactId.prefix(8))...", category: "PQC")
+            return
+        }
+        guard let otpkSecret = PQCKeyManager.kyberOtpkSecret(forKeyId: kyberOtpkId) else {
+            Log.error("PQC: Kyber OTPK id=\(kyberOtpkId) secret MISSING for \(contactId.prefix(8))…", category: "PQC")
+            throw CryptoManagerError.pqxdhOtpkMissing(kyberOtpkId)
+        }
+        try decapsulateAndStrengthen(
+            kemCiphertext: kemCiphertext,
+            contactId: contactId,
+            secretKeyOverride: otpkSecret
+        )
+        PQCKeyManager.deleteKyberOtpk(keyId: kyberOtpkId)
+        Log.info("PQC: PQXDH Kyber OTPK id=\(kyberOtpkId) for \(contactId.prefix(8))...", category: "PQC")
+    }
 }
 
 // MARK: - Errors
