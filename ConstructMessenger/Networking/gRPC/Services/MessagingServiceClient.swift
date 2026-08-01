@@ -386,8 +386,7 @@ final class MessagingServiceClient: Sendable {
 
         var failed: [FailedMessage] = []
         let chatMessages = response.messages.compactMap { msg -> ChatMessage? in
-            // SESSION_RESET_INIT: atomic END_SESSION + new X3DH init — must be checked first
-            // (has a real payload, would be mis-classified by the END_SESSION size heuristic).
+            // SESSION_RESET_INIT: identified path — sealed deliveries use the generic path below.
             if msg.contentType == .sessionResetInit {
                 guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
                     Log.debug("Failed to decode SESSION_RESET_INIT payload \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
@@ -399,7 +398,7 @@ final class MessagingServiceClient: Sendable {
                     id: msg.messageID,
                     from: msg.senderID,
                     to: "",
-                    messageType: "SESSION_RESET_INIT",
+                    messageType: .sessionResetInit,
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
@@ -414,24 +413,23 @@ final class MessagingServiceClient: Sendable {
                     rawPayload: msg.encryptedPayload
                 )
             }
-            // END_SESSION: detect by contentType OR sentinel payload size (server may strip contentType).
-            let isEndSession = msg.contentType == .sessionReset ||
-                (!msg.encryptedPayload.isEmpty && msg.encryptedPayload.count < WirePayloadCoder.headerSize)
-            if isEndSession {
-                let detected = msg.contentType == .sessionReset ? "contentType" : "sentinel payload (\(msg.encryptedPayload.count)b)"
-                Log.debug("END_SESSION pending from \(msg.senderID.prefix(8))… id=\(msg.messageID.prefix(8))… via \(detected)", category: "MessagingServiceClient")
+            // END_SESSION: contentType is the sole classifier (size heuristic removed).
+            if msg.contentType == .sessionReset {
+                Log.debug("END_SESSION pending from \(msg.senderID.prefix(8))… id=\(msg.messageID.prefix(8))…", category: "MessagingServiceClient")
                 return ChatMessage(
                     id: msg.messageID,
                     from: msg.senderID,
                     to: "",
-                    messageType: "CONTROL_MESSAGE",
+                    messageType: .endSession,
                     ephemeralPublicKey: Data(),
                     messageNumber: 0,
                     content: Data(),
                     suiteId: 1,
                     timestamp: UInt64(msg.timestamp),
                     kemCiphertext: Data(),
-                    kyberOtpkId: 0
+                    contentType: 21,
+                    kyberOtpkId: 0,
+                    rawPayload: msg.encryptedPayload
                 )
             }
             // SENDER_SYNC: copy of own outgoing message — decrypt with per-device session.
@@ -448,7 +446,7 @@ final class MessagingServiceClient: Sendable {
                     id: msg.messageID,
                     from: msg.senderID,
                     to: "",
-                    messageType: "SENDER_SYNC",
+                    messageType: .senderSync,
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
@@ -456,6 +454,7 @@ final class MessagingServiceClient: Sendable {
                     timestamp: UInt64(msg.timestamp),
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
+                    contentType: 23,
                     kyberOtpkId: decoded.kyberOtpkId,
                     pqMessageEpoch: decoded.pqMessageEpoch,
                     pqRatchetField: decoded.pqRatchetField,
@@ -468,26 +467,33 @@ final class MessagingServiceClient: Sendable {
             let sealedInner = msg.sealedInnerData
             let isSealed = !sealedInner.isEmpty
             var wirePayload = msg.encryptedPayload
-            if isSealed && wirePayload.isEmpty {
-                if let sealedProto = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInner),
-                   !sealedProto.encryptedPayload.isEmpty {
-                    wirePayload = sealedProto.encryptedPayload
+            var sealedInnerPayload = Data()
+            if isSealed {
+                if let sealedProto = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInner) {
+                    sealedInnerPayload = sealedProto.encryptedPayload
+                    if wirePayload.isEmpty && !sealedInnerPayload.isEmpty {
+                        wirePayload = sealedInnerPayload
+                    }
                 }
             }
             guard let decoded = try? WirePayloadCoder.decode(wirePayload) else {
                 if isSealed {
-                    // Fallback for sealed when outer payload not usable.
+                    // Fallback for sealed control whose inner is not a WirePayload.
+                    // Preserve rawPayload so SessionControl.reason survives unseal.
+                    let preservedPayload = !wirePayload.isEmpty ? wirePayload : sealedInnerPayload
                     return ChatMessage(
                         id: msg.messageID,
                         from: "",
                         to: "",
-                        messageType: "DIRECT_MESSAGE",
+                        messageType: .direct,
                         ephemeralPublicKey: Data(),
                         messageNumber: 0,
                         content: Data(),
                         suiteId: 1,
                         timestamp: UInt64(msg.timestamp),
                         kemCiphertext: Data(),
+                        contentType: UInt8(clamping: msg.contentType.rawValue),
+                        rawPayload: preservedPayload,
                         sealedInnerData: sealedInner
                     )
                 }
@@ -497,9 +503,9 @@ final class MessagingServiceClient: Sendable {
             }
             return ChatMessage(
                 id: msg.messageID,
-                from: msg.senderID,
+                from: isSealed ? "" : msg.senderID,
                 to: "",
-                messageType: "DIRECT_MESSAGE",
+                messageType: .direct,
                 ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                 messageNumber: decoded.messageNumber,
                 content: decoded.content,
@@ -507,7 +513,7 @@ final class MessagingServiceClient: Sendable {
                 timestamp: UInt64(msg.timestamp),
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
-                contentType: UInt8(msg.contentType.rawValue),
+                contentType: UInt8(clamping: msg.contentType.rawValue),
                 kyberOtpkId: decoded.kyberOtpkId,
                 pqMessageEpoch: decoded.pqMessageEpoch,
                 pqRatchetField: decoded.pqRatchetField,

@@ -161,6 +161,20 @@ proto `bytes`, zero base64 in the path? If not, fix the design before merging.
 `init_receiving_session`, `set_local_user_id`) MUST be a `ServerUserId`. Mixing the spaces breaks
 the Double Ratchet AD → permanent AEAD failure on every session (postmortem in construct-docs).
 
+## Sealed Sender Type Authority (CRITICAL — two representations, one authoritative)
+
+| Layer | Field | Authoritative after unseal? |
+|------|--------|------------------------------|
+| Outer envelope (pre-unseal) | `messageType` / outer `content_type` | **No** — sealed path stamps these generic on purpose |
+| `SealedInner` (post-unseal) | `contentType: UInt8` | **Yes** — sole routing input |
+
+**Invariant**: any routing decision on a sealed delivery MUST read the post-unseal
+`contentType` (via `ContentTypeRouting.kind(for:)` / `ChatMessage.isEndSession` etc.).
+Never branch on the outer `messageType` string after `resolveSender`. Same shape of
+defect as the two ID spaces: two parallel representations, silent disagreement, no
+type enforcing agreement. Full remediation:
+`~/Code/construct-docs/client/ios/SEALED_CONTROL_CHANNEL_REMEDIATION.md`.
+
 ## Commits
 
 [Conventional Commits](https://www.conventionalcommits.org/): `feat(scope): …`, `fix(scope): …`,

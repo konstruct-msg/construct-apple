@@ -24,7 +24,8 @@ enum MessageStreamParser {
                 return .keySyncRequest(envelope.sender.userID, cursor: cursor)
             }
             // SESSION_RESET_INIT: atomic END_SESSION + new X3DH session init in one delivery.
-            // Must be checked BEFORE the END_SESSION payload-size heuristic (it has a real payload).
+            // Identified path only — sealed deliveries carry a generic outer content_type and
+            // are handled below (real type recovered post-unseal via ContentTypeRouting).
             if envelope.contentType == .sessionResetInit {
                 guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
                     Log.info("Failed to decode SESSION_RESET_INIT payload for message \(envelope.messageID)", category: "MessageStream")
@@ -35,7 +36,7 @@ enum MessageStreamParser {
                     id: envelope.messageID,
                     from: envelope.sender.userID,
                     to: envelope.recipient.userID,
-                    messageType: "SESSION_RESET_INIT",
+                    messageType: .sessionResetInit,
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
@@ -50,26 +51,23 @@ enum MessageStreamParser {
                     rawPayload: envelope.encryptedPayload
                 ), cursor: cursor)
             }
-            // END_SESSION: detect by contentType OR by payload size.
-            // Servers may strip contentType when relaying — fall back to payload size:
-            // real WirePayload is always ≥ WirePayloadCoder.headerSize (46) bytes;
-            // END_SESSION uses Data(count:16), so any non-empty payload < 46 bytes is a control sentinel.
-            let isEndSession = envelope.contentType == .sessionReset ||
-                (!envelope.encryptedPayload.isEmpty && envelope.encryptedPayload.count < WirePayloadCoder.headerSize)
-            if isEndSession {
-                let detected = envelope.contentType == .sessionReset ? "contentType" : "sentinel payload (\(envelope.encryptedPayload.count)b)"
-                Log.info("END_SESSION from \(envelope.sender.userID.prefix(8))… id=\(envelope.messageID.prefix(8))… detected via \(detected)", category: "MessageStream")
+            // END_SESSION: identified path only — contentType is the sole classifier.
+            // The old "payload < headerSize" heuristic was unsound under sealed sender
+            // (short control inners and empty outer payloads) and is intentionally gone.
+            if envelope.contentType == .sessionReset {
+                Log.info("END_SESSION from \(envelope.sender.userID.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
                 return .message(ChatMessage(
                     id: envelope.messageID,
                     from: envelope.sender.userID,
                     to: envelope.recipient.userID,
-                    messageType: "CONTROL_MESSAGE",
+                    messageType: .endSession,
                     ephemeralPublicKey: Data(),
                     messageNumber: 0,
                     content: Data(),
                     suiteId: 1,
                     timestamp: UInt64(envelope.timestamp),
                     kemCiphertext: Data(),
+                    contentType: 21,
                     kyberOtpkId: 0,
                     // Preserve the raw payload so the END_SESSION handler can read a typed
                     // SessionControl reason hint (e.g. .otpkUnreproducible → 3-DH re-init).
@@ -88,7 +86,7 @@ enum MessageStreamParser {
                     id: envelope.messageID,
                     from: envelope.sender.userID,
                     to: envelope.recipient.userID,
-                    messageType: "SENDER_SYNC",
+                    messageType: .senderSync,
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
@@ -96,6 +94,7 @@ enum MessageStreamParser {
                     timestamp: UInt64(envelope.timestamp),
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
+                    contentType: 23,
                     kyberOtpkId: decoded.kyberOtpkId,
                     pqMessageEpoch: decoded.pqMessageEpoch,
                     pqRatchetField: decoded.pqRatchetField,
@@ -113,31 +112,37 @@ enum MessageStreamParser {
             let senderUserId = isSealed ? "" : envelope.sender.userID
 
             var wirePayload = envelope.encryptedPayload
-            if isSealed && wirePayload.isEmpty {
-                // Payload is carried inside the SealedInner for this delivery.
-                if let sealedProto = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInnerBytes),
-                   !sealedProto.encryptedPayload.isEmpty {
-                    wirePayload = sealedProto.encryptedPayload
+            var sealedInnerPayload = Data()
+            if isSealed {
+                if let sealedProto = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInnerBytes) {
+                    sealedInnerPayload = sealedProto.encryptedPayload
+                    if wirePayload.isEmpty && !sealedInnerPayload.isEmpty {
+                        wirePayload = sealedInnerPayload
+                    }
                 }
             }
 
             guard let decoded = try? WirePayloadCoder.decode(wirePayload) else {
                 if isSealed {
-                    // Fallback for sealed when wire decode not possible: carry only sealed for resolution.
+                    // Fallback for sealed control whose inner is not a WirePayload
+                    // (e.g. END_SESSION 16-byte sentinel / SessionControl). Carry sealed
+                    // bytes for resolveSender AND the inner payload so reason hints survive.
+                    let preservedPayload = !wirePayload.isEmpty ? wirePayload : sealedInnerPayload
                     return .message(ChatMessage(
                         id: envelope.messageID,
                         from: "",
                         to: envelope.recipient.userID,
-                        messageType: "DIRECT_MESSAGE",
+                        messageType: .direct, // outer is generic; remapped post-unseal
                         ephemeralPublicKey: Data(),
                         messageNumber: 0,
                         content: Data(),
                         suiteId: 1,
                         timestamp: UInt64(envelope.timestamp),
                         kemCiphertext: Data(),
-                        contentType: UInt8(envelope.contentType.rawValue),
+                        contentType: UInt8(clamping: envelope.contentType.rawValue),
                         senderDeviceId: envelope.senderDevice.deviceID,
                         conversationId: envelope.conversationID,
+                        rawPayload: preservedPayload,
                         sealedInnerData: sealedInnerBytes
                     ), cursor: cursor)
                 }
@@ -148,7 +153,7 @@ enum MessageStreamParser {
                 id: envelope.messageID,
                 from: senderUserId,
                 to: envelope.recipient.userID,
-                messageType: "DIRECT_MESSAGE",
+                messageType: .direct, // sealed: remapped post-unseal; identified: contentType drives predicates
                 ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                 messageNumber: decoded.messageNumber,
                 content: decoded.content,
@@ -156,7 +161,7 @@ enum MessageStreamParser {
                 timestamp: UInt64(envelope.timestamp),
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
-                contentType: UInt8(envelope.contentType.rawValue),
+                contentType: UInt8(clamping: envelope.contentType.rawValue),
                 kyberOtpkId: decoded.kyberOtpkId,
                 pqMessageEpoch: decoded.pqMessageEpoch,
                 pqRatchetField: decoded.pqRatchetField,

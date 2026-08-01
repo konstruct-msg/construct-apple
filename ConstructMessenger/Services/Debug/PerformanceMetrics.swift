@@ -72,6 +72,12 @@ enum MetricEvent: String {
     case stealthEnforceRejected = "stealth_enforce_rejected"
     // (The send-side degraded-delivery downgrade is already counted by
     // `stealthSealFailure` above — no separate event needed.)
+
+    /// MessageRouter fallthrough: Rust returned no routable action for a *known*
+    /// control/signal content type (session control, call, receipt, sender-sync).
+    /// Was silent INFO for four days while sealed END_SESSION/SRI were dropped —
+    /// keep this ERROR-path countable. `label` carries `ct=<n>`.
+    case noRoutingDecisionControl = "no_routing_decision_control"
 }
 
 #if DEBUG

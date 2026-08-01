@@ -1,0 +1,232 @@
+//
+//  SealedRoutingBoundaryTests.swift
+//  ConstructMessengerTests
+//
+//  The composition that `f39e03b4` broke and that nothing could catch: seal a control message,
+//  unseal it, route it. Sealed END_SESSION and SESSION_RESET_INIT were silently dropped on the
+//  recipient for four days with the entire suite green, because
+//
+//    • `MessageStreamParser.parse` was never executed by a test, and
+//    • `MessageRouter.routeIncomingMessage` was never driven with a SEALED message, so the
+//      unseal-boundary remap (`messageType` from the recovered `contentType`) had no coverage.
+//
+//  Both are exercised here against the real production functions. The acceptance criterion is
+//  mutation-based: revert the remap in MessageRouter or drop `rawPayload` in the parser's sealed
+//  fallback, and this file must go red.
+//
+//  See client/ios/SEALED_CONTROL_CHANNEL_REMEDIATION.md.
+//
+
+import XCTest
+import CoreData
+import SwiftProtobuf
+@testable import Construct_Messenger
+
+@MainActor
+final class SealedRoutingBoundaryTests: XCTestCase {
+
+    // MARK: - Recording delegate
+
+    /// Records the two delegate queries that are unique to the control branches and fire
+    /// *before* any crypto work, so classification can be observed without executing the
+    /// handlers. Both return `true` to short-circuit the heavy path deliberately.
+    private final class RecordingDelegate: MessageRouterDelegate {
+        var resetInitSupersededQueries: [String] = []
+        var endSessionStaleQueries: [String] = []
+        var receipts: [(ids: [String], to: String, status: Shared_Proto_Signaling_V1_ReceiptStatus)] = []
+        var endSessionRequests: [String] = []
+
+        func messageRouter(_ router: MessageRouter, needsPublicKeyBundle userId: String, for message: ChatMessage) {}
+        func messageRouter(_ router: MessageRouter, needsEndSession userId: String) {
+            endSessionRequests.append(userId)
+        }
+        func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64) {}
+        func messageRouter(_ router: MessageRouter, isEndSessionStale userId: String, timestamp: UInt64) -> Bool {
+            endSessionStaleQueries.append(userId)
+            return true   // short-circuit: classification is what we assert
+        }
+        func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64) -> Bool {
+            resetInitSupersededQueries.append(userId)
+            return true   // short-circuit
+        }
+        func messageRouter(_ router: MessageRouter, didWinTieBreak userId: String) {}
+        func messageRouter(_ router: MessageRouter, needsSessionHeal userId: String, failedMessage: ChatMessage) {}
+        func messageRouter(_ router: MessageRouter, needsReceipt messageIds: [String], to userId: String, status: Shared_Proto_Signaling_V1_ReceiptStatus) {
+            receipts.append((messageIds, userId, status))
+        }
+        func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {}
+        func messageRouter(_ router: MessageRouter, needsUsernameUpdate userId: String) {}
+    }
+
+    private var context: NSManagedObjectContext!
+    private var router: MessageRouter!
+    private var delegate: RecordingDelegate!
+    private var savedUserId: String?
+    private let me = UUID().uuidString
+    private let peer = UUID().uuidString
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        savedUserId = AuthSessionManager.shared.currentUserId
+        AuthSessionManager.shared.updateUserId(me)
+        try CryptoCoreTestBootstrap.ensureCore(localUserId: me)
+
+        context = CryptoCoreTestBootstrap.inMemoryContext()
+        router = MessageRouter()
+        router.setContext(context)
+        delegate = RecordingDelegate()
+        router.delegate = delegate
+    }
+
+    override func tearDown() {
+        if let savedUserId, !savedUserId.isEmpty {
+            AuthSessionManager.shared.updateUserId(savedUserId)
+        }
+        context = nil
+        router = nil
+        delegate = nil
+        super.tearDown()
+    }
+
+    // MARK: - A. Unseal boundary remaps the routing kind
+
+    /// A sealed SESSION_RESET_INIT must reach the SRI branch. Before the fix the outer
+    /// "DIRECT_MESSAGE" stamp survived the rebuild, `isSessionResetInit` stayed false, and the
+    /// message fell through to the generic decrypt path where the orchestrator returned no
+    /// routing decision — the peer's session was never re-established.
+    func testSealedResetInit_ReachesResetInitBranch() {
+        stubUnseal(contentType: 24)
+
+        router.routeIncomingMessage(sealedMessage(), in: context)
+
+        XCTAssertEqual(
+            delegate.resetInitSupersededQueries, [peer],
+            "sealed ct=24 must route as SESSION_RESET_INIT — this is the f39e03b4 regression"
+        )
+    }
+
+    /// A sealed END_SESSION must reach the END_SESSION branch. Before the fix it was classified
+    /// as a regular message, failed to build an incoming event, and was skipped outright.
+    func testSealedEndSession_ReachesEndSessionBranch() {
+        stubUnseal(contentType: 21)
+
+        router.routeIncomingMessage(sealedMessage(), in: context)
+
+        XCTAssertEqual(
+            delegate.endSessionStaleQueries, [peer],
+            "sealed ct=21 must route as END_SESSION — this is the f39e03b4 regression"
+        )
+    }
+
+    /// Control-branch classification must not swallow ordinary sealed traffic: a regular body
+    /// takes neither control branch.
+    func testSealedRegularMessage_TakesNeitherControlBranch() {
+        stubUnseal(contentType: 1)
+
+        router.routeIncomingMessage(sealedMessage(), in: context)
+
+        XCTAssertTrue(delegate.resetInitSupersededQueries.isEmpty, "ct=1 is not a SESSION_RESET_INIT")
+        XCTAssertTrue(delegate.endSessionStaleQueries.isEmpty, "ct=1 is not an END_SESSION")
+    }
+
+    /// The resolved sender must become the routing identity — a sealed message carries an empty
+    /// `from`, and everything downstream keys off it.
+    func testSealedMessage_RoutesUnderResolvedSender() {
+        stubUnseal(contentType: 24)
+
+        router.routeIncomingMessage(sealedMessage(), in: context)
+
+        XCTAssertEqual(delegate.resetInitSupersededQueries.first, peer,
+                       "routing identity must be the unsealed sender, not the empty outer `from`")
+    }
+
+    // MARK: - B. Parser preserves the sealed control payload
+
+    /// A sealed END_SESSION carries a 16-byte SessionControl sentinel inside SealedInner — far
+    /// shorter than a WirePayload, so `WirePayloadCoder.decode` fails and the parser takes its
+    /// sealed fallback. That fallback used to drop the payload, which is what made the typed
+    /// `SessionControl.reason` hint (e.g. `.otpkUnreproducible` → 3-DH re-init) unreadable.
+    func testParser_SealedShortControlInner_PreservesRawPayload() throws {
+        let sentinel = Data(repeating: 0xAB, count: 16)
+        let response = sealedStreamResponse(innerPayload: sentinel)
+
+        let event = MessageStreamParser.parse(response)
+
+        guard case .message(let parsed, _)? = event else {
+            return XCTFail("sealed envelope must parse into a .message event, got \(String(describing: event))")
+        }
+        XCTAssertEqual(parsed.rawPayload, sentinel,
+                       "sealed fallback must carry the inner payload through — dropping it loses SessionControl.reason")
+        XCTAssertTrue(parsed.from.isEmpty, "sender stays unresolved until MessageRouter unseals")
+        XCTAssertFalse(parsed.sealedInnerData.isEmpty, "sealed bytes must survive for resolveSender")
+    }
+
+    /// Sanity companion: a sealed envelope whose inner IS a decodable WirePayload keeps its
+    /// wire payload too, so the two fallback arms agree.
+    func testParser_SealedEnvelope_AlwaysCarriesSealedInnerForResolution() throws {
+        let response = sealedStreamResponse(innerPayload: Data(repeating: 0x07, count: 8))
+
+        let event = MessageStreamParser.parse(response)
+
+        guard case .message(let parsed, _)? = event else {
+            return XCTFail("sealed envelope must parse into a .message event")
+        }
+        XCTAssertFalse(parsed.sealedInnerData.isEmpty)
+    }
+
+    // MARK: - Helpers
+
+    private func stubUnseal(contentType: UInt8) {
+        router.sealedSenderResolver = StubResolver(
+            resolved: ResolvedSender(senderId: peer, contentType: contentType, trust: .vouched(.signature))
+        )
+    }
+
+    /// Stands in for StealthSenderService: yields a known sender/content type without needing
+    /// Keychain identity keys or a genuine sealed box.
+    private struct StubResolver: SealedSenderResolving {
+        let resolved: ResolvedSender?
+        func resolveSender(sealedInnerBytes: Data) -> ResolvedSender? { resolved }
+    }
+
+    /// Post-parser shape of a sealed delivery: empty `from`, generic outer stamp, sealed bytes
+    /// present. Exactly what `MessageStreamParser` hands to the router under stealth.
+    private func sealedMessage(id: String = UUID().uuidString) -> ChatMessage {
+        ChatMessage(
+            id: id,
+            from: "",
+            to: me,
+            messageType: .direct,
+            ephemeralPublicKey: Data(repeating: 1, count: 32),
+            messageNumber: 0,
+            content: Data(repeating: 2, count: 48),
+            suiteId: 1,
+            timestamp: UInt64(Date().timeIntervalSince1970),
+            contentType: 1,                                   // outer is forced generic
+            rawPayload: Data(repeating: 3, count: 64),
+            sealedInnerData: Data(repeating: 4, count: 48)
+        )
+    }
+
+    private func sealedStreamResponse(innerPayload: Data) -> Shared_Proto_Services_V1_MessageStreamResponse {
+        var inner = Shared_Proto_Core_V1_SealedInner()
+        inner.recipientUserID = me
+        inner.encryptedPayload = innerPayload
+        inner.contentType = .sessionReset
+
+        var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
+        sealedEnvelope.sealedInner = (try? inner.serializedData()) ?? Data()
+
+        var envelope = Shared_Proto_Core_V1_Envelope()
+        envelope.messageID = UUID().uuidString
+        envelope.recipient.userID = me
+        envelope.timestamp = Int64(Date().timeIntervalSince1970)
+        envelope.contentType = .e2EeSignal            // server forces generic for sealed sends
+        envelope.encryptedPayload = Data()            // payload rides inside SealedInner
+        envelope.sealedSender = sealedEnvelope
+
+        var response = Shared_Proto_Services_V1_MessageStreamResponse()
+        response.message = envelope
+        return response
+    }
+}

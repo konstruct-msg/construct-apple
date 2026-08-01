@@ -38,6 +38,16 @@ final class MessageRouter {
     private let chunkReassembler = ChunkedMessageReassembler.shared
     private var processingMessageIds: Set<String> = []
 
+    /// Opens the SealedInner at the STEALTH boundary in `routeIncomingMessage`. Injected rather
+    /// than reached through `StealthSenderService.shared` so the post-unseal routing decisions
+    /// are drivable without Keychain identity keys or a genuine sealed box.
+    ///
+    /// The dependency is explicit because this boundary is where `f39e03b4` broke: the recovered
+    /// `contentType` must be remapped into the routing kind, and *nothing* could execute that
+    /// line under test — sealed END_SESSION / SESSION_RESET_INIT were dropped in production for
+    /// four days with the whole suite green.
+    var sealedSenderResolver: any SealedSenderResolving = StealthSenderService.shared
+
     /// Message ids that already consumed their one unseal-failure redelivery
     /// (sealed-sender-resilience lever A). First unseal failure defers (holds the
     /// cursor → server re-delivers once); a second failure for the same id gives up and
@@ -144,7 +154,7 @@ final class MessageRouter {
         // `from` is empty for ConstructSEALED messages — decrypt to recover sender ID.
         var message = message
         if message.from.isEmpty && !message.sealedInnerData.isEmpty {
-            guard let resolved = StealthSenderService.shared.resolveSender(sealedInnerBytes: message.sealedInnerData) else {
+            guard let resolved = sealedSenderResolver.resolveSender(sealedInnerBytes: message.sealedInnerData) else {
                 // Unseal itself failed — no sender/payload recoverable (sealed-sender-resilience
                 // lever A: this is the ONLY sealed drop). Give it one redelivery (a box that
                 // fails to open right after an identity-key rotation deserves a second chance)
@@ -175,11 +185,15 @@ final class MessageRouter {
                 }
             }
 
+            // Single source of truth at the unseal boundary: derive messageType from the
+            // recovered contentType. Copying the outer "DIRECT_MESSAGE" stamp left END_SESSION
+            // / SRI routing predicates false after sealed delivery (SEALED_CONTROL_CHANNEL_REMEDIATION).
+            let recoveredKind = ContentTypeRouting.kind(for: resolved.contentType)
             message = ChatMessage(
                 id: message.id,
                 from: resolved.senderId,
                 to: message.to.isEmpty ? currentUserId : message.to,
-                messageType: message.messageType,
+                messageType: recoveredKind,
                 ephemeralPublicKey: message.ephemeralPublicKey,
                 messageNumber: message.messageNumber,
                 content: message.content,
@@ -198,7 +212,10 @@ final class MessageRouter {
                 rawPayload: message.rawPayload
                 // sealedInnerData intentionally omitted — sender resolved
             )
-            Log.debug("STEALTH: resolved sender → \(resolved.senderId.prefix(8))…", category: "MessageRouter")
+            Log.debug(
+                "STEALTH: resolved sender → \(resolved.senderId.prefix(8))… ct=\(resolved.contentType) kind=\(recoveredKind.rawValue)",
+                category: "MessageRouter"
+            )
             if message.contentType == 12 {
                 Log.debug("STEALTH: this was a sealed call signal", category: "MessageRouter")
             }
@@ -540,7 +557,24 @@ final class MessageRouter {
             default:                             return "unknown(\(action))"
             }
         }.joined(separator: ",")
-        Log.info("handleEvent produced no routing decision for \(message.id.prefix(8))… msgNum=\(message.messageNumber) actions=[\(actionNames)] — ACKing as delivered", category: "MessageRouter")
+        // Known control/signal types falling through here was the face of total delivery
+        // failure for four days (INFO looked benign). Promote to ERROR + metric so the
+        // next sealed-control regression cannot hide.
+        if ContentTypeRouting.isKnownControlContentType(message.contentType) {
+            Log.error(
+                "handleEvent produced no routing decision for CONTROL ct=\(message.contentType) \(message.id.prefix(8))… msgNum=\(message.messageNumber) actions=[\(actionNames)] — ACKing as delivered",
+                category: "MessageRouter"
+            )
+            PerformanceMetrics.shared.record(
+                .noRoutingDecisionControl,
+                label: "ct=\(message.contentType)"
+            )
+        } else {
+            Log.info(
+                "handleEvent produced no routing decision for \(message.id.prefix(8))… msgNum=\(message.messageNumber) actions=[\(actionNames)] — ACKing as delivered",
+                category: "MessageRouter"
+            )
+        }
         delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
         if isNewChat { context.delete(chat) }
         return
@@ -1572,7 +1606,9 @@ final class MessageRouter {
         }
 
         chat.applyPreview(text: previewSource, timestamp: message.timestamp)
-        if InAppNotificationService.shared.activeChatId != chat.id {
+        // Same "can the user actually see this?" test the banner uses — an open chat behind a
+        // backgrounded app is not visible, and used to keep unreadCount pinned at 0.
+        if !InAppNotificationService.isChatVisible(chat.id) {
             chat.unreadCount += 1
         }
 

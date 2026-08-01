@@ -1,0 +1,95 @@
+//
+//  ContentTypeRouting.swift
+//  Construct Messenger
+//
+//  Single source of truth for mapping post-unseal `contentType` → routing kind.
+//  Sealed sender masks the outer envelope type; after resolveSender the real
+//  type lives only in SealedInner.contentType. All early-exit routing predicates
+//  must agree with this mapping — see SEALED_CONTROL_CHANNEL_REMEDIATION.md.
+//
+
+import Foundation
+
+/// Early-exit routing kind for control carriers. Derived from `contentType` after unseal
+/// (or from an identified outer envelope at ingest). Never treat a free-form string as
+/// authoritative on its own once a sealed delivery has been unsealed.
+enum WireMessageKind: String, Codable, Equatable, CaseIterable {
+    case direct = "DIRECT_MESSAGE"
+    case endSession = "CONTROL_MESSAGE"
+    case senderSync = "SENDER_SYNC"
+    case sessionResetInit = "SESSION_RESET_INIT"
+
+    /// Canonical proto content-type byte for this kind (0 = regular / non-control).
+    var canonicalContentType: UInt8 {
+        switch self {
+        case .direct:            return 0
+        case .endSession:        return 21  // CONTENT_TYPE_SESSION_RESET
+        case .senderSync:        return 23  // CONTENT_TYPE_SENDER_SYNC
+        case .sessionResetInit:  return 24  // CONTENT_TYPE_SESSION_RESET_INIT
+        }
+    }
+}
+
+/// Named mapping used at the unseal boundary and by ingest parsers.
+/// Phase-1 hotfix + Phase-2 sole classifier — do not duplicate these cases inline.
+enum ContentTypeRouting {
+
+    /// Derive routing kind from an authoritative `contentType` (post-unseal or identified outer).
+    static func kind(for contentType: UInt8) -> WireMessageKind {
+        switch contentType {
+        case 21: return .endSession
+        case 23: return .senderSync
+        case 24: return .sessionResetInit
+        default: return .direct
+        }
+    }
+
+    static func kind(for contentType: Shared_Proto_Core_V1_ContentType) -> WireMessageKind {
+        kind(for: UInt8(clamping: contentType.rawValue))
+    }
+
+    /// Legacy free-form string → kind. Ingest/compat only; never re-read after normalisation.
+    static func kind(fromLegacyMessageType string: String?) -> WireMessageKind {
+        switch string {
+        case "CONTROL_MESSAGE":     return .endSession
+        case "SENDER_SYNC":         return .senderSync
+        case "SESSION_RESET_INIT":  return .sessionResetInit
+        default:                    return .direct
+        }
+    }
+
+    /// String form for call sites that still log / compare the legacy envelope field.
+    /// Prefer `kind(for:)` + predicates on `ChatMessage`.
+    static func messageType(for contentType: UInt8) -> String {
+        kind(for: contentType).rawValue
+    }
+
+    static func messageType(for contentType: Shared_Proto_Core_V1_ContentType) -> String {
+        kind(for: contentType).rawValue
+    }
+
+    /// Control / signal content types that must never fall through to
+    /// "handleEvent produced no routing decision" as a silent INFO.
+    /// Includes session-control ops plus late-routed signal types (call, receipt).
+    static func isKnownControlContentType(_ contentType: UInt8) -> Bool {
+        if SessionControlCodec.op(forContentType: Int(contentType)) != nil { return true }
+        switch contentType {
+        case 12, 14, 23: return true  // callSignal, deliveryReceipt, senderSync
+        default: return false
+        }
+    }
+
+    /// Content types that participate in the sealed round-trip invariant tests.
+    /// Exhaustive over control kinds that ride inside SealedInner under stealth.
+    static var sealedControlContentTypes: [UInt8] {
+        [
+            21, // sessionReset / END_SESSION
+            24, // sessionResetInit
+            25, // sessionPing
+            26, // sessionReady
+            12, // callSignal
+            14, // deliveryReceipt
+            1,  // e2EeSignal (regular body — baseline)
+        ]
+    }
+}

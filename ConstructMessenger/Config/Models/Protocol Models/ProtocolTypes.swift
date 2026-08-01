@@ -13,9 +13,11 @@ struct ChatMessage: Codable, Identifiable {
     let id: String
     let from: String
     let to: String
-    
-    // Message type (from server Phase 4.5)
-    let messageType: String?  // "CONTROL_MESSAGE" | "DIRECT_MESSAGE" | nil (legacy)
+
+    /// Legacy envelope kind string, kept for Codable / logging. **Not** the routing authority —
+    /// early-exit predicates read `contentType` (see `ContentTypeRouting`). After a sealed
+    /// unseal this field is remapped from `resolved.contentType` so the two stay aligned.
+    let messageType: WireMessageKind
 
     // Double Ratchet fields (per API_V3_SPEC.md section 5.2.6)
     // Optional for CONTROL_MESSAGE type
@@ -34,7 +36,9 @@ struct ChatMessage: Codable, Identifiable {
     /// Only present when messageNumber == 0 (first message / session initiation).
     var kemCiphertext: Data = Data()
 
-    /// Content type from the envelope (0 = standard message, 12 = CALL_SIGNAL).
+    /// Authoritative content type for routing.
+    /// Identified path: outer envelope. Sealed path: recovered from SealedInner after unseal.
+    /// Early-exit predicates (`isEndSession` / `isSessionResetInit` / `isSenderSync`) read this.
     var contentType: UInt8 = 0
 
     /// Kyber OTPK key ID used by sender (0 = Kyber SPK was used, >0 = Kyber OTPK ID).
@@ -64,39 +68,40 @@ struct ChatMessage: Codable, Identifiable {
 
     /// Raw binary WirePayload from `Envelope.encrypted_payload`.
     /// Passed directly to Rust for decryption, bypassing JSON conversion.
-    /// Empty for CONTROL_MESSAGE and SENDER_SYNC types.
+    /// For END_SESSION may carry a typed SessionControl reason hint (or a 16-byte sentinel).
     var rawPayload: Data = Data()
 
     /// Sealed inner bytes for STEALTH (ConstructSEALED) messages.
     /// When non-empty, `from` is empty — the real sender is recovered by decrypting this.
     var sealedInnerData: Data = Data()
 
-    /// Check if this is an END_SESSION control message
+    /// END_SESSION — routes off post-unseal / identified `contentType`, not the legacy string.
     var isEndSession: Bool {
-        messageType == "CONTROL_MESSAGE"
+        ContentTypeRouting.kind(for: contentType) == .endSession
     }
 
-    /// Check if this is a SENDER_SYNC message (copy of own outgoing message for other devices).
+    /// SENDER_SYNC — copy of own outgoing message for other devices.
     var isSenderSync: Bool {
-        messageType == "SENDER_SYNC"
+        ContentTypeRouting.kind(for: contentType) == .senderSync
     }
 
-    /// Check if this is a SESSION_RESET_INIT message (atomic END_SESSION + new X3DH init).
+    /// SESSION_RESET_INIT — atomic END_SESSION + new X3DH init.
     var isSessionResetInit: Bool {
-        messageType == "SESSION_RESET_INIT"
+        ContentTypeRouting.kind(for: contentType) == .sessionResetInit
     }
 
-    /// Check if this is a regular encrypted message
+    /// Non-control early-exit carrier (still may be ping/ready/call etc. handled post-decrypt).
     var isRegularMessage: Bool {
-        messageType == "DIRECT_MESSAGE" || messageType == nil  // nil for legacy messages
+        ContentTypeRouting.kind(for: contentType) == .direct
     }
 }
 
 // Custom Codable: crypto fields absent in CONTROL_MESSAGE envelopes — provide safe defaults.
+// `messageType` accepts the typed enum or a legacy free-form string; `contentType` wins when set.
 extension ChatMessage {
     private enum CodingKeys: String, CodingKey {
         case id, from, to, messageType, ephemeralPublicKey, messageNumber, content, suiteId
-        case timestamp, oneTimePreKeyId, kemCiphertext, kyberOtpkId
+        case timestamp, oneTimePreKeyId, kemCiphertext, contentType, kyberOtpkId
         case pqMessageEpoch, pqRatchetField
         case senderDeviceId, conversationId, replyToMessageId, rawPayload
     }
@@ -106,7 +111,15 @@ extension ChatMessage {
         id = try c.decode(String.self, forKey: .id)
         from = try c.decode(String.self, forKey: .from)
         to = try c.decode(String.self, forKey: .to)
-        messageType = try c.decodeIfPresent(String.self, forKey: .messageType)
+        // Prefer typed enum; fall back to legacy free-form string (older persisted JSON).
+        let legacyKind: WireMessageKind
+        if let kind = try? c.decode(WireMessageKind.self, forKey: .messageType) {
+            legacyKind = kind
+        } else {
+            legacyKind = ContentTypeRouting.kind(
+                fromLegacyMessageType: try c.decodeIfPresent(String.self, forKey: .messageType)
+            )
+        }
         ephemeralPublicKey = (try? c.decodeIfPresent(Data.self, forKey: .ephemeralPublicKey)) ?? Data()
         messageNumber = (try? c.decodeIfPresent(UInt32.self, forKey: .messageNumber)) ?? 0
         content = (try? c.decodeIfPresent(Data.self, forKey: .content)) ?? Data()
@@ -114,6 +127,16 @@ extension ChatMessage {
         timestamp = (try? c.decodeIfPresent(UInt64.self, forKey: .timestamp)) ?? 0
         oneTimePreKeyId = (try? c.decodeIfPresent(UInt32.self, forKey: .oneTimePreKeyId)) ?? 0
         kemCiphertext = (try? c.decodeIfPresent(Data.self, forKey: .kemCiphertext)) ?? Data()
+        var decodedContentType = (try? c.decodeIfPresent(UInt8.self, forKey: .contentType)) ?? 0
+        // Legacy rows may only carry messageType; promote contentType so predicates agree.
+        if decodedContentType == 0, legacyKind != .direct {
+            decodedContentType = legacyKind.canonicalContentType
+        }
+        contentType = decodedContentType
+        // contentType is authoritative when set; otherwise keep the legacy kind.
+        messageType = decodedContentType != 0
+            ? ContentTypeRouting.kind(for: decodedContentType)
+            : legacyKind
         kyberOtpkId = (try? c.decodeIfPresent(UInt32.self, forKey: .kyberOtpkId)) ?? 0
         pqMessageEpoch = (try? c.decodeIfPresent(UInt32.self, forKey: .pqMessageEpoch)) ?? 0
         pqRatchetField = (try? c.decodeIfPresent(Data.self, forKey: .pqRatchetField)) ?? Data()

@@ -16,9 +16,20 @@ import CryptoKit
 import SwiftProtobuf
 import Observation
 
+/// Opens a ConstructSEALED envelope, recovering the real sender and content type.
+///
+/// A protocol (rather than a direct `StealthSenderService.shared` call) so the unseal boundary
+/// in `MessageRouter` is an explicit, substitutable dependency — that boundary is where
+/// `f39e03b4` silently dropped every sealed control message, undetected because no test could
+/// reach it. See client/ios/SEALED_CONTROL_CHANNEL_REMEDIATION.md.
+@MainActor
+protocol SealedSenderResolving {
+    func resolveSender(sealedInnerBytes: Data) -> ResolvedSender?
+}
+
 @Observable
 @MainActor
-final class StealthSenderService {
+final class StealthSenderService: SealedSenderResolving {
     static let shared = StealthSenderService()
 
     // Cache key in UserDefaults

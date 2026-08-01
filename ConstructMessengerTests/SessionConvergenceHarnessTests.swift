@@ -76,6 +76,50 @@ private enum Frame: Equatable {
         case .initMsg, .data: return nil
         }
     }
+
+    /// Authoritative content-type byte this frame would carry inside SealedInner
+    /// (or on the identified outer envelope). nil for frames that are not typed
+    /// control (initMsg / data use the regular e2Ee path).
+    var sealedContentType: UInt8? {
+        switch self {
+        case .endSession: return 21
+        case .resetInit:  return 24
+        case .ping:       return 25
+        case .ready:      return 26
+        case .initMsg, .data: return nil
+        }
+    }
+}
+
+/// Delivery path under test. `sealed` forces every control frame through the same
+/// remapping MessageRouter performs after unseal (`ContentTypeRouting.kind(for:)`).
+/// Without that remap, END_SESSION / SRI would arrive as DIRECT and be dropped —
+/// the f39e03b4 composition bug. Identified path uses the frame as-is.
+private enum DeliveryMode: String, CaseIterable {
+    case identified
+    case sealed
+}
+
+/// Simulate the sealed outer envelope (always generic) → unseal recovery step.
+/// Returns nil when a control frame would be mis-classified as a regular message
+/// (the "no routing decision" / skip class the remediation closes).
+private func recoverFrame(_ frame: Frame, mode: DeliveryMode) -> Frame? {
+    guard mode == .sealed, let ct = frame.sealedContentType else { return frame }
+    // Outer envelope is always DIRECT / e2EeSignal under stealth — recover via the
+    // single named mapping (production unseal boundary).
+    let kind = ContentTypeRouting.kind(for: ct)
+    switch frame {
+    case .endSession:
+        return kind == .endSession ? .endSession : nil
+    case .resetInit:
+        return kind == .sessionResetInit ? .resetInit : nil
+    case .ping, .ready:
+        // Ping/ready route post-decrypt off contentType (SessionControlCodec), not
+        // WireMessageKind — they stay themselves as long as ct is preserved.
+        return frame
+    case .initMsg, .data:
+        return frame
+    }
 }
 
 private struct Envelope: Equatable {
@@ -350,8 +394,12 @@ private final class Harness {
     let a: Peer
     let b: Peer
     var now = Date(timeIntervalSince1970: 1_000_000)
+    /// When `.sealed`, control frames pass through `ContentTypeRouting` recovery before
+    /// `Peer.receive` — exercises the sealed composition path the production router uses.
+    let deliveryMode: DeliveryMode
 
-    init() {
+    init(deliveryMode: DeliveryMode = .identified) {
+        self.deliveryMode = deliveryMode
         // Tie-break = higher id wins as INITIATOR, so A must sort ABOVE B lexicographically.
         a = Peer(id: "peer-2", net: net, confirmWindow: 75)   // INITIATOR on tie ("peer-2" > "peer-1")
         b = Peer(id: "peer-1", net: net, confirmWindow: 75)
@@ -366,8 +414,14 @@ private final class Harness {
         var moved = false
         let batch = net.drain()
         for env in batch {
+            // Sealed path: outer type is generic; recover the real kind before routing.
+            // A nil recovery is a dropped control frame (the pre-remediation failure mode).
+            guard let frame = recoverFrame(env.frame, mode: deliveryMode) else {
+                moved = true // still "moved" off the wire, but silently dropped
+                continue
+            }
             moved = true
-            peer(env.to).receive(env.frame, from: env.from, epoch: env.epoch, now: now)
+            peer(env.to).receive(frame, from: env.from, epoch: env.epoch, now: now)
         }
         // Re-evaluate confirm gates against the current clock (TTL release, resend init).
         a.flushOrInit(to: b.id, now: now)
@@ -401,19 +455,47 @@ private final class Harness {
 final class SessionConvergenceHarnessTests: XCTestCase {
 
     // P1: both sides want to talk at once, reliable network → converge + all DATA delivered.
+    // Parameterised over identified + sealed delivery — sealed would have failed on f39e03b4
+    // because END_SESSION/SRI recovery depended on ContentTypeRouting at the unseal boundary.
     @MainActor
     func testDuelingInit_ReliableNetwork_Converges() {
-        let h = Harness()
-        h.a.enqueueSend("a1", to: h.b.id, now: h.now)
-        h.b.enqueueSend("b1", to: h.a.id, now: h.now)
+        for mode in DeliveryMode.allCases {
+            let h = Harness(deliveryMode: mode)
+            h.a.enqueueSend("a1", to: h.b.id, now: h.now)
+            h.b.enqueueSend("b1", to: h.a.id, now: h.now)
 
+            h.settle()
+
+            XCTAssertTrue(h.a.isActive, "[\(mode)] INITIATOR must reach active")
+            XCTAssertTrue(h.b.isActive, "[\(mode)] RESPONDER must reach active")
+            XCTAssertTrue(h.b.delivered.contains("a1"), "[\(mode)] A's message must be delivered to B")
+            XCTAssertTrue(h.a.delivered.contains("b1"), "[\(mode)] B's message must be delivered to A")
+            XCTAssertTrue(h.a.outbox.isEmpty && h.b.outbox.isEmpty, "[\(mode)] no message left buffered")
+        }
+    }
+
+    /// Sealed-path regression: END_SESSION + fresh SRI must recover through ContentTypeRouting
+    /// so the pair reconverges. Without the remap, recoverFrame drops control and the
+    /// RESPONDER stays stranded on the dead ratchet.
+    @MainActor
+    func testSealedPath_EndSessionThenResetInit_Converges() {
+        let h = Harness(deliveryMode: .sealed)
+        // Establish.
+        h.a.enqueueSend("a1", to: h.b.id, now: h.now)
+        h.settle()
+        XCTAssertTrue(h.a.isActive && h.b.isActive)
+
+        // Teardown + fresh SRI (the heal path that was dead on sealed pre-remediation).
+        h.a.receive(.endSession, from: h.b.id, now: h.now)
+        h.b.receive(.endSession, from: h.a.id, now: h.now)
+        h.a.reannounceInit(to: h.b.id, now: h.now)
         h.settle()
 
-        XCTAssertTrue(h.a.isActive, "INITIATOR must reach active")
-        XCTAssertTrue(h.b.isActive, "RESPONDER must reach active")
-        XCTAssertTrue(h.b.delivered.contains("a1"), "A's message must be delivered to B")
-        XCTAssertTrue(h.a.delivered.contains("b1"), "B's message must be delivered to A")
-        XCTAssertTrue(h.a.outbox.isEmpty && h.b.outbox.isEmpty, "no message left buffered")
+        XCTAssertTrue(h.a.isActive && h.b.isActive,
+                      "sealed END_SESSION + SRI must reconverge via ContentTypeRouting")
+        h.a.enqueueSend("a2", to: h.b.id, now: h.now)
+        h.settle()
+        XCTAssertTrue(h.b.delivered.contains("a2"), "DATA after sealed heal must deliver")
     }
 
     // Regression: SESSION_RESET_INIT coalescing must key on CONTENT FRESHNESS, not a time window.
