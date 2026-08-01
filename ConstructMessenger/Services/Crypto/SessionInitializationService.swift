@@ -180,11 +180,71 @@ class SessionInitializationService {
     /// **Degrade path**: if `ageDays >= staleSPKFastFailDays` (30.25d = 6h past the Rust 30-day
     /// limit), the peer has clearly not been online recently — waiting is pointless, so we go
     /// straight to a degraded (at-risk) init instead of burning 2 × 60 s on retries.
+    /// Outcome of one proactive-init run, shared with every coalesced caller.
+    private enum ProactiveInitOutcome {
+        case success
+        case failure(Error)
+    }
+
+    /// In-flight proactive inits, keyed by peer. `@MainActor` makes lookup-then-insert
+    /// atomic, so two concurrent callers can never both start a run.
+    private var proactiveInitTasks: [String: Task<ProactiveInitOutcome, Never>] = [:]
+
+    #if DEBUG
+    /// Test seam: substitutes the init run so the coalescing wrapper can be exercised without
+    /// the network. Returns `true` for success. Nil in production.
+    var proactiveInitOverrideForTests: ((String) async -> Bool)?
+    #endif
+
+    /// Establish a session as INITIATOR, coalescing concurrent callers per peer.
+    ///
+    /// Single-flight is mandatory, not an optimisation. Two runs each fetch a bundle with
+    /// `consumeOneTimePrekey: true` (burning two of the peer's OTPKs) and each call
+    /// `initializeSession(deleteExisting: true)`, so the second silently replaces the first's
+    /// session. The X3DH carriers already dispatched for run #1 (SESSION_RESET_INIT) then
+    /// reference a ratchet we no longer hold, while our own messages continue on run #2 —
+    /// the peer establishes from one and receives on the other, and diverges on the very next
+    /// message. Observed 2026-07-31: `initiator_announce` (END_SESSION received) and
+    /// `queue_message` (user typed) started runs 1s apart and forced one guaranteed heal cycle.
+    ///
+    /// Callers are **coalesced, not skipped**: a late joiner awaits the in-flight run and then
+    /// receives the same outcome through its own callbacks. Skipping would strand its queued
+    /// messages, since `onSuccess` is what flushes them.
     func initializeSessionProactively(
         userId: String,
         onSuccess: @escaping () -> Void,
         onFailure: @escaping (Error) -> Void
     ) async {
+        let outcome: ProactiveInitOutcome
+        if let inFlight = proactiveInitTasks[userId] {
+            Log.info("SESSION_STATE[proactive_init_coalesced]: joining in-flight init for \(userId.prefix(8))…", category: "SessionInit")
+            outcome = await inFlight.value
+        } else {
+            let task = Task { [weak self] () -> ProactiveInitOutcome in
+                guard let self else { return .failure(CryptoManagerError.coreNotInitialized) }
+                #if DEBUG
+                if let override = self.proactiveInitOverrideForTests {
+                    return await override(userId) ? .success : .failure(CryptoManagerError.coreNotInitialized)
+                }
+                #endif
+                return await self.performProactiveInit(userId: userId)
+            }
+            proactiveInitTasks[userId] = task
+            outcome = await task.value
+            proactiveInitTasks[userId] = nil
+        }
+
+        switch outcome {
+        case .success:
+            onSuccess()
+        case .failure(let error):
+            onFailure(error)
+        }
+    }
+
+    /// The actual init run. Never call directly — go through `initializeSessionProactively`
+    /// so concurrent callers coalesce onto a single session.
+    private func performProactiveInit(userId: String) async -> ProactiveInitOutcome {
         Log.info("SESSION_STATE[proactive_init_start]: userId=\(userId.prefix(8))...", category: "SessionInit")
 
         let staleSPKMaxRetries = 2
@@ -208,8 +268,7 @@ class SessionInitializationService {
                 try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
 
                 Log.info("SESSION_STATE[proactive_init_success]: userId=\(userId.prefix(8))...", category: "SessionInit")
-                await MainActor.run { onSuccess() }
-                return
+                return .success
             } catch SessionError.peerSPKStale(let days) where attempt < staleSPKMaxRetries && days < staleSPKFastFailDays {
                 // SPK is barely past the staleness limit — peer may have just come online
                 // and rotated. Wait for server bundle cache to propagate.
@@ -228,8 +287,7 @@ class SessionInitializationService {
                     let bundle = try await fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
                     try initializeSession(userId: userId, bundle: bundle, deleteExisting: true, allowStale: true)
                     Log.info("SESSION_STATE[proactive_init_success_degraded]: userId=\(userId.prefix(8))…", category: "SessionInit")
-                    await MainActor.run { onSuccess() }
-                    return
+                    return .success
                 } catch {
                     Log.error("SESSION_STATE[degraded_init_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                     lastError = error
@@ -243,7 +301,7 @@ class SessionInitializationService {
 
         let finalError = lastError ?? NetworkError.connectionFailed
         Log.error("SESSION_STATE[proactive_init_failed]: userId=\(userId.prefix(8))..., error=\(finalError.localizedDescription)", category: "SessionInit")
-        await MainActor.run { onFailure(finalError) }
+        return .failure(finalError)
     }
 
     // MARK: - At-risk session auto-upgrade (Phase 2)

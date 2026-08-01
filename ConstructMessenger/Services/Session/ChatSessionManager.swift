@@ -178,28 +178,84 @@ final class ChatSessionManager {
         )
     }
 
+    /// Post-init ping (msgNum=0) announcing our fresh ratchet to the peer.
+    ///
+    /// This is the third session-control chokepoint. `f39e03b4` sealed the other two
+    /// (`sendSessionControlCore`, `sendEndSession`) and missed this one, so under always-on
+    /// stealth it kept emitting an identified `senderId` on every establishment — the exact
+    /// sender→recipient+conversation signal the sealed control channel exists to close
+    /// (observed 2026-07-31: SRI and session_ready sent as `[STEALTH]`, this ping as a plain
+    /// user id in the same instant). Sealed here on the same fail-closed pattern:
+    /// no recipient identity key / seal failure ⇒ the ping is skipped, never downgraded.
+    /// Skipping is safe — the ping is an optimisation, and the peer still establishes from
+    /// the X3DH carrier plus the tie-break watchdog.
     func sendSessionInitPing(to userId: String) async {
         guard CryptoManager.shared.hasSession(for: userId) else { return }
+        // A SESSION_RESET_INIT is in flight for this peer and owns msgNum=0 on the (now shared,
+        // post-coalescing) session. The ping exists only to keep msgNum=0 off user content, so
+        // once the SRI has that slot it is redundant — and sending it would put a second X3DH
+        // carrier on the wire that the peer can only discard.
+        guard !SessionConfirmationTracker.shared.isPending(userId) else {
+            Log.info("SESSION_STATE[init_ping_skipped]: SESSION_RESET_INIT owns msgNum=0 for \(userId.prefix(8))…", category: "SessionInit")
+            return
+        }
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
         let pingId = UUID().uuidString.lowercased()
         let nonce = UUID().uuidString
+        // S2 dual-send: typed opcode for new consumers; magic-string payload is the fallback.
+        let contentType: Shared_Proto_Core_V1_ContentType = FeatureFlags.typedSessionControl ? .sessionPing : .e2EeSignal
+        let conversationId = ConversationId.direct(myUserId: myId, theirUserId: userId)
+        let timestamp = UInt64(Date().timeIntervalSince1970)
         do {
             let payload = try OutboundSessionService.shared.encryptSessionControl(
                 payload: SessionControlCodec.encodePayload(op: .ping, nonce: nonce),
                 messageId: pingId,
                 recipientId: userId
             )
-            _ = try await MessagingServiceClient.shared.sendMessage(
-                messageId: pingId,
-                recipientId: userId,
-                senderId: myId,
-                conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
-                encryptedPayload: payload,
-                timestamp: UInt64(Date().timeIntervalSince1970),
-                // S2 dual-send: typed opcode for new consumers; magic-string payload is the fallback.
-                contentType: FeatureFlags.typedSessionControl ? .sessionPing : .e2EeSignal
-            )
+
+            if StealthPolicy.shared.shouldUseSealedSender() {
+                let ctx = chat.managedObjectContext ?? PersistenceController.shared.container.viewContext
+                guard let recipientIK = StealthSenderService.recipientIdentityKey(recipientId: userId, context: ctx) else {
+                    throw StealthDowngradeBlocked(reason: "no recipient identity key for init ping → \(userId.prefix(8))…")
+                }
+                let sealedInner = try await StealthSenderService.buildSealedInner(
+                    recipientUserId: userId,
+                    recipientIdentityKey: recipientIK,
+                    encryptedPayload: payload,
+                    contentType: contentType
+                )
+                _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+                    try await StealthSenderService.buildSealedInner(
+                        recipientUserId: userId,
+                        recipientIdentityKey: recipientIK,
+                        encryptedPayload: payload,
+                        contentType: contentType
+                    )
+                }, send: { inner in
+                    try await MessagingServiceClient.shared.sendMessage(
+                        messageId: pingId,
+                        recipientId: userId,
+                        senderId: myId,
+                        conversationId: conversationId,
+                        encryptedPayload: payload,
+                        timestamp: timestamp,
+                        sealedInnerBytes: inner
+                    )
+                })
+            } else {
+                _ = try await MessagingServiceClient.shared.sendMessage(
+                    messageId: pingId,
+                    recipientId: userId,
+                    senderId: myId,
+                    conversationId: conversationId,
+                    encryptedPayload: payload,
+                    timestamp: timestamp,
+                    contentType: contentType
+                )
+            }
             Log.info("SESSION_STATE[init_ping_sent]: msgNum=0 ping sent to \(userId.prefix(8))… — user messages follow as msgNum=1+", category: "SessionInit")
+        } catch let blocked as StealthDowngradeBlocked {
+            Log.error("SESSION_STATE[init_ping_downgrade_blocked]: \(blocked.reason) — ping skipped (never sent identified under stealth)", category: "SessionInit")
         } catch {
             Log.error("SESSION_STATE[init_ping_failed]: \(error.localizedDescription) for \(userId.prefix(8))… — user messages will be sent anyway", category: "SessionInit")
         }

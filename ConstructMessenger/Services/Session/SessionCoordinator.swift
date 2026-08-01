@@ -598,6 +598,15 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
         initiatorReinitInFlight.insert(userId)
         Log.info("SESSION_STATE[initiator_announce]: re-init + SESSION_RESET_INIT for \(userId.prefix(8))… (\(reason))", category: "SessionInit")
+        // Mark pending synchronously at announce time, before any await:
+        //  1. It gates `sendSessionInitPing`. With proactive-init coalescing the SRI and the ping
+        //     share one session, so only one can be msgNum=0 — the SRI must win, it is the X3DH
+        //     carrier the RESPONDER bootstraps from. Setting the flag inside the Task would leave
+        //     the two coalesced continuations racing for it.
+        //  2. A peer replying `session_ready` faster than the old post-emit call hit
+        //     `markConfirmed`'s `guard removeValue != nil` and was swallowed, leaving the gate up
+        //     until the watchdog TTL.
+        SessionConfirmationTracker.shared.markPending(userId)
         Task { [weak self] in
             guard let self else { return }
             defer { self.initiatorReinitInFlight.remove(userId) }
@@ -609,7 +618,6 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
             )
             await self.emitHandshakeControls(.tieBreakWin, to: userId)
-            SessionConfirmationTracker.shared.markPending(userId)
         }
         startTieBreakWatchdog(for: userId)
     }
@@ -641,6 +649,10 @@ final class SessionCoordinator: MessageRouterDelegate {
             return
         }
         Log.info("SESSION_STATE[zombie_recover]: no session for purely-outbound peer \(userId.prefix(8))… with queued messages — forcing INITIATOR re-establish", category: "SessionInit")
+        // Same reasoning as `reinitAndAnnounceAsInitiator`: mark pending synchronously, before
+        // any await, so the SRI (not a coalesced init ping) owns msgNum=0 and a fast peer's
+        // `session_ready` cannot arrive before the gate exists.
+        SessionConfirmationTracker.shared.markPending(userId)
         let endInit = beginInit(userId)
         Task { [weak self] in
             guard let self else { endInit(); return }
@@ -653,7 +665,6 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
             )
             await self.emitHandshakeControls(.tieBreakWin, to: userId)
-            SessionConfirmationTracker.shared.markPending(userId)
         }
         startTieBreakWatchdog(for: userId)
     }
@@ -1045,11 +1056,13 @@ final class SessionCoordinator: MessageRouterDelegate {
 
                 // Stealth: seal the control envelope exactly like a message body. The real
                 // content type rides inside SealedInner and is recovered on receive
-                // (MessageRouter rebuilds with `resolved.contentType`, then routes control types via
-                // SessionControlCodec.op). Fail-closed: under stealth-on we NEVER emit an identified
-                // control send — that is the server-observable session-graph leak the sealed path
-                // exists to close (decisions/sealed-sender-session-control-channel.md). A blocked
-                // send just fails this attempt; the tie-break watchdog re-drives the handshake.
+                // (MessageRouter rebuilds with `resolved.contentType` AND remaps routing kind
+                // via ContentTypeRouting — early-exit predicates read contentType; late types
+                // still use SessionControlCodec.op). See SEALED_CONTROL_CHANNEL_REMEDIATION.
+                // Fail-closed: under stealth-on we NEVER emit an identified control send — that
+                // is the server-observable session-graph leak the sealed path exists to close
+                // (decisions/sealed-sender-session-control-channel.md). A blocked send just
+                // fails this attempt; the tie-break watchdog re-drives the handshake.
                 if StealthPolicy.shared.shouldUseSealedSender() {
                     let ctx = viewContext ?? PersistenceController.shared.container.viewContext
                     guard let recipientIK = StealthSenderService.recipientIdentityKey(recipientId: userId, context: ctx) else {
