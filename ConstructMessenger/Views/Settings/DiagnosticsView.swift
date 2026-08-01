@@ -33,6 +33,16 @@ struct DiagnosticsView: View {
     @State private var tokenOutcome: String = "—"
     @State private var tokenOutcomeOk: Bool = true
     @State private var tokenlessSends: Int = 0
+    // Silent re-init: contacts we currently hold a session with, offered as targets.
+    @State private var reinitTargets: [ReinitTarget] = []
+    @State private var showReinitPicker = false
+    @State private var reinitStatus: String = "—"
+    @State private var reinitOk = true
+
+    private struct ReinitTarget: Identifiable {
+        let id: String
+        let name: String
+    }
     #endif
     private var isPushPermissionGranted: Bool {
         push.authorizationStatus == .authorized || push.authorizationStatus == .provisional
@@ -128,11 +138,21 @@ struct DiagnosticsView: View {
                                     await PreKeyRotationService.shared.forceRotate()
                                 }
                             }
+                            ConstructActionRow(systemImage: "arrow.triangle.2.circlepath", title: LocalizedStringKey("diagnostics_force_silent_reinit"), role: .secondary) {
+                                loadReinitTargets()
+                            }
+                            ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
+                            diagRow(label: "Last silent re-init", value: reinitStatus, ok: reinitOk)
+                            ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
                             ConstructActionRow(systemImage: "exclamationmark.triangle", title: LocalizedStringKey("diagnostics_reset_local_data_keychain"), role: .destructive) {
                                 resetLocalData()
                             }
                         }
                     }
+                    Text(LocalizedStringKey("diagnostics_silent_reinit_footer"))
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                     Text(LocalizedStringKey("diagnostics_dev_tools_footer"))
                         .font(CTFont.regular(12))
                         .foregroundStyle(Color.CT.textDim)
@@ -247,6 +267,18 @@ struct DiagnosticsView: View {
         .toolbar(.hidden, for: .navigationBar)
         #endif
         .onAppear { refresh() }
+        #if DEBUG
+        .confirmationDialog(
+            LocalizedStringKey("diagnostics_force_silent_reinit"),
+            isPresented: $showReinitPicker,
+            titleVisibility: .visible
+        ) {
+            ForEach(reinitTargets) { target in
+                Button(target.name) { forceSilentReinit(target) }
+            }
+            Button(LocalizedStringKey("cancel"), role: .cancel) {}
+        }
+        #endif
     }
 
     // MARK: - Helpers
@@ -324,6 +356,60 @@ struct DiagnosticsView: View {
         } else {
             tokenOutcome = "no attempt yet"
             tokenOutcomeOk = false
+        }
+    }
+
+    /// Contacts we currently hold a Double Ratchet session with — the only valid targets, since
+    /// the point is to re-init *while the peer still holds the old session*.
+    private func loadReinitTargets() {
+        let context = PersistenceController.shared.container.viewContext
+        let chats = (try? context.fetch(Chat.fetchRequest())) ?? []
+        reinitTargets = chats.compactMap { chat in
+            guard let user = chat.otherUser, !user.id.isEmpty else { return nil }
+            guard CryptoManager.shared.hasSession(for: user.id) else { return nil }
+            return ReinitTarget(id: user.id, name: user.resolvedDisplayName)
+        }
+        if reinitTargets.isEmpty {
+            reinitStatus = "no contact has an active session"
+            reinitOk = false
+        } else {
+            showReinitPicker = true
+        }
+    }
+
+    /// Re-establish our session with `target` as INITIATOR **without telling the peer**.
+    ///
+    /// This manufactures, on demand, the asymmetry that otherwise only appears by chance: we hold
+    /// a fresh ratchet, the peer still holds the old one, so our next message reaches them as an
+    /// X3DH carrier (msgNum=0, KEM ciphertext) on a session they already have. That is the input
+    /// the core answers with `[ApplyPQContribution, CheckAckInDb]` — two actions — which the host
+    /// used to mishandle (see decisions/host-dropped-action-returns).
+    ///
+    /// `initializeSessionProactively` is exactly the right primitive: it fetches the bundle and
+    /// calls `initializeSession(deleteExisting: true)`, and it does NOT send END_SESSION or a
+    /// SESSION_RESET_INIT — announcing is the coordinator's job, and announcing is precisely what
+    /// we must not do here.
+    ///
+    /// Send **two** messages afterwards. The first proves the carrier was decrypted; only the
+    /// second proves the post-quantum contribution was mixed in symmetrically, because an
+    /// asymmetric mix still decrypts msg0 and fails on msg1.
+    private func forceSilentReinit(_ target: ReinitTarget) {
+        reinitStatus = "re-initialising…"
+        reinitOk = true
+        Task { @MainActor in
+            await SessionInitializationService.shared.initializeSessionProactively(
+                userId: target.id,
+                onSuccess: {
+                    reinitStatus = "OK → \(target.name): now send TWO messages"
+                    reinitOk = true
+                    Log.info("DIAG[silent_reinit]: re-initialised with \(target.id.prefix(8))… — peer still holds the old session; next send is an X3DH carrier", category: "Diagnostics")
+                },
+                onFailure: { error in
+                    reinitStatus = "failed: \(error.localizedDescription)"
+                    reinitOk = false
+                    Log.error("DIAG[silent_reinit]: failed for \(target.id.prefix(8))…: \(error)", category: "Diagnostics")
+                }
+            )
         }
     }
 
