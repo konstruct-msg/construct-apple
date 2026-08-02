@@ -102,6 +102,13 @@ enum MetricEvent: String {
     /// `invalid_chunk`, `stale_init`, `stale_pending`, `binary_init_discarded`,
     /// `tie_break_win`).
     case undeliveredNoReceipt = "undelivered_no_receipt"
+
+    /// A durable ACK was written but the in-memory dedup cache could not be warmed, because
+    /// the orchestrator core was not up. Correctness is unaffected — Core Data owns dedup and
+    /// every reader falls through to it — but the hot-path guard is colder than intended.
+    /// Should be zero in a normal run: `markProcessed` is only reached after a decrypt, which
+    /// already requires the core. A non-zero count means that assumption is wrong somewhere.
+    case ackCacheWarmSkippedNoCore = "ack_cache_warm_skipped_no_core"
 }
 
 #if DEBUG

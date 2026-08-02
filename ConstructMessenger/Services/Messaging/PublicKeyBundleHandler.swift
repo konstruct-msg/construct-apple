@@ -182,11 +182,13 @@ class PublicKeyBundleHandler {
                 // The X3DH OTPK is consumed by THIS init — a re-init from the same msg0
                 // can only fail with "OTPK not found" and spuriously start the heal path.
                 // Marked only after the successful save above: if persisting failed, we
-                // WANT the redelivery to retry. Three layers, same as the CFE path:
-                // Rust orchestrator cache (persists with the next state save), Swift
-                // in-memory cache, Core Data (survives restart).
-                CryptoManager.shared.markAckProcessedInOrchestrator(messageId: message.id)
-                PersistentACKStore.shared.preemptACK(message.id)
+                // WANT the redelivery to retry.
+                //
+                // One call, not three. This site used to write the orchestrator cache, a second
+                // Swift-side cache and Core Data in a row, under a comment claiming the
+                // orchestrator cache "persists with the next state save" — it does not
+                // (`export_orchestrator_state_cfe` writes an empty `processed_ids` on purpose).
+                // There is now one cache and one durable store, and `markProcessed` writes both.
                 PersistentACKStore.shared.markProcessed(message.id, senderId: data.userId, in: context)
                 return true
             } catch {

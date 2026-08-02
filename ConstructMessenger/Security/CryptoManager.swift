@@ -408,7 +408,36 @@ class CryptoManager {
         Log.debug("Orchestrator state CFE cleared", category: "CryptoManager")
     }
 
-    /// Mark an ACK as processed inside the Rust orchestrator cache (serialized).
+    // MARK: - ACK dedup cache
+    //
+    // There is exactly **one** in-memory ACK cache: the orchestrator's `lifecycle.ack_store`.
+    // `PersistentACKStore` used to own a second, independent `RustAckStore`, so the same
+    // question ("was this message processed?") had two answers that were written by different
+    // call sites and never reconciled — see decisions/one-ack-cache-one-durable-store.md.
+    //
+    // This cache does **not** survive a restart. `export_orchestrator_state_cfe` writes an
+    // empty `processed_ids` on purpose (snapshotting it grew the blob without bound), so the
+    // durable owner of dedup state is Core Data `ProcessedMessage`, and a cache miss after
+    // launch falls through to it via `Action::CheckAckInDb`.
+
+    /// Whether the orchestrator core exists, i.e. whether the ACK cache can be written at all.
+    var isOrchestratorCoreUp: Bool {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore != nil
+    }
+
+    /// Ask the orchestrator's ACK cache about `messageId`.
+    ///
+    /// Returns `nil` when the core is not up (pre-login, tests) — the caller must then treat
+    /// the question as unanswered and consult Core Data, which is the durable owner anyway.
+    func ackIsProcessedInOrchestrator(messageId: String) -> AckCheckResult? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.ackIsProcessed(messageId: messageId)
+    }
+
+    /// Mark an ACK as processed in the orchestrator's ACK cache (serialized).
     func markAckProcessedInOrchestrator(messageId: String) {
         coreLock.lock()
         defer { coreLock.unlock() }
@@ -1077,11 +1106,15 @@ class CryptoManager {
         Log.debug("ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "CryptoManager")
         Log.debug("content length: \(message.content.count) bytes", category: "CryptoManager")
 
-        // Last-resort duplicate guard: if the foreground stream already processed this
-        // message (preemptACK was called in routeIncomingMessage), the DR state has
-        // already advanced past it.  Attempting to decrypt would fail and incorrectly
-        // archive a healthy session — throw duplicateMessage instead so the caller can
-        // skip silently without triggering session recovery.
+        // Last-resort duplicate guard: if this message was already processed in this launch,
+        // the DR state has already advanced past it. Attempting to decrypt would fail and
+        // incorrectly archive a healthy session — throw duplicateMessage instead so the caller
+        // can skip silently without triggering session recovery.
+        //
+        // Since the two ACK caches were merged (2026-08-02) this also sees marks made by the
+        // Rust decrypt path itself, which the old Swift-side cache never did. The previous
+        // comment here named `routeIncomingMessage` as the writer; it never called `preemptACK`
+        // — the only writer was `PublicKeyBundleHandler`, plus the warm-up after a durable ACK.
         if PersistentACKStore.shared.isProcessedInMemory(message.id) {
             Log.info("CryptoManager: \(message.id.prefix(8))… already in ACK cache — skipping duplicate decrypt", category: "CryptoManager")
             throw CryptoManagerError.duplicateMessage
@@ -1189,7 +1222,7 @@ class CryptoManager {
     /// The caller is responsible for:
     ///   - session restore (call `restoreSession(for:)` per contactId before calling this)
     ///   - storing returned `storageKey` values in `MessageKeyStore`
-    ///   - calling `PersistentACKStore.preemptACK` for successfully decrypted messages
+    ///   - calling `PersistentACKStore.markProcessedInCache` for successfully decrypted messages
     func decryptOfflineBatch(_ messages: [ChatMessage]) -> [OfflineBatchDecryptResult] {
         // Fast pre-filter: drop anything already in the in-memory ACK cache.
         let filtered = messages.filter { !PersistentACKStore.shared.isProcessedInMemory($0.id) }
