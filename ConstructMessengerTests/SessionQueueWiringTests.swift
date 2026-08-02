@@ -113,7 +113,6 @@ final class SessionQueueWiringTests: XCTestCase {
             id: id,
             from: peer,
             to: me,
-            messageType: .direct,
             ephemeralPublicKey: Data(repeating: 1, count: 32),
             messageNumber: msgNum,
             content: Data(repeating: 2, count: 48),

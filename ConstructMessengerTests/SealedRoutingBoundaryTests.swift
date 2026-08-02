@@ -192,7 +192,6 @@ final class SealedRoutingBoundaryTests: XCTestCase {
             id: id,
             from: "",
             to: me,
-            messageType: .direct,
             ephemeralPublicKey: Data(repeating: 1, count: 32),
             messageNumber: 0,
             content: Data(repeating: 2, count: 48),
@@ -247,7 +246,6 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
             id: "6fcec8b4-c2ca-4e94-a8de-764b5623bcb6",
             from: "",
             to: "",
-            messageType: .direct,
             ephemeralPublicKey: Data(repeating: 0x11, count: 32),
             messageNumber: 7,
             content: Data(repeating: 0x22, count: 48),
@@ -317,7 +315,9 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
     func testContentTypeAndKindComeFromTheSealedInner() {
         let rebuilt = sealedCarrier().resolvingSealedSender(resolved(contentType: 24), currentUserId: me)
         XCTAssertEqual(rebuilt.contentType, 24, "outer type is forced generic; the inner one is authoritative")
-        XCTAssertEqual(rebuilt.messageType, .sessionResetInit, "kind must be derived, never copied")
+        // The kind is derived, not stored: `messageType` was removed on 2026-08-02, so there is
+        // no longer a second field that could stay stamped DIRECT while this byte says SRI.
+        XCTAssertTrue(rebuilt.isSessionResetInit, "the recovered byte must drive the predicates")
     }
 
     func testSealedBytesAreDroppedOnceSpent() {
@@ -332,7 +332,7 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
         var addressed = sealedCarrier()
         addressed = ChatMessage(
             id: addressed.id, from: addressed.from, to: "someone-else",
-            messageType: addressed.messageType, ephemeralPublicKey: addressed.ephemeralPublicKey,
+            ephemeralPublicKey: addressed.ephemeralPublicKey,
             messageNumber: addressed.messageNumber, content: addressed.content,
             suiteId: addressed.suiteId, timestamp: addressed.timestamp
         )

@@ -25,7 +25,6 @@ final class SealedControlChannelTests: XCTestCase {
             } else {
                 XCTAssertEqual(ContentTypeRouting.kind(for: ct), kind,
                                "kind \(kind) canonical ct=\(ct) must round-trip")
-                XCTAssertEqual(ContentTypeRouting.messageType(for: ct), kind.rawValue)
             }
         }
     }
@@ -58,13 +57,11 @@ final class SealedControlChannelTests: XCTestCase {
         for kind in controlKinds {
             let ct = kind.canonicalContentType
             let identified = makeMessage(
-                messageType: kind,
                 contentType: ct,
                 rawPayload: Data(repeating: 0xAB, count: 16)
             )
             // Sealed outer before unseal: generic stamp, real type only after resolve.
             let preUnseal = makeMessage(
-                messageType: .direct,
                 contentType: 1, // outer forced generic
                 from: "",
                 rawPayload: Data(repeating: 0xAB, count: 16),
@@ -72,7 +69,6 @@ final class SealedControlChannelTests: XCTestCase {
             )
             // MessageRouter unseal boundary — the named remap under test.
             let postUnseal = makeMessage(
-                messageType: ContentTypeRouting.kind(for: ct),
                 contentType: ct,
                 from: "peer-user",
                 rawPayload: preUnseal.rawPayload
@@ -120,29 +116,31 @@ final class SealedControlChannelTests: XCTestCase {
         XCTAssertFalse(ContentTypeRouting.isKnownControlContentType(0))
     }
 
-    // MARK: - Predicates read contentType, not messageType string
+    // MARK: - contentType is the only type
 
-    func testPredicates_PreferContentType_OverStaleMessageType() {
-        // Simulated bug composition: stale DIRECT string + recovered ct=21.
-        // Predicates must still treat this as END_SESSION.
-        let msg = makeMessage(messageType: .direct, contentType: 21)
-        XCTAssertTrue(msg.isEndSession)
-        XCTAssertFalse(msg.isSessionResetInit)
-        XCTAssertFalse(msg.isRegularMessage)
+    // These two used to pass a `messageType` that disagreed with `contentType`, and asserted the
+    // predicates preferred the latter. `ChatMessage.messageType` was removed on 2026-08-02, so
+    // that disagreement is no longer expressible — which is a stronger guarantee than the test
+    // was making. What remains worth pinning is that the predicates key off the byte, and that
+    // an unset byte routes as nothing.
 
-        let sri = makeMessage(messageType: .direct, contentType: 24)
+    func testPredicates_RouteOffContentType() {
+        let endSession = makeMessage(contentType: 21)
+        XCTAssertTrue(endSession.isEndSession)
+        XCTAssertFalse(endSession.isSessionResetInit)
+        XCTAssertFalse(endSession.isRegularMessage)
+
+        let sri = makeMessage(contentType: 24)
         XCTAssertTrue(sri.isSessionResetInit)
         XCTAssertFalse(sri.isEndSession)
     }
 
-    func testPredicates_IdentifiedEndSession_RequiresContentType21() {
-        // messageType alone is no longer enough (Phase 2).
-        let stale = makeMessage(messageType: .endSession, contentType: 0)
-        XCTAssertFalse(stale.isEndSession,
-                       "contentType=0 must not route as END_SESSION after Phase 2")
-
-        let ok = makeMessage(messageType: .endSession, contentType: 21)
-        XCTAssertTrue(ok.isEndSession)
+    func testPredicates_UnsetContentType_RoutesAsNoControlKind() {
+        let unset = makeMessage(contentType: 0)
+        XCTAssertFalse(unset.isEndSession,
+                       "contentType=0 must not route as END_SESSION — there is no second field to fall back on")
+        XCTAssertFalse(unset.isSessionResetInit)
+        XCTAssertFalse(unset.isSenderSync)
     }
 
     // MARK: - Sealed fallback preserves rawPayload
@@ -152,7 +150,6 @@ final class SealedControlChannelTests: XCTestCase {
         // (END_SESSION sentinel) must keep rawPayload so SessionControl.reason is readable.
         let sentinel = Data(count: 16)
         let msg = makeMessage(
-            messageType: .direct,
             contentType: 0,
             from: "",
             rawPayload: sentinel,
@@ -163,7 +160,6 @@ final class SealedControlChannelTests: XCTestCase {
 
         // After unseal remap to END_SESSION the reason payload is still there.
         let after = makeMessage(
-            messageType: ContentTypeRouting.kind(for: UInt8(21)),
             contentType: 21,
             from: "peer",
             rawPayload: msg.rawPayload
@@ -175,7 +171,6 @@ final class SealedControlChannelTests: XCTestCase {
     // MARK: - Helpers
 
     private func makeMessage(
-        messageType: WireMessageKind,
         contentType: UInt8,
         from: String = "peer-user",
         rawPayload: Data = Data(),
@@ -185,7 +180,6 @@ final class SealedControlChannelTests: XCTestCase {
             id: UUID().uuidString,
             from: from,
             to: "me-user",
-            messageType: messageType,
             ephemeralPublicKey: Data(),
             messageNumber: 0,
             content: Data(),

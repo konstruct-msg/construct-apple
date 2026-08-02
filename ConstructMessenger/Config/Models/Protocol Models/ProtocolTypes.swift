@@ -14,10 +14,14 @@ struct ChatMessage: Codable, Identifiable {
     let from: String
     let to: String
 
-    /// Legacy envelope kind string, kept for Codable / logging. **Not** the routing authority —
-    /// early-exit predicates read `contentType` (see `ContentTypeRouting`). After a sealed
-    /// unseal this field is remapped from `resolved.contentType` so the two stay aligned.
-    let messageType: WireMessageKind
+    // `messageType: WireMessageKind` was removed on 2026-08-02. It was a second representation
+    // of the same fact as `contentType`, written at twelve construction sites and read at none:
+    // every predicate below already routed off `contentType`, and the two could disagree without
+    // anything failing. That disagreement is what shipped the sealed control-channel outage.
+    // The kind is still derivable on demand — `ContentTypeRouting.kind(for: contentType)`.
+    // The legacy `messageType` *storage key* is still decoded (see `init(from:)`), because old
+    // persisted JSON may carry it and no `contentType`; that is a compatibility surface, not a
+    // second field.
 
     // Double Ratchet fields (per API_V3_SPEC.md section 5.2.6)
     // Optional for CONTROL_MESSAGE type
@@ -36,7 +40,7 @@ struct ChatMessage: Codable, Identifiable {
     /// Only present when messageNumber == 0 (first message / session initiation).
     var kemCiphertext: Data = Data()
 
-    /// Authoritative content type for routing.
+    /// **The** content type. Sole routing authority — there is no second representation.
     /// Identified path: outer envelope. Sealed path: recovered from SealedInner after unseal.
     /// Early-exit predicates (`isEndSession` / `isSessionResetInit` / `isSenderSync`) read this.
     var contentType: UInt8 = 0
@@ -99,6 +103,8 @@ struct ChatMessage: Codable, Identifiable {
     ///
     /// This is the unseal boundary. Exactly three things change — the sender the outer envelope
     /// had to mask, the content type it had to force generic, and the now-spent sealed bytes.
+    /// (Before 2026-08-02 there was a fourth, `messageType`, which had to be kept in step with
+    /// `contentType` by hand. It is gone; the kind is derived from `contentType` on demand.)
     /// **Everything else must carry through verbatim**, and a field dropped here is invisible:
     /// nothing fails, the value is simply zero from that point on.
     ///
@@ -118,7 +124,6 @@ struct ChatMessage: Codable, Identifiable {
             id: id,
             from: resolved.senderId,                  // replaced: outer `from` is empty by design
             to: to.isEmpty ? currentUserId : to,
-            messageType: ContentTypeRouting.kind(for: resolved.contentType),
             ephemeralPublicKey: ephemeralPublicKey,
             messageNumber: messageNumber,
             content: content,
@@ -140,13 +145,22 @@ struct ChatMessage: Codable, Identifiable {
 }
 
 // Custom Codable: crypto fields absent in CONTROL_MESSAGE envelopes — provide safe defaults.
-// `messageType` accepts the typed enum or a legacy free-form string; `contentType` wins when set.
+// The `messageType` *key* is still read — old persisted JSON may carry it with no `contentType` —
+// but only to promote `contentType`. Nothing keeps it after decoding; the encoder (synthesized)
+// no longer writes it.
 extension ChatMessage {
     private enum CodingKeys: String, CodingKey {
-        case id, from, to, messageType, ephemeralPublicKey, messageNumber, content, suiteId
+        case id, from, to, ephemeralPublicKey, messageNumber, content, suiteId
         case timestamp, oneTimePreKeyId, kemCiphertext, contentType, kyberOtpkId
         case pqMessageEpoch, pqRatchetField
         case senderDeviceId, conversationId, replyToMessageId, rawPayload
+    }
+
+    /// Read-only: keys that exist in older persisted JSON but no longer map to a property.
+    /// Kept out of `CodingKeys` on purpose — a key there must have a property to synthesize
+    /// `Encodable`, and adding one back is exactly the second representation we removed.
+    private enum LegacyCodingKeys: String, CodingKey {
+        case messageType
     }
 
     init(from decoder: Decoder) throws {
@@ -154,13 +168,14 @@ extension ChatMessage {
         id = try c.decode(String.self, forKey: .id)
         from = try c.decode(String.self, forKey: .from)
         to = try c.decode(String.self, forKey: .to)
-        // Prefer typed enum; fall back to legacy free-form string (older persisted JSON).
+        // Older rows carry a kind and no contentType. Read it only to promote the byte below.
+        let legacy = try decoder.container(keyedBy: LegacyCodingKeys.self)
         let legacyKind: WireMessageKind
-        if let kind = try? c.decode(WireMessageKind.self, forKey: .messageType) {
+        if let kind = try? legacy.decode(WireMessageKind.self, forKey: .messageType) {
             legacyKind = kind
         } else {
             legacyKind = ContentTypeRouting.kind(
-                fromLegacyMessageType: try c.decodeIfPresent(String.self, forKey: .messageType)
+                fromLegacyMessageType: try legacy.decodeIfPresent(String.self, forKey: .messageType)
             )
         }
         ephemeralPublicKey = (try? c.decodeIfPresent(Data.self, forKey: .ephemeralPublicKey)) ?? Data()
@@ -176,10 +191,6 @@ extension ChatMessage {
             decodedContentType = legacyKind.canonicalContentType
         }
         contentType = decodedContentType
-        // contentType is authoritative when set; otherwise keep the legacy kind.
-        messageType = decodedContentType != 0
-            ? ContentTypeRouting.kind(for: decodedContentType)
-            : legacyKind
         kyberOtpkId = (try? c.decodeIfPresent(UInt32.self, forKey: .kyberOtpkId)) ?? 0
         pqMessageEpoch = (try? c.decodeIfPresent(UInt32.self, forKey: .pqMessageEpoch)) ?? 0
         pqRatchetField = (try? c.decodeIfPresent(Data.self, forKey: .pqRatchetField)) ?? Data()

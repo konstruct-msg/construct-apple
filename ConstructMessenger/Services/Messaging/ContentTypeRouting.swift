@@ -58,15 +58,10 @@ enum ContentTypeRouting {
         }
     }
 
-    /// String form for call sites that still log / compare the legacy envelope field.
-    /// Prefer `kind(for:)` + predicates on `ChatMessage`.
-    static func messageType(for contentType: UInt8) -> String {
-        kind(for: contentType).rawValue
-    }
-
-    static func messageType(for contentType: Shared_Proto_Core_V1_ContentType) -> String {
-        kind(for: contentType).rawValue
-    }
+    // The two `messageType(for:) -> String` helpers were removed with `ChatMessage.messageType`
+    // on 2026-08-02. Nothing outside a test called them, and a String form of the kind is exactly
+    // the second representation being eliminated. For logging use `kind(for:).rawValue` at the
+    // call site, so the derivation is visible rather than looking like a stored field.
 
     /// Control / signal content types that must never fall through to
     /// "handleEvent produced no routing decision" as a silent INFO.

@@ -37,7 +37,6 @@ final class IOSAuditFixesTests: XCTestCase {
             id: id,
             from: from,
             to: to,
-            messageType: .direct,
             ephemeralPublicKey: Data(),
             messageNumber: 1,
             content: Data(),

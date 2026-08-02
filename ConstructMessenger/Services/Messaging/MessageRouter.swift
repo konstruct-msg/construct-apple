@@ -185,10 +185,12 @@ final class MessageRouter {
                 }
             }
 
-            // Single source of truth at the unseal boundary: derive messageType from the
-            // recovered contentType. Copying the outer "DIRECT_MESSAGE" stamp left END_SESSION
-            // / SRI routing predicates false after sealed delivery (SEALED_CONTROL_CHANNEL_REMEDIATION).
-            let recoveredKind = ContentTypeRouting.kind(for: resolved.contentType)
+            // The unseal boundary. `contentType` is the only type the message carries, so the
+            // predicates that route it (isEndSession / isSessionResetInit / …) cannot disagree
+            // with it any more. Copying the outer "DIRECT_MESSAGE" stamp into a parallel field
+            // is what left those predicates false after sealed delivery
+            // (SEALED_CONTROL_CHANNEL_REMEDIATION); the field is gone as of 2026-08-02.
+            let recoveredKind = ContentTypeRouting.kind(for: resolved.contentType)  // log only
             message = message.resolvingSealedSender(resolved, currentUserId: currentUserId)
             Log.debug(
                 "STEALTH: resolved sender → \(resolved.senderId.prefix(8))… ct=\(resolved.contentType) kind=\(recoveredKind.rawValue)",
