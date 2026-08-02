@@ -782,13 +782,16 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // initReceivingSession failed — prekey exhausted, AEAD mismatch, or race after
                 // peer END_SESSION (stale msg0 on the wire).
                 Log.info("initReceivingSession failed — clearing queue for \(userId.prefix(8))…", category: "SessionInit")
-                // ACK as delivered so the server advances the delivery cursor past this message.
-                // Sending .failed causes some server implementations to re-enqueue for retry,
-                // creating a cascade: on every reconnect the same undecryptable message comes
-                // back, triggers another failed init, sends another END_SESSION, etc.
-                // .delivered = "message reached device" — recovery is peer re-init / SRI or
-                // our rate-limited END_SESSION outside the post-END_SESSION grace window.
-                streamManager?.sendReceipt([message.id], to: userId, status: .delivered)
+                // No receipt: this message was never decrypted, so telling the sender
+                // "delivered" would put a checkmark on something they never received.
+                //
+                // The old comment here claimed the receipt advanced the server's delivery
+                // cursor. It does not — the server trims strictly from `Subscribe.since_cursor`
+                // (`messaging-service/src/stream.rs`), which the client drives through
+                // `StreamCursorTracker`. The give-up below releases the watermark via
+                // `.clearQueuedMessages` → `removePendingMessages`, so redelivery stops
+                // without any receipt at all.
+                PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "init_fail")
                 // Track as permanently failed so the orphaned-init exception in MessageRouter
                 // does not re-process this message ID on subsequent reconnects.
                 FailedInitMessageStore.shared.add(message.id)
@@ -898,9 +901,10 @@ final class SessionCoordinator: MessageRouterDelegate {
                 Log.error("SESSION_STATE[heal_failed]: initReceivingSession still failing for \(userId.prefix(8))…", category: "SessionInit")
                 if !canContinue {
                     Log.info("Heal exhausted — sending END_SESSION to \(userId.prefix(8))…", category: "SessionInit")
-                    // ACK as delivered (same reasoning as initReceivingSession failure path):
-                    // .failed receipt causes the server to re-enqueue, looping indefinitely.
-                    streamManager?.sendReceipt([failedMessage.id], to: userId, status: .delivered)
+                    // No receipt — same reasoning as the initReceivingSession failure path:
+                    // nothing was decrypted, and the cursor is advanced by StreamCursorTracker,
+                    // never by a receipt.
+                    PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "heal_exhausted")
                     // Permanently block re-processing of this message ID.
                     FailedInitMessageStore.shared.add(failedMessage.id)
                     PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)

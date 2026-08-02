@@ -358,7 +358,7 @@ final class MessageRouter {
                 // the server keeps re-delivering stuck undecryptable messages.
                 if pendingQueue.contains(messageId: message.id, for: otherUserId) {
                     Log.debug("Skipping stale pending message \(message.id.prefix(8))… from deleted contact — not resurrecting", category: "MessageRouter")
-                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+                    PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "stale_pending")
                     return
                 }
                 Log.info("Fresh session (msgNum=0) from previously-deleted contact \(otherUserId.prefix(8))… — clearing deleted flag", category: "MessageRouter")
@@ -415,7 +415,7 @@ final class MessageRouter {
             && SessionConfirmationTracker.shared.isPending(otherUserId) {
             Log.info("SESSION_STATE[stale_init_drop]: discarding stale msgNum=0 from \(otherUserId.prefix(8))… (tie-break WIN, pending RESPONDER confirm)", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+            PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "stale_init")
             if isNewChat { context.delete(chat) }
             return
         }
@@ -562,7 +562,7 @@ final class MessageRouter {
                 category: "MessageRouter"
             )
         }
-        delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+        PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "fallthrough")
         if isNewChat { context.delete(chat) }
         return
     }
@@ -823,7 +823,7 @@ final class MessageRouter {
                     disposition = .incompleteReassembly
                 case .invalid(let reason):
                     Log.error("Invalid chunked message: \(reason)", category: "MessageRouter")
-                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+                    PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "invalid_chunk")
                 }
             }
         }
@@ -885,7 +885,10 @@ final class MessageRouter {
         chat: Chat,
         in context: NSManagedObjectContext
     ) {
-        // HEARTBEAT (content_type=13): silent liveness probe — discard, send cursor ACK.
+        // HEARTBEAT (content_type=13): silent liveness probe — discard.
+        // (The receipt below is NOT a cursor ACK: the server trims from Subscribe.since_cursor,
+        // driven by StreamCursorTracker. It is kept because the peer treats a heartbeat as
+        // answered when the receipt comes back.)
         if message.contentType == 13 {
             Log.debug("Heartbeat received from \(otherUserId.prefix(8))… — session healthy", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
@@ -897,7 +900,7 @@ final class MessageRouter {
         if SessionControlCodec.isBinaryInitSentinel(decryptedContent) {
             Log.info("SESSION_STATE[binary_init_discarded_normal_path]: discarding binary init sentinel from \(otherUserId.prefix(8))…", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+            PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "binary_init_discarded")
             return
         }
         if let op = SessionControlCodec.legacyOp(plaintext: decryptedContent) {
@@ -944,7 +947,8 @@ final class MessageRouter {
             return
         }
 
-        // 6. Acknowledge delivery to sender via stream (cursor ACK)
+        // 6. The message is in the transcript — tell the sender, so their checkmark is true.
+        // Not a cursor ACK: the cursor advances via StreamCursorTracker regardless.
         delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
 
         // 6b. Send E2E-encrypted delivery receipt back to sender.
@@ -1137,7 +1141,7 @@ final class MessageRouter {
             // The Rust session is already intact thanks to the DR snapshot/rollback.
             Log.info("SESSION_STATE[tie_break_win]: kept INITIATOR (my=\(myUserId.prefix(8))… > peer=\(contactId.prefix(8))…), suiteId=\(suiteId)", category: "SessionInit")
             PersistentACKStore.shared.markProcessed(message.id, senderId: contactId, in: context)
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: contactId, status: .delivered)
+            PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "tie_break_win")
             delegate?.messageRouter(self, didWinTieBreak: contactId)
         } else {
             // We are RESPONDER (lower deviceId) — peer WINS. Archive our session and heal.

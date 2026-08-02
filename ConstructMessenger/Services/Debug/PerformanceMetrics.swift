@@ -78,6 +78,30 @@ enum MetricEvent: String {
     /// Was silent INFO for four days while sealed END_SESSION/SRI were dropped —
     /// keep this ERROR-path countable. `label` carries `ct=<n>`.
     case noRoutingDecisionControl = "no_routing_decision_control"
+
+    // MARK: Silent semantic-divergence detectors (iOS audit 2026-08-02)
+    // These exist so a dual-meaning / dual-store mismatch cannot hide as DEBUG/INFO.
+
+    /// Multi-chunk KNST reassembly is incomplete: ratchet advanced for this envelope,
+    /// but the transcript row is not durable and the in-memory reassembler is the only
+    /// home of partial state. `label` = peer prefix or message id prefix.
+    case chunkReassemblyIncomplete = "chunk_reassembly_incomplete"
+
+    /// `CfeAction.persistAck` fired — Rust already marked its in-memory ACK and asks the
+    /// platform to durable-persist. If the Swift handler only re-marks the orchestrator
+    /// (no Core Data), restarts re-open the NeedDbCheck window. Counted so the gap is visible.
+    case persistAckPlatformOnlyMemory = "persist_ack_platform_only_memory"
+
+    /// A terminal disposition that did NOT put the message in front of the user: dropped,
+    /// undecryptable, superseded, or given up on. No receipt is sent — the stream cursor
+    /// advances on its own (`StreamCursorTracker`, default `.durable`), and a `.delivered`
+    /// receipt here would set a checkmark on the sender for something they never received.
+    ///
+    /// Replaces `receiptDeliveredOnFailure`, which counted those sends while they still
+    /// happened. `label` = reason code (`fallthrough`, `init_fail`, `heal_exhausted`,
+    /// `invalid_chunk`, `stale_init`, `stale_pending`, `binary_init_discarded`,
+    /// `tie_break_win`).
+    case undeliveredNoReceipt = "undelivered_no_receipt"
 }
 
 #if DEBUG
