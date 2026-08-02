@@ -635,6 +635,7 @@
 "diagnostics_stealth_override_hint" = "В Release всегда включён. Отключите здесь, чтобы проверить устаревший путь отправки с раскрытием отправителя во время разработки.";
 "diagnostics_force_spk_rotation" = "Принудительно обновить SPK";
 "diagnostics_force_silent_reinit" = "Тихая переинициализация (без уведомления)";
+"diagnostics_replace_otpk_pool" = "Заменить пул OTPK (разовое восстановление)";
 "diagnostics_silent_reinit_footer" = "Пересоздаёт нашу сессию как INITIATOR, не отправляя END_SESSION, — у собеседника остаётся старая. Следующее сообщение придёт к нему X3DH-носителем на живую сессию. После этого отправь ДВА сообщения: второе и доказывает, что PQ-вклад примешан симметрично.";
 "diagnostics_reset_local_data_keychain" = "Сбросить локальные данные и Keychain";
 "diagnostics_dev_tools_footer" = "Удаляет все ключи из Keychain, сессии и UserDefaults. Используйте для теста чистой инициализации без переустановки.";

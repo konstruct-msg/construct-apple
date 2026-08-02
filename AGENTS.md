@@ -33,7 +33,9 @@ Sibling repos: `~/Code/construct-core` (crypto), `~/Code/construct-transport` (Q
 
 ## Build
 
-**Full guide (first build, target flags, gotchas)**: `~/Code/construct-docs/client/ios/BUILD_GUIDE.md`
+**iOS docs index**: `~/Code/construct-docs/client/ios/README.md`  
+**Full guide (first build, target flags, gotchas)**: `~/Code/construct-docs/client/ios/BUILD_GUIDE.md`  
+**UniFFI (current)**: `~/Code/construct-docs/client/ios/UNIFFI_GUIDE.md`
 
 ```bash
 ./build_crypto_lib.sh --all      # first build: ConstructCore.xcframework (iOS+sim+mac)

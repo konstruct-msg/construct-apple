@@ -43,6 +43,11 @@ struct DiagnosticsView: View {
         let id: String
         let name: String
     }
+
+    // One-shot OTPK pool replace — recovery for pools poisoned before 74b6aff6.
+    @State private var otpkReplaceStatus: String = "—"
+    @State private var otpkReplaceOk = true
+    @State private var isReplacingOtpks = false
     #endif
     private var isPushPermissionGranted: Bool {
         push.authorizationStatus == .authorized || push.authorizationStatus == .provisional
@@ -143,6 +148,17 @@ struct DiagnosticsView: View {
                             }
                             ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
                             diagRow(label: "Last silent re-init", value: reinitStatus, ok: reinitOk)
+                            ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
+                            ConstructActionRow(
+                                systemImage: "key.horizontal",
+                                title: LocalizedStringKey("diagnostics_replace_otpk_pool"),
+                                role: .secondary,
+                                isLoading: isReplacingOtpks
+                            ) {
+                                replaceOtpkPool()
+                            }
+                            ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
+                            diagRow(label: "Last OTPK pool replace", value: otpkReplaceStatus, ok: otpkReplaceOk)
                             ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
                             ConstructActionRow(systemImage: "exclamationmark.triangle", title: LocalizedStringKey("diagnostics_reset_local_data_keychain"), role: .destructive) {
                                 resetLocalData()
@@ -410,6 +426,55 @@ struct DiagnosticsView: View {
                     Log.error("DIAG[silent_reinit]: failed for \(target.id.prefix(8))…: \(error)", category: "Diagnostics")
                 }
             )
+        }
+    }
+
+    /// Replace the whole server-side OTPK pool in one shot, and prune the local privates the
+    /// replace just retired.
+    ///
+    /// Recovery, not maintenance. Before `74b6aff6` the append path pruned local privates by id
+    /// cutoff while the server retires nothing, so the server still holds public halves whose
+    /// privates we deleted. That fix stops new damage; it cannot restore deleted keys. The server
+    /// hands out `ORDER BY uploaded_at ASC`, so those dead keys are exactly the ones it serves
+    /// next — every one costs a peer a failed 4-DH init and a fall back to 3-DH.
+    ///
+    /// `replace_existing=true` is the only operation that retires the pool (`key-service` sets
+    /// `is_expired` on every live row), which is what makes the poisoned entries unreachable and
+    /// what makes the follow-up prune correct here.
+    ///
+    /// Cost, accepted deliberately: a bundle a peer fetched moments ago is invalidated too, so
+    /// their next first-message goes to heal. `pruneGraceWindow` only protects our own side.
+    /// Run it once per device, not routinely — see decisions/otpk-pool-lifecycle.
+    private func replaceOtpkPool() {
+        guard !isReplacingOtpks else { return }
+        guard let deviceId = KeychainManager.shared.loadDeviceID(), !deviceId.isEmpty else {
+            otpkReplaceStatus = "no device id"
+            otpkReplaceOk = false
+            return
+        }
+        isReplacingOtpks = true
+        otpkReplaceStatus = "replacing…"
+        otpkReplaceOk = true
+        Task { @MainActor in
+            defer { isReplacingOtpks = false }
+            do {
+                let uploaded = try await OtpkReplenishmentService.generateAndUpload(
+                    count: OtpkReplenishmentService.replenishBatchSize,
+                    deviceId: deviceId,
+                    replaceExisting: true
+                )
+                let localCount = CryptoManager.shared.oneTimePrekeyCount()
+                otpkReplaceStatus = "OK — \(uploaded) uploaded, \(localCount) local"
+                otpkReplaceOk = true
+                Log.info(
+                    "DIAG[otpk_pool_replaced]: \(uploaded) keys uploaded with replaceExisting, \(localCount) privates held locally — poisoned server entries are now expired",
+                    category: "Diagnostics"
+                )
+            } catch {
+                otpkReplaceStatus = "failed: \(error.localizedDescription)"
+                otpkReplaceOk = false
+                Log.error("DIAG[otpk_pool_replaced]: failed: \(error)", category: "Diagnostics")
+            }
         }
     }
 
