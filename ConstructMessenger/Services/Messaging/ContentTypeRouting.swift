@@ -48,20 +48,13 @@ enum ContentTypeRouting {
         kind(for: UInt8(clamping: contentType.rawValue))
     }
 
-    /// Legacy free-form string → kind. Ingest/compat only; never re-read after normalisation.
-    static func kind(fromLegacyMessageType string: String?) -> WireMessageKind {
-        switch string {
-        case "CONTROL_MESSAGE":     return .endSession
-        case "SENDER_SYNC":         return .senderSync
-        case "SESSION_RESET_INIT":  return .sessionResetInit
-        default:                    return .direct
-        }
-    }
-
-    // The two `messageType(for:) -> String` helpers were removed with `ChatMessage.messageType`
-    // on 2026-08-02. Nothing outside a test called them, and a String form of the kind is exactly
-    // the second representation being eliminated. For logging use `kind(for:).rawValue` at the
-    // call site, so the derivation is visible rather than looking like a stored field.
+    // Removed with `ChatMessage.messageType` on 2026-08-02:
+    //   • `messageType(for:) -> String` (both overloads) — a String form of the kind is the same
+    //     duplicate in another shape; for logging use `kind(for:).rawValue` at the call site so
+    //     the derivation stays visible.
+    //   • `kind(fromLegacyMessageType:)` — the only caller was a Codable compat read for rows
+    //     persisted before `contentType` existed. The app has never shipped, so no such rows do.
+    // The content type has exactly one representation now: the byte.
 
     /// Control / signal content types that must never fall through to
     /// "handleEvent produced no routing decision" as a silent INFO.

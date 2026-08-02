@@ -145,9 +145,12 @@ struct ChatMessage: Codable, Identifiable {
 }
 
 // Custom Codable: crypto fields absent in CONTROL_MESSAGE envelopes — provide safe defaults.
-// The `messageType` *key* is still read — old persisted JSON may carry it with no `contentType` —
-// but only to promote `contentType`. Nothing keeps it after decoding; the encoder (synthesized)
-// no longer writes it.
+//
+// No legacy key is read. The `messageType` promotion that briefly lived here was removed the same
+// day it was written: it existed to rescue rows persisted before `contentType`, and there are no
+// such rows — the app has never shipped, so every device in the tester circle can migrate in one
+// step. Keeping a compatibility read for a population that does not exist is how the duplicate
+// representation would have grown back.
 extension ChatMessage {
     private enum CodingKeys: String, CodingKey {
         case id, from, to, ephemeralPublicKey, messageNumber, content, suiteId
@@ -156,28 +159,11 @@ extension ChatMessage {
         case senderDeviceId, conversationId, replyToMessageId, rawPayload
     }
 
-    /// Read-only: keys that exist in older persisted JSON but no longer map to a property.
-    /// Kept out of `CodingKeys` on purpose — a key there must have a property to synthesize
-    /// `Encodable`, and adding one back is exactly the second representation we removed.
-    private enum LegacyCodingKeys: String, CodingKey {
-        case messageType
-    }
-
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         from = try c.decode(String.self, forKey: .from)
         to = try c.decode(String.self, forKey: .to)
-        // Older rows carry a kind and no contentType. Read it only to promote the byte below.
-        let legacy = try decoder.container(keyedBy: LegacyCodingKeys.self)
-        let legacyKind: WireMessageKind
-        if let kind = try? legacy.decode(WireMessageKind.self, forKey: .messageType) {
-            legacyKind = kind
-        } else {
-            legacyKind = ContentTypeRouting.kind(
-                fromLegacyMessageType: try legacy.decodeIfPresent(String.self, forKey: .messageType)
-            )
-        }
         ephemeralPublicKey = (try? c.decodeIfPresent(Data.self, forKey: .ephemeralPublicKey)) ?? Data()
         messageNumber = (try? c.decodeIfPresent(UInt32.self, forKey: .messageNumber)) ?? 0
         content = (try? c.decodeIfPresent(Data.self, forKey: .content)) ?? Data()
@@ -185,12 +171,7 @@ extension ChatMessage {
         timestamp = (try? c.decodeIfPresent(UInt64.self, forKey: .timestamp)) ?? 0
         oneTimePreKeyId = (try? c.decodeIfPresent(UInt32.self, forKey: .oneTimePreKeyId)) ?? 0
         kemCiphertext = (try? c.decodeIfPresent(Data.self, forKey: .kemCiphertext)) ?? Data()
-        var decodedContentType = (try? c.decodeIfPresent(UInt8.self, forKey: .contentType)) ?? 0
-        // Legacy rows may only carry messageType; promote contentType so predicates agree.
-        if decodedContentType == 0, legacyKind != .direct {
-            decodedContentType = legacyKind.canonicalContentType
-        }
-        contentType = decodedContentType
+        contentType = (try? c.decodeIfPresent(UInt8.self, forKey: .contentType)) ?? 0
         kyberOtpkId = (try? c.decodeIfPresent(UInt32.self, forKey: .kyberOtpkId)) ?? 0
         pqMessageEpoch = (try? c.decodeIfPresent(UInt32.self, forKey: .pqMessageEpoch)) ?? 0
         pqRatchetField = (try? c.decodeIfPresent(Data.self, forKey: .pqRatchetField)) ?? Data()
