@@ -189,29 +189,7 @@ final class MessageRouter {
             // recovered contentType. Copying the outer "DIRECT_MESSAGE" stamp left END_SESSION
             // / SRI routing predicates false after sealed delivery (SEALED_CONTROL_CHANNEL_REMEDIATION).
             let recoveredKind = ContentTypeRouting.kind(for: resolved.contentType)
-            message = ChatMessage(
-                id: message.id,
-                from: resolved.senderId,
-                to: message.to.isEmpty ? currentUserId : message.to,
-                messageType: recoveredKind,
-                ephemeralPublicKey: message.ephemeralPublicKey,
-                messageNumber: message.messageNumber,
-                content: message.content,
-                suiteId: message.suiteId,
-                timestamp: message.timestamp,
-                oneTimePreKeyId: message.oneTimePreKeyId,
-                kemCiphertext: message.kemCiphertext,
-                // stealth-sealed-sender-v2 Phase 3: the outer envelope's content_type
-                // is forced generic for sealed sends — the real type only survives
-                // inside SealedInner, recovered by resolveSender above.
-                contentType: resolved.contentType,
-                kyberOtpkId: message.kyberOtpkId,
-                senderDeviceId: message.senderDeviceId,
-                conversationId: message.conversationId,
-                replyToMessageId: message.replyToMessageId,
-                rawPayload: message.rawPayload
-                // sealedInnerData intentionally omitted — sender resolved
-            )
+            message = message.resolvingSealedSender(resolved, currentUserId: currentUserId)
             Log.debug(
                 "STEALTH: resolved sender → \(resolved.senderId.prefix(8))… ct=\(resolved.contentType) kind=\(recoveredKind.rawValue)",
                 category: "MessageRouter"
@@ -505,14 +483,18 @@ final class MessageRouter {
         for action in actions {
             switch action {
             case .messageDecrypted:
-                executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+                // Disposition is observed for metrics/signals only. Incomplete multi-chunk must
+                // NOT hold the stream watermark (one partial media message would stall every
+                // later cursor for the device). Loss-on-restart of partial reassembly is tracked
+                // via `.chunkReassemblyIncomplete`; durable reassembly is the real fix.
+                _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
                 applyIncomingPqContribution(plan.kemCiphertext, for: message, contactId: otherUserId)
                 return
             case .callSignalDecrypted:
                 // ct=12: Rust decrypted the call signal — dispatch to CallManager directly.
                 // There is no .messageDecrypted in the action list for call signals, so this
                 // case must be handled here before the loop falls through to "no routing decision".
-                executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+                _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
                 delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
                 return
             case .sessionHealNeeded(let contactId, let role):
@@ -688,17 +670,28 @@ final class MessageRouter {
         }
     }
 
+    /// What `executeRustActions` did with the decrypted body — feeds stream-cursor disposition.
+    private enum DecryptBodyDisposition {
+        /// Fully handled (or terminal drop) for this envelope.
+        case terminal
+        /// Multi-chunk reassembly still waiting — hold stream cursor; do not pretend durable.
+        case incompleteReassembly
+    }
+
+    @discardableResult
     private func executeRustActions(
         _ actions: [CfeAction],
         for message: ChatMessage,
         chat: Chat,
         otherUserId: String,
         in context: NSManagedObjectContext
-    ) {
+    ) -> DecryptBodyDisposition {
         // Hand off all stateless actions (storage, ACK, timers, heartbeat, call dispatch, etc.)
         // to the centralised executor. Its switch is exhaustive — a new Rust action will
         // refuse to compile until SessionActionExecutor handles it.
         SessionActionExecutor.shared.execute(actions)
+
+        var disposition: DecryptBodyDisposition = .terminal
 
         // Router-state-bound actions: only .messageDecrypted needs chunkReassembler,
         // chat, message, context, and delegate. Handled inline.
@@ -815,13 +808,26 @@ final class MessageRouter {
                     delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
                     continue
                 case .incomplete:
-                    Log.debug("Chunked message incomplete, waiting for more chunks", category: "MessageRouter")
+                    // Dual-store divergence: DR + Rust L1 ACK advanced; reassembler is
+                    // process-memory only; stream cursor still advances (default .durable).
+                    // Restart mid-assembly loses partial state — was silent DEBUG. ERROR +
+                    // metric so loss is countable; durable reassembly is the structural fix.
+                    Log.error(
+                        "Chunked message incomplete for \(message.id.prefix(8))… from \(otherUserId.prefix(8))… — reassembly memory-only, cursor will still advance (restart may lose multi-chunk)",
+                        category: "MessageRouter"
+                    )
+                    PerformanceMetrics.shared.record(
+                        .chunkReassemblyIncomplete,
+                        label: String(message.id.prefix(8))
+                    )
+                    disposition = .incompleteReassembly
                 case .invalid(let reason):
                     Log.error("Invalid chunked message: \(reason)", category: "MessageRouter")
                     delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
                 }
             }
         }
+        return disposition
     }
 
 

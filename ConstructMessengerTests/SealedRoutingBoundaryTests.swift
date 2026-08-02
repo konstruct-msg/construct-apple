@@ -230,3 +230,116 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         return response
     }
 }
+
+// MARK: - C. The rebuild carries every field it does not deliberately replace
+
+/// Slice B of the pre-release consistency audit (decisions/pre-release-consistency-audit).
+///
+/// The unseal boundary replaces three things and must carry the rest verbatim. A field dropped
+/// there is invisible — nothing fails, the value is simply zero downstream. Two were in fact
+/// being dropped: `pqMessageEpoch` and `pqRatchetField`, read by the RESPONDER init to rebuild
+/// the AEAD associated data, and whose loss its own comment records as "the outage".
+final class SealedRebuildFieldPreservationTests: XCTestCase {
+
+    private let peer = "7574fdec-ca31-44ac-9d43-0e6e870fe4d5"
+    private let me = "0a1c609f-b37d-4d67-b7b2-b0f8ec16d167"
+
+    /// Every field distinct and non-default, so a dropped one reads as a changed value rather
+    /// than coinciding with the default it would fall back to.
+    private func sealedCarrier() -> ChatMessage {
+        ChatMessage(
+            id: "6fcec8b4-c2ca-4e94-a8de-764b5623bcb6",
+            from: "",
+            to: "",
+            messageType: .direct,
+            ephemeralPublicKey: Data(repeating: 0x11, count: 32),
+            messageNumber: 7,
+            content: Data(repeating: 0x22, count: 48),
+            suiteId: 3,
+            timestamp: 1_785_665_817,
+            oneTimePreKeyId: 1_003_750,
+            kemCiphertext: Data(repeating: 0x33, count: 1088),
+            contentType: 1,
+            kyberOtpkId: 42,
+            pqMessageEpoch: 9,
+            pqRatchetField: Data(repeating: 0x44, count: 24),
+            senderDeviceId: "651e765cbbd33b4e48631fb802c2b3d2",
+            conversationId: "direct:a:b",
+            replyToMessageId: "reply-target",
+            rawPayload: Data(repeating: 0x55, count: 1428),
+            sealedInnerData: Data(repeating: 0x66, count: 96)
+        )
+    }
+
+    private func resolved(contentType: UInt8 = 24) -> ResolvedSender {
+        ResolvedSender(senderId: peer, contentType: contentType, trust: .vouched(.signature))
+    }
+
+    // MARK: The regression
+
+    /// Suite-3 PQ fields must survive. The sender encrypts with a `pq_message_epoch` tag in the
+    /// associated data; a responder that rebuilds it from zeros produces different AD and cannot
+    /// decrypt. Suite 3 is negotiated in the field, so these are populated on real carriers.
+    func testPqRatchetFieldsSurviveTheUnsealBoundary() {
+        let carrier = sealedCarrier()
+        let rebuilt = carrier.resolvingSealedSender(resolved(), currentUserId: me)
+
+        XCTAssertEqual(rebuilt.pqMessageEpoch, 9,
+                       "suite-3 epoch tag dropped — RESPONDER init rebuilds the wrong AEAD AD")
+        XCTAssertEqual(rebuilt.pqRatchetField, carrier.pqRatchetField,
+                       "suite-3 sparse PQ field dropped — same failure, silent")
+    }
+
+    // MARK: Everything else carried through
+
+    func testAllCarriedFieldsAreUnchanged() {
+        let carrier = sealedCarrier()
+        let rebuilt = carrier.resolvingSealedSender(resolved(), currentUserId: me)
+
+        XCTAssertEqual(rebuilt.id, carrier.id)
+        XCTAssertEqual(rebuilt.ephemeralPublicKey, carrier.ephemeralPublicKey)
+        XCTAssertEqual(rebuilt.messageNumber, carrier.messageNumber)
+        XCTAssertEqual(rebuilt.content, carrier.content)
+        XCTAssertEqual(rebuilt.suiteId, carrier.suiteId, "suite drives the AD layout — must not shift")
+        XCTAssertEqual(rebuilt.timestamp, carrier.timestamp)
+        XCTAssertEqual(rebuilt.oneTimePreKeyId, carrier.oneTimePreKeyId, "X3DH OTPK id — init fails without it")
+        XCTAssertEqual(rebuilt.kemCiphertext, carrier.kemCiphertext, "PQXDH decapsulation input")
+        XCTAssertEqual(rebuilt.kyberOtpkId, carrier.kyberOtpkId, "selects SPK vs one-time Kyber secret")
+        XCTAssertEqual(rebuilt.senderDeviceId, carrier.senderDeviceId)
+        XCTAssertEqual(rebuilt.conversationId, carrier.conversationId)
+        XCTAssertEqual(rebuilt.replyToMessageId, carrier.replyToMessageId)
+        XCTAssertEqual(rebuilt.rawPayload, carrier.rawPayload, "the orchestrator's decrypt input")
+    }
+
+    // MARK: The three deliberate replacements
+
+    func testSenderIsReplacedByTheResolvedIdentity() {
+        let rebuilt = sealedCarrier().resolvingSealedSender(resolved(), currentUserId: me)
+        XCTAssertEqual(rebuilt.from, peer, "sealed `from` is empty on the wire — resolution fills it")
+    }
+
+    func testContentTypeAndKindComeFromTheSealedInner() {
+        let rebuilt = sealedCarrier().resolvingSealedSender(resolved(contentType: 24), currentUserId: me)
+        XCTAssertEqual(rebuilt.contentType, 24, "outer type is forced generic; the inner one is authoritative")
+        XCTAssertEqual(rebuilt.messageType, .sessionResetInit, "kind must be derived, never copied")
+    }
+
+    func testSealedBytesAreDroppedOnceSpent() {
+        let rebuilt = sealedCarrier().resolvingSealedSender(resolved(), currentUserId: me)
+        XCTAssertTrue(rebuilt.sealedInnerData.isEmpty, "the only deliberate omission")
+    }
+
+    /// An empty `to` is filled from our own identity; a populated one is left alone.
+    func testRecipientFilledOnlyWhenAbsent() {
+        XCTAssertEqual(sealedCarrier().resolvingSealedSender(resolved(), currentUserId: me).to, me)
+
+        var addressed = sealedCarrier()
+        addressed = ChatMessage(
+            id: addressed.id, from: addressed.from, to: "someone-else",
+            messageType: addressed.messageType, ephemeralPublicKey: addressed.ephemeralPublicKey,
+            messageNumber: addressed.messageNumber, content: addressed.content,
+            suiteId: addressed.suiteId, timestamp: addressed.timestamp
+        )
+        XCTAssertEqual(addressed.resolvingSealedSender(resolved(), currentUserId: me).to, "someone-else")
+    }
+}

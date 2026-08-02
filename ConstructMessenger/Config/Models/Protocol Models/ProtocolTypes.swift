@@ -94,6 +94,49 @@ struct ChatMessage: Codable, Identifiable {
     var isRegularMessage: Bool {
         ContentTypeRouting.kind(for: contentType) == .direct
     }
+
+    /// Rebuild with the sender and content type recovered from `SealedInner`.
+    ///
+    /// This is the unseal boundary. Exactly three things change — the sender the outer envelope
+    /// had to mask, the content type it had to force generic, and the now-spent sealed bytes.
+    /// **Everything else must carry through verbatim**, and a field dropped here is invisible:
+    /// nothing fails, the value is simply zero from that point on.
+    ///
+    /// It lived inline in `MessageRouter` as a twenty-argument constructor, where
+    /// `pqMessageEpoch` / `pqRatchetField` were in fact being dropped — silently, because the
+    /// one deliberate omission next to them (`sealedInnerData`) carried a comment and these did
+    /// not. Their reader is the RESPONDER init, which rebuilds the AEAD associated data from
+    /// them, and which records that dropping them "was the outage"
+    /// (`CryptoSessionInitializationService`). Suite 3 is negotiated in the field
+    /// (`negotiated=3`, `supportsPqRatchet=true`), so those fields are populated on real
+    /// carriers.
+    ///
+    /// Named and moved here so the boundary is a testable object rather than an argument list —
+    /// see `SealedRoutingBoundaryTests`.
+    func resolvingSealedSender(_ resolved: ResolvedSender, currentUserId: String) -> ChatMessage {
+        ChatMessage(
+            id: id,
+            from: resolved.senderId,                  // replaced: outer `from` is empty by design
+            to: to.isEmpty ? currentUserId : to,
+            messageType: ContentTypeRouting.kind(for: resolved.contentType),
+            ephemeralPublicKey: ephemeralPublicKey,
+            messageNumber: messageNumber,
+            content: content,
+            suiteId: suiteId,
+            timestamp: timestamp,
+            oneTimePreKeyId: oneTimePreKeyId,
+            kemCiphertext: kemCiphertext,
+            contentType: resolved.contentType,        // replaced: outer type is forced generic
+            kyberOtpkId: kyberOtpkId,
+            pqMessageEpoch: pqMessageEpoch,
+            pqRatchetField: pqRatchetField,
+            senderDeviceId: senderDeviceId,
+            conversationId: conversationId,
+            replyToMessageId: replyToMessageId,
+            rawPayload: rawPayload
+            // sealedInnerData deliberately omitted — the sender is resolved, the bytes are spent.
+        )
+    }
 }
 
 // Custom Codable: crypto fields absent in CONTROL_MESSAGE envelopes — provide safe defaults.
