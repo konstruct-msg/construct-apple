@@ -33,7 +33,6 @@ final class SealedRoutingBoundaryTests: XCTestCase {
     private final class RecordingDelegate: MessageRouterDelegate {
         var resetInitSupersededQueries: [String] = []
         var endSessionStaleQueries: [String] = []
-        var receipts: [(ids: [String], to: String, status: Shared_Proto_Signaling_V1_ReceiptStatus)] = []
         var endSessionRequests: [String] = []
 
         func messageRouter(_ router: MessageRouter, needsPublicKeyBundle userId: String, for message: ChatMessage) {}
@@ -51,9 +50,6 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         }
         func messageRouter(_ router: MessageRouter, didWinTieBreak userId: String) {}
         func messageRouter(_ router: MessageRouter, needsSessionHeal userId: String, failedMessage: ChatMessage) {}
-        func messageRouter(_ router: MessageRouter, needsReceipt messageIds: [String], to userId: String, status: Shared_Proto_Signaling_V1_ReceiptStatus) {
-            receipts.append((messageIds, userId, status))
-        }
         func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {}
         func messageRouter(_ router: MessageRouter, needsUsernameUpdate userId: String) {}
     }

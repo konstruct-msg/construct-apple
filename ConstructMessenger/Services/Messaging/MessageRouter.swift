@@ -259,7 +259,10 @@ final class MessageRouter {
                 && !FailedInitMessageStore.shared.contains(message.id)
             if !isOrphanedInit {
                 Log.debug("Skipping already-processed message \(message.id.prefix(8))… (ACK store)", category: "MessageRouter")
-                delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+                // Truthful: the message IS in the transcript from the first delivery. The sender
+                // is redelivering because our first receipt never landed, so this re-send is the
+                // only thing that will ever move their checkmark off "sent".
+                OutboundSessionService.sendDeliveryReceipt(for: [message.id], to: otherUserId, in: context)
                 return
             }
             Log.info("Re-processing orphaned session init \(message.id.prefix(8))… (no active session for \(otherUserId.prefix(8))…)", category: "MessageRouter")
@@ -271,7 +274,6 @@ final class MessageRouter {
         if message.isSenderSync {
             PersistentACKStore.shared.markProcessed(message.id, senderId: message.from, in: context)
             handleSenderSync(message, in: context)
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: message.from, status: .delivered)
             return
         }
 
@@ -289,7 +291,6 @@ final class MessageRouter {
                     "SESSION_RESET_INIT superseded for \(otherUserId.prefix(8))… — ACK only (pre-dates current session)",
                     category: "MessageRouter"
                 )
-                delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
                 return
             }
             Log.info("SESSION_RESET_INIT from \(otherUserId.prefix(8))…", category: "MessageRouter")
@@ -297,7 +298,6 @@ final class MessageRouter {
             // A handled SRI also counts as "we just reset this peer" for the END_SESSION coalescer
             // (preserves the cross-arm the removed inbound-control time-window provided).
             lastInboundEndSessionAt[otherUserId] = Date()
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
             return
         }
 
@@ -320,12 +320,10 @@ final class MessageRouter {
                     "END_SESSION coalesced for \(otherUserId.prefix(8))… — ACK only (inbound control cooldown)",
                     category: "MessageRouter"
                 )
-                delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
                 return
             }
             Log.info("Received END_SESSION from \(otherUserId)", category: "MessageRouter")
             handleEndSession(from: otherUserId, messageTimestamp: message.timestamp, in: context)
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
             return
         }
 
@@ -495,7 +493,6 @@ final class MessageRouter {
                 // There is no .messageDecrypted in the action list for call signals, so this
                 // case must be handled here before the loop falls through to "no routing decision".
                 _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
-                delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
                 return
             case .sessionHealNeeded(let contactId, let role):
                 handleRustHealDecision(role: role, contactId: contactId, message: message, in: context)
@@ -505,7 +502,7 @@ final class MessageRouter {
                 return
             case .sendEndSession(let contactId):
                 Log.info("SESSION_STATE[rust_end_session]: DR diverged for \(contactId.prefix(8))… — sending END_SESSION", category: "SessionInit")
-                delegate?.messageRouter(self, needsReceipt: [message.id], to: contactId, status: .failed)
+                PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "rust_end_session")
                 pendingQueue.remove(for: contactId)
                 SessionHealingService.shared.clearQueue(for: contactId, in: context)
                 PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
@@ -738,13 +735,11 @@ final class MessageRouter {
                 if let profile = ProfileShareData.fromBinaryData(plaintext) {
                     ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
                     continue
                 } else if let str = String(data: plaintext, encoding: .utf8),
                           let profile = ProfileSharingManager.shared.parseProfileMessage(str) {
                     ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
                     continue
                 }
 
@@ -779,7 +774,6 @@ final class MessageRouter {
                         ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
                     }
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
                     continue
                 case .edit(let targetMessageID, let newText, _):
                     // Modern edit from MessageContent.edit (newText carries caption for media too).
@@ -805,7 +799,6 @@ final class MessageRouter {
                         Log.error("Modern edit target not found: \(targetMessageID.prefix(8))… from \(otherUserId.prefix(8))… — edit dropped", category: "MessageRouter")
                     }
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-                    delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
                     continue
                 case .incomplete:
                     // Dual-store divergence: DR + Rust L1 ACK advanced; reassembler is
@@ -842,7 +835,6 @@ final class MessageRouter {
         in context: NSManagedObjectContext
     ) {
         PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-        delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
 
         switch op {
         case .ready:
@@ -886,13 +878,14 @@ final class MessageRouter {
         in context: NSManagedObjectContext
     ) {
         // HEARTBEAT (content_type=13): silent liveness probe — discard.
-        // (The receipt below is NOT a cursor ACK: the server trims from Subscribe.since_cursor,
-        // driven by StreamCursorTracker. It is kept because the peer treats a heartbeat as
-        // answered when the receipt comes back.)
+        // No receipt: a heartbeat has no row on the sender's side, so a receipt could never
+        // move anything. (The old comment claimed the peer "treats a heartbeat as answered
+        // when the receipt comes back" — nothing on the sending side reads it; stream liveness
+        // is tracked by `lastHeartbeatDate` off the stream-level heartbeatAck, a different
+        // mechanism entirely.)
         if message.contentType == 13 {
             Log.debug("Heartbeat received from \(otherUserId.prefix(8))… — session healthy", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
             return
         }
 
@@ -916,7 +909,6 @@ final class MessageRouter {
         ), specialMessageHandled {
             do {
                 try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId, in: context)
-                delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
             } catch {
                 Log.error("Failed to persist ACK for special message \(message.id.prefix(8))…: \(error)", category: "MessageRouter")
             }
@@ -948,34 +940,9 @@ final class MessageRouter {
         }
 
         // 6. The message is in the transcript — tell the sender, so their checkmark is true.
-        // Not a cursor ACK: the cursor advances via StreamCursorTracker regardless.
-        delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
-
-        // 6b. Send E2E-encrypted delivery receipt back to sender.
-        // This receipt is DR-encrypted so the server cannot correlate receipt→sender
-        // even when stealth mode is active. Fires fire-and-forget; non-fatal if it fails.
-        // Carries the canonical (E2E) id so the sender can match its own local row —
-        // the envelope id is server-reassigned on the sealed path and means nothing to the sender.
-        let msgIdForReceipt = canonicalId
-        let identityKeyForReceipt: Data? = {
-            guard StealthPolicy.shared.shouldUseSealedSender() else { return nil }
-            let req = User.fetchRequest()
-            req.predicate = NSPredicate(format: "id == %@", otherUserId)
-            req.fetchLimit = 1
-            do {
-                return try context.fetch(req).first?.knownIdentityKey
-            } catch {
-                Log.error("Failed to load identity key for encrypted receipt to \(otherUserId.prefix(8))…: \(error)", category: "MessageRouter")
-                return nil
-            }
-        }()
-        Task {
-            await OutboundSessionService.shared.sendEncryptedDeliveryReceipt(
-                messageIds: [msgIdForReceipt],
-                to: otherUserId,
-                recipientIdentityKey: identityKeyForReceipt
-            )
-        }
+        // Carries the canonical (E2E) id so the sender can match its own local row: the envelope
+        // id is server-reassigned on the sealed path and means nothing to the sender.
+        OutboundSessionService.sendDeliveryReceipt(for: [canonicalId], to: otherUserId, in: context)
 
         SessionActivityTracker.shared.recordActivity(for: message.from)
         Log.info("Message received and saved: \(message.id)", category: "MessageRouter")
@@ -1039,7 +1006,9 @@ final class MessageRouter {
         // A reset-init must always rebuild, even for a previously-seen id.
         if !forceReinit && PersistentACKStore.shared.isProcessed(message.id, in: context) {
             Log.info("SESSION_STATE[first_message_dedup]: \(message.id.prefix(8))… from \(userId.prefix(8))… already processed — re-ACKing, skipping re-init", category: "SessionInit")
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: userId, status: .delivered)
+            // Truthful: the first init decrypted and saved this msg0. Same reasoning as the
+            // ACK-store dedup above — the re-send is the sender's only remaining checkmark.
+            OutboundSessionService.sendDeliveryReceipt(for: [message.id], to: userId, in: context)
             if isNewChat { context.delete(chat) }
             return .durable
         }
@@ -1068,7 +1037,7 @@ final class MessageRouter {
         if message.messageNumber > 0 && isFirstForUser {
             Log.info("No session for \(userId.prefix(8)) but messageNumber=\(message.messageNumber) — requesting END_SESSION so sender restarts", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: userId, status: .failed)
+            PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "mid_ratchet_no_session")
             pendingQueue.touch(userId)
             // Throttle the user-visible notice + restart request per contact: a burst of
             // mid-ratchet messages would otherwise stack identical "out of sync" bubbles and
@@ -1147,7 +1116,7 @@ final class MessageRouter {
             // We are RESPONDER (lower deviceId) — peer WINS. Archive our session and heal.
             guard SessionHealingService.shared.canHeal(message) else {
                 Log.error("SESSION_STATE[heal_limit_exceeded]: too many heal attempts for \(contactId.prefix(8))… — sending END_SESSION", category: "SessionInit")
-                delegate?.messageRouter(self, needsReceipt: [message.id], to: contactId, status: .failed)
+                PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "heal_limit_exceeded")
                 delegate?.messageRouter(self, needsEndSession: contactId)
                 return
             }
@@ -1207,9 +1176,10 @@ final class MessageRouter {
         from otherUserId: String,
         in context: NSManagedObjectContext
     ) {
+        // No receipt for a receipt: ct=14 has no row on the sender's side, and answering one
+        // receipt with another is the shape of a loop.
         defer {
             PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
-            delegate?.messageRouter(self, needsReceipt: [messageId], to: otherUserId, status: .delivered)
         }
 
         guard !payload.isEmpty else {

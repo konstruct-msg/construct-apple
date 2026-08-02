@@ -209,17 +209,10 @@ final class MessageStreamManager {
     var streamGeneration: UInt64 = 0
     var activeStreamGeneration: UInt64 = 0
 
-    /// Messages that failed decoding during fetchMissedMessages (before stream was open).
-    /// Flushed as `.failed` receipts once the stream is established.
-    var pendingFailedAcks: [MessagingServiceClient.FailedMessage] = []
-
-    /// Delivered receipts queued when the stream was not yet open.
-    /// Flushed as `.delivered` receipts once the stream is established.
-    struct PendingDeliveredAck {
-        let messageIds: [String]
-        let recipientUserId: String
-    }
-    var pendingDeliveredAcks: [PendingDeliveredAck] = []
+    // `pendingFailedAcks` / `pendingDeliveredAcks` were removed on 2026-08-02 together with
+    // `sendReceipt`. Both existed only to buffer plaintext stream receipts until the stream
+    // opened; receipts are now E2E and go through the normal (queued, offline-durable) message
+    // path, so there is nothing left to hold in process memory.
 
     // MARK: - Configuration
 
@@ -559,53 +552,17 @@ final class MessageStreamManager {
         }
     }
 
-    /// Send a delivery receipt for one or more messages via the live stream.
-    ///
-    /// **Receipt semantics contract** — use the wrong status and you will loop forever:
-    ///
-    /// - `.delivered`: the message reached this device. The server advances its Redis stream
-    ///   consumer-group cursor so the message is **never re-delivered**. Use this for ALL
-    ///   session-layer failures (OTPK exhausted, AEAD failure, UTF-8 decode, session not found,
-    ///   init_receiving_session failure, heal exhausted). The device handles recovery itself via
-    ///   END_SESSION; it does NOT need the server to retry.
-    ///
-    /// - `.failed`: the server should **retry delivery later** (message stays in queue).
-    ///   Reserve exclusively for genuine transport failures — e.g. the gRPC stream dropped
-    ///   before the message was processed at all. Never use for crypto/session errors.
-    ///
-    /// - Parameters:
-    ///   - messageIds: IDs of messages being acknowledged.
-    ///   - recipientUserId: The original message sender — server uses this to route the receipt back without a DB lookup.
-    ///   - status: `.delivered` to advance cursor; `.failed` for transport-only retry.
-    func sendReceipt(_ messageIds: [String], to recipientUserId: String = "", status: Shared_Proto_Signaling_V1_ReceiptStatus) {
-        guard !messageIds.isEmpty else { return }
-
-        // If the live stream isn't open yet, queue delivered receipts for flush when it opens.
-        // (outboundContinuation?.yield silently drops if nil — see sendReceipt guard below)
-        if outboundContinuation == nil, status == .delivered {
-            guard !pendingDeliveredAcks.contains(where: { $0.messageIds == messageIds && $0.recipientUserId == recipientUserId }) else {
-                return  // already queued — dedup to prevent bloat during paging cycles
-            }
-            pendingDeliveredAcks.append(PendingDeliveredAck(messageIds: messageIds, recipientUserId: recipientUserId))
-            Log.info("Receipt queued (stream not open): \(status) for \(messageIds.count) msg(s) → recipient=\(recipientUserId.prefix(8))…", category: "MessageStream")
-            return
-        }
-
-        var direct = Shared_Proto_Signaling_V1_DirectReceipt()
-        direct.messageIds = messageIds
-        direct.status = status
-        direct.timestamp = Int64(Date().timeIntervalSince1970)
-        direct.senderDeviceID = KeychainManager.shared.loadDeviceID() ?? ""
-        direct.recipientUserID = recipientUserId
-
-        var delivery = Shared_Proto_Signaling_V1_DeliveryReceipt()
-        delivery.direct = direct
-
-        var req = Shared_Proto_Services_V1_MessageStreamRequest()
-        req.receipt = delivery
-        outboundContinuation?.yield(req)
-        Log.info("Receipt sent: \(status) for \(messageIds.count) msg(s) → recipient=\(recipientUserId.prefix(8))…", category: "MessageStream")
-    }
+    // `sendReceipt` was removed on 2026-08-02. It wrote a plaintext `DirectReceipt` onto the
+    // authenticated stream carrying `recipientUserID` — the *original sender* — in the clear.
+    // On a sealed envelope the server sets `sender_id` to empty on purpose, so this receipt was
+    // the server's only source for the sender↔recipient link, and `receipts.rs` logged it
+    // unhashed on the "fast path". It bought nothing: the Redis trim runs off
+    // `Subscribe.since_cursor` alone, and `.failed` never triggered a retry (the peer's parser
+    // discards anything that is not `.delivered`).
+    //
+    // Receipts are now E2E only — `OutboundSessionService.sendDeliveryReceipt`.
+    // Receiving a relayed receipt is still supported (`MessageStreamParser`): reading one leaks
+    // nothing, and peers on older builds may still send them.
 
     // MARK: - Private: Connection Loop
 
@@ -988,8 +945,14 @@ final class MessageStreamManager {
             lastPendingCursor = fetchResult.nextCursor
 
             if !fetchResult.failed.isEmpty {
-                Log.info("fetchMissedMessages: \(fetchResult.failed.count) undecryptable message(s) — will ACK as failed once stream opens", category: "MessageStream")
-                pendingFailedAcks.append(contentsOf: fetchResult.failed)
+                // These used to be flushed as `.failed` stream receipts, which the peer's parser
+                // discarded and the server never retried on — the ACK was inert. Count them so
+                // undecryptable backlog stays visible.
+                Log.error("fetchMissedMessages: \(fetchResult.failed.count) undecryptable message(s)", category: "MessageStream")
+                PerformanceMetrics.shared.record(
+                    .undeliveredNoReceipt,
+                    label: "fetch_undecryptable"
+                )
             }
 
             if !fetchResult.messages.isEmpty {

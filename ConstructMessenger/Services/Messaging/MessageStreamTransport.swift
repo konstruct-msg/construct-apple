@@ -223,26 +223,8 @@ extension MessageStreamManager {
         outboundCont.yield(subscribeReq)
         Log.debug("MessageStream subscribe sent: \(subscriptionUserIds.count) conversation(s)", category: "MessageStream")
 
-        // Flush any ACKs for messages that failed decoding before the stream was open
-        if !pendingFailedAcks.isEmpty {
-            let toFlush = pendingFailedAcks
-            pendingFailedAcks.removeAll()
-            let bySender = Dictionary(grouping: toFlush, by: \.senderId)
-            for (senderId, entries) in bySender {
-                sendReceipt(entries.map(\.id), to: senderId, status: .failed)
-            }
-            Log.info("Flushed \(toFlush.count) failed ACK(s) for undecryptable pending message(s)", category: "MessageStream")
-        }
-
-        // Flush delivered receipts that were queued while the stream was closed
-        if !pendingDeliveredAcks.isEmpty {
-            let toFlush = pendingDeliveredAcks
-            pendingDeliveredAcks.removeAll()
-            for ack in toFlush {
-                sendReceipt(ack.messageIds, to: ack.recipientUserId, status: .delivered)
-            }
-            Log.info("Flushed \(toFlush.count) pending delivered receipt(s)", category: "MessageStream")
-        }
+        // (Receipt flushes on stream-open used to live here — removed with `sendReceipt`
+        // on 2026-08-02. E2E receipts go through the normal queued send path instead.)
 
         // Start heartbeat sender
         let hbInterval = self.heartbeatInterval

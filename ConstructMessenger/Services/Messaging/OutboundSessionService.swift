@@ -10,6 +10,7 @@
 //  and callable without touching MessageRouter's incoming-message state.
 //
 
+import CoreData
 import Foundation
 import SwiftProtobuf
 
@@ -186,6 +187,50 @@ final class OutboundSessionService {
             Log.debug("Heartbeat sent to \(contactId.prefix(8))…", category: "OutboundSession")
         } catch {
             Log.error("Heartbeat failed to \(contactId.prefix(8))…: \(error.localizedDescription)", category: "OutboundSession")
+        }
+    }
+
+    /// Tell `contactId` their message reached our transcript. Fire-and-forget.
+    ///
+    /// **This is the only receipt we send.** The plaintext stream receipt (`DirectReceipt` over
+    /// `MessageStreamRequest`) was removed on 2026-08-02: it carried `recipient_user_id` — the
+    /// original sender — in the clear, handing the server exactly the sender↔recipient link that
+    /// sealed sender exists to withhold (`sender_id` is deliberately empty on a sealed envelope,
+    /// so the client's receipt was the server's *only* source for that link). It bought nothing:
+    /// the Redis trim is driven solely by `Subscribe.since_cursor`
+    /// (`messaging-service/src/stream.rs`); `relay_delivery_receipt` only forwards.
+    /// See decisions/stream-delivery-receipt-deanonymized-sealed-sender.md.
+    ///
+    /// Call this **only where the message is genuinely in the transcript.** A receipt is a claim
+    /// the sender renders as a checkmark, so an untrue one is a visible lie. Control messages
+    /// (END_SESSION, SRI, ping/ready, heartbeat, receipts, profile shares, edits) never have a
+    /// row on the sender's side, so a receipt for one could not move anything even if sent.
+    ///
+    /// Resolves the recipient identity key synchronously on the caller's context queue, then
+    /// hands off to the async send. Fail-closed under stealth: dropped, never sent identified.
+    static func sendDeliveryReceipt(
+        for messageIds: [String],
+        to contactId: String,
+        in context: NSManagedObjectContext
+    ) {
+        let identityKey: Data? = {
+            guard StealthPolicy.shared.shouldUseSealedSender() else { return nil }
+            let request = User.fetchRequest()
+            request.predicate = NSPredicate(format: "id == %@", contactId)
+            request.fetchLimit = 1
+            do {
+                return try context.fetch(request).first?.knownIdentityKey
+            } catch {
+                Log.error("Failed to load identity key for encrypted receipt to \(contactId.prefix(8))…: \(error)", category: "OutboundSession")
+                return nil
+            }
+        }()
+        Task { @MainActor in
+            await OutboundSessionService.shared.sendEncryptedDeliveryReceipt(
+                messageIds: messageIds,
+                to: contactId,
+                recipientIdentityKey: identityKey
+            )
         }
     }
 

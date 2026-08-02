@@ -439,10 +439,6 @@ final class SessionCoordinator: MessageRouterDelegate {
 
     // MARK: - MessageRouterDelegate
 
-    func messageRouter(_ router: MessageRouter, needsReceipt messageIds: [String], to userId: String, status: Shared_Proto_Signaling_V1_ReceiptStatus) {
-        streamManager?.sendReceipt(messageIds, to: userId, status: status)
-    }
-
     func messageRouter(_ router: MessageRouter, needsPublicKeyBundle userId: String, for message: ChatMessage) {
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -721,10 +717,10 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // the RESPONDER session we just established.
                 cancelPendingEndSessionReinit(for: userId, reason: "responder_init_success")
 
-                // ACK only after we successfully decrypted + persisted the first message.
-                // This prevents message loss when initReceivingSession fails mid-flight.
-                streamManager?.sendReceipt([message.id], to: userId, status: .delivered)
+                // Receipt only after we successfully decrypted + persisted the first message —
+                // it is in the transcript, so the sender's checkmark is now true.
                 if let context = viewContext {
+                    OutboundSessionService.sendDeliveryReceipt(for: [message.id], to: userId, in: context)
                     PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
                 }
 
@@ -891,8 +887,9 @@ final class SessionCoordinator: MessageRouterDelegate {
                 Log.info("SESSION_STATE[heal_success]: session healed for \(userId.prefix(8))…", category: "SessionInit")
                 SessionHealingService.shared.removeRecord(for: failedMessage.id, in: context)
 
-                // We can now decrypt the previously-failed X3DH init message: ACK it as delivered.
-                streamManager?.sendReceipt([failedMessage.id], to: userId, status: .delivered)
+                // The previously-failed X3DH init message is now decrypted and saved — the
+                // sender's checkmark is true, so send the receipt.
+                OutboundSessionService.sendDeliveryReceipt(for: [failedMessage.id], to: userId, in: context)
                 PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
 
                 // Heal does not reset establishment time (no markActive) — drain only.

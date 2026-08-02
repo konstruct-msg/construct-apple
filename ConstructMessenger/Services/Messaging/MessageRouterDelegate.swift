@@ -50,13 +50,10 @@ protocol MessageRouterDelegate: AnyObject {
 
     // MARK: - Delivery
 
-    /// Stream cursor ACK or server receipt should be sent for `messageIds` to `userId`.
-    func messageRouter(
-        _ router: MessageRouter,
-        needsReceipt messageIds: [String],
-        to userId: String,
-        status: Shared_Proto_Signaling_V1_ReceiptStatus
-    )
+    // `needsReceipt` was removed on 2026-08-02. It existed only to send the plaintext stream
+    // receipt, whose `recipient_user_id` handed the server the sender↔recipient link that
+    // sealed sender withholds. Receipts are now E2E-only and sent from `MessageRouter`
+    // directly — see `sendDeliveryReceipt` there for the rule about when one is truthful.
 
     /// An E2E-encrypted delivery receipt was decrypted — `messageIds` are confirmed delivered.
     func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String])

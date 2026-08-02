@@ -41,7 +41,6 @@ final class SessionQueueWiringTests: XCTestCase {
         var bundleRequests: [String] = []
         var endSessionRequests: [String] = []
         var healRequests: [String] = []
-        var receipts: [(ids: [String], to: String, status: Shared_Proto_Signaling_V1_ReceiptStatus)] = []
 
         func messageRouter(_ router: MessageRouter, needsPublicKeyBundle userId: String, for message: ChatMessage) {
             bundleRequests.append(userId)
@@ -55,9 +54,6 @@ final class SessionQueueWiringTests: XCTestCase {
         func messageRouter(_ router: MessageRouter, didWinTieBreak userId: String) {}
         func messageRouter(_ router: MessageRouter, needsSessionHeal userId: String, failedMessage: ChatMessage) {
             healRequests.append(userId)
-        }
-        func messageRouter(_ router: MessageRouter, needsReceipt messageIds: [String], to userId: String, status: Shared_Proto_Signaling_V1_ReceiptStatus) {
-            receipts.append((messageIds, userId, status))
         }
         func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {}
         func messageRouter(_ router: MessageRouter, needsUsernameUpdate userId: String) {}
