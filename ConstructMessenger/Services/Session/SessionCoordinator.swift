@@ -271,18 +271,36 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Rate-limited recovery paths (`sendEndSessionRateLimited`, the otpk-unreproducible path)
     /// decide via `SessionReducer.shouldSendEndSession` *before* calling this; must-send paths
     /// (logout, manual reset, terminal init/heal failures) call it directly and always send.
+    ///
+    /// The local teardown is conditional on the session still being the one we condemned. The
+    /// logout broadcast inherits that check; skipping a teardown there is harmless because
+    /// `performLocalSignOut` wipes the keys immediately afterwards.
     func sendEndSession(
         to userId: String,
         reason: String = "manual_reset",
         resetReason: Shared_Proto_Messaging_V1_SessionResetReason = .unspecified
     ) async throws {
         Log.info("Sending END_SESSION to \(userId): \(reason)\(resetReason != .unspecified ? " [hint=\(resetReason)]" : "")", category: "ChatsViewModel")
+        // Identify the session being condemned BEFORE the network round-trip. The teardown below
+        // destroys whatever session exists when the RPC returns, and the peer can establish a new
+        // one inside that window — see `SessionReducer.shouldTearDownAfterEndSession`.
+        let condemnedEstablishedAt = KeychainManager.shared.loadSessionEstablishedAt(for: userId)
         do {
             let response = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: reason, resetReason: resetReason)
             Log.info("END_SESSION sent successfully: \(response.messageId)", category: "ChatsViewModel")
         } catch {
             Log.error("Failed to send END_SESSION: \(error)", category: "ChatsViewModel")
             throw error
+        }
+        let currentEstablishedAt = KeychainManager.shared.loadSessionEstablishedAt(for: userId)
+        guard SessionReducer.shouldTearDownAfterEndSession(
+            condemned: condemnedEstablishedAt, current: currentEstablishedAt
+        ) else {
+            Log.info(
+                "SESSION_STATE[end_session_teardown_skipped]: session for \(userId.prefix(8))… changed during the END_SESSION flight (condemned=\(condemnedEstablishedAt.map(String.init) ?? "none") current=\(currentEstablishedAt.map(String.init) ?? "none")) — keeping it",
+                category: "SessionInit"
+            )
+            return
         }
         CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
         CryptoManager.shared.clearArchivedSessions(for: userId)

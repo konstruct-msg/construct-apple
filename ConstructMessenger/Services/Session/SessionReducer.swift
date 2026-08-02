@@ -146,6 +146,28 @@ enum SessionReducer {
         return now.timeIntervalSince(lastSentAt) >= cooldown
     }
 
+    /// Whether the local teardown that follows a sent END_SESSION still applies to the session we
+    /// condemned, identified by its `establishedAt` stamp.
+    ///
+    /// The teardown runs *after* a network round-trip, and `archiveSession` destroys whatever
+    /// session exists at that moment — not necessarily the one the caller decided to end. If a
+    /// heal or an incoming carrier established a new session inside that window, tearing it down
+    /// throws away a healthy ratchet and, because `clearArchivedSessions` follows, leaves no
+    /// archive to recover from. Observed 2026-08-02: a RESPONDER init completed with the PQ
+    /// contribution applied and 462 B persisted, and was destroyed under a second later by an
+    /// END_SESSION issued before it existed; flights of 3 s were seen on the mobile path.
+    ///
+    /// A differing stamp on either side means "not the same session", including the
+    /// already-torn-down case (`current == nil`) — there the archive belongs to whoever tore it
+    /// down, and this call has no claim on it.
+    ///
+    /// Residual: `establishedAt` is whole seconds, so a condemned session and its replacement
+    /// established within the same second read as identical and the teardown proceeds. That is
+    /// far narrower than tearing down unconditionally, but it is not zero.
+    static func shouldTearDownAfterEndSession(condemned: UInt64?, current: UInt64?) -> Bool {
+        condemned == current
+    }
+
     /// What to do about END_SESSION after a RESPONDER `initReceivingSession` failure — the single
     /// authority for the grace/otpk/plain branch that used to be nested inline `if`s in
     /// `SessionCoordinator`. Cooldown is still applied separately by `shouldSendEndSession` at the
