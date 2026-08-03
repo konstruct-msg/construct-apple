@@ -475,7 +475,9 @@ struct MessagePaddingConfig {
 struct ChunkedDeliveryConfig {
     static let magic: [UInt8] = [0x4B, 0x4E, 0x53, 0x54] // "KNST"
     static let version: UInt8 = 0x01
-    static let flags: UInt8 = 0x00
+    // Header byte 5 was `flags` — written 0x00 and never read. It now carries the content type
+    // (values 0–26), inside the ciphertext where the server cannot read it. The version stays
+    // 0x01: no reader ever interpreted byte 5, so nothing can be confused by it.
 
     static let headerSize = 30
     static let maxPlaintextSize = 16 * 1024

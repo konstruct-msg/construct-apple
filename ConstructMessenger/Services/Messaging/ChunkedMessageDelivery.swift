@@ -12,8 +12,10 @@ final class ChunkedMessageSender {
 
     private init() {}
 
-    func buildPlan(plaintext: Data, messageId: UUID) -> ChunkedMessagePlan {
-        let payloads = ChunkedMessageCodec.encodeChunks(plaintext: plaintext, messageId: messageId)
+    func buildPlan(plaintext: Data, messageId: UUID, contentType: UInt8 = 1) -> ChunkedMessagePlan {
+        let payloads = ChunkedMessageCodec.encodeChunks(
+            plaintext: plaintext, messageId: messageId, contentType: contentType
+        )
         return ChunkedMessagePlan(messageId: messageId, payloads: payloads, originalLength: plaintext.count)
     }
 
@@ -405,9 +407,13 @@ enum ChunkedMessageCodec {
         let totalChunks: UInt16
         let plaintextLength: Int
         let payload: Data
+        /// Content type recovered from header byte 5 — the authority for what this plaintext is.
+        /// Rides inside the ciphertext, so unlike `SealedInner.content_type` the server cannot
+        /// read it. See decisions/sealed-content-type-inside-the-plaintext-frame.md.
+        let contentType: UInt8
     }
 
-    static func encodeChunks(plaintext: Data, messageId: UUID) -> [Data] {
+    static func encodeChunks(plaintext: Data, messageId: UUID, contentType: UInt8) -> [Data] {
         let payloadSize = ChunkedDeliveryConfig.chunkPayloadSize
         let totalChunks = UInt16((plaintext.count + payloadSize - 1) / payloadSize)
         if totalChunks > ChunkedDeliveryConfig.maxChunks {
@@ -427,7 +433,8 @@ enum ChunkedMessageCodec {
                 messageId: messageId,
                 chunkIndex: UInt16(index),
                 totalChunks: clampedTotal,
-                plaintextLength: plaintext.count
+                plaintextLength: plaintext.count,
+                contentType: contentType
             )
             var frame = Data(capacity: header.count + chunkData.count)
             frame.append(header)
@@ -460,6 +467,11 @@ enum ChunkedMessageCodec {
             return nil
         }
 
+        // Byte 5 was `flags`: written 0x00 and never read, so it was free and already on the
+        // wire. It now carries the content type — inside the ciphertext, where the server
+        // cannot reach it, unlike `SealedInner.content_type`.
+        let contentType = data[5]
+
         let messageIdData = data.subdata(in: 6..<22)
         let messageId = UUID(uuid: messageIdData.toUUIDBytes())
 
@@ -473,7 +485,8 @@ enum ChunkedMessageCodec {
             chunkIndex: chunkIndex,
             totalChunks: totalChunks,
             plaintextLength: plaintextLength,
-            payload: payload
+            payload: payload,
+            contentType: contentType
         )
     }
 
@@ -481,12 +494,13 @@ enum ChunkedMessageCodec {
         messageId: UUID,
         chunkIndex: UInt16,
         totalChunks: UInt16,
-        plaintextLength: Int
+        plaintextLength: Int,
+        contentType: UInt8
     ) -> Data {
         var data = Data(capacity: ChunkedDeliveryConfig.headerSize)
         data.append(contentsOf: ChunkedDeliveryConfig.magic)
         data.append(ChunkedDeliveryConfig.version)
-        data.append(ChunkedDeliveryConfig.flags)
+        data.append(contentType)
         data.append(contentsOf: messageId.uuidBytes)
         data.append(contentsOf: chunkIndex.bigEndianBytes)
         data.append(contentsOf: totalChunks.bigEndianBytes)
