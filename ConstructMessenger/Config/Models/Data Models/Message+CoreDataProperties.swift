@@ -98,7 +98,9 @@ enum MessageContentType: Int16 {
 enum DeliveryStatus: Int16 {
     case sending = 0           // Отправляется (локально)
     case sent = 1              // Отправлено на сервер, подтверждение получено
-    case delivered = 2         // Доставлено получателю (HMAC-SHA256 ACK received)
+    /// Peer confirmed receipt via E2E delivery receipt (content_type=14), NOT the
+    /// stream-cursor `ReceiptStatus.delivered` which only means "stop server redelivery".
+    case delivered = 2
     case queued = 3            // В очереди (получатель offline)
     case failed = 4            // Ошибка отправки
 
@@ -106,7 +108,7 @@ enum DeliveryStatus: Int16 {
         switch self {
         case .sending: return "Sending"
         case .sent: return "Sent to server"           // Сервер подтвердил получение
-        case .delivered: return "Delivered"           // Получатель подтвердил доставку (через HMAC-SHA256)
+        case .delivered: return "Delivered"           // Peer E2E receipt (not stream cursor ACK)
         case .queued: return "Queued locally"         // В локальной очереди
         case .failed: return "Failed"
         }

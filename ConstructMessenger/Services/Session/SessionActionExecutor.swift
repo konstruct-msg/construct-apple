@@ -83,7 +83,24 @@ final class SessionActionExecutor {
 
         // ── ACK ───────────────────────────────────────────────────
         case .persistAck(let messageId, _):
+            // SEMANTIC DIVERGENCE (audited 2026-08-02):
+            // Rust `ack_store.mark_processed` already mutated the in-memory cache and emits
+            // PersistAck meaning "platform must durable-persist". This handler historically
+            // only re-marked the orchestrator (idempotent no-op on L1). Durable L2
+            // (PersistentACKStore / Core Data) is still the responsibility of MessageRouter
+            // terminal paths (`markProcessed` after save / control handle / give-up).
+            //
+            // Do NOT Core-Data-mark here on every decrypt: multi-chunk `.incomplete` would
+            // then survive restart as "processed" with an empty reassembler → permanent loss.
+            // Hold the stream cursor instead (MessageRouter → `.deferred` on incomplete).
+            //
+            // Metric keeps the gap countable until PersistAck is split into
+            // "decrypt-time L1" vs "terminal L2" actions in the core.
             CryptoManager.shared.markAckProcessedInOrchestrator(messageId: messageId)
+            PerformanceMetrics.shared.record(
+                .persistAckPlatformOnlyMemory,
+                label: String(messageId.prefix(8))
+            )
 
         case .pruneAckStore:
             // Periodic prune — currently a no-op on Swift side
