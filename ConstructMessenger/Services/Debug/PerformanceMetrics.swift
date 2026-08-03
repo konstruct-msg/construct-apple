@@ -105,6 +105,20 @@ enum MetricEvent: String {
     /// session — a desync that only heals by luck. `label` = the content type that got through.
     case controlCarrierReachedWirePath = "control_carrier_reached_wire_path"
 
+    /// The server delivered a stream entry whose id is strictly below the `since_cursor` we
+    /// subscribed with — it was told we already had that message and sent it anyway. Distinct
+    /// from the stall below on purpose: this one is the server re-reading the backlog, which at
+    /// scale multiplies every reconnect by the size of every user's history. `label` = message id
+    /// prefix. See `StreamReplayAudit`.
+    case streamReplayBelowCursor = "stream_replay_below_cursor"
+
+    /// Our own resume cursor has not moved across three consecutive stream opens while a head
+    /// entry stays unresolved. Redelivery here is ours to stop, not the server's: the tracker
+    /// stalls rather than skip an unhandled entry, which is correct, but a permanently stuck head
+    /// makes the server resend everything behind it on every reconnect. `label` = blocker state
+    /// (`pending` / `deferred`).
+    case streamCursorStalled = "stream_cursor_stalled"
+
     /// Rust asked us to tell the user's other devices that a session was reset, and we did not —
     /// the feature has no consumer (see `MultiDeviceSendCoordinator.broadcastSessionReset`).
     /// Counted so the gap is a number rather than a silent no-op: this is how often a working

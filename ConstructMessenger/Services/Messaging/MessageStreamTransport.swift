@@ -215,10 +215,12 @@ extension MessageStreamManager {
         var subscribe = Shared_Proto_Services_V1_SubscribeRequest()
         subscribe.conversationIds = subscriptionUserIds
         subscribe.includePresence = true
-        if let cursor = StreamCursorStore.load() {
-            subscribe.sinceCursor = cursor
-            Log.debug("MessageStream subscribe with cursor=\(cursor.prefix(16))…", category: "MessageStream")
+        let resumeCursor = StreamCursorStore.load()
+        if let resumeCursor {
+            subscribe.sinceCursor = resumeCursor
+            Log.debug("MessageStream subscribe with cursor=\(resumeCursor.prefix(16))…", category: "MessageStream")
         }
+        StreamReplayAudit.shared.streamOpened(sinceCursor: resumeCursor)
         subscribeReq.request = .subscribe(subscribe)
         outboundCont.yield(subscribeReq)
         Log.debug("MessageStream subscribe sent: \(subscriptionUserIds.count) conversation(s)", category: "MessageStream")
@@ -259,6 +261,7 @@ extension MessageStreamManager {
                 self.outboundContinuation = nil
                 self.heartbeatTask = nil
                 self.heartbeatWatchdogTask = nil
+                StreamReplayAudit.shared.streamClosed()
                 Log.info("MessageStream disconnected from \(host):\(port)", category: "MessageStream")
             } else {
                 Log.info("MessageStream disconnected (stale generation) from \(host):\(port)", category: "MessageStream")
@@ -281,6 +284,7 @@ extension MessageStreamManager {
                 switch event {
                 case .message(let msg, let cursor):
                     Log.debug("MessageStream received message from=\(msg.from) id=\(msg.id)", category: "MessageStream")
+                    StreamReplayAudit.shared.delivery(messageId: msg.id, cursor: cursor)
                     if let handler = self.onMessageReceived {
                         // Track BEFORE handling so the cursor only advances once the pipeline
                         // reports a durable outcome (StreamCursorTracker.report inside

@@ -44,8 +44,13 @@ final class StreamCursorTracker {
         case skip
     }
 
-    private enum State { case pending, deferred, resolved }
-    private struct Entry { let messageId: String; let cursor: String; var state: State }
+    private enum State: String { case pending, deferred, resolved }
+    private struct Entry {
+        let messageId: String
+        let cursor: String
+        var state: State
+        let trackedAt: Date
+    }
 
     private var entries: [Entry] = []
     private var committed: String?
@@ -69,7 +74,7 @@ final class StreamCursorTracker {
     func track(messageId: String, cursor: String) {
         guard !messageId.isEmpty, !cursor.isEmpty else { return }
         guard !entries.contains(where: { $0.messageId == messageId }) else { return }
-        entries.append(Entry(messageId: messageId, cursor: cursor, state: .pending))
+        entries.append(Entry(messageId: messageId, cursor: cursor, state: .pending, trackedAt: Date()))
     }
 
     /// Report the terminal outcome for a tracked message and advance the committed cursor over
@@ -106,6 +111,18 @@ final class StreamCursorTracker {
         committed = c
         persist(c)
         return c
+    }
+
+    /// The entry currently holding the committed cursor back, if any.
+    ///
+    /// The stall above is safe — the server re-delivers and the client dedups — but it is not
+    /// free, and it was silent. The server trims and resumes from the committed position, so one
+    /// entry stuck at the head means every reconnect re-reads the entire backlog behind it. That
+    /// is invisible with two testers and ruinous with a thousand users, so the head entry names
+    /// itself instead of being inferred from a redelivery count. See `StreamReplayAudit`.
+    func headBlocker() -> (messageId: String, state: String, age: TimeInterval)? {
+        guard let first = entries.first, first.state != .resolved else { return nil }
+        return (first.messageId, first.state.rawValue, Date().timeIntervalSince(first.trackedAt))
     }
 
     // MARK: - Test hooks
