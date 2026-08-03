@@ -269,53 +269,32 @@ final class MultiDeviceSendCoordinator {
 
     // MARK: - Session Reset Broadcast (Изъян 8)
 
-    /// Изъян 8: Notify all own linked devices that the DR session with `contactId` was reset.
+    /// Изъян 8: tell the user's other devices that the DR session with `contactId` was reset, so
+    /// each can heal independently.
     ///
-    /// Each device receiving this notification should independently trigger a heal with the contact.
-    /// Failures are non-fatal — best-effort delivery.
+    /// **Not implemented — the send was removed on 2026-08-03 because it had no reader.**
+    ///
+    /// It used to encrypt `"__session_reset_notify__<contactId>__"` to every linked device with
+    /// `content_type = SENDER_SYNC`. A repository-wide search finds zero consumers of that string:
+    /// no device ever healed because of it. What it did do was arrive in `saveSenderSyncMessage`,
+    /// fail every control-format check, fall through to the plain-text branch and get **saved as a
+    /// visible message bubble containing that literal string** — so the feature's only observable
+    /// effect was littering the transcript of multi-device accounts.
+    ///
+    /// Deleting the send loses nothing (no behaviour depended on it) and stops the litter. The
+    /// metric below counts how often the notification *would* have gone out, which is the number
+    /// worth having before deciding whether to build the real thing: a working version needs a
+    /// routable content type plus a heal-trigger policy (when to heal, how not to loop two devices
+    /// into healing each other), and that is a design decision, not a wiring fix. See TODO 32.
     func broadcastSessionReset(contactId: String) async {
-        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
-        guard let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty else { return }
-        let ownDevices: [DeviceBundleData]
-        do {
-            ownDevices = try await fetchOwnOtherDevices(myUserId: myId, myDeviceId: myDeviceId)
-        } catch {
-            Log.info("broadcastSessionReset: failed to fetch own devices: \(error.localizedDescription)", category: "MultiDevice")
-            return
-        }
-        guard !ownDevices.isEmpty else {
-            Log.debug("No linked devices to notify of session reset with \(contactId.prefix(8))…", category: "MultiDevice")
-            return
-        }
-        let resetPayload = "__session_reset_notify__\(contactId)__"
-        for device in ownDevices {
-            let msgId = UUID().uuidString.lowercased()
-            let syncContactId = "\(myId):\(device.deviceId)"
-            do {
-                guard CryptoManager.shared.hasSession(for: syncContactId) else { continue }
-                // Explicitly no stealth for device-to-device session reset notifications
-                // (internal to the user, see multi-device exclusion in stealth scope).
-                let payload = try OutboundSessionService.shared.encryptSessionControl(
-                    plaintext: resetPayload,
-                    messageId: msgId,
-                    recipientId: syncContactId
-                )
-                _ = try await MessagingServiceClient.shared.sendMessage(
-                    messageId: msgId,
-                    recipientId: myId,
-                    senderId: myId,
-                    conversationId: ConversationId.direct(myUserId: myId, theirUserId: myId),
-                    encryptedPayload: payload,
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    senderDeviceId: myDeviceId,
-                    recipientDeviceId: device.deviceId,
-                    contentType: .senderSync
-                )
-                Log.debug("Session-reset notification sent to own device \(device.deviceId.prefix(8))…", category: "MultiDevice")
-            } catch {
-                Log.info("Session-reset notify failed for device \(device.deviceId.prefix(8))…: \(error.localizedDescription)", category: "MultiDevice")
-            }
-        }
+        PerformanceMetrics.shared.record(
+            .linkedDeviceResetNotifyUnimplemented,
+            label: String(contactId.prefix(8))
+        )
+        Log.info(
+            "Session reset with \(contactId.prefix(8))… — linked devices NOT notified (Изъян 8 unimplemented; they heal on their own next failed decrypt)",
+            category: "MultiDevice"
+        )
     }
 }
 

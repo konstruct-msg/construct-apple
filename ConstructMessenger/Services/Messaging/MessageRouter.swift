@@ -568,8 +568,38 @@ final class MessageRouter {
 
     // MARK: - Rust Orchestrator Routing (M5)
 
+    /// `isControl` is **not** "this is a control content type" — deriving it that way would be a
+    /// bug, and this comment exists because that derivation was once proposed.
+    ///
+    /// In the core it means exactly one thing: *archive the session now*. It skips ACK dedup (the
+    /// synthetic END_SESSION id is unique per invocation, so it always misses the cache) and skips
+    /// wire-payload unpacking, then calls `archive_session` (`message_router.rs:136` and `:289`).
+    /// SENDER_SYNC and SESSION_RESET_INIT are control *kinds* that must not archive anything, so a
+    /// content-type-derived flag would tear down healthy sessions on every sync.
+    ///
+    /// `false` here is therefore correct: this builder is only ever reached by ordinary carriers.
+    /// END_SESSION (21) and SRI (24) early-exit above, and the synthetic archive event that does
+    /// want `true` is constructed elsewhere. `assertNotControlCarrier` makes that precondition
+    /// checkable instead of assumed.
+    func assertNotControlCarrier(_ message: ChatMessage, path: String) {
+        guard message.isEndSession || message.isSessionResetInit else { return }
+        // Reaching here means a control carrier slipped past its early exit — the sealed remap
+        // missing is the way it could happen. The core would then try to unpack the END_SESSION
+        // sentinel as a wire payload and the session would never be archived: a desync that heals
+        // only by luck. ERROR + metric so it is not a silent wrong answer.
+        Log.error(
+            "ROUTING[control_reached_wire_path]: ct=\(message.contentType) message \(message.id.prefix(8))… reached \(path) — it should have early-exited; session will NOT be archived",
+            category: "MessageRouter"
+        )
+        PerformanceMetrics.shared.record(
+            .controlCarrierReachedWirePath,
+            label: "ct=\(message.contentType)"
+        )
+    }
+
     /// Build a typed `CfeIncomingEvent.messageReceived` from a server message.
     private func buildIncomingEvent(message: ChatMessage, otherUserId: String) -> CfeIncomingEvent? {
+        assertNotControlCarrier(message, path: "buildIncomingEvent")
         guard !message.rawPayload.isEmpty else {
             Log.error("buildIncomingEvent: empty rawPayload for \(message.id.prefix(8))… — falling back to JSON path", category: "MessageRouter")
             return buildIncomingEventLegacy(message: message, otherUserId: otherUserId)
@@ -589,6 +619,7 @@ final class MessageRouter {
 
     /// Legacy JSON path — only used when rawPayload is unavailable (e.g. old healing records).
     private func buildIncomingEventLegacy(message: ChatMessage, otherUserId: String) -> CfeIncomingEvent? {
+        assertNotControlCarrier(message, path: "buildIncomingEventLegacy")
         let sealedBox = MessagePadding.unpadCiphertext(message.content)
         guard sealedBox.count >= 12 else {
             Log.error("buildIncomingEventLegacy: sealed box too short (\(sealedBox.count)b) for \(message.id.prefix(8))…", category: "MessageRouter")

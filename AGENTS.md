@@ -130,6 +130,20 @@ Invariants you must not violate:
 - `#if DEBUG` / `#if os(iOS)` guards where appropriate.
 - No inline magic numbers — `CT.*` tokens or named constants.
 - Comment only non-obvious logic.
+- **A field left out on purpose at a boundary MUST say so in a comment.** Rebuilding a value
+  across a boundary (unseal, FFI, wire→model) means listing fields, and in a list of twenty an
+  omission that was deliberate is indistinguishable from one that was forgotten. This is not
+  style: `pqMessageEpoch` and `pqRatchetField` were dropped at the unseal boundary and nobody
+  could see it, precisely because the neighbouring deliberate omission (`sealedInnerData`) *was*
+  commented and these two were not. Better still, give the boundary a name
+  (`ChatMessage.resolvingSealedSender(_:currentUserId:)`) so it is an object a test can reach
+  rather than an argument list inside a 200-line method.
+- **A producer with no consumer is a defect, not dead weight.** If you add a send, a signal, or an
+  action, the reader must exist in the same change — or the sender must be removed. An unconsumed
+  message still costs a ratchet advance, and it surfaces somewhere: `__session_reset_notify__`
+  shipped in April 2026 with no reader and spent four months writing itself into the transcript as
+  a visible bubble on multi-device accounts. Same rule for the reverse:
+  a handler that no producer reaches is either wired up or deleted.
 
 ## Binary Data Pipeline (CRITICAL — no redundant encodings)
 

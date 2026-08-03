@@ -92,6 +92,17 @@ enum MetricEvent: String {
     /// unrecorded. See sessions/2026-08-03-inverted-chunk-logging.md.
     case chunkReassemblyExpired = "chunk_reassembly_expired"
 
+    /// An END_SESSION or SESSION_RESET_INIT carrier reached the ordinary wire-payload path instead
+    /// of early-exiting. The core would unpack the sentinel as a wire payload and never archive the
+    /// session — a desync that only heals by luck. `label` = the content type that got through.
+    case controlCarrierReachedWirePath = "control_carrier_reached_wire_path"
+
+    /// Rust asked us to tell the user's other devices that a session was reset, and we did not —
+    /// the feature has no consumer (see `MultiDeviceSendCoordinator.broadcastSessionReset`).
+    /// Counted so the gap is a number rather than a silent no-op: this is how often a working
+    /// implementation would have fired, which is what decides whether it is worth building.
+    case linkedDeviceResetNotifyUnimplemented = "linked_device_reset_notify_unimplemented"
+
     /// `CfeAction.persistAck` fired — Rust already marked its in-memory ACK and asks the
     /// platform to durable-persist. If the Swift handler only re-marks the orchestrator
     /// (no Core Data), restarts re-open the NeedDbCheck window. Counted so the gap is visible.
