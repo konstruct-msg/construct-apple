@@ -47,7 +47,7 @@ final class ChunkedProfileShareTests: XCTestCase {
         XCTAssertEqual(frames.count, 1, "a small profile is a single chunk")
 
         let reassembler = ChunkedMessageReassembler()
-        let result = reassembler.process(data: frames[0])
+        let result = reassembler.process(data: frames[0], envelopeId: "profile-test")
 
         switch result {
         case .profile(let data):

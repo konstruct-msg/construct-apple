@@ -129,27 +129,23 @@ final class ChunkedMessageReassembler {
     /// reassembler interactions on the main thread, so no extra locking is needed.
     static let shared = ChunkedMessageReassembler()
 
-    private struct PendingMessage {
-        let messageId: UUID
-        let totalChunks: UInt16
-        let plaintextLength: Int
-        var receivedChunks: [UInt16: Data]
-        let startTime: Date
+    /// Partial reassembly lives in `PendingReassemblyStore` — on disk, encrypted, surviving a
+    /// restart. There is deliberately no in-memory map here any more: a chunk decrypted in this
+    /// process consumes its ratchet key, so a redelivery after a kill cannot be decrypted again
+    /// and an in-memory-only partial was simply lost. See decisions/durable-chunk-reassembly.md.
+    private let store = PendingReassemblyStore.shared
 
-        var isComplete: Bool {
-            receivedChunks.count == Int(totalChunks)
-        }
-    }
-
-    private var pending: [UUID: PendingMessage] = [:]
-
-    /// Process binary decrypted data — supports both binary KNST frames and legacy formats.
-    /// Extracts `QuotedMessage` from `MessageContent` proto when present.
-    /// `now` is a parameter only so the sweep below is testable without waiting out the timeout.
-    func process(data: Data, now: Date = Date()) -> ChunkedMessageResult {
+    /// Decode one decrypted payload.
+    ///
+    /// `envelopeId` is the transport id that carried these bytes. It is recorded with the partial
+    /// so the caller can mark it processed the moment the bytes are durable — an intermediate
+    /// chunk that is never marked is what let the same ids loop through redelivery.
+    ///
+    /// `now` is a parameter only so expiry is testable without waiting out the retention window.
+    func process(data: Data, envelopeId: String, now: Date = Date()) -> ChunkedMessageResult {
         // Sweep on every decrypted message, not only on chunked ones: a stalled reassembly is
         // most likely to be noticed while ordinary traffic keeps flowing from other peers.
-        cleanupExpired(now: now)
+        store.sweepExpired(now: now)
 
         // ── Binary KNST frame ────────────────────────────────────────────────
         let magic = ChunkedDeliveryConfig.magic
@@ -161,19 +157,17 @@ final class ChunkedMessageReassembler {
                 Log.info("Binary KNST magic found but header invalid, falling through", category: "ChunkedDelivery")
                 return decodeRaw(data)
             }
-            return processKnstChunk(parsed)
-        }
-
-        // ── Legacy KNST1:<base64> text framing ──────────────────────────────
-        let prefix = Data(ChunkedMessageCodec.legacyPrefix.utf8)
-        if data.starts(with: prefix), let text = String(data: data, encoding: .utf8) {
-            return process(decryptedText: text)
+            return processKnstChunk(parsed, envelopeId: envelopeId, now: now)
         }
 
         return decodeRaw(data)
     }
 
-    private func processKnstChunk(_ parsed: ChunkedMessageCodec.ParsedChunk) -> ChunkedMessageResult {
+    private func processKnstChunk(
+        _ parsed: ChunkedMessageCodec.ParsedChunk,
+        envelopeId: String,
+        now: Date
+    ) -> ChunkedMessageResult {
         if parsed.totalChunks == 1 {
             let trimmed = parsed.payload.prefix(parsed.plaintextLength)
             return decodeAssembled(Data(trimmed), e2eMessageId: Self.e2eId(from: parsed.messageId))
@@ -181,26 +175,26 @@ final class ChunkedMessageReassembler {
         if parsed.totalChunks > ChunkedDeliveryConfig.maxChunks {
             return .invalid("total_chunks exceeds max")
         }
-        var entry = pending[parsed.messageId] ?? PendingMessage(
+
+        guard let complete = store.put(
             messageId: parsed.messageId,
+            chunkIndex: parsed.chunkIndex,
             totalChunks: parsed.totalChunks,
             plaintextLength: parsed.plaintextLength,
-            receivedChunks: [:],
-            startTime: Date()
-        )
-        entry.receivedChunks[parsed.chunkIndex] = parsed.payload
-        pending[parsed.messageId] = entry
-        guard entry.isComplete else { return .incomplete }
-        var assembled = Data()
-        for index in 0..<entry.totalChunks {
-            guard let chunk = entry.receivedChunks[index] else { return .incomplete }
-            assembled.append(chunk)
+            contentType: parsed.contentType,
+            payload: parsed.payload,
+            envelopeId: envelopeId,
+            now: now
+        ) else {
+            return .incomplete
         }
-        pending.removeValue(forKey: parsed.messageId)
-        guard entry.plaintextLength <= assembled.count else {
+
+        guard let assembled = complete.assembled() else {
+            store.remove(messageId: parsed.messageId)
             return .invalid("Plaintext length exceeds assembled size")
         }
-        return decodeAssembled(Data(assembled.prefix(entry.plaintextLength)), e2eMessageId: Self.e2eId(from: parsed.messageId))
+        store.remove(messageId: parsed.messageId)
+        return decodeAssembled(assembled, e2eMessageId: Self.e2eId(from: parsed.messageId))
     }
 
     /// Normalize a KNST-header UUID to the row-id format (lowercased). Rejects the all-zero
@@ -300,106 +294,20 @@ final class ChunkedMessageReassembler {
         }
     }
 
-    /// Legacy path: process a string decrypted with the old base64-KNST format.
-    /// Kept for BackgroundFetchManager compatibility with pre-migration messages.
-    func process(decryptedText: String) -> ChunkedMessageResult {
-        guard let encoded = ChunkedMessageCodec.extractPayloadString(from: decryptedText) else {
-            return .legacy(decryptedText)
-        }
+    // `process(decryptedText:)` and its second pending map were removed on 2026-08-03. The
+    // `KNST1:<base64>` text framing has no producer anywhere in the app — `encodeChunks` has
+    // emitted binary frames throughout — so the path was unreachable, and its private copy of the
+    // pending map was a second store of the one fact `PendingReassemblyStore` now owns.
 
-        guard let data = Data(base64Encoded: encoded) else {
-            Log.info("Chunked prefix found but Base64 decode failed, treating as legacy", category: "ChunkedDelivery")
-            return .legacy(decryptedText)
-        }
-
-        guard let parsed = ChunkedMessageCodec.parseChunk(data: data) else {
-            Log.info("Chunked prefix found but header invalid, treating as legacy", category: "ChunkedDelivery")
-            return .legacy(decryptedText)
-        }
-
-        cleanupExpired()
-
-        if parsed.totalChunks == 1 {
-            let payload = parsed.payload
-            guard parsed.plaintextLength <= payload.count else {
-                return .invalid("Plaintext length exceeds payload size")
-            }
-            let trimmed = payload.prefix(parsed.plaintextLength)
-            guard let text = String(data: trimmed, encoding: .utf8) else {
-                return .invalid("Failed to decode plaintext")
-            }
-            return .assembled(text: text, quoted: nil, e2eMessageId: Self.e2eId(from: parsed.messageId), mediaAlbum: nil, storagePayload: LocalMessagePayload.encodeText(text))
-        }
-
-        if parsed.totalChunks > ChunkedDeliveryConfig.maxChunks {
-            return .invalid("total_chunks exceeds max")
-        }
-
-        var entry = pending[parsed.messageId] ?? PendingMessage(
-            messageId: parsed.messageId,
-            totalChunks: parsed.totalChunks,
-            plaintextLength: parsed.plaintextLength,
-            receivedChunks: [:],
-            startTime: Date()
-        )
-
-        entry.receivedChunks[parsed.chunkIndex] = parsed.payload
-        pending[parsed.messageId] = entry
-
-        guard entry.isComplete else {
-            return .incomplete
-        }
-
-        var assembled = Data()
-        for index in 0..<entry.totalChunks {
-            guard let chunk = entry.receivedChunks[index] else {
-                return .incomplete
-            }
-            assembled.append(chunk)
-        }
-
-        pending.removeValue(forKey: parsed.messageId)
-
-        guard entry.plaintextLength <= assembled.count else {
-            return .invalid("Plaintext length exceeds assembled size")
-        }
-        let trimmed = assembled.prefix(entry.plaintextLength)
-        guard let text = String(data: trimmed, encoding: .utf8) else {
-            return .invalid("Failed to decode assembled plaintext")
-        }
-        return .assembled(text: text, quoted: nil, e2eMessageId: Self.e2eId(from: parsed.messageId), mediaAlbum: nil, storagePayload: LocalMessagePayload.encodeText(text))
-    }
-
-    /// Drop reassemblies that never completed within `reassemblyTimeout`, and say so.
+    /// Expiry moved into `PendingReassemblyStore.sweepExpired` on 2026-08-03, together with the
+    /// state it acts on. It reports the same way — ERROR naming the message, how many chunks of
+    /// how many arrived and which indices are missing, plus `chunkReassemblyExpired` — but the
+    /// window is now the store's 24 h retention rather than 60 s: the point of the durable copy is
+    /// to outlive a relaunch, and a one-minute expiry would have thrown it away first.
     ///
-    /// This is the only place a multi-chunk message is actually lost, and until 2026-08-03 it was
-    /// the one place that logged nothing at all — while every *intermediate* chunk logged an ERROR
-    /// warning about a loss that had not happened. The real event is here.
-    ///
-    /// Nothing is recoverable at this point: the ratchet advanced when each chunk decrypted and
-    /// the stream cursor has moved past them, so the missing chunks will not be redelivered.
-    /// Durable reassembly is the fix (TODO 12); this only makes the loss countable.
-    ///
-    /// Swept lazily — on every decrypted message, not on a timer. A device that receives a partial
-    /// message and then nothing at all will not report it until the next message arrives. Widening
-    /// that needs an owner for the timer, which this type does not have.
-    /// `now` is a parameter purely so the 60s timeout is testable without waiting 60s.
+    /// Test seam kept here for callers that drive expiry directly.
     func cleanupExpired(now: Date = Date()) {
-        let expired = pending.filter { now.timeIntervalSince($0.value.startTime) > ChunkedDeliveryConfig.reassemblyTimeout }
-        guard !expired.isEmpty else { return }
-
-        for (id, entry) in expired {
-            let missing = (0..<entry.totalChunks).filter { entry.receivedChunks[$0] == nil }
-            Log.error(
-                "Chunked message LOST for \(id.uuidString.prefix(8))… — \(entry.receivedChunks.count)/\(entry.totalChunks) chunks after \(Int(now.timeIntervalSince(entry.startTime)))s, missing indices \(missing.prefix(16).map(String.init).joined(separator: ",")) — not recoverable (ratchet advanced, cursor past)",
-                category: "ChunkedDelivery"
-            )
-            PerformanceMetrics.shared.record(
-                .chunkReassemblyExpired,
-                label: String(id.uuidString.prefix(8))
-            )
-        }
-        pending = pending.filter { expired[$0.key] == nil }
+        store.sweepExpired(now: now)
     }
 }
 

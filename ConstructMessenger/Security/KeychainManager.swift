@@ -29,7 +29,9 @@ class KeychainManager {
         "identity_key", "signed_prekey", "signing_key",
         "hybrid_sig_private_key", "crypto_private_keys", "crypto_otpks",
         // v2: written by callers that used to rely on the WhenUnlocked default.
-        "construct.kyber_session_state", "tracked_prekey_ids"
+        "construct.kyber_session_state", "tracked_prekey_ids",
+        // v3: at-rest key for partial multi-chunk messages (background decrypt must read it).
+        "construct.reassembly_store_key"
     ]
 
     /// Account prefixes whose items are created dynamically (per key id / contact / user) and
@@ -148,7 +150,20 @@ class KeychainManager {
     func loadDeviceIdentityKey() -> Data? {
         return load(forKey: "deviceIdentityKey")
     }
-    
+
+    /// Key that encrypts half-arrived multi-chunk messages at rest (`PendingReassemblyStore`).
+    ///
+    /// `cryptoKeyAccessible` is required, not preferred: reassembly resumes during a background
+    /// push decrypt, and under `WhenUnlocked*` the key would be unreadable exactly then — the
+    /// partial message would be silently unrecoverable in the one situation the store exists for.
+    func saveReassemblyStoreKey(_ key: Data) {
+        _ = save(key, forKey: "construct.reassembly_store_key", accessible: Self.cryptoKeyAccessible)
+    }
+
+    func loadReassemblyStoreKey() -> Data? {
+        return load(forKey: "construct.reassembly_store_key")
+    }
+
     /// Check if device is registered (has device ID and keys)
     func isDeviceRegistered() -> Bool {
         let deviceId = loadDeviceID()

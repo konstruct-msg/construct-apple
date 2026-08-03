@@ -1294,7 +1294,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // raw protobuf (single-message delivery), and UTF-8 control strings (pings).
         let plaintext: String
         let e2eMessageId: String?
-        switch initMessageReassembler.process(data: decryptedBytes) {
+        switch initMessageReassembler.process(data: decryptedBytes, envelopeId: messageData.id) {
         case .assembled(let text, _, let e2eId, _, _):
             plaintext = text
             e2eMessageId = e2eId
