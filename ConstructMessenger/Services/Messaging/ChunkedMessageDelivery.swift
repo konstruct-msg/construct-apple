@@ -258,8 +258,9 @@ final class ChunkedMessageReassembler {
         if ProfileShareData.fromBinaryData(data) != nil {
             return .profile(data)
         }
-        // Session control magic: prefix match on bytes (E8) then one UTF-8 decode for handlers.
-        if SessionControlCodec.isLegacyControlPlaintext(data) {
+        // END_SESSION marker: the one control payload that is a magic string rather than a frame,
+        // because it has no ciphertext to carry a frame in.
+        if SessionControlCodec.isEndSessionMarker(data) {
             if let text = String(data: data, encoding: .utf8), !text.isEmpty {
                 return .legacy(text)
             }

@@ -1169,7 +1169,7 @@ final class SessionCoordinator: MessageRouterDelegate {
     private func sendSessionPing(to userId: String) async {
         await sendSessionControlCore(
             codecOp: .ping,
-            contentType: FeatureFlags.typedSessionControl ? .sessionPing : .e2EeSignal,
+            contentType: .unspecified,  // the ping's type is in the frame; the wire says nothing
             to: userId, maxAttempts: pingMaxAttempts, logTag: "tie_break_ping"
         )
     }
@@ -1180,7 +1180,7 @@ final class SessionCoordinator: MessageRouterDelegate {
     private func sendSessionReady(to userId: String) async {
         await sendSessionControlCore(
             codecOp: .ready,
-            contentType: FeatureFlags.typedSessionControl ? .sessionReady : .e2EeSignal,
+            contentType: .unspecified,  // the ready's type is in the frame; the wire says nothing
             to: userId, maxAttempts: 1, logTag: "session_ready"
         )
     }

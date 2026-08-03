@@ -911,17 +911,10 @@ final class MessageRouter {
             return
         }
 
-        // Legacy plaintext control magic (typed content_type 24/25/26 handled pre-reassembler).
-        if SessionControlCodec.isBinaryInitSentinel(decryptedContent) {
-            Log.info("SESSION_STATE[binary_init_discarded_normal_path]: discarding binary init sentinel from \(otherUserId.prefix(8))…", category: "MessageRouter")
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "binary_init_discarded")
-            return
-        }
-        if let op = SessionControlCodec.legacyOp(plaintext: decryptedContent) {
-            handleSessionControlSignal(op, for: message, from: otherUserId, chat: chat, in: context)
-            return
-        }
+        // The magic-string control sniffers that stood here were removed on 2026-08-03. A control
+        // signal is identified by KNST byte 5 in executeRustActions and never reaches this
+        // function, so matching on decrypted text was a second, silent way to answer the same
+        // question. Anything that arrives here is user content.
 
         // 4. Check for special message types (profile sharing, etc.)
         if let specialMessageHandled = handleSpecialMessage(
@@ -1812,14 +1805,7 @@ final class MessageRouter {
                 storagePayload = LocalMessagePayload.encodeText(text)
                 previewText = text
             }
-            // Control magic that arrived as legacy UTF-8 assembled text.
-            if SessionControlCodec.legacyOp(plaintext: text) != nil {
-                return
-            }
         case .legacy(let text):
-            if SessionControlCodec.legacyOp(plaintext: text) != nil {
-                return
-            }
             e2eRowId = nil
             mediaAlbum = nil
             storagePayload = LocalMessagePayload.encodeText(text)

@@ -47,55 +47,23 @@ enum SessionControlCodec {
         }
     }
 
-    /// Legacy fallback: detect a control op from a decrypted plaintext magic string.
-    /// Kept until the fleet has upgraded past the typed-producer phase.
-    /// Does **not** map `__binary_init_*` sentinels (those are discard-only, not a real op).
-    static func legacyOp(plaintext: String) -> Op? {
-        if plaintext.hasPrefix("__session_ping") { return .ping }
-        if plaintext.hasPrefix("__session_ready") || plaintext.hasPrefix("session_ready_") { return .ready }
-        if plaintext.hasPrefix("__session_reset_init") || plaintext.hasPrefix("session_reset_init_") { return .resetInit }
-        return nil
-    }
+    // Removed on 2026-08-03, once the frame became the only carrier of the type:
+    //   • `legacyOp(plaintext:)` / `legacyOp(plaintextData:)` — sniffed `__session_ping…` and
+    //     friends out of decrypted text. A second way to answer "what is this message", disagreeing
+    //     with `contentType` in silence. Nothing produces those strings any more.
+    //   • `isBinaryInitSentinel` — a discard-only marker for a UTF-8 decode failure that the
+    //     binary pipeline cannot produce.
+    //   • `isLegacyControlPlaintext` — the union of the two plus the END_SESSION marker.
+    // A control signal is now identified by KNST byte 5 and nothing else.
 
-    // MARK: - Binary prefix match (E8 — sniff control without full-string work)
-
-    /// ASCII magic prefixes for legacy control plaintext (matched on raw `Data`).
-    private static let pingPrefix = Data("__session_ping".utf8)
-    private static let readyPrefix = Data("__session_ready".utf8)
-    private static let readyLegacyPrefix = Data("session_ready_".utf8)
-    private static let resetInitPrefix = Data("__session_reset_init".utf8)
-    private static let resetInitLegacyPrefix = Data("session_reset_init_".utf8)
-    private static let binaryInitPrefix = Data("__binary_init_".utf8)
     private static let endSessionMarker = Data("__END_SESSION__".utf8)
 
-    /// Detect legacy control op from decrypted **bytes** without allocating a String.
-    /// Prefer this on receive paths that still hold `Data` (pre-reassembler / raw).
-    static func legacyOp(plaintextData data: Data) -> Op? {
-        if data.starts(with: pingPrefix) { return .ping }
-        if data.starts(with: readyPrefix) || data.starts(with: readyLegacyPrefix) { return .ready }
-        if data.starts(with: resetInitPrefix) || data.starts(with: resetInitLegacyPrefix) { return .resetInit }
-        return nil
-    }
-
     /// True when plaintext is the magic END_SESSION marker (or starts with it).
+    ///
+    /// The one magic string left. END_SESSION has no ciphertext to put a frame in — the marker
+    /// *is* the payload — so it cannot be identified any other way.
     static func isEndSessionMarker(_ data: Data) -> Bool {
         data == endSessionMarker || data.starts(with: endSessionMarker)
-    }
-
-    /// Discard-only legacy sentinel (failed UTF-8 decode of msgNum=0 init payload).
-    static func isBinaryInitSentinel(_ data: Data) -> Bool {
-        data.starts(with: binaryInitPrefix)
-    }
-
-    static func isBinaryInitSentinel(_ plaintext: String) -> Bool {
-        plaintext.hasPrefix("__binary_init_")
-    }
-
-    /// True when decrypted bytes are known control / sentinel magic, not chat text.
-    static func isLegacyControlPlaintext(_ data: Data) -> Bool {
-        legacyOp(plaintextData: data) != nil
-            || isEndSessionMarker(data)
-            || isBinaryInitSentinel(data)
     }
 
     /// Parse a typed `SessionControl` payload (Phase 2+ producers). Returns nil if the bytes
@@ -110,41 +78,21 @@ enum SessionControlCodec {
 
     // MARK: - Producer
 
-    /// Build the encrypted inner payload for an outgoing control signal (producer half).
+    /// Build the encrypted inner payload for an outgoing control signal (producer half):
+    /// a serialized `SessionControl{op, nonce}`. Consumers dispatch on the type — KNST byte 5 for
+    /// ping/ready, `SealedInner.content_type` for the two that must be read before decryption —
+    /// and open this payload only for `nonce`.
     ///
-    /// S3 / default since 2026-07-17 (`binarySessionControlPayload` ON): a serialized
-    /// `SessionControl{op, nonce}` — the magic string is dropped from the wire; consumers dispatch
-    /// on the typed `content_type` and read the payload only for `nonce`. The string parser
-    /// (`legacyOp`) stays as a consumer fallback, so string-producing peers are still understood.
-    ///
-    /// S2 fallback (`binarySessionControlPayload` explicitly OFF): the legacy magic string, for
-    /// the case an ancient pre-S1 peer (no `content_type` dispatch) resurfaces. In S2 dual-send
-    /// the typed signal still rides in the Envelope `content_type` (gated by `typedSessionControl`,
-    /// default ON).
+    /// The `binarySessionControlPayload` escape hatch and its `legacyString` wire form went with
+    /// the string parser on 2026-08-03. Keeping a producer whose output no consumer understands is
+    /// worse than having no escape hatch: the flag looked like a way back and was a way to make
+    /// every handshake unreadable.
     ///
     /// See `decisions/binary-control-message-format.md`.
     static func encodePayload(op: Op, nonce: String) -> Data {
-        if FeatureFlags.binarySessionControlPayload {
-            var control = Shared_Proto_Messaging_V1_SessionControl()
-            control.op = op
-            control.nonce = nonce
-            if let data = try? control.serializedData(), !data.isEmpty {
-                return data
-            }
-            // Serialization should never fail; fall through to the legacy form if it somehow does
-            // so a control signal still goes out rather than nothing.
-        }
-        return Data(legacyString(op: op, nonce: nonce).utf8)
-    }
-
-    /// The legacy plaintext magic string for an op, e.g. `__session_ping_<nonce>__`. Kept as the
-    /// flag-OFF wire form and matched by `legacyOp` on the consumer side.
-    static func legacyString(op: Op, nonce: String) -> String {
-        switch op {
-        case .ping:      return "__session_ping_\(nonce)__"
-        case .ready:     return "__session_ready_\(nonce)__"
-        case .resetInit: return "__session_reset_init_\(nonce)__"
-        default:         return "__session_\(nonce)__"
-        }
+        var control = Shared_Proto_Messaging_V1_SessionControl()
+        control.op = op
+        control.nonce = nonce
+        return (try? control.serializedData()) ?? Data()
     }
 }

@@ -377,47 +377,15 @@ struct FeatureFlags {
         }
     }
 
-    /// **Default `true` (S2 dual-send enabled 2026-06-30).** Phase S2 of the typed binary
-    /// session-control migration (`decisions/binary-control-message-format.md`).
-    ///
-    /// When `true`, session-handshake signals carry a typed Envelope `content_type`
-    /// (`CONTENT_TYPE_SESSION_PING = 25`, `CONTENT_TYPE_SESSION_READY = 26`) **in addition**
-    /// to the legacy `__session_ping_<UUID>__` / `__session_ready_<UUID>__` plaintext payload
-    /// (dual-send). New consumers (S1, already shipped) dispatch on the typed `content_type`;
-    /// old peers still read the magic string, so this is backward-compatible in both directions —
-    /// enabling it never breaks anyone, which is why the default is now `true`.
-    /// `content_type` is NOT part of the AEAD associated data, so the typed byte can never
-    /// cause a decrypt failure. Server fleet (S0) is deployed and understands 25/26.
-    /// `SESSION_RESET_INIT` (24) was already sent typed unconditionally.
-    ///
-    /// This flag does NOT drop the legacy string — the payload stays the magic string so old
-    /// peers keep working. Dropping the string and sending a pure binary `SessionControl`
-    /// payload is the later S3 step, gated separately by `binarySessionControlPayload`.
-    ///
-    /// Backed by `UserDefaults`, defaulting `true` when never set (a stored value — an explicit
-    /// toggle — is respected). Read fresh at each send, so it takes effect on the next handshake.
-    static let typedSessionControlKey = "ff.typedSessionControl"
-    static var typedSessionControl: Bool {
-        get { UserDefaults.standard.object(forKey: typedSessionControlKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: typedSessionControlKey) }
-    }
+    // `typedSessionControl` and `binarySessionControlPayload` were removed on 2026-08-03 with the
+    // magic-string parser they gated (phases S2/S3, `decisions/binary-control-message-format.md`).
+    //
+    // Both had become one-way switches. ping/ready now carry their type in KNST byte 5 and go out
+    // with `content_type` UNSPECIFIED whatever `typedSessionControl` said; and with the
+    // consumer-side string parser gone, setting `binarySessionControlPayload = false` would have
+    // produced handshakes no peer could read. A flag that can only break things is not an escape
+    // hatch. There is no old population to fall back for — the app has never shipped.
 
-    /// **Default `true` (flipped 2026-07-17).** Phase S3 of the typed session-control migration.
-    ///
-    /// When `true`, handshake producers send a pure binary `SessionControl{op, nonce}` as the
-    /// encrypted payload and **drop** the legacy magic string. Safe now because the S1 typed
-    /// consumer (dispatch on `content_type` 24/25/26) is fleet-wide; the legacy string parser
-    /// (`SessionControlCodec.legacyOp`) is KEPT as a consumer fallback indefinitely, so peers
-    /// still producing strings remain fully understood. A pre-S1 peer (no `content_type`
-    /// dispatch) would not recognise our binary payload — that population is gone from the
-    /// fleet. Set to `false` (explicit UserDefaults toggle is respected) to fall back to
-    /// string-producing S2 if an ancient peer resurfaces. Independent of
-    /// `typedSessionControl`, which only controls the (backward-safe) typed `content_type`.
-    static let binarySessionControlPayloadKey = "ff.binarySessionControlPayload"
-    static var binarySessionControlPayload: Bool {
-        get { UserDefaults.standard.object(forKey: binarySessionControlPayloadKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: binarySessionControlPayloadKey) }
-    }
 }
 
 // MARK: - Traffic Protection Configuration
