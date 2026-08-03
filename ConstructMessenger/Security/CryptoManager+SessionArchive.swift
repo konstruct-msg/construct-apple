@@ -56,7 +56,12 @@ extension CryptoManager {
         guard let core = orchestratorCore else { return false }
         if core.hasSession(contactId: userId) { return true }
         guard let sessionData = KeychainManager.shared.loadSessionData(for: userId) else {
-            Log.error("No session data in Keychain for \(userId) — session must be re-established", category: "CryptoManager")
+            // Not an error: a chat can exist with no session on file — never messaged, or the
+            // session was legitimately archived by END_SESSION / SESSION_RESET_INIT. Every caller
+            // treats `false` as "establish one", and the bulk path reports the aggregate below.
+            // This was ERROR until 2026-08-03 and fired on every launch for such contacts, which
+            // is noise in the one signal a release run is judged by.
+            Log.info("No stored session for \(userId.prefix(8))… — will be established on demand", category: "CryptoManager")
             return false
         }
         do {

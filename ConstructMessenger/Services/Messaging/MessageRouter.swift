@@ -485,8 +485,8 @@ final class MessageRouter {
             case .messageDecrypted:
                 // Disposition is observed for metrics/signals only. Incomplete multi-chunk must
                 // NOT hold the stream watermark (one partial media message would stall every
-                // later cursor for the device). Loss-on-restart of partial reassembly is tracked
-                // via `.chunkReassemblyIncomplete`; durable reassembly is the real fix.
+                // later cursor for the device). Reassembly that never completes is reported by
+                // `.chunkReassemblyExpired`; durable reassembly is the real fix.
                 _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
                 applyIncomingPqContribution(plan.kemCiphertext, for: message, contactId: otherUserId)
                 return
@@ -823,17 +823,15 @@ final class MessageRouter {
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                     continue
                 case .incomplete:
-                    // Dual-store divergence: DR + Rust L1 ACK advanced; reassembler is
-                    // process-memory only; stream cursor still advances (default .durable).
-                    // Restart mid-assembly loses partial state — was silent DEBUG. ERROR +
-                    // metric so loss is countable; durable reassembly is the structural fix.
-                    Log.error(
-                        "Chunked message incomplete for \(message.id.prefix(8))… from \(otherUserId.prefix(8))… — reassembly memory-only, cursor will still advance (restart may lose multi-chunk)",
+                    // Every chunk but the last lands here — it is the normal state of a large
+                    // message, not a failure. It was ERROR + metric until 2026-08-03, which meant
+                    // a twelve-chunk photo raised eleven "may lose multi-chunk" errors for a
+                    // message that arrived perfectly, while the one moment a message is genuinely
+                    // lost (reassembly expiry) logged nothing at all. The alarm now lives where
+                    // the loss is: `ChunkedMessageReassembler.cleanupExpired`.
+                    Log.debug(
+                        "Chunk \(message.id.prefix(8))… from \(otherUserId.prefix(8))… — awaiting more",
                         category: "MessageRouter"
-                    )
-                    PerformanceMetrics.shared.record(
-                        .chunkReassemblyIncomplete,
-                        label: String(message.id.prefix(8))
                     )
                     disposition = .incompleteReassembly
                 case .invalid(let reason):

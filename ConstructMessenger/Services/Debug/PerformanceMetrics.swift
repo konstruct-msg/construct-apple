@@ -82,10 +82,15 @@ enum MetricEvent: String {
     // MARK: Silent semantic-divergence detectors (iOS audit 2026-08-02)
     // These exist so a dual-meaning / dual-store mismatch cannot hide as DEBUG/INFO.
 
-    /// Multi-chunk KNST reassembly is incomplete: ratchet advanced for this envelope,
-    /// but the transcript row is not durable and the in-memory reassembler is the only
-    /// home of partial state. `label` = peer prefix or message id prefix.
-    case chunkReassemblyIncomplete = "chunk_reassembly_incomplete"
+    /// A multi-chunk KNST reassembly was **dropped without ever completing** — the message is
+    /// lost, and since the ratchet already advanced and the cursor already moved, it is lost for
+    /// good. `label` = message id prefix.
+    ///
+    /// This replaced `chunk_reassembly_incomplete` on 2026-08-03. That metric fired on every
+    /// *intermediate* chunk, so a 12-chunk photo raised it eleven times and a real loss raised it
+    /// zero — the counter measured traffic, not failure, while the event it was named for went
+    /// unrecorded. See sessions/2026-08-03-inverted-chunk-logging.md.
+    case chunkReassemblyExpired = "chunk_reassembly_expired"
 
     /// `CfeAction.persistAck` fired — Rust already marked its in-memory ACK and asks the
     /// platform to durable-persist. If the Swift handler only re-marks the orchestrator

@@ -145,7 +145,12 @@ final class ChunkedMessageReassembler {
 
     /// Process binary decrypted data — supports both binary KNST frames and legacy formats.
     /// Extracts `QuotedMessage` from `MessageContent` proto when present.
-    func process(data: Data) -> ChunkedMessageResult {
+    /// `now` is a parameter only so the sweep below is testable without waiting out the timeout.
+    func process(data: Data, now: Date = Date()) -> ChunkedMessageResult {
+        // Sweep on every decrypted message, not only on chunked ones: a stalled reassembly is
+        // most likely to be noticed while ordinary traffic keeps flowing from other peers.
+        cleanupExpired(now: now)
+
         // ── Binary KNST frame ────────────────────────────────────────────────
         let magic = ChunkedDeliveryConfig.magic
         if data.count >= magic.count + 1,
@@ -169,7 +174,6 @@ final class ChunkedMessageReassembler {
     }
 
     private func processKnstChunk(_ parsed: ChunkedMessageCodec.ParsedChunk) -> ChunkedMessageResult {
-        cleanupExpired()
         if parsed.totalChunks == 1 {
             let trimmed = parsed.payload.prefix(parsed.plaintextLength)
             return decodeAssembled(Data(trimmed), e2eMessageId: Self.e2eId(from: parsed.messageId))
@@ -366,9 +370,36 @@ final class ChunkedMessageReassembler {
         return .assembled(text: text, quoted: nil, e2eMessageId: Self.e2eId(from: parsed.messageId), mediaAlbum: nil, storagePayload: LocalMessagePayload.encodeText(text))
     }
 
-    private func cleanupExpired() {
-        let now = Date()
-        pending = pending.filter { now.timeIntervalSince($0.value.startTime) <= ChunkedDeliveryConfig.reassemblyTimeout }
+    /// Drop reassemblies that never completed within `reassemblyTimeout`, and say so.
+    ///
+    /// This is the only place a multi-chunk message is actually lost, and until 2026-08-03 it was
+    /// the one place that logged nothing at all — while every *intermediate* chunk logged an ERROR
+    /// warning about a loss that had not happened. The real event is here.
+    ///
+    /// Nothing is recoverable at this point: the ratchet advanced when each chunk decrypted and
+    /// the stream cursor has moved past them, so the missing chunks will not be redelivered.
+    /// Durable reassembly is the fix (TODO 12); this only makes the loss countable.
+    ///
+    /// Swept lazily — on every decrypted message, not on a timer. A device that receives a partial
+    /// message and then nothing at all will not report it until the next message arrives. Widening
+    /// that needs an owner for the timer, which this type does not have.
+    /// `now` is a parameter purely so the 60s timeout is testable without waiting 60s.
+    func cleanupExpired(now: Date = Date()) {
+        let expired = pending.filter { now.timeIntervalSince($0.value.startTime) > ChunkedDeliveryConfig.reassemblyTimeout }
+        guard !expired.isEmpty else { return }
+
+        for (id, entry) in expired {
+            let missing = (0..<entry.totalChunks).filter { entry.receivedChunks[$0] == nil }
+            Log.error(
+                "Chunked message LOST for \(id.uuidString.prefix(8))… — \(entry.receivedChunks.count)/\(entry.totalChunks) chunks after \(Int(now.timeIntervalSince(entry.startTime)))s, missing indices \(missing.prefix(16).map(String.init).joined(separator: ",")) — not recoverable (ratchet advanced, cursor past)",
+                category: "ChunkedDelivery"
+            )
+            PerformanceMetrics.shared.record(
+                .chunkReassemblyExpired,
+                label: String(id.uuidString.prefix(8))
+            )
+        }
+        pending = pending.filter { expired[$0.key] == nil }
     }
 }
 
