@@ -69,6 +69,10 @@ final class AudioRecorderService: ObservableObject {
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
 
+        // Bracketed so a keyboard dismissal can be attributed to the audio session rather than to
+        // the composer swap — the swap was ruled out on device and this is the next candidate.
+        // See KeyboardEventTracer.
+        KeyboardEventTracer.shared.enter(.audioSessionActivating)
         try configureAudioSession()
 
         let rec = try AVAudioRecorder(url: url, settings: settings)
@@ -79,6 +83,7 @@ final class AudioRecorderService: ObservableObject {
         startDate  = Date()
         waveformSamples = []
         state = .recording(duration: 0, waveform: [])
+        KeyboardEventTracer.shared.enter(.recording)
 
         startMeteringTimer()
     }

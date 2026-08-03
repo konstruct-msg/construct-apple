@@ -1113,3 +1113,6 @@
 "net_status_protected" = "Protected";
 "net_status_connecting" = "Connecting…";
 "file" = "File";
+
+/* Chat system bubble: the encrypted session broke and incoming messages cannot be read. */
+"system_session_out_of_sync" = "The encrypted session with this contact is out of sync — new messages can't be read until it is re-established.";

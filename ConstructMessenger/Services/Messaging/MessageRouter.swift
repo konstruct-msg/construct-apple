@@ -548,7 +548,7 @@ final class MessageRouter {
         // next sealed-control regression cannot hide.
         if ContentTypeRouting.isKnownControlContentType(message.contentType) {
             Log.error(
-                "handleEvent produced no routing decision for CONTROL ct=\(message.contentType) \(message.id.prefix(8))… msgNum=\(message.messageNumber) actions=[\(actionNames)] — ACKing as delivered",
+                "handleEvent produced no routing decision for CONTROL ct=\(message.contentType) \(message.id.prefix(8))… msgNum=\(message.messageNumber) actions=[\(actionNames)] — NOT acked, no row written",
                 category: "MessageRouter"
             )
             PerformanceMetrics.shared.record(
@@ -557,7 +557,7 @@ final class MessageRouter {
             )
         } else {
             Log.info(
-                "handleEvent produced no routing decision for \(message.id.prefix(8))… msgNum=\(message.messageNumber) actions=[\(actionNames)] — ACKing as delivered",
+                "handleEvent produced no routing decision for \(message.id.prefix(8))… msgNum=\(message.messageNumber) actions=[\(actionNames)] — NOT acked, no row written",
                 category: "MessageRouter"
             )
         }
@@ -796,7 +796,7 @@ final class MessageRouter {
                     continue
                 }
 
-                switch chunkReassembler.process(data: plaintext) {
+                switch chunkReassembler.process(data: plaintext, envelopeId: message.id) {
                 case .assembled(let text, let quoted, let e2eMessageId, let mediaAlbum, let storagePayload):
                     handleResolvedMessage(
                         text,
@@ -854,16 +854,26 @@ final class MessageRouter {
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                     continue
                 case .incomplete:
-                    // Every chunk but the last lands here — it is the normal state of a large
-                    // message, not a failure. It was ERROR + metric until 2026-08-03, which meant
-                    // a twelve-chunk photo raised eleven "may lose multi-chunk" errors for a
-                    // message that arrived perfectly, while the one moment a message is genuinely
-                    // lost (reassembly expiry) logged nothing at all. The alarm now lives where
-                    // the loss is: `ChunkedMessageReassembler.cleanupExpired`.
+                    // Every chunk but the last lands here — the normal state of a large message,
+                    // not a failure. The alarm for a genuine loss lives where the loss is
+                    // (`PendingReassemblyStore.sweepExpired`), so this is DEBUG.
+                    //
+                    // The L2 mark is the point of this branch. Its bytes are on disk before
+                    // `process` returned, so this envelope is genuinely handled and must be
+                    // recorded as such. Leaving intermediate envelopes unmarked is what let the
+                    // same ids come back through redelivery over and over — the client re-ran the
+                    // whole path, the core answered "duplicate" with an empty action list, and the
+                    // fallthrough below claimed "ACKing as delivered" while ACKing nothing.
+                    //
+                    // Safe only because the store is durable: marking an envelope processed while
+                    // its bytes lived in process memory would have turned a redelivery storm into
+                    // permanent loss on the next restart, which is why this could not be done as
+                    // the "quick anti-loop fix" ahead of the store.
                     Log.debug(
-                        "Chunk \(message.id.prefix(8))… from \(otherUserId.prefix(8))… — awaiting more",
+                        "Chunk \(message.id.prefix(8))… from \(otherUserId.prefix(8))… — stored, awaiting more",
                         category: "MessageRouter"
                     )
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                     disposition = .incompleteReassembly
                 case .invalid(let reason):
                     Log.error("Invalid chunked message: \(reason)", category: "MessageRouter")
@@ -1088,8 +1098,19 @@ final class MessageRouter {
             // re-ask the sender to restart on every one. Cursor/ACK bookkeeping above is
             // per-message and unaffected; only the notice + END_SESSION are rate-limited.
             if shouldEmitOutOfSyncNotice(for: userId) {
+                // Says what is true, not what we intend. The old text — "Asking contact to
+                // restart…" — promised an action this code cannot confirm: `needsEndSession` is
+                // fire-and-forget into a Task, and `SessionCoordinator` gates it behind its own
+                // cooldown. Observed on device 2026-08-03: the bubble appeared and the very next
+                // line was `END_SESSION cooldown active …, skipping`. Two timers that are supposed
+                // to agree by hand had drifted, and the user was told about a request that was
+                // never made.
+                //
+                // The state is certain, so that is what the bubble states; recovery is still
+                // attempted below, rate-limited, and either this call sends END_SESSION or a very
+                // recent one already did.
                 addSystemMessage(
-                    "Encrypted session out of sync. Asking contact to restart...",
+                    NSLocalizedString("system_session_out_of_sync", comment: "Shown in a chat when messages from a contact cannot be read because the encrypted session is out of sync"),
                     toUserId: userId,
                     in: context
                 )
@@ -1823,7 +1844,7 @@ final class MessageRouter {
         let e2eRowId: String?
         let mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage?
 
-        switch ChunkedMessageReassembler.shared.process(data: decryptedBytes) {
+        switch ChunkedMessageReassembler.shared.process(data: decryptedBytes, envelopeId: original.id) {
         case .assembled(let text, _, let e2eId, let album, let storage):
             e2eRowId = e2eId
             mediaAlbum = album
