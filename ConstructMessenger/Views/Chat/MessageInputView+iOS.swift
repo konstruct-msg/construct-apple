@@ -105,30 +105,55 @@ struct IOSMessageInputView: View {
         }
     }
 
+    /// The composer never unmounts, even while a voice bar is on screen.
+    ///
+    /// It used to be a `switch` that replaced `inputRow` with the voice bar. That takes the
+    /// `TextField` out of the view tree, and a `TextField` that leaves the tree loses focus by
+    /// definition — so the keyboard collapsed the moment recording started and came back when it
+    /// ended, moving the whole chat twice per voice message. Nothing asked for the keyboard to go;
+    /// it was a side effect of how the swap was written.
+    ///
+    /// Keeping `inputRow` mounted and hidden underneath preserves focus, so the keyboard stays
+    /// exactly as the user left it. Hidden means invisible *and* inert: no hit testing (taps belong
+    /// to the voice bar above it) and hidden from accessibility, or VoiceOver would read a text
+    /// field that is not there.
+    ///
+    /// Height note: the ZStack takes the taller of the two, so the composer can still shift by the
+    /// difference between the input row and a voice bar. That is a few points against ~300 for the
+    /// keyboard, and the two are designed to the same composer height.
     @ViewBuilder
     private var voiceOrInputRow: some View {
-        switch audioRecorder.state {
-        case .recording(let duration, let waveform):
-            VoiceRecordingBar(duration: duration, waveform: waveform) {
-                audioRecorder.stopRecording()
-            } onCancel: {
-                audioRecorder.cancel()
-            }
-            .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            .padding(.vertical, CTLayout.inlinePad)
+        let isIdle = audioRecorder.state == .idle
 
-        case .recorded(let url, let duration, let waveform):
-            VoicePreviewBar(duration: duration, waveform: waveform) {
-                onSendVoice?(url, duration, waveform)
-                audioRecorder.resetAfterSend()
-            } onDiscard: {
-                audioRecorder.cancel()
-            }
-            .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            .padding(.vertical, CTLayout.inlinePad)
-
-        case .idle:
+        ZStack {
             inputRow
+                .opacity(isIdle ? 1 : 0)
+                .allowsHitTesting(isIdle)
+                .accessibilityHidden(!isIdle)
+
+            switch audioRecorder.state {
+            case .recording(let duration, let waveform):
+                VoiceRecordingBar(duration: duration, waveform: waveform) {
+                    audioRecorder.stopRecording()
+                } onCancel: {
+                    audioRecorder.cancel()
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                .padding(.vertical, CTLayout.inlinePad)
+
+            case .recorded(let url, let duration, let waveform):
+                VoicePreviewBar(duration: duration, waveform: waveform) {
+                    onSendVoice?(url, duration, waveform)
+                    audioRecorder.resetAfterSend()
+                } onDiscard: {
+                    audioRecorder.cancel()
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                .padding(.vertical, CTLayout.inlinePad)
+
+            case .idle:
+                EmptyView()
+            }
         }
     }
 

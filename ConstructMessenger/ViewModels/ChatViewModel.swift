@@ -200,8 +200,8 @@ class ChatViewModel {
 
     // MARK: - Messages
 
-    func loadMoreMessages() {
-        messageStore.loadMoreMessages()
+    func loadMoreMessages(trigger: LoadMoreTrigger = .user) {
+        messageStore.loadMoreMessages(trigger: trigger)
     }
 
     func deleteMessage(_ message: Message) {

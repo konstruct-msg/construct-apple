@@ -124,8 +124,12 @@ struct ChatView: View {
                             }
                             .id("loadMoreIndicator")
                             .onAppear {
+                                // Fires on entering a chat, not only on scrolling up: LazyVStack
+                                // materialises top-down, so this indicator appears during the
+                                // first layout even though the scroll is anchored to the bottom.
+                                // Tagged so the log can tell it apart from a real tap — see TODO 34.
                                 if !viewModel.isLoadingMore && !isSearchActive {
-                                    viewModel.loadMoreMessages()
+                                    viewModel.loadMoreMessages(trigger: .indicatorAppeared)
                                 }
                             }
                         }

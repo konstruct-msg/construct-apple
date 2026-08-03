@@ -92,6 +92,14 @@ enum MetricEvent: String {
     /// unrecorded. See sessions/2026-08-03-inverted-chunk-logging.md.
     case chunkReassemblyExpired = "chunk_reassembly_expired"
 
+    /// An older batch was loaded that nobody asked for: `ChatView`'s load-more indicator appeared
+    /// during first layout, so entering a chat prepends messages while the ScrollView is settling.
+    /// Leading suspect for "the chat scrolled off into nothing" (TODO 34). `label` = how many
+    /// messages were on screen when it fired, so the log shows whether it hit an entry (≈30) or a
+    /// genuine scroll to the top. Counted rather than fixed: the visual symptom has not been tied
+    /// to it yet, and a blind fix to a layout race would be a patch on a guess.
+    case loadMoreUnprompted = "load_more_unprompted"
+
     /// An END_SESSION or SESSION_RESET_INIT carrier reached the ordinary wire-payload path instead
     /// of early-exiting. The core would unpack the sentinel as a wire payload and never archive the
     /// session — a desync that only heals by luck. `label` = the content type that got through.

@@ -6,6 +6,15 @@
 import Foundation
 import CoreData
 
+/// Who asked for an older batch. Recorded because the two callers are not equivalent and the
+/// difference is invisible in a log otherwise — see `loadMoreMessages(trigger:)` and TODO 34.
+enum LoadMoreTrigger: String {
+    /// The user tapped "load older messages".
+    case user
+    /// `ChatView`'s load-more indicator appeared. Unprompted: it fires on entering a chat.
+    case indicatorAppeared
+}
+
 @MainActor
 final class ChatMessageStore: NSObject {
 
@@ -97,11 +106,23 @@ final class ChatMessageStore: NSObject {
 
     // MARK: - Load more
 
-    func loadMoreMessages() {
+    /// `trigger` says who asked. Two callers exist and they mean very different things: the user
+    /// tapping "load older", and `ChatView`'s `.onAppear` on the load-more indicator — which fires
+    /// on *every* chat entry, unprompted, because `LazyVStack` materialises top-down and the
+    /// indicator sits at the top even when the scroll is anchored to the bottom.
+    ///
+    /// That unprompted call prepends a batch while the ScrollView is still settling its position,
+    /// which is the leading suspect for "the chat scrolled off into nothing" (TODO 34). The two
+    /// were indistinguishable in the log, so the suspicion could not be confirmed or dismissed
+    /// from a device run. Now it can be.
+    func loadMoreMessages(trigger: LoadMoreTrigger = .user) {
         guard let vm = viewModel else { return }
         guard !vm.isLoadingMore, vm.hasMoreMessages, let oldestTimestamp = oldestLoadedTimestamp else { return }
         vm.isLoadingMore = true
-        Log.debug("Loading more messages before \(oldestTimestamp)", category: "ChatViewModel")
+        Log.debug("Loading more messages before \(oldestTimestamp) [trigger=\(trigger.rawValue)]", category: "ChatViewModel")
+        if trigger == .indicatorAppeared {
+            PerformanceMetrics.shared.record(.loadMoreUnprompted, label: String(vm.messages.count))
+        }
         let fetchRequest = Message.fetchRequest()
         let chatPredicate = NSPredicate(format: "chat == %@ AND timestamp < %@", chat, oldestTimestamp as NSDate)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
