@@ -67,16 +67,18 @@ enum ContentTypeRouting {
         }
     }
 
-    /// Content types that participate in the sealed round-trip invariant tests.
-    /// Exhaustive over control kinds that ride inside SealedInner under stealth.
+    /// Content types that still ride on `SealedInner.content_type` under stealth.
+    ///
+    /// Narrowed on 2026-08-03 to the two that genuinely cannot be moved: END_SESSION carries no
+    /// ciphertext to hide a frame in, and SESSION_RESET_INIT is wire-identical to an ordinary
+    /// X3DH carrier — both must be recognised *before* decryption. Call signal (12), delivery
+    /// receipt (14) and ping/ready (25/26) now carry their type in KNST byte 5, inside the
+    /// ciphertext, so the server can no longer distinguish them.
+    /// See decisions/sealed-content-type-inside-the-plaintext-frame.md.
     static var sealedControlContentTypes: [UInt8] {
         [
             21, // sessionReset / END_SESSION
             24, // sessionResetInit
-            25, // sessionPing
-            26, // sessionReady
-            12, // callSignal
-            14, // deliveryReceipt
             1,  // e2EeSignal (regular body — baseline)
         ]
     }

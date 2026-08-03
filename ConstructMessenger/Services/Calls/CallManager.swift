@@ -1053,10 +1053,19 @@ final class CallManager: CallUIManaging {
 
         // Call signaling is in-scope for stealth (hides caller identity from the construct).
         // We apply SealedInner here at the transport layer (after Rust E2EE encryption of the signal).
+        //
+        // The signal is wrapped in a single KNST frame carrying content type 12 in byte 5 — inside
+        // the ciphertext, so nothing on the wire says "this is a call". `SealedInner.content_type`
+        // and the outer envelope both stay UNSPECIFIED. One whole frame, never chunked: an SDP
+        // offer can exceed `chunkPayloadSize` and this producer sends exactly one message.
+        // (VoIP push is unaffected — it comes from signaling-service's own RPC, not from this
+        // envelope's type.) See decisions/sealed-content-type-inside-the-plaintext-frame.md.
         let event = CfeIncomingEvent.outgoingCallSignal(
             contactId: peerUserId,
             messageId: messageId,
-            protoBytes: protoData
+            protoBytes: ChunkedMessageCodec.frameWhole(
+                protoData, contentType: 12, messageId: UUID(uuidString: messageId) ?? UUID()
+            )
         )
         do {
             let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "outgoing_call_signal")
@@ -1111,7 +1120,7 @@ final class CallManager: CallUIManaging {
                                             encryptedPayload: payload,
                                             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                                             senderDeviceId: Self.currentDeviceId(),
-                                            contentType: .callSignal,
+                                            contentType: .unspecified,
                                             sealedInnerBytes: inner
                                         )
                                     }
@@ -1125,7 +1134,7 @@ final class CallManager: CallUIManaging {
                                     encryptedPayload: payload,
                                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                                     senderDeviceId: Self.currentDeviceId(),
-                                    contentType: .callSignal,
+                                    contentType: .unspecified,
                                     sealedInnerBytes: nil
                                 )
                             }
@@ -1197,7 +1206,7 @@ final class CallManager: CallUIManaging {
                 recipientUserId: recipient,
                 recipientIdentityKey: ik,
                 encryptedPayload: payload,
-                contentType: .callSignal
+                contentType: .unspecified
             )
             Log.debug("STEALTH: built SealedInner for call signal (payload \(payload.count)b)", category: "Calls")
             return sealed

@@ -202,15 +202,16 @@ final class ChatSessionManager {
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
         let pingId = UUID().uuidString.lowercased()
         let nonce = UUID().uuidString
-        // S2 dual-send: typed opcode for new consumers; magic-string payload is the fallback.
-        let contentType: Shared_Proto_Core_V1_ContentType = FeatureFlags.typedSessionControl ? .sessionPing : .e2EeSignal
+        // The ping's type rides in KNST byte 5, inside the ciphertext; the server is told nothing.
+        let contentType: Shared_Proto_Core_V1_ContentType = .unspecified
         let conversationId = ConversationId.direct(myUserId: myId, theirUserId: userId)
         let timestamp = UInt64(Date().timeIntervalSince1970)
         do {
             let payload = try OutboundSessionService.shared.encryptSessionControl(
                 payload: SessionControlCodec.encodePayload(op: .ping, nonce: nonce),
                 messageId: pingId,
-                recipientId: userId
+                recipientId: userId,
+                frameAs: SessionControlCodec.frameContentType(for: .ping)
             )
 
             if StealthPolicy.shared.shouldUseSealedSender() {

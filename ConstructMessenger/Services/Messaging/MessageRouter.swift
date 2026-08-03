@@ -196,9 +196,9 @@ final class MessageRouter {
                 "STEALTH: resolved sender → \(resolved.senderId.prefix(8))… ct=\(resolved.contentType) kind=\(recoveredKind.rawValue)",
                 category: "MessageRouter"
             )
-            if message.contentType == 12 {
-                Log.debug("STEALTH: this was a sealed call signal", category: "MessageRouter")
-            }
+            // Nothing branches on `resolved.contentType` beyond this point for the four types that
+            // moved into the frame (12/14/25/26) — it is UNSPECIFIED for all of them now. Only
+            // END_SESSION (21) and SESSION_RESET_INIT (24) still say anything here.
         }
 
         let otherUserId = message.from == currentUserId ? message.to : message.from
@@ -714,23 +714,43 @@ final class MessageRouter {
                     continue
                 }
 
-                // DELIVERY_RECEIPT (content_type=14): intercept raw bytes before reassembler.
-                // The payload is either legacy JSON (starts with `{`) or binary proto (starts with 0x0A).
-                // The reassembler would reject binary proto as "non-decodable binary".
-                if message.contentType == 14 {
-                    handleIncomingE2EDeliveryReceipt(plaintext, messageId: message.id, from: otherUserId, in: context)
-                    continue
-                }
-
-                // SESSION_PING (25) / SESSION_READY (26): typed handshake control signals.
-                // Dispatch on content_type before the reassembler so they never enter the
-                // renderable text pipeline. (RESET_INIT=24 is intentionally NOT handled here:
-                // it carries a real X3DH first-ratchet payload.) Legacy peers send these as
-                // magic-string plaintext — that fallback lives in handleResolvedMessage.
-                if let op = SessionControlCodec.op(forContentType: Int(message.contentType)),
-                   op == .ping || op == .ready {
-                    handleSessionControlSignal(op, for: message, from: otherUserId, chat: chat, in: context)
-                    continue
+                // ── The type comes out of the plaintext, not off the wire ────────────────
+                // Call signal (12), delivery receipt (14) and ping/ready (25/26) carry their
+                // type in KNST byte 5, inside the ciphertext. Nothing outside this decrypt
+                // knows what they are: `SealedInner.content_type` is UNSPECIFIED for all four,
+                // which is the point — the server can no longer tell a receipt from a body, or
+                // see that a call is being set up.
+                //
+                // `message.contentType` remains meaningful only for the two types that must be
+                // recognised *before* decryption (END_SESSION 21, SESSION_RESET_INIT 24) and for
+                // the never-sealed carriers (heartbeat 13, SENDER_SYNC 23) — none of which reach
+                // this branch framed. See decisions/sealed-content-type-inside-the-plaintext-frame.md.
+                if let control = ChunkedMessageCodec.controlFrame(plaintext),
+                   control.contentType != 0, control.contentType != 1 {
+                    switch control.contentType {
+                    case 12:
+                        if let signal = CallManager.decodeSignalProto(from: control.payload) {
+                            CallManager.shared.handleCallSignalProto(from: resolvedSender, signal: signal)
+                        } else {
+                            Log.error("Call signal frame from \(otherUserId.prefix(8))… failed to decode", category: "MessageRouter")
+                        }
+                        PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                        continue
+                    case 14:
+                        handleIncomingE2EDeliveryReceipt(control.payload, messageId: message.id, from: otherUserId, in: context)
+                        continue
+                    case 25, 26:
+                        // RESET_INIT (24) is deliberately absent: it carries a real X3DH
+                        // first-ratchet payload and is handled before we ever get here.
+                        if let op = SessionControlCodec.op(forContentType: Int(control.contentType)) {
+                            handleSessionControlSignal(op, for: message, from: otherUserId, chat: chat, in: context)
+                            continue
+                        }
+                    default:
+                        // An unknown framed type is a peer speaking a dialect we do not have.
+                        // Fall through to the body pipeline rather than dropping it silently.
+                        Log.info("Unknown framed content type \(control.contentType) from \(otherUserId.prefix(8))… — treating as a message body", category: "MessageRouter")
+                    }
                 }
 
                 // Profile share: support binary wire (no JSON) + legacy. Detect on raw Data here.

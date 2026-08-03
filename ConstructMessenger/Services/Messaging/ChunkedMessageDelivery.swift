@@ -445,6 +445,38 @@ enum ChunkedMessageCodec {
         return payloads
     }
 
+    /// One frame holding the whole payload, whatever its size (`totalChunks == 1`).
+    ///
+    /// For control carriers — call signal, delivery receipt, ping/ready — which are sent as a
+    /// single message and never split. `encodeChunks` would cut a large SDP offer into several
+    /// frames that these producers have no way to send, so they must not use it.
+    ///
+    /// The frame exists here only to carry `contentType` in byte 5: inside the ciphertext, where
+    /// the server cannot read it, unlike `SealedInner.content_type`.
+    static func frameWhole(_ payload: Data, contentType: UInt8, messageId: UUID) -> Data {
+        var frame = Data(capacity: ChunkedDeliveryConfig.headerSize + payload.count)
+        frame.append(buildHeader(
+            messageId: messageId,
+            chunkIndex: 0,
+            totalChunks: 1,
+            plaintextLength: payload.count,
+            contentType: contentType
+        ))
+        frame.append(payload)
+        return frame
+    }
+
+    /// Read a single-frame control carrier: its content type and its unframed payload.
+    ///
+    /// Returns nil for anything that is not one whole KNST frame — a multi-chunk body belongs to
+    /// the reassembler, and unframed bytes are not ours. This is the sole post-decrypt routing
+    /// input for content types 12 / 14 / 25 / 26; those no longer appear on `SealedInner`.
+    static func controlFrame(_ data: Data) -> (contentType: UInt8, payload: Data)? {
+        guard let parsed = parseChunk(data: data), parsed.totalChunks == 1 else { return nil }
+        guard parsed.plaintextLength <= parsed.payload.count else { return nil }
+        return (parsed.contentType, Data(parsed.payload.prefix(parsed.plaintextLength)))
+    }
+
     static func extractPayloadString(from decryptedText: String) -> String? {
         guard decryptedText.hasPrefix(prefix) else {
             return nil

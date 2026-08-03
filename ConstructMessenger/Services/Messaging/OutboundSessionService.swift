@@ -138,13 +138,29 @@ final class OutboundSessionService {
     /// Binary variant for typed session-control payloads (serialized `SessionControl`, built by
     /// `SessionControlCodec.encodePayload`). The control payload stays `Data` end-to-end — no
     /// stringification across the crypto boundary.
+    ///
+    /// Pass `frameAs` for the ops whose type must be hidden from the server (ping 25, ready 26):
+    /// the payload is wrapped in a KNST frame carrying the type in byte 5, inside the ciphertext,
+    /// and `SealedInner.content_type` is left UNSPECIFIED by the caller.
+    ///
+    /// **END_SESSION (21) and SESSION_RESET_INIT (24) must NOT be framed.** Both have to be
+    /// recognised *before* decryption — END_SESSION carries no ciphertext at all, and an SRI is
+    /// wire-identical to an ordinary X3DH carrier, so the receiver cannot tell them apart from the
+    /// body alone. They keep their pre-decrypt hint on `SealedInner`; that residue is the whole
+    /// reason the field survives. See decisions/sealed-content-type-inside-the-plaintext-frame.md.
     func encryptSessionControl(
         payload: Data,
         messageId: String,
-        recipientId: String
+        recipientId: String,
+        frameAs contentType: UInt8? = nil
     ) throws -> Data {
-        try encryptOutgoing(
-            plaintext: payload,
+        let plaintext = contentType.map {
+            ChunkedMessageCodec.frameWhole(
+                payload, contentType: $0, messageId: UUID(uuidString: messageId) ?? UUID()
+            )
+        } ?? payload
+        return try encryptOutgoing(
+            plaintext: plaintext,
             messageId: messageId,
             recipientId: recipientId,
             contentType: 0
@@ -267,11 +283,16 @@ final class OutboundSessionService {
         }
 
         do {
+            // The type rides in KNST byte 5, inside the ciphertext. Both the orchestrator and
+            // `SealedInner` are told nothing (0 / UNSPECIFIED) so the server cannot tell a receipt
+            // from a message body. See decisions/sealed-content-type-inside-the-plaintext-frame.md.
             let wirePayload = try encryptOutgoing(
-                plaintext: payloadData,
+                plaintext: ChunkedMessageCodec.frameWhole(
+                    payloadData, contentType: 14, messageId: UUID(uuidString: receiptId) ?? UUID()
+                ),
                 messageId: receiptId,
                 recipientId: contactId,
-                contentType: 14
+                contentType: 0
             )
             var sealedInner: Data? = nil
             if let identityKey = recipientIdentityKey, StealthPolicy.shared.shouldUseSealedSender() {
@@ -280,7 +301,7 @@ final class OutboundSessionService {
                         recipientUserId: contactId,
                         recipientIdentityKey: identityKey,
                         encryptedPayload: wirePayload,
-                        contentType: .deliveryReceipt
+                        contentType: .unspecified
                     )
                 } catch {
                     Log.error("E2E receipt: seal failed: \(error)", category: "OutboundSession")
@@ -313,7 +334,7 @@ final class OutboundSessionService {
                         recipientUserId: contactId,
                         recipientIdentityKey: identityKey,
                         encryptedPayload: wirePayload,
-                        contentType: .deliveryReceipt
+                        contentType: .unspecified
                     )
                 }, send: { inner in
                     if FeatureFlags.sealedSenderUnauthenticatedTransport {
@@ -327,7 +348,6 @@ final class OutboundSessionService {
                             conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
                             encryptedPayload: wirePayload,
                             timestamp: UInt64(Date().timeIntervalSince1970),
-                            contentType: .deliveryReceipt,
                             sealedInnerBytes: inner
                         )
                     }
@@ -340,7 +360,6 @@ final class OutboundSessionService {
                     conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
                     encryptedPayload: wirePayload,
                     timestamp: UInt64(Date().timeIntervalSince1970),
-                    contentType: .deliveryReceipt,
                     sealedInnerBytes: nil
                 )
             }

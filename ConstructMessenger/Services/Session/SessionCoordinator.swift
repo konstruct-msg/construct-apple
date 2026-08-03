@@ -1061,6 +1061,13 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
 
+        // ping (25) / ready (26) hide their type in KNST byte 5, inside the ciphertext, and tell
+        // the server nothing. SESSION_RESET_INIT (24) cannot: it is wire-identical to an ordinary
+        // X3DH carrier, so the receiver must know before it decrypts. That is the only handshake
+        // type left on `SealedInner`.
+        let frameType = SessionControlCodec.frameContentType(for: codecOp)
+        let wireContentType: Shared_Proto_Core_V1_ContentType = frameType == nil ? contentType : .unspecified
+
         for attempt in 1...maxAttempts {
             do {
                 let nonce = UUID().uuidString
@@ -1070,14 +1077,11 @@ final class SessionCoordinator: MessageRouterDelegate {
                 let encryptedPayload = try OutboundSessionService.shared.encryptSessionControl(
                     payload: SessionControlCodec.encodePayload(op: codecOp, nonce: nonce),
                     messageId: msgId,
-                    recipientId: userId
+                    recipientId: userId,
+                    frameAs: frameType
                 )
 
-                // Stealth: seal the control envelope exactly like a message body. The real
-                // content type rides inside SealedInner and is recovered on receive
-                // (MessageRouter rebuilds with `resolved.contentType` AND remaps routing kind
-                // via ContentTypeRouting — early-exit predicates read contentType; late types
-                // still use SessionControlCodec.op). See SEALED_CONTROL_CHANNEL_REMEDIATION.
+                // Stealth: seal the control envelope exactly like a message body.
                 // Fail-closed: under stealth-on we NEVER emit an identified control send — that
                 // is the server-observable session-graph leak the sealed path exists to close
                 // (decisions/sealed-sender-session-control-channel.md). A blocked send just
@@ -1091,14 +1095,14 @@ final class SessionCoordinator: MessageRouterDelegate {
                         recipientUserId: userId,
                         recipientIdentityKey: recipientIK,
                         encryptedPayload: encryptedPayload,
-                        contentType: contentType
+                        contentType: wireContentType
                     )
                     _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
                         try await StealthSenderService.buildSealedInner(
                             recipientUserId: userId,
                             recipientIdentityKey: recipientIK,
                             encryptedPayload: encryptedPayload,
-                            contentType: contentType
+                            contentType: wireContentType
                         )
                     }, send: { inner in
                         try await MessagingServiceClient.shared.sendMessage(
@@ -1119,7 +1123,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                         conversationId: convId,
                         encryptedPayload: encryptedPayload,
                         timestamp: ts,
-                        contentType: contentType
+                        contentType: wireContentType
                     )
                 }
                 Log.info("SESSION_STATE[\(logTag)_sent]: to \(userId.prefix(8))… (attempt \(attempt))", category: "SessionInit")

@@ -31,6 +31,22 @@ enum SessionControlCodec {
         }
     }
 
+    /// The content type an op puts in KNST byte 5, or nil when the op must stay readable
+    /// *before* decryption and therefore keeps its hint on `SealedInner`.
+    ///
+    /// ping / ready are pure post-decrypt signals: nothing acts on them until the payload is
+    /// open, so the server never needs to know. END_SESSION (21) has no ciphertext to hide a
+    /// frame in, and SESSION_RESET_INIT (24) is wire-identical to an ordinary X3DH carrier —
+    /// framing either would make it unroutable. See
+    /// decisions/sealed-content-type-inside-the-plaintext-frame.md.
+    static func frameContentType(for op: Op) -> UInt8? {
+        switch op {
+        case .ping:  return 25
+        case .ready: return 26
+        default:     return nil
+        }
+    }
+
     /// Legacy fallback: detect a control op from a decrypted plaintext magic string.
     /// Kept until the fleet has upgraded past the typed-producer phase.
     /// Does **not** map `__binary_init_*` sentinels (those are discard-only, not a real op).
