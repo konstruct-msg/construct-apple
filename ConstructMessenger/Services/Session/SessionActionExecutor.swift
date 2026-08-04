@@ -83,24 +83,23 @@ final class SessionActionExecutor {
 
         // ── ACK ───────────────────────────────────────────────────
         case .persistAck(let messageId, _):
-            // SEMANTIC DIVERGENCE (audited 2026-08-02):
-            // Rust `ack_store.mark_processed` already mutated the in-memory cache and emits
-            // PersistAck meaning "platform must durable-persist". This handler historically
-            // only re-marked the orchestrator (idempotent no-op on L1). Durable L2
-            // (PersistentACKStore / Core Data) is still the responsibility of MessageRouter
-            // terminal paths (`markProcessed` after save / control handle / give-up).
+            // The core means "platform must durable-persist this record" (`ack_store.rs:109`).
+            // The L2 write itself belongs to `MessageRouter`'s terminal paths, which know whether
+            // the message was saved, handled or given up; this handler cannot know that yet, and
+            // writing here unconditionally would mark work that has not happened.
             //
-            // Do NOT Core-Data-mark here on every decrypt: multi-chunk `.incomplete` would
-            // then survive restart as "processed" with an empty reassembler → permanent loss.
-            // Hold the stream cursor instead (MessageRouter → `.deferred` on incomplete).
+            // So it records the obligation and the router settles it. Nothing else about this
+            // action was doing anything: `markAckProcessedInOrchestrator` was provably inert
+            // (`mark_processed` inserts into the cache *before* emitting the action, so the second
+            // call short-circuits at `ack_store.rs:112`), and the metric fired once per decrypted
+            // message — a counter of traffic, not of failure.
             //
-            // Metric keeps the gap countable until PersistAck is split into
-            // "decrypt-time L1" vs "terminal L2" actions in the core.
-            CryptoManager.shared.markAckProcessedInOrchestrator(messageId: messageId)
-            PerformanceMetrics.shared.record(
-                .persistAckPlatformOnlyMemory,
-                label: String(messageId.prefix(8))
-            )
+            // Superseded reasoning, kept because it read like proof and no longer is: the old
+            // comment said L2 must not be written for multi-chunk `.incomplete` or a restart would
+            // find "processed" with an empty reassembler. That was true until `PendingReassemblyStore`
+            // (2026-08-03) made the chunks durable; `MessageRouter` now marks intermediate envelopes
+            // at the durable put, deliberately. See decisions/durable-chunk-reassembly.
+            PersistentACKStore.shared.expectDurableWrite(messageId)
 
         case .pruneAckStore:
             // Periodic prune — currently a no-op on Swift side

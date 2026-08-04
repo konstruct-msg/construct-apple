@@ -156,6 +156,12 @@ enum MetricEvent: String {
     /// counter called `duplicate` would have gone to zero and read like a fix. `label` = action list.
     case noRoutingDecisionMessage = "no_routing_decision_message"
 
+    /// The core required a durable ACK record (`CfeAction.persistAck`) and the routing pass ended
+    /// `.durable` without one being written. Replaces `persistAckPlatformOnlyMemory`, which fired
+    /// on every decrypted message and so counted traffic rather than the gap it was named for —
+    /// the same inversion `chunkReassemblyExpired` corrected. `label` = `msgNum=<n>`.
+    case persistAckWithoutDurableWrite = "persist_ack_without_durable_write"
+
     /// A `checkAckInDb` action reached a handler other than `MessageRouter`, which owns the
     /// round-trip. Nothing answers it there any more, so the message does not route — loud on
     /// purpose: the previous behaviour (answer from a detached Task, discard the verdict) could
@@ -167,11 +173,6 @@ enum MetricEvent: String {
     /// Counted so the gap is a number rather than a silent no-op: this is how often a working
     /// implementation would have fired, which is what decides whether it is worth building.
     case linkedDeviceResetNotifyUnimplemented = "linked_device_reset_notify_unimplemented"
-
-    /// `CfeAction.persistAck` fired — Rust already marked its in-memory ACK and asks the
-    /// platform to durable-persist. If the Swift handler only re-marks the orchestrator
-    /// (no Core Data), restarts re-open the NeedDbCheck window. Counted so the gap is visible.
-    case persistAckPlatformOnlyMemory = "persist_ack_platform_only_memory"
 
     /// A terminal disposition that did NOT put the message in front of the user: dropped,
     /// undecryptable, superseded, or given up on. No receipt is sent — the stream cursor

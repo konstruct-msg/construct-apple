@@ -143,7 +143,26 @@ final class MessageRouter {
         // (let the owning path resolve it). The defer reports exactly once on every exit path.
         // Untracked ids (backfill, which carries no stream cursor) are no-ops in the tracker.
         var streamOutcome: StreamCursorTracker.Outcome = .durable
-        defer { StreamCursorTracker.shared.report(messageId: message.id, streamOutcome) }
+        defer {
+            // Settle the core's durable-persistence obligation at the one point every exit path
+            // passes through. Only `.durable` is a verdict: it says nothing will revisit this
+            // message, so if the core asked for a durable record and Core Data has none, the
+            // record exists solely in a cache that dies with the process — after a restart the
+            // message returns and nothing remembers handling it. `.deferred` and `.skip` mean some
+            // other path still owns it, and an obligation outstanding there is not yet a gap.
+            let unmet = PersistentACKStore.shared.settleDurableWrite(message.id, in: context)
+            if unmet, case .durable = streamOutcome {
+                Log.error(
+                    "PersistAck unmet for \(message.id.prefix(8))… — core required a durable record, the pass ended .durable with none written; a restart will re-deliver this message with nothing remembering it",
+                    category: "MessageRouter"
+                )
+                PerformanceMetrics.shared.record(
+                    .persistAckWithoutDurableWrite,
+                    label: "msgNum=\(message.messageNumber)"
+                )
+            }
+            StreamCursorTracker.shared.report(messageId: message.id, streamOutcome)
+        }
 
         guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             streamOutcome = .skip

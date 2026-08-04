@@ -56,6 +56,58 @@ final class PersistentACKStore {
         CryptoManager.shared.markAckProcessedInOrchestrator(messageId: messageId)
     }
 
+    // MARK: - Durable-persistence expectations
+    //
+    // `CfeAction.persistAck` is documented in the core as "platform must durable-persist this
+    // record" (`ack_store.rs:109`). The platform never did: the handler re-marked the orchestrator
+    // — which cannot do anything, because `mark_processed` inserts into the cache *before* emitting
+    // the action, so the second call always short-circuits — and recorded a metric on every
+    // decrypted message. A counter that increments once per message measures traffic, not failure,
+    // and is exactly what rule 1a of decisions/ios-semantic-divergence-signals forbids.
+    //
+    // The L2 write really does happen, just somewhere else: `MessageRouter`'s terminal paths. So
+    // the action is not useless — it is the core stating an obligation that nothing checks. These
+    // two calls turn it into one that is checked: the executor records the obligation, the router
+    // settles it at the single point every routing pass exits through.
+
+    private let expectationLock = NSLock()
+    private var awaitingDurableWrite: Set<String> = []
+
+    /// The core requires `messageId` to survive a restart as "processed".
+    func expectDurableWrite(_ messageId: String) {
+        expectationLock.lock()
+        awaitingDurableWrite.insert(messageId)
+        expectationLock.unlock()
+    }
+
+    /// Clear the obligation and report whether it is still outstanding.
+    ///
+    /// Returns `true` only when the core asked for a durable write during this pass and Core Data
+    /// still does not have it. Callers use that to decide whether the pass ended in a real gap:
+    /// the cursor moves on, the core's in-memory cache dies with the process, and the message comes
+    /// back after a restart with nothing left that remembers handling it.
+    func settleDurableWrite(_ messageId: String, in context: NSManagedObjectContext) -> Bool {
+        expectationLock.lock()
+        let wasExpected = awaitingDurableWrite.remove(messageId) != nil
+        expectationLock.unlock()
+        guard wasExpected else { return false }
+        return !isProcessedInCoreData(messageId, in: context)
+    }
+
+    #if DEBUG
+    func hasOutstandingDurableWriteForTesting(_ messageId: String) -> Bool {
+        expectationLock.lock()
+        defer { expectationLock.unlock() }
+        return awaitingDurableWrite.contains(messageId)
+    }
+
+    func resetDurableWriteExpectationsForTesting() {
+        expectationLock.lock()
+        awaitingDurableWrite.removeAll()
+        expectationLock.unlock()
+    }
+    #endif
+
     // MARK: - Check
 
     /// Returns `true` if the message was already processed (cache or durable store).
