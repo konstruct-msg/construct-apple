@@ -1319,17 +1319,28 @@ final class SessionCoordinator: MessageRouterDelegate {
             return
         }
 
-        // Typed handshake control signals: dispatch by op before the plaintext-prefix fallback
-        // below. The X3DH init for these already ran in initReceivingSession; the decrypted inner
-        // is just a sentinel, so we never persist it.
+        // Side-channel frames (call signal 12, delivery receipt 14) go through the router's
+        // dispatcher — the same one the ordinary path uses. This site had no equivalent at all: it
+        // knew about session-control ops only, so a receipt arriving as the first message of a
+        // fresh session was persisted as a chat row. On 2026-08-04 that produced a bubble
+        // containing the message id the receipt referenced.
         //
-        // The type is read from the KNST frame FIRST, and only then from the envelope. Since
-        // `cf157f64` the envelope carries `.unspecified` for ping/ready — their type rides in
-        // frame byte 5, inside the ciphertext, so the server learns nothing. This site was still
-        // asking the envelope, which now answers "ordinary message" for every ping, and the
-        // binary `SessionControl` payload then fell through to be persisted as a chat bubble.
-        // Same defect the frame move was meant to end: two carriers of one fact, one site
-        // updated. `MessageRouter` was; this one was not.
+        // Since `cf157f64` the envelope carries `.unspecified` for these — the type rides in frame
+        // byte 5, inside the ciphertext, so the server learns nothing. A site that asks only the
+        // envelope now hears "ordinary message" about every one of them.
+        if messageRouter.handleFramedSideChannel(
+            decryptedBytes,
+            messageId: messageData.id,
+            from: messageData.from,
+            resolvedSender: messageData.from,
+            in: context
+        ) {
+            return
+        }
+
+        // Session-handshake ops additionally drive this coordinator's own watchdogs and queues,
+        // so they are re-read here after the router has had its turn. Frame first, envelope second,
+        // for the reason above.
         let frameOp = ChunkedMessageCodec.controlFrame(decryptedBytes)
             .flatMap { SessionControlCodec.op(forContentType: Int($0.contentType)) }
         if let op = frameOp ?? SessionControlCodec.op(forContentType: Int(messageData.contentType)) {

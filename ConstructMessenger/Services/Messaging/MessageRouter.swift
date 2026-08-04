@@ -261,10 +261,21 @@ final class MessageRouter {
                 && !FailedInitMessageStore.shared.contains(message.id)
             if !isOrphanedInit {
                 Log.debug("Skipping already-processed message \(message.id.prefix(8))… (ACK store)", category: "MessageRouter")
-                // Truthful: the message IS in the transcript from the first delivery. The sender
-                // is redelivering because our first receipt never landed, so this re-send is the
-                // only thing that will ever move their checkmark off "sent".
-                OutboundSessionService.sendDeliveryReceipt(for: [message.id], to: otherUserId, in: context)
+                // The message IS in the transcript from the first delivery, and re-sending the
+                // receipt is still the only thing that can move the sender's checkmark off "sent"
+                // if our first one was lost. But once per *redelivery* is an amplifier: a receipt
+                // is itself a message, so it enters the peer's stream, gets replayed back at us by
+                // the server, and is answered again. On 2026-08-04 that turned 6236 duplicates
+                // into 3754 encrypt+ratchet+RPC cycles and cooked the phone.
+                //
+                // Once per message per window keeps the recovery and removes the loop: a lost
+                // receipt is cosmetic and rare, and receipts do not stop redelivery anyway — the
+                // stream cursor does.
+                if ReceiptResendThrottle.shared.shouldSend(messageId: message.id) {
+                    OutboundSessionService.sendDeliveryReceipt(for: [message.id], to: otherUserId, in: context)
+                } else {
+                    PerformanceMetrics.shared.record(.receiptResendThrottled, label: "duplicate_delivery")
+                }
                 return
             }
             Log.info("Re-processing orphaned session init \(message.id.prefix(8))… (no active session for \(otherUserId.prefix(8))…)", category: "MessageRouter")
@@ -756,32 +767,27 @@ final class MessageRouter {
                 // recognised *before* decryption (END_SESSION 21, SESSION_RESET_INIT 24) and for
                 // the never-sealed carriers (heartbeat 13, SENDER_SYNC 23) — none of which reach
                 // this branch framed. See decisions/sealed-content-type-inside-the-plaintext-frame.md.
+                if handleFramedSideChannel(
+                    plaintext, messageId: message.id, from: otherUserId,
+                    resolvedSender: resolvedSender, in: context
+                ) {
+                    continue
+                }
+                // Session control (25/26) is dispatched here rather than in the shared helper:
+                // on this path a ping/ready only unblocks the outgoing queue, while on the
+                // session-init path it also cancels watchdogs. RESET_INIT (24) is deliberately
+                // absent — it carries a real X3DH first-ratchet payload and is handled earlier.
+                if let control = ChunkedMessageCodec.controlFrame(plaintext),
+                   control.contentType == 25 || control.contentType == 26,
+                   let op = SessionControlCodec.op(forContentType: Int(control.contentType)) {
+                    handleSessionControlSignal(op, for: message, from: otherUserId, chat: chat, in: context)
+                    continue
+                }
                 if let control = ChunkedMessageCodec.controlFrame(plaintext),
                    control.contentType != 0, control.contentType != 1 {
-                    switch control.contentType {
-                    case 12:
-                        if let signal = CallManager.decodeSignalProto(from: control.payload) {
-                            CallManager.shared.handleCallSignalProto(from: resolvedSender, signal: signal)
-                        } else {
-                            Log.error("Call signal frame from \(otherUserId.prefix(8))… failed to decode", category: "MessageRouter")
-                        }
-                        PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-                        continue
-                    case 14:
-                        handleIncomingE2EDeliveryReceipt(control.payload, messageId: message.id, from: otherUserId, in: context)
-                        continue
-                    case 25, 26:
-                        // RESET_INIT (24) is deliberately absent: it carries a real X3DH
-                        // first-ratchet payload and is handled before we ever get here.
-                        if let op = SessionControlCodec.op(forContentType: Int(control.contentType)) {
-                            handleSessionControlSignal(op, for: message, from: otherUserId, chat: chat, in: context)
-                            continue
-                        }
-                    default:
-                        // An unknown framed type is a peer speaking a dialect we do not have.
-                        // Fall through to the body pipeline rather than dropping it silently.
-                        Log.info("Unknown framed content type \(control.contentType) from \(otherUserId.prefix(8))… — treating as a message body", category: "MessageRouter")
-                    }
+                    // A peer speaking a dialect we do not have. Fall through to the body pipeline
+                    // rather than dropping it silently.
+                    Log.info("Unknown framed content type \(control.contentType) from \(otherUserId.prefix(8))… — treating as a message body", category: "MessageRouter")
                 }
 
                 // Profile share: support binary wire (no JSON) + legacy. Detect on raw Data here.
@@ -1602,6 +1608,48 @@ final class MessageRouter {
             Log.debug("System message added to chat with \(userId)", category: "MessageRouter")
         } catch {
             Log.error("Failed to save system message: \(error)", category: "MessageRouter")
+        }
+    }
+
+    /// Route a framed payload that is a pure side channel — a call signal (12) or a delivery
+    /// receipt (14). Returns true when it was consumed and must never become a chat row.
+    ///
+    /// Shared by the ordinary path and by `SessionCoordinator`'s session-init path, which had no
+    /// equivalent at all: it knew about session-control ops and nothing else, so a receipt arriving
+    /// as the first message of a fresh session was persisted and rendered as a bubble containing
+    /// the id it referenced (observed 2026-08-04, `08b9653c-…`).
+    ///
+    /// Deliberately **not** extended to session control (24/25/26). Those look like one decision
+    /// and are two: the session-init path additionally cancels tie-break watchdogs, responder
+    /// fallbacks and pending re-inits, which the ordinary path has no business doing. Folding them
+    /// in here would have silently dropped those cancellations — the same class of loss this whole
+    /// exercise is about, just in the other direction.
+    ///
+    /// An unknown framed type returns false: a peer speaking a newer dialect should reach the body
+    /// pipeline rather than vanish.
+    func handleFramedSideChannel(
+        _ plaintext: Data,
+        messageId: String,
+        from otherUserId: String,
+        resolvedSender: String,
+        in context: NSManagedObjectContext
+    ) -> Bool {
+        guard let control = ChunkedMessageCodec.controlFrame(plaintext) else { return false }
+
+        switch control.contentType {
+        case 12:
+            if let signal = CallManager.decodeSignalProto(from: control.payload) {
+                CallManager.shared.handleCallSignalProto(from: resolvedSender, signal: signal)
+            } else {
+                Log.error("Call signal frame from \(otherUserId.prefix(8))… failed to decode", category: "MessageRouter")
+            }
+            PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
+            return true
+        case 14:
+            handleIncomingE2EDeliveryReceipt(control.payload, messageId: messageId, from: otherUserId, in: context)
+            return true
+        default:
+            return false
         }
     }
 

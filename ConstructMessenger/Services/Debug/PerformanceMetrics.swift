@@ -105,6 +105,11 @@ enum MetricEvent: String {
     /// session — a desync that only heals by luck. `label` = the content type that got through.
     case controlCarrierReachedWirePath = "control_carrier_reached_wire_path"
 
+    /// A delivery receipt was NOT re-sent because one for the same message went out inside the
+    /// window (`ReceiptResendThrottle`). Under a healthy stream this stays near zero; a large
+    /// number is the redelivery storm being absorbed instead of amplified. `label` = call site.
+    case receiptResendThrottled = "receipt_resend_throttled"
+
     /// A message row was persisted whose entire body is a bare UUID — an identifier where text
     /// belongs, i.e. a service payload reaching the transcript. `label` = the writing call site
     /// (`file:line`), which is the whole point: the shape was observed on device before any
