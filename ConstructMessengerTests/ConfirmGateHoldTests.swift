@@ -188,6 +188,62 @@ final class ConfirmGateHoldTests: XCTestCase {
         )
     }
 
+    // MARK: - Every path that drops the gate must settle the hold
+
+    /// The lazy TTL inside `isPending` releases the gate from inside a *query*, so it cannot replay
+    /// what it released — and it beats the 30 s watchdog to the entry, which is why the `.giveUp`
+    /// replay never ran. Build 575, 2026-08-04: `confirm_hold` 2, `confirm_replay` 0, the cursor
+    /// deferred behind both. The lapse must therefore be claimable exactly once by whoever can.
+    ///
+    /// Mutation: drop the `lapsedUnreplayed.insert(userId)` from the expiry branch.
+    @MainActor
+    func testLazyExpiryLeavesAClaimableLapse() {
+        let tracker = SessionConfirmationTracker.shared
+        let peer = "lapse-peer-\(UUID().uuidString)"
+        tracker.markPending(peer)
+
+        // Not yet expired: nothing to settle.
+        XCTAssertTrue(tracker.isPending(peer))
+        XCTAssertFalse(tracker.consumeLapse(peer), "an unexpired gate has no lapse to claim")
+
+        tracker.expireForTesting(peer)
+        XCTAssertFalse(tracker.isPending(peer), "the TTL must still self-release — no deadlock")
+        XCTAssertTrue(tracker.consumeLapse(peer), "the release left a hold nobody replayed")
+        XCTAssertFalse(tracker.consumeLapse(peer), "claimed once, so two callers cannot both replay")
+    }
+
+    /// The explicit releases replay as part of dropping the gate, so they must NOT also leave a
+    /// lapse — a second replay would re-route messages the first one already handled.
+    ///
+    /// Mutation: remove `lapsedUnreplayed.remove(userId)` from `markConfirmed`.
+    @MainActor
+    func testExplicitReleasesLeaveNothingToSettle() {
+        let tracker = SessionConfirmationTracker.shared
+
+        let confirmed = "confirmed-peer-\(UUID().uuidString)"
+        tracker.markPending(confirmed)
+        tracker.markConfirmed(confirmed)
+        XCTAssertFalse(tracker.consumeLapse(confirmed), "the peer-ack path replays the hold itself")
+
+        let lapsed = "watchdog-peer-\(UUID().uuidString)"
+        tracker.markPending(lapsed)
+        tracker.releaseLapsed(lapsed)
+        XCTAssertFalse(tracker.consumeLapse(lapsed), "the watchdog give-up path replays it itself")
+    }
+
+    /// A lapse recorded by the TTL, then superseded by an explicit confirm, must not survive: the
+    /// confirm's own replay already drained the buffer.
+    @MainActor
+    func testConfirmAfterLapseDoesNotLeaveADoubleReplay() {
+        let tracker = SessionConfirmationTracker.shared
+        let peer = "raced-peer-\(UUID().uuidString)"
+        tracker.markPending(peer)
+        tracker.expireForTesting(peer)
+        _ = tracker.isPending(peer)          // records the lapse
+        tracker.markConfirmed(peer)          // peer ack lands late and replays
+        XCTAssertFalse(tracker.consumeLapse(peer), "one release, one replay")
+    }
+
     // MARK: - Not covered here, on purpose
     //
     // That a held message is never `markProcessed`'d — the property that turned this delay into a

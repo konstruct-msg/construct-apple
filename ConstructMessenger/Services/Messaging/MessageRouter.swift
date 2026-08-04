@@ -492,8 +492,17 @@ final class MessageRouter {
         // re-inited one second earlier, and `markProcessed` meant the server never redelivered
         // its init. Whether a peer init is stale or live is knowable only once the gate falls;
         // until then the message is buffered rather than guessed about.
+        let gateIsUp = SessionConfirmationTracker.shared.isPending(otherUserId)
+        // The gate can also fall inside that query, via its lazy TTL, and that path has no way to
+        // replay what it released — it runs from whatever call site happened to ask, with no
+        // managed-object context. It also beats the watchdog to the entry, so the `.giveUp` replay
+        // never runs (observed in build 575: two peer inits held, zero replayed, cursor deferred
+        // behind them). Settle it here, where the gate matters and a context exists.
+        if !gateIsUp, SessionConfirmationTracker.shared.consumeLapse(otherUserId) {
+            replayHeldMessages(for: otherUserId, in: context)
+        }
         if case .hold = SessionReducer.confirmGateAction(
-            isPending: SessionConfirmationTracker.shared.isPending(otherUserId),
+            isPending: gateIsUp,
             isControlCarrier: message.isEndSession || message.isSessionResetInit,
             isPeerInit: message.messageNumber == 0,
             decryptFailed: false

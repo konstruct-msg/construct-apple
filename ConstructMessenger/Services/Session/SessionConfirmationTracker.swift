@@ -43,8 +43,31 @@ final class SessionConfirmationTracker {
     }
 
     func markConfirmed(_ userId: String) {
+        // The caller replays the hold itself, so an unsettled lapse for this peer is moot.
+        lapsedUnreplayed.remove(userId)
         guard pendingSince.removeValue(forKey: userId) != nil else { return }
         Log.info("SESSION_CONFIRM[confirmed]: \(userId.prefix(8))… — RESPONDER acknowledged", category: "SessionConfirm")
+    }
+
+    // MARK: - Unsettled lapses
+
+    /// Peers whose gate fell via the **lazy TTL inside `isPending`** rather than via an explicit
+    /// release, and whose held incoming messages therefore have not been replayed yet.
+    ///
+    /// Both explicit releases (peer ack, watchdog give-up) replay the hold as part of dropping the
+    /// gate. The lazy TTL cannot: it fires inside a query, from whatever call site happened to ask,
+    /// with no context to route with. And it *wins the race* — observed 2026-08-04 in build 575,
+    /// where `isPending` expired the entry at 18:36:37 before the 30 s watchdog tick could return
+    /// `.giveUp`, so the `.giveUp` replay never ran and two held peer inits sat in the buffer with
+    /// the stream cursor deferred behind them. Recording the lapse lets the next router pass settle
+    /// what the query could not.
+    private var lapsedUnreplayed: Set<String> = []
+
+    /// Claim an unsettled lapse for `userId`. True exactly once per lapse — the caller must then
+    /// replay that peer's hold.
+    @discardableResult
+    func consumeLapse(_ userId: String) -> Bool {
+        lapsedUnreplayed.remove(userId) != nil
     }
 
     // MARK: - Tie-break watchdog (called by SessionCoordinator's re-arming watchdog)
@@ -59,6 +82,8 @@ final class SessionConfirmationTracker {
     /// expiry in `isPending`). Returns whether an entry was actually pending.
     @discardableResult
     func releaseLapsed(_ userId: String) -> Bool {
+        // This path replays the hold itself.
+        lapsedUnreplayed.remove(userId)
         guard pendingSince.removeValue(forKey: userId) != nil else { return false }
         Log.info("SESSION_CONFIRM[watchdog_giveup]: \(userId.prefix(8))… — confirm window exhausted, releasing gate + flushing", category: "SessionConfirm")
         return true
@@ -71,13 +96,26 @@ final class SessionConfirmationTracker {
     /// messages as `.queued`; MessageRouter uses it to hold the peer's msgNum=0 and to suppress a
     /// teardown on a decrypt failure it caused itself. Once the window passes without confirmation
     /// the entry self-expires so neither guard can deadlock.
+    #if DEBUG
+    /// Backdate the pending stamp past the confirm window so a test can drive the TTL branch
+    /// without sleeping 75 s. Only the stamp is touched — the expiry itself still runs in
+    /// `isPending`, which is the behaviour under test.
+    func expireForTesting(_ userId: String) {
+        guard pendingSince[userId] != nil else { return }
+        pendingSince[userId] = Date().addingTimeInterval(-(confirmWindow + 1))
+    }
+    #endif
+
     func isPending(_ userId: String) -> Bool {
         let since = pendingSince[userId]
         // Single tested authority for the TTL decision (harness-covered).
         guard SessionReducer.isConfirmBuffering(pendingSince: since, now: Date(), confirmWindow: confirmWindow) else {
             if since != nil {
                 pendingSince.removeValue(forKey: userId)
-                Log.info("SESSION_CONFIRM[window_expired]: \(userId.prefix(8))… — no session_ready in \(Int(confirmWindow))s, releasing gate (peer re-init will now converge; buffered sends drain via retry)", category: "SessionConfirm")
+                // Held incoming messages still need replaying, and this call site cannot do it —
+                // see `lapsedUnreplayed`. Mark it so the next router pass settles it.
+                lapsedUnreplayed.insert(userId)
+                Log.info("SESSION_CONFIRM[window_expired]: \(userId.prefix(8))… — no session_ready in \(Int(confirmWindow))s, releasing gate (peer re-init will now converge; buffered sends drain via retry, held incoming replays on the next pass)", category: "SessionConfirm")
             }
             return false
         }
