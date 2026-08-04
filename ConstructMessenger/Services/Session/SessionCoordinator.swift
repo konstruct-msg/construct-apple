@@ -1319,11 +1319,20 @@ final class SessionCoordinator: MessageRouterDelegate {
             return
         }
 
-        // Typed handshake control signals (content_type 24/25/26): dispatch by op before the
-        // plaintext-prefix fallback below. The X3DH init for these already ran in
-        // initReceivingSession; the decrypted inner is just a sentinel, so we never persist it.
-        // Legacy peers send these as magic strings — handled by the string checks that follow.
-        if let op = SessionControlCodec.op(forContentType: Int(messageData.contentType)) {
+        // Typed handshake control signals: dispatch by op before the plaintext-prefix fallback
+        // below. The X3DH init for these already ran in initReceivingSession; the decrypted inner
+        // is just a sentinel, so we never persist it.
+        //
+        // The type is read from the KNST frame FIRST, and only then from the envelope. Since
+        // `cf157f64` the envelope carries `.unspecified` for ping/ready — their type rides in
+        // frame byte 5, inside the ciphertext, so the server learns nothing. This site was still
+        // asking the envelope, which now answers "ordinary message" for every ping, and the
+        // binary `SessionControl` payload then fell through to be persisted as a chat bubble.
+        // Same defect the frame move was meant to end: two carriers of one fact, one site
+        // updated. `MessageRouter` was; this one was not.
+        let frameOp = ChunkedMessageCodec.controlFrame(decryptedBytes)
+            .flatMap { SessionControlCodec.op(forContentType: Int($0.contentType)) }
+        if let op = frameOp ?? SessionControlCodec.op(forContentType: Int(messageData.contentType)) {
             let peerId = messageData.from
             switch op {
             case .resetInit:

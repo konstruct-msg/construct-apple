@@ -68,13 +68,34 @@ public class Message: NSManagedObject {
     /// on a supported device, but keeps the message visible in any case).
     /// Encrypt UTF-8 text for at-rest storage. Prefer `plaintextData` when the caller
     /// already holds binary (CTM1 envelope / media album).
-    func applyStoredEncryption(plaintext: String, contactId: String) {
-        applyStoredEncryption(plaintextData: Data(plaintext.utf8), contactId: contactId)
+    func applyStoredEncryption(
+        plaintext: String,
+        contactId: String,
+        caller: StaticString = #function,
+        callerFile: StaticString = #fileID,
+        callerLine: UInt = #line
+    ) {
+        // Forward the original call site — otherwise every String caller is reported as this
+        // one-line overload, which is the one place that certainly is not the culprit.
+        applyStoredEncryption(
+            plaintextData: Data(plaintext.utf8),
+            contactId: contactId,
+            caller: caller,
+            callerFile: callerFile,
+            callerLine: callerLine
+        )
     }
 
     /// Encrypt opaque local payload bytes (CTM1 envelope or legacy UTF-8) for at-rest storage.
     /// See `LocalMessagePayload` / client/specs/local-message-payload-binary.md (E1/E2).
-    func applyStoredEncryption(plaintextData: Data, contactId: String) {
+    func applyStoredEncryption(
+        plaintextData: Data,
+        contactId: String,
+        caller: StaticString = #function,
+        callerFile: StaticString = #fileID,
+        callerLine: UInt = #line
+    ) {
+        reportIfBodyIsABareIdentifier(plaintextData, caller: caller, file: callerFile, line: callerLine)
         guard !plaintextData.isEmpty else {
             // encryptedContent must always be non-null (Core Data required attribute).
             encryptedContent = Data()
@@ -107,5 +128,37 @@ public class Message: NSManagedObject {
 
         MessageKeyStore.shared.storeSync(messageId: msgId, key: keyBytes, contactId: contactId)
         MessageDisplayCache.shared.store(messageId: msgId, plaintextData: plaintextData)
+    }
+
+    /// Name the writer when a row's whole body is a bare UUID.
+    ///
+    /// Observed on device 2026-08-04: two bubbles whose entire text was a message id
+    /// (`f11a72bb-…`, `3e841298-…`), both ids of messages that had failed to decrypt minutes
+    /// earlier, and neither id present in the peer's log — so no peer sent them. Something on
+    /// this device persisted an identifier where a message body belongs.
+    ///
+    /// Which path did it is not guessable from the transcript, and the candidates were checked
+    /// and eliminated rather than picked: a leaked binary `SessionControl` would render as
+    /// `$` + an UPPERCASE nonce, a leaked `DeliveryReceipt` as a newline + `$` + an id. Both were
+    /// ruled out by shape. Rather than fix a third guess and hope — the way TODO 33 lost two days
+    /// — this reports the caller. Every row body in the app goes through this method, so whatever
+    /// writes the next one names itself, with file and line.
+    ///
+    /// A user can legitimately send a UUID as a message, so this logs and does not block.
+    private func reportIfBodyIsABareIdentifier(
+        _ plaintextData: Data,
+        caller: StaticString,
+        file: StaticString,
+        line: UInt
+    ) {
+        guard plaintextData.count == 36,
+              let text = String(data: plaintextData, encoding: .utf8),
+              UUID(uuidString: text) != nil
+        else { return }
+        Log.error(
+            "Row body is a bare UUID (\(text)) — written by \(caller) at \(file):\(line), row id \(id.prefix(8))…, isSentByMe=\(isSentByMe). A message body is never an identifier; this is a service payload reaching the transcript.",
+            category: "Storage"
+        )
+        PerformanceMetrics.shared.record(.identifierPersistedAsMessageBody, label: "\(file):\(line)")
     }
 }

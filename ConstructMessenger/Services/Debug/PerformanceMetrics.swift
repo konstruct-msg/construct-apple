@@ -105,6 +105,12 @@ enum MetricEvent: String {
     /// session — a desync that only heals by luck. `label` = the content type that got through.
     case controlCarrierReachedWirePath = "control_carrier_reached_wire_path"
 
+    /// A message row was persisted whose entire body is a bare UUID — an identifier where text
+    /// belongs, i.e. a service payload reaching the transcript. `label` = the writing call site
+    /// (`file:line`), which is the whole point: the shape was observed on device before any
+    /// candidate path could be confirmed. See `Message.applyStoredEncryption`.
+    case identifierPersistedAsMessageBody = "identifier_persisted_as_message_body"
+
     /// The server delivered a stream entry whose id is strictly below the `since_cursor` we
     /// subscribed with — it was told we already had that message and sent it anyway. Distinct
     /// from the stall below on purpose: this one is the server re-reading the backlog, which at

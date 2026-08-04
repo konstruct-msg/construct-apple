@@ -56,6 +56,18 @@ enum MessageContentType: Int16 {
         case .text(let plaintext):
             return inferLegacyControl(plaintext)
         case .legacyUTF8(let raw):
+            // A raw (non-CTM1) body is the only shape a leaked binary control payload can take,
+            // and `SessionControl` is not a string, so the prefix list below is blind to it. That
+            // blindness is not hypothetical: while the type lived on the envelope the string list
+            // was a backstop; once ping/ready moved into the frame, a control payload that slipped
+            // past dispatch had nothing left to catch it and rendered as a bubble. Ask the bytes.
+            if let control = SessionControlCodec.decode(raw) {
+                switch control.op {
+                case .ping:  return .sessionPing
+                case .ready: return .sessionReady
+                default:     return .sessionReset
+                }
+            }
             return inferLegacyControl(String(data: raw, encoding: .utf8) ?? "")
         }
     }
