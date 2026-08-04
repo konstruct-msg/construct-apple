@@ -126,6 +126,53 @@ final class MessageRouter {
         }
     }
 
+    // MARK: - Tie-break confirm hold
+
+    /// Hold `message` until the tie-break confirm gate for `userId` resolves — peer ack or
+    /// watchdog give-up, both of which call `replayHeldMessages(for:in:)`.
+    ///
+    /// Returns the cursor disposition, and deliberately never marks the message processed: a held
+    /// message must stay redeliverable. Giving that up is what turned a decrypt failure inside the
+    /// confirm window into permanent loss rather than a delay.
+    private func holdUntilConfirmResolves(
+        _ message: ChatMessage,
+        from userId: String,
+        reason: String
+    ) -> StreamCursorTracker.Outcome {
+        if pendingQueue.contains(messageId: message.id, for: userId) { return .deferred }
+        guard pendingQueue.enqueue(message, for: userId) else {
+            // Cap reached (100/peer). Now it really is a drop, so say so at ERROR — the one
+            // branch in this path where a message is lost on purpose.
+            Log.error("SESSION_STATE[confirm_hold_overflow]: buffer full for \(userId.prefix(8))… — dropping \(message.id.prefix(8))… (\(reason))", category: "MessageRouter")
+            PerformanceMetrics.shared.record(.confirmHoldOverflow, label: reason)
+            return .durable
+        }
+        Log.info("SESSION_STATE[confirm_hold]: holding msgNum=\(message.messageNumber) from \(userId.prefix(8))… (\(reason)) — buffer \(pendingQueue.count(for: userId))", category: "MessageRouter")
+        PerformanceMetrics.shared.record(.confirmHold, label: reason)
+        return .deferred
+    }
+
+    /// Re-route everything held behind the tie-break confirm gate for `userId`.
+    ///
+    /// Only meaningful once the gate is down: with it still up every message would be re-held and
+    /// the drain would be a no-op that read like a flush, so the gate state is asserted here rather
+    /// than trusted from the call site.
+    func replayHeldMessages(for userId: String, in context: NSManagedObjectContext) {
+        guard !SessionConfirmationTracker.shared.isPending(userId) else {
+            let held = pendingQueue.count(for: userId)
+            if held > 0 {
+                Log.info("SESSION_STATE[confirm_replay_skipped]: gate still up for \(userId.prefix(8))… — \(held) message(s) stay held", category: "MessageRouter")
+            }
+            return
+        }
+        let held = pendingQueue.drain(for: userId)
+        guard !held.isEmpty else { return }
+        Log.info("SESSION_STATE[confirm_replay]: re-routing \(held.count) held message(s) from \(userId.prefix(8))…", category: "MessageRouter")
+        for message in held {
+            routeIncomingMessage(message, in: context)
+        }
+    }
+
     private func beginProcessing(_ messageId: String) -> Bool {
         processingMessageIds.insert(messageId).inserted
     }
@@ -436,16 +483,22 @@ final class MessageRouter {
         }
 
         // Guard: after a tie-break WIN we sent SESSION_RESET_INIT and are waiting for the
-        // RESPONDER (peer) to acknowledge. Any msgNum=0 arriving in this window is from
-        // the peer's OLD init attempt (different ephemeral keys) and will always fail AEAD.
-        // ACK and discard it rather than letting the Rust core produce sendEndSession → loop.
-        if message.messageNumber == 0
-            && !message.isEndSession
-            && !message.isSessionResetInit
-            && SessionConfirmationTracker.shared.isPending(otherUserId) {
-            Log.info("SESSION_STATE[stale_init_drop]: discarding stale msgNum=0 from \(otherUserId.prefix(8))… (tie-break WIN, pending RESPONDER confirm)", category: "MessageRouter")
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "stale_init")
+        // RESPONDER (peer) to acknowledge. A msgNum=0 arriving in this window is a peer init
+        // encrypted under keys our fresh INITIATOR session cannot read, so feeding it to the
+        // ratchet produces sendEndSession → reset loop.
+        //
+        // It is HELD, not discarded. The premise the discard rested on — "any msgNum=0 in this
+        // window is the peer's OLD attempt" — was false on 2026-08-04: the peer had genuinely
+        // re-inited one second earlier, and `markProcessed` meant the server never redelivered
+        // its init. Whether a peer init is stale or live is knowable only once the gate falls;
+        // until then the message is buffered rather than guessed about.
+        if case .hold = SessionReducer.confirmGateAction(
+            isPending: SessionConfirmationTracker.shared.isPending(otherUserId),
+            isControlCarrier: message.isEndSession || message.isSessionResetInit,
+            isPeerInit: message.messageNumber == 0,
+            decryptFailed: false
+        ) {
+            streamOutcome = holdUntilConfirmResolves(message, from: otherUserId, reason: "peer_init")
             if isNewChat { context.delete(chat) }
             return
         }
@@ -574,9 +627,32 @@ final class MessageRouter {
                 streamOutcome = .deferred
                 return
             case .sendEndSession(let contactId):
+                // While our own SESSION_RESET_INIT is still unacked we are the side that replaced
+                // the session; the peer is necessarily behind. A decrypt failure here is the
+                // expected consequence of our own re-init, not evidence that the ratchet diverged,
+                // and tearing down answers our own reset with another reset — taking the message
+                // with it. 2026-08-04: a user's first message after a re-init died on exactly this
+                // line, one second after its own msgNum=0 was discarded by the gate above; A held
+                // it at `sent` forever and B never rendered it. Hold instead; the confirm (peer ack
+                // or watchdog give-up) resolves it, and a genuine divergence still tears down then,
+                // one confirm window later.
+                if case .hold = SessionReducer.confirmGateAction(
+                    isPending: SessionConfirmationTracker.shared.isPending(contactId),
+                    isControlCarrier: message.isEndSession || message.isSessionResetInit,
+                    isPeerInit: message.messageNumber == 0,
+                    decryptFailed: true
+                ) {
+                    Log.info("SESSION_STATE[end_session_deferred]: decrypt failed for \(contactId.prefix(8))… while our SESSION_RESET_INIT is unacked — holding, not tearing down", category: "SessionInit")
+                    streamOutcome = holdUntilConfirmResolves(message, from: contactId, reason: "dr_fail_pending_confirm")
+                    if isNewChat { context.delete(chat) }
+                    return
+                }
                 Log.info("SESSION_STATE[rust_end_session]: DR diverged for \(contactId.prefix(8))… — sending END_SESSION", category: "SessionInit")
                 PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "rust_end_session")
-                pendingQueue.remove(for: contactId)
+                // Give-up: resolve each discarded message's watermark as it goes. Bare `remove`
+                // left held messages deferred forever, pinning the device cursor behind messages
+                // nothing would ever revisit — invisible while the queue only ever held inits.
+                removePendingMessages(for: contactId)
                 SessionHealingService.shared.clearQueue(for: contactId, in: context)
                 PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                 delegate?.messageRouter(self, needsEndSession: contactId)
@@ -989,6 +1065,10 @@ final class MessageRouter {
                     context: context
                 )
             }
+            // The gate held incoming traffic too — it is down now, so replay it. Only the
+            // outgoing side was ever flushed here, which is why an inbound hold had to be a
+            // discard to avoid stranding messages.
+            replayHeldMessages(for: otherUserId, in: context)
         default: // .ping (and any other non-ready signal routed here)
             Log.info("SESSION_STATE[session_ping_received]: discarding session ping from \(otherUserId.prefix(8))…", category: "MessageRouter")
             // A ping means the peer initiated and a RESPONDER session is established on our side,
@@ -1002,6 +1082,7 @@ final class MessageRouter {
                     context: context
                 )
             }
+            replayHeldMessages(for: otherUserId, in: context)
         }
     }
 

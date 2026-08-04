@@ -274,17 +274,62 @@ enum SessionReducer {
         case other
     }
 
-    /// The INITIATOR (tie-break winner) buffers outgoing and drops the peer's stale msgNum=0 while
+    /// The INITIATOR (tie-break winner) buffers outgoing and holds the peer's msgNum=0 while
     /// awaiting the RESPONDER's `session_ready`. This gate is a **hint, never a permanent lock**:
     /// it self-releases after `confirmWindow` so a lost SESSION_RESET_INIT / lost ping / lost
     /// session_ready can't deadlock (the class fixed piecemeal in `3f166e61` + `04f16211`, now a
     /// single tested decision `SessionConfirmationTracker` delegates to).
     ///
     /// - Returns: true iff a pending mark exists AND the confirm window has not elapsed — i.e.
-    ///   outgoing should still buffer and the peer's msgNum=0 should still be `stale_init_drop`'d.
+    ///   outgoing should still buffer and the peer's msgNum=0 should still be held
+    ///   (`MessageRouter.holdUntilConfirmResolves`, replayed when the gate falls).
     static func isConfirmBuffering(pendingSince: Date?, now: Date, confirmWindow: TimeInterval) -> Bool {
         guard let pendingSince else { return false }
         return now.timeIntervalSince(pendingSince) < confirmWindow
+    }
+
+    /// What the tie-break confirm gate does with an *incoming* message.
+    enum ConfirmGateAction: Equatable {
+        /// Route normally.
+        case route
+        /// Buffer until the gate resolves, then replay (`MessageRouter.replayHeldMessages`).
+        case hold
+    }
+
+    /// The gate's disposition for one incoming message — the single authority for both points at
+    /// which the question is asked: before decryption (a peer msgNum=0) and after it (the core
+    /// answered `sendEndSession`).
+    ///
+    /// Both must **hold**, never discard. Inside our own confirm window we are the side that
+    /// replaced the session, so a peer init that cannot be read and a decrypt failure are both
+    /// consequences of our own re-init, not evidence about the peer. Answering either with a
+    /// discard cost a user message on 2026-08-04: the peer's live init was marked processed (so
+    /// the server never redelivered it) and the message that followed it one second later tore the
+    /// session down and went with it.
+    ///
+    /// Control carriers are exempt. END_SESSION and SESSION_RESET_INIT are what drives the
+    /// convergence the gate is waiting for — holding them would make the gate wait on itself.
+    static func confirmGateAction(
+        isPending: Bool,
+        isControlCarrier: Bool,
+        isPeerInit: Bool,
+        decryptFailed: Bool
+    ) -> ConfirmGateAction {
+        guard isPending, !isControlCarrier else { return .route }
+        return .hold
+    }
+
+    /// Whether a handshake-control retry may still speak for the session it was created to
+    /// announce. Sibling of `shouldTearDownAfterEndSession`, and the same defect: a decision made
+    /// before a network round-trip, applied after one, against whatever session exists by then.
+    ///
+    /// Observed 2026-08-04: SESSION_RESET_INIT attempts 1-2 failed on `StealthDowngradeBlocked`,
+    /// the peer's own SRI arrived in the gap and made us the RESPONDER on a new session, and
+    /// attempt 3 announced a session that had been gone for a second. The peer answered by tearing
+    /// down a healthy ratchet.
+    static func shouldContinueControlRetry(announced: UInt64?, current: UInt64?, hasSession: Bool) -> Bool {
+        guard hasSession else { return false }
+        return announced == current
     }
 
     // MARK: - Handshake control emission (the send-side authority)

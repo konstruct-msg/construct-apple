@@ -601,7 +601,8 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// *nothing*. The peer's RESPONDER wait then timed out after 60s and flipped to
     /// INITIATOR — producing a dueling-initiator deadlock where the winner buffers its
     /// outgoing messages forever (`SessionConfirmationTracker.pending` never clears) and
-    /// silently drops the loser's inits (`stale_init_drop`). Transmitting the SRI here
+    /// holds the loser's inits until the window lapses (`confirm_hold`; before 2026-08-04 it
+    /// discarded them, which is how a genuinely live re-init could be lost). Transmitting the SRI here
     /// lets the RESPONDER bootstrap and reply `session_ready`, which clears `pending` and
     /// flushes the buffer via the existing markConfirmed → sendQueuedMessages path.
     private func reinitAndAnnounceAsInitiator(to userId: String, reason: String) {
@@ -1068,7 +1069,34 @@ final class SessionCoordinator: MessageRouterDelegate {
         let frameType = SessionControlCodec.frameContentType(for: codecOp)
         let wireContentType: Shared_Proto_Core_V1_ContentType = frameType == nil ? contentType : .unspecified
 
+        // The session this send speaks for, pinned before the first attempt. A retry crosses the
+        // network, and a session can be replaced underneath it: on 2026-08-04 attempts 1 and 2
+        // failed on `StealthDowngradeBlocked`, the peer's own SESSION_RESET_INIT landed in the gap
+        // and made us the RESPONDER on a new session, and attempt 3 then announced a session that
+        // had not existed for a second. The peer read it as "reset" and tore down a healthy ratchet
+        // — the first domino of a cascade that ended in a lost user message.
+        //
+        // Same defect and same remedy as `SessionReducer.shouldTearDownAfterEndSession`: identify
+        // the session the decision was made about, rather than asserting that *a* session exists.
+        // The `hasSession` guard above cannot see this — it was true throughout.
+        // Residual, inherited from that function: `establishedAt` is whole seconds, so a
+        // replacement inside the same second still reads as identical.
+        let announcedSession = establishedAt(for: userId)
+
         for attempt in 1...maxAttempts {
+            if attempt > 1 {
+                let stillLive = CryptoManager.shared.hasSession(for: userId)
+                guard SessionReducer.shouldContinueControlRetry(
+                    announced: announcedSession,
+                    current: establishedAt(for: userId),
+                    hasSession: stillLive
+                ) else {
+                    let why = stillLive ? "replaced" : "gone"
+                    Log.info("SESSION_STATE[\(logTag)_superseded]: session for \(userId.prefix(8))… is \(why) between attempts — abandoning at \(attempt)/\(maxAttempts) rather than announcing a session that no longer exists", category: "SessionInit")
+                    PerformanceMetrics.shared.record(.controlRetrySuperseded, label: "\(logTag):\(why)")
+                    return
+                }
+            }
             do {
                 let nonce = UUID().uuidString
                 let msgId = UUID().uuidString.lowercased()
@@ -1224,6 +1252,12 @@ final class SessionCoordinator: MessageRouterDelegate {
                     Log.info("SESSION_STATE[tie_break_watchdog]: confirm window exhausted for \(userId.prefix(8))… — releasing gate + flushing buffer", category: "SessionInit")
                     SessionConfirmationTracker.shared.releaseLapsed(userId)
                     self.sendSessionQueuedMessages(for: userId)
+                    // Both directions. The gate holds incoming as well as outgoing, and this is
+                    // the give-up path for the incoming hold too: replay it and let the ordinary
+                    // decrypt/heal decision run now that the gate no longer suppresses it.
+                    if let context = self.viewContext {
+                        self.messageRouter.replayHeldMessages(for: userId, in: context)
+                    }
                     self.tieBreakWatchdogs.removeValue(forKey: userId)
                     return
                 }

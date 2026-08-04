@@ -27,8 +27,10 @@ final class SessionConfirmationTracker {
     /// How long the confirm buffer holds before it self-releases when no `session_ready`
     /// (or ping) ever arrives. The tie-break watchdog fires one SRI retry at 30 s, so the
     /// window spans that retry plus one more RTT/heal — then the gate opens so both the
-    /// `stale_init_drop` (incoming msgNum=0) and the outgoing buffer stop deadlocking on a
+    /// incoming hold and the outgoing buffer stop deadlocking on a
     /// lost SESSION_RESET_INIT / lost ping (persistent-transport case, e.g. flaky iPad path).
+    /// This is also the upper bound on how long a held incoming message waits: nothing behind
+    /// the gate is discarded any more, only delayed by at most this window.
     /// Past the window the Rust core converges the peer's re-init and new sends flow normally
     /// (exactly what `MessageRetryManager` force-retry already proves works).
     private let confirmWindow: TimeInterval = 75
@@ -66,8 +68,9 @@ final class SessionConfirmationTracker {
 
     /// Returns true when the INITIATOR session for this peer is awaiting `session_ready`
     /// **and** the confirm window has not elapsed. ChatViewModel uses this to buffer outgoing
-    /// messages as `.queued`; MessageRouter uses it to drop the peer's stale msgNum=0. Once the
-    /// window passes without confirmation the entry self-expires so neither guard can deadlock.
+    /// messages as `.queued`; MessageRouter uses it to hold the peer's msgNum=0 and to suppress a
+    /// teardown on a decrypt failure it caused itself. Once the window passes without confirmation
+    /// the entry self-expires so neither guard can deadlock.
     func isPending(_ userId: String) -> Bool {
         let since = pendingSince[userId]
         // Single tested authority for the TTL decision (harness-covered).

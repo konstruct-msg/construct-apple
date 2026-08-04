@@ -162,6 +162,26 @@ enum MetricEvent: String {
     /// the same inversion `chunkReassemblyExpired` corrected. `label` = `msgNum=<n>`.
     case persistAckWithoutDurableWrite = "persist_ack_without_durable_write"
 
+    /// An incoming message was held behind the tie-break confirm gate instead of being routed —
+    /// either a peer init arriving while our SESSION_RESET_INIT is unacked (`peer_init`) or a
+    /// decrypt failure in that same window (`dr_fail_pending_confirm`). Benign and expected during
+    /// a re-init; it is the volume gauge for how much traffic a confirm window costs. The two
+    /// labels replace `undeliveredNoReceipt(stale_init)`, which counted the same event back when
+    /// it was a permanent discard. `label` = reason.
+    case confirmHold = "confirm_hold"
+
+    /// The confirm hold hit its per-peer cap (100) and a message was genuinely dropped. This is
+    /// the only losing branch left in the hold path, so it is the one that must be loud — the
+    /// distinction rule 1a exists for: `confirmHold` is "not yet", this is "never".
+    /// `label` = reason.
+    case confirmHoldOverflow = "confirm_hold_overflow"
+
+    /// A session handshake control (SRI / ping / ready) was abandoned mid-retry because the
+    /// session it announces was replaced or destroyed between attempts. Sending it anyway told the
+    /// peer to reset a session that had already been superseded — see the 2026-08-04 cascade in
+    /// `sendSessionControlCore`. `label` = `<logTag>:replaced` | `<logTag>:gone`.
+    case controlRetrySuperseded = "control_retry_superseded"
+
     /// A `checkAckInDb` action reached a handler other than `MessageRouter`, which owns the
     /// round-trip. Nothing answers it there any more, so the message does not route — loud on
     /// purpose: the previous behaviour (answer from a detached Task, discard the verdict) could
@@ -181,7 +201,7 @@ enum MetricEvent: String {
     ///
     /// Replaces `receiptDeliveredOnFailure`, which counted those sends while they still
     /// happened. `label` = reason code (`fallthrough`, `init_fail`, `heal_exhausted`,
-    /// `invalid_chunk`, `stale_init`, `stale_pending`, `binary_init_discarded`,
+    /// `invalid_chunk`, `stale_pending`, `binary_init_discarded`,
     /// `tie_break_win`).
     case undeliveredNoReceipt = "undelivered_no_receipt"
 
