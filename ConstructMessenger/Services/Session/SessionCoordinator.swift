@@ -955,6 +955,25 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
     }
 
+    /// Drop the tie-break confirm gate for `userId` and flush **both** directions it was holding.
+    ///
+    /// One call because the two flushes must not drift apart. For as long as the gate existed only
+    /// the outgoing side was flushed at these sites, which is precisely why the incoming side had
+    /// to be a discard rather than a hold — there was nowhere for a held message to be released.
+    /// A future fourth release site gets both by construction.
+    private func releaseConfirmGate(for userId: String, lapsed: Bool = false) {
+        assertMainThread()
+        if lapsed {
+            SessionConfirmationTracker.shared.releaseLapsed(userId)
+        } else {
+            SessionConfirmationTracker.shared.markConfirmed(userId)
+        }
+        sendSessionQueuedMessages(for: userId)
+        if let context = viewContext {
+            messageRouter.replayHeldMessages(for: userId, in: context)
+        }
+    }
+
     /// Re-sends any outgoing messages that were marked `.queued` by `requeueUndeliveredOutgoing`
     /// after receiving END_SESSION (i.e. messages encrypted under the now-replaced session).
     private func sendSessionQueuedMessages(for userId: String) {
@@ -1249,15 +1268,10 @@ final class SessionCoordinator: MessageRouterDelegate {
                     // Confirm window exhausted — stop retrying, release the gate, drain the buffer
                     // (rather than waiting for the lazy TTL / next reconnect). New sends flow; if the
                     // session is genuinely broken the peer's decrypt-fail drives normal recovery.
-                    Log.info("SESSION_STATE[tie_break_watchdog]: confirm window exhausted for \(userId.prefix(8))… — releasing gate + flushing buffer", category: "SessionInit")
-                    SessionConfirmationTracker.shared.releaseLapsed(userId)
-                    self.sendSessionQueuedMessages(for: userId)
-                    // Both directions. The gate holds incoming as well as outgoing, and this is
-                    // the give-up path for the incoming hold too: replay it and let the ordinary
+                    Log.info("SESSION_STATE[tie_break_watchdog]: confirm window exhausted for \(userId.prefix(8))… — releasing gate + flushing buffers", category: "SessionInit")
+                    // Give-up path for the incoming hold too: replay it and let the ordinary
                     // decrypt/heal decision run now that the gate no longer suppresses it.
-                    if let context = self.viewContext {
-                        self.messageRouter.replayHeldMessages(for: userId, in: context)
-                    }
+                    self.releaseConfirmGate(for: userId, lapsed: true)
                     self.tieBreakWatchdogs.removeValue(forKey: userId)
                     return
                 }
@@ -1393,10 +1407,9 @@ final class SessionCoordinator: MessageRouterDelegate {
                 cancelPendingEndSessionReinit(for: peerId, reason: "ping_received")
                 // A RESPONDER session now exists. If we were also waiting on our own
                 // INITIATOR session_ready, that confirmation will never arrive (the peer is the
-                // INITIATOR here) — release the stale pending flag and flush the outgoing buffer
+                // INITIATOR here) — release the stale pending flag and flush both buffers
                 // so sends stop deadlocking on a session_ready that won't come.
-                SessionConfirmationTracker.shared.markConfirmed(peerId)
-                sendSessionQueuedMessages(for: peerId)
+                releaseConfirmGate(for: peerId)
                 return
             case .ready:
                 Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed (content_type=26)", category: "SessionCoordinator")
@@ -1404,8 +1417,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 cancelResponderFallback(for: peerId)
                 cancelPendingEndSessionReinit(for: peerId, reason: "session_ready")
                 markActive(peerId)
-                SessionConfirmationTracker.shared.markConfirmed(peerId)
-                sendSessionQueuedMessages(for: peerId)
+                releaseConfirmGate(for: peerId)
                 return
             case .end, .unspecified, .UNRECOGNIZED:
                 break  // fall through to normal handling
@@ -1433,8 +1445,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             cancelPendingEndSessionReinit(for: messageData.from, reason: "ping_received_legacy")
             // See the typed-ping case above: a RESPONDER session exists, so release any stale
             // INITIATOR-pending buffer instead of waiting for a session_ready that won't arrive.
-            SessionConfirmationTracker.shared.markConfirmed(messageData.from)
-            sendSessionQueuedMessages(for: messageData.from)
+            releaseConfirmGate(for: messageData.from)
             return
         }
 

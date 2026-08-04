@@ -329,8 +329,10 @@ struct DiagnosticsView: View {
     }
 
     private func clearLogs() {
-        LogCollector.shared.clearLogs()
-        DispatchQueue.main.asyncAfter(deadline: .now() + DiagnosticsConfig.clearLogsRefreshDelay) { refresh() }
+        // Refresh when the deletion has actually happened, not after a fixed guess at how long it
+        // takes. The 0.3 s timer raced the writer queue: under the log volume that makes a user
+        // want to clear logs in the first place, it read the size before anything was removed.
+        LogCollector.shared.clearLogs { refresh() }
     }
 
     private func diagRow(label: String, value: String, ok: Bool) -> some View {

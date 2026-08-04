@@ -1054,36 +1054,30 @@ final class MessageRouter {
         switch op {
         case .ready:
             Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(otherUserId.prefix(8))… confirmed session — discarding control signal", category: "MessageRouter")
-            // Mark session confirmed so ChatViewModel stops buffering outgoing messages.
-            SessionConfirmationTracker.shared.markConfirmed(otherUserId)
-            // Flush messages buffered while waiting for RESPONDER confirmation.
-            if let myId = AuthSessionManager.shared.currentUserId {
-                MessageRetryManager.shared.sendQueuedMessages(
-                    for: chat,
-                    recipientId: otherUserId,
-                    currentUserId: myId,
-                    context: context
-                )
-            }
-            // The gate held incoming traffic too — it is down now, so replay it. Only the
-            // outgoing side was ever flushed here, which is why an inbound hold had to be a
-            // discard to avoid stranding messages.
-            replayHeldMessages(for: otherUserId, in: context)
+            releaseConfirmGate(for: otherUserId, chat: chat, in: context)
         default: // .ping (and any other non-ready signal routed here)
             Log.info("SESSION_STATE[session_ping_received]: discarding session ping from \(otherUserId.prefix(8))…", category: "MessageRouter")
             // A ping means the peer initiated and a RESPONDER session is established on our side,
             // so stop buffering outgoing messages that were waiting for a session_ready.
-            SessionConfirmationTracker.shared.markConfirmed(otherUserId)
-            if let myId = AuthSessionManager.shared.currentUserId {
-                MessageRetryManager.shared.sendQueuedMessages(
-                    for: chat,
-                    recipientId: otherUserId,
-                    currentUserId: myId,
-                    context: context
-                )
-            }
-            replayHeldMessages(for: otherUserId, in: context)
+            releaseConfirmGate(for: otherUserId, chat: chat, in: context)
         }
+    }
+
+    /// Drop the tie-break confirm gate and flush **both** directions it was holding. Mirror of
+    /// `SessionCoordinator.releaseConfirmGate` — the two classes both release the gate, and a
+    /// release that flushes only one side is what made an incoming hold impossible before.
+    private func releaseConfirmGate(
+        for userId: String,
+        chat: Chat,
+        in context: NSManagedObjectContext
+    ) {
+        SessionConfirmationTracker.shared.markConfirmed(userId)
+        if let myId = AuthSessionManager.shared.currentUserId {
+            MessageRetryManager.shared.sendQueuedMessages(
+                for: chat, recipientId: userId, currentUserId: myId, context: context
+            )
+        }
+        replayHeldMessages(for: userId, in: context)
     }
 
     private func handleResolvedMessage(

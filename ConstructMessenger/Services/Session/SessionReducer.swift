@@ -316,7 +316,7 @@ enum SessionReducer {
         decryptFailed: Bool
     ) -> ConfirmGateAction {
         guard isPending, !isControlCarrier else { return .route }
-        return .hold
+        return (isPeerInit || decryptFailed) ? .hold : .route
     }
 
     /// Whether a handshake-control retry may still speak for the session it was created to

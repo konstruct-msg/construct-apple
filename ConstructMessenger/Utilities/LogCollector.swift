@@ -188,20 +188,35 @@ class LogCollector {
         return archiveURL
     }
     
-    /// Clear all log files
-    func clearLogs() {
+    /// Clear all log files, then call `completion` on the main queue once the deletion has
+    /// actually run.
+    ///
+    /// The completion is the point. Deletion is enqueued behind every pending `append`, so under
+    /// load — which is exactly when a user clears logs — a caller that refreshes on a fixed timer
+    /// reads the size before anything was removed and reports the old figure, looking like the
+    /// clear did nothing. Reported 2026-08-04 as "16 MB and it never resets".
+    ///
+    /// Note it can never read zero: `writeSystemInfo()` re-creates the header immediately, so a
+    /// few hundred bytes is the floor and the correct "empty" reading.
+    func clearLogs(completion: (() -> Void)? = nil) {
         queue.async { [weak self] in
-            guard let self = self else { return }
-            
+            guard let self = self else {
+                if let completion { DispatchQueue.main.async(execute: completion) }
+                return
+            }
+
             try? FileManager.default.removeItem(at: self.currentLogFile)
-            
+
             for i in 1...self.maxRotatedFiles {
                 let rotatedFile = self.logDirectory.appendingPathComponent("\(i).log")
                 try? FileManager.default.removeItem(at: rotatedFile)
             }
-            
-            Log.info("All logs cleared", category: "LogCollector")
+
             self.writeSystemInfo()
+            // After writeSystemInfo, so the line lands in the fresh file rather than in the one
+            // being deleted — it used to be logged first and was itself erased.
+            Log.info("All logs cleared", category: "LogCollector")
+            if let completion { DispatchQueue.main.async(execute: completion) }
         }
     }
     

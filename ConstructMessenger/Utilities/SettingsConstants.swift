@@ -71,7 +71,8 @@ enum DiagnosticsConfig {
     /// the point is that it is a constant, so the read cost no longer scales with the log file.
     static let recentLogTailBytes: Int = 256 * 1024
     static let recentLogContainerHeight: CGFloat = 340
-    static let clearLogsRefreshDelay: TimeInterval = 0.3
+    // clearLogsRefreshDelay removed 2026-08-04: `clearLogs` now reports completion, so there is
+    // nothing left to guess a duration for. A constant with no consumer is a defect (AGENTS.md).
 }
 
 enum DiagnosticsLayout {

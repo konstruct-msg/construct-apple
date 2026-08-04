@@ -99,6 +99,11 @@ private struct SingleMediaCell: View {
     @State private var thumbnailImage: PlatformImage?
     @State private var isLoading = false
     @State private var loadError: String?
+    /// The media descriptor (mediaId/mediaUrl/mediaKey) is not readable yet — distinct from
+    /// `loadError`, which means a download was attempted and failed. Kept apart because the two
+    /// were one state and the "not yet" case rendered as "Failed to load" for a frame on every
+    /// outgoing photo.
+    @State private var isAwaitingDescriptor = false
     @State private var downloadProgress: Double = 0
     @State private var hasReceivedBytes = false
     @State private var blurPreview: PlatformImage?
@@ -150,7 +155,9 @@ private struct SingleMediaCell: View {
                             )
                     )
                     .onTapGesture { onTap() }
-            } else if isLoading {
+            } else if isLoading || isAwaitingDescriptor {
+                // "Waiting for the descriptor" and "downloading" look the same to the user and
+                // both end in a picture. Only a real failure gets the warning + Retry.
                 loadingPlaceholder
             } else if loadError != nil {
                 errorPlaceholder
@@ -169,6 +176,15 @@ private struct SingleMediaCell: View {
             } else {
                 loadThumbnail()
             }
+        }
+        // `onAppear` is the only thing that drove the load, so a bubble that appeared before its
+        // media descriptor was written had nothing to bring it back — the old code papered over
+        // that by rendering the failure state, which at least offered a Retry button. Now that the
+        // not-yet state renders as loading, it must actually resolve: re-drive the load when the
+        // descriptor lands.
+        .onChange(of: itemDict["mediaId"] as? String) { _, newMediaId in
+            guard !isVideo, isAwaitingDescriptor, newMediaId != nil else { return }
+            loadThumbnail(forceRetry: true)
         }
     }
 
@@ -392,6 +408,7 @@ private struct SingleMediaCell: View {
         if thumbnailImage != nil || isLoading { return }
         if loadError != nil && !forceRetry { return }
         loadError = nil
+        isAwaitingDescriptor = false
         hasReceivedBytes = false
         downloadProgress = 0
 
@@ -414,9 +431,18 @@ private struct SingleMediaCell: View {
               let mediaKeyStr = itemDict["mediaKey"] as? String,
               let mediaKey = Data(base64Encoded: mediaKeyStr)
         else {
-            if thumbnailImage == nil { loadError = "Missing media info" }
+            // NOT a failure — the descriptor is not readable *yet*. On our own send this row is
+            // created moments before its thumbnail is stored and before the media JSON lands, so
+            // for one frame the bubble has neither; painting `errorPlaceholder` there is what made
+            // "Failed to load / Retry" flash on every photo we sent (reported 2026-08-04). Rule 1a
+            // applied to UI: a not-yet state must not wear the failure's clothes.
+            if thumbnailImage == nil {
+                isAwaitingDescriptor = true
+                Log.debug("Media descriptor not ready yet for \(message.id.prefix(8))…[\(itemIndex)] — showing placeholder, not an error", category: "MediaMessageView")
+            }
             return
         }
+        isAwaitingDescriptor = false
         if thumbnailImage == nil { isLoading = true }
         // Real byte-level progress: encrypted total comes from the descriptor `size`.
         let total = Double((itemDict["size"] as? Int) ?? 0)
