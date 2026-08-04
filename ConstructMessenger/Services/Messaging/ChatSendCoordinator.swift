@@ -19,13 +19,23 @@ struct QueuedMessage {
     /// is dropped silently — the caption arrives, the files never do.
     let fileURLs: [URL]
     let replyTo: Message?
+    let replyToContentOverride: String?
     let timestamp: Date
 
-    init(text: String, attachments: [MediaAttachment] = [], fileURLs: [URL] = [], replyTo: Message? = nil) {
+    /// Row already on screen for this send, written when it was queued so the chat is not blank
+    /// while the session initialises. The replay creates its own row, so this one is deleted just
+    /// before `sendMessage` runs again; on give-up it becomes the `.failed` row rather than a
+    /// second one appearing underneath it.
+    let placeholderId: String?
+
+    init(text: String, attachments: [MediaAttachment] = [], fileURLs: [URL] = [],
+         replyTo: Message? = nil, replyToContentOverride: String? = nil, placeholderId: String? = nil) {
         self.text = text
         self.attachments = attachments
         self.fileURLs = fileURLs
         self.replyTo = replyTo
+        self.replyToContentOverride = replyToContentOverride
+        self.placeholderId = placeholderId
         self.timestamp = Date()
     }
 }
@@ -46,7 +56,15 @@ final class ChatSendCoordinator {
 
     // MARK: - Send state
 
+    /// Media/file sends waiting for a session. Text does NOT live here — see
+    /// `enqueueUntilSessionExists` for why the two are queued in different places.
     private var queuedMessages: [QueuedMessage] = []
+
+    /// Ids of the `.queued` rows this coordinator wrote while waiting for a session. Tracked so a
+    /// session give-up marks *those* rows `.failed` and nothing else: a blanket "fail every
+    /// `.queued` row in this chat" would also condemn the RESPONDER-confirmation stubs, which are
+    /// waiting on a different event and are still perfectly live.
+    private var queuedTextRowIds: Set<String> = []
 
     private struct MediaUploadPayload {
         let attachments: [MediaAttachment]
@@ -121,13 +139,16 @@ final class ChatSendCoordinator {
         let hasSession = CryptoManager.shared.hasSession(for: recipientId)
 
         if !hasSession {
-            let queued = QueuedMessage(text: text, attachments: attachments, fileURLs: fileURLs, replyTo: replyTo)
-            queuedMessages.append(queued)
-            viewModel?.isInitializingSession = true
-            Log.info("SESSION_STATE[queue_message]: userId=\(recipientId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
-            Task { [weak self] in
-                await self?.sessionManager.initializeSessionProactively(userId: recipientId)
-            }
+            enqueueUntilSessionExists(
+                text: text,
+                attachments: attachments,
+                fileURLs: fileURLs,
+                replyTo: replyTo,
+                replyToContentOverride: replyToContentOverride,
+                recipientId: recipientId,
+                currentUserId: currentUserId,
+                reason: "no_session"
+            )
             return
         }
 
@@ -162,11 +183,16 @@ final class ChatSendCoordinator {
             guard let self else { return }
             let ok = await SessionActivityTracker.shared.preflight(for: recipientId)
             guard ok else {
-                let queued = QueuedMessage(text: text, attachments: attachments, fileURLs: fileURLs, replyTo: replyTo)
-                self.queuedMessages.append(queued)
-                self.viewModel?.isInitializingSession = true
-                Log.info("Pre-flight failed — message queued, triggering proactive reinit for \(recipientId.prefix(8))…", category: "ChatViewModel")
-                await self.sessionManager.initializeSessionProactively(userId: recipientId)
+                self.enqueueUntilSessionExists(
+                    text: text,
+                    attachments: attachments,
+                    fileURLs: fileURLs,
+                    replyTo: replyTo,
+                    replyToContentOverride: replyToContentOverride,
+                    recipientId: recipientId,
+                    currentUserId: currentUserId,
+                    reason: "preflight_failed"
+                )
                 return
             }
             self.dispatchSend(
@@ -178,6 +204,116 @@ final class ChatSendCoordinator {
             )
         }
     }
+
+    // MARK: - Queue on missing session
+
+    /// Hold a send until a session exists — and put a row on screen while it waits.
+    ///
+    /// Both callers used to append to `queuedMessages` and return without writing anything, so the
+    /// composer cleared and the chat stayed blank until the session came up or gave up. Same
+    /// complaint as the invisible upload in `sessions/2026-07-31-send-feedback-invisible-upload-placeholder`:
+    /// the send is in flight and nothing says so.
+    ///
+    /// Text and media are queued **differently**, and not for tidiness — they drain through
+    /// different machinery:
+    ///
+    /// - **Text** becomes a `.queued` Core Data row and is NOT kept in memory. `MessageRetryManager
+    ///   .sendQueuedMessages` already fetches exactly that state, re-encrypts anything with
+    ///   recoverable plaintext and no wire payload, and defers while `hasSession` is false — which
+    ///   is precisely this situation. Keeping the message in both places would send it twice: the
+    ///   Core Data flush also runs on `connectionStatus == .connected` (`ChatViewModel`), which
+    ///   overlaps session init constantly. It also stops being lost on app kill, which the
+    ///   in-memory queue could not survive.
+    ///
+    /// - **Media/files** stay in memory, because that flush cannot carry them: `reencryptAndSend`
+    ///   refuses `.media`, and at queue time there is no content to re-encrypt — the JSON is
+    ///   produced by the upload. They get an upload placeholder purely so the send is visible, and
+    ///   the replay deletes it before making its own.
+    private func enqueueUntilSessionExists(
+        text: String,
+        attachments: [MediaAttachment],
+        fileURLs: [URL],
+        replyTo: Message?,
+        replyToContentOverride: String?,
+        recipientId: String,
+        currentUserId: String,
+        reason: String
+    ) {
+        viewModel?.isInitializingSession = true
+
+        if attachments.isEmpty && fileURLs.isEmpty {
+            let rowId = UUID().uuidString
+            let stub = ChatMessage(
+                id: rowId,
+                from: currentUserId,
+                to: recipientId,
+                ephemeralPublicKey: Data(),
+                messageNumber: 0,
+                content: Data(),
+                suiteId: 0,
+                timestamp: UInt64(Date().timeIntervalSince1970)
+            )
+            saveMessage(stub, decryptedContent: text, isSentByMe: true, status: .queued,
+                        replyTo: replyTo, replyToContentOverride: replyToContentOverride, suiteId: 0)
+            queuedTextRowIds.insert(rowId)
+            Log.info("SESSION_STATE[queue_message]: userId=\(recipientId.prefix(8))…, reason=\(reason), row=\(rowId.prefix(8))… persisted as .queued", category: "SessionInit")
+        } else {
+            let placeholderId = UUID().uuidString
+            let items = attachments.map { attachment in
+                MessagePersistenceService.UploadPlaceholderItem(
+                    thumbnail: attachment.displayImage.flatMap { MediaManager.shared.generateThumbnail(from: $0) },
+                    mimeType: attachment.mimeType
+                )
+            }
+            persistenceService.savePlaceholderMessage(
+                id: placeholderId,
+                fromUserId: currentUserId,
+                toUserId: recipientId,
+                caption: text,
+                items: items,
+                replyTo: replyTo,
+                replyToContentOverride: replyToContentOverride,
+                chat: chat,
+                in: viewContext
+            )
+            queuedMessages.append(QueuedMessage(
+                text: text, attachments: attachments, fileURLs: fileURLs,
+                replyTo: replyTo, replyToContentOverride: replyToContentOverride,
+                placeholderId: placeholderId
+            ))
+            Log.info("SESSION_STATE[queue_message]: userId=\(recipientId.prefix(8))…, reason=\(reason), media queueSize=\(queuedMessages.count), placeholder=\(placeholderId.prefix(8))…", category: "SessionInit")
+        }
+
+        Task { [weak self] in
+            await self?.sessionManager.initializeSessionProactively(userId: recipientId)
+        }
+    }
+
+    #if DEBUG
+    /// Test seams. Both wrap private methods that never touch `AuthSessionManager` on the paths
+    /// under test, so a suite can drive them with an in-memory store and no signed-in user.
+    func enqueueUntilSessionExistsForTesting(
+        text: String,
+        attachments: [MediaAttachment] = [],
+        fileURLs: [URL] = [],
+        recipientId: String,
+        currentUserId: String
+    ) {
+        enqueueUntilSessionExists(
+            text: text, attachments: attachments, fileURLs: fileURLs,
+            replyTo: nil, replyToContentOverride: nil,
+            recipientId: recipientId, currentUserId: currentUserId, reason: "test"
+        )
+    }
+
+    func failQueuedMessagesForTesting(reason: String) { failQueuedMessages(reason: reason) }
+
+    /// Size of the in-memory queue. Exposed because "text is not held here" cannot be observed
+    /// from Core Data alone: a text send present in BOTH places still leaves one row, and the
+    /// damage (a duplicate delivery) only appears on the success path, which a unit test cannot
+    /// reach.
+    var inMemoryQueueCountForTesting: Int { queuedMessages.count }
+    #endif
 
     // MARK: - Dispatch
 
@@ -240,29 +376,61 @@ final class ChatSendCoordinator {
     }
 
     private func sendQueuedMessages(userId: String) async {
-        Log.info("SESSION_STATE[send_queued]: userId=\(userId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
+        Log.info("SESSION_STATE[send_queued]: userId=\(userId.prefix(8))…, media queueSize=\(queuedMessages.count), text rows=\(queuedTextRowIds.count)", category: "SessionInit")
         let messagesToSend = queuedMessages
         queuedMessages.removeAll()
         for queued in messagesToSend {
+            // The replay writes its own placeholder, so the queue-time one goes first. Deleting
+            // before the send (not after) keeps the count on screen honest: two cells for one
+            // album would read as a double send.
+            if let placeholderId = queued.placeholderId {
+                MediaUploadProgressTracker.shared.clear(placeholderId)
+                persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: true)
+            }
             Log.info("Sending queued message: \"\(queued.text.prefix(30))\"", category: "ChatViewModel")
             sendMessage(
                 text: queued.text,
                 attachments: queued.attachments,
                 fileURLs: queued.fileURLs,
-                replyTo: queued.replyTo
+                replyTo: queued.replyTo,
+                replyToContentOverride: queued.replyToContentOverride
             )
         }
+
+        // Text rows are drained from Core Data, not from memory. Handing them to the same flush
+        // the reconnect path uses keeps one drain mechanism instead of two that must agree.
+        queuedTextRowIds.removeAll()
+        sendQueuedMessages()
     }
 
     private func failQueuedMessages(reason: String) {
-        Log.error("Failing \(queuedMessages.count) queued messages: \(reason)", category: "ChatViewModel")
-        guard !queuedMessages.isEmpty else { return }
+        Log.error("Failing \(queuedMessages.count) media + \(queuedTextRowIds.count) text queued message(s): \(reason)", category: "ChatViewModel")
+        guard !queuedMessages.isEmpty || !queuedTextRowIds.isEmpty else { return }
+
+        // Flip the rows that already exist, before anything that can bail out. They are on screen
+        // since the send was queued, so failing them needs neither identity nor recipient — and
+        // leaving them at `.queued` because an unrelated lookup came back nil would strand a
+        // message in "waiting" with nothing left to wait for.
+        //
+        // Flip, never insert. Inserting was right while queueing wrote nothing; now it would show
+        // the same message twice — once waiting forever, once failed.
+        for rowId in queuedTextRowIds {
+            persistenceService.updateMessageStatus(messageId: rowId, status: .failed, in: viewContext)
+        }
+        queuedTextRowIds.removeAll()
+        for queued in queuedMessages {
+            guard let placeholderId = queued.placeholderId else { continue }
+            MediaUploadProgressTracker.shared.clear(placeholderId)
+            persistenceService.updateMessageStatus(messageId: placeholderId, status: .failed, in: viewContext)
+        }
+
         guard let currentUserId = AuthSessionManager.shared.currentUserId,
               let recipientId = chat.otherUser?.id else {
             queuedMessages.removeAll()
             return
         }
-        for queued in queuedMessages {
+
+        for queued in queuedMessages where queued.placeholderId == nil {
             let msg = Message(context: viewContext)
             msg.id = UUID().uuidString
             msg.fromUserId = currentUserId
