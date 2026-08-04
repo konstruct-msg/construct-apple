@@ -156,6 +156,12 @@ enum MetricEvent: String {
     /// counter called `duplicate` would have gone to zero and read like a fix. `label` = action list.
     case noRoutingDecisionMessage = "no_routing_decision_message"
 
+    /// A `checkAckInDb` action reached a handler other than `MessageRouter`, which owns the
+    /// round-trip. Nothing answers it there any more, so the message does not route — loud on
+    /// purpose: the previous behaviour (answer from a detached Task, discard the verdict) could
+    /// consume the core's buffered message and throw its routing decision away. `label` = handler.
+    case ackCheckOutsideRouter = "ack_check_outside_router"
+
     /// Rust asked us to tell the user's other devices that a session was reset, and we did not —
     /// the feature has no consumer (see `MultiDeviceSendCoordinator.broadcastSessionReset`).
     /// Counted so the gap is a number rather than a silent no-op: this is how often a working

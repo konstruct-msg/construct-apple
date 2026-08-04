@@ -136,17 +136,28 @@ final class SessionActionExecutor {
         case .healSuppressed(let contactId, let retryAfterMs):
             Log.debug("Heal suppressed for \(contactId.prefix(8))… retry in \(retryAfterMs)ms", category: "SessionActionExecutor")
 
-        // ── Async DB check ────────────────────────────────────────
+        // ── ACK DB check: NOT ours to answer ──────────────────────
         case .checkAckInDb(let messageId):
-            Task { @MainActor in
-                let isProcessed = await PersistentACKStore.shared.isProcessedInCoreData(messageId: messageId)
-                let result = CfeIncomingEvent.ackDbResult(messageId: messageId, isProcessed: isProcessed)
-                do {
-                    _ = try CryptoManager.shared.handleOrchestratorEvent(result, tag: "ack_db_result_async")
-                } catch {
-                    Log.error("ACK DB result follow-up failed for \(messageId.prefix(8))…: \(error)", category: "SessionActionExecutor")
-                }
-            }
+            // `MessageRouter` owns this round-trip, synchronously, because the answer decides how
+            // the message routes and the router is the only place that can act on the result.
+            //
+            // This case used to answer it too, from a detached Task, and discard the verdict
+            // (`_ = try …`). Both halves are load-bearing failures. The core removes the buffered
+            // message in `resume_after_ack_check` (`message_router.rs:262`), so whichever answer
+            // lands first consumes it and the other gets `RoutingDecision::Error` — and if the
+            // async one won, the real routing decision was the thing thrown away, leaving a
+            // message decrypted by nobody.
+            //
+            // It never fired in practice (zero occurrences across four device logs, no
+            // ROUTING_ERROR either), but only because of which action lists happen to reach this
+            // executor — nothing enforced it. Now the invariant is stated instead of assumed: if
+            // this ever runs, the list came from a path that must be routed through the router,
+            // and the ERROR says so rather than the message quietly going missing.
+            Log.error(
+                "checkAckInDb reached SessionActionExecutor for \(messageId.prefix(8))… — this round-trip belongs to MessageRouter; NOT answering here, the message will not route",
+                category: "SessionActionExecutor"
+            )
+            PerformanceMetrics.shared.record(.ackCheckOutsideRouter, label: "session_action_executor")
 
         // ── Decryption result (needs chunk reassembler + save) ───
         case .messageDecrypted:
