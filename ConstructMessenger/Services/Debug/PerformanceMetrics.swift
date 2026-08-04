@@ -130,6 +130,32 @@ enum MetricEvent: String {
     /// (`pending` / `deferred`).
     case streamCursorStalled = "stream_cursor_stalled"
 
+    /// The core answered a `checkAckInDb` round-trip with the verdict "duplicate" — a terminal,
+    /// benign disposition. Counted rather than logged loud: under redelivery this is the single
+    /// highest-volume event on the receive path (6296 of 6302 fallthroughs in the 2026-08-04 run),
+    /// and it is exactly the traffic the server should stop sending, not something we did wrong.
+    /// `label` = `msgNum=<n>`.
+    case duplicateAfterAckCheck = "duplicate_after_ack_check"
+
+    /// A `checkAckInDb` round-trip came back empty while our answer was "not processed". Empty is
+    /// the core's encoding for three different verdicts (`orchestrator.rs`): duplicate, init lock
+    /// held, END_SESSION cooldown. Our own answer rules out the first, so this is one of the two
+    /// "come back later" cases — the message was dropped without a routing decision and only the
+    /// server's redelivery brings it back.
+    ///
+    /// The cursor policy for it is deliberately NOT changed on the strength of this counter: we do
+    /// not yet know whether it ever fires. Measure first (`decisions/ios-semantic-divergence-signals`).
+    case ackCheckResumedWithoutDecision = "ack_check_resumed_without_decision"
+
+    /// MessageRouter fallthrough for an ordinary message body: the core returned actions, none of
+    /// them routable, and no row was written. Sibling of `noRoutingDecisionControl`.
+    ///
+    /// Named for the message, not for "duplicate" as originally planned: once duplicates are
+    /// answered above by `duplicateAfterAckCheck`, what reaches the fallthrough is the genuinely
+    /// undecided remainder (`NotifyError` for QUEUE_FULL / ROUTING_ERROR, suppressed heal). A
+    /// counter called `duplicate` would have gone to zero and read like a fix. `label` = action list.
+    case noRoutingDecisionMessage = "no_routing_decision_message"
+
     /// Rust asked us to tell the user's other devices that a session was reset, and we did not —
     /// the feature has no consumer (see `MultiDeviceSendCoordinator.broadcastSessionReset`).
     /// Counted so the gap is a number rather than a silent no-op: this is how often a working

@@ -479,13 +479,54 @@ final class MessageRouter {
         if let ackMsgId = plan.ackCheckMessageId {
             let isProcessed = PersistentACKStore.shared.isProcessedInCoreData(ackMsgId, in: context)
             let ackResult = CfeIncomingEvent.ackDbResult(messageId: ackMsgId, isProcessed: isProcessed)
+            let followup: [CfeAction]
             do {
-                let followup = try CryptoManager.shared.handleOrchestratorEvent(ackResult, tag: "ack_db_result")
-                if !followup.isEmpty {
-                    actions = followup
-                }
+                followup = try CryptoManager.shared.handleOrchestratorEvent(ackResult, tag: "ack_db_result")
             } catch {
                 Log.error("ACK DB result follow-up failed for \(ackMsgId.prefix(8))…: \(error)", category: "MessageRouter")
+                if isNewChat { context.delete(chat) }
+                return
+            }
+
+            // An empty follow-up is a VERDICT, not a missing answer. The core maps
+            // `RoutingDecision::Duplicate` to `vec![]` (orchestrator.rs:1669), and the previous
+            // `if !followup.isEmpty { actions = followup }` read that as "nothing came back, keep
+            // what we had" — so `actions` still held the pre-round-trip `[checkAckInDb]` and the
+            // loop below reported a correctly-dropped duplicate as "no routing decision … NOT
+            // acked, no row written", printing the one action it had in fact just answered.
+            // 6296 of 6302 fallthroughs in the 2026-08-04 run were this. One carrier, two
+            // assertions ("what the core asked" vs "what the core decided") — the epic's own
+            // defect class, sitting on the detector meant to catch it.
+            switch AckCheckOutcome.resolve(followupIsEmpty: followup.isEmpty,
+                                           weAnsweredProcessed: isProcessed) {
+            case .routable:
+                actions = followup
+
+            case .duplicate:
+                Log.debug(
+                    "Duplicate confirmed by ACK DB check — \(ackMsgId.prefix(8))… msgNum=\(message.messageNumber), dropped without a row",
+                    category: "MessageRouter"
+                )
+                PerformanceMetrics.shared.record(
+                    .duplicateAfterAckCheck,
+                    label: "msgNum=\(message.messageNumber)"
+                )
+                if isNewChat { context.delete(chat) }
+                return
+
+            case .droppedPendingRedelivery:
+                // Init lock or cooldown: the message is dropped and comes back only by redelivery.
+                // `streamOutcome` is deliberately left `.durable` — see the metric doc; changing
+                // the cursor policy before we know this ever fires would make a zero unreadable
+                // ("never happens" vs "we stopped counting it").
+                Log.error(
+                    "ACK DB check resumed with no routing decision for \(ackMsgId.prefix(8))… msgNum=\(message.messageNumber) — core returned no actions although we answered not-processed (init lock or END_SESSION cooldown); message dropped pending redelivery",
+                    category: "MessageRouter"
+                )
+                PerformanceMetrics.shared.record(
+                    .ackCheckResumedWithoutDecision,
+                    label: "msgNum=\(message.messageNumber)"
+                )
                 if isNewChat { context.delete(chat) }
                 return
             }
@@ -534,7 +575,9 @@ final class MessageRouter {
             }
         }
 
-        // No actionable routing decision (e.g. duplicate, cooldown) — ACK and skip.
+        // No actionable routing decision. Duplicates no longer reach here — they are answered at
+        // the `checkAckInDb` round-trip above; the parenthetical that used to say "e.g. duplicate,
+        // cooldown" was what made 6296 healthy drops look like they belonged in this bucket.
         // Include the action types in the log so we can diagnose why Rust returned no
         // routable event without a live debugger (e.g. a msgNum=0 session init arriving
         // while we're already mid-INITIATOR — the most common source of this fallthrough).
@@ -567,9 +610,19 @@ final class MessageRouter {
                 label: "ct=\(message.contentType)"
             )
         } else {
-            Log.info(
+            // Ordinary message body. This was INFO because the overwhelming majority of arrivals
+            // here were answered duplicates — handled above since 2026-08-04, so what is left is
+            // the genuinely undecided remainder: QUEUE_FULL / ROUTING_ERROR notifications and
+            // suppressed heals. Those mean a message the peer sent is not in the transcript and
+            // nothing will put it there, which is precisely what the acceptance criterion
+            // ("0 unexplained ERROR") is supposed to catch.
+            Log.error(
                 "handleEvent produced no routing decision for \(message.id.prefix(8))… msgNum=\(message.messageNumber) actions=[\(actionNames)] — NOT acked, no row written",
                 category: "MessageRouter"
+            )
+            PerformanceMetrics.shared.record(
+                .noRoutingDecisionMessage,
+                label: actionNames.isEmpty ? "none" : actionNames
             )
         }
         PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "fallthrough")

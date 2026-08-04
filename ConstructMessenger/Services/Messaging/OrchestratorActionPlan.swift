@@ -53,3 +53,38 @@ struct OrchestratorActionPlan {
         self.ackCheckMessageId = ackCheckMessageId
     }
 }
+
+/// What the core meant by the action list it returned from an answered `checkAckInDb`.
+///
+/// The round-trip has the same hazard as the list above, one level down: the core encodes a
+/// *verdict* as an empty `Vec<Action>`, and an empty list also reads as "nothing came back".
+/// `MessageRouter` took the second reading — `if !followup.isEmpty { actions = followup }` — so a
+/// duplicate the core had definitively dropped left `actions` holding the pre-round-trip
+/// `[checkAckInDb]`, and the fallthrough logged it as "no routing decision … NOT acked", naming
+/// the one action it had just answered. 6296 of 6302 such log lines in the 2026-08-04 run.
+///
+/// Empty is overloaded three ways in `decision_to_actions` (`orchestrator.rs`): duplicate, init
+/// lock held, END_SESSION cooldown. Our own answer disambiguates it exactly, because
+/// `resume_after_ack_check` returns `Duplicate` on `is_processed = true` before either other
+/// branch is reachable (`message_router.rs:271`) — no core change needed to tell them apart.
+enum AckCheckOutcome: Equatable {
+
+    /// The core confirmed a duplicate. Terminal and benign: the row already exists, which is how
+    /// we were able to answer "processed" in the first place.
+    case duplicate
+
+    /// Empty verdict although we answered *not* processed — init lock held or END_SESSION
+    /// cooldown. The message is dropped and returns only by redelivery.
+    case droppedPendingRedelivery
+
+    /// A real action list came back; routing continues with it.
+    case routable
+
+    /// - Parameters:
+    ///   - followupIsEmpty: whether the core's post-answer action list was empty.
+    ///   - weAnsweredProcessed: the `is_processed` value we fed back.
+    static func resolve(followupIsEmpty: Bool, weAnsweredProcessed: Bool) -> AckCheckOutcome {
+        guard followupIsEmpty else { return .routable }
+        return weAnsweredProcessed ? .duplicate : .droppedPendingRedelivery
+    }
+}
