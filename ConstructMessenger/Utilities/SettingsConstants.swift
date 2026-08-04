@@ -67,6 +67,9 @@ enum DataStorageSettingsConfig {
 enum DiagnosticsConfig {
     static let apnsTokenPreviewPrefixLength: Int = 8
     static let recentLogLineLimit: Int = 200
+    /// Tail window for the recent-log preview. 256 KB holds ~200 lines at any realistic width;
+    /// the point is that it is a constant, so the read cost no longer scales with the log file.
+    static let recentLogTailBytes: Int = 256 * 1024
     static let recentLogContainerHeight: CGFloat = 340
     static let clearLogsRefreshDelay: TimeInterval = 0.3
 }

@@ -1569,6 +1569,19 @@ final class MessageRouter {
             return
         }
         
+        // Do not restate a condition that has not changed and about which nothing has happened.
+        //
+        // The 30 s cooldown on the caller bounds how often a *new* notice can appear; it does not
+        // stop the same one stacking hours apart, and on device it produced five identical
+        // "session out of sync" blocks in a row (2026-08-04, both sides). Five of them say exactly
+        // what one says: the session is still broken. A repeat is only informative if something
+        // reached the transcript in between — and that is precisely the test here, because a
+        // message arriving would put a different row last.
+        if Self.isRepeatOfLastRow(text, in: chat, context: context) {
+            Log.debug("System notice suppressed — identical to the last row in this chat", category: "MessageRouter")
+            return
+        }
+
         let message = Message(context: context)
         message.id = UUID().uuidString
         message.chat = chat
@@ -1591,7 +1604,37 @@ final class MessageRouter {
             Log.error("Failed to save system message: \(error)", category: "MessageRouter")
         }
     }
-    
+
+    /// True when the newest row in `chat` is a system row carrying exactly `text`.
+    ///
+    /// Fetches one row, not the transcript — this runs on every notice. Compares the decrypted
+    /// text rather than a stored marker so it stays correct if the wording changes: two rows are
+    /// duplicates when the user would read them as duplicates.
+    private static func isRepeatOfLastRow(
+        _ text: String,
+        in chat: Chat,
+        context: NSManagedObjectContext
+    ) -> Bool {
+        let fetch = Message.fetchRequest()
+        fetch.predicate = NSPredicate(format: "chat == %@", chat)
+        fetch.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+        fetch.fetchLimit = 1
+        guard let last = try? context.fetch(fetch).first else { return false }
+        return last.fromUserId == "SYSTEM" && last.displayText == text
+    }
+
+    #if DEBUG
+    /// Test seam for `isRepeatOfLastRow`. The rule is about what the user sees in a transcript,
+    /// so it is worth testing directly rather than through the whole routing path.
+    static func isRepeatOfLastRowForTesting(
+        _ text: String,
+        in chat: Chat,
+        context: NSManagedObjectContext
+    ) -> Bool {
+        isRepeatOfLastRow(text, in: chat, context: context)
+    }
+    #endif
+
     // MARK: - Message Persistence
     
     /// Save message to Core Data

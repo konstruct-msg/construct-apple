@@ -351,9 +351,40 @@ struct DiagnosticsView: View {
         .padding(.vertical, SettingsLayout.rowVerticalPadding)
     }
 
+    /// Last `lineLimit` lines of a log file, read from the end.
+    ///
+    /// This used to be `String(contentsOf:)` + `split` + `suffix` — the whole file (up to
+    /// `LogCollector.maxFileSize`, 5 MB) decoded into a String and then sliced into ~50 000
+    /// Substrings, to keep 200 of them. It ran on every `onAppear` of the screen people open
+    /// *because* something is wrong. Now it reads a bounded tail and never touches the rest.
+    ///
+    /// This is not a claimed fix for the reported crash on leaving Diagnostics — that has no
+    /// diagnosis yet and needs the crash report. It is a disproportionate read, fixed on its
+    /// own merits.
     private static func readLogPreview(from url: URL, lineLimit: Int) -> String {
-        guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return "" }
-        let lines = raw.split(separator: "\n", omittingEmptySubsequences: false)
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return "" }
+        defer { try? handle.close() }
+        guard let end = try? handle.seekToEnd() else { return "" }
+
+        // Enough for `lineLimit` lines at a generous average width, capped so a file of very long
+        // lines cannot pull the old behaviour back in through the window size.
+        let window = UInt64(min(DiagnosticsConfig.recentLogTailBytes, Int(end)))
+        guard window > 0, (try? handle.seek(toOffset: end - window)) != nil,
+              let data = try? handle.readToEnd()
+        else { return "" }
+
+        // A window boundary can land mid-character; drop up to 3 leading bytes to find a valid
+        // start rather than returning nothing.
+        var text: String?
+        for skip in 0..<min(4, data.count) where text == nil {
+            text = String(data: data.dropFirst(skip), encoding: .utf8)
+        }
+        guard let text else { return "" }
+
+        // The first line is almost certainly cut in half by the window — drop it unless the
+        // window covered the whole file.
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        if window < end, !lines.isEmpty { lines.removeFirst() }
         return lines.suffix(lineLimit).joined(separator: "\n")
     }
 
