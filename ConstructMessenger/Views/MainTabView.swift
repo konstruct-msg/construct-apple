@@ -100,6 +100,7 @@ struct MainTabView: View {
                         .environment(chatsViewModel)
                 } label: {
                     Image(systemName: "message")
+                        .accessibilityIdentifier(A11y.Tab.chats)
                 }
 
                 Tab(value: 1) {
@@ -107,6 +108,7 @@ struct MainTabView: View {
                         .environment(chatsViewModel)
                 } label: {
                     Image(systemName: "circle.grid.cross")
+                        .accessibilityIdentifier(A11y.Tab.synaps)
                 }
 
                 if CallsFeature.isEnabled {
@@ -114,6 +116,7 @@ struct MainTabView: View {
                         CallHistoryView()
                     } label: {
                         Image(systemName: "phone")
+                            .accessibilityIdentifier(A11y.Tab.calls)
                     }
                 }
 
@@ -122,6 +125,7 @@ struct MainTabView: View {
                         .environment(chatsViewModel)
                 } label: {
                     Image(systemName: "gearshape")
+                        .accessibilityIdentifier(A11y.Tab.settings)
                 }
             }
             .tint(Color.CT.accent)

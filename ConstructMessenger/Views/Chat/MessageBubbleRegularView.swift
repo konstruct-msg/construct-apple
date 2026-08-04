@@ -192,6 +192,9 @@ struct MessageBubbleRegularView: View {
                     HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
                         if message.isSentByMe {
                             deliveryStatusView
+                                .accessibilityIdentifier(
+                                    A11y.Chat.messageStatus(message.id, message.deliveryStatus)
+                                )
                         }
 
                         if message.isEdited {

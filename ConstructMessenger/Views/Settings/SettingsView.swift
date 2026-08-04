@@ -232,6 +232,7 @@ struct SettingsView: View {
                 CTSettingsRow(label: NSLocalizedString("show_qr_code", comment: "").uppercased(), icon: "qrcode", isAction: true, disclosure: true)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier(A11y.Settings.showQR)
             CTSep(style: .thin)
 
             Button { copyContactLink() } label: {
@@ -244,6 +245,7 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .disabled(linkCopied)
+            .accessibilityIdentifier(A11y.Settings.copyContactLink)
 
             if let ownFingerprint {
                 CTSep(style: .thin)

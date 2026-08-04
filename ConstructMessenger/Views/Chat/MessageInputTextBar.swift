@@ -52,6 +52,7 @@ struct MessageInputTextBar: View {
             .textFieldStyle(.plain)
             .lineLimit(1...8)
             .focused($focused)
+            .accessibilityIdentifier(A11y.Chat.input)
             .padding(.leading, ChatUIConstants.InputBar.textLeadingPad)
             .padding(.trailing, canSend ? ChatUIConstants.Bubble.tightVerticalPadding : CTLayout.inlinePad)
             // Vertical padding keeps single-line height ≈ attach circle (controlHeight).
@@ -111,6 +112,7 @@ struct MessageInputTextBar: View {
                     #endif
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier(A11y.Chat.send)
             .transition(.scale.combined(with: .opacity))
         }
     }
@@ -128,6 +130,7 @@ struct MessageInputTextBar: View {
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier(A11y.Chat.voice)
             .transition(.scale.combined(with: .opacity))
         }
     }

@@ -47,6 +47,7 @@ struct ChatNavBarView: View {
                 accessibilityKey: "chat_nav_back",
                 action: onBack
             )
+            .accessibilityIdentifier(A11y.Chat.back)
 
             Button(action: onOpenProfile) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -69,6 +70,7 @@ struct ChatNavBarView: View {
             }
             .buttonStyle(.plain)
             .layoutPriority(1)
+            .accessibilityIdentifier(A11y.Chat.title)
 
             ktBadge
         }

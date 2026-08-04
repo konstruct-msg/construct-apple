@@ -72,6 +72,7 @@ struct ContactQRCodeView: View {
                     // QR block
                     VStack(spacing: ContactQRCodeLayout.qrBlockSpacing) {
                         qrBlock
+                            .accessibilityIdentifier(A11y.ContactQR.code)
                         timerBlock
                     }
                     .padding(.vertical, ContactQRCodeLayout.qrBlockVerticalPadding)
@@ -195,6 +196,7 @@ struct ContactQRCodeView: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(A11y.ContactQR.regenerate)
             }
         }
     }

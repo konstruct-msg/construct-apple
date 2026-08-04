@@ -136,6 +136,7 @@ struct ChatsListView: View {
 
     private var searchBar: some View {
         CTSearchBar(text: $searchQuery)
+            .accessibilityIdentifier(A11y.Chats.search)
     }
 
     // MARK: - Nav Bar
@@ -155,6 +156,7 @@ struct ChatsListView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier(A11y.Chats.scanQR)
             .accessibilityLabel(NSLocalizedString("scan_qr_code", comment: ""))
         }
         .padding(.horizontal, CTLayout.edgePad)
@@ -201,6 +203,7 @@ struct ChatsListView: View {
                         ChatRowView(chat: chat)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier(A11y.Chats.row(chat.id))
                     // Clear so the CTMatrixBackground watermark shows through the rows.
                     .listRowBackground(Color.clear)
                     .listRowSeparatorTint(Color.CT.noise)
@@ -251,6 +254,7 @@ struct ChatsListView: View {
         .contentMargins(.horizontal, CTLayout.edgePad, for: .scrollContent)
         // ASCII matrix watermark behind the rows (base #090909 comes from .ctBackground()).
         .background(CTMatrixBackground())
+        .accessibilityIdentifier(A11y.Chats.list)
     }
 
     /// Empty streams list — points users to invite paths (QR / Synaps).
@@ -279,18 +283,21 @@ struct ChatsListView: View {
                 ) {
                     showingQRScanner = true
                 }
+                .accessibilityIdentifier(A11y.Chats.emptyScanQR)
                 emptyActionButton(
                     titleKey: "chats_empty_show_qr",
                     systemImage: "qrcode"
                 ) {
                     showingMyQR = true
                 }
+                .accessibilityIdentifier(A11y.Chats.emptyShowQR)
                 emptyActionButton(
                     titleKey: "chats_empty_open_synaps",
                     systemImage: "circle.grid.cross"
                 ) {
                     NotificationCenter.default.post(name: .openSynapsTab, object: nil)
                 }
+                .accessibilityIdentifier(A11y.Chats.emptyOpenSynaps)
             }
             .padding(.top, CTLayout.inlinePad)
             .frame(maxWidth: 320)
@@ -298,6 +305,7 @@ struct ChatsListView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)
         .padding(.horizontal, CTLayout.edgePad)
+        .accessibilityIdentifier(A11y.Chats.empty)
     }
 
     private func emptyActionButton(

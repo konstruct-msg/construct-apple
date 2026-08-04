@@ -178,6 +178,7 @@ struct ChatView: View {
                                     }
                                 )
                                 .id(message.id)
+                                .accessibilityIdentifier(A11y.Chat.message(message.id))
                                 .opacity(replyFocusOpacity(for: message))
                                 .animation(
                                     .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
@@ -205,6 +206,7 @@ struct ChatView: View {
                     .padding(.horizontal)
                 }
                 .background(Color.CT.bg) // base under glass
+                .accessibilityIdentifier(A11y.Chat.messageList)
                 .defaultScrollAnchor(.bottom)
                 .scrollDismissesKeyboard(.interactively)
                 .environment(\.containerWidth, containerWidth)
