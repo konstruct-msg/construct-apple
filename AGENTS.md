@@ -23,6 +23,7 @@ construct-messenger/
 │   ├── Services/                # Session, messaging, healing, crypto orchestration
 │   ├── Networking/gRPC/         # gRPC channel + generated protobuf Swift files
 │   └── en.lproj/ ru.lproj/ ja.lproj/  # Localized strings
+├── scripts/two_sims.sh          # Two-simulator E2E stand (see below)
 ├── ConstructCore.xcframework/      # Built Rust crypto core + VEIL (NOT in git)
 ├── ConstructTransport.xcframework/ # Built Rust transport (NOT in git)
 └── AGENTS.md                    # This file
@@ -43,11 +44,58 @@ Sibling repos: `~/Code/construct-core` (crypto), `~/Code/construct-transport` (Q
 ./build_crypto_lib.sh --ios      # quick rebuild after Rust changes (~45s)
 
 xcodebuild -scheme ConstructMessenger \
-  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' build   # or `test`
+  -destination 'platform=iOS Simulator,name=iPhone 17' build   # or `test`
 ```
+
+**Never pin `OS=` in a destination.** Simulator runtimes are replaced with every Xcode
+upgrade; a pinned one stops resolving and the failure reads like a project problem. This line
+said `iPhone 16,OS=18.6` for months after that runtime was gone. Same for device names —
+check `xcrun simctl list devices available` rather than trusting this example.
 
 The `*.xcframework` binaries are NOT in git — after a fresh clone they must be built before
 Xcode can compile the app.
+
+## Two-simulator E2E stand
+
+`scripts/two_sims.sh` runs the app on two dedicated simulators (`Construct-A` iPhone 17 Pro,
+`Construct-B` iPhone 17) for send/receive scenarios that cannot exist on a single device.
+
+```bash
+./scripts/two_sims.sh run     # up + build + install + launch on both
+./scripts/two_sims.sh pair a  # invite from A's pasteboard → openurl on B
+./scripts/two_sims.sh env     # UDID_A / UDID_B / BUNDLE_ID for UI-automation tools
+./scripts/two_sims.sh reset   # erase both → clean onboarding
+./scripts/two_sims.sh shot    # screenshots → logs/two_sims/ (gitignored)
+```
+
+- **Pairing goes through the pasteboard, never the QR.** A simulator has no camera, so
+  the scan path is undrivable. Settings ▸ COPY CONTACT LINK carries the same invite;
+  `simctl pbpaste` reads it and `pair` hands it to the other sim. That command rewrites
+  the copied HTTPS share link to the `konstruct://` scheme on purpose — the HTTPS form is
+  a universal link and needs an apple-app-site-association fetch, so a simulator opens it
+  in Safari instead of the app. Note simulator pasteboards auto-sync with the host, so the
+  host clipboard bleeds in; `pair` rejects a buffer that holds no invite rather than
+  guessing.
+
+- **Two simulators already are two accounts** — separate container, Keychain and Core Data per
+  sim. Do NOT add test-account launch arguments or environment flags to the app to distinguish
+  them: the app reads no launch args today (`ProcessInfo` use is Preview detection only), and a
+  test-only branch in production code is a worse price than one `reset`.
+- **The stand is a happy-path UI harness, not a protocol test bed.** APNs push, VoIP + CallKit
+  audio, background decrypt, and anything driven by network conditions (session healing, offline
+  delivery, stream replay) do not reproduce faithfully on a simulator. Those belong in
+  `ConstructMessengerTests` against a real server — a green two-sim run says nothing about them.
+- Drive the UI through accessibility identifiers, not screenshot matching: a11y-tree reads are
+  cheap and stable, pixel comparison is neither. New UI on a happy path gets an
+  `accessibilityIdentifier`, and the string comes from `Utilities/AccessibilityIdentifiers.swift`
+  (`A11y.*`) — never a literal at the call site. The consumer is outside this repo, so a rename
+  breaks a scenario that still compiles.
+- Rows and messages are addressed by id (`A11y.Chats.row(chat.id)`, `A11y.Chat.message(id)`),
+  never by position — the list reorders on every incoming message.
+- `A11y.Chat.messageStatus` encodes the delivery status **in the identifier**
+  (`chat.message.<id>.status.delivered`). The status icons are bare SF Symbols with no label,
+  and identifiers are neither localized nor user-visible — which makes them the right channel
+  for machine-readable state, with no invented user-facing string.
 
 ## Design System (CRITICAL — read before touching any UI)
 
