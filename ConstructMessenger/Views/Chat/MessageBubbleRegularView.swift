@@ -186,12 +186,23 @@ struct MessageBubbleRegularView: View {
                             }
                         }
                     )
+                    // Scoped to the bubble, NOT the whole row. An identifier on a container
+                    // propagates down and overwrites its descendants', so putting it on the
+                    // row stamped the delivery status too — `chat.message.<id>` where the
+                    // status token should have been, and no way to assert "delivered".
+                    .accessibilityIdentifier(A11y.Chat.message(message.id))
                 }
 
                 if isLastInGroup {
                     HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
                         if message.isSentByMe {
+                            // The label is what makes this an accessibility element at all:
+                            // the status is a bare SF Symbol, and SwiftUI drops unlabeled
+                            // decorative images from the tree — identifier and all. Without
+                            // it the delivery state is invisible to VoiceOver *and* to the
+                            // two-simulator stand.
                             deliveryStatusView
+                                .accessibilityLabel(Text(message.deliveryStatus.a11yLabel))
                                 .accessibilityIdentifier(
                                     A11y.Chat.messageStatus(message.id, message.deliveryStatus)
                                 )

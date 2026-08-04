@@ -178,7 +178,6 @@ struct ChatView: View {
                                     }
                                 )
                                 .id(message.id)
-                                .accessibilityIdentifier(A11y.Chat.message(message.id))
                                 .opacity(replyFocusOpacity(for: message))
                                 .animation(
                                     .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),

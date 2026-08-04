@@ -81,6 +81,11 @@ Xcode can compile the app.
   sim. Do NOT add test-account launch arguments or environment flags to the app to distinguish
   them: the app reads no launch args today (`ProcessInfo` use is Preview detection only), and a
   test-only branch in production code is a worse price than one `reset`.
+- **Typing goes through the simulator's active keyboard, so verify what landed.** UI automation
+  sends HID key codes: under a Russian layout `alice` arrives as `фдш`, and the failure looks
+  like a broken app. `up` forces `en_US`, but iOS restores the previous input source on app
+  relaunch, so always read the field back. A first burst into an empty field also loses
+  everything after the first character — type with `replaceExisting`, and expect to repeat it.
 - **The stand is a happy-path UI harness, not a protocol test bed.** APNs push, VoIP + CallKit
   audio, background decrypt, and anything driven by network conditions (session healing, offline
   delivery, stream replay) do not reproduce faithfully on a simulator. Those belong in
@@ -96,6 +101,20 @@ Xcode can compile the app.
   (`chat.message.<id>.status.delivered`). The status icons are bare SF Symbols with no label,
   and identifiers are neither localized nor user-visible — which makes them the right channel
   for machine-readable state, with no invented user-facing string.
+
+Three SwiftUI accessibility facts this cost a live run to learn — none of them fail loudly:
+
+- **An identifier on a container overwrites its descendants'.** `chat.message.<id>` was applied
+  to the whole bubble row, so it stamped the delivery-status icon too and
+  `.status.delivered` never existed. Scope an identifier to the leaf it names, never to a row
+  that also holds independently-addressed children.
+- **An unlabeled `Image` is dropped from the accessibility tree, identifier and all.** The
+  status icons carried an identifier for a whole session and matched nothing. The
+  `accessibilityLabel` is what makes the element exist — it is a prerequisite for the
+  identifier, not a nicety. (It is also the only reason VoiceOver can read delivery state.)
+- **`snapshot_ui` does not print elements whose action is `none`.** The status icon is neither
+  tappable nor text, so it is invisible in a snapshot even when present. Assert it with
+  `wait_for_ui` on an `identifier` selector; absence from a snapshot proves nothing.
 
 ## Design System (CRITICAL — read before touching any UI)
 

@@ -111,4 +111,16 @@ extension DeliveryStatus {
         case .failed:    return "failed"
         }
     }
+
+    /// Spoken by VoiceOver, and the reason the status appears in the accessibility tree
+    /// at all — an unlabeled `Image` is dropped from it, taking the identifier with it.
+    var a11yLabel: String {
+        switch self {
+        case .sending:   return NSLocalizedString("msg_status_sending", comment: "")
+        case .sent:      return NSLocalizedString("msg_status_sent", comment: "")
+        case .delivered: return NSLocalizedString("msg_status_delivered", comment: "")
+        case .queued:    return NSLocalizedString("msg_status_queued", comment: "")
+        case .failed:    return NSLocalizedString("msg_status_failed", comment: "")
+        }
+    }
 }

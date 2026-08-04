@@ -105,9 +105,20 @@ ensure_sim() {
   printf '%s' "$udid"
 }
 
+# Force a Latin keyboard. UI automation types HID key codes, which the simulator maps
+# through its *active* input source: with a Russian layout "alice" arrives as "фдшсу"
+# and the failure looks like a broken app, not a broken locale.
+normalize_keyboard() {
+  local udid="$1"
+  xcrun simctl spawn "$udid" defaults write -g AppleLanguages -array en-US 2>/dev/null || true
+  xcrun simctl spawn "$udid" defaults write -g AppleLocale -string en_US 2>/dev/null || true
+  xcrun simctl spawn "$udid" defaults write -g AppleKeyboards -array "en_US@sw=QWERTY" 2>/dev/null || true
+}
+
 boot_sim() {
   local udid="$1" name="$2"
   if [[ "$(state_for "$udid")" != "Booted" ]]; then
+    normalize_keyboard "$udid"
     info "загружаю $name"
     xcrun simctl boot "$udid"
   fi

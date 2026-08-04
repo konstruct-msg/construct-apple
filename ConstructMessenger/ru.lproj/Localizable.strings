@@ -1127,3 +1127,11 @@
 
 /* Chat system bubble: the encrypted session broke and incoming messages cannot be read. */
 "system_session_out_of_sync" = "Зашифрованная сессия с этим собеседником рассинхронизирована — новые сообщения не читаются, пока она не будет установлена заново.";
+
+/* Delivery status of an outgoing message. VoiceOver-only: the bubble shows a bare
+   icon, so without these the delivery state is inaudible. */
+"msg_status_sending" = "Отправляется";
+"msg_status_sent" = "Отправлено";
+"msg_status_delivered" = "Доставлено";
+"msg_status_queued" = "В очереди, получатель офлайн";
+"msg_status_failed" = "Не отправлено";

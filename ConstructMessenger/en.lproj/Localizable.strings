@@ -1116,3 +1116,11 @@
 
 /* Chat system bubble: the encrypted session broke and incoming messages cannot be read. */
 "system_session_out_of_sync" = "The encrypted session with this contact is out of sync — new messages can't be read until it is re-established.";
+
+/* Delivery status of an outgoing message. VoiceOver-only: the bubble shows a bare
+   icon, so without these the delivery state is inaudible. */
+"msg_status_sending" = "Sending";
+"msg_status_sent" = "Sent";
+"msg_status_delivered" = "Delivered";
+"msg_status_queued" = "Queued, recipient offline";
+"msg_status_failed" = "Failed to send";
