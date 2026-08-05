@@ -110,6 +110,26 @@ final class VeilCapabilityProvisioner {
                     return
                 }
 
+                // The address is the SERVER's: `issueCapability` prefers `response.relay_address`
+                // over the one we asked for. So it gets the same Option-C gate the alternates get,
+                // and it gets it BEFORE the store — the previous order wrote the ticket first and
+                // compared the SPKI afterwards as a log line, and skipped the comparison entirely
+                // for an address in neither the manifest nor the pin set. A request for relay A
+                // answered with relay B was stored unchecked.
+                if let rejection = VeilRelayTrust.verify(
+                    relayAddress: issued.relayAddress,
+                    spki: issued.spki,
+                    capabilityB64: newB64,
+                    capabilityVersion: issued.capabilityVersion
+                ) {
+                    Log.error(
+                        "VEIL provision: reject capability for \(issued.relayAddress) — \(rejection.summary). Requested \(relayAddress); nothing stored.",
+                        category: "VEIL"
+                    )
+                    PerformanceMetrics.shared.record(.veilPrimaryCapabilityRejected, label: rejection.metricLabel)
+                    return
+                }
+
                 let parsed = try VeilConfigImporter.parseCapability(newB64)
                 guard VeilTicketStore.store(ticket: newB64, for: issued.relayAddress) else {
                     Log.error("VEIL provision: failed to store capability for \(issued.relayAddress)", category: "VEIL")
@@ -123,15 +143,6 @@ final class VeilCapabilityProvisioner {
                 let cachedAlts = VeilAlternatesCache.store(issued.alternates)
                 if cachedAlts > 0 {
                     Log.info("VEIL provision: cached \(cachedAlts)/\(issued.alternates.count) alternate front(s)", category: "VEIL")
-                }
-
-                // Same anti-downgrade stance as the renewer: never override binary-pinned SPKI.
-                if let pin = VEILConfig.hardcodedRelaySPKIs[issued.relayAddress],
-                   !issued.spki.isEmpty, pin.lowercased() != issued.spki.lowercased() {
-                    Log.error(
-                        "VEIL provision: relay \(issued.relayAddress) reports SPKI \(issued.spki.prefix(12))… ≠ binary pin \(pin.prefix(12))… — cert rotated; ship an app update with the new pin",
-                        category: "VEIL"
-                    )
                 }
 
                 await MainActor.run {

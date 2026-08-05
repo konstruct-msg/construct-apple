@@ -50,35 +50,25 @@ enum VeilAlternatesCache {
     }
 
     /// The Option-C acceptance gate for a single alternate. Exposed for tests.
+    ///
+    /// The three gates live in `VeilRelayTrust` so the primary-capability path applies the
+    /// same ones — it used to apply strictly weaker checks to a coordinate the server picks.
     static func accept(_ alt: VeilServiceClient.Alternate) -> Bool {
-        // 1. Coords must be vouched for by a trust anchor the live server does not
-        //    control: the signed relay manifest, or the in-binary pin.
-        let trusted = VeilCertFetcher.spkiPinSync(for: alt.relayAddress)
-            ?? VEILConfig.hardcodedRelaySPKIs[alt.relayAddress]
-        guard let trustedSpki = trusted, !trustedSpki.isEmpty else {
-            Log.info("VEIL alt: reject \(alt.relayAddress) — not in signed manifest or pin set", category: "VEIL")
-            return false
+        let rejection = VeilRelayTrust.verify(
+            relayAddress: alt.relayAddress,
+            spki: alt.spki,
+            capabilityB64: alt.capability.base64EncodedString(),
+            capabilityVersion: alt.capabilityVersion
+        )
+        guard let rejection else { return true }
+        switch rejection {
+        case .unknownRelay:
+            // Expected during manifest rotation, not an error: the server offered a front
+            // this build has no anchor for, and we simply do not take it.
+            Log.info("VEIL alt: reject \(alt.relayAddress) — \(rejection.summary)", category: "VEIL")
+        case .spkiMismatch, .invalidCapability:
+            Log.error("VEIL alt: reject \(alt.relayAddress) — \(rejection.summary)", category: "VEIL")
         }
-
-        // 2. Response SPKI must match the trusted pin (anti-redirection).
-        guard !alt.spki.isEmpty, trustedSpki.lowercased() == alt.spki.lowercased() else {
-            Log.error("VEIL alt: reject \(alt.relayAddress) — SPKI \(alt.spki.prefix(12))… ≠ trusted \(trustedSpki.prefix(12))…", category: "VEIL")
-            return false
-        }
-
-        // 3. The capability must carry a valid issuer signature + live window (the same
-        //    offline check the relay performs).
-        let b64 = alt.capability.base64EncodedString()
-        do {
-            switch alt.capabilityVersion {
-            case 2:  _ = try VeilConfigImporter.parseCapabilityV2(b64)
-            default: _ = try VeilConfigImporter.parseCapability(b64)
-            }
-        } catch {
-            Log.error("VEIL alt: reject \(alt.relayAddress) — invalid capability: \(error)", category: "VEIL")
-            return false
-        }
-
-        return true
+        return false
     }
 }

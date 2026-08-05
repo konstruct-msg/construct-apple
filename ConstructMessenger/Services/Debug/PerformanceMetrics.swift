@@ -179,6 +179,15 @@ enum MetricEvent: String {
     /// `label` = reason.
     case confirmHoldOverflow = "confirm_hold_overflow"
 
+    /// A primary VEIL capability was refused before storing: the relay address the *server*
+    /// chose is vouched for by no anchor outside its control, its SPKI disagrees with the pinned
+    /// one, or the blob failed its issuer check. Previously the first two could not refuse
+    /// anything — the ticket was stored and the SPKI compared afterwards, as a log line.
+    ///
+    /// `label` is the reason only, never the address or a key: the point of this layer is that
+    /// nobody learns where a user was steered, and a local counter is no exception.
+    case veilPrimaryCapabilityRejected = "veil_primary_capability_rejected"
+
     /// A SENDER_SYNC arrived without the fields needed to route it, so the copy of a message this
     /// user sent from another device is dropped and never appears in the transcript here.
     ///
