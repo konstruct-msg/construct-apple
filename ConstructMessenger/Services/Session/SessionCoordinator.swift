@@ -41,6 +41,10 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// SESSION_RESET_INIT or a fresh init. Blind END_SESSION here doubles the reset storm
     /// (seen in device logs: AEAD fail → session_init_failed → SRI → success).
     private var lastInboundEndSessionAt: [String: Date] = [:]
+    /// Timestamp of the last SESSION_RESET_INIT we decided to apply, per peer. In memory only:
+    /// after a process restart `establishedAt` is current again and covers the same duplicate,
+    /// while a stale persisted value would be a way to strand a live re-init.
+    private var lastAppliedResetInitAt: [String: UInt64] = [:]
     /// Grace after inbound END_SESSION during which initReceiving failure does not
     /// emit outbound END_SESSION (still ACKs + FailedInitMessageStore + OTPK top-up).
     private let postEndSessionInitFailGrace: TimeInterval = 20.0
@@ -512,9 +516,21 @@ final class SessionCoordinator: MessageRouterDelegate {
 
     func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64) -> Bool {
         let established = establishedAt(for: userId)
+        let lastApplied = lastAppliedResetInitAt[userId]
         let superseded = SessionReducer.isResetInitSuperseded(
-            establishedAt: established, timestamp: timestamp, fudgeSeconds: Self.endSessionStaleFudge
+            establishedAt: established,
+            lastAppliedAt: lastApplied,
+            timestamp: timestamp,
+            fudgeSeconds: Self.endSessionStaleFudge
         )
+        // Recorded here, at the decision, and not where the re-init finishes — that lag is the
+        // defect. This is the sole caller and it applies the init whenever the answer is `false`,
+        // so "decided to apply" and "applied" are the same event from this method's side.
+        if !superseded {
+            lastAppliedResetInitAt[userId] = timestamp
+        } else if lastApplied.map({ timestamp <= $0 }) == true {
+            PerformanceMetrics.shared.record(.resetInitDuplicate, label: "redelivery")
+        }
         // `established == nil` → apply (never strand a possibly-live re-init on a missing record).
         // A *newer* init (superseded == false) is applied even while a session is active: the peer
         // has ratcheted onto it and its next msgNum≥1 only decrypts against the new session.

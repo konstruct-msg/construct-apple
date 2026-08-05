@@ -195,6 +195,9 @@ private final class Peer {
     /// the incoming init's epoch; the INITIATOR uses its own `initGeneration`. Drives the
     /// production `SessionReducer.isResetInitSuperseded` decision on an inbound SESSION_RESET_INIT.
     var establishedFromEpoch: UInt64 = 0
+    /// Epoch of the last reset-init this node acted on. Models the production memory that makes a
+    /// redelivered init idempotent — without it the harness would keep asserting the old behaviour.
+    var lastAppliedResetEpoch: UInt64?
 
     init(id: String, net: Network, confirmWindow: TimeInterval) {
         self.id = id
@@ -334,7 +337,13 @@ private final class Peer {
             // and MUST be applied even while active — dropping it is the 2026-07-26 stranding bug.
             guard !isInitiator(over: peerId) else { break }
             let currentEpoch: UInt64? = isActive ? establishedFromEpoch : nil
-            if !SessionReducer.isResetInitSuperseded(establishedAt: currentEpoch, timestamp: epoch, fudgeSeconds: 0) {
+            if !SessionReducer.isResetInitSuperseded(
+                establishedAt: currentEpoch,
+                lastAppliedAt: lastAppliedResetEpoch,
+                timestamp: epoch,
+                fudgeSeconds: 0
+            ) {
+                lastAppliedResetEpoch = epoch
                 becomeResponder(to: peerId, now: now, epoch: epoch)
             }
 

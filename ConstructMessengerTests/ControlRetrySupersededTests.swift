@@ -115,4 +115,50 @@ final class ControlRetrySupersededTests: XCTestCase {
             "known residual: second-granularity stamps cannot separate these"
         )
     }
+
+    // MARK: - A redelivered SESSION_RESET_INIT must be idempotent (build 579)
+
+    /// The defect: `establishedAt` is stamped only when the re-init *completes*, so two copies of
+    /// one redelivered SRI both read the pre-init value and both applied. The second archived the
+    /// session the first had just built, and the payload that arrived in the gap asked the peer to
+    /// start over. Real numbers from the 15:22:04 log line.
+    func testRedeliveredResetInitIsCoalescedEvenWhileEstablishedLags() {
+        let ts: UInt64 = 1_785_943_323
+        let staleEstablished: UInt64 = 1_785_943_288
+
+        // First copy: nothing applied yet → apply.
+        XCTAssertFalse(SessionReducer.isResetInitSuperseded(
+            establishedAt: staleEstablished, lastAppliedAt: nil, timestamp: ts, fudgeSeconds: 5
+        ))
+        // Second copy, same timestamp, establishment record has not caught up → must coalesce.
+        XCTAssertTrue(SessionReducer.isResetInitSuperseded(
+            establishedAt: staleEstablished, lastAppliedAt: ts, timestamp: ts, fudgeSeconds: 5
+        ), "a redelivery of the init we just applied must not re-establish")
+    }
+
+    /// A genuine peer retry re-stamps its timestamp, so it is strictly newer and still applies —
+    /// dropping it is the 2026-07-26 stranding bug, which this must not reintroduce.
+    func testGenuinePeerRetryWithNewerTimestampStillApplies() {
+        XCTAssertFalse(SessionReducer.isResetInitSuperseded(
+            establishedAt: 1_785_943_324,
+            lastAppliedAt: 1_785_943_323,
+            timestamp: 1_785_943_340,
+            fudgeSeconds: 5
+        ))
+    }
+
+    /// An init older than the one we acted on is a backlog replay, whatever the establishment says.
+    func testOlderInitThanTheOneWeAppliedIsCoalesced() {
+        XCTAssertTrue(SessionReducer.isResetInitSuperseded(
+            establishedAt: nil, lastAppliedAt: 1_785_943_323, timestamp: 1_785_943_300, fudgeSeconds: 5
+        ))
+    }
+
+    /// With no memory yet and no establishment record, an init is always applied — never strand a
+    /// possibly-live re-init on a missing record.
+    func testNoMemoryNoRecordAlwaysApplies() {
+        XCTAssertFalse(SessionReducer.isResetInitSuperseded(
+            establishedAt: nil, lastAppliedAt: nil, timestamp: 1_785_943_323, fudgeSeconds: 5
+        ))
+    }
 }

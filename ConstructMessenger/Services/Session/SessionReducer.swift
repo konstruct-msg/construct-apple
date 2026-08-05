@@ -488,7 +488,27 @@ enum SessionReducer {
     /// establishing init is idempotent → coalesce), and the fudge errs toward *applying* (a
     /// near-boundary init is applied, never stranding — a redundant re-init is cheap and
     /// self-limiting, a dropped live init is a permanent storm). `nil` establishment → apply.
-    static func isResetInitSuperseded(establishedAt: UInt64?, timestamp: UInt64, fudgeSeconds: UInt64) -> Bool {
+    /// `lastAppliedAt` — the timestamp of the last SRI we *acted on* for this peer, recorded at the
+    /// moment of the decision. It exists because the establishment record lags: `establishedAt` is
+    /// stamped only when the re-init completes, so two copies of one redelivered SRI both read the
+    /// pre-init value and both applied. Build 579, 15:22:04, one second apart:
+    ///
+    ///     ts=1785943323 established=1785943288 → fresh (apply re-init)
+    ///     ts=1785943323 established=1785943288 → fresh (apply re-init)   ← the same message
+    ///     No session for a7bf9efc but messageNumber=1 — requesting END_SESSION
+    ///
+    /// The second application archived the session the first had just rebuilt, and the payload
+    /// that arrived in the gap asked the peer to start over. §1c again, in its purest form: the
+    /// check compared *time* where it needed *identity*, and two copies of one init carry the same
+    /// time. Comparison is exact `<=` with no fudge — a genuine peer retry carries a strictly newer
+    /// timestamp (its watchdog re-stamps), so only a true duplicate or an older init coalesces.
+    static func isResetInitSuperseded(
+        establishedAt: UInt64?,
+        lastAppliedAt: UInt64?,
+        timestamp: UInt64,
+        fudgeSeconds: UInt64
+    ) -> Bool {
+        if let lastAppliedAt, timestamp <= lastAppliedAt { return true }
         guard let establishedAt else { return false }
         return timestamp + fudgeSeconds <= establishedAt
     }

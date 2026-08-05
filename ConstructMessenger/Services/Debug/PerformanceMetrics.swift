@@ -230,6 +230,11 @@ enum MetricEvent: String {
     /// the build-579 run.
     case confirmReplaySuperseded = "confirm_replay_superseded"
 
+    /// A SESSION_RESET_INIT arrived that we had already acted on — a server redelivery of the same
+    /// init. Coalesced to an ACK now; before, both copies re-established, and the second archived
+    /// the session the first had just built.
+    case resetInitDuplicate = "reset_init_duplicate"
+
     /// The callee answered before the SDP offer arrived. `wait` = answered with no offer yet,
     /// `resumed` = the late offer finished the answer, `timeout` = it never came and the call was
     /// failed honestly. "There is an incoming call" and "here is its SDP" ride different channels
