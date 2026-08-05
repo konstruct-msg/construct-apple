@@ -601,13 +601,26 @@ final class MessageRouter {
                 // the cursor policy before we know this ever fires would make a zero unreadable
                 // ("never happens" vs "we stopped counting it").
                 Log.error(
-                    "ACK DB check resumed with no routing decision for \(ackMsgId.prefix(8))… msgNum=\(message.messageNumber) — core returned no actions although we answered not-processed (init lock or END_SESSION cooldown); message dropped pending redelivery",
+                    "ACK DB check resumed with no routing decision for \(ackMsgId.prefix(8))… msgNum=\(message.messageNumber) — core returned no actions although we answered not-processed (init lock or END_SESSION cooldown); holding the cursor for redelivery",
                     category: "MessageRouter"
                 )
                 PerformanceMetrics.shared.record(
                     .ackCheckResumedWithoutDecision,
                     label: "msgNum=\(message.messageNumber)"
                 )
+                // The measurement this counter was added for came back on 2026-08-05 (build 577):
+                // five ordinary message bodies, msgNum 0-3, dropped here inside one session
+                // re-establishment — and none of them ever appears again in the log. The line said
+                // "pending redelivery" while the cursor said `.durable`, i.e. done; the watermark
+                // advanced past them and the server had nothing left to redeliver. Two carriers of
+                // one intent, disagreeing in silence.
+                //
+                // `.deferred` is safe here precisely because both causes of an empty verdict — the
+                // init lock and the END_SESSION cooldown — are transient by construction, and both
+                // are released by the same paths that end a re-establishment. A permanent stall
+                // would need the core to hold the init lock forever, which is its own bug and would
+                // now be visible as a stuck watermark rather than as vanished messages.
+                streamOutcome = .deferred
                 if isNewChat { context.delete(chat) }
                 return
             }

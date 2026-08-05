@@ -143,8 +143,11 @@ enum MetricEvent: String {
     /// "come back later" cases — the message was dropped without a routing decision and only the
     /// server's redelivery brings it back.
     ///
-    /// The cursor policy for it is deliberately NOT changed on the strength of this counter: we do
-    /// not yet know whether it ever fires. Measure first (`decisions/ios-semantic-divergence-signals`).
+    /// Measured 2026-08-05 (build 577): it fires, five times inside one session re-establishment,
+    /// on ordinary message bodies (msgNum 0-3) — and none of them came back. The cursor policy was
+    /// `.durable` while the log line promised redelivery, so the watermark advanced past them. Now
+    /// `.deferred`: both causes of an empty verdict are transient, so holding the cursor is what
+    /// "pending redelivery" was always supposed to mean.
     case ackCheckResumedWithoutDecision = "ack_check_resumed_without_decision"
 
     /// MessageRouter fallthrough for an ordinary message body: the core returned actions, none of
