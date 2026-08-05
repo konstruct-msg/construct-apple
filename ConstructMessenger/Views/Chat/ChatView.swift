@@ -197,6 +197,23 @@ struct ChatView: View {
                                     }
                                 )
                                 .id(message.id)
+                                // Probe on the LAST message only. The bottom anchor already tells us
+                                // the viewport reaches the end of the list (build 581) — what it
+                                // cannot tell us is whether the last *message* is in that view. If
+                                // this fires while the screen is blank, the cells are materialised
+                                // and drawing nothing; if the anchor fires and this does not, there
+                                // is something between them holding ~500pt, which is what the
+                                // content-height oscillation (651→2542→4018→3557) points at.
+                                .onAppear {
+                                    if index == renderedMessages.count - 1 {
+                                        Log.debug("SCROLL_ANCHOR last message visible (\(message.id.prefix(8))…, idx=\(index)/\(renderedMessages.count))", category: "ChatScrollManager")
+                                    }
+                                }
+                                .onDisappear {
+                                    if index == renderedMessages.count - 1 {
+                                        Log.debug("SCROLL_ANCHOR last message left the viewport (\(message.id.prefix(8))…)", category: "ChatScrollManager")
+                                    }
+                                }
                                 .opacity(replyFocusOpacity(for: message))
                                 .animation(
                                     .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),

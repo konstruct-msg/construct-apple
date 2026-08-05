@@ -185,9 +185,13 @@ class ChatScrollManager {
                     Log.debug("PIN aborted at tick \(index) — auto-scroll was switched off", category: "ChatScrollManager")
                     return
                 }
+                // A missing proxy is a *not yet*, not a no: the pin series is armed from
+                // `beginOpening` before `ScrollViewReader`'s `onAppear` has handed us the proxy, so
+                // tick 0 of every single opening was a silent no-op (8 of 8 in the build-581 log).
+                // Skip the tick and keep the series — the later ticks are what it is there for.
                 guard self.proxy != nil else {
-                    Log.debug("PIN aborted at tick \(index) — no ScrollViewProxy registered", category: "ChatScrollManager")
-                    return
+                    Log.debug("PIN tick \(index) skipped — ScrollViewProxy not registered yet", category: "ChatScrollManager")
+                    continue
                 }
                 Log.debug("PIN tick \(index) (+\(ms)ms) → \(messageId), contentHeight=\(Int(self.contentHeight))pt fromBottom=\(Int(self.distanceFromBottom))", category: "ChatScrollManager")
                 self.scrollToBottom(messageId: messageId, animated: false)
