@@ -41,6 +41,22 @@ class ChatScrollManager {
     /// Whether the view has scrolled to bottom at least once
     var hasScrolledToBottom = false
 
+    /// True while the chat is *opening*: from the first non-empty transcript until the
+    /// multi-pass pin has settled — or until a person touches the scroll, whichever comes first.
+    ///
+    /// It exists because during that window the scroll geometry describes a layout in flight, not
+    /// a reader. `ChatView` used to hold this as its own `didStabilizeInitialScroll` and armed it
+    /// from the wrong evidence: the transcript is empty on first appear (the store publishes from
+    /// `onViewAppear`, after the first body pass), and an empty list was read as "the opening
+    /// scroll has settled". So by the time the unprompted load-more grew 30 → 50, the opening was
+    /// already considered over and the growth took the *animated* branch — an animated scroll
+    /// through the composer inset settle, which is what leaves the LazyVStack dematerialized and
+    /// the chat blank until a gesture. One authority for "are we still opening", here.
+    private(set) var isOpening = false
+
+    @ObservationIgnored
+    private var openingTask: Task<Void, Never>?
+
     /// Keyboard height when visible
     var keyboardHeight: CGFloat = 0
 
@@ -171,6 +187,36 @@ class ChatScrollManager {
         }
     }
 
+    // MARK: - Opening window
+
+    /// Start the opening window: pin to the bottom and treat scroll geometry as layout noise
+    /// until it settles. Called when the transcript first becomes non-empty (and on a re-appear
+    /// that already has one) — never on an empty transcript, which says nothing has opened yet.
+    ///
+    /// Auto-scroll is forced back on here on purpose: whatever the geometry reported for the
+    /// blank first layout was not a reading position, and letting it survive into the opening
+    /// meant every corrective pin bailed at its own `shouldScrollToBottom` guard.
+    func beginOpening(settleAfterMs: UInt64 = 600) {
+        openingTask?.cancel()
+        isOpening = true
+        shouldScrollToBottom = true
+        if shouldShowScrollToBottomButton { shouldShowScrollToBottomButton = false }
+        pinToBottomCorrective(delaysMs: [0, 80, 200, 400])
+        openingTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(settleAfterMs))
+            guard !Task.isCancelled else { return }
+            self?.isOpening = false
+        }
+    }
+
+    /// End the opening window early. A person touching the list outranks the settle timer:
+    /// someone who enters a chat and immediately swipes up must not be pinned back down.
+    func endOpening() {
+        openingTask?.cancel()
+        openingTask = nil
+        if isOpening { isOpening = false }
+    }
+
     /// Scroll to a specific message
     /// - Parameters:
     ///   - messageId: Message ID to scroll to
@@ -207,14 +253,45 @@ class ChatScrollManager {
 
         distanceFromBottom = distance
 
+        let next = Self.flags(
+            current: ScrollFlags(autoScroll: shouldScrollToBottom, showJumpButton: shouldShowScrollToBottomButton),
+            distanceFromBottom: distance,
+            contentFits: contentFits,
+            keyboardVisible: isKeyboardVisible,
+            isOpening: isOpening
+        )
+        if next.autoScroll != shouldScrollToBottom {
+            shouldScrollToBottom = next.autoScroll
+        }
+        if next.showJumpButton != shouldShowScrollToBottomButton {
+            shouldShowScrollToBottomButton = next.showJumpButton
+        }
+    }
+
+    // MARK: - Pure decisions
+
+    struct ScrollFlags: Equatable {
+        var autoScroll: Bool
+        var showJumpButton: Bool
+    }
+
+    /// What the two observed flags become for a given scroll geometry.
+    ///
+    /// The one rule that is not just a threshold: **while the chat is opening, geometry may turn
+    /// auto-scroll back ON but never OFF.** A large `distanceFromBottom` means "the person scrolled
+    /// up" only once there is a settled layout to scroll within; during the opening it is equally
+    /// the signature of an offset that has not landed yet — and reading it as intent switched off
+    /// the auto-scroll that the corrective pin then refused to perform, which is a chat that stays
+    /// blank until the user swipes. Same for the jump FAB, which flashed on over an empty list.
+    static func flags(
+        current: ScrollFlags,
+        distanceFromBottom distance: CGFloat,
+        contentFits: Bool,
+        keyboardVisible: Bool,
+        isOpening: Bool
+    ) -> ScrollFlags {
         if contentFits {
-            if shouldShowScrollToBottomButton {
-                shouldShowScrollToBottomButton = false
-            }
-            if !shouldScrollToBottom {
-                shouldScrollToBottom = true
-            }
-            return
+            return ScrollFlags(autoScroll: true, showJumpButton: false)
         }
 
         let nearBottom = distance <= Threshold.nearBottom
@@ -222,21 +299,49 @@ class ChatScrollManager {
 
         // Keyboard / composer-height animation produces transient distances.
         // Never latch the FAB ON while the keyboard is up; still allow hide + near-bottom.
-        if isKeyboardVisible {
-            if nearBottom {
-                if !shouldScrollToBottom { shouldScrollToBottom = true }
-                if shouldShowScrollToBottomButton { shouldShowScrollToBottomButton = false }
-            }
-            return
+        if keyboardVisible {
+            guard nearBottom else { return current }
+            return ScrollFlags(autoScroll: true, showJumpButton: false)
         }
 
-        if nearBottom != shouldScrollToBottom {
-            shouldScrollToBottom = nearBottom
+        if isOpening {
+            return ScrollFlags(
+                autoScroll: nearBottom ? true : current.autoScroll,
+                showJumpButton: false
+            )
         }
 
-        if farUp != shouldShowScrollToBottomButton {
-            shouldShowScrollToBottomButton = farUp
-        }
+        return ScrollFlags(autoScroll: nearBottom, showJumpButton: farUp)
+    }
+
+    /// What a change in transcript length should do to the scroll position.
+    enum CountChangeAction: Equatable {
+        case none
+        /// The transcript went from nothing to something — this is the chat opening.
+        case openTranscript
+        /// Growth during the opening window: non-animated pin only.
+        case correctivePin
+        /// Ordinary new message on a settled layout.
+        case animatedFollow
+    }
+
+    /// `openTranscript` deliberately ignores `autoScrollOn`: the flag describes where a reader
+    /// was in a transcript that did not exist yet, so it cannot be evidence about this one.
+    static func countChangeAction(
+        oldCount: Int,
+        newCount: Int,
+        autoScrollOn: Bool,
+        searchActive: Bool,
+        isOpening: Bool
+    ) -> CountChangeAction {
+        guard newCount > 0, !searchActive else { return .none }
+        if oldCount == 0 { return .openTranscript }
+        guard autoScrollOn else { return .none }
+        if isOpening { return .correctivePin }
+        // Never follow a count *drop* (FRC thrash): that path animated to bottom while the
+        // LazyVStack dematerialized → black flash.
+        guard newCount > oldCount else { return .none }
+        return .animatedFollow
     }
 
     /// Legacy alias — treats argument as **signed** bottom offset (0 at bottom, negative up).
@@ -257,6 +362,9 @@ class ChatScrollManager {
         pinTask = nil
         animatedScrollTask?.cancel()
         animatedScrollTask = nil
+        openingTask?.cancel()
+        openingTask = nil
+        isOpening = false
         shouldScrollToBottom = true
         hasScrolledToBottom = false
         shouldShowScrollToBottomButton = false

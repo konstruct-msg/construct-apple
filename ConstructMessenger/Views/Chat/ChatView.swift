@@ -57,9 +57,9 @@ struct ChatView: View {
     /// Current height of the bottom composer (safeAreaInset). Tracked so we can re-pin the
     /// scroll when it changes — see the composer's `.onGeometryChange` below.
     @State private var composerHeight: CGFloat = 0
-    /// False until the multi-pass open pin finishes — during this window all auto-scrolls
-    /// stay non-animated so LazyVStack does not dematerialize into a blank list.
-    @State private var didStabilizeInitialScroll = false
+    // The opening window ("all auto-scrolls stay non-animated until the first pin settles") now
+    // lives in `scrollManager.isOpening`. It was a `@State` here and was armed from the wrong
+    // evidence — see `ChatScrollManager.isOpening`.
 
     private enum Layout {
         static let composerHorizontalPadding = ChatUIConstants.Shell.composerHorizontalPadding
@@ -235,18 +235,29 @@ struct ChatView: View {
                     scrollManager.registerProxy(proxy)
                     LocalNotificationManager.shared.clearBadge()
                     scrollManager.hasScrolledToBottom = true
-                    didStabilizeInitialScroll = false
                     // .defaultScrollAnchor(.bottom) + LazyVStack + composer safeAreaInset often
                     // lands the first offset out of range → blank list until a gesture.
                     // Multi-pass non-animated pin covers inset settle and FRC load-more churn.
-                    if !renderedMessages.isEmpty || !viewModel.messages.isEmpty {
-                        scrollManager.pinToBottomCorrective()
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(400))
-                            didStabilizeInitialScroll = true
-                        }
-                    } else {
-                        didStabilizeInitialScroll = true
+                    //
+                    // Only when there is a transcript to open. On a cold entry there is not: the
+                    // store publishes from `viewModel.onViewAppear()`, which runs after this, so
+                    // the list is empty here and the opening is armed by the 0 → N change below.
+                    // Declaring the opening finished on an empty list is what let the load-more
+                    // growth take the animated branch and blank the chat.
+                    if !viewModel.messages.isEmpty {
+                        scrollManager.beginOpening()
+                    }
+                }
+                .onScrollPhaseChange { _, phase in
+                    // A person touching the list outranks the settle timer. `.animating` is our
+                    // own corrective pin, so it must not count as a touch.
+                    switch phase {
+                    case .tracking, .interacting, .decelerating:
+                        scrollManager.endOpening()
+                    case .idle, .animating:
+                        break
+                    @unknown default:
+                        break
                     }
                 }
                 .onChange(of: viewModel.messages.count) { oldCount, count in
@@ -254,27 +265,32 @@ struct ChatView: View {
                         Log.info("ChatView: messages count changed to \(count)")
                     }
 
-                    // Auto-scroll when new messages arrive — only if user is at the bottom.
-                    // `shouldScrollToBottom` is automatically managed by ChatScrollManager
-                    // based on scroll position, so this won't fight the user reading history.
-                    guard scrollManager.shouldScrollToBottom, !isSearchActive, count > 0 else { return }
-
-                    // Opening path: FRC 0→N or N→N+loadMore — corrective pin only.
-                    // Animated scroll here was a top contributor to the empty-first-paint bug.
-                    if !didStabilizeInitialScroll || oldCount == 0 {
-                        scrollManager.pinToBottomCorrective(delaysMs: [0, 80, 200])
+                    // Auto-scroll when new messages arrive — only if the user is at the bottom.
+                    // `shouldScrollToBottom` is managed by ChatScrollManager from scroll position,
+                    // so this won't fight a user reading history. The whole branch is one decision
+                    // (`countChangeAction`) so it can be asserted in a test rather than on a phone.
+                    switch ChatScrollManager.countChangeAction(
+                        oldCount: oldCount,
+                        newCount: count,
+                        autoScrollOn: scrollManager.shouldScrollToBottom,
+                        searchActive: isSearchActive,
+                        isOpening: scrollManager.isOpening
+                    ) {
+                    case .none:
                         return
-                    }
-
-                    // Never auto-scroll on a count *drop* (FRC thrash in logs: 83→51→67…).
-                    // That path animated to bottom while LazyVStack dematerialized → black flash.
-                    guard count > oldCount else { return }
-
-                    let delay = ChatViewConstants.MessageDelay.mediaRender
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .seconds(delay))
-                        guard scrollManager.shouldScrollToBottom else { return }
-                        scrollManager.scrollToBottom(animated: true)
+                    case .openTranscript:
+                        scrollManager.beginOpening()
+                    case .correctivePin:
+                        // Growth while the layout is still settling — the unprompted load-more
+                        // lands here (30 → 50 on every chat entry). Non-animated only.
+                        scrollManager.pinToBottomCorrective(delaysMs: [0, 80, 200])
+                    case .animatedFollow:
+                        let delay = ChatViewConstants.MessageDelay.mediaRender
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(delay))
+                            guard scrollManager.shouldScrollToBottom else { return }
+                            scrollManager.scrollToBottom(animated: true)
+                        }
                     }
                 }
                 .onChange(of: viewModel.voicePlaybackScrollTarget) { _, target in
