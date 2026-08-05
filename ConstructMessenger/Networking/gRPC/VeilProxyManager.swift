@@ -105,8 +105,9 @@ final class VeilProxyManager: ObservableObject {
                 .rpcSucceeded(via: .veil(port: 0, relay: address), latencyMs: Int(latency * 1000))
             )
         }
-        // VEIL is confirmed working — a good moment to renew the capability in-band
-        // before it expires (no-ops unless near expiry; rate-limited internally).
+        // VEIL is confirmed working — ensure / renew capabilities in-band
+        // (each step no-ops unless needed; rate-limited internally).
+        VeilCapabilityProvisioner.shared.provisionIfNeeded(relayAddress: address)
         VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: address)
         // Ticket B1: bootstrap/renew the key-bound capability over the same live
         // tunnel (no-ops unless needed; rate-limited internally).
@@ -248,17 +249,18 @@ final class VeilProxyManager: ObservableObject {
         // Seeds remain the floor if the fetch fails (censored first hop, offline, etc.).
         await fetchConfigAndEvictIfRemoved()
 
-        // In-band capability renew/bootstrap over whatever transport is up (typically
-        // direct right after the user toggles). No-ops without a prior ticket / path.
-        VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
-        VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
+        // Capability pipeline over whatever transport is up (typically direct right
+        // after the user toggles). First-issue is the critical path when no ticket
+        // was ever imported; renew/B1 no-op unless needed.
+        ensureCapabilitiesForPrimaryRelay()
 
         await startIfNeeded()
     }
 
     /// Start or refresh VEIL when the transport layer actually needs it.
-    /// In `.auto` mode this is a no-op on a healthy direct path — avoids spinning up
-    /// the local proxy (and its CPU cost) on every foreground transition.
+    /// In `.auto` mode the *proxy* is a no-op on a healthy direct path — but we still
+    /// auto-provision / renew the veil-front capability over direct so the client has
+    /// a working ticket ready before the network becomes censored.
     func startIfNeeded() async {
         migrateToModeIfNeeded()
         guard mode != .off else {
@@ -269,10 +271,16 @@ final class VeilProxyManager: ObservableObject {
             Log.info("VEIL startup skipped — device not registered", category: "VEIL")
             return
         }
+
+        // ALWAYS run capability ensure on a registered device with VEIL not off —
+        // including auto+direct. First-issue over clearnet is how we remove the
+        // manual QR/paste dependency for normal logins. Rate-limited internally.
+        ensureCapabilitiesForPrimaryRelay()
+
         if mode == .auto {
             let snap = await TransportRouter.shared.snapshot()
             guard snap.state.prefersVEIL else {
-                Log.debug("VEIL startup skipped — auto mode on direct path", category: "VEIL")
+                Log.debug("VEIL proxy startup skipped — auto mode on direct path (capability ensure still ran)", category: "VEIL")
                 return
             }
         }
@@ -286,12 +294,15 @@ final class VeilProxyManager: ObservableObject {
         // here — that fetch only added two 8s .well-known/ice-cert timeouts on censored
         // networks. The relay manifest is still refreshed for AMS relay retirement.
         await fetchConfigAndEvictIfRemoved()
+    }
 
-        // Renew the capability if it's near expiry. Works over whatever transport is
-        // up (in-band over VEIL when active); no-ops unless within the renewal window.
-        VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
-        // Ticket B1: bootstrap/renew the key-bound capability over the same channel.
-        VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: VEILConfig.ruRelayAddress)
+    /// First-issue (if missing) → near-expiry renew → B1 bootstrap/renew for the
+    /// primary seed relay. Safe to call often; each step is rate-limited + no-ops when idle.
+    private func ensureCapabilitiesForPrimaryRelay() {
+        let address = VEILConfig.ruRelayAddress
+        VeilCapabilityProvisioner.shared.provisionIfNeeded(relayAddress: address)
+        VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: address)
+        VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: address)
     }
 
     /// Legacy name — forwards to `startIfNeeded()`.
