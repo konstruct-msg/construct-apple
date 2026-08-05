@@ -494,27 +494,45 @@ enum SessionReducer {
     /// establishing init is idempotent → coalesce), and the fudge errs toward *applying* (a
     /// near-boundary init is applied, never stranding — a redundant re-init is cheap and
     /// self-limiting, a dropped live init is a permanent storm). `nil` establishment → apply.
-    /// `lastAppliedAt` — the timestamp of the last SRI we *acted on* for this peer, recorded at the
-    /// moment of the decision. It exists because the establishment record lags: `establishedAt` is
-    /// stamped only when the re-init completes, so two copies of one redelivered SRI both read the
-    /// pre-init value and both applied. Build 579, 15:22:04, one second apart:
+    /// `alreadyApplied` — we have already acted on **this exact init**, identified by its X3DH
+    /// ephemeral public key. Build 579, 15:22:04, one second apart:
     ///
     ///     ts=1785943323 established=1785943288 → fresh (apply re-init)
     ///     ts=1785943323 established=1785943288 → fresh (apply re-init)   ← the same message
     ///     No session for a7bf9efc but messageNumber=1 — requesting END_SESSION
     ///
     /// The second application archived the session the first had just rebuilt, and the payload
-    /// that arrived in the gap asked the peer to start over. §1c again, in its purest form: the
-    /// check compared *time* where it needed *identity*, and two copies of one init carry the same
-    /// time. Comparison is exact `<=` with no fudge — a genuine peer retry carries a strictly newer
-    /// timestamp (its watchdog re-stamps), so only a true duplicate or an older init coalesces.
+    /// that arrived in the gap asked the peer to start over. The predicate compared *time* where it
+    /// needed *identity*, and two copies of one init carry the same time (§1c). The first remedy
+    /// was `lastAppliedAt`, a second timestamp — which failed the same way, because the establishment
+    /// record it raced is stamped only when the re-init completes. The ephemeral key is the init's
+    /// own identity: two copies of one message carry the same key, and a genuine peer retry
+    /// generates a new one, so the answer no longer depends on when anything happened.
+    ///
+    /// ## Why this one cannot use `SessionEpoch`
+    ///
+    /// The other four checks became epoch equality (`decisions/session-epoch-before-mls.md`). This
+    /// one cannot, and the reason is structural rather than an omission: **the decision to apply an
+    /// SRI is made before anything it carries can be decrypted.** An epoch identifies a session we
+    /// have; to learn which session the *sender* is replacing we would have to read a field they
+    /// sent, and the only pre-decryption surface is the envelope — where the server would see it,
+    /// handing it a stable pairwise identifier for free. So the epoch cannot gate an SRI, and the
+    /// ephemeral public key, already in the clear on the envelope and already unique per init, is
+    /// the strongest identity available at this point.
+    ///
+    /// The `establishedAt` comparison therefore stays, for the one question the ephemeral key
+    /// cannot answer: whether an init we have *never* applied pre-dates the session we now hold (a
+    /// server backlog replay from before we re-established). There is no pre-decryption ordering
+    /// primitive but the peer's clock, so this keeps its fudge, and the fudge keeps erring toward
+    /// *applying* — a redundant re-init is cheap and self-limiting, a dropped live init is a
+    /// permanent storm. `nil` establishment → apply.
     static func isResetInitSuperseded(
+        alreadyApplied: Bool,
         establishedAt: UInt64?,
-        lastAppliedAt: UInt64?,
         timestamp: UInt64,
         fudgeSeconds: UInt64
     ) -> Bool {
-        if let lastAppliedAt, timestamp <= lastAppliedAt { return true }
+        if alreadyApplied { return true }
         guard let establishedAt else { return false }
         return timestamp + fudgeSeconds <= establishedAt
     }

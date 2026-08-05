@@ -27,12 +27,21 @@ protocol MessageRouterDelegate: AnyObject {
     /// (pre-dates the currently established session) and should be silently discarded.
     func messageRouter(_ router: MessageRouter, isEndSessionStale userId: String, timestamp: UInt64) -> Bool
 
-    /// Return `true` when a SESSION_RESET_INIT from `userId` carrying `timestamp` is *superseded*
-    /// (pre-dates or exactly matches the current session's establishment — a server backlog replay)
-    /// and should be coalesced (ACK-only). A *newer* init returns `false` and MUST be applied, even
-    /// while a session is active, or the RESPONDER strands on a stale ratchet (see
-    /// `SessionReducer.isResetInitSuperseded`).
-    func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64) -> Bool
+    /// Return `true` when a SESSION_RESET_INIT from `userId` is *superseded* — either we have
+    /// already applied this exact init (identified by `initEphemeral`, its X3DH ephemeral public
+    /// key), or it pre-dates the current session's establishment (a server backlog replay). Such an
+    /// init is coalesced, ACK-only. A live init returns `false` and MUST be applied, even while a
+    /// session is active, or the RESPONDER strands on a stale ratchet.
+    ///
+    /// `initEphemeral` is what makes a redelivery recognisable at all: two copies of one init carry
+    /// the same key, and they carry the same `timestamp` too — which is why the timestamp alone
+    /// could not tell them apart. See `SessionReducer.isResetInitSuperseded`.
+    func messageRouter(
+        _ router: MessageRouter,
+        isResetInitSuperseded userId: String,
+        timestamp: UInt64,
+        initEphemeral: Data
+    ) -> Bool
 
     // MARK: - Session initialisation
 

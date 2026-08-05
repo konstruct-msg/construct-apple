@@ -397,7 +397,12 @@ final class MessageRouter {
             // establishment (a server backlog replay) is a duplicate to ACK-only. A *newer* init
             // is a live re-init and MUST be applied even while a session is active — dropping it
             // strands the RESPONDER on a dead ratchet → END_SESSION storm (2026-07-26 desync).
-            if delegate?.messageRouter(self, isResetInitSuperseded: otherUserId, timestamp: message.timestamp) == true {
+            if delegate?.messageRouter(
+                self,
+                isResetInitSuperseded: otherUserId,
+                timestamp: message.timestamp,
+                initEphemeral: message.ephemeralPublicKey
+            ) == true {
                 Log.info(
                     "SESSION_RESET_INIT superseded for \(otherUserId.prefix(8))… — ACK only (pre-dates current session)",
                     category: "MessageRouter"

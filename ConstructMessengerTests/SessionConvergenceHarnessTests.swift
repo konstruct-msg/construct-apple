@@ -195,9 +195,11 @@ private final class Peer {
     /// the incoming init's epoch; the INITIATOR uses its own `initGeneration`. Drives the
     /// production `SessionReducer.isResetInitSuperseded` decision on an inbound SESSION_RESET_INIT.
     var establishedFromEpoch: UInt64 = 0
-    /// Epoch of the last reset-init this node acted on. Models the production memory that makes a
-    /// redelivered init idempotent — without it the harness would keep asserting the old behaviour.
-    var lastAppliedResetEpoch: UInt64?
+    /// The inits this node has already acted on. Models `AppliedInitLedger`: in production the
+    /// identity is the init's X3DH ephemeral public key, and here it is the generation stamped on
+    /// the frame — in both cases two copies of one init carry the same value and a genuine retry
+    /// carries a new one. Without it the harness would keep asserting the pre-fix behaviour.
+    var appliedResetInits = AppliedInitLedger()
 
     init(id: String, net: Network, confirmWindow: TimeInterval) {
         self.id = id
@@ -337,13 +339,14 @@ private final class Peer {
             // and MUST be applied even while active — dropping it is the 2026-07-26 stranding bug.
             guard !isInitiator(over: peerId) else { break }
             let currentEpoch: UInt64? = isActive ? establishedFromEpoch : nil
+            let initIdentity = withUnsafeBytes(of: epoch.littleEndian) { Data($0) }
             if !SessionReducer.isResetInitSuperseded(
+                alreadyApplied: appliedResetInits.contains(initIdentity),
                 establishedAt: currentEpoch,
-                lastAppliedAt: lastAppliedResetEpoch,
                 timestamp: epoch,
                 fudgeSeconds: 0
             ) {
-                lastAppliedResetEpoch = epoch
+                appliedResetInits.record(initIdentity)
                 becomeResponder(to: peerId, now: now, epoch: epoch)
             }
 

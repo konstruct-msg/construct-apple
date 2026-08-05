@@ -50,7 +50,7 @@ final class SessionQueueWiringTests: XCTestCase {
         }
         func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64) {}
         func messageRouter(_ router: MessageRouter, isEndSessionStale userId: String, timestamp: UInt64) -> Bool { false }
-        func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64) -> Bool { false }
+        func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64, initEphemeral: Data) -> Bool { false }
         func messageRouter(_ router: MessageRouter, didWinTieBreak userId: String) {}
         func messageRouter(_ router: MessageRouter, needsSessionHeal userId: String, failedMessage: ChatMessage) {
             healRequests.append(userId)

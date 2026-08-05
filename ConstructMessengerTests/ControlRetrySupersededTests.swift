@@ -128,43 +128,104 @@ final class ControlRetrySupersededTests: XCTestCase {
     /// one redelivered SRI both read the pre-init value and both applied. The second archived the
     /// session the first had just built, and the payload that arrived in the gap asked the peer to
     /// start over. Real numbers from the 15:22:04 log line.
+    ///
+    /// The first remedy compared timestamps too (`lastAppliedAt`), which worked only because a peer
+    /// retry happens to re-stamp. This asks the question directly: is it the same init?
     func testRedeliveredResetInitIsCoalescedEvenWhileEstablishedLags() {
         let ts: UInt64 = 1_785_943_323
         let staleEstablished: UInt64 = 1_785_943_288
 
-        // First copy: nothing applied yet → apply.
+        // First copy: this init has not been applied → apply.
         XCTAssertFalse(SessionReducer.isResetInitSuperseded(
-            establishedAt: staleEstablished, lastAppliedAt: nil, timestamp: ts, fudgeSeconds: 5
+            alreadyApplied: false, establishedAt: staleEstablished, timestamp: ts, fudgeSeconds: 5
         ))
-        // Second copy, same timestamp, establishment record has not caught up → must coalesce.
+        // Second copy, same init, establishment record has not caught up → must coalesce.
         XCTAssertTrue(SessionReducer.isResetInitSuperseded(
-            establishedAt: staleEstablished, lastAppliedAt: ts, timestamp: ts, fudgeSeconds: 5
+            alreadyApplied: true, establishedAt: staleEstablished, timestamp: ts, fudgeSeconds: 5
         ), "a redelivery of the init we just applied must not re-establish")
     }
 
-    /// A genuine peer retry re-stamps its timestamp, so it is strictly newer and still applies —
-    /// dropping it is the 2026-07-26 stranding bug, which this must not reintroduce.
-    func testGenuinePeerRetryWithNewerTimestampStillApplies() {
+    /// A genuine peer retry is a *different* init — new ephemeral key — so it applies even though
+    /// its predecessor is on record. Dropping it is the 2026-07-26 stranding bug, which this must
+    /// not reintroduce.
+    func testGenuinePeerRetryIsADifferentInitAndStillApplies() {
         XCTAssertFalse(SessionReducer.isResetInitSuperseded(
+            alreadyApplied: false,
             establishedAt: 1_785_943_324,
-            lastAppliedAt: 1_785_943_323,
             timestamp: 1_785_943_340,
             fudgeSeconds: 5
         ))
     }
 
-    /// An init older than the one we acted on is a backlog replay, whatever the establishment says.
-    func testOlderInitThanTheOneWeAppliedIsCoalesced() {
+    /// An init we already acted on is coalesced whatever the establishment record says — including
+    /// when there is none. This is the case a timestamp could not reach: the record lags precisely
+    /// when the duplicate arrives.
+    func testAlreadyAppliedInitIsCoalescedWithNoEstablishmentRecord() {
         XCTAssertTrue(SessionReducer.isResetInitSuperseded(
-            establishedAt: nil, lastAppliedAt: 1_785_943_323, timestamp: 1_785_943_300, fudgeSeconds: 5
+            alreadyApplied: true, establishedAt: nil, timestamp: 1_785_943_300, fudgeSeconds: 5
         ))
     }
 
-    /// With no memory yet and no establishment record, an init is always applied — never strand a
+    /// With nothing applied and no establishment record, an init is always applied — never strand a
     /// possibly-live re-init on a missing record.
     func testNoMemoryNoRecordAlwaysApplies() {
         XCTAssertFalse(SessionReducer.isResetInitSuperseded(
-            establishedAt: nil, lastAppliedAt: nil, timestamp: 1_785_943_323, fudgeSeconds: 5
+            alreadyApplied: false, establishedAt: nil, timestamp: 1_785_943_323, fudgeSeconds: 5
         ))
+    }
+
+    /// The half the ephemeral key cannot answer: an init we have *never* applied, pre-dating the
+    /// session we now hold, is a server backlog replay. There is no pre-decryption ordering
+    /// primitive but the peer clock, so this comparison keeps its fudge.
+    func testNeverAppliedInitPredatingEstablishmentIsCoalesced() {
+        XCTAssertTrue(SessionReducer.isResetInitSuperseded(
+            alreadyApplied: false,
+            establishedAt: 1_785_943_324,
+            timestamp: 1_785_943_300,
+            fudgeSeconds: 5
+        ))
+    }
+
+    // MARK: - The ledger that answers `alreadyApplied`
+
+    /// Two copies of one init carry one ephemeral key; that is the whole mechanism.
+    func testLedgerRecognisesTheSameInit() {
+        var ledger = AppliedInitLedger()
+        let ephemeral = Data(repeating: 0xA7, count: 32)
+        XCTAssertFalse(ledger.contains(ephemeral))
+        ledger.record(ephemeral)
+        XCTAssertTrue(ledger.contains(ephemeral))
+        XCTAssertFalse(ledger.contains(Data(repeating: 0xB3, count: 32)), "a different init is a different key")
+    }
+
+    /// An init we cannot identify must not be coalesced on a guess: a redundant re-init is cheap,
+    /// a dropped live one strands the peer permanently.
+    func testLedgerNeverMatchesAnUnidentifiableInit() {
+        var ledger = AppliedInitLedger()
+        ledger.record(Data())
+        XCTAssertFalse(ledger.contains(Data()))
+    }
+
+    /// Bounded, most-recent-first. The oldest init falls out rather than the ledger growing per peer.
+    func testLedgerEvictsTheOldestBeyondCapacity() {
+        var ledger = AppliedInitLedger()
+        let keys = (0...AppliedInitLedger.capacity).map { Data([UInt8($0)]) }
+        keys.forEach { ledger.record($0) }
+        XCTAssertFalse(ledger.contains(keys[0]), "the oldest init is evicted")
+        XCTAssertTrue(ledger.contains(keys[1]))
+        XCTAssertTrue(ledger.contains(keys.last!))
+    }
+
+    /// A peer retrying one init must not be able to push the others out — re-recording moves the
+    /// key to the front instead of adding a copy. Without this, a redelivery loop would evict the
+    /// ledger and make every earlier init look fresh again.
+    func testRerecordingDoesNotEvictOtherInits() {
+        var ledger = AppliedInitLedger()
+        let first = Data([0x01])
+        ledger.record(first)
+        let others = (2...AppliedInitLedger.capacity).map { Data([UInt8($0)]) }
+        others.forEach { ledger.record($0) }
+        for _ in 0..<20 { ledger.record(others.last!) }
+        XCTAssertTrue(ledger.contains(first), "re-recording one init must not evict the rest")
     }
 }

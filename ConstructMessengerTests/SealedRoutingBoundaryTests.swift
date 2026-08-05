@@ -44,7 +44,7 @@ final class SealedRoutingBoundaryTests: XCTestCase {
             endSessionStaleQueries.append(userId)
             return true   // short-circuit: classification is what we assert
         }
-        func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64) -> Bool {
+        func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64, initEphemeral: Data) -> Bool {
             resetInitSupersededQueries.append(userId)
             return true   // short-circuit
         }

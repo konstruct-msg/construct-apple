@@ -41,10 +41,10 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// SESSION_RESET_INIT or a fresh init. Blind END_SESSION here doubles the reset storm
     /// (seen in device logs: AEAD fail → session_init_failed → SRI → success).
     private var lastInboundEndSessionAt: [String: Date] = [:]
-    /// Timestamp of the last SESSION_RESET_INIT we decided to apply, per peer. In memory only:
-    /// after a process restart `establishedAt` is current again and covers the same duplicate,
-    /// while a stale persisted value would be a way to strand a live re-init.
-    private var lastAppliedResetInitAt: [String: UInt64] = [:]
+    /// The SESSION_RESET_INITs we have decided to apply, per peer, identified by their X3DH
+    /// ephemeral public key. See `AppliedInitLedger` for why the identity is the key and not a
+    /// timestamp, and why it is in memory only.
+    private var appliedResetInits: [String: AppliedInitLedger] = [:]
     /// Grace after inbound END_SESSION during which initReceiving failure does not
     /// emit outbound END_SESSION (still ACKs + FailedInitMessageStore + OTPK top-up).
     private let postEndSessionInitFailGrace: TimeInterval = 20.0
@@ -514,12 +514,18 @@ final class SessionCoordinator: MessageRouterDelegate {
         return stale
     }
 
-    func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64) -> Bool {
+    func messageRouter(
+        _ router: MessageRouter,
+        isResetInitSuperseded userId: String,
+        timestamp: UInt64,
+        initEphemeral: Data
+    ) -> Bool {
         let established = establishedAt(for: userId)
-        let lastApplied = lastAppliedResetInitAt[userId]
+        var ledger = appliedResetInits[userId] ?? AppliedInitLedger()
+        let alreadyApplied = ledger.contains(initEphemeral)
         let superseded = SessionReducer.isResetInitSuperseded(
+            alreadyApplied: alreadyApplied,
             establishedAt: established,
-            lastAppliedAt: lastApplied,
             timestamp: timestamp,
             fudgeSeconds: Self.endSessionStaleFudge
         )
@@ -527,8 +533,9 @@ final class SessionCoordinator: MessageRouterDelegate {
         // defect. This is the sole caller and it applies the init whenever the answer is `false`,
         // so "decided to apply" and "applied" are the same event from this method's side.
         if !superseded {
-            lastAppliedResetInitAt[userId] = timestamp
-        } else if lastApplied.map({ timestamp <= $0 }) == true {
+            ledger.record(initEphemeral)
+            appliedResetInits[userId] = ledger
+        } else if alreadyApplied {
             PerformanceMetrics.shared.record(.resetInitDuplicate, label: "redelivery")
         }
         // `established == nil` → apply (never strand a possibly-live re-init on a missing record).
