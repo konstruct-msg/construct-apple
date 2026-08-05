@@ -179,6 +179,16 @@ enum MetricEvent: String {
     /// `label` = reason.
     case confirmHoldOverflow = "confirm_hold_overflow"
 
+    /// A SENDER_SYNC arrived without the fields needed to route it, so the copy of a message this
+    /// user sent from another device is dropped and never appears in the transcript here.
+    ///
+    /// Not repairable here, and not a relay bug: the server blanks `conversation_id` and
+    /// `sender_device` deliberately (server-visible metadata must not carry E2E semantics), while
+    /// SENDER_SYNC routes on exactly those. Counted so the size of that contradiction is a number
+    /// rather than a log line — this is how often multi-device sync silently did nothing.
+    /// `label` = which fields were missing.
+    case senderSyncUnroutable = "sender_sync_unroutable"
+
     /// The callee answered before the SDP offer arrived. `wait` = answered with no offer yet,
     /// `resumed` = the late offer finished the answer, `timeout` = it never came and the call was
     /// failed honestly. "There is an incoming call" and "here is its SDP" ride different channels

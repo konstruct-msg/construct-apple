@@ -2030,7 +2030,36 @@ final class MessageRouter {
 
         let partnerUserId = extractPartnerUserId(from: message.conversationId, myUserId: currentUserId)
         guard !partnerUserId.isEmpty else {
-            Log.error("SENDER_SYNC: cannot extract partner from conversationId='\(message.conversationId)'", category: "MessageRouter")
+            // This branch is not reachable-by-accident: it is where SENDER_SYNC always ends up.
+            //
+            // We do send both fields — `buildEnvelope` sets `conversationID` and `senderDevice` on
+            // every non-sealed envelope, and SENDER_SYNC is explicitly never sealed. The server
+            // blanks them on delivery **on purpose** (`messaging-service/src/envelope.rs`:
+            // `sender_device: None` and "conversation_id is intentionally empty: it is
+            // server-visible metadata and must not carry E2E semantics"). Observed 2026-08-05, one
+            // message id on both sides of a single device:
+            //
+            //   sent      1aa6abac…-ss-b3ed60ab  conversationId = direct:0a1c609f…:ea134859…
+            //   received  conversationId = ''    senderDevice = ''
+            //
+            // So this is a design contradiction, not a relay bug: SENDER_SYNC routes on metadata
+            // the server is designed never to deliver, which means multi-device sync of one's own
+            // sent messages cannot work as currently specified. The partner id and sender device
+            // have to travel *inside* the ciphertext, where the server neither sees nor strips
+            // them — a protocol change, not a patch, so it is not made here. The message id is no
+            // fallback either: `-ss-<deviceTag>` carries the *recipient* device, not the sender's.
+            //
+            // What is fixed here is the diagnosis. The previous line named neither the message nor
+            // the second missing field, so fifteen distinct failures read exactly like one failure
+            // logged fifteen times.
+            Log.error(
+                "SENDER_SYNC: unroutable \(message.id) — conversationId='\(message.conversationId)' senderDeviceId='\(message.senderDeviceId)'; both are set on send and blanked by the server by design, so this message cannot be placed in a conversation. The copy of what the other device sent will not appear here.",
+                category: "MessageRouter"
+            )
+            PerformanceMetrics.shared.record(
+                .senderSyncUnroutable,
+                label: message.senderDeviceId.isEmpty ? "no_conversation_no_device" : "no_conversation"
+            )
             return
         }
 
