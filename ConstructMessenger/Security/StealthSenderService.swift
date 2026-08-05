@@ -340,6 +340,15 @@ final class StealthSenderService: SealedSenderResolving {
         // so if we cannot seal we must NOT spend the token — leave it in the wallet for a
         // later send once the key is cached (it arrives via GetSenderCertificateResponse).
         let canSeal = await ServerKeyManager.shared.hasTokenEncryptionKey()
+        // An empty wallet is not a verdict — it is a race with issuance. Reading it once and
+        // stepping over it is how 93 of 271 sealed sends in one busy hour went out token-less
+        // *past a batch that was already in flight* (the 99 "replenishment already in progress"
+        // lines are the same event from the issuer's end). Under enforce those are rejected
+        // sends, so the wait is cheaper than the failure. Bounded, and skipped entirely while
+        // the issuer is backing us off — see BlindTokenService.ensureTokenAvailable.
+        if wantedToken, canSeal, TokenWalletService.shared.balance == 0 {
+            await BlindTokenService.shared.ensureTokenAvailable()
+        }
         if canSeal,
            let token = StealthPolicy.shared.consumeTokenIfNeeded(),
            let sealedToken = await ServerKeyManager.shared.sealTokenBytes(token.token) {

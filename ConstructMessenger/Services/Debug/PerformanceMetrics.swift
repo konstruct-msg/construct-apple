@@ -207,6 +207,15 @@ enum MetricEvent: String {
     /// device whose evidence is being erased between attempts, which is the defect this replaced.
     case quicSuppressed = "quic_suppressed"
 
+    /// A sealed send found the wallet empty and waited for issuance. `served` = a token arrived in
+    /// time · `timeout` = it did not · `backoff` = the issuer was refusing, so we did not wait.
+    ///
+    /// This is the gauge for the enforce readiness question. `served` is the share of sends that
+    /// used to go token-less (and would be *rejected* under enforce) and no longer do; a rising
+    /// `timeout` means issuance cannot keep up with the burst and the cap needs re-sizing, not the
+    /// client; `backoff` counts sends the server was always going to refuse.
+    case tokenWalletWait = "token_wallet_wait"
+
     /// The callee answered before the SDP offer arrived. `wait` = answered with no offer yet,
     /// `resumed` = the late offer finished the answer, `timeout` = it never came and the call was
     /// failed honestly. "There is an incoming call" and "here is its SDP" ride different channels
