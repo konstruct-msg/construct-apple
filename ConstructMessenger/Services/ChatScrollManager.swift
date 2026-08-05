@@ -70,6 +70,10 @@ class ChatScrollManager {
     @ObservationIgnored
     private(set) var distanceFromBottom: CGFloat = 0
 
+    /// Last measured content height. Not observed — it changes every layout pass.
+    @ObservationIgnored
+    private(set) var contentHeight: CGFloat = 0
+
     /// Reference to ScrollViewProxy for programmatic scrolling
     @ObservationIgnored
     private var proxy: ScrollViewProxy?
@@ -174,8 +178,18 @@ class ChatScrollManager {
                     try? await Task.sleep(for: .milliseconds(ms))
                 }
                 guard !Task.isCancelled, let self else { return }
-                guard self.shouldScrollToBottom else { return }
-                guard self.proxy != nil else { return }
+                // Both bail-outs are logged: a pin series that silently stopped is
+                // indistinguishable from one that ran and missed, and we have spent two builds
+                // unable to tell those apart.
+                guard self.shouldScrollToBottom else {
+                    Log.debug("PIN aborted at tick \(index) — auto-scroll was switched off", category: "ChatScrollManager")
+                    return
+                }
+                guard self.proxy != nil else {
+                    Log.debug("PIN aborted at tick \(index) — no ScrollViewProxy registered", category: "ChatScrollManager")
+                    return
+                }
+                Log.debug("PIN tick \(index) (+\(ms)ms) → \(messageId), contentHeight=\(Int(self.contentHeight))pt fromBottom=\(Int(self.distanceFromBottom))", category: "ChatScrollManager")
                 self.scrollToBottom(messageId: messageId, animated: false)
                 // First tick is often a no-op if LazyVStack has not produced the anchor yet.
                 if index == 0 {
@@ -248,6 +262,24 @@ class ChatScrollManager {
     /// - Parameter contentFits: content shorter than the viewport → nothing to jump to.
     ///
     /// Only mutates observed flags when crossing thresholds (not every pixel).
+    /// Feed the measured content height. Re-pins when a bottom-anchored list grows under itself.
+    func updateContentHeight(_ height: CGFloat) {
+        guard height.isFinite, height > 0 else { return }
+        let previous = contentHeight
+        contentHeight = height
+        guard Self.shouldRepinForHeightChange(
+            previousHeight: previous,
+            currentHeight: height,
+            autoScrollOn: shouldScrollToBottom,
+            isOpening: isOpening
+        ) else { return }
+        Log.debug(
+            "Content grew \(Int(previous)) → \(Int(height))pt while pinned — re-pinning (opening=\(isOpening))",
+            category: "ChatScrollManager"
+        )
+        pinToBottomCorrective(delaysMs: [0, 60])
+    }
+
     func updateScrollOffset(distanceFromBottom distance: CGFloat, contentFits: Bool = false) {
         guard distance.isFinite else { return }
 
@@ -313,6 +345,33 @@ class ChatScrollManager {
 
         return ScrollFlags(autoScroll: nearBottom, showJumpButton: farUp)
     }
+
+    /// A list anchored to the bottom must stay anchored when the content grows under it — and
+    /// message *count* is only one of the two ways it grows. The other is height: a media bubble
+    /// is laid out small and becomes tall when its image resolves, and nothing re-pinned for that.
+    ///
+    /// Build 579 (video 2026-08-05 18:22, blank chat): the corrective pins land at 0/80/200/400ms,
+    /// the images resolve later, and the transcript settles ~470pt lower than where the pins put
+    /// it — the viewport is left over a region the content has since vacated. Whether that is the
+    /// whole of the blank chat is not proven; that a bottom-anchored list ignores content growth
+    /// is a defect on its own terms.
+    ///
+    /// Growth only. A list that shrinks while pinned is already handled by `.defaultScrollAnchor`,
+    /// and re-pinning on shrink would fight a user whose keyboard just dismissed.
+    static func shouldRepinForHeightChange(
+        previousHeight: CGFloat,
+        currentHeight: CGFloat,
+        autoScrollOn: Bool,
+        isOpening: Bool
+    ) -> Bool {
+        guard autoScrollOn || isOpening else { return false }
+        guard previousHeight > 0 else { return false }   // first measurement is not a change
+        return currentHeight - previousHeight >= heightRepinThreshold
+    }
+
+    /// Below this a growth is layout noise (a status glyph, a one-line reflow) and re-pinning
+    /// would be visible churn.
+    static let heightRepinThreshold: CGFloat = 24
 
     /// What a change in transcript length should do to the scroll position.
     enum CountChangeAction: Equatable {

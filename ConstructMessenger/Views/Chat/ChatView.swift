@@ -68,6 +68,8 @@ struct ChatView: View {
         /// Extra band below the status-bar safe area (≈ nav capsule height + margin) covered
         /// by the top scrim so scrolling text blurs/fades before it reaches the clock & signal.
         static let topScrimUnderSafeArea = ChatUIConstants.Shell.topScrimUnderSafeArea
+        /// Below this a viewport move / content growth is layout noise and is not logged.
+        static let geometryLogThreshold: CGFloat = 24
     }
 
     /// Combined scroll metrics so a single `onScrollGeometryChange` drives both
@@ -79,6 +81,23 @@ struct ChatView: View {
         var width: CGFloat
         /// Content shorter than the viewport ⇒ nothing to jump to — the FAB must never show.
         var contentFits: Bool
+        /// Total laid-out height. Grows after the opening pins when media resolves.
+        var contentHeight: CGFloat
+        /// Top of the viewport in content coordinates — the missing half of every blank-chat report.
+        var visibleMinY: CGFloat
+    }
+
+    /// One line per meaningful viewport move. The blank chat has never appeared in a log because
+    /// nothing recorded *where the viewport was* — only what the store published. Thresholded so a
+    /// settled list is silent and an opening is fully traced.
+    private func logScrollGeometryIfChanged(from old: ChatScrollGeometry, to new: ChatScrollGeometry) {
+        let moved = abs(new.visibleMinY - old.visibleMinY) >= Layout.geometryLogThreshold
+        let grew = abs(new.contentHeight - old.contentHeight) >= Layout.geometryLogThreshold
+        guard moved || grew || scrollManager.isOpening else { return }
+        Log.debug(
+            "SCROLL_GEO content=\(Int(new.contentHeight))pt viewport=[\(Int(new.visibleMinY))…\(Int(new.visibleMinY + (new.contentHeight - new.distanceFromBottom - new.visibleMinY)))] fromBottom=\(Int(new.distanceFromBottom)) msgs=\(viewModel.messages.count) opening=\(scrollManager.isOpening) autoScroll=\(scrollManager.shouldScrollToBottom)",
+            category: "ChatScrollManager"
+        )
     }
 
     init(chat: Chat, context: NSManagedObjectContext) {
@@ -195,10 +214,23 @@ struct ChatView: View {
                         // installed via `safeAreaInset`.
                         Color.clear
                             .frame(height: Layout.messageBottomClearance)
-                        // Bottom anchor for scrollToBottom
+                        // Bottom anchor for scrollToBottom.
+                        //
+                        // Its appearance is the probe that separates the two readings of a blank
+                        // chat, which no log has ever been able to do: if this fires while the
+                        // screen is empty, the viewport IS at the end of the list and the cells
+                        // are not drawing; if it never fires, the offset is somewhere else. One
+                        // of those is a rendering bug and the other is a scrolling bug, and we
+                        // have been guessing between them since 2026-08-03.
                         Color.clear
                             .frame(height: 1)
                             .id("bottom")
+                            .onAppear {
+                                Log.debug("SCROLL_ANCHOR bottom visible (msgs=\(renderedMessages.count), opening=\(scrollManager.isOpening))", category: "ChatScrollManager")
+                            }
+                            .onDisappear {
+                                Log.debug("SCROLL_ANCHOR bottom left the viewport", category: "ChatScrollManager")
+                            }
                     }
                     // Top space for floating nav capsule (+ call mini-bar when a call is active).
                     .padding(.top, ChatUIConstants.Shell.scrollContentTopPad + callBarInset)
@@ -219,13 +251,22 @@ struct ChatView: View {
                     return ChatScrollGeometry(
                         distanceFromBottom: distance,
                         width: geo.containerSize.width,
-                        contentFits: geo.contentSize.height <= geo.visibleRect.height + 8
+                        contentFits: geo.contentSize.height <= geo.visibleRect.height + 8,
+                        contentHeight: geo.contentSize.height,
+                        visibleMinY: geo.visibleRect.minY
                     )
-                } action: { _, metrics in
+                } action: { old, metrics in
                     scrollManager.updateScrollOffset(
                         distanceFromBottom: metrics.distanceFromBottom,
                         contentFits: metrics.contentFits
                     )
+                    // Growth is a re-pin trigger in its own right — media resolves after the
+                    // opening pins have already fired (TODO 34, build 579 video).
+                    scrollManager.updateContentHeight(metrics.contentHeight)
+                    // The blank chat is a *geometry* state and no log has ever shown it: we know
+                    // where the messages are and nothing about where the viewport is. One line per
+                    // meaningful move answers "was the offset wrong, or were the cells absent".
+                    logScrollGeometryIfChanged(from: old, to: metrics)
                     // Ignore zero-width passes during mid-layout; avoid thrashing on sub-pixel noise.
                     if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
                         containerWidth = metrics.width
