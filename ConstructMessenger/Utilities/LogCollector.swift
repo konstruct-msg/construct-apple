@@ -174,6 +174,15 @@ class LogCollector {
         
         """
         
+        // Crash reports first: they are the reason the archive is being sent in the incident case,
+        // and a reader should not have to scroll past 5 MB of session logs to find them.
+        if let crashes = CrashDiagnosticsCollector.storedReportsURL,
+           let content = try? String(contentsOf: crashes, encoding: .utf8), !content.isEmpty {
+            combinedLogs += "=== CRASH REPORTS (MetricKit) ===\n"
+            combinedLogs += content
+            combinedLogs += "\n\n"
+        }
+
         // Combine all log files (oldest to newest)
         let logFiles = getAllLogFiles().reversed()
         for (index, logFile) in logFiles.enumerated() {

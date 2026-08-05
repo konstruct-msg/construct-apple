@@ -282,7 +282,13 @@ struct DiagnosticsView: View {
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         #endif
-        .onAppear { refresh() }
+        .onAppear {
+            // Pull MetricKit's retained window now. Its own delivery fires at most once every
+            // 24h, which would mean a crash reported today is not shareable until tomorrow —
+            // and this screen is exactly where someone goes after a crash.
+            CrashDiagnosticsCollector.shared.collectPastPayloads()
+            refresh()
+        }
         #if DEBUG
         .confirmationDialog(
             LocalizedStringKey("diagnostics_force_silent_reinit"),

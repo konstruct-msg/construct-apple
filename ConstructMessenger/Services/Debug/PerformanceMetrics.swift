@@ -216,6 +216,11 @@ enum MetricEvent: String {
     /// client; `backoff` counts sends the server was always going to refuse.
     case tokenWalletWait = "token_wallet_wait"
 
+    /// MetricKit handed us a crash report. `label` = the crash class (signal / exception type),
+    /// never a stack frame. Exists because TestFlight has been delivering device metadata with the
+    /// payload withheld, so TODO 40 has had two theories and no evidence.
+    case crashDiagnosticReceived = "crash_diagnostic_received"
+
     /// The callee answered before the SDP offer arrived. `wait` = answered with no offer yet,
     /// `resumed` = the late offer finished the answer, `timeout` = it never came and the call was
     /// failed honestly. "There is an incoming call" and "here is its SDP" ride different channels

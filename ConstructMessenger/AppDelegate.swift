@@ -50,6 +50,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             Log.info("Background fetch is disabled by user or Low Power Mode")
         }
 
+        // Crash reports, delivered to us rather than through App Store Connect (TODO 40).
+        // Subscribed at launch because MetricKit hands over the *previous* run's crash — the
+        // later this registers, the more of that window we are not listening for.
+        CrashDiagnosticsCollector.shared.start()
+
         // Initialize local notification manager
         // This ensures it's ready when needed
         _ = LocalNotificationManager.shared
