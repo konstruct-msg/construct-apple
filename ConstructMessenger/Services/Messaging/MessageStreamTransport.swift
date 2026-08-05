@@ -139,9 +139,9 @@ extension MessageStreamManager {
         firstServerEventReceived = false
 
         // Consume the one-shot H2 fallback flag (set when the previous H3 attempt timed out
-        // on a direct path). Also check the persistent failure counter: after h3OpenFailureThreshold
-        // consecutive H3 failures (surviving network changes), switch to H2 until a clean stream
-        // resets the counter. This handles devices where H3 never works regardless of network.
+        // on a direct path). Also check the failure counter: after the number of consecutive
+        // failures this network is allowed (QuicSuppressionPolicy — two on an unknown network,
+        // one on a network that has already proved it), switch to H2 until QUIC delivers data.
         //
         // Global H3 disable: `FeatureFlags.h3Enabled` short-circuits everything when H3 is
         // turned off project-wide (see flag's docs for the 2026-05-29 disable reason).
@@ -153,12 +153,16 @@ extension MessageStreamManager {
         // Session cooldown: if the fast-UDP transport was flagged unhealthy (QUIC kept dying on
         // this network), stay on H2 until the cooldown expires rather than re-trying QUIC.
         let fastUdpInCooldown = (fastUdpUnhealthyUntil.map { $0 > Date() }) ?? false
+        // Same predicate the suppression ladder uses to decide it has seen enough — read from one
+        // place so "stop probing" and "arm the cooldown" cannot disagree about how many failures
+        // this network is allowed.
+        let failuresAllowed = QuicSuppressionPolicy.failuresBeforeSuppressing(strikes: quicSuppressionStrikes)
         let useH2Fallback = (!FeatureFlags.h3Enabled && !experimentalQuic)
             || shouldFallbackToH2Direct
-            || consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold
+            || consecutiveH3OpenFailures >= failuresAllowed
             || fastUdpInCooldown
-        if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
-            Log.info("H3 disabled — \(consecutiveH3OpenFailures) consecutive failures, using H2 direct", category: "MessageStream")
+        if consecutiveH3OpenFailures >= failuresAllowed {
+            Log.info("Fast-UDP disabled — \(consecutiveH3OpenFailures) consecutive failures, using H2 direct", category: "MessageStream")
         }
         shouldFallbackToH2Direct = false
 
@@ -280,6 +284,11 @@ extension MessageStreamManager {
                 guard self.activeStreamGeneration == generation else { break }
                 // Any server-pushed event proves the connection is live end-to-end
                 // (not just at TLS layer). Sets the watchdog-cancel flag below.
+                // On fast-UDP this is also the only evidence that clears the suppression ladder:
+                // an accept proves the handshake, data proves the network.
+                if !self.firstServerEventReceived, self.lastStreamTransportWasH3 {
+                    self.noteFastUdpProvenHealthy()
+                }
                 self.firstServerEventReceived = true
                 switch event {
                 case .message(let msg, let cursor):
@@ -516,7 +525,11 @@ extension MessageStreamManager {
                     else { return false }
                     Log.info("MessageStream H3 silent for \(Int(NetworkTiming.Stream.firstServerEventWatchdogH3))s after accept — DPI likely dropping UDP, forcing H2 fallback", category: "MessageStream")
                     self.shouldFallbackToH2Direct = true
-                    self.consecutiveH3OpenFailures += 1
+                    // Accepted-then-silent is the *most* conclusive failure this transport has —
+                    // the handshake was allowed through and the data was not. It goes through the
+                    // same ladder as an open timeout rather than bumping the raw counter, which
+                    // left this path unable to ever arm a suppression on its own.
+                    self.noteFastUdpOpenFailure(context: "silent_after_accept")
                     return true
                 }
                 guard shouldFallback else { return }

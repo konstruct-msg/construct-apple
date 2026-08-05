@@ -123,7 +123,10 @@ final class MessageStreamManager {
     /// Not reset by forceDisconnect() so it survives network path switches.
     /// Cleared when H3 succeeds or the stream ends cleanly.
     var consecutiveH3OpenFailures = 0
-    static let h3OpenFailureThreshold = 2
+    /// Which rung of `QuicSuppressionPolicy.ladder` this network sits on. Persisted, and — unlike
+    /// the window — **not** cleared when the window lapses: an expired suppression is permission
+    /// to probe again, not permission to forget what the probe found last time.
+    var quicSuppressionStrikes = 0
     /// Session-level suppression of the fast-UDP transport (native H3 / engine-QUIC) after it
     /// proves unhealthy on this network — e.g. QUIC connects then dies at the idle timeout every
     /// ~30s because DPI throttles UDP. Without this, each reconnect re-tries QUIC, dies, falls to
@@ -141,51 +144,94 @@ final class MessageStreamManager {
         get { _fastUdpUnhealthyUntil }
         set {
             _fastUdpUnhealthyUntil = newValue
-            Self.persistQuicSuppression(until: newValue)
+            Self.persistQuicSuppression(until: newValue, strikes: quicSuppressionStrikes)
         }
     }
-    static let fastUdpCooldown: TimeInterval = 300
 
-    private static let quicSuppressedUntilKey = "quic_suppressed_until_v1"
-    private static let quicSuppressedNetworkKey = "quic_suppressed_network_v1"
+    // v2: the record now carries the ladder rung and is keyed by network *identity* (interfaces +
+    // gateways), not interface names alone. Old v1 keys are ignored — a stale flat-300s record
+    // read as a rung would misstate what the device learned.
+    private static let quicSuppressedUntilKey = "quic_suppressed_until_v2"
+    private static let quicSuppressedNetworkKey = "quic_suppressed_network_v2"
+    private static let quicSuppressionStrikesKey = "quic_suppression_strikes_v2"
     /// One-shot guard so the persisted suppression is restored at most once per launch (at the first
     /// connect, by when the network monitor has reported a fingerprint).
     private var didRestoreQuicSuppression = false
 
-    /// Write-through the suppression window to `UserDefaults`, tagged with the current network
-    /// fingerprint. A nil / past value clears it.
-    private static func persistQuicSuppression(until: Date?) {
+    /// Write-through the suppression window **and the ladder rung** to `UserDefaults`, tagged with
+    /// the current network identity. Clearing the window keeps the rung: the two are separate
+    /// facts, and conflating them is what made this unable to converge.
+    private static func persistQuicSuppression(until: Date?, strikes: Int) {
         let d = UserDefaults.standard
-        if let until, until > Date() {
-            d.set(until, forKey: quicSuppressedUntilKey)
-            d.set(NetworkReachabilityManager.shared.currentPathFingerprint, forKey: quicSuppressedNetworkKey)
-        } else {
+        guard strikes > 0 || (until.map { $0 > Date() } ?? false) else {
             d.removeObject(forKey: quicSuppressedUntilKey)
             d.removeObject(forKey: quicSuppressedNetworkKey)
+            d.removeObject(forKey: quicSuppressionStrikesKey)
+            return
         }
+        if let until, until > Date() {
+            d.set(until, forKey: quicSuppressedUntilKey)
+        } else {
+            d.removeObject(forKey: quicSuppressedUntilKey)
+        }
+        d.set(strikes, forKey: quicSuppressionStrikesKey)
+        d.set(NetworkReachabilityManager.shared.currentNetworkIdentity, forKey: quicSuppressedNetworkKey)
     }
 
-    /// Restore a persisted QUIC suppression once per launch — but ONLY if it is still in the future
-    /// AND on the same network fingerprint. A different (or unknown) network must re-probe QUIC, so
-    /// a stale suppression from another network never wrongly forces H2.
+    /// Restore the persisted QUIC record once per launch, for this network only.
+    ///
+    /// Two things come back, and they expire differently: the window (still in force → start on H2
+    /// without probing) and the rung (survives expiry → the next failure escalates instead of
+    /// restarting the ladder). A different or unknown network restores neither — what we learned
+    /// is a claim about a network, not about the device.
     private func restoreQuicSuppressionOnceIfNeeded() {
         guard !didRestoreQuicSuppression else { return }
         didRestoreQuicSuppression = true
 
         let d = UserDefaults.standard
-        guard let until = d.object(forKey: Self.quicSuppressedUntilKey) as? Date, until > Date() else {
-            Self.persistQuicSuppression(until: nil)
-            return
-        }
         let persistedNet = d.string(forKey: Self.quicSuppressedNetworkKey) ?? ""
-        let currentNet = NetworkReachabilityManager.shared.currentPathFingerprint
-        if !persistedNet.isEmpty, persistedNet == currentNet {
-            _fastUdpUnhealthyUntil = until   // set backing directly — already persisted, same value
-            Log.info("QUIC suppression restored from prior session (same network, \(Int(until.timeIntervalSinceNow))s left) — starting on H2", category: "MessageStream")
+        let currentNet = NetworkReachabilityManager.shared.currentNetworkIdentity
+        let restored = QuicSuppressionPolicy.restore(
+            persistedUntil: d.object(forKey: Self.quicSuppressedUntilKey) as? Date,
+            persistedStrikes: d.integer(forKey: Self.quicSuppressionStrikesKey),
+            sameNetwork: !persistedNet.isEmpty && !currentNet.isEmpty && persistedNet == currentNet
+        )
+        quicSuppressionStrikes = restored.strikes
+        _fastUdpUnhealthyUntil = restored.suppressedUntil   // already persisted; same value
+        if let until = restored.suppressedUntil {
+            Log.info("QUIC suppression restored (same network, rung \(restored.strikes), \(Int(until.timeIntervalSinceNow))s left) — starting on H2", category: "MessageStream")
+        } else if restored.strikes > 0 {
+            Log.info("QUIC suppression lapsed (same network, rung \(restored.strikes)) — probing once; another failure suppresses for \(Int(QuicSuppressionPolicy.window(afterStrikes: restored.strikes) / 60))min", category: "MessageStream")
         } else {
-            // Different / unknown network → drop the stale suppression and re-probe QUIC.
-            Self.persistQuicSuppression(until: nil)
+            Self.persistQuicSuppression(until: nil, strikes: 0)
         }
+    }
+
+    /// One authority for "the fast-UDP transport failed to open". Both failure paths in
+    /// `connectLoop` used to carry their own copy of the threshold test and the cooldown
+    /// arithmetic; they had already drifted apart (only one of them set `shouldFallbackToH2Direct`).
+    func noteFastUdpOpenFailure(context: String) {
+        consecutiveH3OpenFailures += 1
+        let needed = QuicSuppressionPolicy.failuresBeforeSuppressing(strikes: quicSuppressionStrikes)
+        Log.info("Fast-UDP open failure #\(consecutiveH3OpenFailures)/\(needed) [\(context)] (network rung \(quicSuppressionStrikes))", category: "MessageStream")
+        guard consecutiveH3OpenFailures >= needed else { return }
+        let window = QuicSuppressionPolicy.window(afterStrikes: quicSuppressionStrikes)
+        quicSuppressionStrikes += 1
+        fastUdpUnhealthyUntil = Date().addingTimeInterval(window)   // setter persists rung + window
+        PerformanceMetrics.shared.record(.quicSuppressed, label: "rung\(quicSuppressionStrikes)")
+        Log.info("Fast-UDP (QUIC/H3) suppressed \(Int(window))s on this network — using H2 (rung \(quicSuppressionStrikes))", category: "MessageStream")
+    }
+
+    /// QUIC carried real server data on this network — the only evidence that actually clears the
+    /// ladder. Deliberately NOT the stream *accept*: on DPI'd networks the handshake is allowed
+    /// through and the connection then goes silent, so clearing on accept would reset the rung on
+    /// exactly the networks the ladder exists for, and the device would oscillate at rung 1 forever.
+    func noteFastUdpProvenHealthy() {
+        consecutiveH3OpenFailures = 0
+        guard quicSuppressionStrikes > 0 || _fastUdpUnhealthyUntil != nil else { return }
+        Log.info("QUIC delivered data on this network — clearing suppression ladder (was rung \(quicSuppressionStrikes))", category: "MessageStream")
+        quicSuppressionStrikes = 0
+        fastUdpUnhealthyUntil = nil
     }
     /// Debounce for `reconnectForTransportChange`. A transport toggle does a full teardown +
     /// reconnect; toggling rapidly (or SwiftUI firing `.onChange` twice) stacks teardowns and
@@ -261,10 +307,14 @@ final class MessageStreamManager {
         continuousFailureStreakStart = nil
         isInDegradedMode = false
         // Re-arm fast-UDP: the new network may not block QUIC even if the old one did (and vice-versa).
-        fastUdpUnhealthyUntil = nil
+        // The ladder rung goes with it — it was a claim about the network we just left. This is the
+        // one event that resets it, and it is why the suppression can be a day long without
+        // stranding a user who moved: we re-probe when you move, not when you relaunch.
+        quicSuppressionStrikes = 0
+        fastUdpUnhealthyUntil = nil      // setter clears the persisted record (rung is 0 now)
         consecutiveH3OpenFailures = 0
         shouldFallbackToH2Direct = false
-        Log.debug("Network path — cleared degraded-mode window + fast-UDP suppression (QUIC re-probe on next open)", category: "MessageStream")
+        Log.debug("Network path — cleared degraded-mode window + fast-UDP suppression ladder (QUIC re-probe on next open)", category: "MessageStream")
     }
 
     /// Single entry for routing-driven reconnects. Bursts (network flap + VEIL port + invalidate)
@@ -417,7 +467,8 @@ final class MessageStreamManager {
             Log.info("Transport toggle — no callback yet, nothing to reconnect", category: "MessageStream")
             return
         }
-        // Explicit toggle = give the chosen transport a clean slate (clear QUIC suppression).
+        // Explicit toggle = give the chosen transport a clean slate (clear QUIC suppression ladder).
+        quicSuppressionStrikes = 0
         fastUdpUnhealthyUntil = nil
         consecutiveH3OpenFailures = 0
         shouldFallbackToH2Direct = false
@@ -751,12 +802,7 @@ final class MessageStreamManager {
                         routingKeyAtLoopStart: routingKeyAtLoopStart
                     )
                     if lastStreamTransportWasH3 {
-                        consecutiveH3OpenFailures += 1
-                        Log.info("H3 open failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold)", category: "MessageStream")
-                        if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
-                            fastUdpUnhealthyUntil = Date().addingTimeInterval(Self.fastUdpCooldown)
-                            Log.info("Fast-UDP (QUIC/H3) suppressed \(Int(Self.fastUdpCooldown))s — using H2", category: "MessageStream")
-                        }
+                        noteFastUdpOpenFailure(context: "accept_timeout")
                     }
                     // H3→H2 fallback: if H3 failed on the direct path and VEIL isn't active yet,
                     // try H2 once before activating VEIL (H3 may be unsupported, not blocked).
@@ -815,16 +861,11 @@ final class MessageStreamManager {
                     routingKeyAtLoopStart: routingKeyAtLoopStart
                 )
                 if lastStreamTransportWasH3 {
-                    consecutiveH3OpenFailures += 1
                     // First open failure → next connectLoop iteration uses H2 immediately
                     // (shouldFallbackToH2Direct), without waiting for a second full QUIC
                     // handshake timeout (often 3s each) before the stream is usable.
                     shouldFallbackToH2Direct = true
-                    Log.info("H3 failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold) — next open prefers H2", category: "MessageStream")
-                    if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
-                        fastUdpUnhealthyUntil = Date().addingTimeInterval(Self.fastUdpCooldown)
-                        Log.info("Fast-UDP (QUIC/H3) suppressed \(Int(Self.fastUdpCooldown))s — DPI/idle death on this network, using H2", category: "MessageStream")
-                    }
+                    noteFastUdpOpenFailure(context: "stream_failure")
                 }
                 // Log full error details for diagnosis
                 if let rpcError = error as? RPCError {

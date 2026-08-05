@@ -54,6 +54,21 @@ class NetworkReachabilityManager {
     /// different one. Empty until the monitor's first path callback.
     var currentPathFingerprint: String { prevPathFingerprint }
 
+    /// Identity of the network we are attached to, for keying *long-lived* per-network memory
+    /// (the QUIC suppression ladder). Empty until the monitor's first path callback.
+    ///
+    /// Interface names alone cannot carry that memory: every Wi-Fi network is `en0`, so a
+    /// day-long "QUIC is blocked here" learned at home would follow the user onto a hotel
+    /// network and quietly hold them on H2. Adding the path's gateways separates them — two
+    /// networks with the same interface set but different routers are different networks.
+    ///
+    /// It is coarse on purpose. The SSID would be exact and costs a location permission prompt
+    /// for a transport heuristic, which is not a trade this app makes. Two networks that share
+    /// a gateway address (192.168.1.1 is everywhere) still collide; the cost of that collision
+    /// is that we stay on H2 where QUIC would have worked, which is slower, not broken — the
+    /// opposite error costs a 3s handshake timeout before every connect.
+    private(set) var currentNetworkIdentity: String = ""
+
     private init() {
         // Always set default values first
         isReachable = true
@@ -117,6 +132,15 @@ class NetworkReachabilityManager {
                     && !self.prevPathFingerprint.isEmpty
                     && fingerprint != self.prevPathFingerprint
                 self.prevPathFingerprint = fingerprint
+
+                // Kept separate from the fingerprint above on purpose: that one drives *reconnect*
+                // decisions and must not start firing on a DHCP-time gateway change, while this one
+                // only scopes persisted transport memory and needs to tell two Wi-Fi networks apart.
+                let gateways = path.gateways
+                    .map { "\($0)" }
+                    .sorted()
+                    .joined(separator: ",")
+                self.currentNetworkIdentity = gateways.isEmpty ? fingerprint : "\(fingerprint)|\(gateways)"
 
                 let interfaceSwitched = interfaceTypeSwitched || pathTopologyChanged
                 self.prevConnectionType = self.connectionType

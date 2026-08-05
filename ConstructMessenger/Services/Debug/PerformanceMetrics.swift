@@ -198,6 +198,15 @@ enum MetricEvent: String {
     /// `label` = which fields were missing.
     case senderSyncUnroutable = "sender_sync_unroutable"
 
+    /// The fast-UDP transport (engine-QUIC / native H3) was suppressed on this network because it
+    /// failed to carry data. `label` = the ladder rung just armed (`rung1` 5min · `rung2` 1h ·
+    /// `rung3` 24h), which is the gauge for "how permanently is QUIC blocked where this user is".
+    ///
+    /// Benign by itself — it means the fallback worked — so it stays a counter, not an ERROR (1a).
+    /// What it answers is whether the ladder converges: a device that keeps re-arming `rung1` is a
+    /// device whose evidence is being erased between attempts, which is the defect this replaced.
+    case quicSuppressed = "quic_suppressed"
+
     /// The callee answered before the SDP offer arrived. `wait` = answered with no offer yet,
     /// `resumed` = the late offer finished the answer, `timeout` = it never came and the call was
     /// failed honestly. "There is an incoming call" and "here is its SDP" ride different channels
