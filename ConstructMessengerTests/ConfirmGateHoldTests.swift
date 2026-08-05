@@ -252,4 +252,71 @@ final class ConfirmGateHoldTests: XCTestCase {
     // and three singletons, and a test that cannot fail against a mutation is worse than none
     // (decisions/ios-semantic-divergence-signals, amendment 2026-08-04). The device-log check is
     // `grep confirm_hold` with no matching `Skipping already-processed` for the same id.
+
+    // MARK: - The replay must know which session it was held against (build 579 regression)
+
+    /// The defect, stated: a peer init held while session A was live, replayed after session B
+    /// replaced it, cannot decrypt — and the failure drove `heal` → `manual_reset`, deleting the
+    /// healthy B. Three times in one hour on 2026-08-05.
+    func testPeerInitHeldAgainstAnOlderSessionIsSuperseded() {
+        XCTAssertEqual(
+            SessionReducer.heldReplayDisposition(
+                heldAgainstEstablishedAt: 1_785_943_288,
+                currentEstablishedAt: 1_785_943_324,
+                isPeerInit: true
+            ),
+            .superseded
+        )
+    }
+
+    /// Held against the same session that is still current: nothing replaced it, so it replays.
+    func testPeerInitHeldAgainstTheCurrentSessionReplays() {
+        XCTAssertEqual(
+            SessionReducer.heldReplayDisposition(
+                heldAgainstEstablishedAt: 1_785_943_324,
+                currentEstablishedAt: 1_785_943_324,
+                isPeerInit: true
+            ),
+            .replay
+        )
+    }
+
+    /// No session now — this init may be the very handshake that establishes one. Dropping it
+    /// here would be the discard that §1d forbids.
+    func testPeerInitWithNoCurrentSessionAlwaysReplays() {
+        XCTAssertEqual(
+            SessionReducer.heldReplayDisposition(
+                heldAgainstEstablishedAt: 1_785_943_288,
+                currentEstablishedAt: nil,
+                isPeerInit: true
+            ),
+            .replay
+        )
+    }
+
+    /// Held while we had no session at all, and one exists now: it was established after this init
+    /// was set aside, so the handshake this init belongs to has already concluded.
+    func testPeerInitHeldWithNoSessionIsSupersededOnceOneExists() {
+        XCTAssertEqual(
+            SessionReducer.heldReplayDisposition(
+                heldAgainstEstablishedAt: nil,
+                currentEstablishedAt: 1_785_943_324,
+                isPeerInit: true
+            ),
+            .superseded
+        )
+    }
+
+    /// A payload is never dropped on age. Losing user content on a guess is the failure the hold
+    /// exists to prevent; an undecryptable payload is the healing path's question, not this one's.
+    func testPayloadAlwaysReplaysHoweverStale() {
+        XCTAssertEqual(
+            SessionReducer.heldReplayDisposition(
+                heldAgainstEstablishedAt: 1,
+                currentEstablishedAt: 999_999_999,
+                isPeerInit: false
+            ),
+            .replay
+        )
+    }
 }

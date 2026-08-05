@@ -221,6 +221,15 @@ enum MetricEvent: String {
     /// payload withheld, so TODO 40 has had two theories and no evidence.
     case crashDiagnosticReceived = "crash_diagnostic_received"
 
+    /// A message the confirm gate held turned out to belong to a peer session that a later
+    /// handshake replaced, so it was acknowledged instead of re-routed.
+    ///
+    /// Benign — it is the gate doing its job — but it is the counter for the defect it replaced:
+    /// replaying such an init drove `heal` → `manual_reset` and deleted a healthy session, which
+    /// is what put "the encrypted session is out of sync" on screen three times in one hour of
+    /// the build-579 run.
+    case confirmReplaySuperseded = "confirm_replay_superseded"
+
     /// The callee answered before the SDP offer arrived. `wait` = answered with no offer yet,
     /// `resumed` = the late offer finished the answer, `timeout` = it never came and the call was
     /// failed honestly. "There is an incoming call" and "here is its SDP" ride different channels

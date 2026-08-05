@@ -332,6 +332,47 @@ enum SessionReducer {
         return announced == current
     }
 
+    /// What to do with a message the confirm gate held, at the moment the gate comes down.
+    enum HeldReplayDisposition: Equatable {
+        /// Still meaningful against the session we have now.
+        case replay
+        /// Belongs to a peer session that a later handshake replaced. Acknowledge and drop.
+        case superseded
+    }
+
+    /// §1c applied to the confirm gate's own buffer: **a held message must carry the identity of
+    /// the session it was held against.**
+    ///
+    /// The 2026-08-05 build-579 log is the third instance of this shape and the first one I wrote
+    /// myself. The gate correctly held peer inits instead of discarding them (§1d) — but the replay
+    /// was unconditional, so when the 75s window lapsed we re-routed inits belonging to peer
+    /// sessions that a *later* handshake had already replaced. The stale one cannot decrypt, the
+    /// core answers `heal`, and healing does `manual_reset`: the healthy session established
+    /// seconds earlier is archived and deleted. Three times in one hour, each followed by
+    /// "the encrypted session with this contact is out of sync" on screen:
+    ///
+    ///     15:23:27  confirm_replay: re-routing 2 held message(s)
+    ///     15:23:27  heal_triggered: becoming RESPONDER
+    ///     15:23:27  Archiving session … reason: manual_reset      ← a 60-second-old good session
+    ///
+    /// Only a peer *init* is dropped. A payload (`messageNumber > 0`) is replayed whatever its
+    /// age: dropping user content on a guess is the failure §1d exists to prevent, and a payload
+    /// that cannot decrypt is a question for the healing path, not for this one.
+    static func heldReplayDisposition(
+        heldAgainstEstablishedAt: UInt64?,
+        currentEstablishedAt: UInt64?,
+        isPeerInit: Bool
+    ) -> HeldReplayDisposition {
+        guard isPeerInit else { return .replay }
+        // No session now: nothing has superseded it, and it may be the very handshake that
+        // establishes one.
+        guard let current = currentEstablishedAt else { return .replay }
+        // Held while we had no session, and one exists now — that session was established after
+        // this init was set aside, so this init is a step of a handshake that already concluded.
+        guard let held = heldAgainstEstablishedAt else { return .superseded }
+        return current > held ? .superseded : .replay
+    }
+
     // MARK: - Handshake control emission (the send-side authority)
 
     /// A handshake transition that emits control message(s) to the peer.
