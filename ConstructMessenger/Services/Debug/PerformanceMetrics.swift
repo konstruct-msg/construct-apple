@@ -179,6 +179,18 @@ enum MetricEvent: String {
     /// `label` = reason.
     case confirmHoldOverflow = "confirm_hold_overflow"
 
+    /// The callee answered before the SDP offer arrived. `wait` = answered with no offer yet,
+    /// `resumed` = the late offer finished the answer, `timeout` = it never came and the call was
+    /// failed honestly. "There is an incoming call" and "here is its SDP" ride different channels
+    /// (VoIP push vs the E2EE message stream) and CallKit is driven by the fast one, so `wait` is
+    /// normal and expected; a `wait` with no matching `resumed` is the defect.
+    case answerBeforeOffer = "answer_before_offer"
+
+    /// A call signal arrived for a call that had already ended. Benign to drop, loud enough to
+    /// count: the offer variant used to re-report the dead call to CallKit, producing a phantom
+    /// incoming call from a peer who was not calling. `label` = signal kind.
+    case callSignalAfterEnd = "call_signal_after_end"
+
     /// A session handshake control (SRI / ping / ready) was abandoned mid-retry because the
     /// session it announces was replaced or destroyed between attempts. Sending it anyway told the
     /// peer to reset a session that had already been superseded — see the 2026-08-04 cascade in
