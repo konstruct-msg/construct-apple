@@ -31,8 +31,20 @@ final class ChatMessageStore: NSObject {
     private var frcDebounceTask: Task<Void, Never>?
     /// Serial generation so only the latest scheduled apply runs (debounce races).
     private var frcApplyGeneration: UInt64 = 0
+    /// The one piece of state that defines what the transcript shows: everything from this instant
+    /// forward. `loadMoreMessages` widens it and nothing else touches it.
+    ///
+    /// The visible list is a **function of this window**, re-derived from Core Data on every
+    /// snapshot — never an accumulator. It used to be one: `applyFRCSnapshot` built the historic
+    /// half by filtering `viewModel.messages` (the list) against the FRC's current contents, so the
+    /// list was its own and only source of history. Two consequences, both seen in the 2026-08-05
+    /// run: anything the validity filter dropped was gone permanently, because there was nowhere to
+    /// re-read it from (`51 recent + 14 historic = 65` → `36 recent + 20 historic = 56`, nine
+    /// messages simply absent); and `historic + fetched` was an unsorted concatenation resting on
+    /// "everything not in the FRC window is older than everything in it", which the FRC does not
+    /// guarantee — its `fetchLimit` is not re-applied on incremental updates, so `fetchedObjects`
+    /// drifts (51/52/36 inside one second in that same log). See TODO 34.
     private var oldestLoadedTimestamp: Date?
-    private var allLoadedMessageIds: Set<String> = []
     /// Last published transcript fingerprint — skip no-op FRC storms (status-spam / receipt).
     private var lastSnapshotFingerprint: UInt64 = 0
 
@@ -59,6 +71,53 @@ final class ChatMessageStore: NSObject {
     /// encryption. Drops any control/service payload that leaked into the transcript.
     private static func visible(_ messages: [Message]) -> [Message] {
         messages.filter { !$0.isControlArtifact && !$0.isServiceArtifact }
+    }
+
+    // MARK: - The transcript window
+
+    /// Re-read the visible transcript for the current window, oldest-first.
+    ///
+    /// One fetch, one sort, one source. Duplicate ids are impossible by construction — which
+    /// matters beyond tidiness: a `ForEach` fed duplicate ids renders unpredictably, and the merge
+    /// this replaces could produce them whenever the FRC window slid under it.
+    ///
+    /// Sorted by `(timestamp, id)`: the id is not decoration. Messages sent in the same burst share
+    /// a timestamp to the millisecond, and without a tie-break their relative order flips between
+    /// fetches — which is a transcript that reshuffles itself while the user is looking at it.
+    private func fetchWindow() -> [Message] {
+        let request = Message.fetchRequest()
+        var predicates: [NSPredicate] = [
+            NSPredicate(format: "chat == %@", chat),
+            ChatMessageStore.controlMessageFilterPredicate
+        ]
+        if let oldest = oldestLoadedTimestamp {
+            predicates.append(NSPredicate(format: "timestamp >= %@", oldest as NSDate))
+        } else {
+            // No window yet (setup failed, or an empty chat): fall back to the newest page rather
+            // than fetching the entire history.
+            request.fetchLimit = initialMessageLimit
+            request.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+            let newest = ChatMessageStore.visible((try? viewContext.fetch(request)) ?? [])
+            return Array(newest.reversed())
+        }
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "timestamp", ascending: true),
+            NSSortDescriptor(key: "id", ascending: true)
+        ]
+        return ChatMessageStore.visible((try? viewContext.fetch(request)) ?? [])
+    }
+
+    /// Publish `window` if it differs from what is on screen. Returns whether it was published.
+    @discardableResult
+    private func publish(_ window: [Message]) -> Bool {
+        guard let vm = viewModel else { return false }
+        let fp = Self.fingerprint(window)
+        guard fp != lastSnapshotFingerprint else { return false }
+        lastSnapshotFingerprint = fp
+        vm.messages = window
+        return true
     }
 
     // MARK: - Init
@@ -92,13 +151,13 @@ final class ChatMessageStore: NSObject {
         fetchedResultsController?.delegate = self
         do {
             try fetchedResultsController?.performFetch()
+            // The FRC exists to *notify*, not to supply the list. Its first fetch does define the
+            // initial window, though: the newest page.
             let fetched = ChatMessageStore.visible(fetchedResultsController?.fetchedObjects ?? [])
-            let messages = Array(fetched.reversed())
-            viewModel?.messages = messages
-            oldestLoadedTimestamp = messages.first?.timestamp
-            allLoadedMessageIds = Set(messages.map { $0.id })
-            lastSnapshotFingerprint = Self.fingerprint(messages)
-            Log.debug("FRC initial fetch: \(messages.count) messages (reversed to oldest-first)", category: "ChatViewModel")
+            oldestLoadedTimestamp = fetched.last?.timestamp   // sorted newest-first
+            let window = fetchWindow()
+            publish(window)
+            Log.debug("FRC initial fetch: \(window.count) messages (oldest-first)", category: "ChatViewModel")
         } catch {
             Log.error("FRC fetch failed: \(error)", category: "ChatViewModel")
         }
@@ -123,32 +182,36 @@ final class ChatMessageStore: NSObject {
         if trigger == .indicatorAppeared {
             PerformanceMetrics.shared.record(.loadMoreUnprompted, label: String(vm.messages.count))
         }
+        defer { vm.isLoadingMore = false }
+
+        // Fetch the next older batch only to learn where the widened window starts — the batch
+        // itself is not spliced into the list. Newest-first so the last element is the oldest we
+        // are admitting.
         let fetchRequest = Message.fetchRequest()
         let chatPredicate = NSPredicate(format: "chat == %@ AND timestamp < %@", chat, oldestTimestamp as NSDate)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
             chatPredicate,
             ChatMessageStore.controlMessageFilterPredicate
         ])
-        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
         fetchRequest.fetchLimit = loadMoreBatchSize
-        if let fetched = try? viewContext.fetch(fetchRequest) {
-            let newMessages = ChatMessageStore.visible(fetched).filter { !allLoadedMessageIds.contains($0.id) }
-            if newMessages.isEmpty {
-                vm.hasMoreMessages = false
-                vm.isLoadingMore = false
-                Log.debug("No more older messages to load", category: "ChatViewModel")
-                return
-            }
-            vm.messages = newMessages + vm.messages
-            oldestLoadedTimestamp = vm.messages.first?.timestamp
-            allLoadedMessageIds.formUnion(Set(newMessages.map { $0.id }))
-            lastSnapshotFingerprint = Self.fingerprint(vm.messages)
-            checkIfHasMoreMessages()
-            Log.debug("Loaded \(newMessages.count) more messages (total: \(vm.messages.count))", category: "ChatViewModel")
-        } else {
+        guard let older = try? viewContext.fetch(fetchRequest) else {
             Log.error("Failed to fetch more messages", category: "ChatViewModel")
+            return
         }
-        vm.isLoadingMore = false
+        guard let newBound = older.last?.timestamp else {
+            vm.hasMoreMessages = false
+            Log.debug("No more older messages to load", category: "ChatViewModel")
+            return
+        }
+
+        // Widening by timestamp, not by object identity, is what keeps a boundary shared by several
+        // messages of the same millisecond from being split across two pages.
+        let previousCount = vm.messages.count
+        oldestLoadedTimestamp = newBound
+        publish(fetchWindow())
+        checkIfHasMoreMessages()
+        Log.debug("Loaded \(vm.messages.count - previousCount) more messages (total: \(vm.messages.count))", category: "ChatViewModel")
     }
 
     private func checkIfHasMoreMessages() {
@@ -194,34 +257,17 @@ final class ChatMessageStore: NSObject {
             lastSnapshotFingerprint = 0
             return
         }
-        func isValid(_ msg: Message) -> Bool {
-            msg.managedObjectContext != nil && !msg.isDeleted
-        }
-        let fetchedMessages = ChatMessageStore.visible((controller.fetchedObjects as? [Message] ?? [])
-            .filter { isValid($0) })
-            .reversed() as [Message]
-        let fetchedIds = Set(fetchedMessages.map { $0.id })
-        let historicMessages = vm.messages.filter {
-            isValid($0) && !fetchedIds.contains($0.id)
-        }
-        let merged = historicMessages + fetchedMessages
+        // `controller` is deliberately unread: the FRC is the change *trigger*, and reading the
+        // transcript off `fetchedObjects` is what this method used to do wrong. Its `fetchLimit`
+        // is not re-applied on incremental updates, so its contents drift under us.
+        _ = controller
 
-        // Skip identical transcripts — FRC fires on every receipt/status write; reassigning
-        // `messages` forces LazyVStack identity churn and black flashes (log storm: 10×
-        // "FRC updated" in one second with oscillating recent counts).
-        let fp = Self.fingerprint(merged)
-        guard fp != lastSnapshotFingerprint else { return }
-        lastSnapshotFingerprint = fp
-
-        vm.messages = merged
-        Log.debug(
-            "FRC updated: \(fetchedMessages.count) recent + \(historicMessages.count) historic = \(merged.count) total",
-            category: "ChatViewModel"
-        )
-        if let first = merged.first, isValid(first) {
-            oldestLoadedTimestamp = first.timestamp
-        }
-        allLoadedMessageIds = Set(merged.compactMap { isValid($0) ? $0.id : nil })
+        // Re-derive rather than merge. `publish` skips identical transcripts — the FRC fires on
+        // every receipt and status write, and reassigning `messages` forces LazyVStack identity
+        // churn and black flashes.
+        let window = fetchWindow()
+        guard publish(window) else { return }
+        Log.debug("FRC updated: \(window.count) message(s) in window", category: "ChatViewModel")
     }
 
     /// Cheap structural fingerprint: ordered ids + delivery status + edit flag.
