@@ -150,16 +150,16 @@ final class MessageRouter {
         // Stamp the session this was held *against*. Without it the replay cannot tell an init
         // that is still live from one a later handshake has already replaced — see
         // SessionReducer.heldReplayDisposition.
-        heldAgainstEstablishedAt[message.id] = KeychainManager.shared.loadSessionEstablishedAt(for: userId)
+        heldAgainstEpoch[message.id] = CryptoManager.shared.sessionEpoch(for: userId)
         Log.info("SESSION_STATE[confirm_hold]: holding msgNum=\(message.messageNumber) from \(userId.prefix(8))… (\(reason)) — buffer \(pendingQueue.count(for: userId))", category: "MessageRouter")
         PerformanceMetrics.shared.record(.confirmHold, label: reason)
         return .deferred
     }
 
-    /// `establishedAt` of the session each held message was set aside against, keyed by message id.
+    /// The `SessionEpoch` each held message was set aside against, keyed by message id.
     /// Cleared as the buffer drains; a held message that never returns takes its entry with it
     /// through the overflow path.
-    private var heldAgainstEstablishedAt: [String: UInt64?] = [:]
+    private var heldAgainstEpoch: [String: SessionEpoch?] = [:]
 
     /// Re-route everything held behind the tie-break confirm gate for `userId`.
     ///
@@ -176,14 +176,14 @@ final class MessageRouter {
         }
         let held = pendingQueue.drain(for: userId)
         guard !held.isEmpty else { return }
-        let current = KeychainManager.shared.loadSessionEstablishedAt(for: userId)
+        let current = CryptoManager.shared.sessionEpoch(for: userId)
         var replayed = 0
         var superseded = 0
         for message in held {
-            let stamp = heldAgainstEstablishedAt.removeValue(forKey: message.id) ?? nil
+            let heldAgainst = heldAgainstEpoch.removeValue(forKey: message.id) ?? nil
             switch SessionReducer.heldReplayDisposition(
-                heldAgainstEstablishedAt: stamp,
-                currentEstablishedAt: current,
+                heldAgainst: heldAgainst,
+                current: current,
                 isPeerInit: message.messageNumber == 0
             ) {
             case .replay:

@@ -288,7 +288,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // Identify the session being condemned BEFORE the network round-trip. The teardown below
         // destroys whatever session exists when the RPC returns, and the peer can establish a new
         // one inside that window — see `SessionReducer.shouldTearDownAfterEndSession`.
-        let condemnedEstablishedAt = KeychainManager.shared.loadSessionEstablishedAt(for: userId)
+        let condemnedEpoch = CryptoManager.shared.sessionEpoch(for: userId)
         do {
             let response = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: reason, resetReason: resetReason)
             Log.info("END_SESSION sent successfully: \(response.messageId)", category: "ChatsViewModel")
@@ -296,12 +296,12 @@ final class SessionCoordinator: MessageRouterDelegate {
             Log.error("Failed to send END_SESSION: \(error)", category: "ChatsViewModel")
             throw error
         }
-        let currentEstablishedAt = KeychainManager.shared.loadSessionEstablishedAt(for: userId)
+        let currentEpoch = CryptoManager.shared.sessionEpoch(for: userId)
         guard SessionReducer.shouldTearDownAfterEndSession(
-            condemned: condemnedEstablishedAt, current: currentEstablishedAt
+            condemned: condemnedEpoch, current: currentEpoch
         ) else {
             Log.info(
-                "SESSION_STATE[end_session_teardown_skipped]: session for \(userId.prefix(8))… changed during the END_SESSION flight (condemned=\(condemnedEstablishedAt.map(String.init) ?? "none") current=\(currentEstablishedAt.map(String.init) ?? "none")) — keeping it",
+                "SESSION_STATE[end_session_teardown_skipped]: session for \(userId.prefix(8))… changed during the END_SESSION flight (condemned=\(condemnedEpoch.logDescription) current=\(currentEpoch.logDescription)) — keeping it",
                 category: "SessionInit"
             )
             return
@@ -1114,16 +1114,14 @@ final class SessionCoordinator: MessageRouterDelegate {
         // Same defect and same remedy as `SessionReducer.shouldTearDownAfterEndSession`: identify
         // the session the decision was made about, rather than asserting that *a* session exists.
         // The `hasSession` guard above cannot see this — it was true throughout.
-        // Residual, inherited from that function: `establishedAt` is whole seconds, so a
-        // replacement inside the same second still reads as identical.
-        let announcedSession = establishedAt(for: userId)
+        let announcedEpoch = CryptoManager.shared.sessionEpoch(for: userId)
 
         for attempt in 1...maxAttempts {
             if attempt > 1 {
                 let stillLive = CryptoManager.shared.hasSession(for: userId)
                 guard SessionReducer.shouldContinueControlRetry(
-                    announced: announcedSession,
-                    current: establishedAt(for: userId),
+                    announced: announcedEpoch,
+                    current: CryptoManager.shared.sessionEpoch(for: userId),
                     hasSession: stillLive
                 ) else {
                     let why = stillLive ? "replaced" : "gone"

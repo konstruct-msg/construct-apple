@@ -255,14 +255,17 @@ final class ConfirmGateHoldTests: XCTestCase {
 
     // MARK: - The replay must know which session it was held against (build 579 regression)
 
+    private static let heldAgainst = SessionEpoch(rawValue: "e51d7a03bc9426f8107d3e5ab84c92f6")!
+    private static let replacement = SessionEpoch(rawValue: "77b93c1ae02f56d4b8319ca7e0d452f1")!
+
     /// The defect, stated: a peer init held while session A was live, replayed after session B
     /// replaced it, cannot decrypt — and the failure drove `heal` → `manual_reset`, deleting the
     /// healthy B. Three times in one hour on 2026-08-05.
     func testPeerInitHeldAgainstAnOlderSessionIsSuperseded() {
         XCTAssertEqual(
             SessionReducer.heldReplayDisposition(
-                heldAgainstEstablishedAt: 1_785_943_288,
-                currentEstablishedAt: 1_785_943_324,
+                heldAgainst: Self.heldAgainst,
+                current: Self.replacement,
                 isPeerInit: true
             ),
             .superseded
@@ -273,8 +276,8 @@ final class ConfirmGateHoldTests: XCTestCase {
     func testPeerInitHeldAgainstTheCurrentSessionReplays() {
         XCTAssertEqual(
             SessionReducer.heldReplayDisposition(
-                heldAgainstEstablishedAt: 1_785_943_324,
-                currentEstablishedAt: 1_785_943_324,
+                heldAgainst: Self.heldAgainst,
+                current: Self.heldAgainst,
                 isPeerInit: true
             ),
             .replay
@@ -286,8 +289,8 @@ final class ConfirmGateHoldTests: XCTestCase {
     func testPeerInitWithNoCurrentSessionAlwaysReplays() {
         XCTAssertEqual(
             SessionReducer.heldReplayDisposition(
-                heldAgainstEstablishedAt: 1_785_943_288,
-                currentEstablishedAt: nil,
+                heldAgainst: Self.heldAgainst,
+                current: nil,
                 isPeerInit: true
             ),
             .replay
@@ -299,8 +302,8 @@ final class ConfirmGateHoldTests: XCTestCase {
     func testPeerInitHeldWithNoSessionIsSupersededOnceOneExists() {
         XCTAssertEqual(
             SessionReducer.heldReplayDisposition(
-                heldAgainstEstablishedAt: nil,
-                currentEstablishedAt: 1_785_943_324,
+                heldAgainst: nil,
+                current: Self.replacement,
                 isPeerInit: true
             ),
             .superseded
@@ -312,11 +315,27 @@ final class ConfirmGateHoldTests: XCTestCase {
     func testPayloadAlwaysReplaysHoweverStale() {
         XCTAssertEqual(
             SessionReducer.heldReplayDisposition(
-                heldAgainstEstablishedAt: 1,
-                currentEstablishedAt: 999_999_999,
+                heldAgainst: Self.heldAgainst,
+                current: Self.replacement,
                 isPeerInit: false
             ),
             .replay
+        )
+    }
+
+    /// The comparison is equality, not ordering. Under `establishedAt` the predicate asked whether
+    /// the current session was *newer* than the held one, which quietly replayed anything that read
+    /// as older — including a replacement whose stamp landed in the same second. Two different
+    /// epochs are two different sessions, in either direction.
+    func testAnyDifferentEpochIsSuperseded() {
+        XCTAssertEqual(
+            SessionReducer.heldReplayDisposition(
+                heldAgainst: Self.replacement,
+                current: Self.heldAgainst,
+                isPeerInit: true
+            ),
+            .superseded,
+            "there is no 'older' epoch to make an exception for"
         )
     }
 }

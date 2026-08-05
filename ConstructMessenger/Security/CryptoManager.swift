@@ -982,6 +982,19 @@ class CryptoManager {
         return orchestratorCore?.getSessionHealth(contactId: userId)
     }
 
+    /// The identity of the session with `userId` — see `SessionEpoch`.
+    ///
+    /// The single reader of the core's session identifier. Every "is this still the session I
+    /// decided about?" goes through here rather than through `establishedAt` timestamps: the epoch
+    /// is derived from the handshake, so it is exact where a whole-second stamp was not, and it is
+    /// identical on both sides, so it means the same thing across the wire.
+    ///
+    /// `nil` means there is no session (or the core is not ready) — never "unknown".
+    func sessionEpoch(for userId: String) -> SessionEpoch? {
+        guard let sessionId = getSessionHealth(for: userId)?.sessionId else { return nil }
+        return SessionEpoch(rawValue: sessionId)
+    }
+
     /// Get all user IDs with active sessions
     /// Used for sending END_SESSION to all contacts on logout
     func getAllSessionUserIds() -> [String] {

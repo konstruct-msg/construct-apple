@@ -147,7 +147,7 @@ enum SessionReducer {
     }
 
     /// Whether the local teardown that follows a sent END_SESSION still applies to the session we
-    /// condemned, identified by its `establishedAt` stamp.
+    /// condemned, identified by its `SessionEpoch`.
     ///
     /// The teardown runs *after* a network round-trip, and `archiveSession` destroys whatever
     /// session exists at that moment — not necessarily the one the caller decided to end. If a
@@ -157,14 +157,15 @@ enum SessionReducer {
     /// contribution applied and 462 B persisted, and was destroyed under a second later by an
     /// END_SESSION issued before it existed; flights of 3 s were seen on the mobile path.
     ///
-    /// A differing stamp on either side means "not the same session", including the
+    /// A differing epoch on either side means "not the same session", including the
     /// already-torn-down case (`current == nil`) — there the archive belongs to whoever tore it
     /// down, and this call has no claim on it.
     ///
-    /// Residual: `establishedAt` is whole seconds, so a condemned session and its replacement
-    /// established within the same second read as identical and the teardown proceeds. That is
-    /// far narrower than tearing down unconditionally, but it is not zero.
-    static func shouldTearDownAfterEndSession(condemned: UInt64?, current: UInt64?) -> Bool {
+    /// Until 2026-08-05 the identity here was `establishedAt`, whole seconds, so a condemned
+    /// session and its replacement established inside the same second read as identical and the
+    /// teardown proceeded anyway. `SessionEpoch` closes that residual: it descends from the
+    /// handshake, not from the clock, so a replacement is a different epoch however fast it arrives.
+    static func shouldTearDownAfterEndSession(condemned: SessionEpoch?, current: SessionEpoch?) -> Bool {
         condemned == current
     }
 
@@ -327,7 +328,11 @@ enum SessionReducer {
     /// the peer's own SRI arrived in the gap and made us the RESPONDER on a new session, and
     /// attempt 3 announced a session that had been gone for a second. The peer answered by tearing
     /// down a healthy ratchet.
-    static func shouldContinueControlRetry(announced: UInt64?, current: UInt64?, hasSession: Bool) -> Bool {
+    ///
+    /// `hasSession` is kept alongside the epoch rather than folded into it: `current == nil` also
+    /// covers "the core is not ready", and abandoning a retry because the core was mid-restore
+    /// would be a different decision than abandoning it because the session is gone.
+    static func shouldContinueControlRetry(announced: SessionEpoch?, current: SessionEpoch?, hasSession: Bool) -> Bool {
         guard hasSession else { return false }
         return announced == current
     }
@@ -359,18 +364,19 @@ enum SessionReducer {
     /// age: dropping user content on a guess is the failure §1d exists to prevent, and a payload
     /// that cannot decrypt is a question for the healing path, not for this one.
     static func heldReplayDisposition(
-        heldAgainstEstablishedAt: UInt64?,
-        currentEstablishedAt: UInt64?,
+        heldAgainst: SessionEpoch?,
+        current: SessionEpoch?,
         isPeerInit: Bool
     ) -> HeldReplayDisposition {
         guard isPeerInit else { return .replay }
         // No session now: nothing has superseded it, and it may be the very handshake that
         // establishes one.
-        guard let current = currentEstablishedAt else { return .replay }
-        // Held while we had no session, and one exists now — that session was established after
-        // this init was set aside, so this init is a step of a handshake that already concluded.
-        guard let held = heldAgainstEstablishedAt else { return .superseded }
-        return current > held ? .superseded : .replay
+        guard current != nil else { return .replay }
+        // Any other epoch than the one it was held against — including "held while we had no
+        // session, and one exists now" — means a handshake concluded in the meantime and this init
+        // is a step of it. Equality, not ordering: epochs are identities, and the timestamps this
+        // replaced could not tell a replacement inside the same second from the original.
+        return heldAgainst == current ? .replay : .superseded
     }
 
     // MARK: - Handshake control emission (the send-side authority)

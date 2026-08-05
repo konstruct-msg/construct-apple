@@ -29,6 +29,9 @@ import XCTest
 
 final class ControlRetrySupersededTests: XCTestCase {
 
+    private let announced = SessionEpoch(rawValue: "9c30bf14e7a26d85031fb4c78e29a6d0")!
+    private let replacement = SessionEpoch(rawValue: "2ad86f05b13c94e7f60a2d38c5b71e94")!
+
     // MARK: - The regression
 
     /// The device case: a live session exists at retry time, but it is not the one we set out to
@@ -36,7 +39,7 @@ final class ControlRetrySupersededTests: XCTestCase {
     func testSessionReplacedBetweenAttempts_IsAbandoned() {
         XCTAssertFalse(
             SessionReducer.shouldContinueControlRetry(
-                announced: 1_785_854_448, current: 1_785_854_451, hasSession: true
+                announced: announced, current: replacement, hasSession: true
             ),
             "attempt 3 must not speak for the session attempt 1 was created from"
         )
@@ -46,7 +49,7 @@ final class ControlRetrySupersededTests: XCTestCase {
     func testSessionGoneBetweenAttempts_IsAbandoned() {
         XCTAssertFalse(
             SessionReducer.shouldContinueControlRetry(
-                announced: 1_785_854_448, current: nil, hasSession: false
+                announced: announced, current: nil, hasSession: false
             )
         )
     }
@@ -56,7 +59,7 @@ final class ControlRetrySupersededTests: XCTestCase {
     func testSessionAppearedBetweenAttempts_IsAbandoned() {
         XCTAssertFalse(
             SessionReducer.shouldContinueControlRetry(
-                announced: nil, current: 1_785_854_451, hasSession: true
+                announced: nil, current: replacement, hasSession: true
             )
         )
     }
@@ -68,7 +71,7 @@ final class ControlRetrySupersededTests: XCTestCase {
     func testMatchingStampsWithNoLiveSession_IsAbandoned() {
         XCTAssertFalse(
             SessionReducer.shouldContinueControlRetry(
-                announced: 1_785_854_448, current: 1_785_854_448, hasSession: false
+                announced: announced, current: announced, hasSession: false
             ),
             "a stale in-memory/Keychain stamp must not resurrect a retry for a dead session"
         )
@@ -84,35 +87,38 @@ final class ControlRetrySupersededTests: XCTestCase {
     func testUnchangedSession_KeepsRetrying() {
         XCTAssertTrue(
             SessionReducer.shouldContinueControlRetry(
-                announced: 1_785_854_448, current: 1_785_854_448, hasSession: true
+                announced: announced, current: announced, hasSession: true
             )
         )
     }
 
-    /// A session that never had a stamp on either side (older builds never persisted them) is not
-    /// evidence of replacement — retry, as before.
-    func testNoStampEitherSide_KeepsRetrying() {
+    /// Neither side could name an epoch — the core is mid-restore, or this is a session from before
+    /// the identifier was surfaced. That is not evidence of replacement, and `hasSession` says a
+    /// session is live, so retry as before.
+    func testNoEpochEitherSide_KeepsRetrying() {
         XCTAssertTrue(
             SessionReducer.shouldContinueControlRetry(
                 announced: nil, current: nil, hasSession: true
             ),
-            "absence of a stamp must not read as 'replaced' — that would disable retry on any "
-            + "session predating establishedAt persistence"
+            "absence of an epoch must not read as 'replaced' — that would disable retry whenever "
+            + "the core cannot answer"
         )
     }
 
-    // MARK: - The known residual, pinned so it is a decision and not a surprise
+    // MARK: - The residual the epoch removed
 
-    /// `establishedAt` is whole seconds, inherited from `shouldTearDownAfterEndSession`. A session
-    /// replaced inside the same second reads as unchanged and the retry proceeds. Narrower than
-    /// the unconditional retry it replaces, but not zero — recorded here so a future
-    /// sub-second stamp has a test that says what it fixes.
-    func testReplacementWithinTheSameSecond_IsNotDetected() {
-        XCTAssertTrue(
+    /// Under `establishedAt` (whole seconds, inherited from `shouldTearDownAfterEndSession`) a
+    /// session replaced inside the same second read as unchanged and the retry proceeded — and the
+    /// device incident this guard was written for unfolded inside one second.
+    ///
+    /// An epoch descends from the handshake, so the replacement is a different value however fast
+    /// it arrives. The old residual test is inverted here.
+    func testReplacementWithinTheSameSecond_IsNowDetected() {
+        XCTAssertFalse(
             SessionReducer.shouldContinueControlRetry(
-                announced: 1_785_854_451, current: 1_785_854_451, hasSession: true
+                announced: announced, current: replacement, hasSession: true
             ),
-            "known residual: second-granularity stamps cannot separate these"
+            "sub-second replacement is two epochs — the second-granularity residual is gone"
         )
     }
 

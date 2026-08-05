@@ -18,6 +18,10 @@
 //  `clearArchivedSessions` follows the archive, so nothing was recoverable either. Flights of 3 s
 //  were seen on the mobile path, so the window is wide.
 //
+//  2026-08-05: the identity compared here changed from `establishedAt` (whole seconds) to
+//  `SessionEpoch` (derived from the handshake). The guard is unchanged; what it compares is now
+//  exact. See `decisions/session-epoch-before-mls.md`.
+//
 //  Acceptance is mutation-based: make `shouldTearDownAfterEndSession` return `true`
 //  unconditionally and testSessionReestablishedDuringFlight_IsKept must go red.
 //
@@ -27,14 +31,17 @@ import XCTest
 
 final class EndSessionTeardownGuardTests: XCTestCase {
 
+    private let condemned = SessionEpoch(rawValue: "4f2a91c7d0e35b8a6c1f47e29b03da58")!
+    private let replacement = SessionEpoch(rawValue: "b7e10c34a95d2f68e04b7c19d3f8a260")!
+
     // MARK: - The regression
 
     /// A session established while our END_SESSION was in flight is a different session, and it is
     /// healthy. Tearing it down throws away a working ratchet and leaves no archive.
     func testSessionReestablishedDuringFlight_IsKept() {
         XCTAssertFalse(
-            SessionReducer.shouldTearDownAfterEndSession(condemned: 1_785_659_299, current: 1_785_659_301),
-            "a newer establishedAt means the heal already replaced the condemned session — "
+            SessionReducer.shouldTearDownAfterEndSession(condemned: condemned, current: replacement),
+            "a different epoch means the heal already replaced the condemned session — "
             + "the teardown belongs to a session that no longer exists"
         )
     }
@@ -42,16 +49,16 @@ final class EndSessionTeardownGuardTests: XCTestCase {
     /// Nothing existed when we condemned, something does now: still a different session.
     func testSessionAppearedDuringFlight_IsKept() {
         XCTAssertFalse(
-            SessionReducer.shouldTearDownAfterEndSession(condemned: nil, current: 1_785_659_301)
+            SessionReducer.shouldTearDownAfterEndSession(condemned: nil, current: replacement)
         )
     }
 
     // MARK: - The teardown must still happen in the ordinary case
 
-    /// Unchanged stamp — the session we condemned is the session still there. Tear it down.
+    /// Unchanged epoch — the session we condemned is the session still there. Tear it down.
     func testUnchangedSession_IsTornDown() {
         XCTAssertTrue(
-            SessionReducer.shouldTearDownAfterEndSession(condemned: 1_785_659_299, current: 1_785_659_299),
+            SessionReducer.shouldTearDownAfterEndSession(condemned: condemned, current: condemned),
             "the guard must not become a blanket refusal — END_SESSION still has to end the session"
         )
     }
@@ -66,20 +73,39 @@ final class EndSessionTeardownGuardTests: XCTestCase {
     /// that path, not to us — `clearArchivedSessions` would destroy their recovery copy.
     func testTornDownByAnotherPathDuringFlight_WeDoNotClaimTheArchive() {
         XCTAssertFalse(
-            SessionReducer.shouldTearDownAfterEndSession(condemned: 1_785_659_299, current: nil)
+            SessionReducer.shouldTearDownAfterEndSession(condemned: condemned, current: nil)
         )
     }
 
-    // MARK: - Documented residual
+    // MARK: - The residual the epoch removed
 
-    /// `establishedAt` is whole seconds, so a replacement established inside the same second as the
-    /// condemned session is indistinguishable and the teardown proceeds. Pinned as a test so the
-    /// limitation is a known property rather than a surprise: if this ever starts failing, someone
-    /// gave the stamp finer granularity and the residual is gone.
-    func testSameSecondReplacement_IsIndistinguishable() {
-        XCTAssertTrue(
-            SessionReducer.shouldTearDownAfterEndSession(condemned: 1_785_659_299, current: 1_785_659_299),
-            "known residual — sub-second re-establishment is not detectable at this granularity"
+    /// Under `establishedAt` this was the documented hole: whole seconds, so a replacement
+    /// established inside the same second as the condemned session read as identical and the
+    /// teardown proceeded. The observed incident above happened *inside one second*, so the hole
+    /// covered the very case the guard was written for.
+    ///
+    /// An epoch descends from the X3DH root key, not from the clock, so two establishments are
+    /// different however close together they are. This test is the old residual inverted: it asserts
+    /// the sub-second replacement is now detected.
+    func testSameInstantReplacement_IsNowDistinguishable() {
+        XCTAssertFalse(
+            SessionReducer.shouldTearDownAfterEndSession(condemned: condemned, current: replacement),
+            "two establishments a millisecond apart are two epochs — the whole-second residual is gone"
         )
+    }
+
+    /// The identity must be the epoch's own value, not object identity or a prefix: two sessions
+    /// whose identifiers share a prefix are still different sessions.
+    func testEpochsSharingAPrefix_AreDifferentSessions() {
+        let a = SessionEpoch(rawValue: "4f2a91c7d0e35b8a6c1f47e29b03da58")!
+        let b = SessionEpoch(rawValue: "4f2a91c7d0e35b8a6c1f47e29b03da59")!
+        XCTAssertFalse(SessionReducer.shouldTearDownAfterEndSession(condemned: a, current: b))
+    }
+
+    /// An empty identifier is not an epoch. Were it allowed, two sessions the core could not
+    /// identify would compare equal to each other and a teardown would proceed on the strength of
+    /// a shared absence.
+    func testEmptyIdentifierIsNotAnEpoch() {
+        XCTAssertNil(SessionEpoch(rawValue: ""))
     }
 }
