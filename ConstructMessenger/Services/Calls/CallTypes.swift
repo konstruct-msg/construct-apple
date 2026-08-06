@@ -61,6 +61,49 @@ func callOfferDisposition(
     return awaitingOfferAfterAnswer ? .resumeAnswer : .storeForAnswer
 }
 
+/// What an SDP offer means for a call we are already tracking.
+enum RemoteOfferDisposition: Equatable {
+    /// The call is under way — this is the peer renegotiating (ICE restart, re-offer). Apply it;
+    /// asking for consent again would drop a live call.
+    case renegotiate
+    /// An incoming call nobody has answered. Hold the SDP. Consent is what starts negotiation.
+    case holdUntilAnswered
+}
+
+/// Whether an offer for a known call may be negotiated immediately, or must wait for the user.
+///
+/// `callOfferDisposition` above answers this correctly — and was reachable only when no `ActiveCall`
+/// existed yet. When one did, `handleCallSignalProto` went to `handleRemoteOffer` instead: a third
+/// implementation of "apply the offer and answer" that negotiates, marks `answeredAt`, and sets the
+/// call `.active`, with no consent and without telling CallKit. Which of the two ran came down to a
+/// race — whether the VoIP push (call id, fast) beat the E2EE offer (SDP, slow). The push usually
+/// wins, so the usual path was the unguarded one. Build 583, 2026-08-06:
+///
+///     13:52:06  Incoming VoIP push — CallKit notified
+///     13:52:06  WebRTC session created (role=callee)  ← negotiating already
+///     13:52:06  Answer (proto) sent via E2EE          ← and answered, unasked
+///     13:52:09  peerConnectionState → connected
+///     13:52:13  CallKit answer                        ← the user accepts, seven seconds later
+///     13:52:13  "Answered before the offer arrived — waiting up to 45s for SDP"
+///     13:52:22  Call end                              ← never worked
+///
+/// Two consequences. The visible one: CallKit still offers accept/decline while the app's own UI
+/// shows a running timer, because `state = .active` came from media, not from the user. The one that
+/// killed the call: `handleRemoteOffer` consumes the offer without touching
+/// `pendingRemoteOfferSdp`, so the real answer found it empty and armed a 45-second wait for an SDP
+/// that had been applied and answered seven seconds earlier.
+///
+/// The same shape as the rest of this class of defect: two carriers for "the offer has been
+/// applied", disagreeing in silence. `applyOfferAndAnswer` was written to be the single authority
+/// and says so in its own comment — this is the implementation that was left behind it.
+///
+/// A renegotiation is *not* a consent question: the call is already up, and holding an ICE-restart
+/// offer would strand a call the user is in the middle of.
+func remoteOfferDisposition(isIncomingCall: Bool, hasAnswered: Bool) -> RemoteOfferDisposition {
+    guard isIncomingCall, !hasAnswered else { return .renegotiate }
+    return .holdUntilAnswered
+}
+
 enum CallState: Equatable {
     case idle
     case incoming(CallSession)

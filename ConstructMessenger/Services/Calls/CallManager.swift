@@ -774,8 +774,16 @@ final class CallManager: CallUIManaging {
         case .signal(let s):
             switch s.signal {
             case .offer(let offer):
-                Task { @MainActor in
-                    await self.handleRemoteOffer(offer, for: session)
+                if let active = self.active, active.session == session,
+                   case .holdUntilAnswered = remoteOfferDisposition(
+                       isIncomingCall: { if case .incoming = session.direction { return true } else { return false } }(),
+                       hasAnswered: active.answeredAt != nil
+                   ) {
+                    self.holdRemoteOffer(offer, for: active)
+                } else {
+                    Task { @MainActor in
+                        await self.handleRemoteOffer(offer, for: session)
+                    }
                 }
             case .ringing(let r):
                 Log.info("Ringing device=\(r.deviceID.prefix(8))…", category: "Calls")
@@ -1016,7 +1024,7 @@ final class CallManager: CallUIManaging {
                 // never delivered didActivate. Idempotent — peerConnectionState may
                 // bounce through .connected on reconnects.
                 #if os(iOS)
-                CallAudioController.shared.notifyMediaConnected()
+                CallAudioController.shared.notifyMediaConnected(hasAnswered: self.active?.answeredAt != nil)
                 #endif
             }
         }
@@ -1036,6 +1044,44 @@ final class CallManager: CallUIManaging {
         callQuality = .good   // reset for a fresh call
         active.webrtc = webrtc
         Log.info("WebRTC session created (role=\(role), turn=\(active.turn != nil ? "yes" : "STUN-only"))", category: "Calls")
+    }
+
+    /// Hold an offer for a call the user has not answered. The SDP goes where `answer()` looks for
+    /// it, so consent is what starts negotiation — see `remoteOfferDisposition`.
+    ///
+    /// Stored **decrypted**. `handleIncomingCallOffer` stored `offer.sdp` raw while
+    /// `handleRemoteOffer` decrypted it, and `applyOfferAndAnswer` — which consumes what is stored —
+    /// does not decrypt. Today that disagreement is invisible because `decryptField` passes plaintext
+    /// through, which is exactly the kind of silence this whole class of defect lives in. One
+    /// answer: what is stored is plaintext SDP.
+    private func holdRemoteOffer(_ offer: Shared_Proto_Signaling_V1_CallOffer, for call: ActiveCall) {
+        let sdp: String
+        do {
+            sdp = try CallSignalCrypto.shared.decryptField(offer.sdp, from: call.session.peerUserId)
+        } catch {
+            Log.error("Failed to decrypt held offer SDP: \(error)", category: "Calls")
+            endActiveCall(reason: .local("Offer handling failed"))
+            return
+        }
+        call.pendingRemoteOfferSdp = sdp
+        Log.info(
+            "Holding offer for unanswered call \(call.session.id.prefix(8))… — negotiation waits for the user",
+            category: "Calls"
+        )
+        // Already waiting on an SDP because the user answered first? Then consent exists and the
+        // answer can finish now. Same transition `.resumeAnswer` makes on the push-less path.
+        guard call.awaitingOfferAfterAnswer else { return }
+        Log.info("Offer arrived after the user answered — resuming the answer (call_id=\(call.session.id.prefix(8))…)", category: "Calls")
+        PerformanceMetrics.shared.record(.answerBeforeOffer, label: "resumed")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.applyOfferAndAnswer(sdp: sdp, for: call)
+            } catch {
+                Log.error("Failed to answer with the late offer: \(error)", category: "Calls")
+                self.endActiveCall(reason: .local("Accept failed"))
+            }
+        }
     }
 
     private func handleRemoteOffer(_ offer: Shared_Proto_Signaling_V1_CallOffer, for session: CallSession) async {
@@ -1058,9 +1104,15 @@ final class CallManager: CallUIManaging {
                 return
             }
             sendAnswer(sdp: answerSdp)
-            active.answeredAt = Date()
+            // Only ever a *first* answer for an outgoing/glare call. A renegotiation of a call the
+            // user already answered must not re-stamp this — `answeredAt` is what call duration and
+            // the completed/missed verdict are computed from, so restamping it on an ICE restart
+            // would report a two-minute call as ten seconds.
+            if active.answeredAt == nil {
+                active.answeredAt = Date()
+                PerformanceMetrics.shared.end(.callSetupStart, endEvent: .callSetupEnd, label: String(session.id.prefix(8)))
+            }
             state = .active(session)
-            PerformanceMetrics.shared.end(.callSetupStart, endEvent: .callSetupEnd, label: String(session.id.prefix(8)))
         } catch {
             Log.error("Failed to handle offer: \(error)", category: "Calls")
             endActiveCall(reason: .local("Offer handling failed"))
@@ -1322,9 +1374,17 @@ final class CallManager: CallUIManaging {
         switch signal.signal {
         case .offer(let offer):
             if let active, active.session.id == signal.callID {
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    await self.handleRemoteOffer(offer, for: active.session)
+                switch remoteOfferDisposition(
+                    isIncomingCall: { if case .incoming = active.session.direction { return true } else { return false } }(),
+                    hasAnswered: active.answeredAt != nil
+                ) {
+                case .holdUntilAnswered:
+                    holdRemoteOffer(offer, for: active)
+                case .renegotiate:
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        await self.handleRemoteOffer(offer, for: active.session)
+                    }
                 }
             } else {
                 // Note: `offer.callerUserID` is a UUID, not a display name. Resolve via
@@ -1417,7 +1477,19 @@ final class CallManager: CallUIManaging {
     }
 
     /// Handle an incoming call offer (SDP received via E2EE message before user answers).
-    private func handleIncomingCallOffer(callId: String, callerUserId: String, callerName: String?, sdp: String) {
+    private func handleIncomingCallOffer(callId: String, callerUserId: String, callerName: String?, sdp encryptedSdp: String) {
+        // Decrypt before storing. This stored the wire value verbatim while `handleRemoteOffer`
+        // decrypted, and `applyOfferAndAnswer` — the consumer of what is stored — does not decrypt:
+        // a v3-prefixed SDP would have gone to `setRemoteOffer` as base64. Invisible so far only
+        // because call signals are currently plaintext and `decryptField` passes those through.
+        // `pendingRemoteOfferSdp` holds plaintext SDP, from every path that writes it.
+        let sdp: String
+        do {
+            sdp = try CallSignalCrypto.shared.decryptField(encryptedSdp, from: callerUserId)
+        } catch {
+            Log.error("Failed to decrypt incoming offer SDP from \(callerUserId.prefix(8))…: \(error)", category: "Calls")
+            return
+        }
         let matchingIncoming: ActiveCall? = {
             guard let active, active.session.id == callId,
                   case .incoming = active.session.direction else { return nil }

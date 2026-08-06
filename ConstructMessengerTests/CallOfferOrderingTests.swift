@@ -159,4 +159,59 @@ final class CallOfferOrderingTests: XCTestCase {
     // coverage (decisions/ios-semantic-divergence-signals, amendment 2026-08-04). On device they
     // read as `answer_before_offer` labelled `wait` → `resumed`, or `wait` → `timeout`; a `wait`
     // with neither successor is the defect returning.
+
+    // MARK: - An offer for a call already on screen (build 583, 2026-08-06)
+
+    //  `callOfferDisposition` above was only reachable when no ActiveCall existed. When one did,
+    //  `handleCallSignalProto` went to `handleRemoteOffer` — a third implementation of "apply the
+    //  offer and answer" that negotiates, stamps `answeredAt` and sets the call `.active` with no
+    //  consent, and without touching `pendingRemoteOfferSdp`. Which one ran was a race between the
+    //  VoIP push (call id, fast) and the E2EE offer (SDP, slow), and the push usually wins:
+    //
+    //      13:52:06  Incoming VoIP push — CallKit notified
+    //      13:52:06  Answer (proto) sent via E2EE          ← answered, unasked
+    //      13:52:13  CallKit answer                        ← the user, seven seconds later
+    //      13:52:13  "Answered before the offer arrived — waiting up to 45s for SDP"
+    //      13:52:22  Call end                              ← never worked
+
+    /// The regression, and the reason the call died: an unanswered incoming call must not
+    /// negotiate. Consent starts the handshake.
+    func testUnansweredIncomingCallHoldsTheOffer() {
+        XCTAssertEqual(
+            remoteOfferDisposition(isIncomingCall: true, hasAnswered: false),
+            .holdUntilAnswered,
+            "negotiating here answers the call on the user's behalf and consumes the SDP the real answer needs"
+        )
+    }
+
+    /// Once answered, an offer is the peer renegotiating — an ICE restart. Holding it would strand
+    /// a call the user is in the middle of, which is the failure mode in the other direction.
+    func testAnsweredIncomingCallRenegotiates() {
+        XCTAssertEqual(
+            remoteOfferDisposition(isIncomingCall: true, hasAnswered: true),
+            .renegotiate
+        )
+    }
+
+    /// An offer on our own outgoing call is never a consent question — we placed the call.
+    func testOutgoingCallAlwaysRenegotiates() {
+        XCTAssertEqual(
+            remoteOfferDisposition(isIncomingCall: false, hasAnswered: false),
+            .renegotiate
+        )
+        XCTAssertEqual(
+            remoteOfferDisposition(isIncomingCall: false, hasAnswered: true),
+            .renegotiate
+        )
+    }
+
+    /// Consent is the only thing that distinguishes the two, and it is read from `answeredAt` —
+    /// the same field the duration and the completed/missed verdict come from. Pinned so a future
+    /// change that re-stamps it on renegotiation shows up here as well as in the call history.
+    func testOnlyConsentSeparatesTheTwoDispositions() {
+        XCTAssertNotEqual(
+            remoteOfferDisposition(isIncomingCall: true, hasAnswered: false),
+            remoteOfferDisposition(isIncomingCall: true, hasAnswered: true)
+        )
+    }
 }
