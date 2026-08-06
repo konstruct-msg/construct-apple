@@ -206,4 +206,135 @@ final class ChatOpeningScrollTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(300))
         XCTAssertFalse(manager.isOpening, "the settle timer must close the window")
     }
+
+    // MARK: - The transcript is measured at a height it does not keep (build 583)
+
+    //  Every opening in the 2026-08-06 log:
+    //
+    //      596 → 2143 → 4118 → 3952 → 5901 → 5792   ← the corrective pin lands here
+    //      …3s… content=3952pt viewport=[3942…4874] fromBottom=-922 autoScroll=true
+    //
+    //  The pin anchored to a 5792pt transcript; it settled at 3952pt, and the viewport was left
+    //  922 points past the end of the content: ten points of transcript on screen and a screenful
+    //  of nothing beneath it. That is the blank chat.
+
+    /// The regression. `shouldRepinForHeightChange` said "growth only" on the assumption that a
+    /// shrink is handled by `.defaultScrollAnchor`. A 1840pt collapse is not.
+    func testShrinkWhilePinnedRepins() {
+        XCTAssertTrue(
+            ChatScrollManager.shouldRepinForHeightChange(
+                previousHeight: 5792, currentHeight: 3952, autoScrollOn: true, isOpening: false
+            ),
+            "the pin anchored to a height the transcript no longer has"
+        )
+    }
+
+    /// Growth still re-pins — media resolving under a bottom-anchored list.
+    func testGrowthWhilePinnedStillRepins() {
+        XCTAssertTrue(
+            ChatScrollManager.shouldRepinForHeightChange(
+                previousHeight: 3952, currentHeight: 5792, autoScrollOn: true, isOpening: false
+            )
+        )
+    }
+
+    /// The reason the old rule gave for excluding shrink was "it would fight a user whose keyboard
+    /// just dismissed". That user does not have auto-scroll on, so the guard already covered it —
+    /// pinned here in case someone re-derives the old argument.
+    func testShrinkIsIgnoredWhenNotPinned() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldRepinForHeightChange(
+                previousHeight: 5792, currentHeight: 3952, autoScrollOn: false, isOpening: false
+            ),
+            "a person who scrolled up must never be yanked back by a layout change"
+        )
+    }
+
+    /// Sub-threshold changes in either direction are layout noise; re-pinning would be churn.
+    func testNoiseInEitherDirectionDoesNotRepin() {
+        XCTAssertFalse(ChatScrollManager.shouldRepinForHeightChange(
+            previousHeight: 3952, currentHeight: 3952 - (ChatScrollManager.heightRepinThreshold - 1),
+            autoScrollOn: true, isOpening: false
+        ))
+        XCTAssertFalse(ChatScrollManager.shouldRepinForHeightChange(
+            previousHeight: 3952, currentHeight: 3952 + (ChatScrollManager.heightRepinThreshold - 1),
+            autoScrollOn: true, isOpening: false
+        ))
+    }
+
+    /// The first measurement is not a change.
+    func testFirstMeasurementIsNotAShrink() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldRepinForHeightChange(
+                previousHeight: 0, currentHeight: 3952, autoScrollOn: true, isOpening: false
+            )
+        )
+    }
+
+    // MARK: - Auto-scroll must keep the promise it makes
+
+    /// The second half of the defect, and the one a distance threshold cannot express: auto-scroll
+    /// claims the newest message is on screen, and `distance <= threshold` accepted −922 exactly as
+    /// readily as 0. Stated as visibility because an inset chat is legitimately negative and any
+    /// numeric cutoff between "composer inset" and "stranded" would move with the composer.
+    func testPinnedButLastMessageOffScreenRecovers() {
+        XCTAssertTrue(
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: false, autoScrollOn: true, isOpening: false, searchActive: false
+            )
+        )
+    }
+
+    func testLastMessageVisibleNeedsNoRecovery() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: true, autoScrollOn: true, isOpening: false, searchActive: false
+            )
+        )
+    }
+
+    /// A person who scrolled up has auto-scroll off, and the last message being off screen is
+    /// exactly what they asked for.
+    func testReadingUpTheTranscriptIsNotRecovered() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: false, autoScrollOn: false, isOpening: false, searchActive: false
+            ),
+            "recovering here would yank a reader back to the bottom on every scroll"
+        )
+    }
+
+    /// During the opening the offset has not landed and the corrective pin series owns the window;
+    /// a second source of pins there would fight it.
+    func testOpeningWindowOwnsItsOwnCorrection() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: false, autoScrollOn: true, isOpening: true, searchActive: false
+            )
+        )
+    }
+
+    /// Search deliberately puts the transcript somewhere other than the end.
+    func testSearchIsNotRecovered() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: false, autoScrollOn: true, isOpening: false, searchActive: true
+            )
+        )
+    }
+
+    /// The manager starts believing the newest message is on screen, so an empty or not-yet-drawn
+    /// transcript never reads as stranded.
+    func testManagerStartsNotStranded() {
+        XCTAssertTrue(ChatScrollManager().isLastMessageVisible)
+    }
+
+    /// The flag follows what the transcript reports, in both directions.
+    func testVisibilityIsRecorded() {
+        let manager = ChatScrollManager()
+        manager.noteLastMessageVisible(false, searchActive: false)
+        XCTAssertFalse(manager.isLastMessageVisible)
+        manager.noteLastMessageVisible(true, searchActive: false)
+        XCTAssertTrue(manager.isLastMessageVisible)
+    }
 }

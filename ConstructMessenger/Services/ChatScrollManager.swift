@@ -278,7 +278,29 @@ class ChatScrollManager {
             isOpening: isOpening
         ) else { return }
         Log.debug(
-            "Content grew \(Int(previous)) → \(Int(height))pt while pinned — re-pinning (opening=\(isOpening))",
+            "Content \(height > previous ? "grew" : "shrank") \(Int(previous)) → \(Int(height))pt while pinned — re-pinning (opening=\(isOpening))",
+            category: "ChatScrollManager"
+        )
+        pinToBottomCorrective(delaysMs: [0, 60])
+    }
+
+    /// Whether the newest message is currently materialised. Fed by the last row's
+    /// `onAppear`/`onDisappear`; `true` until the transcript first reports otherwise, so an empty
+    /// or not-yet-rendered list never reads as stranded.
+    @ObservationIgnored private(set) var isLastMessageVisible = true
+
+    /// Report the newest message appearing or leaving, and recover if auto-scroll is anchored to a
+    /// place the transcript has vacated. See `shouldRecoverStrandedViewport`.
+    func noteLastMessageVisible(_ visible: Bool, searchActive: Bool) {
+        isLastMessageVisible = visible
+        guard Self.shouldRecoverStrandedViewport(
+            lastMessageVisible: visible,
+            autoScrollOn: shouldScrollToBottom,
+            isOpening: isOpening,
+            searchActive: searchActive
+        ) else { return }
+        Log.debug(
+            "SCROLL_RECOVER: pinned to bottom but the newest message is off screen (contentHeight=\(Int(contentHeight))pt fromBottom=\(Int(distanceFromBottom))) — re-pinning",
             category: "ChatScrollManager"
         )
         pinToBottomCorrective(delaysMs: [0, 60])
@@ -360,8 +382,20 @@ class ChatScrollManager {
     /// whole of the blank chat is not proven; that a bottom-anchored list ignores content growth
     /// is a defect on its own terms.
     ///
-    /// Growth only. A list that shrinks while pinned is already handled by `.defaultScrollAnchor`,
-    /// and re-pinning on shrink would fight a user whose keyboard just dismissed.
+    /// **Either direction.** This said "growth only", on the assumption that a shrink while pinned
+    /// is handled by `.defaultScrollAnchor` and that re-pinning would fight a user whose keyboard
+    /// had just dismissed. Build 583 disproved the first half, and the second was already covered
+    /// by the `autoScrollOn` guard — a person who scrolled up does not have auto-scroll on, so
+    /// there is nobody to fight.
+    ///
+    /// Every opening in the 2026-08-06 log measures the transcript at a height it does not keep:
+    ///
+    ///     596 → 2143 → 4118 → 3952 → 5901 → 5792   ← the corrective pin lands here
+    ///     …3s… content=3952pt viewport=[3942…4874] fromBottom=-922 autoScroll=true
+    ///
+    /// The pin anchored to a 5792pt transcript; it settled at 3952pt. The offset stayed, so the
+    /// viewport sat 922 points past the end of the content: ten points of transcript on screen and
+    /// a screenful of nothing under it. `.defaultScrollAnchor` does not rescue a 1840pt collapse.
     static func shouldRepinForHeightChange(
         previousHeight: CGFloat,
         currentHeight: CGFloat,
@@ -370,7 +404,33 @@ class ChatScrollManager {
     ) -> Bool {
         guard autoScrollOn || isOpening else { return false }
         guard previousHeight > 0 else { return false }   // first measurement is not a change
-        return currentHeight - previousHeight >= heightRepinThreshold
+        return abs(currentHeight - previousHeight) >= heightRepinThreshold
+    }
+
+    /// Whether the transcript is anchored to the bottom but the newest message is not on screen.
+    ///
+    /// Auto-scroll makes exactly one promise — *the newest message is visible* — and until now
+    /// nothing checked it. The check that stood in for it was `distanceFromBottom <= threshold`,
+    /// a **one-sided** comparison, so −922 satisfied it exactly as well as 0: "922 points of empty
+    /// space below the content" and "at the bottom" were the same state. That is the divergence
+    /// signal §1a describes — the alarm has to be on the loss, not on the state before it — and it
+    /// is why the stranded viewport in the log corrects itself only when the user swipes.
+    ///
+    /// Stated as visibility rather than as a distance on purpose: an inset chat has a legitimately
+    /// negative `distanceFromBottom` (the composer and keyboard sit over the content), so any
+    /// threshold separating "inset" from "stranded" would be a guess that changes with the
+    /// composer. Whether the last row is materialised is the property auto-scroll actually claims.
+    ///
+    /// Not applied while opening — the offset has not landed yet and the corrective pin series owns
+    /// that window — nor while search is active, where the transcript is deliberately elsewhere.
+    static func shouldRecoverStrandedViewport(
+        lastMessageVisible: Bool,
+        autoScrollOn: Bool,
+        isOpening: Bool,
+        searchActive: Bool
+    ) -> Bool {
+        guard autoScrollOn, !isOpening, !searchActive else { return false }
+        return !lastMessageVisible
     }
 
     /// Below this a growth is layout noise (a status glyph, a one-line reflow) and re-pinning

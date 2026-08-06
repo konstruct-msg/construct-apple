@@ -197,21 +197,23 @@ struct ChatView: View {
                                     }
                                 )
                                 .id(message.id)
-                                // Probe on the LAST message only. The bottom anchor already tells us
-                                // the viewport reaches the end of the list (build 581) — what it
-                                // cannot tell us is whether the last *message* is in that view. If
-                                // this fires while the screen is blank, the cells are materialised
-                                // and drawing nothing; if the anchor fires and this does not, there
-                                // is something between them holding ~500pt, which is what the
-                                // content-height oscillation (651→2542→4018→3557) points at.
+                                // The LAST message only, and no longer just a probe. Auto-scroll
+                                // promises the newest message is on screen; this is the only place
+                                // that can tell whether the promise holds. Build 583 showed it
+                                // broken for seconds at a time — the transcript measured 5792pt,
+                                // the pin anchored there, the height settled at 3952pt and the
+                                // viewport was left 922pt past the end. See
+                                // `ChatScrollManager.shouldRecoverStrandedViewport`.
                                 .onAppear {
                                     if index == renderedMessages.count - 1 {
                                         Log.debug("SCROLL_ANCHOR last message visible (\(message.id.prefix(8))…, idx=\(index)/\(renderedMessages.count))", category: "ChatScrollManager")
+                                        scrollManager.noteLastMessageVisible(true, searchActive: isSearchActive)
                                     }
                                 }
                                 .onDisappear {
                                     if index == renderedMessages.count - 1 {
                                         Log.debug("SCROLL_ANCHOR last message left the viewport (\(message.id.prefix(8))…)", category: "ChatScrollManager")
+                                        scrollManager.noteLastMessageVisible(false, searchActive: isSearchActive)
                                     }
                                 }
                                 .opacity(replyFocusOpacity(for: message))
