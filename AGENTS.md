@@ -258,6 +258,55 @@ defect as the two ID spaces: two parallel representations, silent disagreement, 
 type enforcing agreement. Full remediation:
 `~/Code/construct-docs/client/ios/SEALED_CONTROL_CHANNEL_REMEDIATION.md`.
 
+## Testing
+
+**Full rationale + worked examples**: `~/Code/construct-docs/decisions/testing-by-pure-decision.md`
+
+The target is **not a coverage number**. Coverage counts lines executed, not claims checked, and
+this repo has paid for the difference: `SessionQueueWiringTests` passed for five weeks asserting
+nothing after a production guard began returning early — it read all-zeros and confirmed them.
+**A test that cannot fail is worse than no test**: it occupies the place where someone would
+otherwise have looked.
+
+### The method
+
+1. **Extract the decision.** Take the branch out of the procedure and make it a free function or
+   `static` over scalars — no network, no Core Data, no CallKit, no `Date()` (inject time). If a
+   decision cannot be reached from a test, that is a design defect, not a testing gap: `"should we
+   apply this SESSION_RESET_INIT"` was untestable as a chain of `if let` inside a `@MainActor`
+   singleton, and testable the moment it became `remoteOfferDisposition(isIncomingCall:hasAnswered:)`.
+   Nearly every fix in this codebase has that shape — `shouldTearDownAfterEndSession`,
+   `heldReplayDisposition`, `shouldRecoverStrandedViewport`, `isResetInitSuperseded`.
+
+2. **Name the test after the incident, not the function.** `testSessionReestablishedDuringFlight_IsKept`,
+   not `testShouldTearDown_returnsFalse`. Put the device log in the comment — the timestamps, the
+   real numbers. A test whose reason for existing is only in a commit message loses it.
+
+3. **Pin the cases that must NOT fire.** Every corrective rule can misfire, and the misfire is
+   usually worse than the bug: a scroll recovery that yanks a reader back mid-message, a coalescer
+   that drops a live re-init. Assert those explicitly.
+
+4. **Verify by mutation — one mutation per run.** Break the production line deliberately, run the
+   suite, and confirm the *named* test goes red. A mutation nothing kills means the test is
+   decorative. **Check the build compiled first**: a build failure looks exactly like "no test
+   failed", and that reassuring shape once nearly had correct tests rewritten.
+   Restore from a `.bak` copy in the scratchpad, never `git checkout` (it takes unrelated work
+   with it).
+
+5. **Say what is not covered, in the code.** When wiring cannot be reached from a test, write that
+   down at the call site — `sessionEpoch(for:)` is not proven to be connected to a real session by
+   any test, and an always-`nil` epoch would make every guard pass silently. State it and name the
+   log line that would answer it on device. An honest gap is worth more than a test that fakes it.
+
+### Counting
+
+`xcodebuild … test` prints a line per test; a retried clone prints some twice. Count **unique**:
+
+```bash
+xcodebuild -scheme ConstructMessenger -destination 'platform=iOS Simulator,name=iPhone 17' test \
+  2>&1 | grep -oE "^Test case '[^']+' passed" | sort -u | wc -l
+```
+
 ## Commits
 
 [Conventional Commits](https://www.conventionalcommits.org/): `feat(scope): …`, `fix(scope): …`,
