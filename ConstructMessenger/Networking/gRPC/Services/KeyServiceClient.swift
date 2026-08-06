@@ -379,6 +379,23 @@ final class KeyServiceClient: Sendable {
             }
         }
 
+        // Backstop. The two writers above pin `knownIdentityKey` only on the branches they care
+        // about — `.verified`/`.degraded`/identity-changed for hybrid, `.verified` for KT — and both
+        // bail without a word when the `User` row does not exist. On any other combination we have
+        // just fetched, accepted and are about to run X3DH against an identity key that nothing
+        // kept, and every subsequent sealed send to this peer fails closed with
+        // `StealthDowngradeBlocked` (TODO #45). Reached only when the bundle was accepted: a
+        // `.failed` outcome throws inside the RPC closure above, and a hybrid downgrade throws in
+        // the switch.
+        await MainActor.run {
+            ContactLinkService.shared.rememberIdentityKeyIfUnknown(
+                userId: userId,
+                identityKey: fetched.data.identityPublic,
+                source: "bundle_fetch",
+                context: PersistenceController.shared.container.viewContext
+            )
+        }
+
         let supportsPqRatchetDescription = fetched.data.supportsPqRatchet.map(String.init) ?? "nil"
         Log.info("SESSION_STATE[bundle_capabilities]: userId=\(userId.prefix(8))…, device=\(fetched.deviceID.prefix(8))…, supportsPqRatchet=\(supportsPqRatchetDescription)", category: "SessionInit")
 

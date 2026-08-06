@@ -411,7 +411,19 @@ final class StealthSenderService: SealedSenderResolving {
         let req = User.fetchRequest()
         req.predicate = NSPredicate(format: "id == %@", recipientId)
         req.fetchLimit = 1
-        return (try? context.fetch(req))?.first?.knownIdentityKey
+        let user = (try? context.fetch(req))?.first
+        if let key = user?.knownIdentityKey { return key }
+        // A miss here fails every sealed send to this peer closed, permanently, and the thrown
+        // `StealthDowngradeBlocked` only says the key is absent — never which absence it is. That
+        // gap is why TODO #45 could not be attributed to a branch from a device log. The two cases
+        // have different causes and different fixes, so they get different lines.
+        Log.error(
+            user == nil
+                ? "IK_MISS[no_row]: no User row for \(recipientId.prefix(8))… — sealed send cannot proceed"
+                : "IK_MISS[no_key]: User row for \(recipientId.prefix(8))… exists but knownIdentityKey is nil (isContact=\(user!.isContact) kt=\(user!.ktStatus)) — sealed send cannot proceed",
+            category: "Stealth"
+        )
+        return nil
     }
 }
 
