@@ -245,7 +245,6 @@
 "delete_selected" = "Удалить выбранное";
 "message_selected" = "сообщение выбрано";
 "messages_selected" = "сообщений выбрано";
-"load_older_messages" = "Загрузить более старые сообщения";
 "reachable" = "Доступно";
 "unreachable" = "Недоступно";
 "delete_my_account" = "Удалить идентичность";

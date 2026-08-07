@@ -251,7 +251,6 @@
 "delete_selected" = "Delete Selected";
 "message_selected" = "message selected";
 "messages_selected" = "messages selected";
-"load_older_messages" = "Load older messages";
 "reachable" = "Reachable";
 "unreachable" = "Unreachable";
 "delete_my_account" = "Delete identity";

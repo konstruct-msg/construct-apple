@@ -64,27 +64,23 @@ struct DesktopChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
+                        // Infinite-scroll sentinel (same policy as iOS ChatView) — no manual button.
                         if viewModel.hasMoreMessages && !filteredMessages.isEmpty {
-                            HStack {
-                                Spacer()
+                            Group {
                                 if viewModel.isLoadingMore {
-                                    ProgressView().padding()
+                                    ProgressView()
+                                        .padding(.vertical, 8)
                                 } else {
-                                    Button {
-                                        viewModel.loadMoreMessages()
-                                    } label: {
-                                        Text(NSLocalizedString("load_older_messages", comment: ""))
-                                            .font(CTFont.regular(12))
-                                            .foregroundColor(Color.CT.accentDim)
-                                            .padding(.vertical, 8)
-                                    }
+                                    Color.clear
+                                        .frame(height: 1)
                                 }
-                                Spacer()
                             }
+                            .frame(maxWidth: .infinity)
                             .id("loadMoreIndicator")
+                            .accessibilityHidden(true)
                             .onAppear {
                                 if !viewModel.isLoadingMore && !isSearchActive {
-                                    viewModel.loadMoreMessages()
+                                    viewModel.loadMoreMessages(trigger: .indicatorAppeared)
                                 }
                             }
                         }

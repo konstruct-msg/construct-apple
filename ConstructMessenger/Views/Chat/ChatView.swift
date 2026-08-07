@@ -121,31 +121,24 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: ChatUIConstants.Shell.listSpacing) {
-                        // Load more indicator at TOP of list (oldest messages)
+                        // Infinite-scroll sentinel at the TOP (oldest edge). No button — history
+                        // must keep loading as the user scrolls up. LazyVStack also materialises
+                        // this on first layout (scroll is bottom-anchored), so entry still prefetches;
+                        // tagged `.indicatorAppeared` for logs (TODO 34).
                         if viewModel.hasMoreMessages && !renderedMessages.isEmpty {
-                            HStack {
-                                Spacer()
+                            Group {
                                 if viewModel.isLoadingMore {
                                     ProgressView()
-                                        .padding()
+                                        .padding(.vertical, ChatUIConstants.Shell.listSpacing)
                                 } else {
-                                    Button {
-                                        viewModel.loadMoreMessages()
-                                    } label: {
-                                        Text(NSLocalizedString("load_older_messages", comment: "Load older messages button"))
-                                            .font(CTFont.regular(ChatUIConstants.Typography.captionSize))
-                                            .foregroundColor(Color.CT.accentDim)
-                                            .padding(.vertical, ChatUIConstants.Shell.listSpacing)
-                                    }
+                                    Color.clear
+                                        .frame(height: 1)
                                 }
-                                Spacer()
                             }
+                            .frame(maxWidth: .infinity)
                             .id("loadMoreIndicator")
+                            .accessibilityHidden(true)
                             .onAppear {
-                                // Fires on entering a chat, not only on scrolling up: LazyVStack
-                                // materialises top-down, so this indicator appears during the
-                                // first layout even though the scroll is anchored to the bottom.
-                                // Tagged so the log can tell it apart from a real tap — see TODO 34.
                                 if !viewModel.isLoadingMore && !isSearchActive {
                                     viewModel.loadMoreMessages(trigger: .indicatorAppeared)
                                 }

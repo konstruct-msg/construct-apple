@@ -251,7 +251,6 @@
 "delete_selected" = "Supprimer la sélection";
 "message_selected" = "message sélectionné";
 "messages_selected" = "messages sélectionnés";
-"load_older_messages" = "Charger les messages plus anciens";
 "reachable" = "Joignable";
 "unreachable" = "Non joignable";
 "delete_my_account" = "Supprimer l'identité";

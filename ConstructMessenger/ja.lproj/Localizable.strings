@@ -233,7 +233,6 @@
 "delete_selected" = "選択した項目を削除";
 "message_selected" = "件のメッセージを選択中";
 "messages_selected" = "件のメッセージを選択中";
-"load_older_messages" = "以前のメッセージを読み込む";
 "reachable" = "接続可能";
 "unreachable" = "接続不可";
 "delete_my_account" = "アイデンティティを削除";
