@@ -109,6 +109,10 @@ enum MetricEvent: String {
     /// window (`ReceiptResendThrottle`). Under a healthy stream this stays near zero; a large
     /// number is the redelivery storm being absorbed instead of amplified. `label` = call site.
     case receiptResendThrottled = "receipt_resend_throttled"
+    /// A redelivery dropped before the sealed-sender unseal. The counter is the point: it is the
+    /// measure of how much work the server's cursor replay is costing this device, and it should
+    /// track `redelivery_skipped ≈ incoming` while the server keeps replaying below the watermark.
+    case redeliverySkippedBeforeUnseal = "redelivery_skipped_before_unseal"
 
     /// A message row was persisted whose entire body is a bare UUID — an identifier where text
     /// belongs, i.e. a service payload reaching the transcript. `label` = the writing call site

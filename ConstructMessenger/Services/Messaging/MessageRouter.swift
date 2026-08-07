@@ -205,6 +205,36 @@ final class MessageRouter {
         )
     }
 
+    /// Whether a redelivery can be dropped without unsealing it.
+    ///
+    /// The expensive part of routing an incoming message is recovering the sealed sender — an
+    /// Ed25519 verification — and it runs before anything knows the message is a duplicate. At 51
+    /// redeliveries a second that is a saturated core (build 584: CPU 100–128 %, thermal
+    /// nominal → fair, 99.6 % of incoming already processed).
+    ///
+    /// Both reasons the full path still has work to do for a duplicate can be answered from the
+    /// envelope, without opening the seal:
+    ///
+    /// - **The orphaned-init exception.** A msgNum-0 init may need re-processing when the session
+    ///   was lost after the ACK, and deciding that needs the unsealed content type and sender. So
+    ///   `msgNum == 0` never takes this path — it was 1.1 % of the traffic.
+    /// - **The receipt resend.** A duplicate re-sends a delivery receipt at most once per window,
+    ///   and the throttle is keyed on the message id. While it is still suppressing, there is no
+    ///   receipt to send and therefore no need for the sender the unseal would recover.
+    ///
+    /// Deliberately *not* keyed on "is this sealed": an identified redelivery has the same nothing
+    /// to do, and a rule that applies to one wire form and not the other is the kind of split this
+    /// codebase keeps paying for.
+    nonisolated static func canSkipRedeliveryBeforeUnseal(
+        isProcessed: Bool,
+        messageNumber: UInt32,
+        receiptStillThrottled: Bool
+    ) -> Bool {
+        guard isProcessed else { return false }
+        guard messageNumber > 0 else { return false }
+        return receiptStillThrottled
+    }
+
     private func beginProcessing(_ messageId: String) -> Bool {
         processingMessageIds.insert(messageId).inserted
     }
@@ -245,6 +275,35 @@ final class MessageRouter {
 
         guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             streamOutcome = .skip
+            return
+        }
+
+        // Redelivery fast path — **before** the unseal, which is the whole point.
+        //
+        // The server ignores `since_cursor` and replays below the watermark, so the stream is
+        // mostly messages we have already handled. Build 584, four minutes on one device:
+        //
+        //     12 252  incoming            (51/s)
+        //     12 204  "already-processed"  (99.6 %)
+        //     12 170  sealed-sender signature verifications
+        //     CPU 100–128 % sustained, thermal nominal → fair
+        //
+        // Every one of those paid an Ed25519 verification and a ten-line RAW dump *before*
+        // reaching the duplicate check that threw the result away. The redelivery is the server's
+        // defect; burning a core on it is ours.
+        //
+        // Nothing is lost by leaving early, because the two things the full path still does for a
+        // duplicate both have pre-unseal answers: the orphaned-init exception is `msgNum == 0`
+        // only (138 of 12 251 here — 1.1 %), and the receipt resend is already suppressed by the
+        // throttle, which is keyed on the message id. The exit is `.durable`, exactly as the
+        // duplicate branch below produces, so cursor bookkeeping is unchanged — the `defer` above
+        // still settles and reports.
+        if Self.canSkipRedeliveryBeforeUnseal(
+            isProcessed: PersistentACKStore.shared.isProcessed(message.id, in: context),
+            messageNumber: message.messageNumber,
+            receiptStillThrottled: ReceiptResendThrottle.shared.isThrottled(messageId: message.id)
+        ) {
+            PerformanceMetrics.shared.record(.redeliverySkippedBeforeUnseal, label: "msgNum>0")
             return
         }
 

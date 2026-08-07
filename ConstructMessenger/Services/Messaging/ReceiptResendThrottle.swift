@@ -59,6 +59,19 @@ final class ReceiptResendThrottle {
         }
     }
 
+    /// Whether a receipt for `messageId` is currently suppressed — **without recording anything**.
+    ///
+    /// `shouldSend` is a decision *and* a write, so it cannot be used to ask the question. The
+    /// redelivery fast path needs to know whether anything is still owed for a message before it
+    /// spends an unseal finding out; asking with `shouldSend` would consume the slot for a receipt
+    /// it then never sends.
+    func isThrottled(messageId: String, now: Date = Date()) -> Bool {
+        queue.sync {
+            guard let last = sentAt[messageId] else { return false }
+            return now.timeIntervalSince(last) < Self.window
+        }
+    }
+
     /// Filter a batch, keeping only the ids that are due.
     func due(_ messageIds: [String], now: Date = Date()) -> [String] {
         messageIds.filter { shouldSend(messageId: $0, now: now) }
