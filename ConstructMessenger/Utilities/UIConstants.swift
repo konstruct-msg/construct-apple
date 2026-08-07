@@ -160,15 +160,6 @@ struct ChatViewConstants {
         /// Delay before scrolling to first search result
         static let scrollToResult: TimeInterval = 0.2
     }
-    
-    /// Message sending delays
-    struct MessageDelay {
-        /// Delay after sending before scrolling (for rendering)
-        static let scrollAfterSend: TimeInterval = 0.5
-        
-        /// Delay for media messages to render
-        static let mediaRender: TimeInterval = 0.1
-    }
 }
 
 // MARK: - Font Styles

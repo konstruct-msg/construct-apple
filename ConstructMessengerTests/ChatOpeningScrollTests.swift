@@ -372,4 +372,66 @@ final class ChatOpeningScrollTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(ChatScrollManager.heightSettleMs, 60)
         XCTAssertLessThanOrEqual(ChatScrollManager.heightSettleMs, 150)
     }
+
+    // MARK: - PinPolicy is the only delay table
+
+    /// Every pin reason has a non-empty series; height settle is the only one that must never
+    /// lead with 0 (intermediate layout measurements must not become visible jumps).
+    func testPinPolicy_heightSettleHasNoLeadingZero() {
+        let delays = ChatScrollManager.PinPolicy.delays(for: .heightSettle)
+        XCTAssertFalse(delays.isEmpty)
+        XCTAssertFalse(delays.contains(0))
+        XCTAssertEqual(delays, ChatScrollManager.heightSettleDelaysMs)
+    }
+
+    func testPinPolicy_openingUsesImmediateFirstTick() {
+        let opening = ChatScrollManager.PinPolicy.delays(for: .opening)
+        XCTAssertEqual(opening.first, 0)
+        XCTAssertGreaterThanOrEqual(opening.count, 3)
+    }
+
+    func testPinPolicy_everyReasonHasDelays() {
+        for reason in ChatScrollManager.PinReason.allCases {
+            XCTAssertFalse(
+                ChatScrollManager.PinPolicy.delays(for: reason).isEmpty,
+                "reason \(reason.rawValue) must map to a pin series"
+            )
+        }
+    }
+
+    // MARK: - ViewportMode derivation
+
+    func testViewportMode_openingWinsOverFlags() {
+        let manager = ChatScrollManager()
+        manager.beginOpening(settleAfterMs: 10_000)
+        XCTAssertEqual(manager.viewportMode, .opening)
+        // Even if flags would say reading history, opening owns the mode.
+        manager.shouldScrollToBottom = false
+        XCTAssertEqual(manager.viewportMode, .opening)
+    }
+
+    func testViewportMode_followingVsReadingHistory() {
+        let manager = ChatScrollManager()
+        XCTAssertEqual(manager.viewportMode, .following)
+        manager.shouldScrollToBottom = false
+        XCTAssertEqual(manager.viewportMode, .readingHistory)
+        manager.shouldScrollToBottom = true
+        XCTAssertEqual(manager.viewportMode, .following)
+    }
+
+    /// handleTranscriptCountChange is the single entry ChatView uses — 0→N must open.
+    func testHandleTranscriptCountChange_zeroToNBeginsOpening() {
+        let manager = ChatScrollManager()
+        manager.handleTranscriptCountChange(oldCount: 0, newCount: 30, searchActive: false)
+        XCTAssertTrue(manager.isOpening)
+        XCTAssertEqual(manager.viewportMode, .opening)
+        XCTAssertTrue(manager.shouldScrollToBottom)
+    }
+
+    func testHandleTranscriptCountChange_searchIsNoOp() {
+        let manager = ChatScrollManager()
+        manager.handleTranscriptCountChange(oldCount: 0, newCount: 30, searchActive: true)
+        XCTAssertFalse(manager.isOpening)
+        XCTAssertEqual(manager.viewportMode, .following)
+    }
 }

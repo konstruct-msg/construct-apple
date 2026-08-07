@@ -49,6 +49,8 @@ struct DesktopChatView: View {
         var width: CGFloat
         /// Content shorter than the viewport ⇒ nothing to jump to — the FAB must never show.
         var contentFits: Bool
+        /// Total laid-out height — feeds height-settle re-pin (same as iOS ChatView).
+        var contentHeight: CGFloat
     }
 
     init(chat: Chat, context: NSManagedObjectContext) {
@@ -118,6 +120,16 @@ struct DesktopChatView: View {
                                     onJumpToReply: { msg in peekReplyChain(for: msg) }
                                 )
                                 .id(message.id)
+                                .onAppear {
+                                    if index == filteredMessages.count - 1 {
+                                        scrollManager.noteLastMessageVisible(true, searchActive: isSearchActive)
+                                    }
+                                }
+                                .onDisappear {
+                                    if index == filteredMessages.count - 1 {
+                                        scrollManager.noteLastMessageVisible(false, searchActive: isSearchActive)
+                                    }
+                                }
                                 .opacity(replyFocusOpacity(for: message))
                                 .animation(
                                     .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
@@ -152,13 +164,15 @@ struct DesktopChatView: View {
                     return ChatScrollGeometry(
                         distanceFromBottom: distance,
                         width: geo.containerSize.width,
-                        contentFits: geo.contentSize.height <= geo.visibleRect.height + 8
+                        contentFits: geo.contentSize.height <= geo.visibleRect.height + 8,
+                        contentHeight: geo.contentSize.height
                     )
                 } action: { _, metrics in
                     scrollManager.updateScrollOffset(
                         distanceFromBottom: metrics.distanceFromBottom,
                         contentFits: metrics.contentFits
                     )
+                    scrollManager.updateContentHeight(metrics.contentHeight)
                     if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
                         containerWidth = metrics.width
                     }
@@ -166,17 +180,29 @@ struct DesktopChatView: View {
                 .onAppear {
                     scrollManager.registerProxy(proxy)
                     LocalNotificationManager.shared.clearBadge()
-                    scrollManager.hasScrolledToBottom = true
-                }
-                .onChange(of: viewModel.messages.count) { _, _ in
-                    if scrollManager.shouldScrollToBottom && !isSearchActive && !viewModel.messages.isEmpty {
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .seconds(ChatViewConstants.MessageDelay.mediaRender))
-                            if let last = filteredMessages.last {
-                                scrollManager.scrollToBottom(messageId: last.id)
-                            }
-                        }
+                    // Same as iOS: only arm opening when a transcript is already present.
+                    // Empty → 0→N is handled by handleTranscriptCountChange.
+                    if !viewModel.messages.isEmpty {
+                        scrollManager.beginOpening()
                     }
+                }
+                .onScrollPhaseChange { _, phase in
+                    switch phase {
+                    case .tracking, .interacting, .decelerating:
+                        scrollManager.endOpening()
+                    case .idle, .animating:
+                        break
+                    @unknown default:
+                        break
+                    }
+                }
+                .onChange(of: viewModel.messages.count) { oldCount, count in
+                    // Shared with iOS ChatView: open / corrective pin / animated follow.
+                    scrollManager.handleTranscriptCountChange(
+                        oldCount: oldCount,
+                        newCount: count,
+                        searchActive: isSearchActive
+                    )
                 }
                 .onChange(of: searchText) { _, newValue in
                     if !newValue.isEmpty, let first = filteredMessages.first {
@@ -186,9 +212,7 @@ struct DesktopChatView: View {
                         }
                     } else if newValue.isEmpty {
                         scrollManager.shouldScrollToBottom = true
-                        if let last = filteredMessages.last {
-                            scrollManager.scrollToBottom(messageId: last.id)
-                        }
+                        scrollManager.scrollToBottom()
                     }
                 }
                 .onChange(of: isSearchActive) { _, active in
@@ -197,9 +221,7 @@ struct DesktopChatView: View {
                     } else {
                         searchText = ""
                         scrollManager.shouldScrollToBottom = true
-                        if let last = filteredMessages.last {
-                            scrollManager.scrollToBottom(messageId: last.id)
-                        }
+                        scrollManager.scrollToBottom()
                     }
                 }
                 .onChange(of: isEditMode) { _, editMode in
@@ -428,7 +450,6 @@ struct DesktopChatView: View {
             text: $messageText,
             droppedImages: $chatDropImages,
             droppedFileURLs: $chatDropFileURLs,
-            isSending: viewModel.isSending,
             replyingTo: replyingTo,
             quoteOverride: replyQuoteText,
             editingMessage: viewModel.editingMessage,
@@ -454,13 +475,8 @@ struct DesktopChatView: View {
                     replyingTo = nil
                     replyQuoteText = nil
                     clearReplyFocus(animated: true)
+                    // Follow newest via messages.count onChange — not a second delayed scroll here.
                     scrollManager.shouldScrollToBottom = true
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .seconds(ChatViewConstants.MessageDelay.scrollAfterSend))
-                        if let last = filteredMessages.last {
-                            scrollManager.scrollToBottom(messageId: last.id)
-                        }
-                    }
                 }
             },
             onSendVoice: { url, duration, waveform in
@@ -482,9 +498,7 @@ struct DesktopChatView: View {
             if scrollManager.shouldShowScrollToBottomButton && !isEditMode {
                 Button {
                     withAnimation(.easeOut(duration: 0.3)) {
-                        if let last = filteredMessages.last {
-                            scrollManager.scrollToBottom(messageId: last.id)
-                        }
+                        scrollManager.scrollToBottom()
                         scrollManager.shouldScrollToBottom = true
                     }
                 } label: {

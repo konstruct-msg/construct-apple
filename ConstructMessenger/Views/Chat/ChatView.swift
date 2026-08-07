@@ -13,7 +13,6 @@ import Combine
 struct ChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
-    @Environment(ChatsViewModel.self) private var chatsViewModel
     /// Lazy holder — SwiftUI re-runs View.init on parent re-render; we must not
     /// allocate ChatViewModel there or discarded copies spam deinit / waste work.
     @State private var lazyViewModel: LazyChatViewModel
@@ -95,7 +94,7 @@ struct ChatView: View {
         let grew = abs(new.contentHeight - old.contentHeight) >= Layout.geometryLogThreshold
         guard moved || grew || scrollManager.isOpening else { return }
         Log.debug(
-            "SCROLL_GEO content=\(Int(new.contentHeight))pt viewport=[\(Int(new.visibleMinY))…\(Int(new.visibleMinY + (new.contentHeight - new.distanceFromBottom - new.visibleMinY)))] fromBottom=\(Int(new.distanceFromBottom)) msgs=\(viewModel.messages.count) opening=\(scrollManager.isOpening) autoScroll=\(scrollManager.shouldScrollToBottom)",
+            "SCROLL_GEO content=\(Int(new.contentHeight))pt viewport=[\(Int(new.visibleMinY))…\(Int(new.visibleMinY + (new.contentHeight - new.distanceFromBottom - new.visibleMinY)))] fromBottom=\(Int(new.distanceFromBottom)) msgs=\(viewModel.messages.count) mode=\(scrollManager.viewportMode) autoScroll=\(scrollManager.shouldScrollToBottom)",
             category: "ChatScrollManager"
         )
     }
@@ -294,7 +293,6 @@ struct ChatView: View {
                 .onAppear {
                     scrollManager.registerProxy(proxy)
                     LocalNotificationManager.shared.clearBadge()
-                    scrollManager.hasScrolledToBottom = true
                     // .defaultScrollAnchor(.bottom) + LazyVStack + composer safeAreaInset often
                     // lands the first offset out of range → blank list until a gesture.
                     // Multi-pass non-animated pin covers inset settle and FRC load-more churn.
@@ -324,34 +322,13 @@ struct ChatView: View {
                     if AppConstants.enableDebugLogging {
                         Log.info("ChatView: messages count changed to \(count)")
                     }
-
-                    // Auto-scroll when new messages arrive — only if the user is at the bottom.
-                    // `shouldScrollToBottom` is managed by ChatScrollManager from scroll position,
-                    // so this won't fight a user reading history. The whole branch is one decision
-                    // (`countChangeAction`) so it can be asserted in a test rather than on a phone.
-                    switch ChatScrollManager.countChangeAction(
+                    // One entry: open / corrective pin / animated follow — decisions live in
+                    // ChatScrollManager (countChangeAction + PinPolicy).
+                    scrollManager.handleTranscriptCountChange(
                         oldCount: oldCount,
                         newCount: count,
-                        autoScrollOn: scrollManager.shouldScrollToBottom,
-                        searchActive: isSearchActive,
-                        isOpening: scrollManager.isOpening
-                    ) {
-                    case .none:
-                        return
-                    case .openTranscript:
-                        scrollManager.beginOpening()
-                    case .correctivePin:
-                        // Growth while the layout is still settling — the unprompted load-more
-                        // lands here (30 → 50 on every chat entry). Non-animated only.
-                        scrollManager.pinToBottomCorrective(delaysMs: [0, 80, 200])
-                    case .animatedFollow:
-                        let delay = ChatViewConstants.MessageDelay.mediaRender
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .seconds(delay))
-                            guard scrollManager.shouldScrollToBottom else { return }
-                            scrollManager.scrollToBottom(animated: true)
-                        }
-                    }
+                        searchActive: isSearchActive
+                    )
                 }
                 .onChange(of: viewModel.voicePlaybackScrollTarget) { _, target in
                     // Continuous voice playback advanced — bring the now-playing message
@@ -409,46 +386,23 @@ struct ChatView: View {
                 }
             }
 
-            // Top scrim behind the floating nav capsule so scrolling text doesn't collide with the
-            // status bar (clock / signal / battery). Two stacked gradient layers:
-            //   1. Progressive blur (bottom): a material frost — which blurs the scroll content
-            //      behind it — masked by a top→bottom gradient so the blur fades out lower down.
-            //   2. Colour fade (top): a Color.CT.bg → transparent gradient that recolours the grey
-            //      frost into the adaptive theme background (black in dark, light base in light) and
-            //      fades to clear. Sitting ON TOP of the blur, it kills the frost's greyness while
-            //      the blur still softens the text peeking through in the transition band.
+            // Top scrim so scrolling text fades before the status bar / floating nav.
             GeometryReader { geo in
-                ZStack {
-//                    Rectangle()
-//                        .fill(.ultraThinMaterial)
-//                        .mask(
-//                            LinearGradient(
-//                                stops: [
-//                                    .init(color: .black.opacity(0.95), location: 0),
-//                                    .init(color: .black.opacity(0.55), location: 0.55),
-//                                    .init(color: .clear, location: 1)
-//                                ],
-//                                startPoint: .top,
-//                                endPoint: .bottom
-//                            )
-//                        )
-
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: Color.CT.bg, location: 0),
-                                    .init(color: Color.CT.bg.opacity(0.65), location: 0.55),
-                                    .init(color: Color.CT.bg.opacity(0), location: 1)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.CT.bg, location: 0),
+                                .init(color: Color.CT.bg.opacity(0.65), location: 0.55),
+                                .init(color: Color.CT.bg.opacity(0), location: 1)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
                         )
-                }
-                .frame(height: geo.safeAreaInsets.top + Layout.topScrimUnderSafeArea)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .ignoresSafeArea(edges: .top)
+                    )
+                    .frame(height: geo.safeAreaInsets.top + Layout.topScrimUnderSafeArea)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .ignoresSafeArea(edges: .top)
             }
             .allowsHitTesting(false)
 
@@ -504,9 +458,7 @@ struct ChatView: View {
                     composerHeight = newHeight
                     if changed {
                         if scrollManager.shouldScrollToBottom {
-                            // Reply/edit/media growth must re-pin without animation (same black-flash path).
-                            // Fewer passes — pinTask coalesces concurrent height events.
-                            scrollManager.pinToBottomCorrective(delaysMs: [0, 120])
+                            scrollManager.noteComposerHeightChanged()
                         } else if let anchorId = (replyingTo ?? viewModel.editingMessage)?.id {
                             // Reading history and starting a reply/edit: the bar grew the bottom
                             // inset. Without a corrective the LazyVStack dematerializes into a
@@ -701,26 +653,15 @@ struct ChatView: View {
                     replyQuoteText = nil
                     clearReplyFocus(animated: true)
 
-                    // ✅ Enable auto-scroll for new message
+                    // Follow newest via messages.count → countChangeAction(.animatedFollow).
+                    // Do not also scroll here — that was a second path fighting the same event.
                     scrollManager.shouldScrollToBottom = true
-
-                    // Scroll to bottom after sending (longer delay for media)
-                    // Use virtual bottom anchor so message is not placed under the input.
-                    let sendDelay = ChatViewConstants.MessageDelay.scrollAfterSend
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .seconds(sendDelay))
-                        scrollManager.scrollToBottom()
-                    }
                 }
             },
             onSendVoice: { url, duration, waveform in
                 viewModel.sendVoiceMessage(url: url, duration: duration, waveform: waveform)
+                // Same single path as text send: count change owns the follow-scroll.
                 scrollManager.shouldScrollToBottom = true
-                // Scroll using virtual bottom to account for input height.
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(150))
-                    scrollManager.scrollToBottom()
-                }
             },
             onCancelReply: {
                 replyingTo = nil
@@ -1075,11 +1016,9 @@ struct ChatView: View {
     try? context.save()
 
     // SessionLifecycleController.shared is used internally — preview doesn't need DI
-    let previewChatsViewModel = ChatsViewModel()
     return NavigationStack {
         ChatView(chat: chat, context: context)
             .environment(\.managedObjectContext, context)
-            .environment(previewChatsViewModel)
     }
 }
 #endif

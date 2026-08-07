@@ -13,33 +13,91 @@ import Observation
 import UIKit
 #endif
 
-/// Manages scroll state and behavior for ChatView
+/// Scroll position, auto-scroll, opening pin, and keyboard re-pin for chat transcripts.
 ///
-/// **Responsibilities:**
-/// - Scroll position tracking
-/// - Auto-scroll to bottom on new messages
-/// - Keyboard appearance handling
-/// - Scroll gesture state
+/// High-frequency geometry stays `@ObservationIgnored` so `onScrollGeometryChange` does not
+/// re-render the chat every frame (that loop also produced "tried to update multiple times per frame").
 ///
-/// **Benefits:**
-/// - Reduces ChatView from 620 → 550 lines
-/// - Isolates scroll complexity (was 6 @State variables)
-/// - Easier to debug scroll issues
-/// - Can be reused in other chat-like views
+/// ## Who owns the viewport
+///
+/// ``viewportMode`` is the single reading of intent:
+/// - ``ViewportMode/opening`` — layout in flight; geometry is noise; only corrective pins
+/// - ``ViewportMode/following`` — newest message must stay visible
+/// - ``ViewportMode/readingHistory`` — person scrolled up; never yank
+///
+/// All multi-pass pins go through ``pinToBottom(reason:)`` so delay series live in one table
+/// (``PinPolicy``), not scattered call sites.
 @MainActor
 @Observable
 class ChatScrollManager {
+    // MARK: - Viewport ownership
+
+    /// Who currently owns the scroll position. Derived from `isOpening` + `shouldScrollToBottom`
+    /// so existing flags stay the source of truth for pure decisions / tests.
+    enum ViewportMode: Equatable {
+        /// Transcript layout is still settling. Geometry must not read as reader intent.
+        case opening
+        /// Anchored to the newest message (auto-scroll on).
+        case following
+        /// Person is reading older messages (auto-scroll off).
+        case readingHistory
+    }
+
+    /// Why a corrective pin series is armed. Each reason maps to one delay series in ``PinPolicy``.
+    enum PinReason: String, Equatable, CaseIterable {
+        /// First non-empty transcript / re-open with messages already loaded.
+        case opening
+        /// Count growth while still opening (unprompted load-more 30 → 50).
+        case openingGrowth
+        /// Content height settled after media / layout thrash.
+        case heightSettle
+        /// Auto-scroll on but newest row is not materialised.
+        case strandedRecover
+        /// Composer safe-area inset grew/shrank (reply bar, media strip, multiline).
+        case composerInset
+        case keyboardShow
+        case keyboardHide
+    }
+
+    /// Single table of pin delay series. Call sites pass a ``PinReason``, never a raw array.
+    enum PinPolicy {
+        /// How long height must hold still before a re-pin lands (build 584 flicker).
+        static let heightSettleMs: UInt64 = 90
+
+        /// Delay before animated follow after transcript growth (media layout settle).
+        static let animatedFollowDelayMs: UInt64 = 100
+
+        /// Opening settle window — after this, geometry is intent again unless the person touched.
+        static let openingSettleMs: UInt64 = 600
+
+        static func delays(for reason: PinReason) -> [UInt64] {
+            switch reason {
+            case .opening:
+                // immediate · after first inset · after load-more/FRC · late settle
+                return [0, 80, 200, 400]
+            case .openingGrowth:
+                // Shorter than full opening — growth already inside the opening window.
+                return [0, 80, 200]
+            case .heightSettle:
+                // **No leading 0** — an immediate tick made every intermediate measurement a jump.
+                return [heightSettleMs, heightSettleMs + 160]
+            case .strandedRecover:
+                return [0, 60]
+            case .composerInset:
+                return [0, 120]
+            case .keyboardShow:
+                return [150, 280]
+            case .keyboardHide:
+                return [100, 220]
+            }
+        }
+    }
+
     // MARK: - Observed UI State
     // Only properties that should invalidate ChatView belong here.
-    // High-frequency scroll position is @ObservationIgnored so
-    // onScrollGeometryChange does not re-render the chat every frame
-    // (that loop also produced "tried to update multiple times per frame").
 
     /// Whether the view should scroll to bottom on next layout
     var shouldScrollToBottom = true
-
-    /// Whether the view has scrolled to bottom at least once
-    var hasScrolledToBottom = false
 
     /// True while the chat is *opening*: from the first non-empty transcript until the
     /// multi-pass pin has settled — or until a person touches the scroll, whichever comes first.
@@ -53,6 +111,12 @@ class ChatScrollManager {
     /// through the composer inset settle, which is what leaves the LazyVStack dematerialized and
     /// the chat blank until a gesture. One authority for "are we still opening", here.
     private(set) var isOpening = false
+
+    /// Derived viewport owner — prefer this when logging or branching on "who owns scroll".
+    var viewportMode: ViewportMode {
+        if isOpening { return .opening }
+        return shouldScrollToBottom ? .following : .readingHistory
+    }
 
     @ObservationIgnored
     private var openingTask: Task<Void, Never>?
@@ -78,10 +142,6 @@ class ChatScrollManager {
     @ObservationIgnored
     private var proxy: ScrollViewProxy?
 
-    /// Drag offset for pull-to-refresh gestures
-    @ObservationIgnored
-    private(set) var dragOffset: CGFloat = 0
-
     /// Cancellables for keyboard notifications
     @ObservationIgnored
     private var cancellables = Set<AnyCancellable>()
@@ -94,6 +154,10 @@ class ChatScrollManager {
     @ObservationIgnored
     private var animatedScrollTask: Task<Void, Never>?
 
+    /// Delayed animated follow after count growth (separate from scroll coalesce task).
+    @ObservationIgnored
+    private var followTask: Task<Void, Never>?
+
     // MARK: - Thresholds
 
     private enum Threshold {
@@ -102,6 +166,17 @@ class ChatScrollManager {
         /// Need at least this much content below the viewport to show the jump FAB.
         static let showJumpButton: CGFloat = 200
     }
+
+    // MARK: - Back-compat aliases for tests / call sites
+
+    /// How long the height must hold still before a re-pin lands.
+    static var heightSettleMs: UInt64 { PinPolicy.heightSettleMs }
+
+    /// The pin series a height change queues. **No leading `0`**.
+    static var heightSettleDelaysMs: [UInt64] { PinPolicy.delays(for: .heightSettle) }
+
+    /// Below this a growth is layout noise and re-pinning would be visible churn.
+    static let heightRepinThreshold: CGFloat = 24
 
     // MARK: - Initialization
 
@@ -112,7 +187,6 @@ class ChatScrollManager {
     // MARK: - Public Methods
 
     /// Register the ScrollViewProxy for programmatic scrolling
-    /// - Parameter proxy: ScrollViewProxy from ScrollViewReader
     func registerProxy(_ proxy: ScrollViewProxy) {
         self.proxy = proxy
     }
@@ -141,7 +215,6 @@ class ChatScrollManager {
                 withAnimation(.easeOut(duration: 0.25)) {
                     proxy.scrollTo(messageId, anchor: .bottom)
                 }
-                self.hasScrolledToBottom = true
                 self.shouldScrollToBottom = true
                 if self.shouldShowScrollToBottomButton {
                     self.shouldShowScrollToBottomButton = false
@@ -152,7 +225,6 @@ class ChatScrollManager {
         }
 
         proxy.scrollTo(messageId, anchor: .bottom)
-        hasScrolledToBottom = true
         shouldScrollToBottom = true
         // Programmatic jump always clears the FAB — don't wait for the next geometry tick.
         if shouldShowScrollToBottomButton {
@@ -160,15 +232,27 @@ class ChatScrollManager {
         }
     }
 
-    /// Multi-pass non-animated pin used when the composer inset / first layout is still
-    /// settling. Stops early if the user scrolls away (`shouldScrollToBottom == false`).
-    /// Default delays cover: immediate · after first inset · after load-more/FRC churn.
-    /// Concurrent calls cancel the previous pin series (composer + keyboard + reply).
+    /// Arm a multi-pass non-animated pin for a known reason.
+    /// Concurrent reasons cancel the previous series (composer + keyboard + opening coalesce).
+    func pinToBottom(reason: PinReason, messageId: String = "bottom") {
+        let delays = PinPolicy.delays(for: reason)
+        Log.debug("PIN arm reason=\(reason.rawValue) delays=\(delays)", category: "ChatScrollManager")
+        runPinSeries(delaysMs: delays, messageId: messageId)
+    }
+
+    /// Multi-pass non-animated pin. Prefer ``pinToBottom(reason:)`` so delays stay in ``PinPolicy``.
+    /// Kept for rare call sites that already chose a series (tests / migration).
     func pinToBottomCorrective(
-        delaysMs: [UInt64] = [0, 50, 160, 350],
+        delaysMs: [UInt64],
         messageId: String = "bottom"
     ) {
-        // Prefer non-animated corrective pin over any pending animated jump.
+        runPinSeries(delaysMs: delaysMs, messageId: messageId)
+    }
+
+    private func runPinSeries(delaysMs: [UInt64], messageId: String) {
+        // Prefer non-animated corrective pin over any pending animated jump / follow.
+        followTask?.cancel()
+        followTask = nil
         animatedScrollTask?.cancel()
         animatedScrollTask = nil
         pinTask?.cancel()
@@ -193,7 +277,10 @@ class ChatScrollManager {
                     Log.debug("PIN tick \(index) skipped — ScrollViewProxy not registered yet", category: "ChatScrollManager")
                     continue
                 }
-                Log.debug("PIN tick \(index) (+\(ms)ms) → \(messageId), contentHeight=\(Int(self.contentHeight))pt fromBottom=\(Int(self.distanceFromBottom))", category: "ChatScrollManager")
+                Log.debug(
+                    "PIN tick \(index) (+\(ms)ms) → \(messageId), mode=\(self.viewportMode), contentHeight=\(Int(self.contentHeight))pt fromBottom=\(Int(self.distanceFromBottom))",
+                    category: "ChatScrollManager"
+                )
                 self.scrollToBottom(messageId: messageId, animated: false)
                 // First tick is often a no-op if LazyVStack has not produced the anchor yet.
                 if index == 0 {
@@ -214,12 +301,12 @@ class ChatScrollManager {
     /// Auto-scroll is forced back on here on purpose: whatever the geometry reported for the
     /// blank first layout was not a reading position, and letting it survive into the opening
     /// meant every corrective pin bailed at its own `shouldScrollToBottom` guard.
-    func beginOpening(settleAfterMs: UInt64 = 600) {
+    func beginOpening(settleAfterMs: UInt64 = PinPolicy.openingSettleMs) {
         openingTask?.cancel()
         isOpening = true
         shouldScrollToBottom = true
         if shouldShowScrollToBottomButton { shouldShowScrollToBottomButton = false }
-        pinToBottomCorrective(delaysMs: [0, 80, 200, 400])
+        pinToBottom(reason: .opening)
         openingTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(settleAfterMs))
             guard !Task.isCancelled else { return }
@@ -235,11 +322,38 @@ class ChatScrollManager {
         if isOpening { isOpening = false }
     }
 
+    /// Apply the pure ``countChangeAction`` decision — one entry for transcript length changes.
+    func handleTranscriptCountChange(oldCount: Int, newCount: Int, searchActive: Bool) {
+        switch Self.countChangeAction(
+            oldCount: oldCount,
+            newCount: newCount,
+            autoScrollOn: shouldScrollToBottom,
+            searchActive: searchActive,
+            isOpening: isOpening
+        ) {
+        case .none:
+            return
+        case .openTranscript:
+            beginOpening()
+        case .correctivePin:
+            pinToBottom(reason: .openingGrowth)
+        case .animatedFollow:
+            followNewestAnimated()
+        }
+    }
+
+    /// Ordinary new message on a settled layout — delayed animated follow.
+    /// Uses its own task so the delay is not cancelled by `scrollToBottom`'s coalesce task.
+    func followNewestAnimated() {
+        followTask?.cancel()
+        followTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(PinPolicy.animatedFollowDelayMs))
+            guard !Task.isCancelled, let self, self.shouldScrollToBottom else { return }
+            self.scrollToBottom(animated: true)
+        }
+    }
+
     /// Scroll to a specific message
-    /// - Parameters:
-    ///   - messageId: Message ID to scroll to
-    ///   - anchor: Anchor position (default: .center)
-    ///   - animated: Whether to animate the scroll (default: true)
     func scrollTo(messageId: String, anchor: UnitPoint = .center, animated: Bool = true) {
         guard let proxy = proxy else {
             return
@@ -265,24 +379,13 @@ class ChatScrollManager {
     ///   open the chat looked "at bottom" while the metric stayed ≤ −200 and the FAB stuck on.
     /// - Parameter contentFits: content shorter than the viewport → nothing to jump to.
     ///
-    /// Only mutates observed flags when crossing thresholds (not every pixel).
-    /// How long the height must hold still before a re-pin lands.
-    ///
     /// A height change is a *measurement of a layout in flight*, not an event to act on. Build 584
     /// opened one chat and reported seven of them inside a second — 91 → 596 → 4524 → 4755 → 4673
     /// → 5948 → 5210 → 4673, ending where it had been three steps earlier. Pinning on each one
     /// scrolled the transcript seven times: the flicker. Only where it lands is worth a scroll.
     ///
-    /// Long enough to swallow one layout pass, short enough that a genuine settle is not visibly
-    /// late. Successive changes cancel each other (`pinToBottomCorrective` cancels the pending
-    /// series), so a burst costs exactly one scroll.
-    static let heightSettleMs: UInt64 = 90
-
-    /// The pin series a height change queues. **No leading `0`** — that immediate tick is what made
-    /// every intermediate measurement a visible scroll. Exposed so the absence can be asserted.
-    static let heightSettleDelaysMs: [UInt64] = [heightSettleMs, heightSettleMs + 160]
-
-    /// Feed the measured content height. Re-pins once the height settles, in either direction.
+    /// Successive changes cancel each other (`pinToBottom` cancels the pending series), so a
+    /// burst costs exactly one scroll.
     func updateContentHeight(_ height: CGFloat) {
         guard height.isFinite, height > 0 else { return }
         let previous = contentHeight
@@ -294,11 +397,10 @@ class ChatScrollManager {
             isOpening: isOpening
         ) else { return }
         Log.debug(
-            "Content \(height > previous ? "grew" : "shrank") \(Int(previous)) → \(Int(height))pt while pinned — re-pin queued (opening=\(isOpening))",
+            "Content \(height > previous ? "grew" : "shrank") \(Int(previous)) → \(Int(height))pt while pinned — re-pin queued (mode=\(viewportMode))",
             category: "ChatScrollManager"
         )
-        // No leading tick: an immediate scroll is what made every intermediate measurement visible.
-        pinToBottomCorrective(delaysMs: Self.heightSettleDelaysMs)
+        pinToBottom(reason: .heightSettle)
     }
 
     /// Whether the newest message is currently materialised. Fed by the last row's
@@ -317,10 +419,17 @@ class ChatScrollManager {
             searchActive: searchActive
         ) else { return }
         Log.debug(
-            "SCROLL_RECOVER: pinned to bottom but the newest message is off screen (contentHeight=\(Int(contentHeight))pt fromBottom=\(Int(distanceFromBottom))) — re-pinning",
+            "SCROLL_RECOVER: mode=\(viewportMode) but newest message off screen (contentHeight=\(Int(contentHeight))pt fromBottom=\(Int(distanceFromBottom))) — re-pinning",
             category: "ChatScrollManager"
         )
-        pinToBottomCorrective(delaysMs: [0, 60])
+        pinToBottom(reason: .strandedRecover)
+    }
+
+    /// Composer inset changed. Re-pin when following; when reading history and a reply/edit is
+    /// open, caller should scroll to that message instead.
+    func noteComposerHeightChanged() {
+        guard shouldScrollToBottom else { return }
+        pinToBottom(reason: .composerInset)
     }
 
     func updateScrollOffset(distanceFromBottom distance: CGFloat, contentFits: Bool = false) {
@@ -395,24 +504,9 @@ class ChatScrollManager {
     ///
     /// Build 579 (video 2026-08-05 18:22, blank chat): the corrective pins land at 0/80/200/400ms,
     /// the images resolve later, and the transcript settles ~470pt lower than where the pins put
-    /// it — the viewport is left over a region the content has since vacated. Whether that is the
-    /// whole of the blank chat is not proven; that a bottom-anchored list ignores content growth
-    /// is a defect on its own terms.
+    /// it — the viewport is left over a region the content has since vacated.
     ///
-    /// **Either direction.** This said "growth only", on the assumption that a shrink while pinned
-    /// is handled by `.defaultScrollAnchor` and that re-pinning would fight a user whose keyboard
-    /// had just dismissed. Build 583 disproved the first half, and the second was already covered
-    /// by the `autoScrollOn` guard — a person who scrolled up does not have auto-scroll on, so
-    /// there is nobody to fight.
-    ///
-    /// Every opening in the 2026-08-06 log measures the transcript at a height it does not keep:
-    ///
-    ///     596 → 2143 → 4118 → 3952 → 5901 → 5792   ← the corrective pin lands here
-    ///     …3s… content=3952pt viewport=[3942…4874] fromBottom=-922 autoScroll=true
-    ///
-    /// The pin anchored to a 5792pt transcript; it settled at 3952pt. The offset stayed, so the
-    /// viewport sat 922 points past the end of the content: ten points of transcript on screen and
-    /// a screenful of nothing under it. `.defaultScrollAnchor` does not rescue a 1840pt collapse.
+    /// **Either direction.** Build 583: pin at 5792pt, settle at 3952pt, viewport 922pt past end.
     static func shouldRepinForHeightChange(
         previousHeight: CGFloat,
         currentHeight: CGFloat,
@@ -426,20 +520,12 @@ class ChatScrollManager {
 
     /// Whether the transcript is anchored to the bottom but the newest message is not on screen.
     ///
-    /// Auto-scroll makes exactly one promise — *the newest message is visible* — and until now
-    /// nothing checked it. The check that stood in for it was `distanceFromBottom <= threshold`,
-    /// a **one-sided** comparison, so −922 satisfied it exactly as well as 0: "922 points of empty
-    /// space below the content" and "at the bottom" were the same state. That is the divergence
-    /// signal §1a describes — the alarm has to be on the loss, not on the state before it — and it
-    /// is why the stranded viewport in the log corrects itself only when the user swipes.
+    /// Auto-scroll makes exactly one promise — *the newest message is visible*. Stated as
+    /// visibility rather than distance: an inset chat has a legitimately negative
+    /// `distanceFromBottom`, so any numeric cutoff would move with the composer.
     ///
-    /// Stated as visibility rather than as a distance on purpose: an inset chat has a legitimately
-    /// negative `distanceFromBottom` (the composer and keyboard sit over the content), so any
-    /// threshold separating "inset" from "stranded" would be a guess that changes with the
-    /// composer. Whether the last row is materialised is the property auto-scroll actually claims.
-    ///
-    /// Not applied while opening — the offset has not landed yet and the corrective pin series owns
-    /// that window — nor while search is active, where the transcript is deliberately elsewhere.
+    /// Not applied while opening — the corrective pin series owns that window — nor while search
+    /// is active, where the transcript is deliberately elsewhere.
     static func shouldRecoverStrandedViewport(
         lastMessageVisible: Bool,
         autoScrollOn: Bool,
@@ -449,10 +535,6 @@ class ChatScrollManager {
         guard autoScrollOn, !isOpening, !searchActive else { return false }
         return !lastMessageVisible
     }
-
-    /// Below this a growth is layout noise (a status glyph, a one-line reflow) and re-pinning
-    /// would be visible churn.
-    static let heightRepinThreshold: CGFloat = 24
 
     /// What a change in transcript length should do to the scroll position.
     enum CountChangeAction: Equatable {
@@ -484,32 +566,22 @@ class ChatScrollManager {
         return .animatedFollow
     }
 
-    /// Legacy alias — treats argument as **signed** bottom offset (0 at bottom, negative up).
-    func updateScrollOffset(_ offset: CGFloat, contentFits: Bool = false) {
-        // Convert old convention (negative = up) to distance-from-bottom (positive = up).
-        updateScrollOffset(distanceFromBottom: -offset, contentFits: contentFits)
-    }
-
-    /// Update drag offset for pull-to-refresh
-    /// - Parameter offset: Drag gesture offset
-    func updateDragOffset(_ offset: CGFloat) {
-        dragOffset = offset
-    }
-
     /// Reset scroll state (e.g., when switching chats)
     func reset() {
         pinTask?.cancel()
         pinTask = nil
         animatedScrollTask?.cancel()
         animatedScrollTask = nil
+        followTask?.cancel()
+        followTask = nil
         openingTask?.cancel()
         openingTask = nil
         isOpening = false
         shouldScrollToBottom = true
-        hasScrolledToBottom = false
         shouldShowScrollToBottomButton = false
         distanceFromBottom = 0
-        dragOffset = 0
+        contentHeight = 0
+        isLastMessageVisible = true
         proxy = nil
 
         Log.debug("ChatScrollManager reset", category: "ChatScrollManager")
@@ -519,7 +591,6 @@ class ChatScrollManager {
 
     private func setupKeyboardObservers() {
         #if canImport(UIKit)
-        // Observe keyboard will show
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
             .compactMap { notification in
                 (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.height
@@ -527,19 +598,17 @@ class ChatScrollManager {
             .sink { [weak self] height in
                 self?.keyboardHeight = height
                 // Corrective pin only — animated scroll during keyboard animation
-                // dematerializes LazyVStack (empty chat flash). Single multi-pass pin
-                // replaces stacked ad-hoc Tasks from concurrent keyboard + composer events.
+                // dematerializes LazyVStack (empty chat flash).
                 guard let self else { return }
                 if self.shouldShowScrollToBottomButton {
                     self.shouldShowScrollToBottomButton = false
                 }
                 if self.shouldScrollToBottom {
-                    self.pinToBottomCorrective(delaysMs: [150, 280])
+                    self.pinToBottom(reason: .keyboardShow)
                 }
             }
             .store(in: &cancellables)
 
-        // Observe keyboard will hide
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
             .sink { [weak self] _ in
                 guard let self else { return }
@@ -548,7 +617,7 @@ class ChatScrollManager {
                 // latched during the keyboard geometry thrash.
                 self.shouldScrollToBottom = true
                 self.shouldShowScrollToBottomButton = false
-                self.pinToBottomCorrective(delaysMs: [100, 220])
+                self.pinToBottom(reason: .keyboardHide)
             }
             .store(in: &cancellables)
         #endif
