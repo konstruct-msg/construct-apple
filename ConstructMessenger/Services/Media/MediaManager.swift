@@ -35,9 +35,18 @@ class MediaManager {
     static let defaultMaxDiskCacheBytes: Int = 1_073_741_824
 
     // MARK: - In-Memory Cache
-    
-    /// Cache for downloaded/decrypted media to avoid re-downloading
-    private var mediaCache: [String: Data] = [:]
+
+    /// Cost-limited cache of decrypted media. Prefer `NSCache` over a `Dictionary`:
+    /// it evicts under pressure and enforces `totalCostLimit`. A plain dict only refused
+    /// *new* inserts at 50 MB and never dropped old ones — build 586 still held an 11.8 MB
+    /// video in RAM while resident climbed toward ~460 MB hopping between media chats.
+    private let mediaCache = NSCache<NSString, NSData>()
+    /// Soft ceiling for a single in-memory entry. Bigger blobs stay **disk-only** (videos,
+    /// original HEIC/PNG). Display paths that need the full bytes re-read from disk.
+    nonisolated static let maxMemoryItemBytes = 2 * 1024 * 1024
+    /// Aggregate cost limit for `mediaCache` (bytes).
+    private static let maxMemoryCacheBytes = 32 * 1024 * 1024
+
     /// Deduplicates concurrent fetches for the same media ID while the first request is in flight.
     private var inFlightDownloads: [String: Task<Data, Error>] = [:]
     /// Media IDs the server reported as gone (expired past retention / never existed), with the
@@ -47,8 +56,6 @@ class MediaManager {
     private var notFoundMedia: [String: Date] = [:]
     /// How long a not-found verdict is trusted before a re-check is allowed.
     private static let notFoundTTL: TimeInterval = 30 * 60
-    private let maxCacheSize = 50 * 1024 * 1024  // 50 MB
-    private var currentCacheSize = 0
 
     // MARK: - Persistent Disk Cache
 
@@ -112,7 +119,7 @@ class MediaManager {
             guard currentSize > Int64(maxBytes) else { break }
             let size = Int64((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
             try? FileManager.default.removeItem(at: file)
-            mediaCache.removeValue(forKey: file.lastPathComponent)
+            mediaCache.removeObject(forKey: file.lastPathComponent as NSString)
             currentSize -= size
             Log.debug("Evicted \(file.lastPathComponent.prefix(8))… (\(size / 1024)KB) — quota", category: "MediaManager")
         }
@@ -134,7 +141,7 @@ class MediaManager {
             let mod = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantFuture
             if mod < cutoff {
                 try? FileManager.default.removeItem(at: file)
-                mediaCache.removeValue(forKey: file.lastPathComponent)
+                mediaCache.removeObject(forKey: file.lastPathComponent as NSString)
                 count += 1
             }
         }
@@ -142,8 +149,62 @@ class MediaManager {
             Log.info("Evicted \(count) cached file(s) older than \(days) days", category: "MediaManager")
         }
     }
-    
-    private init() {}
+
+    /// Whether a decrypted blob is small enough to keep in RAM. Pure / nonisolated so tests
+    /// and callers can decide without hopping onto the main actor.
+    nonisolated static func shouldCacheInMemory(
+        byteCount: Int,
+        maxItemBytes: Int = maxMemoryItemBytes
+    ) -> Bool {
+        byteCount > 0 && byteCount <= maxItemBytes
+    }
+
+    private func memoryCachedData(for mediaId: String) -> Data? {
+        mediaCache.object(forKey: mediaId as NSString) as Data?
+    }
+
+    private func storeInMemoryCache(_ data: Data, mediaId: String) {
+        guard Self.shouldCacheInMemory(byteCount: data.count) else {
+            Log.debug(
+                "Skip memory cache for \(mediaId.prefix(8))… (\(data.count / 1024)KB > \(Self.maxMemoryItemBytes / 1024)KB) — disk only",
+                category: "MediaManager"
+            )
+            return
+        }
+        mediaCache.setObject(data as NSData, forKey: mediaId as NSString, cost: data.count)
+    }
+
+    private func clearMemoryCache(reason: String) {
+        mediaCache.removeAllObjects()
+        Log.info("Media memory cache cleared (\(reason))", category: "MediaManager")
+    }
+
+    private init() {
+        mediaCache.totalCostLimit = Self.maxMemoryCacheBytes
+        mediaCache.countLimit = 64
+        mediaCache.name = "MediaManager.mediaCache"
+        #if canImport(UIKit)
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.clearMemoryCache(reason: "memory_warning")
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Disk cache remains; drop RAM so background jetsam is less likely after a media chat.
+            Task { @MainActor in
+                self?.clearMemoryCache(reason: "background")
+            }
+        }
+        #endif
+    }
     
     // MARK: - Upload Operations
     
@@ -353,10 +414,7 @@ class MediaManager {
     /// no network, no low-res-thumbnail fallback.
     func cacheSentMedia(_ plaintext: Data, mediaId: String) {
         saveToDiskcache(plaintext, mediaId: mediaId)
-        if currentCacheSize + plaintext.count < maxCacheSize {
-            mediaCache[mediaId] = plaintext
-            currentCacheSize += plaintext.count
-        }
+        storeInMemoryCache(plaintext, mediaId: mediaId)
     }
 
     /// Pixel dimensions of an image (nil when unavailable).
@@ -589,7 +647,7 @@ class MediaManager {
     func downloadAndDecryptMedia(mediaId: String, mediaUrl: String, mediaKey: Data, onProgress: (@Sendable (Int64) -> Void)? = nil) async throws -> Data {
         // 1. In-memory cache
         let cacheKey = mediaId
-        if let cachedData = mediaCache[cacheKey] {
+        if let cachedData = memoryCachedData(for: cacheKey) {
             Log.debug("Media cache hit (memory) for: \(mediaId.prefix(8))...", category: "MediaManager")
             return cachedData
         }
@@ -597,10 +655,8 @@ class MediaManager {
         // 2. Persistent disk cache — survives app updates and restarts
         if let diskData = loadFromDiskCache(mediaId: mediaId) {
             Log.debug("Media cache hit (disk) for: \(mediaId.prefix(8))...", category: "MediaManager")
-            if currentCacheSize + diskData.count < maxCacheSize {
-                mediaCache[cacheKey] = diskData
-                currentCacheSize += diskData.count
-            }
+            // Promote only when small enough — never pull a multi‑MB video back into RAM.
+            storeInMemoryCache(diskData, mediaId: cacheKey)
             return diskData
         }
 
@@ -642,20 +698,12 @@ class MediaManager {
             Log.info("Media \(mediaId.prefix(8))… not found on server (expired/removed) — negative-caching for \(Int(Self.notFoundTTL))s", category: "MediaManager")
             throw error
         }
-        
+
         // Persist to disk cache so media survives app restarts and updates
         saveToDiskcache(decryptedData, mediaId: mediaId)
         evictToQuota()
+        storeInMemoryCache(decryptedData, mediaId: cacheKey)
 
-        // Store in memory cache if space available
-        if currentCacheSize + decryptedData.count < maxCacheSize {
-            mediaCache[cacheKey] = decryptedData
-            currentCacheSize += decryptedData.count
-            Log.debug("Cached media (\(currentCacheSize / 1024)KB / \(maxCacheSize / 1024)KB)", category: "MediaManager")
-        } else {
-            Log.debug("Cache full, not caching this media", category: "MediaManager")
-        }
-        
         return decryptedData
     }
 
@@ -685,9 +733,8 @@ class MediaManager {
         return decompressed
     }
     func clearCache(includingDisk: Bool = false) {
-        mediaCache.removeAll()
+        mediaCache.removeAllObjects()
         notFoundMedia.removeAll()
-        currentCacheSize = 0
         if includingDisk {
             try? FileManager.default.removeItem(at: diskCacheDirectory)
             try? FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
