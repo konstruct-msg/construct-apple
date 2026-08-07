@@ -2,74 +2,83 @@ import XCTest
 import SwiftUI
 @testable import Construct_Messenger
 
-/// Swipe-to-reply competes head-on with the interactive back gesture: both are rightward,
-/// and incoming bubbles sit against the leading edge where the system pop lives. The
-/// original rules were "started anywhere" plus `h > v`, so a swipe meant to leave the chat
-/// landed on whatever bubble it began over and quoted it instead.
+/// Swipe-to-reply used to travel **right**, head-on into the interactive back gesture, and the
+/// two were told apart by where the drag began: a 44pt leading strip was conceded to the pop.
+/// That is a truce, not a separation — one direction serving two roles, arbitrated by a margin.
+/// It leaked both ways: a back swipe starting further inboard quoted whatever bubble it began
+/// over, and the concession made the leftmost 44pt of every incoming bubble un-swipeable, which
+/// is precisely where the short ones sit.
+///
+/// The reply swipe now travels **left**. No start position can make a leftward drag look like a
+/// rightward pop, so the strip is gone and every pixel of every bubble is live.
 @MainActor
 final class ReplySwipeGestureTests: XCTestCase {
     private typealias Swipe = MessageBubbleRegularView
-    private let edge = ChatUIConstants.ReplySwipe.leadingEdgeExclusion
     private let commit = ChatUIConstants.ReplySwipe.commitOffset
 
-    private func offset(startX: CGFloat, dx: CGFloat, dy: CGFloat = 0) -> CGFloat? {
-        Swipe.replySwipeOffset(startX: startX, translation: CGSize(width: dx, height: dy))
+    /// `dx` is signed screen travel; leftward is negative, as SwiftUI reports it.
+    private func offset(dx: CGFloat, dy: CGFloat = 0) -> CGFloat? {
+        Swipe.replySwipeOffset(translation: CGSize(width: dx, height: dy))
     }
 
-    // MARK: - The back gesture's strip
+    // MARK: - Direction is the whole separation
 
-    func testDragFromTheScreenEdgeNeverReplies() {
-        // A textbook back swipe: starts on the edge, travels far enough to commit.
-        XCTAssertNil(offset(startX: 2, dx: 200), "The leading edge belongs to the pop gesture")
-        XCTAssertNil(offset(startX: edge, dx: 200), "Exclusion is inclusive of the boundary")
+    func testRightwardDragNeverArms() {
+        // The back gesture's direction. Whatever else it is, it is not a reply — and unlike the
+        // old rule, this holds no matter where on the screen it started.
+        XCTAssertNil(offset(dx: 200))
+        XCTAssertNil(offset(dx: 45))
     }
 
-    func testDragJustInboardOfTheStripStillReplies() {
-        XCTAssertNotNil(offset(startX: edge + 1, dx: 200))
+    func testLeftwardDragArms() {
+        XCTAssertNotNil(offset(dx: -200))
     }
 
-    /// The strip has to be wider than the system's ~20pt edge zone, otherwise a back swipe
-    /// that starts a little inboard falls between the two gestures and does neither.
-    func testExclusionIsWiderThanTheSystemEdgeZone() {
-        XCTAssertGreaterThan(edge, 30)
+    func testABubbleIsSwipeableAlongItsWholeWidth() {
+        // The regression the exclusion strip caused: a short incoming bubble near the leading
+        // edge could not be replied to at all. Start position is no longer an input, so this is
+        // now true by construction — asserted so a future "just add a small guard" has to fail here.
+        XCTAssertNotNil(offset(dx: -80), "no start position, no dead zone")
     }
 
-    // MARK: - Direction
+    // MARK: - Direction ratio
 
     func testDiagonalDragDoesNotArm() {
-        // 100 across, 90 down — the old `h > v` test passed this, which is why brushing a
-        // bubble mid-scroll produced a reply.
-        XCTAssertNil(offset(startX: 200, dx: 100, dy: 90))
-        XCTAssertNil(offset(startX: 200, dx: 100, dy: -90), "Direction is symmetric in y")
+        // 100 across, 90 down — a plain `h > v` test passes this, which is why brushing a bubble
+        // mid-scroll used to produce a reply.
+        XCTAssertNil(offset(dx: -100, dy: 90))
+        XCTAssertNil(offset(dx: -100, dy: -90), "direction is symmetric in y")
     }
 
     func testClearlyHorizontalDragArms() {
-        XCTAssertNotNil(offset(startX: 200, dx: 100, dy: 20))
-    }
-
-    func testLeftwardDragNeverArms() {
-        XCTAssertNil(offset(startX: 200, dx: -200))
+        XCTAssertNotNil(offset(dx: -100, dy: 20))
     }
 
     func testVerticalScrollNeverArms() {
-        XCTAssertNil(offset(startX: 200, dx: 4, dy: 300))
+        XCTAssertNil(offset(dx: -4, dy: 300))
     }
 
     // MARK: - Travel
 
     func testBubbleTrailsTheFingerAtHalfSpeedAndIsCapped() {
-        XCTAssertEqual(offset(startX: 200, dx: 40), 20)
-        XCTAssertEqual(offset(startX: 200, dx: 1000), ChatUIConstants.ReplySwipe.maxOffset)
+        XCTAssertEqual(offset(dx: -40), 20)
+        XCTAssertEqual(offset(dx: -1000), ChatUIConstants.ReplySwipe.maxOffset)
     }
 
-    /// Committing must take a deliberate distance — the gesture fires on release, so a
-    /// short flick should not be enough.
+    func testOffsetIsAPositiveMagnitude() {
+        // The call site applies the sign (`.offset(x: -swipeOffset)`) and the indicator's
+        // opacity divides by it. A negative here would invert the bubble and blank the arrow.
+        XCTAssertGreaterThan(offset(dx: -100)!, 0)
+    }
+
+    /// Committing must take a deliberate distance — the gesture fires on release, so a short
+    /// flick should not be enough.
     func testShortFlickDoesNotReachTheCommitThreshold() {
-        let short = offset(startX: 200, dx: 50)
+        let short = offset(dx: -50)
         XCTAssertNotNil(short)
         XCTAssertLessThan(short!, commit)
 
-        let deliberate = offset(startX: 200, dx: 80)
+        let deliberate = offset(dx: -80)
         XCTAssertGreaterThanOrEqual(deliberate!, commit)
     }
 }

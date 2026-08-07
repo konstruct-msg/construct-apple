@@ -99,10 +99,11 @@ enum ChatUIConstants {
     /// leading edge — exactly where the system pop lives. Without these limits a swipe
     /// meant to leave the chat landed on whatever bubble it started over and replied to it.
     enum ReplySwipe {
-        /// Drags starting inside this leading strip belong to the pop gesture and never
-        /// arm a reply. Wider than the system's ~20pt edge zone so a back swipe that
-        /// starts slightly inboard still exits instead of quoting a message.
-        static let leadingEdgeExclusion: CGFloat = 44
+        // There is no leading-edge exclusion any more. It existed because the reply swipe and
+        // the interactive pop both travelled right, so they had to be separated by where the
+        // drag began — a 44pt strip conceded to the pop, which both leaked (a back swipe
+        // starting inboard quoted a message) and cost the leftmost 44pt of every incoming
+        // bubble. The reply swipe now travels left; direction tells them apart on its own.
         /// Horizontal travel must beat vertical by this factor. The old test was `h > v`,
         /// which any lazy diagonal satisfied.
         static let directionRatio: CGFloat = 1.5
