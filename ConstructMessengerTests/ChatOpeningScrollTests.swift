@@ -337,4 +337,39 @@ final class ChatOpeningScrollTests: XCTestCase {
         manager.noteLastMessageVisible(true, searchActive: false)
         XCTAssertTrue(manager.isLastMessageVisible)
     }
+
+    // MARK: - A height change is a measurement, not an event (build 584)
+
+    //  The 583 fix re-pinned on every height change in either direction. Build 584 stopped going
+    //  blank and started flickering, because one opening reports seven changes inside a second:
+    //
+    //      91 → 596 → 4524 → 4755 → 4673 → 5948 → 5210 → 4673
+    //
+    //  It ends where it was three steps earlier. Each re-pin carried a leading `0` tick, so each
+    //  intermediate measurement became a visible scroll. Only where the height lands deserves one.
+
+    /// The regression, stated as the property that caused it: no immediate tick. With a leading
+    /// zero every measurement in a burst scrolls; without one, successive changes cancel each
+    /// other and a burst costs a single scroll.
+    func testHeightChangeDoesNotScrollImmediately() {
+        XCTAssertFalse(
+            ChatScrollManager.heightSettleDelaysMs.contains(0),
+            "a leading 0 tick makes every intermediate layout measurement a visible jump"
+        )
+    }
+
+    /// The series must still land, and land twice — one pin after the settle, one after the layout
+    /// pass that the settle itself can trigger.
+    func testHeightChangeStillPins() {
+        XCTAssertEqual(ChatScrollManager.heightSettleDelaysMs.count, 2)
+        XCTAssertTrue(ChatScrollManager.heightSettleDelaysMs.allSatisfy { $0 > 0 })
+        XCTAssertEqual(ChatScrollManager.heightSettleDelaysMs.first, ChatScrollManager.heightSettleMs)
+    }
+
+    /// Long enough to swallow a layout pass, short enough not to read as lag. Pinned as a range so
+    /// the number is a decision rather than a habit.
+    func testSettleDelayIsWithinAReasonableBand() {
+        XCTAssertGreaterThanOrEqual(ChatScrollManager.heightSettleMs, 60)
+        XCTAssertLessThanOrEqual(ChatScrollManager.heightSettleMs, 150)
+    }
 }

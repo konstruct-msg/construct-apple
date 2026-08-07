@@ -266,7 +266,23 @@ class ChatScrollManager {
     /// - Parameter contentFits: content shorter than the viewport → nothing to jump to.
     ///
     /// Only mutates observed flags when crossing thresholds (not every pixel).
-    /// Feed the measured content height. Re-pins when a bottom-anchored list grows under itself.
+    /// How long the height must hold still before a re-pin lands.
+    ///
+    /// A height change is a *measurement of a layout in flight*, not an event to act on. Build 584
+    /// opened one chat and reported seven of them inside a second — 91 → 596 → 4524 → 4755 → 4673
+    /// → 5948 → 5210 → 4673, ending where it had been three steps earlier. Pinning on each one
+    /// scrolled the transcript seven times: the flicker. Only where it lands is worth a scroll.
+    ///
+    /// Long enough to swallow one layout pass, short enough that a genuine settle is not visibly
+    /// late. Successive changes cancel each other (`pinToBottomCorrective` cancels the pending
+    /// series), so a burst costs exactly one scroll.
+    static let heightSettleMs: UInt64 = 90
+
+    /// The pin series a height change queues. **No leading `0`** — that immediate tick is what made
+    /// every intermediate measurement a visible scroll. Exposed so the absence can be asserted.
+    static let heightSettleDelaysMs: [UInt64] = [heightSettleMs, heightSettleMs + 160]
+
+    /// Feed the measured content height. Re-pins once the height settles, in either direction.
     func updateContentHeight(_ height: CGFloat) {
         guard height.isFinite, height > 0 else { return }
         let previous = contentHeight
@@ -278,10 +294,11 @@ class ChatScrollManager {
             isOpening: isOpening
         ) else { return }
         Log.debug(
-            "Content \(height > previous ? "grew" : "shrank") \(Int(previous)) → \(Int(height))pt while pinned — re-pinning (opening=\(isOpening))",
+            "Content \(height > previous ? "grew" : "shrank") \(Int(previous)) → \(Int(height))pt while pinned — re-pin queued (opening=\(isOpening))",
             category: "ChatScrollManager"
         )
-        pinToBottomCorrective(delaysMs: [0, 60])
+        // No leading tick: an immediate scroll is what made every intermediate measurement visible.
+        pinToBottomCorrective(delaysMs: Self.heightSettleDelaysMs)
     }
 
     /// Whether the newest message is currently materialised. Fed by the last row's
