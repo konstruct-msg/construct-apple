@@ -189,7 +189,10 @@ class ChatScrollManager {
 
     // MARK: - Thresholds
 
-    private enum Threshold {
+    /// Not private: `nearBottom` is what separates "anchored, and the transcript vanished" from
+    /// "the reader scrolled up", so the stranded-viewport tests assert against the same number the
+    /// flags use rather than a copy of it.
+    enum Threshold {
         /// Within this many points of the bottom → auto-scroll stays on; FAB hidden.
         static let nearBottom: CGFloat = 60
         /// Need at least this much content below the viewport to show the jump FAB.
@@ -479,6 +482,7 @@ class ChatScrollManager {
             lastMessageVisible: isLastMessageVisible,
             newestHiddenFor: hiddenFor,
             visibleContentFraction: fraction,
+            distanceFromBottom: distanceFromBottom,
             autoScrollOn: shouldScrollToBottom,
             isOpening: isOpening,
             searchActive: searchActive
@@ -639,11 +643,27 @@ class ChatScrollManager {
         lastMessageVisible: Bool,
         newestHiddenFor: TimeInterval,
         visibleContentFraction: CGFloat,
+        distanceFromBottom: CGFloat,
         autoScrollOn: Bool,
         isOpening: Bool,
         searchActive: Bool
     ) -> Bool {
         guard autoScrollOn, !isOpening, !searchActive else { return false }
+        // `autoScrollOn` is not proof that the viewport is at the bottom. While the keyboard is up
+        // the flags deliberately latch (`flags(current:…)` returns `current` unchanged rather than
+        // read a transient distance), so a person who scrolls up to read history keeps auto-scroll
+        // on. Build 588 fired twice on exactly that, both a second before `KEYBOARD_TRACE: will
+        // HIDE`:
+        //
+        //     newest off screen for 1.1s, 94% of the viewport shows transcript
+        //         (contentHeight=3147pt fromBottom=2378) — re-pinning
+        //     newest off screen for 1.1s, 100% …    (contentHeight=3181pt fromBottom=626)
+        //
+        // 2378pt above the bottom with the screen full of transcript: the newest message is off
+        // screen because the reader put it there. Recovering yanked them to the end mid-read —
+        // the misfire that is worse than the bug. The blank chat this rule exists for sits at
+        // `fromBottom=-84`; anchored is negative or near zero, never hundreds of points up.
+        guard distanceFromBottom <= Threshold.nearBottom else { return false }
         // The newest row being on screen is proof the chat is not blank, and it outranks any
         // ratio: a short transcript legitimately covers very little of the viewport. Coverage
         // answers *where the viewport is*, never *whether anything is drawn*.

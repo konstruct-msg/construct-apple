@@ -232,7 +232,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testPinnedButLastMessageOffScreenRecovers() {
         XCTAssertTrue(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: false, searchActive: false
+                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: 0.01, distanceFromBottom: -84, autoScrollOn: true, isOpening: false, searchActive: false
             )
         )
     }
@@ -240,7 +240,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testLastMessageVisibleNeedsNoRecovery() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: true, newestHiddenFor: 0, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: false, searchActive: false
+                lastMessageVisible: true, newestHiddenFor: 0, visibleContentFraction: 0.01, distanceFromBottom: -84, autoScrollOn: true, isOpening: false, searchActive: false
             )
         )
     }
@@ -250,7 +250,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testReadingUpTheTranscriptIsNotRecovered() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: 0.01, autoScrollOn: false, isOpening: false, searchActive: false
+                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: 0.01, distanceFromBottom: -84, autoScrollOn: false, isOpening: false, searchActive: false
             ),
             "recovering here would yank a reader back to the bottom on every scroll"
         )
@@ -261,7 +261,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testOpeningWindowOwnsItsOwnCorrection() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: true, searchActive: false
+                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: 0.01, distanceFromBottom: -84, autoScrollOn: true, isOpening: true, searchActive: false
             )
         )
     }
@@ -270,7 +270,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testSearchIsNotRecovered() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: false, searchActive: true
+                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: 0.01, distanceFromBottom: -84, autoScrollOn: true, isOpening: false, searchActive: true
             )
         )
     }
@@ -307,7 +307,7 @@ final class ChatOpeningScrollTests: XCTestCase {
                              "the 587 geometry reads healthy — that is the whole problem")
         XCTAssertTrue(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, newestHiddenFor: 4, visibleContentFraction: fraction,
+                lastMessageVisible: false, newestHiddenFor: 4, visibleContentFraction: fraction, distanceFromBottom: -84,
                 autoScrollOn: true, isOpening: false, searchActive: false
             ),
             "geometry no longer holds a veto over a row that is provably not on screen"
@@ -321,7 +321,7 @@ final class ChatOpeningScrollTests: XCTestCase {
         )
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, newestHiddenFor: 0.1, visibleContentFraction: fraction,
+                lastMessageVisible: false, newestHiddenFor: 0.1, visibleContentFraction: fraction, distanceFromBottom: -84,
                 autoScrollOn: true, isOpening: false, searchActive: false
             ),
             "a flicker cannot sustain an absence; 112 of 585's 120 episodes were under a second"
@@ -332,7 +332,7 @@ final class ChatOpeningScrollTests: XCTestCase {
         let grace = ChatScrollManager.newestMessageAbsenceGrace
         func stranded(after seconds: TimeInterval) -> Bool {
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, newestHiddenFor: seconds, visibleContentFraction: 0.9,
+                lastMessageVisible: false, newestHiddenFor: seconds, visibleContentFraction: 0.9, distanceFromBottom: -84,
                 autoScrollOn: true, isOpening: false, searchActive: false
             )
         }
@@ -345,7 +345,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testViewportOffTheTranscriptRecoversWithoutWaiting() {
         XCTAssertTrue(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, newestHiddenFor: 0, visibleContentFraction: 0.01,
+                lastMessageVisible: false, newestHiddenFor: 0, visibleContentFraction: 0.01, distanceFromBottom: -84,
                 autoScrollOn: true, isOpening: false, searchActive: false
             )
         )
@@ -356,10 +356,60 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testCoverageNeverOverridesAVisibleNewestRow() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: true, newestHiddenFor: 0, visibleContentFraction: 0.01,
+                lastMessageVisible: true, newestHiddenFor: 0, visibleContentFraction: 0.01, distanceFromBottom: -84,
                 autoScrollOn: true, isOpening: false, searchActive: false
             )
         )
+    }
+
+    // MARK: - Build 588: auto-scroll on is not proof of being at the bottom
+    //
+    // The rule above fired twice on device, both times on a reader in the history, both a second
+    // before `KEYBOARD_TRACE: will HIDE`:
+    //
+    //     newest off screen for 1.1s, 94% of the viewport shows transcript
+    //         (contentHeight=3147pt fromBottom=2378) — re-pinning
+    //     newest off screen for 1.1s, 100% …    (contentHeight=3181pt fromBottom=626)
+    //
+    // `flags(current:…)` returns `current` unchanged while the keyboard is visible and the
+    // viewport is not near the bottom — a deliberate latch against transient keyboard distances.
+    // So someone who scrolls up with the keyboard open keeps auto-scroll on, and the guard that
+    // was supposed to protect them said nothing. They were yanked to the end mid-read.
+
+    func testReaderScrolledUpWithTheKeyboardOpenIsNotYankedDown() {
+        for distance in [CGFloat(2378), 626] {   // both device readings
+            XCTAssertFalse(
+                ChatScrollManager.shouldRecoverStrandedViewport(
+                    lastMessageVisible: false, newestHiddenFor: 1.1, visibleContentFraction: 0.94,
+                    distanceFromBottom: distance,
+                    autoScrollOn: true, isOpening: false, searchActive: false
+                ),
+                "fromBottom=\(distance): the newest message is off screen because the reader put it there"
+            )
+        }
+    }
+
+    func testTheBlankChatItselfIsStillAnchored() {
+        // 587's blank sat at fromBottom=-84 — anchored is negative or near zero, never hundreds up.
+        XCTAssertTrue(
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: false, newestHiddenFor: 4, visibleContentFraction: 0.91,
+                distanceFromBottom: -84,
+                autoScrollOn: true, isOpening: false, searchActive: false
+            )
+        )
+    }
+
+    func testTheAnchorAllowanceEndsAtTheNearBottomThreshold() {
+        func stranded(at distance: CGFloat) -> Bool {
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: false, newestHiddenFor: 4, visibleContentFraction: 0.91,
+                distanceFromBottom: distance,
+                autoScrollOn: true, isOpening: false, searchActive: false
+            )
+        }
+        XCTAssertTrue(stranded(at: ChatScrollManager.Threshold.nearBottom))
+        XCTAssertFalse(stranded(at: ChatScrollManager.Threshold.nearBottom + 1))
     }
 
     /// Neither route may override the guards. A reader who scrolled up asked for exactly this.
@@ -367,7 +417,7 @@ final class ChatOpeningScrollTests: XCTestCase {
         for (auto, opening, search) in [(false, false, false), (true, true, false), (true, false, true)] {
             XCTAssertFalse(
                 ChatScrollManager.shouldRecoverStrandedViewport(
-                    lastMessageVisible: false, newestHiddenFor: 30, visibleContentFraction: 0.01,
+                    lastMessageVisible: false, newestHiddenFor: 30, visibleContentFraction: 0.01, distanceFromBottom: -84,
                     autoScrollOn: auto, isOpening: opening, searchActive: search
                 ),
                 "autoScroll=\(auto) opening=\(opening) search=\(search)"
@@ -552,7 +602,7 @@ final class ChatOpeningScrollTests: XCTestCase {
         XCTAssertLessThan(fraction, ChatScrollManager.strandedCoverageFloor)
         XCTAssertTrue(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: fraction,
+                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: fraction, distanceFromBottom: -84,
                 autoScrollOn: true, isOpening: false, searchActive: false
             )
         )
@@ -567,7 +617,7 @@ final class ChatOpeningScrollTests: XCTestCase {
         XCTAssertGreaterThan(fraction, ChatScrollManager.strandedCoverageFloor)
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, newestHiddenFor: 0.1, visibleContentFraction: fraction,
+                lastMessageVisible: false, newestHiddenFor: 0.1, visibleContentFraction: fraction, distanceFromBottom: -84,
                 autoScrollOn: true, isOpening: false, searchActive: false
             ),
             "recovering a chat that is already at the bottom is what made it jerk"
@@ -609,7 +659,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testLowCoverageAloneDoesNotRecoverWhileTheNewestRowIsVisible() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: true, newestHiddenFor: 0, visibleContentFraction: 0.01,
+                lastMessageVisible: true, newestHiddenFor: 0, visibleContentFraction: 0.01, distanceFromBottom: -84,
                 autoScrollOn: true, isOpening: false, searchActive: false
             )
         )
