@@ -42,7 +42,11 @@ final class StreamLifecycleCoordinator {
     /// Coalescing window for `appDidBecomeActive`. CallKit UI, Control Center and system alerts
     /// emit bursts of active/inactive transitions (observed 3 in one second during an incoming
     /// call); without this, each one re-ran VEIL startup + reconnect, thrashing the proxy.
-    private static let foregroundSettleDelay: Duration = .milliseconds(400)
+    ///
+    /// Build 587 thermal storm: active/background flaps every few seconds still drove VEIL
+    /// verify + stream resume after only 400ms of quiet. 1.2s covers a Control Center dismiss
+    /// / app switch bounce without delaying a real foreground by much.
+    private static let foregroundSettleDelay: Duration = .milliseconds(1_200)
 
     private static let backgroundGracePeriod: Duration = {
         #if os(macOS)

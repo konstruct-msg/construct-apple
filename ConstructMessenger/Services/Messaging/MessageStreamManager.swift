@@ -80,10 +80,43 @@ final class MessageStreamManager {
     /// Writable from `MessageStreamTransport` (same type, other file).
     var activeRoutingKey: String = ""
 
-    /// True when a connection attempt is actively in progress (not sleeping in backoff).
-    /// When true, app-foreground force-reconnect should be skipped to avoid interrupting
-    /// an ongoing VEIL failover path with a new competing direct-path attempt.
-    var isActivelyConnecting: Bool { streamTask != nil && !isConnected && retryCount == 0 }
+    /// True when a connectLoop is running and the stream is not yet live — includes backoff sleep.
+    ///
+    /// Build 587 heated the phone by treating only `retryCount == 0` as "connecting": after the
+    /// first open failure the loop was still alive (sleeping or mid-open) but foreground settle
+    /// saw `isActivelyConnecting == false` and called `forceReconnect`, killing the in-flight
+    /// loop and starting another. Pure form: ``isActivelyConnecting(hasStreamTask:isConnected:)``.
+    var isActivelyConnecting: Bool {
+        Self.isActivelyConnecting(hasStreamTask: streamTask != nil, isConnected: isConnected)
+    }
+
+    /// Pure form of ``isActivelyConnecting`` — any live connectLoop owns the stream until accept.
+    nonisolated static func isActivelyConnecting(hasStreamTask: Bool, isConnected: Bool) -> Bool {
+        hasStreamTask && !isConnected
+    }
+
+    /// What to do after `openStream` throws the open-timeout sentinel (`retrying with VEIL`).
+    enum OpenTimeoutDisposition: Equatable, Sendable {
+        /// H3 on direct timed out — hop to H2 once without sleeping.
+        case immediateTransportFailover
+        /// Same path / already H2 / VEIL path — exponential backoff (no tight immediate loop).
+        case exponentialBackoff
+    }
+
+    /// Build 587 log: `open timed out — reconnecting` → `reconnecting immediately (VEIL=false)`
+    /// on every timeout, including same-path H2, while the app flapped active/background.
+    /// Immediate continue is only for the H3→H2 transport hop; everything else must backoff.
+    nonisolated static func openTimeoutDisposition(
+        lastTransportWasH3: Bool,
+        prefersVEIL: Bool,
+        routingKeyUnchanged: Bool,
+        wasDirectRouting: Bool
+    ) -> OpenTimeoutDisposition {
+        if !prefersVEIL, routingKeyUnchanged, wasDirectRouting, lastTransportWasH3 {
+            return .immediateTransportFailover
+        }
+        return .exponentialBackoff
+    }
 
     // MARK: - Callbacks
 
@@ -785,8 +818,8 @@ final class MessageStreamManager {
                         Log.info("MessageStream refresh failed (network error) — keeping tokens, will retry later", category: "MessageStream")
                     }
                 }
-                // Fast failover path: openStream() throws this sentinel to force an immediate
-                // reconnect without exponential backoff.
+                // Open-timeout sentinel from openStream(). Immediate retry is only for the
+                // H3→H2 transport hop; same-path timeouts use exponential backoff below.
                 if let rpcError = error as? RPCError,
                    rpcError.code == .unavailable,
                    rpcError.message.contains("retrying with VEIL") {
@@ -804,82 +837,92 @@ final class MessageStreamManager {
                     if lastStreamTransportWasH3 {
                         noteFastUdpOpenFailure(context: "accept_timeout")
                     }
-                    // H3→H2 fallback: if H3 failed on the direct path and VEIL isn't active yet,
-                    // try H2 once before activating VEIL (H3 may be unsupported, not blocked).
                     let routingKeyNow = GRPCChannelManager.shared.currentRoutingKey
                     let nowUsingVEIL = await TransportRouter.shared.snapshot().state.prefersVEIL
-                    if !nowUsingVEIL, routingKeyNow == routingKeyAtLoopStart,
-                       routingKeyAtLoopStart.hasPrefix("direct:"), lastStreamTransportWasH3 {
+                    let disposition = Self.openTimeoutDisposition(
+                        lastTransportWasH3: lastStreamTransportWasH3,
+                        prefersVEIL: nowUsingVEIL,
+                        routingKeyUnchanged: routingKeyNow == routingKeyAtLoopStart,
+                        wasDirectRouting: routingKeyAtLoopStart.hasPrefix("direct:")
+                    )
+                    switch disposition {
+                    case .immediateTransportFailover:
                         shouldFallbackToH2Direct = true
-                        Log.info("H3 direct timeout — trying H2 direct next", category: "MessageStream")
-                    } else {
-                        shouldFallbackToH2Direct = false
-                        lastStreamTransportWasH3 = false
-                    }
-                    Log.info("MessageStream reconnecting immediately (VEIL=\(nowUsingVEIL))", category: "MessageStream")
-                    backgroundFetchTask?.cancel()
-                    retryCount = 0
-                    // If grpcServerChanged already scheduled a debounced reconnect, do not
-                    // open another stream in this loop — that is the dual-connect storm
-                    // (connectLoop open + forceDisconnect/connect 2s later).
-                    if routingReconnectDebounce != nil {
-                        Log.info(
-                            "MessageStream fast-failover deferred to pending routing reconnect",
-                            category: "MessageStream"
-                        )
-                        break
-                    }
-                    // VEIL probe in flight: wait for active (or timeout) so the next
-                    // openStream uses ice:port instead of racing a doomed direct open.
-                    if case .veilProbing = await TransportRouter.shared.snapshot().state {
-                        let becameActive = await waitWhileVeilProbing(timeoutSeconds: 8)
+                        Log.info("H3 direct timeout — trying H2 direct next (immediate failover)", category: "MessageStream")
+                        backgroundFetchTask?.cancel()
+                        retryCount = 0
+                        // If grpcServerChanged already scheduled a debounced reconnect, do not
+                        // open another stream in this loop — that is the dual-connect storm
+                        // (connectLoop open + forceDisconnect/connect 2s later).
                         if routingReconnectDebounce != nil {
                             Log.info(
-                                "MessageStream VEIL wait ended with pending routing reconnect — yielding",
+                                "MessageStream fast-failover deferred to pending routing reconnect",
                                 category: "MessageStream"
                             )
                             break
                         }
-                        if !becameActive {
-                            Log.info(
-                                "MessageStream VEIL probe did not become active within timeout — continuing openStream",
-                                category: "MessageStream"
-                            )
+                        // VEIL probe in flight: wait for active (or timeout) so the next
+                        // openStream uses ice:port instead of racing a doomed direct open.
+                        if case .veilProbing = await TransportRouter.shared.snapshot().state {
+                            let becameActive = await waitWhileVeilProbing(timeoutSeconds: 8)
+                            if routingReconnectDebounce != nil {
+                                Log.info(
+                                    "MessageStream VEIL wait ended with pending routing reconnect — yielding",
+                                    category: "MessageStream"
+                                )
+                                break
+                            }
+                            if !becameActive {
+                                Log.info(
+                                    "MessageStream VEIL probe did not become active within timeout — continuing openStream",
+                                    category: "MessageStream"
+                                )
+                            }
                         }
+                        continue
+                    case .exponentialBackoff:
+                        // Same path already timed out (often H2 after flaky network / app thrash).
+                        // Fall through to the shared backoff sleep — do not tight-loop openStream.
+                        shouldFallbackToH2Direct = false
+                        lastStreamTransportWasH3 = false
+                        Log.info(
+                            "MessageStream open timed out on same path (VEIL=\(nowUsingVEIL)) — applying backoff",
+                            category: "MessageStream"
+                        )
                     }
-                    continue
-                }
-                // Generic stream failure → feed to the FSM.
-                let kind = RPCFailureClassifier.classify(error)
-                let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("veil:")
-                    ? .veil(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
-                           relay: routerSnapshot.state.currentRelay ?? "")
-                    : .direct(.h2)
-                await reportStreamTransportFailureIfNeeded(
-                    kind: kind,
-                    via: failTarget,
-                    routingKeyAtLoopStart: routingKeyAtLoopStart
-                )
-                if lastStreamTransportWasH3 {
-                    // First open failure → next connectLoop iteration uses H2 immediately
-                    // (shouldFallbackToH2Direct), without waiting for a second full QUIC
-                    // handshake timeout (often 3s each) before the stream is usable.
-                    shouldFallbackToH2Direct = true
-                    noteFastUdpOpenFailure(context: "stream_failure")
-                }
-                // Log full error details for diagnosis
-                if let rpcError = error as? RPCError {
-                    Log.error("""
-                        MessageStream RPC error:
-                           code    = \(rpcError.code)
-                           message = \(rpcError.message)
-                           host    = \(host):\(port)
-                           attempt = #\(retryCount + 1)
-                        """, category: "MessageStream")
                 } else {
-                    Log.error("MessageStream error (attempt #\(retryCount + 1)): \(error)", category: "MessageStream")
+                    // Generic stream failure → feed to the FSM.
+                    let kind = RPCFailureClassifier.classify(error)
+                    let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("veil:")
+                        ? .veil(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
+                               relay: routerSnapshot.state.currentRelay ?? "")
+                        : .direct(.h2)
+                    await reportStreamTransportFailureIfNeeded(
+                        kind: kind,
+                        via: failTarget,
+                        routingKeyAtLoopStart: routingKeyAtLoopStart
+                    )
+                    if lastStreamTransportWasH3 {
+                        // First open failure → next connectLoop iteration uses H2 immediately
+                        // (shouldFallbackToH2Direct), without waiting for a second full QUIC
+                        // handshake timeout (often 3s each) before the stream is usable.
+                        shouldFallbackToH2Direct = true
+                        noteFastUdpOpenFailure(context: "stream_failure")
+                    }
+                    // Log full error details for diagnosis
+                    if let rpcError = error as? RPCError {
+                        Log.error("""
+                            MessageStream RPC error:
+                               code    = \(rpcError.code)
+                               message = \(rpcError.message)
+                               host    = \(host):\(port)
+                               attempt = #\(retryCount + 1)
+                            """, category: "MessageStream")
+                    } else {
+                        Log.error("MessageStream error (attempt #\(retryCount + 1)): \(error)", category: "MessageStream")
+                    }
+                    ConnectionStatusManager.shared.setLastError(error.localizedDescription)
                 }
-                ConnectionStatusManager.shared.setLastError(error.localizedDescription)
             }
 
             guard !Task.isCancelled else { break }
