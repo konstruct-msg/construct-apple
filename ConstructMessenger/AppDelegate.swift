@@ -277,10 +277,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // FIXME(masque): When MASQUE-over-TCP is implemented, the engine path replaces this.
         // For now the engine never starts on iOS (UDP 443 blocked by OS), so use the
         // legacy BackgroundFetchManager path directly.
+        let pushArrivedAt = Date()
         Task {
             await withTaskGroup(of: Void.self) { group in
                 group.addTask {
-                    await BackgroundFetchManager.shared.fetchPendingMessages()
+                    await BackgroundFetchManager.shared.fetchPendingMessagesForSilentPush(
+                        pushArrivedAt: pushArrivedAt
+                    )
                 }
                 group.addTask {
                     try? await Task.sleep(nanoseconds: 27_000_000_000)

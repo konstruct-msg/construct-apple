@@ -245,37 +245,54 @@ class BackgroundFetchManager: NSObject {
                 // It is also why the server sees no ACK. Deletion from `delivery:offline:{user}` is
                 // cursor-driven, and a fetch that always asks from the beginning never tells the
                 // server anything has been handled — so the same ids come back forever.
-                var cursor: String? = StreamCursorStore.load()
+                let cursor: String? = StreamCursorStore.load()
                 Log.info(
                     "Offline fetch from cursor=\(cursor ?? "beginning")",
                     category: "BackgroundFetch"
                 )
 
-                repeat {
-                    let result = try await MessagingServiceClient.shared.getPendingMessages(
-                        sinceCursor: cursor,
-                        limit: 50
-                    )
-                    allMessages.append(contentsOf: result.messages)
-                    cursor = result.nextCursor
-
-                    if !result.hasMore { break }
-                } while true
-
-                // The final `cursor` is deliberately NOT committed to `StreamCursorStore`.
+                // ONE page per fetch — deliberately, and this is load-bearing.
                 //
-                // The store's invariant is that the committed cursor never advances past a message
-                // that has not been durably handled — advancing tells the server to delete it, and
-                // that is the offline-delivery loss of 2026-06-08. `GetPendingMessagesResponse`
-                // carries one `next_cursor` per *page*, not per message (proto field 2), so this
-                // path cannot say which messages inside a page reached a durable terminal. The
-                // stream owns the advance: it receives a cursor with each entry, tracks it, and
+                // The server now trims `delivery:offline:{user}` on GetPendingMessages too, up to
+                // whatever `since_cursor` we send (messaging-service, 2026-08-07, metric
+                // `construct_msg_offline_trim_total{path="get_pending"}`). That makes the cursor we
+                // put on the wire an instruction to delete, on this path as much as on Subscribe.
+                //
+                // The committed cursor is safe to send: `StreamCursorTracker` only advances it over
+                // messages that reached a durable terminal. A *page* cursor is not. Paging used to
+                // send `result.nextCursor` as the next request's `since_cursor` — which now tells
+                // the server to delete page 1 while page 1 is still sitting in `allMessages`,
+                // unrouted and unpersisted. Kill the app there and those messages are gone from
+                // both sides: the 2026-06-08 offline-delivery loss, re-entered through a door that
+                // opened today.
+                //
+                // So we ask once, from a cursor we can defend, and let the remainder come back on
+                // the next round — the stream advances the watermark properly, and a backlog deeper
+                // than one page drains over successive fetches instead of in one unsafe sweep.
+                let result = try await MessagingServiceClient.shared.getPendingMessages(
+                    sinceCursor: cursor,
+                    limit: 50
+                )
+                allMessages.append(contentsOf: result.messages)
+                if result.hasMore {
+                    Log.info(
+                        "Offline backlog deeper than one page — remainder follows on the next fetch/stream",
+                        category: "BackgroundFetch"
+                    )
+                }
+
+                // `result.nextCursor` is deliberately NOT committed to `StreamCursorStore`, for the
+                // same reason it is not sent back as a `since_cursor` above: it is a page boundary,
+                // not a durability watermark. `GetPendingMessagesResponse` carries one `next_cursor`
+                // per page, not per message (proto field 2), so this path cannot say which messages
+                // inside the page reached a durable terminal.
+                //
+                // The stream owns the advance: it receives a cursor with each entry, tracks it, and
                 // commits over the longest durable prefix. Anything fetched here is the same Redis
                 // entry and is re-delivered on the next Subscribe, where it advances properly.
                 //
-                // Committing per page would need either a per-message cursor on the RPC or an
-                // all-durable check over the page. Until then, seeding is the whole fix — it stops
-                // the re-download, and the stream still moves the watermark.
+                // Committing from this path would need either a per-message cursor on the RPC or an
+                // all-durable check over the page.
 
                 await MainActor.run { [allMessages] in
                     // No sealed pre-resolution here: MessageRouter opens the SealedInner at its
@@ -398,6 +415,45 @@ class BackgroundFetchManager: NSObject {
         await withCheckedContinuation { continuation in
             performQuickMessageFetch { _ in continuation.resume() }
         }
+    }
+
+    // MARK: - Silent-push fetch (coalesced)
+
+    @MainActor private var fetchStartedAt: Date?
+    @MainActor private var isFetchInFlight = false
+    @MainActor private var followUpRequested = false
+
+    /// Entry point for a `new_message` silent push. Unlike pull-to-refresh — a gesture, which
+    /// always runs — a push is only a claim that the server has something, and the backlog of
+    /// pushes iOS delivers at launch makes that claim dozens of times about the same backlog.
+    /// See `OfflineFetchCoalescer` for the build-585 numbers.
+    @MainActor
+    func fetchPendingMessagesForSilentPush(pushArrivedAt: Date) async {
+        switch OfflineFetchCoalescer.admit(
+            pushArrivedAt: pushArrivedAt,
+            lastFetchStartedAt: fetchStartedAt,
+            isFetchInFlight: isFetchInFlight
+        ) {
+        case .alreadyCovered:
+            Log.info("Silent push covered by a fetch already in progress — not fetching again", category: "BackgroundFetch")
+            return
+        case .requestFollowUp:
+            followUpRequested = true
+            Log.info("Silent push folded into one follow-up fetch after the running one", category: "BackgroundFetch")
+            return
+        case .start:
+            break
+        }
+
+        // Loop rather than recurse: every push that arrived during a fetch is answered by the
+        // next iteration, and any number of them collapses into that one fetch.
+        repeat {
+            followUpRequested = false
+            fetchStartedAt = Date()
+            isFetchInFlight = true
+            await fetchPendingMessages()
+            isFetchInFlight = false
+        } while followUpRequested
     }
 
     func enableBackgroundFetch() {
