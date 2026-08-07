@@ -218,58 +218,10 @@ final class ChatOpeningScrollTests: XCTestCase {
     //  922 points past the end of the content: ten points of transcript on screen and a screenful
     //  of nothing beneath it. That is the blank chat.
 
-    /// The regression. `shouldRepinForHeightChange` said "growth only" on the assumption that a
-    /// shrink is handled by `.defaultScrollAnchor`. A 1840pt collapse is not.
-    func testShrinkWhilePinnedRepins() {
-        XCTAssertTrue(
-            ChatScrollManager.shouldRepinForHeightChange(
-                previousHeight: 5792, currentHeight: 3952, autoScrollOn: true, isOpening: false
-            ),
-            "the pin anchored to a height the transcript no longer has"
-        )
-    }
 
-    /// Growth still re-pins — media resolving under a bottom-anchored list.
-    func testGrowthWhilePinnedStillRepins() {
-        XCTAssertTrue(
-            ChatScrollManager.shouldRepinForHeightChange(
-                previousHeight: 3952, currentHeight: 5792, autoScrollOn: true, isOpening: false
-            )
-        )
-    }
 
-    /// The reason the old rule gave for excluding shrink was "it would fight a user whose keyboard
-    /// just dismissed". That user does not have auto-scroll on, so the guard already covered it —
-    /// pinned here in case someone re-derives the old argument.
-    func testShrinkIsIgnoredWhenNotPinned() {
-        XCTAssertFalse(
-            ChatScrollManager.shouldRepinForHeightChange(
-                previousHeight: 5792, currentHeight: 3952, autoScrollOn: false, isOpening: false
-            ),
-            "a person who scrolled up must never be yanked back by a layout change"
-        )
-    }
 
-    /// Sub-threshold changes in either direction are layout noise; re-pinning would be churn.
-    func testNoiseInEitherDirectionDoesNotRepin() {
-        XCTAssertFalse(ChatScrollManager.shouldRepinForHeightChange(
-            previousHeight: 3952, currentHeight: 3952 - (ChatScrollManager.heightRepinThreshold - 1),
-            autoScrollOn: true, isOpening: false
-        ))
-        XCTAssertFalse(ChatScrollManager.shouldRepinForHeightChange(
-            previousHeight: 3952, currentHeight: 3952 + (ChatScrollManager.heightRepinThreshold - 1),
-            autoScrollOn: true, isOpening: false
-        ))
-    }
 
-    /// The first measurement is not a change.
-    func testFirstMeasurementIsNotAShrink() {
-        XCTAssertFalse(
-            ChatScrollManager.shouldRepinForHeightChange(
-                previousHeight: 0, currentHeight: 3952, autoScrollOn: true, isOpening: false
-            )
-        )
-    }
 
     // MARK: - Auto-scroll must keep the promise it makes
 
@@ -280,7 +232,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testPinnedButLastMessageOffScreenRecovers() {
         XCTAssertTrue(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, autoScrollOn: true, isOpening: false, searchActive: false
+                lastMessageVisible: false, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: false, searchActive: false
             )
         )
     }
@@ -288,7 +240,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testLastMessageVisibleNeedsNoRecovery() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: true, autoScrollOn: true, isOpening: false, searchActive: false
+                lastMessageVisible: true, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: false, searchActive: false
             )
         )
     }
@@ -298,7 +250,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testReadingUpTheTranscriptIsNotRecovered() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, autoScrollOn: false, isOpening: false, searchActive: false
+                lastMessageVisible: false, visibleContentFraction: 0.01, autoScrollOn: false, isOpening: false, searchActive: false
             ),
             "recovering here would yank a reader back to the bottom on every scroll"
         )
@@ -309,7 +261,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testOpeningWindowOwnsItsOwnCorrection() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, autoScrollOn: true, isOpening: true, searchActive: false
+                lastMessageVisible: false, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: true, searchActive: false
             )
         )
     }
@@ -318,7 +270,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testSearchIsNotRecovered() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, autoScrollOn: true, isOpening: false, searchActive: true
+                lastMessageVisible: false, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: false, searchActive: true
             )
         )
     }
@@ -348,30 +300,8 @@ final class ChatOpeningScrollTests: XCTestCase {
     //  It ends where it was three steps earlier. Each re-pin carried a leading `0` tick, so each
     //  intermediate measurement became a visible scroll. Only where the height lands deserves one.
 
-    /// The regression, stated as the property that caused it: no immediate tick. With a leading
-    /// zero every measurement in a burst scrolls; without one, successive changes cancel each
-    /// other and a burst costs a single scroll.
-    func testHeightChangeDoesNotScrollImmediately() {
-        XCTAssertFalse(
-            ChatScrollManager.heightSettleDelaysMs.contains(0),
-            "a leading 0 tick makes every intermediate layout measurement a visible jump"
-        )
-    }
 
-    /// The series must still land, and land twice — one pin after the settle, one after the layout
-    /// pass that the settle itself can trigger.
-    func testHeightChangeStillPins() {
-        XCTAssertEqual(ChatScrollManager.heightSettleDelaysMs.count, 2)
-        XCTAssertTrue(ChatScrollManager.heightSettleDelaysMs.allSatisfy { $0 > 0 })
-        XCTAssertEqual(ChatScrollManager.heightSettleDelaysMs.first, ChatScrollManager.heightSettleMs)
-    }
 
-    /// Long enough to swallow a layout pass, short enough not to read as lag. Pinned as a range so
-    /// the number is a decision rather than a habit.
-    func testSettleDelayIsWithinAReasonableBand() {
-        XCTAssertGreaterThanOrEqual(ChatScrollManager.heightSettleMs, 60)
-        XCTAssertLessThanOrEqual(ChatScrollManager.heightSettleMs, 150)
-    }
 
     // MARK: - PinPolicy is the only delay table
 
@@ -433,5 +363,89 @@ final class ChatOpeningScrollTests: XCTestCase {
         manager.handleTranscriptCountChange(oldCount: 0, newCount: 30, searchActive: true)
         XCTAssertFalse(manager.isOpening)
         XCTAssertEqual(manager.viewportMode, .following)
+    }
+
+    // MARK: - The loop I built, and the geometry that breaks it (build 585)
+
+    //  583 made a height change a re-pin trigger; 584 debounced it. Build 585 shows why neither
+    //  worked: in a lazy list a pin changes which cells are materialised, which changes the
+    //  measured height, which triggers another pin. 631 re-pins and 115 recoveries in one session,
+    //  the height oscillating 2645 ↔ 3000 ↔ 3151 forever. The height trigger is deleted.
+    //
+    //  The recovery rule survived, but it had the same flaw in miniature: `onDisappear` for the
+    //  last row fires transiently during re-materialisation, and it reported "off screen" at
+    //  fromBottom=-91 — with the viewport at the bottom and 90 % of it covered by transcript.
+    //  Geometry now has the casting vote.
+
+    /// The blank chat: content 3952, viewport [3942…4874]. Ten points of transcript under a
+    /// screenful of nothing.
+    func testBlankTranscriptIsAlmostNoCoverage() {
+        let fraction = ChatScrollManager.visibleContentFraction(
+            contentHeight: 3952, visibleMinY: 3942, distanceFromBottom: -922
+        )
+        XCTAssertLessThan(fraction, ChatScrollManager.strandedCoverageFloor)
+        XCTAssertTrue(
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: false, visibleContentFraction: fraction,
+                autoScrollOn: true, isOpening: false, searchActive: false
+            )
+        )
+    }
+
+    /// The 585 false positive: at rest at the bottom, only the composer inset below the content.
+    /// The row callback said "gone"; the screen was full.
+    func testAtRestWithComposerInsetIsNotStranded() {
+        let fraction = ChatScrollManager.visibleContentFraction(
+            contentHeight: 2645, visibleMinY: 1804, distanceFromBottom: -91
+        )
+        XCTAssertGreaterThan(fraction, ChatScrollManager.strandedCoverageFloor)
+        XCTAssertFalse(
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: false, visibleContentFraction: fraction,
+                autoScrollOn: true, isOpening: false, searchActive: false
+            ),
+            "recovering a chat that is already at the bottom is what made it jerk"
+        )
+    }
+
+    /// A ratio, not a point count — the inset can grow (keyboard + reply bar) without ever
+    /// approaching half the screen, which is why no pt threshold was safe.
+    func testKeyboardSizedInsetIsStillNotStranded() {
+        let fraction = ChatScrollManager.visibleContentFraction(
+            contentHeight: 4000, visibleMinY: 3200, distanceFromBottom: -340
+        )
+        XCTAssertGreaterThan(fraction, ChatScrollManager.strandedCoverageFloor)
+    }
+
+    /// An unmeasured layout must never read as stranded — that would pin on first appear, before
+    /// anything has been laid out.
+    func testUnknownGeometryReadsAsFullyCovered() {
+        XCTAssertEqual(
+            ChatScrollManager.visibleContentFraction(
+                contentHeight: 0, visibleMinY: 0, distanceFromBottom: 0
+            ),
+            1
+        )
+    }
+
+    /// Scrolled entirely past the end: no overlap at all.
+    func testViewportFullyPastTheEndIsZeroCoverage() {
+        XCTAssertEqual(
+            ChatScrollManager.visibleContentFraction(
+                contentHeight: 1000, visibleMinY: 1200, distanceFromBottom: -900
+            ),
+            0
+        )
+    }
+
+    /// Both witnesses are required. Geometry alone must not pin while the newest row is on screen —
+    /// during the opening the fraction is legitimately small and the pin series owns that window.
+    func testLowCoverageAloneDoesNotRecoverWhileTheNewestRowIsVisible() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: true, visibleContentFraction: 0.01,
+                autoScrollOn: true, isOpening: false, searchActive: false
+            )
+        )
     }
 }

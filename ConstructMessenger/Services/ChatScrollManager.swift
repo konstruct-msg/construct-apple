@@ -138,6 +138,12 @@ class ChatScrollManager {
     @ObservationIgnored
     private(set) var contentHeight: CGFloat = 0
 
+    /// Top of the viewport in content coordinates. With `contentHeight` and `distanceFromBottom`
+    /// this is enough to say how much transcript is actually on screen — see
+    /// `visibleContentFraction`.
+    @ObservationIgnored
+    private(set) var visibleMinY: CGFloat = 0
+
     /// Reference to ScrollViewProxy for programmatic scrolling
     @ObservationIgnored
     private var proxy: ScrollViewProxy?
@@ -386,22 +392,27 @@ class ChatScrollManager {
     ///
     /// Successive changes cancel each other (`pinToBottom` cancels the pending series), so a
     /// burst costs exactly one scroll.
-    func updateContentHeight(_ height: CGFloat) {
-        guard height.isFinite, height > 0 else { return }
-        let previous = contentHeight
-        contentHeight = height
-        guard Self.shouldRepinForHeightChange(
-            previousHeight: previous,
-            currentHeight: height,
-            autoScrollOn: shouldScrollToBottom,
-            isOpening: isOpening
-        ) else { return }
-        Log.debug(
-            "Content \(height > previous ? "grew" : "shrank") \(Int(previous)) → \(Int(height))pt while pinned — re-pin queued (mode=\(viewportMode))",
-            category: "ChatScrollManager"
-        )
-        pinToBottom(reason: .heightSettle)
-    }
+    // `updateContentHeight` and its re-pin are gone as of build 585, and the deletion is the fix.
+    //
+    // Re-pinning on a height change is **circular in a lazy list**: a pin changes which cells are
+    // materialised, which changes the measured content height, which triggers another pin. Build
+    // 585 shows the loop running unbounded — 631 re-pins and 115 recoveries in one session, the
+    // height oscillating 2645 ↔ 3000 ↔ 3151 forever:
+    //
+    //     Content shrank 3000 → 2645  re-pin queued
+    //     last message left the viewport
+    //     SCROLL_RECOVER — re-pinning        ← fromBottom=-91: we were AT the bottom
+    //     Content grew 2645 → 3151    re-pin queued
+    //     Content shrank 3151 → 3000  re-pin queued …
+    //
+    // 583 made the height a trigger to catch a collapse the pins had outrun; 584 debounced it,
+    // which slowed the loop without breaking it, because each pin produces its new height after
+    // the debounce has already fired. The height is a *consequence* of the scroll position, not an
+    // independent signal about it, so no amount of filtering makes it a safe trigger.
+    //
+    // `shouldRecoverStrandedViewport` covers what the height rule was reaching for — it names the
+    // end state (the viewport is off the transcript) instead of the intermediate measurements —
+    // and it is not circular, because a correction that works stops satisfying it.
 
     /// Whether the newest message is currently materialised. Fed by the last row's
     /// `onAppear`/`onDisappear`; `true` until the transcript first reports otherwise, so an empty
@@ -412,14 +423,20 @@ class ChatScrollManager {
     /// place the transcript has vacated. See `shouldRecoverStrandedViewport`.
     func noteLastMessageVisible(_ visible: Bool, searchActive: Bool) {
         isLastMessageVisible = visible
+        let fraction = Self.visibleContentFraction(
+            contentHeight: contentHeight,
+            visibleMinY: visibleMinY,
+            distanceFromBottom: distanceFromBottom
+        )
         guard Self.shouldRecoverStrandedViewport(
             lastMessageVisible: visible,
+            visibleContentFraction: fraction,
             autoScrollOn: shouldScrollToBottom,
             isOpening: isOpening,
             searchActive: searchActive
         ) else { return }
         Log.debug(
-            "SCROLL_RECOVER: mode=\(viewportMode) but newest message off screen (contentHeight=\(Int(contentHeight))pt fromBottom=\(Int(distanceFromBottom))) — re-pinning",
+            "SCROLL_RECOVER: mode=\(viewportMode), newest message off screen and only \(Int(fraction * 100))% of the viewport shows transcript (contentHeight=\(Int(contentHeight))pt fromBottom=\(Int(distanceFromBottom))) — re-pinning",
             category: "ChatScrollManager"
         )
         pinToBottom(reason: .strandedRecover)
@@ -432,10 +449,21 @@ class ChatScrollManager {
         pinToBottom(reason: .composerInset)
     }
 
-    func updateScrollOffset(distanceFromBottom distance: CGFloat, contentFits: Bool = false) {
+    func updateScrollOffset(
+        distanceFromBottom distance: CGFloat,
+        contentFits: Bool = false,
+        contentHeight newContentHeight: CGFloat? = nil,
+        visibleMinY newVisibleMinY: CGFloat? = nil
+    ) {
         guard distance.isFinite else { return }
 
         distanceFromBottom = distance
+        if let newContentHeight, newContentHeight.isFinite, newContentHeight > 0 {
+            contentHeight = newContentHeight
+        }
+        if let newVisibleMinY, newVisibleMinY.isFinite {
+            visibleMinY = newVisibleMinY
+        }
 
         let next = Self.flags(
             current: ScrollFlags(autoScroll: shouldScrollToBottom, showJumpButton: shouldShowScrollToBottomButton),
@@ -526,14 +554,46 @@ class ChatScrollManager {
     ///
     /// Not applied while opening — the corrective pin series owns that window — nor while search
     /// is active, where the transcript is deliberately elsewhere.
+    /// Below this share of the viewport showing transcript, the screen reads as empty and the
+    /// position is wrong whatever the row callbacks say. A **ratio**, not a point count, so it is
+    /// immune to the composer and keyboard insets — those are a fraction of a screen, never half of
+    /// one. Blank chat (build 583): content 3952, viewport [3942…4874] → 1 % covered. Healthy, at
+    /// rest, composer inset only: ~90 %.
+    static let strandedCoverageFloor: CGFloat = 0.5
+
     static func shouldRecoverStrandedViewport(
         lastMessageVisible: Bool,
+        visibleContentFraction: CGFloat,
         autoScrollOn: Bool,
         isOpening: Bool,
         searchActive: Bool
     ) -> Bool {
         guard autoScrollOn, !isOpening, !searchActive else { return false }
-        return !lastMessageVisible
+        guard !lastMessageVisible else { return false }
+        // The row callback alone was the 585 defect. `onDisappear` for the last row fires
+        // transiently while the list re-materialises, so it reported "off screen" at
+        // `fromBottom=-91` — with the viewport sitting at the bottom, 90 % covered by transcript.
+        // Recovering there scrolled a chat that was already correct, which changed the layout,
+        // which fired the callback again. Two witnesses now, and geometry has the casting vote:
+        // it is measured from the same frame it describes, where the callback is an edge that has
+        // already passed.
+        return visibleContentFraction < strandedCoverageFloor
+    }
+
+    /// The share of the viewport actually showing transcript, 0…1.
+    ///
+    /// `1` when the geometry is not yet known — an unmeasured layout must never read as stranded.
+    static func visibleContentFraction(
+        contentHeight: CGFloat,
+        visibleMinY: CGFloat,
+        distanceFromBottom: CGFloat
+    ) -> CGFloat {
+        let visibleMaxY = contentHeight - distanceFromBottom
+        let viewportHeight = visibleMaxY - visibleMinY
+        guard viewportHeight > 0, contentHeight > 0 else { return 1 }
+        let overlap = min(contentHeight, visibleMaxY) - max(0, visibleMinY)
+        guard overlap > 0 else { return 0 }
+        return min(1, overlap / viewportHeight)
     }
 
     /// What a change in transcript length should do to the scroll position.

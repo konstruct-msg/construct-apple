@@ -269,11 +269,10 @@ struct ChatView: View {
                 } action: { old, metrics in
                     scrollManager.updateScrollOffset(
                         distanceFromBottom: metrics.distanceFromBottom,
-                        contentFits: metrics.contentFits
+                        contentFits: metrics.contentFits,
+                        contentHeight: metrics.contentHeight,
+                        visibleMinY: metrics.visibleMinY
                     )
-                    // Growth is a re-pin trigger in its own right — media resolves after the
-                    // opening pins have already fired (TODO 34, build 579 video).
-                    scrollManager.updateContentHeight(metrics.contentHeight)
                     // The blank chat is a *geometry* state and no log has ever shown it: we know
                     // where the messages are and nothing about where the viewport is. One line per
                     // meaningful move answers "was the offset wrong, or were the cells absent".
