@@ -88,6 +88,12 @@ class ChatScrollManager {
         /// `keyboardWillHide` within ~20ms both used to arm a pin series. One series is enough.
         static let keyboardPinCoalesceSeconds: TimeInterval = 0.2
 
+        /// Composer height settles in steps (reply bar → media strip → async thumbnails). Each
+        /// step used to arm a full `[0, 120]` series; one series covers the burst if we re-arm at
+        /// most once per this window. Longer than a single pin tick so intermediate layouts share
+        /// the first series' delayed pass.
+        static let composerInsetCoalesceSeconds: TimeInterval = 0.2
+
         static func delays(for reason: PinReason) -> [UInt64] {
             switch reason {
             case .opening:
@@ -149,6 +155,9 @@ class ChatScrollManager {
     /// observers (build 586: one willShow → two PIN arm keyboardShow).
     @ObservationIgnored private static var lastKeyboardPinReason: PinReason?
     @ObservationIgnored private static var lastKeyboardPinUptime: TimeInterval = 0
+
+    /// Per-manager last composer-inset pin. Not process-wide: two chats must not share a window.
+    @ObservationIgnored private var lastComposerInsetPinUptime: TimeInterval = 0
 
     // MARK: - High-frequency / private state
 
@@ -506,8 +515,19 @@ class ChatScrollManager {
 
     /// Composer inset changed. Re-pin when following; when reading history and a reply/edit is
     /// open, caller should scroll to that message instead.
-    func noteComposerHeightChanged() {
+    ///
+    /// Coalesces multi-step height settles (reply bar + media strip + thumbnails) so one series
+    /// covers the burst — same shape as keyboard pin coalesce, per manager.
+    func noteComposerHeightChanged(now: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         guard shouldScrollToBottom else { return }
+        guard Self.shouldArmComposerInsetPin(
+            now: now,
+            lastTime: lastComposerInsetPinUptime
+        ) else {
+            Self.logGeometry("PIN arm skipped (composer coalesce)")
+            return
+        }
+        lastComposerInsetPinUptime = now
         pinToBottom(reason: .composerInset)
     }
 
@@ -785,6 +805,9 @@ class ChatScrollManager {
         shouldShowScrollToBottomButton = false
         distanceFromBottom = 0
         contentHeight = 0
+        contentFits = false
+        visibleMinY = 0
+        lastComposerInsetPinUptime = 0
         isLastMessageVisible = true
         proxy = nil
 
@@ -804,6 +827,20 @@ class ChatScrollManager {
     ) -> Bool {
         guard reason == .keyboardShow || reason == .keyboardHide else { return true }
         if lastReason == reason, (now - lastTime) < coalesceWindow {
+            return false
+        }
+        return true
+    }
+
+    /// Whether a composer-inset height change should arm a new pin series.
+    /// Pure so multi-step media/reply settles can be asserted without SwiftUI geometry.
+    static func shouldArmComposerInsetPin(
+        now: TimeInterval,
+        lastTime: TimeInterval,
+        coalesceWindow: TimeInterval = PinPolicy.composerInsetCoalesceSeconds
+    ) -> Bool {
+        // lastTime == 0 means never armed on this manager (ProcessInfo uptime is > 0 after launch).
+        if lastTime > 0, (now - lastTime) < coalesceWindow {
             return false
         }
         return true

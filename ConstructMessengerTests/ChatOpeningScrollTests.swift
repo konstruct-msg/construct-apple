@@ -711,6 +711,57 @@ final class ChatOpeningScrollTests: XCTestCase {
         )
     }
 
+    // MARK: - Composer inset pin coalesce
+
+    /// Media/reply height settles in several geometry steps; each used to arm `[0, 120]`.
+    func testComposerInsetPin_coalescesBurstInsideWindow() {
+        let window = ChatScrollManager.PinPolicy.composerInsetCoalesceSeconds
+        XCTAssertTrue(
+            ChatScrollManager.shouldArmComposerInsetPin(now: 10.0, lastTime: 0),
+            "first arm on a manager (lastTime never set)"
+        )
+        XCTAssertFalse(
+            ChatScrollManager.shouldArmComposerInsetPin(now: 10.0 + window / 2, lastTime: 10.0),
+            "reply bar + media strip + thumbnail steps must share one series"
+        )
+        XCTAssertTrue(
+            ChatScrollManager.shouldArmComposerInsetPin(now: 10.0 + window + 0.01, lastTime: 10.0),
+            "a later settle after the window still re-pins"
+        )
+    }
+
+    /// Instance path: following + rapid noteComposerHeightChanged arms once inside the window.
+    func testComposerInsetPin_instanceSkipsSecondArmInBurst() {
+        let manager = ChatScrollManager()
+        manager.shouldScrollToBottom = true
+        manager.noteComposerHeightChanged(now: 20.0)
+        // Second call must not throw / re-arm; last time stays 20.0 so a third inside the window is also skipped.
+        manager.noteComposerHeightChanged(now: 20.05)
+        XCTAssertFalse(
+            ChatScrollManager.shouldArmComposerInsetPin(
+                now: 20.1,
+                lastTime: 20.0
+            )
+        )
+        // After the window, pure decision allows again (instance would arm on next call).
+        let window = ChatScrollManager.PinPolicy.composerInsetCoalesceSeconds
+        XCTAssertTrue(
+            ChatScrollManager.shouldArmComposerInsetPin(now: 20.0 + window + 0.01, lastTime: 20.0)
+        )
+    }
+
+    func testComposerInsetPin_doesNotPinWhenReadingHistory() {
+        let manager = ChatScrollManager()
+        manager.shouldScrollToBottom = false
+        manager.noteComposerHeightChanged(now: 30.0)
+        // Never armed → lastTime still 0 → pure "first arm" would still be true, but the guard
+        // on shouldScrollToBottom means we did not update lastTime. A later follow still arms.
+        XCTAssertTrue(
+            ChatScrollManager.shouldArmComposerInsetPin(now: 30.0, lastTime: 0),
+            "refusing while reading must not burn the coalesce slot"
+        )
+    }
+
     /// Probe logs drowned thermal exports (259 SCROLL_GEO in 4.5 min). Default must stay off.
     func testVerboseGeometryLoggingDefaultsOff() {
         XCTAssertFalse(
