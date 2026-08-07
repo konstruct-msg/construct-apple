@@ -49,8 +49,9 @@ struct DesktopChatView: View {
         var width: CGFloat
         /// Content shorter than the viewport ⇒ nothing to jump to — the FAB must never show.
         var contentFits: Bool
-        /// Total laid-out height — feeds height-settle re-pin (same as iOS ChatView).
+        /// Stored for stranded recovery geometry (not a re-pin trigger — see ChatScrollManager).
         var contentHeight: CGFloat
+        var visibleMinY: CGFloat
     }
 
     init(chat: Chat, context: NSManagedObjectContext) {
@@ -161,14 +162,18 @@ struct DesktopChatView: View {
                         distanceFromBottom: distance,
                         width: geo.containerSize.width,
                         contentFits: geo.contentSize.height <= geo.visibleRect.height + 8,
-                        contentHeight: geo.contentSize.height
+                        contentHeight: geo.contentSize.height,
+                        visibleMinY: geo.visibleRect.minY
                     )
                 } action: { _, metrics in
+                    // Same contract as iOS: record geometry only — never re-pin on height change
+                    // (that loop heated the phone: pin → rematerialize → new height → pin).
                     scrollManager.updateScrollOffset(
                         distanceFromBottom: metrics.distanceFromBottom,
-                        contentFits: metrics.contentFits
+                        contentFits: metrics.contentFits,
+                        contentHeight: metrics.contentHeight,
+                        visibleMinY: metrics.visibleMinY
                     )
-                    scrollManager.updateContentHeight(metrics.contentHeight)
                     if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
                         containerWidth = metrics.width
                     }
