@@ -232,7 +232,24 @@ class BackgroundFetchManager: NSObject {
         Task {
             do {
                 var allMessages: [ChatMessage] = []
-                var cursor: String? = nil
+                // Start where we left off, not at the beginning of the offline stream.
+                //
+                // This was `nil` on every fetch, so each one re-downloaded the backlog from the
+                // start. The pagination below advanced `cursor` *within* a fetch and then dropped
+                // the final value on the floor, so nothing carried across. Build 584, four minutes
+                // on one device: 270 distinct messages routed 61 times each — 12 252 trips through
+                // `routeIncomingMessage`, 51/s, a saturated core and thermal nominal → fair. The
+                // live stream delivered 148 messages in the same window; the amplification was
+                // entirely ours.
+                //
+                // It is also why the server sees no ACK. Deletion from `delivery:offline:{user}` is
+                // cursor-driven, and a fetch that always asks from the beginning never tells the
+                // server anything has been handled — so the same ids come back forever.
+                var cursor: String? = StreamCursorStore.load()
+                Log.info(
+                    "Offline fetch from cursor=\(cursor ?? "beginning")",
+                    category: "BackgroundFetch"
+                )
 
                 repeat {
                     let result = try await MessagingServiceClient.shared.getPendingMessages(
@@ -244,6 +261,21 @@ class BackgroundFetchManager: NSObject {
 
                     if !result.hasMore { break }
                 } while true
+
+                // The final `cursor` is deliberately NOT committed to `StreamCursorStore`.
+                //
+                // The store's invariant is that the committed cursor never advances past a message
+                // that has not been durably handled — advancing tells the server to delete it, and
+                // that is the offline-delivery loss of 2026-06-08. `GetPendingMessagesResponse`
+                // carries one `next_cursor` per *page*, not per message (proto field 2), so this
+                // path cannot say which messages inside a page reached a durable terminal. The
+                // stream owns the advance: it receives a cursor with each entry, tracks it, and
+                // commits over the longest durable prefix. Anything fetched here is the same Redis
+                // entry and is re-delivered on the next Subscribe, where it advances properly.
+                //
+                // Committing per page would need either a per-message cursor on the RPC or an
+                // all-durable check over the page. Until then, seeding is the whole fix — it stops
+                // the re-download, and the stream still moves the watermark.
 
                 await MainActor.run { [allMessages] in
                     // No sealed pre-resolution here: MessageRouter opens the SealedInner at its
