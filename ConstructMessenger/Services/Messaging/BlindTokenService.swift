@@ -100,7 +100,12 @@ final class BlindTokenService {
     /// rejected and retried, which costs a round trip anyway — so a bounded wait here is cheaper
     /// than the failure it prevents. It is paid at most once per batch (20 tokens serve the next
     /// 20 sends), and not at all while the issuer is backing us off.
-    static let tokenWaitTimeout: TimeInterval = 2.0
+    ///
+    /// `nonisolated` because it is a default argument of `ensureTokenAvailable`, and a default
+    /// argument expression is evaluated in the *caller's* context — which is not the main actor.
+    /// An immutable `TimeInterval` needs no isolation to be read safely; same treatment as
+    /// `batchSize` above. Without it this is a warning today and an error under Swift 6.
+    nonisolated static let tokenWaitTimeout: TimeInterval = 2.0
     private static let tokenWaitPollMs: UInt64 = 40
 
     /// Pacing between *successful* batches — our own politeness. Never blocks an empty wallet.
