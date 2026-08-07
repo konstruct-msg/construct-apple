@@ -692,7 +692,12 @@ final class MessageRouter {
                 return
 
             case .droppedPendingRedelivery:
-                // Init lock or cooldown: the message is dropped and comes back only by redelivery.
+                // Since the core change of 2026-08-07 the two causes this was written for — the
+                // init lock and the END_SESSION cooldown — no longer answer with an empty list;
+                // they return `messageQueuedPendingInit` and `endSessionSuppressed`, handled in the
+                // loop below. What can still land here is an `EndSessionReceived` whose archive
+                // produced no actions. The branch stays because an older linked core still
+                // produces the old shape, and because a *new* empty verdict must not be silent.
                 // `streamOutcome` is deliberately left `.durable` — see the metric doc; changing
                 // the cursor policy before we know this ever fires would make a zero unreadable
                 // ("never happens" vs "we stopped counting it").
@@ -783,6 +788,31 @@ final class MessageRouter {
                 // Re-queued for session re-establishment — hold the cursor until drained/cleared.
                 streamOutcome = .deferred
                 return
+            case .endSessionSuppressed(let contactId, let retryAfterMs):
+                // The core hit its END_SESSION cooldown and has taken ownership of sending the
+                // teardown when the cooldown clears. This message is not readable — it is bound to
+                // a ratchet we no longer hold — and it is the peer's re-send after that teardown
+                // that recovers it. Before 2026-08-07 the core answered this case with an empty
+                // action list and never sent the teardown: build 585 lost three media messages
+                // inside one five-second window.
+                Log.info(
+                    "SESSION_STATE[end_session_owed]: teardown for \(contactId.prefix(8))… deferred by cooldown, core sends it in \(retryAfterMs)ms — \(message.id.prefix(8))… awaits the peer's re-send",
+                    category: "SessionInit"
+                )
+                streamOutcome = .deferred
+                if isNewChat { context.delete(chat) }
+                return
+            case .messageQueuedPendingInit(let contactId, let queuedCount):
+                // Held inside the core behind an in-flight init, drained on SessionInitCompleted.
+                // Nothing is required here — but the watermark must not move past a message the
+                // core has not finished with.
+                Log.info(
+                    "SESSION_STATE[queued_in_core]: \(message.id.prefix(8))… held behind session init for \(contactId.prefix(8))… (\(queuedCount) waiting)",
+                    category: "SessionInit"
+                )
+                streamOutcome = .deferred
+                if isNewChat { context.delete(chat) }
+                return
             default:
                 break
             }
@@ -807,6 +837,8 @@ final class MessageRouter {
             case .persistAck:                    return "persistAck"
             case .pruneAckStore:                 return "pruneAckStore"
             case .checkAckInDb:                  return "checkAckInDb"
+            case .endSessionSuppressed:          return "endSessionSuppressed"
+            case .messageQueuedPendingInit:      return "messageQueuedPendingInit"
             default:                             return "unknown(\(action))"
             }
         }.joined(separator: ",")

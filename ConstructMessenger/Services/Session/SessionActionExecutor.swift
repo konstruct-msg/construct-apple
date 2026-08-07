@@ -135,6 +135,24 @@ final class SessionActionExecutor {
         case .healSuppressed(let contactId, let retryAfterMs):
             Log.debug("Heal suppressed for \(contactId.prefix(8))… retry in \(retryAfterMs)ms", category: "SessionActionExecutor")
 
+        case .endSessionSuppressed(let contactId, let retryAfterMs):
+            // The core owes this teardown and will send it when the cooldown clears; nothing to do
+            // here but say so. Until 2026-08-07 this arrived as an empty action list and the
+            // teardown was never sent at all — build 585 lost three media messages that way,
+            // because the peer only re-sends after receiving END_SESSION.
+            Log.info(
+                "END_SESSION suppressed for \(contactId.prefix(8))… — core owes it, sending in \(retryAfterMs)ms",
+                category: "SessionActionExecutor"
+            )
+
+        case .messageQueuedPendingInit(let contactId, let queuedCount):
+            // Held inside the core behind an in-flight init and drained on SessionInitCompleted.
+            // Nothing is lost — which is the point of it having a name.
+            Log.info(
+                "Message queued in core behind session init for \(contactId.prefix(8))… (\(queuedCount) waiting)",
+                category: "SessionActionExecutor"
+            )
+
         // ── ACK DB check: NOT ours to answer ──────────────────────
         case .checkAckInDb(let messageId):
             // `MessageRouter` owns this round-trip, synchronously, because the answer decides how
