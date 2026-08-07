@@ -122,9 +122,10 @@ struct ChatView: View {
                 ScrollView {
                     LazyVStack(spacing: ChatUIConstants.Shell.listSpacing) {
                         // Infinite-scroll sentinel at the TOP (oldest edge). No button — history
-                        // must keep loading as the user scrolls up. LazyVStack also materialises
-                        // this on first layout (scroll is bottom-anchored), so entry still prefetches;
-                        // tagged `.indicatorAppeared` for logs (TODO 34).
+                        // loads as the user reaches the oldest edge. LazyVStack materialises this
+                        // on first layout even when bottom-anchored; the load is gated by
+                        // `ChatScrollManager.shouldLoadOlderHistory` (TODO 34) so entry no longer
+                        // unprompted-prefetches 30 → 50.
                         if viewModel.hasMoreMessages && !renderedMessages.isEmpty {
                             Group {
                                 if viewModel.isLoadingMore {
@@ -139,9 +140,7 @@ struct ChatView: View {
                             .id("loadMoreIndicator")
                             .accessibilityHidden(true)
                             .onAppear {
-                                if !viewModel.isLoadingMore && !isSearchActive {
-                                    viewModel.loadMoreMessages(trigger: .indicatorAppeared)
-                                }
+                                attemptLoadOlderHistory()
                             }
                         }
 
@@ -287,6 +286,10 @@ struct ChatView: View {
                     if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
                         containerWidth = metrics.width
                     }
+                    // Near-top geometry is the reliable trigger once the user scrolls up: sentinel
+                    // `onAppear` alone misses the case where the top stayed materialised from entry
+                    // (no second appear) and would never widen the window.
+                    attemptLoadOlderHistory()
                 }
                 .onAppear {
                     scrollManager.registerProxy(proxy)
@@ -327,6 +330,13 @@ struct ChatView: View {
                         newCount: count,
                         searchActive: isSearchActive
                     )
+                }
+                // Opening refused every sentinel appear; when it ends, a short window that still
+                // fits must be allowed to fill (contentFits path) without waiting for a scroll.
+                .onChange(of: scrollManager.isOpening) { _, opening in
+                    if !opening {
+                        attemptLoadOlderHistory()
+                    }
                 }
                 .onChange(of: viewModel.voicePlaybackScrollTarget) { _, target in
                     // Continuous voice playback advanced — bring the now-playing message
@@ -739,6 +749,17 @@ struct ChatView: View {
         if let user = (try? ctx.fetch(req))?.first {
             contactKTStatus = user.ktStatus
         }
+    }
+
+    /// Infinite-scroll entry point. Policy lives in `ChatScrollManager.shouldLoadOlderHistory` so
+    /// entry-time LazyVStack top materialisation cannot widen the window (TODO 34).
+    private func attemptLoadOlderHistory() {
+        guard scrollManager.shouldLoadOlderHistory(
+            isSearchActive: isSearchActive,
+            isLoadingMore: viewModel.isLoadingMore,
+            hasMoreMessages: viewModel.hasMoreMessages
+        ) else { return }
+        viewModel.loadMoreMessages(trigger: .indicatorAppeared)
     }
 
 

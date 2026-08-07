@@ -104,15 +104,153 @@ final class ChatOpeningScrollTests: XCTestCase {
         )
     }
 
-    /// The regression this fixes. The unprompted load-more grows 30 → 50 on every chat entry; with
-    /// the opening window mistakenly considered over, this took `.animatedFollow` — an animated
-    /// scroll through the composer-inset settle, which dematerializes the LazyVStack.
+    /// Growth during opening (media / FRC — load-more is gated off now) must stay non-animated.
     func testGrowthDuringOpening_isCorrectivePinNotAnimated() {
         XCTAssertEqual(
             ChatScrollManager.countChangeAction(
                 oldCount: 30, newCount: 50, autoScrollOn: true, searchActive: false, isOpening: true
             ),
             .correctivePin
+        )
+    }
+
+    // MARK: - shouldLoadOlderHistory (TODO 34 — unprompted load-more)
+
+    private let atTop: CGFloat = 0
+    private let midList: CGFloat = 800
+
+    /// The defect: LazyVStack materialises the top sentinel on first layout while bottom-anchored.
+    /// Opening must refuse so entry does not grow 30 → 50.
+    func testLoadOlder_refusesDuringOpeningEvenAtTop() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldLoadOlderHistory(
+                isOpening: true,
+                contentFits: false,
+                visibleMinY: atTop,
+                isSearchActive: false,
+                isLoadingMore: false,
+                hasMoreMessages: true
+            )
+        )
+        XCTAssertFalse(
+            ChatScrollManager.shouldLoadOlderHistory(
+                isOpening: true,
+                contentFits: true,
+                visibleMinY: atTop,
+                isSearchActive: false,
+                isLoadingMore: false,
+                hasMoreMessages: true
+            ),
+            "contentFits fill must wait until opening ends"
+        )
+    }
+
+    /// Bottom-anchored entry after opening: top is far from the viewport → no load.
+    func testLoadOlder_refusesWhenFollowingOverflow() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldLoadOlderHistory(
+                isOpening: false,
+                contentFits: false,
+                visibleMinY: midList,
+                isSearchActive: false,
+                isLoadingMore: false,
+                hasMoreMessages: true
+            )
+        )
+    }
+
+    /// Person scrolled to the oldest edge → widen the window.
+    func testLoadOlder_allowsNearTopWhileReadingHistory() {
+        XCTAssertTrue(
+            ChatScrollManager.shouldLoadOlderHistory(
+                isOpening: false,
+                contentFits: false,
+                visibleMinY: atTop,
+                isSearchActive: false,
+                isLoadingMore: false,
+                hasMoreMessages: true
+            )
+        )
+        XCTAssertTrue(
+            ChatScrollManager.shouldLoadOlderHistory(
+                isOpening: false,
+                contentFits: false,
+                visibleMinY: ChatScrollManager.Threshold.nearTop,
+                isSearchActive: false,
+                isLoadingMore: false,
+                hasMoreMessages: true
+            ),
+            "at the threshold still counts as near top"
+        )
+        XCTAssertFalse(
+            ChatScrollManager.shouldLoadOlderHistory(
+                isOpening: false,
+                contentFits: false,
+                visibleMinY: ChatScrollManager.Threshold.nearTop + 1,
+                isSearchActive: false,
+                isLoadingMore: false,
+                hasMoreMessages: true
+            )
+        )
+    }
+
+    /// Short initial page of a longer chat: fill until the list can scroll (after opening).
+    func testLoadOlder_allowsContentFitsFillAfterOpening() {
+        XCTAssertTrue(
+            ChatScrollManager.shouldLoadOlderHistory(
+                isOpening: false,
+                contentFits: true,
+                visibleMinY: midList,
+                isSearchActive: false,
+                isLoadingMore: false,
+                hasMoreMessages: true
+            )
+        )
+    }
+
+    func testLoadOlder_respectsBusyAndSearchAndExhausted() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldLoadOlderHistory(
+                isOpening: false, contentFits: true, visibleMinY: atTop,
+                isSearchActive: true, isLoadingMore: false, hasMoreMessages: true
+            )
+        )
+        XCTAssertFalse(
+            ChatScrollManager.shouldLoadOlderHistory(
+                isOpening: false, contentFits: true, visibleMinY: atTop,
+                isSearchActive: false, isLoadingMore: true, hasMoreMessages: true
+            )
+        )
+        XCTAssertFalse(
+            ChatScrollManager.shouldLoadOlderHistory(
+                isOpening: false, contentFits: true, visibleMinY: atTop,
+                isSearchActive: false, isLoadingMore: false, hasMoreMessages: false
+            )
+        )
+    }
+
+    /// Instance mirror reads last geometry tick (contentFits stored by updateScrollOffset).
+    func testLoadOlder_instanceUsesStoredGeometry() {
+        let manager = ChatScrollManager()
+        manager.beginOpening(settleAfterMs: 10_000)
+        manager.updateScrollOffset(
+            distanceFromBottom: 0,
+            contentFits: true,
+            contentHeight: 200,
+            visibleMinY: 0
+        )
+        XCTAssertFalse(
+            manager.shouldLoadOlderHistory(
+                isSearchActive: false, isLoadingMore: false, hasMoreMessages: true
+            ),
+            "opening still blocks"
+        )
+        manager.endOpening()
+        XCTAssertTrue(
+            manager.shouldLoadOlderHistory(
+                isSearchActive: false, isLoadingMore: false, hasMoreMessages: true
+            ),
+            "after opening, contentFits fill is allowed"
         )
     }
 

@@ -61,7 +61,7 @@ class ChatScrollManager {
     enum PinReason: String, Equatable, CaseIterable {
         /// First non-empty transcript / re-open with messages already loaded.
         case opening
-        /// Count growth while still opening (unprompted load-more 30 → 50).
+        /// Count growth while still opening (media / FRC — not load-more; that is gated off).
         case openingGrowth
         /// Content height settled after media / layout thrash.
         case heightSettle
@@ -124,10 +124,10 @@ class ChatScrollManager {
     /// a reader. `ChatView` used to hold this as its own `didStabilizeInitialScroll` and armed it
     /// from the wrong evidence: the transcript is empty on first appear (the store publishes from
     /// `onViewAppear`, after the first body pass), and an empty list was read as "the opening
-    /// scroll has settled". So by the time the unprompted load-more grew 30 → 50, the opening was
-    /// already considered over and the growth took the *animated* branch — an animated scroll
-    /// through the composer inset settle, which is what leaves the LazyVStack dematerialized and
-    /// the chat blank until a gesture. One authority for "are we still opening", here.
+    /// scroll has settled". Growth during that window (media, FRC) must stay non-animated — an
+    /// animated scroll through the composer inset settle dematerializes the LazyVStack and leaves
+    /// the chat blank until a gesture. One authority for "are we still opening", here. Load-more
+    /// itself is refused while this is true (`shouldLoadOlderHistory`).
     private(set) var isOpening = false
 
     /// Derived viewport owner — prefer this when logging or branching on "who owns scroll".
@@ -167,6 +167,11 @@ class ChatScrollManager {
     @ObservationIgnored
     private(set) var visibleMinY: CGFloat = 0
 
+    /// Content shorter than the viewport. Kept so load-more policy can fill a short window after
+    /// opening without waiting for a second sentinel `onAppear` (which may never come).
+    @ObservationIgnored
+    private(set) var contentFits = false
+
     /// Reference to ScrollViewProxy for programmatic scrolling
     @ObservationIgnored
     private var proxy: ScrollViewProxy?
@@ -197,6 +202,10 @@ class ChatScrollManager {
         static let nearBottom: CGFloat = 60
         /// Need at least this much content below the viewport to show the jump FAB.
         static let showJumpButton: CGFloat = 200
+        /// Viewport top is within this many points of the content top → infinite-scroll may fire.
+        /// Slack covers top padding + the 1pt sentinel / ProgressView so a real "scrolled to oldest"
+        /// is not lost to sub-pixel noise, while bottom-anchored entry (visibleMinY ≫ this) is refused.
+        static let nearTop: CGFloat = 120
     }
 
     // MARK: - Back-compat aliases for tests / call sites
@@ -511,6 +520,7 @@ class ChatScrollManager {
         guard distance.isFinite else { return }
 
         distanceFromBottom = distance
+        self.contentFits = contentFits
         if let newContentHeight, newContentHeight.isFinite, newContentHeight > 0 {
             contentHeight = newContentHeight
         }
@@ -538,6 +548,48 @@ class ChatScrollManager {
     struct ScrollFlags: Equatable {
         var autoScroll: Bool
         var showJumpButton: Bool
+    }
+
+    /// Whether the infinite-scroll sentinel may widen the transcript window.
+    ///
+    /// The defect this closes (TODO 34 / `load_more_unprompted`): `LazyVStack` materialises the
+    /// top sentinel on first layout even when the scroll is bottom-anchored, so every chat entry
+    /// used to prepend a batch (30 → 50) while the opening pin was still landing. Opening already
+    /// stopped that growth from taking the animated branch; this stops the fetch itself.
+    ///
+    /// Allowed only when:
+    /// - not opening (layout is settled enough to read intent), and
+    /// - either the viewport is at the oldest edge (`visibleMinY` near 0), or the whole transcript
+    ///   fits on screen (short window of a longer history — keep filling until it can scroll).
+    static func shouldLoadOlderHistory(
+        isOpening: Bool,
+        contentFits: Bool,
+        visibleMinY: CGFloat,
+        isSearchActive: Bool,
+        isLoadingMore: Bool,
+        hasMoreMessages: Bool
+    ) -> Bool {
+        guard hasMoreMessages, !isLoadingMore, !isSearchActive else { return false }
+        if isOpening { return false }
+        if contentFits { return true }
+        return visibleMinY <= Threshold.nearTop
+    }
+
+    /// Instance view of ``shouldLoadOlderHistory(isOpening:contentFits:visibleMinY:isSearchActive:isLoadingMore:hasMoreMessages:)``
+    /// over the last geometry tick.
+    func shouldLoadOlderHistory(
+        isSearchActive: Bool,
+        isLoadingMore: Bool,
+        hasMoreMessages: Bool
+    ) -> Bool {
+        Self.shouldLoadOlderHistory(
+            isOpening: isOpening,
+            contentFits: contentFits,
+            visibleMinY: visibleMinY,
+            isSearchActive: isSearchActive,
+            isLoadingMore: isLoadingMore,
+            hasMoreMessages: hasMoreMessages
+        )
     }
 
     /// What the two observed flags become for a given scroll geometry.

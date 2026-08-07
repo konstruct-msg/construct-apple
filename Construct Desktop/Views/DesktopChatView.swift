@@ -66,6 +66,7 @@ struct DesktopChatView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         // Infinite-scroll sentinel (same policy as iOS ChatView) — no manual button.
+                        // Load gated by `ChatScrollManager.shouldLoadOlderHistory` (TODO 34).
                         if viewModel.hasMoreMessages && !filteredMessages.isEmpty {
                             Group {
                                 if viewModel.isLoadingMore {
@@ -80,9 +81,7 @@ struct DesktopChatView: View {
                             .id("loadMoreIndicator")
                             .accessibilityHidden(true)
                             .onAppear {
-                                if !viewModel.isLoadingMore && !isSearchActive {
-                                    viewModel.loadMoreMessages(trigger: .indicatorAppeared)
-                                }
+                                attemptLoadOlderHistory()
                             }
                         }
 
@@ -177,6 +176,7 @@ struct DesktopChatView: View {
                     if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
                         containerWidth = metrics.width
                     }
+                    attemptLoadOlderHistory()
                 }
                 .onAppear {
                     scrollManager.registerProxy(proxy)
@@ -204,6 +204,11 @@ struct DesktopChatView: View {
                         newCount: count,
                         searchActive: isSearchActive
                     )
+                }
+                .onChange(of: scrollManager.isOpening) { _, opening in
+                    if !opening {
+                        attemptLoadOlderHistory()
+                    }
                 }
                 .onChange(of: searchText) { _, newValue in
                     if !newValue.isEmpty, let first = filteredMessages.first {
@@ -720,6 +725,16 @@ struct DesktopChatView: View {
         guard !selectedMessages.isEmpty else { return }
         viewModel.deleteMessages(withIds: selectedMessages)
         withAnimation { selectedMessages.removeAll(); isEditMode = false }
+    }
+
+    /// Same gate as iOS `ChatView.attemptLoadOlderHistory` — see `ChatScrollManager.shouldLoadOlderHistory`.
+    private func attemptLoadOlderHistory() {
+        guard scrollManager.shouldLoadOlderHistory(
+            isSearchActive: isSearchActive,
+            isLoadingMore: viewModel.isLoadingMore,
+            hasMoreMessages: viewModel.hasMoreMessages
+        ) else { return }
+        viewModel.loadMoreMessages(trigger: .indicatorAppeared)
     }
 
     private func loadContactKTStatus() {

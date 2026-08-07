@@ -9,9 +9,11 @@ import CoreData
 /// Who asked for an older batch. Recorded because the two callers are not equivalent and the
 /// difference is invisible in a log otherwise — see `loadMoreMessages(trigger:)` and TODO 34.
 enum LoadMoreTrigger: String {
-    /// The user tapped "load older messages".
+    /// Explicit request (tests, any future manual control). Always honored by the store.
     case user
-    /// `ChatView`'s load-more indicator appeared. Unprompted: it fires on entering a chat.
+    /// Infinite-scroll sentinel / near-top geometry. View layer gates via
+    /// `ChatScrollManager.shouldLoadOlderHistory` so entry-time LazyVStack top materialisation
+    /// does not widen the window; residual hits of the counter mean a real near-top or contentFits fill.
     case indicatorAppeared
 }
 
@@ -165,15 +167,11 @@ final class ChatMessageStore: NSObject {
 
     // MARK: - Load more
 
-    /// `trigger` says who asked. Two callers exist and they mean very different things: the user
-    /// tapping "load older", and `ChatView`'s `.onAppear` on the load-more indicator — which fires
-    /// on *every* chat entry, unprompted, because `LazyVStack` materialises top-down and the
-    /// indicator sits at the top even when the scroll is anchored to the bottom.
-    ///
-    /// That unprompted call prepends a batch while the ScrollView is still settling its position,
-    /// which is the leading suspect for "the chat scrolled off into nothing" (TODO 34). The two
-    /// were indistinguishable in the log, so the suspicion could not be confirmed or dismissed
-    /// from a device run. Now it can be.
+    /// `trigger` says who asked. The store always widens when called; the view is responsible for
+    /// not calling `.indicatorAppeared` during opening or while following the bottom (see
+    /// `ChatScrollManager.shouldLoadOlderHistory`). The metric below is the residual gauge — entry
+    /// used to fire it on every chat open (30 → 50); after the gate it should only tick on a real
+    /// near-top scroll or a short-window fill.
     func loadMoreMessages(trigger: LoadMoreTrigger = .user) {
         guard let vm = viewModel else { return }
         guard !vm.isLoadingMore, vm.hasMoreMessages, let oldestTimestamp = oldestLoadedTimestamp else { return }
