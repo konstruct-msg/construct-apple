@@ -181,10 +181,25 @@ extension Message {
         (value(forKey: "timestamp") as? Date) ?? Date()
     }
 
-    // Computed property для удобства
+    /// The delivery status, with the one rule that keeps ~30 uncoordinated writers honest:
+    /// a status that says nothing about arrival may not overwrite one that does. The rule lives
+    /// in the setter on purpose — auditing every call site is exactly what failed before
+    /// (see `DeliveryStatusTransition` for the build-585 incident). A refused write is logged,
+    /// never silent.
     var deliveryStatus: DeliveryStatus {
         get { DeliveryStatus(rawValue: deliveryStatusRaw) ?? .sending }
-        set { deliveryStatusRaw = newValue.rawValue }
+        set {
+            let current = deliveryStatus
+            guard let resolved = DeliveryStatusTransition.resolve(current: current, proposed: newValue) else {
+                Log.info(
+                    "Delivery status \(current) → \(newValue) refused for \(id.prefix(8))… — " +
+                    "\(newValue) knows nothing about arrival and \(current) does",
+                    category: "MessagePersistence"
+                )
+                return
+            }
+            deliveryStatusRaw = resolved.rawValue
+        }
     }
 
     var contentType: MessageContentType {
