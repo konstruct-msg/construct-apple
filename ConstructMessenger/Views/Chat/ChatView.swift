@@ -86,16 +86,16 @@ struct ChatView: View {
         var visibleMinY: CGFloat
     }
 
-    /// One line per meaningful viewport move. The blank chat has never appeared in a log because
-    /// nothing recorded *where the viewport was* — only what the store published. Thresholded so a
-    /// settled list is silent and an opening is fully traced.
+    /// Probe log for viewport moves. Gated by ``ChatScrollManager.verboseGeometryLogging`` —
+    /// default off so thermal/export sessions stay readable. Requires a real move/growth even
+    /// during opening (the old `|| isOpening` branch logged every layout pass).
     private func logScrollGeometryIfChanged(from old: ChatScrollGeometry, to new: ChatScrollGeometry) {
+        guard ChatScrollManager.verboseGeometryLogging else { return }
         let moved = abs(new.visibleMinY - old.visibleMinY) >= Layout.geometryLogThreshold
         let grew = abs(new.contentHeight - old.contentHeight) >= Layout.geometryLogThreshold
-        guard moved || grew || scrollManager.isOpening else { return }
-        Log.debug(
-            "SCROLL_GEO content=\(Int(new.contentHeight))pt viewport=[\(Int(new.visibleMinY))…\(Int(new.visibleMinY + (new.contentHeight - new.distanceFromBottom - new.visibleMinY)))] fromBottom=\(Int(new.distanceFromBottom)) msgs=\(viewModel.messages.count) mode=\(scrollManager.viewportMode) autoScroll=\(scrollManager.shouldScrollToBottom)",
-            category: "ChatScrollManager"
+        guard moved || grew else { return }
+        ChatScrollManager.logGeometry(
+            "SCROLL_GEO content=\(Int(new.contentHeight))pt viewport=[\(Int(new.visibleMinY))…\(Int(new.visibleMinY + (new.contentHeight - new.distanceFromBottom - new.visibleMinY)))] fromBottom=\(Int(new.distanceFromBottom)) msgs=\(viewModel.messages.count) mode=\(scrollManager.viewportMode) autoScroll=\(scrollManager.shouldScrollToBottom)"
         )
     }
 
@@ -198,13 +198,17 @@ struct ChatView: View {
                                 // `ChatScrollManager.shouldRecoverStrandedViewport`.
                                 .onAppear {
                                     if index == renderedMessages.count - 1 {
-                                        Log.debug("SCROLL_ANCHOR last message visible (\(message.id.prefix(8))…, idx=\(index)/\(renderedMessages.count))", category: "ChatScrollManager")
+                                        ChatScrollManager.logGeometry(
+                                            "SCROLL_ANCHOR last message visible (\(message.id.prefix(8))…, idx=\(index)/\(renderedMessages.count))"
+                                        )
                                         scrollManager.noteLastMessageVisible(true, searchActive: isSearchActive)
                                     }
                                 }
                                 .onDisappear {
                                     if index == renderedMessages.count - 1 {
-                                        Log.debug("SCROLL_ANCHOR last message left the viewport (\(message.id.prefix(8))…)", category: "ChatScrollManager")
+                                        ChatScrollManager.logGeometry(
+                                            "SCROLL_ANCHOR last message left the viewport (\(message.id.prefix(8))…)"
+                                        )
                                         scrollManager.noteLastMessageVisible(false, searchActive: isSearchActive)
                                     }
                                 }
@@ -237,10 +241,12 @@ struct ChatView: View {
                             .frame(height: 1)
                             .id("bottom")
                             .onAppear {
-                                Log.debug("SCROLL_ANCHOR bottom visible (msgs=\(renderedMessages.count), opening=\(scrollManager.isOpening))", category: "ChatScrollManager")
+                                ChatScrollManager.logGeometry(
+                                    "SCROLL_ANCHOR bottom visible (msgs=\(renderedMessages.count), opening=\(scrollManager.isOpening))"
+                                )
                             }
                             .onDisappear {
-                                Log.debug("SCROLL_ANCHOR bottom left the viewport", category: "ChatScrollManager")
+                                ChatScrollManager.logGeometry("SCROLL_ANCHOR bottom left the viewport")
                             }
                     }
                     // Top space for floating nav capsule (+ call mini-bar when a call is active).

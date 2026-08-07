@@ -429,6 +429,14 @@ final class ChatOpeningScrollTests: XCTestCase {
         )
     }
 
+    /// Probe logs drowned thermal exports (259 SCROLL_GEO in 4.5 min). Default must stay off.
+    func testVerboseGeometryLoggingDefaultsOff() {
+        XCTAssertFalse(
+            ChatScrollManager.verboseGeometryLogging,
+            "export sessions should not pay for geometry probes unless someone flips the flag"
+        )
+    }
+
     // MARK: - The loop I built, and the geometry that breaks it (build 585)
 
     //  583 made a height change a re-pin trigger; 584 debounced it. Build 585 shows why neither

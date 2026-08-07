@@ -30,6 +30,20 @@ import UIKit
 @MainActor
 @Observable
 class ChatScrollManager {
+    // MARK: - Logging
+
+    /// High-frequency geometry / anchor probes (`SCROLL_GEO`, `SCROLL_ANCHOR`, pin ticks).
+    /// **Off by default even in DEBUG** — build 586 exported 259 `SCROLL_GEO` + 50+ anchor lines
+    /// in 4.5 minutes while the useful signal was the rare `PIN arm` / `SCROLL_RECOVER`. Flip on
+    /// for a live blank-chat investigation; do not leave on when collecting thermal logs.
+    static var verboseGeometryLogging = false
+
+    /// Probe-level scroll diagnostics. No-op unless ``verboseGeometryLogging`` is on.
+    static func logGeometry(_ message: @autoclosure () -> String) {
+        guard verboseGeometryLogging else { return }
+        Log.debug(message(), category: "ChatScrollManager")
+    }
+
     // MARK: - Viewport ownership
 
     /// Who currently owns the scroll position. Derived from `isOpening` + `shouldScrollToBottom`
@@ -289,12 +303,11 @@ class ChatScrollManager {
                 // tick 0 of every single opening was a silent no-op (8 of 8 in the build-581 log).
                 // Skip the tick and keep the series — the later ticks are what it is there for.
                 guard self.proxy != nil else {
-                    Log.debug("PIN tick \(index) skipped — ScrollViewProxy not registered yet", category: "ChatScrollManager")
+                    Self.logGeometry("PIN tick \(index) skipped — ScrollViewProxy not registered yet")
                     continue
                 }
-                Log.debug(
-                    "PIN tick \(index) (+\(ms)ms) → \(messageId), mode=\(self.viewportMode), contentHeight=\(Int(self.contentHeight))pt fromBottom=\(Int(self.distanceFromBottom))",
-                    category: "ChatScrollManager"
+                Self.logGeometry(
+                    "PIN tick \(index) (+\(ms)ms) → \(messageId), mode=\(self.viewportMode), contentHeight=\(Int(self.contentHeight))pt fromBottom=\(Int(self.distanceFromBottom))"
                 )
                 self.scrollToBottom(messageId: messageId, animated: false)
                 // First tick is often a no-op if LazyVStack has not produced the anchor yet.
