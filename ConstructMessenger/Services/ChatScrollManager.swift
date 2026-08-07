@@ -70,6 +70,10 @@ class ChatScrollManager {
         /// Opening settle window — after this, geometry is intent again unless the person touched.
         static let openingSettleMs: UInt64 = 600
 
+        /// Two `ChatScrollManager` instances (SwiftUI re-create) and/or a double-delivered
+        /// `keyboardWillHide` within ~20ms both used to arm a pin series. One series is enough.
+        static let keyboardPinCoalesceSeconds: TimeInterval = 0.2
+
         static func delays(for reason: PinReason) -> [UInt64] {
             switch reason {
             case .opening:
@@ -126,6 +130,11 @@ class ChatScrollManager {
 
     /// "Jump to bottom" FAB — only flips when crossing the threshold (not every pixel).
     var shouldShowScrollToBottomButton = false
+
+    /// Process-wide last keyboard pin — coalesces duplicate NC deliveries and multi-manager
+    /// observers (build 586: one willShow → two PIN arm keyboardShow).
+    @ObservationIgnored private static var lastKeyboardPinReason: PinReason?
+    @ObservationIgnored private static var lastKeyboardPinUptime: TimeInterval = 0
 
     // MARK: - High-frequency / private state
 
@@ -649,6 +658,51 @@ class ChatScrollManager {
 
     // MARK: - Keyboard Handling
 
+    /// Whether another keyboard pin of the same reason was armed too recently.
+    /// Pure so the 586 double-arm (two managers × one notification) can be asserted without UIKit.
+    static func shouldArmKeyboardPin(
+        reason: PinReason,
+        now: TimeInterval,
+        lastReason: PinReason?,
+        lastTime: TimeInterval,
+        coalesceWindow: TimeInterval = PinPolicy.keyboardPinCoalesceSeconds
+    ) -> Bool {
+        guard reason == .keyboardShow || reason == .keyboardHide else { return true }
+        if lastReason == reason, (now - lastTime) < coalesceWindow {
+            return false
+        }
+        return true
+    }
+
+    /// True when this instance should treat a willShow height as a new keyboard event
+    /// (not a same-frame redelivery).
+    static func shouldApplyKeyboardShow(newHeight: CGFloat, previousHeight: CGFloat) -> Bool {
+        guard newHeight.isFinite, newHeight > 0 else { return false }
+        if previousHeight > 0, abs(newHeight - previousHeight) < 1 {
+            return false
+        }
+        return true
+    }
+
+    private func tryArmKeyboardPin(reason: PinReason) {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard Self.shouldArmKeyboardPin(
+            reason: reason,
+            now: now,
+            lastReason: Self.lastKeyboardPinReason,
+            lastTime: Self.lastKeyboardPinUptime
+        ) else {
+            Log.debug(
+                "PIN arm skipped (keyboard coalesce) reason=\(reason.rawValue)",
+                category: "ChatScrollManager"
+            )
+            return
+        }
+        Self.lastKeyboardPinReason = reason
+        Self.lastKeyboardPinUptime = now
+        pinToBottom(reason: reason)
+    }
+
     private func setupKeyboardObservers() {
         #if canImport(UIKit)
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
@@ -656,28 +710,34 @@ class ChatScrollManager {
                 (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.height
             }
             .sink { [weak self] height in
-                self?.keyboardHeight = height
+                guard let self else { return }
+                let previous = self.keyboardHeight
+                self.keyboardHeight = height
                 // Corrective pin only — animated scroll during keyboard animation
                 // dematerializes LazyVStack (empty chat flash).
-                guard let self else { return }
                 if self.shouldShowScrollToBottomButton {
                     self.shouldShowScrollToBottomButton = false
                 }
-                if self.shouldScrollToBottom {
-                    self.pinToBottom(reason: .keyboardShow)
+                guard self.shouldScrollToBottom else { return }
+                guard Self.shouldApplyKeyboardShow(newHeight: height, previousHeight: previous) else {
+                    return
                 }
+                self.tryArmKeyboardPin(reason: .keyboardShow)
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
             .sink { [weak self] _ in
                 guard let self else { return }
+                // Second hide on the same instance (system double-delivery ~20ms later) is a no-op.
+                let wasVisible = self.keyboardHeight > 0
                 self.keyboardHeight = 0
                 // After keyboard dismisses, re-enable auto-scroll and clear any FAB that
                 // latched during the keyboard geometry thrash.
                 self.shouldScrollToBottom = true
                 self.shouldShowScrollToBottomButton = false
-                self.pinToBottom(reason: .keyboardHide)
+                guard wasVisible else { return }
+                self.tryArmKeyboardPin(reason: .keyboardHide)
             }
             .store(in: &cancellables)
         #endif

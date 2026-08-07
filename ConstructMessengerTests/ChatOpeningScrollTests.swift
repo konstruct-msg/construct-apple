@@ -365,6 +365,70 @@ final class ChatOpeningScrollTests: XCTestCase {
         XCTAssertEqual(manager.viewportMode, .following)
     }
 
+    // MARK: - Keyboard pin coalesce (build 586: one willShow → two PIN arm)
+
+    //  Log 586: one KEYBOARD_TRACE will SHOW, two `PIN arm reason=keyboardShow` — two live
+    //  ChatScrollManager instances both subscribed. will HIDE arrived twice ~20ms apart and each
+    //  doubled again (4 arms). One pin series is enough; the rest only restarts pinTask.
+
+    func testKeyboardPin_sameReasonWithinWindowIsCoalesced() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldArmKeyboardPin(
+                reason: .keyboardShow,
+                now: 10.05,
+                lastReason: .keyboardShow,
+                lastTime: 10.0
+            ),
+            "second manager / double NC within 200ms must not arm another series"
+        )
+        XCTAssertFalse(
+            ChatScrollManager.shouldArmKeyboardPin(
+                reason: .keyboardHide,
+                now: 10.02,
+                lastReason: .keyboardHide,
+                lastTime: 10.0
+            )
+        )
+    }
+
+    func testKeyboardPin_oppositeReasonIsNotCoalesced() {
+        XCTAssertTrue(
+            ChatScrollManager.shouldArmKeyboardPin(
+                reason: .keyboardHide,
+                now: 10.05,
+                lastReason: .keyboardShow,
+                lastTime: 10.0
+            ),
+            "hide after show is a real transition even inside the window"
+        )
+    }
+
+    func testKeyboardPin_sameReasonAfterWindowArmsAgain() {
+        let window = ChatScrollManager.PinPolicy.keyboardPinCoalesceSeconds
+        XCTAssertTrue(
+            ChatScrollManager.shouldArmKeyboardPin(
+                reason: .keyboardShow,
+                now: 10.0 + window + 0.01,
+                lastReason: .keyboardShow,
+                lastTime: 10.0
+            )
+        )
+    }
+
+    func testKeyboardShow_sameHeightIsNoOp() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldApplyKeyboardShow(newHeight: 336, previousHeight: 336)
+        )
+        XCTAssertTrue(
+            ChatScrollManager.shouldApplyKeyboardShow(newHeight: 336, previousHeight: 0),
+            "first show on this instance"
+        )
+        XCTAssertTrue(
+            ChatScrollManager.shouldApplyKeyboardShow(newHeight: 380, previousHeight: 336),
+            "keyboard resize (emoji bar / floating) still re-pins"
+        )
+    }
+
     // MARK: - The loop I built, and the geometry that breaks it (build 585)
 
     //  583 made a height change a re-pin trigger; 584 debounced it. Build 585 shows why neither
