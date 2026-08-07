@@ -152,6 +152,15 @@ class SessionInitializationService {
                 allowStale: allowStale
             )
             PerformanceMetrics.shared.end(.sessionInitStart, endEvent: .sessionInitEnd, label: String(userId.prefix(8)))
+            // A session now exists — date it here, where it is created, not where it is later
+            // confirmed. `markActive` (the peer's `session_ready`) used to be the INITIATOR's only
+            // writer, which left every freshly built session undatable until the peer answered:
+            // build 585 destroyed a session built at 10:54:07 with an END_SESSION stamped 10:54:03,
+            // because the stale-check read `established=nil`. See `SessionEstablishment`.
+            //
+            // Every INITIATOR path funnels through this method, so one call covers prewarm,
+            // proactive init, re-init after END_SESSION, multi-device and profile share.
+            SessionEstablishment.record(for: userId)
             // Track at-risk state: a degraded (stale-SPK) init is authentic but should be
             // re-keyed once the peer rotates; a clean init clears any prior at-risk flag.
             if allowStale {

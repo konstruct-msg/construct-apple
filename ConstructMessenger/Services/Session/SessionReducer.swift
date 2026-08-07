@@ -462,12 +462,20 @@ enum SessionReducer {
 
     /// Whether a received END_SESSION pre-dates our established session and should be discarded.
     ///
-    /// `establishedAt` is now persisted per-peer in the Keychain (see
-    /// `SessionCoordinator.apply` / `KeychainManager.saveSessionEstablishedAt`) and restored on
-    /// launch, so this can filter a re-delivered old END_SESSION even right after a cold start —
-    /// the case that used to tear down a healthy restored session and trigger SESSION_RESET_INIT
-    /// churn. `nil` only remains for sessions established by a build predating that persistence
-    /// (one-time gap, resolved on their next re-establishment); there this returns `false`.
+    /// `establishedAt` is persisted per-peer (see `SessionEstablishment`) and restored on launch,
+    /// so this can filter a re-delivered old END_SESSION even right after a cold start — the case
+    /// that used to tear down a healthy restored session and trigger SESSION_RESET_INIT churn.
+    ///
+    /// The claim that `nil` "only remains for sessions established by a build predating that
+    /// persistence" was wrong, and build 585 disproved it: an INITIATOR recorded nothing until the
+    /// peer's `session_ready` came back, so every freshly built session was undatable for as long
+    /// as confirmation took. Fixed by recording at creation; `nil` now means no session on record.
+    ///
+    /// **This predicate cannot settle a crossing teardown.** `timestamp` is the *peer's* clock,
+    /// which is why the fudge exists, and any teardown sent within the fudge of our establishment
+    /// reads as current. Build 585 lost a session built at 10:54:07 to an END_SESSION stamped
+    /// 10:54:03 — four seconds, inside the five-second tolerance. Widening the fudge is not the
+    /// answer (it eats genuine teardowns); naming the condemned session on the wire is.
     static func isEndSessionStale(establishedAt: UInt64?, timestamp: UInt64, fudgeSeconds: UInt64) -> Bool {
         guard let establishedAt else { return false }
         return timestamp + fudgeSeconds < establishedAt

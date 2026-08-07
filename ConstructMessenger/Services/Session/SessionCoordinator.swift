@@ -120,9 +120,9 @@ final class SessionCoordinator: MessageRouterDelegate {
         // must not drop its establishment time — a terminal failure will clear it via `nil`).
         switch newPhase {
         case .active(let at):
-            KeychainManager.shared.saveSessionEstablishedAt(at, for: userId)
+            SessionEstablishment.record(for: userId, at: at)
         case .none:
-            KeychainManager.shared.deleteSessionEstablishedAt(for: userId)
+            SessionEstablishment.clear(for: userId)
         case .initializing:
             break
         }
@@ -183,7 +183,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // No in-memory phase (typical right after launch: the Rust core restored the session
         // from CFE but this map starts empty). Fall back to the persisted timestamp so the
         // END_SESSION stale-check can still filter a re-delivered old END_SESSION.
-        return KeychainManager.shared.loadSessionEstablishedAt(for: userId)
+        return SessionEstablishment.loadTimestamp(for: userId)
     }
 
     // MARK: - Injected references
@@ -221,7 +221,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             if establishedAt(for: userId) != nil { continue }
             // Prefer an existing Keychain value; otherwise stamp "now" so historical
             // offline-queue END_SESSIONs (ts << now) are treated as stale.
-            if let persisted = KeychainManager.shared.loadSessionEstablishedAt(for: userId) {
+            if let persisted = SessionEstablishment.loadTimestamp(for: userId) {
                 sessionPhases[userId] = .active(establishedAt: persisted)
             } else {
                 apply(.markActive(at: now), for: userId)
