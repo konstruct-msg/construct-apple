@@ -441,26 +441,53 @@ class ChatScrollManager {
     /// or not-yet-rendered list never reads as stranded.
     @ObservationIgnored private(set) var isLastMessageVisible = true
 
+    /// When the newest message went off screen, or nil while it is on screen.
+    @ObservationIgnored private var newestHiddenSince: Date?
+    @ObservationIgnored private var absenceRecheckTask: Task<Void, Never>?
+
     /// Report the newest message appearing or leaving, and recover if auto-scroll is anchored to a
     /// place the transcript has vacated. See `shouldRecoverStrandedViewport`.
-    func noteLastMessageVisible(_ visible: Bool, searchActive: Bool) {
+    func noteLastMessageVisible(_ visible: Bool, searchActive: Bool, now: Date = Date()) {
         isLastMessageVisible = visible
+        if visible {
+            newestHiddenSince = nil
+            absenceRecheckTask?.cancel()
+            absenceRecheckTask = nil
+        } else if newestHiddenSince == nil {
+            newestHiddenSince = now
+            // The callback is an edge: nothing fires again while the message simply stays away,
+            // so the persistence half of the rule needs its own look back. Build 587 sat blank
+            // for 4 s and then 26 s without a single further callback.
+            absenceRecheckTask?.cancel()
+            absenceRecheckTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(UInt64(Self.newestMessageAbsenceGrace * 1000) + 50))
+                guard !Task.isCancelled, let self, !self.isLastMessageVisible else { return }
+                self.evaluateStrandedViewport(searchActive: searchActive)
+            }
+        }
+        evaluateStrandedViewport(searchActive: searchActive, now: now)
+    }
+
+    private func evaluateStrandedViewport(searchActive: Bool, now: Date = Date()) {
         let fraction = Self.visibleContentFraction(
             contentHeight: contentHeight,
             visibleMinY: visibleMinY,
             distanceFromBottom: distanceFromBottom
         )
+        let hiddenFor = newestHiddenSince.map { now.timeIntervalSince($0) } ?? 0
         guard Self.shouldRecoverStrandedViewport(
-            lastMessageVisible: visible,
+            lastMessageVisible: isLastMessageVisible,
+            newestHiddenFor: hiddenFor,
             visibleContentFraction: fraction,
             autoScrollOn: shouldScrollToBottom,
             isOpening: isOpening,
             searchActive: searchActive
         ) else { return }
         Log.debug(
-            "SCROLL_RECOVER: mode=\(viewportMode), newest message off screen and only \(Int(fraction * 100))% of the viewport shows transcript (contentHeight=\(Int(contentHeight))pt fromBottom=\(Int(distanceFromBottom))) — re-pinning",
+            "SCROLL_RECOVER: mode=\(viewportMode), newest off screen for \(String(format: "%.1f", hiddenFor))s, \(Int(fraction * 100))% of the viewport shows transcript (contentHeight=\(Int(contentHeight))pt fromBottom=\(Int(distanceFromBottom))) — re-pinning",
             category: "ChatScrollManager"
         )
+        newestHiddenSince = nil
         pinToBottom(reason: .strandedRecover)
     }
 
@@ -583,23 +610,46 @@ class ChatScrollManager {
     /// rest, composer inset only: ~90 %.
     static let strandedCoverageFloor: CGFloat = 0.5
 
+    /// How long the newest message must stay off screen before its absence counts as a strand
+    /// rather than a re-materialisation flicker.
+    ///
+    /// Measured, not guessed. Build 585 (the false-positive run): 120 absence episodes, 112 of
+    /// them shorter than a second. Build 587 (the blank chat): 4 s and 26 s. A second cleanly
+    /// separates the flicker from the failure.
+    static let newestMessageAbsenceGrace: TimeInterval = 1.0
+
+    /// Two independent ways to be stranded, because the two witnesses are each blind to one of
+    /// them — and the 585→587 sequence is what proved it:
+    ///
+    /// - **The viewport is off the transcript** (coverage below the floor). Geometry sees this
+    ///   and the row callback may not. Build 583: content 3952, viewport [3942…4874], 1 % covered.
+    ///
+    /// - **The newest message is not rendered, persistently.** The row callback sees this and
+    ///   geometry *cannot*, which is the 587 regression: `content=4961 viewport=[4113…5045]
+    ///   fromBottom=-84` reads as 91 % covered while the screen is empty, because a `LazyVStack`
+    ///   reports height for rows it has not rendered. Content height was the very thing lying,
+    ///   so a metric derived from it could only agree with the lie. The chat filled the moment
+    ///   the keyboard forced a re-layout — the giveaway that the rows, not the position, were
+    ///   missing.
+    ///
+    /// So neither witness gets a veto; each fires on what it can actually see. What keeps the row
+    /// callback from re-creating the 585 storm is duration, not arbitration: `onDisappear` flaps
+    /// for a frame or two during re-materialisation and cannot sustain an absence.
     static func shouldRecoverStrandedViewport(
         lastMessageVisible: Bool,
+        newestHiddenFor: TimeInterval,
         visibleContentFraction: CGFloat,
         autoScrollOn: Bool,
         isOpening: Bool,
         searchActive: Bool
     ) -> Bool {
         guard autoScrollOn, !isOpening, !searchActive else { return false }
+        // The newest row being on screen is proof the chat is not blank, and it outranks any
+        // ratio: a short transcript legitimately covers very little of the viewport. Coverage
+        // answers *where the viewport is*, never *whether anything is drawn*.
         guard !lastMessageVisible else { return false }
-        // The row callback alone was the 585 defect. `onDisappear` for the last row fires
-        // transiently while the list re-materialises, so it reported "off screen" at
-        // `fromBottom=-91` — with the viewport sitting at the bottom, 90 % covered by transcript.
-        // Recovering there scrolled a chat that was already correct, which changed the layout,
-        // which fired the callback again. Two witnesses now, and geometry has the casting vote:
-        // it is measured from the same frame it describes, where the callback is an edge that has
-        // already passed.
         return visibleContentFraction < strandedCoverageFloor
+            || newestHiddenFor >= newestMessageAbsenceGrace
     }
 
     /// The share of the viewport actually showing transcript, 0…1.

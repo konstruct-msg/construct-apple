@@ -232,7 +232,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testPinnedButLastMessageOffScreenRecovers() {
         XCTAssertTrue(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: false, searchActive: false
+                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: false, searchActive: false
             )
         )
     }
@@ -240,7 +240,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testLastMessageVisibleNeedsNoRecovery() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: true, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: false, searchActive: false
+                lastMessageVisible: true, newestHiddenFor: 0, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: false, searchActive: false
             )
         )
     }
@@ -250,7 +250,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testReadingUpTheTranscriptIsNotRecovered() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, visibleContentFraction: 0.01, autoScrollOn: false, isOpening: false, searchActive: false
+                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: 0.01, autoScrollOn: false, isOpening: false, searchActive: false
             ),
             "recovering here would yank a reader back to the bottom on every scroll"
         )
@@ -261,7 +261,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testOpeningWindowOwnsItsOwnCorrection() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: true, searchActive: false
+                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: true, searchActive: false
             )
         )
     }
@@ -270,7 +270,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testSearchIsNotRecovered() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: false, searchActive: true
+                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: 0.01, autoScrollOn: true, isOpening: false, searchActive: true
             )
         )
     }
@@ -279,6 +279,100 @@ final class ChatOpeningScrollTests: XCTestCase {
     /// transcript never reads as stranded.
     func testManagerStartsNotStranded() {
         XCTAssertTrue(ChatScrollManager().isLastMessageVisible)
+    }
+
+    // MARK: - Build 587: geometry cannot see an unrendered row
+    //
+    // 586 shipped geometry as the casting vote and the blank chat came back. The log:
+    //
+    //     16:58:47  SCROLL_ANCHOR last message left the viewport (0b9bd1ab…)
+    //     16:58:47  SCROLL_GEO content=4961pt viewport=[4113…5045] fromBottom=-84 mode=opening
+    //     …four seconds of nothing…
+    //     16:58:51  SCROLL_ANCHOR last message visible (0b9bd1ab…, idx=49/50)
+    //
+    // 848 of 932 viewport points "showing transcript" — 91 % — while the screen was empty. A
+    // `LazyVStack` reports height for rows it has not rendered, so the content height was itself
+    // the lie, and a coverage ratio derived from it could only agree with the lie. The chat filled
+    // the instant the keyboard forced a re-layout: the rows were missing, not the position.
+    //
+    // The witness that CAN see this is the row callback — the one 585 demoted for flapping. What
+    // separates the flap from the failure is duration, measured in both logs: 585 had 120 absence
+    // episodes, 112 under a second; 587's blanks lasted 4 s and 26 s.
+
+    func testNewestRowMissingBehindHealthyGeometryStillRecovers() {
+        let fraction = ChatScrollManager.visibleContentFraction(
+            contentHeight: 4961, visibleMinY: 4113, distanceFromBottom: -84
+        )
+        XCTAssertGreaterThan(fraction, ChatScrollManager.strandedCoverageFloor,
+                             "the 587 geometry reads healthy — that is the whole problem")
+        XCTAssertTrue(
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: false, newestHiddenFor: 4, visibleContentFraction: fraction,
+                autoScrollOn: true, isOpening: false, searchActive: false
+            ),
+            "geometry no longer holds a veto over a row that is provably not on screen"
+        )
+    }
+
+    /// The 585 storm, which duration — not arbitration — is what prevents.
+    func testMomentaryDisappearanceDuringRematerialisationIsIgnored() {
+        let fraction = ChatScrollManager.visibleContentFraction(
+            contentHeight: 4694, visibleMinY: 4130, distanceFromBottom: -91
+        )
+        XCTAssertFalse(
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: false, newestHiddenFor: 0.1, visibleContentFraction: fraction,
+                autoScrollOn: true, isOpening: false, searchActive: false
+            ),
+            "a flicker cannot sustain an absence; 112 of 585's 120 episodes were under a second"
+        )
+    }
+
+    func testAbsenceMustOutlastTheGraceExactly() {
+        let grace = ChatScrollManager.newestMessageAbsenceGrace
+        func stranded(after seconds: TimeInterval) -> Bool {
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: false, newestHiddenFor: seconds, visibleContentFraction: 0.9,
+                autoScrollOn: true, isOpening: false, searchActive: false
+            )
+        }
+        XCTAssertFalse(stranded(after: grace - 0.01))
+        XCTAssertTrue(stranded(after: grace))
+    }
+
+    /// The 583 case: the viewport is off the end of the transcript. Coverage answers immediately,
+    /// with no grace to wait out — there is nothing transient about a viewport past the content.
+    func testViewportOffTheTranscriptRecoversWithoutWaiting() {
+        XCTAssertTrue(
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: false, newestHiddenFor: 0, visibleContentFraction: 0.01,
+                autoScrollOn: true, isOpening: false, searchActive: false
+            )
+        )
+    }
+
+    /// …but never over a visible newest row. A short transcript covers little of the viewport and
+    /// is perfectly healthy; coverage says where the viewport is, not whether anything is drawn.
+    func testCoverageNeverOverridesAVisibleNewestRow() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldRecoverStrandedViewport(
+                lastMessageVisible: true, newestHiddenFor: 0, visibleContentFraction: 0.01,
+                autoScrollOn: true, isOpening: false, searchActive: false
+            )
+        )
+    }
+
+    /// Neither route may override the guards. A reader who scrolled up asked for exactly this.
+    func testAPersistentAbsenceStillRespectsTheGuards() {
+        for (auto, opening, search) in [(false, false, false), (true, true, false), (true, false, true)] {
+            XCTAssertFalse(
+                ChatScrollManager.shouldRecoverStrandedViewport(
+                    lastMessageVisible: false, newestHiddenFor: 30, visibleContentFraction: 0.01,
+                    autoScrollOn: auto, isOpening: opening, searchActive: search
+                ),
+                "autoScroll=\(auto) opening=\(opening) search=\(search)"
+            )
+        }
     }
 
     /// The flag follows what the transcript reports, in both directions.
@@ -458,7 +552,7 @@ final class ChatOpeningScrollTests: XCTestCase {
         XCTAssertLessThan(fraction, ChatScrollManager.strandedCoverageFloor)
         XCTAssertTrue(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, visibleContentFraction: fraction,
+                lastMessageVisible: false, newestHiddenFor: 2, visibleContentFraction: fraction,
                 autoScrollOn: true, isOpening: false, searchActive: false
             )
         )
@@ -473,7 +567,7 @@ final class ChatOpeningScrollTests: XCTestCase {
         XCTAssertGreaterThan(fraction, ChatScrollManager.strandedCoverageFloor)
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: false, visibleContentFraction: fraction,
+                lastMessageVisible: false, newestHiddenFor: 0.1, visibleContentFraction: fraction,
                 autoScrollOn: true, isOpening: false, searchActive: false
             ),
             "recovering a chat that is already at the bottom is what made it jerk"
@@ -515,7 +609,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testLowCoverageAloneDoesNotRecoverWhileTheNewestRowIsVisible() {
         XCTAssertFalse(
             ChatScrollManager.shouldRecoverStrandedViewport(
-                lastMessageVisible: true, visibleContentFraction: 0.01,
+                lastMessageVisible: true, newestHiddenFor: 0, visibleContentFraction: 0.01,
                 autoScrollOn: true, isOpening: false, searchActive: false
             )
         )
