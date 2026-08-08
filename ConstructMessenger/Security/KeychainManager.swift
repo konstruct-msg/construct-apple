@@ -423,44 +423,36 @@ class KeychainManager {
         Log.info("All cryptographic keys and sessions deleted", category: "Keychain")
     }
     
-    /// Delete all per-contact E2EE session blobs (`session_*` keys).
+    /// Delete every Double Ratchet session blob, live and archived.
+    ///
+    /// Called on account deletion and before a device link, so the next identity cannot
+    /// inherit the previous one's ratchet state.
     func deleteAllE2EESessions() {
         deleteAllSessions()
     }
 
-    /// Delete all saved sessions (sessions are stored with keys like "session_<contactId>")
-    /// Note: Keychain doesn't provide a way to list keys, so we delete by pattern
-    /// This is called during account deletion to ensure clean state
+    /// Enumerates the `session_` namespace and deletes what `KeychainSessionAccounts` says is
+    /// session state — deliberately not everything under the prefix, because `session_token`
+    /// lives there too and this runs while the user is still signed in.
+    ///
+    /// Until 2026-08-08 this filtered on `kSecAttrService == Bundle.main.bundleIdentifier` and
+    /// therefore matched nothing: `save(_:forKey:accessible:)` writes no service attribute, so
+    /// every item this app owns has the empty service. See `KeychainSessionAccounts` for the
+    /// incident.
+    ///
+    /// Do NOT "fix" the schema by starting to write `kSecAttrService` here. Generic-password
+    /// identity is (account, service); adding a service to new writes would orphan every item
+    /// already on every device — the whole Keychain would read as empty. Changing it requires
+    /// the re-add migration described in
+    /// `construct-docs/decisions/share-extension-shared-container.md`.
     private func deleteAllSessions() {
-        // Since we can't enumerate Keychain keys, we'll delete all items with kSecClass = kSecClassGenericPassword
-        // and service matching our bundle identifier with "session_" prefix
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Bundle.main.bundleIdentifier ?? "dev.construct.messenger"
-        ]
-        
-        // Get all items
-        let queryWithReturnData = query.merging([
-            kSecReturnAttributes as String: true,
-            kSecMatchLimit as String: kSecMatchLimitAll
-        ]) { $1 }
-        
-        var result: AnyObject?
-        let status = SecItemCopyMatching(queryWithReturnData as CFDictionary, &result)
-        
-        if status == errSecSuccess, let items = result as? [[String: Any]] {
-            var deletedCount = 0
-            for item in items {
-                if let account = item[kSecAttrAccount as String] as? String,
-                   account.hasPrefix("session_") {
-                    delete(forKey: account)
-                    deletedCount += 1
-                }
-            }
-            if deletedCount > 0 {
-                Log.info("Deleted \(deletedCount) session(s) from Keychain", category: "Keychain")
-            }
+        let deleted = accounts(withPrefix: KeychainSessionAccounts.prefix)
+            .filter(KeychainSessionAccounts.isSessionState)
+        for account in deleted {
+            delete(forKey: account)
         }
+        // Logged unconditionally: a zero here is the finding, not the absence of one.
+        Log.info("Deleted \(deleted.count) session blob(s) from Keychain", category: "Keychain")
     }
 
     // MARK: - Session Persistence
