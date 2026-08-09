@@ -230,6 +230,105 @@ final class ConnectionLoopTests: XCTestCase {
         XCTAssertEqual(snapshot.state, .direct(consecutiveFails: 1))
         XCTAssertEqual(proxyStartCalls, 0)
     }
+
+    // MARK: - Stream (data plane) events — transport-connection-health-and-escalation
+
+    /// QUIC mid-session death must count like a direct transport failure (router must
+    /// not stay blind — regression for "not reported to router — experimental H3/QUIC").
+    func testTransportReducer_StreamFailedQuic_CountsTowardDirectFails() {
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 0),
+            event: .streamFailed(
+                method: .quic,
+                kind: .midSessionTimeout,
+                via: .direct(.h3)
+            ),
+            config: .default,
+            now: Date()
+        )
+        XCTAssertEqual(outcome.state, .direct(consecutiveFails: 1))
+        XCTAssertFalse(outcome.effects.contains(.requestProxyStart))
+    }
+
+    /// Two stream failures on direct escalate to VEIL when allowed (same threshold as rpcFailed).
+    func testTransportReducer_StreamFailedTwice_EscalatesToVeilProbing() {
+        let first = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 0),
+            event: .streamFailed(method: .quic, kind: .midSessionTimeout, via: .direct(.h3)),
+            config: .default,
+            now: Date()
+        )
+        XCTAssertEqual(first.state, .direct(consecutiveFails: 1))
+
+        let second = TransportReducer.reduce(
+            state: first.state,
+            event: .streamFailed(method: .h2, kind: .openTimeout, via: .direct(.h2)),
+            config: .default,
+            now: Date()
+        )
+        XCTAssertEqual(second.state, .veilProbing)
+        XCTAssertTrue(second.effects.contains(.requestProxyStart))
+    }
+
+    /// mode=off must not escalate on stream failures either.
+    func testTransportReducer_StreamFailed_DoesNotEscalateWhenVEILFallbackDisabled() {
+        let config = TransportConfig(
+            directFailThreshold: 2,
+            allowDirectToVeilEscalation: false,
+            veilCooldownDuration: 30
+        )
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 1),
+            event: .streamFailed(method: .h2, kind: .openTimeout, via: .direct(.h2)),
+            config: config,
+            now: Date()
+        )
+        XCTAssertEqual(outcome.state, .direct(consecutiveFails: 2))
+        XCTAssertFalse(outcome.effects.contains(.requestProxyStart))
+    }
+
+    /// Successful stream open clears the fail streak (data plane recovered).
+    func testTransportReducer_StreamOpened_ResetsDirectFails() {
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 2),
+            event: .streamOpened(method: .quic, via: .direct(.h3)),
+            config: .default,
+            now: Date()
+        )
+        XCTAssertEqual(outcome.state, .direct(consecutiveFails: 0))
+    }
+
+    /// Auto + censored still starts direct; stream failure is what escalates (not geography).
+    func testTransportReducer_AutoCensored_StreamFailsEscalateNotGeography() {
+        let initial = TransportState.initial(mode: .auto, censored: true, reachable: true)
+        XCTAssertEqual(initial, .direct(consecutiveFails: 0))
+
+        var state = initial
+        for _ in 0..<2 {
+            let o = TransportReducer.reduce(
+                state: state,
+                event: .streamFailed(method: .quic, kind: .midSessionTimeout, via: .direct(.h3)),
+                config: .default,
+                now: Date()
+            )
+            state = o.state
+        }
+        XCTAssertEqual(state, .veilProbing)
+    }
+
+    func testTransportEvent_StreamLabels_AreStable() {
+        let fail = TransportEvent.streamFailed(
+            method: .quic,
+            kind: .midSessionTimeout,
+            via: .direct(.h3)
+        )
+        XCTAssertTrue(fail.shortLabel.contains("stream-fail"))
+        XCTAssertTrue(fail.shortLabel.contains("quic"))
+
+        let sup = TransportEvent.streamSuppressed(method: .quic, ttlSeconds: 300)
+        XCTAssertTrue(sup.shortLabel.contains("stream-suppress"))
+        XCTAssertTrue(sup.shortLabel.contains("300"))
+    }
 }
 
 private actor MockProxyEffector: ProxyEffector {

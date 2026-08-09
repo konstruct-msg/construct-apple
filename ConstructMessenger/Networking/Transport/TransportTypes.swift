@@ -34,6 +34,35 @@ enum DirectProtocol: Equatable, Sendable {
     case h3
 }
 
+// MARK: - Stream (data plane) method
+
+/// Long-lived MessageStream carrier. Orthogonal to short unary RPCs (`rpcSucceeded` /
+/// `rpcFailed`). See decisions/transport-connection-health-and-escalation.md.
+enum StreamMethod: Equatable, Sendable {
+    /// Quinn/H3 path (`quic.konstruct.cc` / engine-QUIC). Preferred fast path where UDP
+    /// works (AU / Asia / EU confirmed); may be suppressed per-network after failure.
+    case quic
+    /// Classic HTTP/2 gRPC stream to the direct backend.
+    case h2
+    /// Stream tunneled through the local VEIL proxy.
+    case veil
+}
+
+/// Why a long-lived stream died or failed to open. Classifier lives at the call site
+/// (MessageStream / QuicTransport); the FSM only sees this enum.
+enum StreamFailureKind: Equatable, Sendable {
+    /// open / subscribe did not become ready in time
+    case openTimeout
+    /// mid-session recv/send timeout (e.g. QUIC recv_data Timeout)
+    case midSessionTimeout
+    /// write failed on an ostensibly open stream
+    case writeFailed
+    /// peer or local clean close that still ends the data plane
+    case closed
+    /// unclassified transport error on the stream
+    case transportUnknown
+}
+
 // MARK: - State
 
 /// The single source of truth for the transport layer.
@@ -152,6 +181,24 @@ enum TransportEvent: Sendable, Equatable {
     /// - foreground: true for user-visible flows; false for background prefetch/maintenance.
     case rpcFailed(kind: RPCFailureKind, via: TransportTarget, foreground: Bool)
 
+    // MARK: Data-plane (MessageStream) — must not bypass the router
+    // See decisions/transport-connection-health-and-escalation.md.
+    // Wire-up: MessageStream / QuicTransport post these; never "not reported to router".
+
+    /// Long-lived stream became ready (subscribe sent / first heartbeat path).
+    case streamOpened(method: StreamMethod, via: TransportTarget)
+
+    /// Periodic proof the stream is still live (optional; UI heartbeat SLO).
+    case streamHealthy(method: StreamMethod, heartbeatAgeMs: Int)
+
+    /// Stream open failed or died. Counts toward direct-path escalation like a
+    /// foreground transport `rpcFailed` when `via` is direct.
+    case streamFailed(method: StreamMethod, kind: StreamFailureKind, via: TransportTarget)
+
+    /// Method suppressed on this network for `ttlSeconds` (e.g. Fast-UDP 300s after QUIC fail).
+    /// Skeleton: logged / available for scorers; full per-network store is follow-up.
+    case streamSuppressed(method: StreamMethod, ttlSeconds: Int)
+
     /// Network path changed (interface switch, VPN on/off, reachability flip).
     /// Carries the up-to-date snapshot of inputs the FSM needs to recompute its
     /// starting state — keeps the reducer pure.
@@ -207,6 +254,7 @@ enum TransportEffect: Equatable, Sendable {
 /// reducer on every call so they're trivially overridable in tests.
 struct TransportConfig: Sendable, Equatable {
     /// Direct-path transport failures before we escalate to VEIL.
+    /// Counts both short `rpcFailed` and data-plane `streamFailed` on direct.
     var directFailThreshold: Int = 2
 
     /// Whether direct-path failures may escalate into VEIL probing.
@@ -218,6 +266,10 @@ struct TransportConfig: Sendable, Equatable {
     /// the coordinator does **not** sleep its own cooldown anymore — this is the sole
     /// backoff so we don't re-fire `veil_start` back-to-back (that churn burned CPU).
     var veilCooldownDuration: TimeInterval = 30
+
+    /// Default TTL hint when callers post `streamSuppressed` without a custom policy
+    /// (matches MessageStream Fast-UDP suppress window).
+    var streamSuppressDefaultTTL: TimeInterval = 300
 
     static let `default` = TransportConfig()
 }
