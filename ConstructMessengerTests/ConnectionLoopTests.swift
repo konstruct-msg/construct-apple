@@ -329,6 +329,34 @@ final class ConnectionLoopTests: XCTestCase {
         XCTAssertTrue(sup.shortLabel.contains("stream-suppress"))
         XCTAssertTrue(sup.shortLabel.contains("300"))
     }
+
+    func testMapStreamFailureKind_TimeoutAndWrite() {
+        XCTAssertEqual(
+            MessageStreamManager.mapStreamFailureKind(
+                rpcKind: .streamTimeout,
+                error: nil,
+                wasConnected: false
+            ),
+            .openTimeout
+        )
+        XCTAssertEqual(
+            MessageStreamManager.mapStreamFailureKind(
+                rpcKind: .streamTimeout,
+                error: nil,
+                wasConnected: true
+            ),
+            .midSessionTimeout
+        )
+        let writeErr = RPCError(code: .unavailable, message: "Write failed.")
+        XCTAssertEqual(
+            MessageStreamManager.mapStreamFailureKind(
+                rpcKind: .transportUnknown,
+                error: writeErr,
+                wasConnected: true
+            ),
+            .writeFailed
+        )
+    }
 }
 
 private actor MockProxyEffector: ProxyEffector {

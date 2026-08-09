@@ -328,6 +328,8 @@ extension MessageStreamManager {
                     // would tell the server to delete messages the client never received.
                     // (The server already sends no cursor on heartbeats; this is defensive.)
                     self.lastHeartbeatDate = Date()
+                    // Data-plane liveness → TransportRouter (UI heartbeat SLO / health).
+                    self.reportStreamHealthyToRouter()
                 }
             }
         }
@@ -376,6 +378,8 @@ extension MessageStreamManager {
                 } else {
                     Log.info("MessageStream connected — stream: \(streamMsStr)ms via \(metricsLabel)", category: "MessageStream")
                 }
+                // Data plane is up — router must see this (clears direct fail streak).
+                self.reportStreamOpenedToRouter(transportLabel: label, metricsLabel: metricsLabel)
             }
         }
 

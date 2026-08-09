@@ -253,6 +253,11 @@ final class MessageStreamManager {
         fastUdpUnhealthyUntil = Date().addingTimeInterval(window)   // setter persists rung + window
         PerformanceMetrics.shared.record(.quicSuppressed, label: "rung\(quicSuppressionStrikes)")
         Log.info("Fast-UDP (QUIC/H3) suppressed \(Int(window))s on this network — using H2 (rung \(quicSuppressionStrikes))", category: "MessageStream")
+        // Router must see suppressions (ADR transport-connection-health-and-escalation).
+        let ttl = Int(window.rounded(.up))
+        Task {
+            await TransportRouter.shared.send(.streamSuppressed(method: .quic, ttlSeconds: ttl))
+        }
     }
 
     /// QUIC carried real server data on this network — the only evidence that actually clears the
@@ -832,7 +837,8 @@ final class MessageStreamManager {
                     await reportStreamTransportFailureIfNeeded(
                         kind: kind,
                         via: failTarget,
-                        routingKeyAtLoopStart: routingKeyAtLoopStart
+                        routingKeyAtLoopStart: routingKeyAtLoopStart,
+                        error: rpcError
                     )
                     if lastStreamTransportWasH3 {
                         noteFastUdpOpenFailure(context: "accept_timeout")
@@ -900,7 +906,8 @@ final class MessageStreamManager {
                     await reportStreamTransportFailureIfNeeded(
                         kind: kind,
                         via: failTarget,
-                        routingKeyAtLoopStart: routingKeyAtLoopStart
+                        routingKeyAtLoopStart: routingKeyAtLoopStart,
+                        error: error
                     )
                     if lastStreamTransportWasH3 {
                         // First open failure → next connectLoop iteration uses H2 immediately
@@ -1080,20 +1087,116 @@ final class MessageStreamManager {
         forceReconnect(contactUserIds: subscriptionUserIds, onMessageReceived: cb)
     }
 
-    /// Experimental QUIC/H3 stream failures are not evidence of DPI — do not feed them
-    /// into the transport FSM or auto mode will spuriously start the VEIL proxy.
+    /// Report data-plane death to `TransportRouter` for **every** carrier (H2 and QUIC).
+    ///
+    /// Previously QUIC/H3 failures were swallowed ("experimental — not reported to router"),
+    /// so auto mode never escalated to VEIL when only the long-lived stream died on DPI
+    /// networks while short HTTPS still worked. See
+    /// `decisions/transport-connection-health-and-escalation.md`.
     private func reportStreamTransportFailureIfNeeded(
         kind: RPCFailureKind,
         via: TransportTarget,
-        routingKeyAtLoopStart: String
+        routingKeyAtLoopStart: String,
+        error: Error? = nil
     ) async {
-        if lastStreamTransportWasH3 || routingKeyAtLoopStart.hasPrefix("engine-quic:") {
-            Log.debug(
-                "Stream transport failure not reported to router — experimental H3/QUIC path (kind=\(kind))",
-                category: "MessageStream"
-            )
-            return
+        let method = streamMethod(
+            wasH3: lastStreamTransportWasH3 || routingKeyAtLoopStart.hasPrefix("engine-quic:"),
+            routingKey: routingKeyAtLoopStart,
+            via: via
+        )
+        // Prefer .direct(.h3) when the failed stream was QUIC so diagnostics match reality.
+        let reportVia: TransportTarget
+        if case .veil = via {
+            reportVia = via
+        } else if method == .quic {
+            reportVia = .direct(.h3)
+        } else {
+            reportVia = via
         }
-        await TransportRouter.shared.send(.rpcFailed(kind: kind, via: via, foreground: true))
+        let streamKind = Self.mapStreamFailureKind(rpcKind: kind, error: error, wasConnected: isConnected)
+        Log.info(
+            "Stream transport failure → router method=\(method.shortLabel) kind=\(streamKind) (rpcKind=\(kind))",
+            category: "MessageStream"
+        )
+        await TransportRouter.shared.send(
+            .streamFailed(method: method, kind: streamKind, via: reportVia)
+        )
+    }
+
+    private func streamMethod(wasH3: Bool, routingKey: String, via: TransportTarget) -> StreamMethod {
+        if via.isVEIL || routingKey.hasPrefix("veil:") || routingKey.hasPrefix("ice:") {
+            return .veil
+        }
+        if wasH3 {
+            return .quic
+        }
+        return .h2
+    }
+
+    /// Map legacy RPC classification + error text into stream-specific kinds for the FSM.
+    static func mapStreamFailureKind(
+        rpcKind: RPCFailureKind,
+        error: Error?,
+        wasConnected: Bool
+    ) -> StreamFailureKind {
+        let text = (error as? RPCError)?.message
+            ?? error?.localizedDescription
+            ?? ""
+        let lower = text.lowercased()
+        if lower.contains("write failed") {
+            return .writeFailed
+        }
+        if lower.contains("timeout") || rpcKind == .streamTimeout {
+            return wasConnected ? .midSessionTimeout : .openTimeout
+        }
+        if lower.contains("closed") || lower.contains("cancel") {
+            return .closed
+        }
+        return .transportUnknown
+    }
+
+    /// Notify router that MessageStream is live (call from onAccepted).
+    func reportStreamOpenedToRouter(transportLabel: String, metricsLabel: String) {
+        let method: StreamMethod
+        let via: TransportTarget
+        if metricsLabel.hasPrefix("veil:") || metricsLabel.hasPrefix("ice:")
+            || GRPCChannelManager.shared.veilProxyPort() != nil {
+            method = .veil
+            let port = GRPCChannelManager.shared.veilProxyPort() ?? 0
+            // currentRelay may be nil briefly; empty string is still tagged veil for the FSM.
+            let relay = TransportRouterMirror.shared.state.currentRelay ?? ""
+            via = .veil(port: port, relay: relay)
+        } else if transportLabel == "QUIC" || transportLabel == "H3" {
+            method = .quic
+            via = .direct(.h3)
+        } else {
+            method = .h2
+            via = .direct(.h2)
+        }
+        Task {
+            await TransportRouter.shared.send(.streamOpened(method: method, via: via))
+        }
+    }
+
+    /// Periodic proof of data-plane liveness (heartbeat ack).
+    func reportStreamHealthyToRouter() {
+        let method: StreamMethod
+        switch activeTransport {
+        case "QUIC", "H3": method = .quic
+        case "H2": method = .h2
+        default:
+            method = GRPCChannelManager.shared.veilProxyPort() != nil ? .veil : .h2
+        }
+        let ageMs: Int
+        if let last = lastHeartbeatDate {
+            ageMs = max(0, Int(Date().timeIntervalSince(last) * 1000))
+        } else {
+            ageMs = 0
+        }
+        Task {
+            await TransportRouter.shared.send(
+                .streamHealthy(method: method, heartbeatAgeMs: ageMs)
+            )
+        }
     }
 }
