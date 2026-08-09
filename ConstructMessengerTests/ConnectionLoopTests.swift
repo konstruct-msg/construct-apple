@@ -1,4 +1,5 @@
 import XCTest
+import GRPCCore   // RPCError — the input `mapStreamFailureKind` classifies
 @testable import Construct_Messenger
 
 final class ConnectionLoopTests: XCTestCase {
@@ -330,6 +331,9 @@ final class ConnectionLoopTests: XCTestCase {
         XCTAssertTrue(sup.shortLabel.contains("300"))
     }
 
+    // `mapStreamFailureKind` is a pure classifier but lives on the @MainActor
+    // `MessageStreamManager`, so the test has to be isolated to reach it synchronously.
+    @MainActor
     func testMapStreamFailureKind_TimeoutAndWrite() {
         XCTAssertEqual(
             MessageStreamManager.mapStreamFailureKind(
