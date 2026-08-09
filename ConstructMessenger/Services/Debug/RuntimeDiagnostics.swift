@@ -150,6 +150,12 @@ final class RuntimeDiagnostics {
             message += " hot=[\(snapshot.hotThreads.map(\.description).joined(separator: ", "))]"
         }
 
+        // The transport runtime is the one that pins a worker at 100% (2026-08-09), and from the
+        // app side it is opaque — `hot=` can name the thread but not what is on it. `conns` tests
+        // whether connections accumulate; `tasks` separates one task that never yields from tasks
+        // that are never reaped. Cheap: two atomics behind an FFI call, once per sample.
+        message += " transport=\(transportRuntimeStats())"
+
         // A `serious` thermal state is a finding, not a failure, and logging it as an error made
         // 15 of the 18 ERROR lines in a device log not be errors. The severity is already in the
         // message (`thermal=serious`) and greps for it directly. Only a state nothing can be done
