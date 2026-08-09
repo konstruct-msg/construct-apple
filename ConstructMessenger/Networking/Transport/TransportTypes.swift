@@ -183,7 +183,7 @@ enum TransportEvent: Sendable, Equatable {
 
     // MARK: Data-plane (MessageStream) — must not bypass the router
     // See decisions/transport-connection-health-and-escalation.md.
-    // Wire-up: MessageStream / QuicTransport post these; never "not reported to router".
+    // Posted by MessageStreamManager (open / fail / suppress / heartbeat).
 
     /// Long-lived stream became ready (subscribe sent / first heartbeat path).
     case streamOpened(method: StreamMethod, via: TransportTarget)
