@@ -448,8 +448,18 @@ extension MessageStreamManager {
                     throw StreamAcceptTimeout()
                 }
                 // 3) Early stream failure (before accepted)
+                //
+                // Must NOT be a bare `try await streamTask.value`. That ignores this child's
+                // cancellation, and a group waits for every child before it can return — so the
+                // accept timeouts above became advisory: they fired on time and then sat here
+                // until quinn's own connection timeout released them, 29s later (2026-08-10
+                // 07:34:13 → 07:34:44, "took 31740ms"). See UnstructuredWait.
+                //
+                // The non-cancelling variant is required: on the *success* path the body calls
+                // `group.cancelAll()`, and `cancellingValue` would reach through and tear down
+                // the stream that was just accepted.
                 group.addTask {
-                    try await streamTask.value
+                    try await UnstructuredWait.value(of: streamTask)
                 }
                 // 4) Hard H3 deadline — safety net for NWConnections that ignore the soft 1.5s
                 //    timeout.  Apple's Network.framework QUIC handshake runs on a DispatchQueue and
@@ -518,6 +528,15 @@ extension MessageStreamManager {
         //
         // Runs only for H3 — H2 has its own (slower) backpressure path and over VEIL the
         // additional relay latency makes a 5s watchdog too aggressive.
+        //
+        // NOTE: until the UnstructuredWait fix above, this watchdog could never fire. The task
+        // group held the whole stream's lifetime, so this task was created only after the stream
+        // had already ended, and its `activeStreamGeneration == generation` guard then failed
+        // against the next generation. Device logs bear that out: zero occurrences of "silent
+        // for … after accept" across every session. It is live for the first time now.
+        // Not a risk in the observed traffic — every QUIC accept in those logs was followed by a
+        // server heartbeat ack inside the same second, well under the 5s window — but if healthy
+        // QUIC streams start reporting "DPI likely dropping UDP", this is the change that armed it.
         if isH3Transport {
             let firstEventWatchdog = Task { [weak self] in
                 try? await Task.sleep(for: .seconds(NetworkTiming.Stream.firstServerEventWatchdogH3))
@@ -545,11 +564,14 @@ extension MessageStreamManager {
                 streamTask.cancel()
             }
             defer { firstEventWatchdog.cancel() }
-            try await streamTask.value
+            // Cancelling variant here: cancellation of openStream means "tear this stream down",
+            // which is what the `defer { streamTask.cancel() }` above already intends — it just
+            // could not run while a bare `.value` await was ignoring the cancellation.
+            try await UnstructuredWait.cancellingValue(of: streamTask)
             return
         }
 
         // Wait until the stream ends (disconnect, server close, etc.)
-        try await streamTask.value
+        try await UnstructuredWait.cancellingValue(of: streamTask)
     }
 }
