@@ -30,6 +30,13 @@ final class ChunkedMessageSender {
     ) async throws -> [SendMessageResponse] {
         var responses: [SendMessageResponse] = []
 
+        // One Privacy Pass spend for the whole logical message. A three-photo album is ~30 wire
+        // envelopes; paying per envelope emptied a young account's 30/hr allowance on one tap.
+        // Only created for genuinely multi-envelope sends — a single chunk leaves the spend id
+        // empty and keeps the legacy per-envelope path byte-for-byte, which is also the only
+        // shape the server has redeemed until now.
+        let spendUnit = await TokenSpendUnit.forEnvelopeCount(plan.payloads.count)
+
         for (index, payload) in plan.payloads.enumerated() {
             let chunkMessageId = index == 0 ? plan.messageId.uuidString.lowercased()
                 : "\(plan.messageId.uuidString.lowercased())-c\(index)"
@@ -58,7 +65,8 @@ final class ChunkedMessageSender {
                         recipientUserId: recipientId,
                         recipientIdentityKey: recipientIK,
                         encryptedPayload: encryptedPayload,
-                        contentType: .e2EeSignal
+                        contentType: .e2EeSignal,
+                        spendUnit: spendUnit
                     )
                 } catch {
                     Log.error("STEALTH: seal failed under stealth-on — refusing identified downgrade, queueing: \(error)", category: "ChunkedDelivery")
@@ -74,11 +82,17 @@ final class ChunkedMessageSender {
                 // delivery tag; the DR payload is reused — the ratchet does not advance).
                 // Never downgrades to an identified send (StealthSendRecovery invariant).
                 response = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
-                    try await StealthSenderService.buildSealedInner(
+                    // A privacy_pass rejection means the redemption we were counting on did not
+                    // happen — so the rebuilt envelope has to pay again. Without this the rebuild
+                    // would re-attach the same unpaid spend id and be rejected identically,
+                    // turning a one-shot recovery into a guaranteed second failure.
+                    await spendUnit?.invalidatePayment()
+                    return try await StealthSenderService.buildSealedInner(
                         recipientUserId: recipientId,
                         recipientIdentityKey: recipientIK,
                         encryptedPayload: encryptedPayload,
-                        contentType: .e2EeSignal
+                        contentType: .e2EeSignal,
+                        spendUnit: spendUnit
                     )
                 }, send: { inner in
                     if FeatureFlags.sealedSenderUnauthenticatedTransport {

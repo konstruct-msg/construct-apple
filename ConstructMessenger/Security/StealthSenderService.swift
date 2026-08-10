@@ -320,7 +320,8 @@ final class StealthSenderService: SealedSenderResolving {
         certBytes: Data,
         recipientIdentityKey: Data,
         encryptedPayload: Data,
-        contentType: Shared_Proto_Core_V1_ContentType
+        contentType: Shared_Proto_Core_V1_ContentType,
+        spendUnit: TokenSpendUnit? = nil
     ) async throws -> Data {
         let sealedCert = try sealSenderCert(certBytes, recipientIdentityKey: recipientIdentityKey)
         var inner = Shared_Proto_Core_V1_SealedInner()
@@ -329,12 +330,26 @@ final class StealthSenderService: SealedSenderResolving {
         inner.encryptedPayload = encryptedPayload
         inner.contentType = contentType
         inner.deliveryTag = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
+        // Present only on multi-envelope messages. A nil unit leaves the field empty, which the
+        // server reads as legacy per-envelope redemption — the path every single-envelope send
+        // still takes, unchanged.
+        if let spendUnit {
+            inner.tokenSpendID = spendUnit.spendId
+        }
 
         // A token accompanies every sealed send (per-message — the only model compatible
         // with server-side enforce; per-stream removed 2026-07-15). `wantedToken` is
         // captured before consuming so "stealth disabled" is distinguishable from
         // "wallet empty" in the else-branch logging below.
-        let wantedToken = StealthPolicy.shared.shouldConsumeToken()
+        //
+        // Within a spend unit only one envelope pays; the rest ride on its redemption. The
+        // payer is whoever *succeeds*, not whoever is first — see TokenSpendUnit for why an
+        // empty wallet on chunk 0 must not condemn chunks 1…29.
+        let unitAlreadyPaid = spendUnit.map { !$0.shouldAttemptPayment } ?? false
+        let wantedToken = TokenSpendUnit.shouldAttemptPayment(
+            policyWantsToken: StealthPolicy.shared.shouldConsumeToken(),
+            unitPaid: unitAlreadyPaid
+        )
         // Peek the server token-encryption key BEFORE consuming a wallet token. An
         // unsealable token is rejected server-side (`decrypt_failed`, fatal under enforce),
         // so if we cannot seal we must NOT spend the token — leave it in the wallet for a
@@ -349,13 +364,24 @@ final class StealthSenderService: SealedSenderResolving {
         if wantedToken, canSeal, TokenWalletService.shared.balance == 0 {
             await BlindTokenService.shared.ensureTokenAvailable()
         }
-        if canSeal,
+        if unitAlreadyPaid {
+            // Covered by an earlier envelope of the same logical message. Deliberately silent
+            // about the wallet — nothing was spent. Logged so an album's cost is legible in a
+            // device log as one WITH-token line followed by N covered ones.
+            Log.debug(
+                "Stealth: sealed send covered by unit \(spendUnit?.spendId.prefix(4).map { String(format: "%02x", $0) }.joined() ?? "") — no token spent",
+                category: "Stealth"
+            )
+        } else if wantedToken, canSeal,
            let token = StealthPolicy.shared.consumeTokenIfNeeded(),
            let sealedToken = await ServerKeyManager.shared.sealTokenBytes(token.token) {
             inner.tokenNonce = token.nonce
             // token_bytes sealed to the server's X25519 key so relay operators cannot read
             // the spent token (VEIL ghost-mode) and the server can redeem it.
             inner.tokenBytes = sealedToken
+            // Only now is the unit paid for. Marking it before the seal succeeded would leave
+            // the remaining envelopes riding on a redemption that never happened.
+            spendUnit?.markPaid()
             // Positive-path visibility: confirms a token was actually attached (successful
             // consume was previously silent — the wallet could only be inferred, not seen).
             Log.info("Stealth: sealed send WITH token (wallet=\(TokenWalletService.shared.balance) left)", category: "Stealth")
@@ -389,7 +415,8 @@ final class StealthSenderService: SealedSenderResolving {
         recipientUserId: String,
         recipientIdentityKey: Data,
         encryptedPayload: Data,
-        contentType: Shared_Proto_Core_V1_ContentType
+        contentType: Shared_Proto_Core_V1_ContentType,
+        spendUnit: TokenSpendUnit? = nil
     ) async throws -> Data {
         // getSenderCertificate is @MainActor async — call it directly (will hop automatically)
         let certBytes = try await StealthSenderService.shared.getSenderCertificate()
@@ -398,7 +425,8 @@ final class StealthSenderService: SealedSenderResolving {
             certBytes: certBytes,
             recipientIdentityKey: recipientIdentityKey,
             encryptedPayload: encryptedPayload,
-            contentType: contentType
+            contentType: contentType,
+            spendUnit: spendUnit
         )
     }
 
