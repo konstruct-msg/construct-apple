@@ -304,8 +304,22 @@ otherwise have looked.
 
 ```bash
 xcodebuild -scheme ConstructMessenger -destination 'platform=iOS Simulator,name=iPhone 17' test \
-  2>&1 | grep -oE "^Test case '[^']+' passed" | sort -u | wc -l
+  2>&1 | grep -oiE "^Test case '[^']+' passed" | sort -u | wc -l
 ```
+
+**`-i` is not optional.** The two run modes print different text: parallel clones print
+`Test case 'FooTests.testBar()' passed`, a `-parallel-testing-enabled NO` run prints
+`Test Case '-[ConstructMessengerTests.FooTests testBar]' passed`. Case-sensitively this command
+answers **0** for a run where everything passed — the same shape of lie as a build failure reading
+like "no test failed".
+
+### Running one class (mutation verification)
+
+`scripts/test_run.sh ConstructMessengerTests/FooTests` — scoped, no simulator clones (~40s vs
+~65s), separates "build did not complete" from "no test failed", and if the build wedges it writes
+a diagnosis (last command, disk, process list, `sample` of the build service) instead of dying
+silently at your timeout. Six such wedges between 2026-08-08 and 2026-08-10 cost two mutations
+their verification; the cause is not yet known, so the script captures evidence for the next one.
 
 ## Commits
 
