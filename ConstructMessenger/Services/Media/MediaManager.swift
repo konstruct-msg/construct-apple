@@ -767,8 +767,12 @@ class MediaManager {
     ///   - image: Source image
     ///   - maxSize: Maximum dimension (width or height)
     /// - Returns: Thumbnail image data (JPEG)
+    /// - Parameter maxSize: **ignored.** `MediaOptimizer` owns the thumbnail dimension and byte
+    ///   budget; this parameter has never been forwarded. It stayed in the signature for the
+    ///   existing callers, but the log used to print it — claiming "maxSize: 250.0" while the
+    ///   optimizer rendered 400px — so it is no longer reported as if it applied.
     func generateThumbnail(from image: PlatformImage, maxSize: CGFloat = 250) -> Data? {
-        Log.debug("Generating thumbnail (maxSize: \(maxSize))", category: "MediaManager")
+        Log.debug("Generating thumbnail", category: "MediaManager")
         
         do {
             let optimized = try MediaOptimizer.generateThumbnail(from: image)

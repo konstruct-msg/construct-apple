@@ -501,12 +501,13 @@ class ChatScrollManager {
             newestHiddenFor: hiddenFor,
             visibleContentFraction: fraction,
             distanceFromBottom: distanceFromBottom,
+            contentFits: contentFits,
             autoScrollOn: shouldScrollToBottom,
             isOpening: isOpening,
             searchActive: searchActive
         ) else { return }
         Log.debug(
-            "SCROLL_RECOVER: mode=\(viewportMode), newest off screen for \(String(format: "%.1f", hiddenFor))s, \(Int(fraction * 100))% of the viewport shows transcript (contentHeight=\(Int(contentHeight))pt fromBottom=\(Int(distanceFromBottom))) — re-pinning",
+            "SCROLL_RECOVER: mode=\(viewportMode), newest off screen for \(String(format: "%.1f", hiddenFor))s, \(Int(fraction * 100))% of the viewport shows transcript (contentHeight=\(Int(contentHeight))pt fromBottom=\(Int(distanceFromBottom)) fits=\(contentFits)) — re-pinning",
             category: "ChatScrollManager"
         )
         newestHiddenSince = nil
@@ -716,6 +717,7 @@ class ChatScrollManager {
         newestHiddenFor: TimeInterval,
         visibleContentFraction: CGFloat,
         distanceFromBottom: CGFloat,
+        contentFits: Bool,
         autoScrollOn: Bool,
         isOpening: Bool,
         searchActive: Bool
@@ -740,7 +742,22 @@ class ChatScrollManager {
         // ratio: a short transcript legitimately covers very little of the viewport. Coverage
         // answers *where the viewport is*, never *whether anything is drawn*.
         guard !lastMessageVisible else { return false }
-        return visibleContentFraction < strandedCoverageFloor
+        // Coverage answers *where the viewport is*. When the transcript is shorter than the
+        // viewport there is nowhere else for it to be, so the ratio stops meaning anything and
+        // becomes just the fill level — which is legitimately low for a short chat. Build 593,
+        // eleven messages, right after sending an album:
+        //
+        //     newest off screen for 0.0s, 42% of the viewport shows transcript
+        //         (contentHeight=798pt fromBottom=-538) — re-pinning
+        //
+        // 798pt of content against a viewport half again as tall, and `fromBottom` negative
+        // because there is nothing to scroll. The newest row simply had not been laid out yet.
+        // The `distanceFromBottom <= nearBottom` guard cannot catch this: -538 passes it easily.
+        //
+        // The duration branch still applies. A newest row missing for a full second is a blank
+        // chat whether or not the content fits, and that is the failure this rule exists for.
+        let coverageIsMeaningful = !contentFits
+        return (coverageIsMeaningful && visibleContentFraction < strandedCoverageFloor)
             || newestHiddenFor >= newestMessageAbsenceGrace
     }
 
