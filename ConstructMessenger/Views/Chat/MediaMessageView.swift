@@ -191,7 +191,8 @@ private struct SingleMediaCell: View {
     /// Video bubble: poster (sender) or blurhash preview (receiver) + play + duration.
     /// Never downloads the full video — playback happens on tap in the gallery.
     private var videoCell: some View {
-        let poster = MediaImageCache.shared.image(for: message.id, at: itemIndex) ?? thumbnailImage ?? blurPreview
+        let poster = MediaImageCache.shared.displayImage(for: message.id, at: itemIndex)
+            ?? MediaImageCache.shared.image(for: message.id, at: itemIndex) ?? thumbnailImage ?? blurPreview
         let isUploading = isPlaceholder && message.deliveryStatus == .sending
         return ZStack {
             if let poster {
@@ -466,7 +467,11 @@ private struct SingleMediaCell: View {
                     onProgress: onProgress
                 )
                 await MainActor.run { if isLoading { downloadProgress = 0.95 } }
-                guard let image = PlatformImage(data: imageData) else {
+                // Decode at bubble size. This used to be `PlatformImage(data:)` — a full-resolution
+                // decode (~11.8 MB for a 1440×2048 photo) whose only purposes were to make a 320px
+                // thumbnail from it and to hand the gallery a copy it can fetch itself. The bubble
+                // never needed those pixels, and holding them is what took footprint to 447 MB.
+                guard let displayImage = ImageDownsampler.image(from: imageData) else {
                     await MainActor.run {
                         isLoading = false
                         if thumbnailImage == nil { loadError = "Invalid image data" }
@@ -475,11 +480,13 @@ private struct SingleMediaCell: View {
                     }
                     return
                 }
-                // Full image → gallery cache; a 320px thumb keeps the bubble light.
-                let thumbnail = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 320)
                 await MainActor.run {
-                    MediaImageCache.shared.store(image, for: message.id, at: itemIndex)
-                    thumbnailImage = thumbnail
+                    // Display compartment only. The gallery, save and share still want the real
+                    // thing and load it on demand from MediaManager — a disk-cache hit, not a
+                    // re-download. Storing this copy under the full-resolution key would make
+                    // "save to photos" quietly write a 1024px file.
+                    MediaImageCache.shared.storeDisplay(displayImage, for: message.id, at: itemIndex)
+                    thumbnailImage = displayImage
                     isLoading = false
                     hasReceivedBytes = true
                     downloadProgress = 1.0
@@ -692,7 +699,8 @@ private struct GridCell: View {
 
     var body: some View {
         ZStack {
-            if isVideo, let poster = MediaImageCache.shared.image(for: message.id, at: itemIndex) ?? thumbnailImage ?? blurPreview {
+            if isVideo, let poster = MediaImageCache.shared.displayImage(for: message.id, at: itemIndex)
+                ?? MediaImageCache.shared.image(for: message.id, at: itemIndex) ?? thumbnailImage ?? blurPreview {
                 Image(platformImage: poster).resizable().scaledToFill()
             } else if let img = thumbnailImage {
                 Image(platformImage: img).resizable().scaledToFill()
@@ -864,7 +872,8 @@ private struct GridCell: View {
         isMissingMedia = false
         hasReceivedBytes = false
         downloadProgress = 0
-        if let cached = MediaImageCache.shared.image(for: message.id, at: itemIndex) {
+        if let cached = MediaImageCache.shared.displayImage(for: message.id, at: itemIndex)
+            ?? MediaImageCache.shared.image(for: message.id, at: itemIndex) {
             thumbnailImage = cached
             return
         }

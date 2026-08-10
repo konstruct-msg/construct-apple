@@ -39,6 +39,10 @@ final class MediaImageCache {
         cache.totalCostLimit = Self.costLimit
         cache.countLimit = 24
         cache.name = "MediaImageCache"
+        // A 1024px display copy is ~4 MB, so this holds a screenful and some scrollback.
+        displayCache.totalCostLimit = 24 * 1024 * 1024
+        displayCache.countLimit = 48
+        displayCache.name = "MediaImageCache.display"
         #if canImport(UIKit)
         NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
@@ -46,7 +50,8 @@ final class MediaImageCache {
             queue: .main
         ) { [weak self] _ in
             self?.cache.removeAllObjects()
-            Log.info("Media image cache cleared (memory warning)", category: "MediaManager")
+            self?.displayCache.removeAllObjects()
+            Log.info("Media image caches cleared (memory warning)", category: "MediaManager")
         }
         #endif
     }
@@ -72,6 +77,26 @@ final class MediaImageCache {
 
     func image(for messageId: String, at index: Int = 0) -> PlatformImage? {
         cache.object(forKey: Self.key(messageId, index))
+    }
+
+    // MARK: - Display copies
+
+    /// Bubble-sized decodes, kept apart from the full-resolution entries above **on purpose**.
+    ///
+    /// Save-to-photos and share (`MediaGalleryViewer`) read `image(for:at:)`. If a downsampled
+    /// copy were stored under the same key, the user would silently save a 1024px version of
+    /// their photo — a data-loss bug wearing the costume of a memory fix. Two compartments, and
+    /// the caller says which one it means.
+    private let displayCache = NSCache<NSString, PlatformImage>()
+
+    func storeDisplay(_ image: PlatformImage, for messageId: String, at index: Int = 0) {
+        displayCache.setObject(
+            image, forKey: Self.key(messageId, index), cost: Self.decodedBytes(image)
+        )
+    }
+
+    func displayImage(for messageId: String, at index: Int = 0) -> PlatformImage? {
+        displayCache.object(forKey: Self.key(messageId, index))
     }
 
     // Legacy single-image accessor kept for callers that don't need index
