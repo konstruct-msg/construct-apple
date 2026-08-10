@@ -232,12 +232,23 @@ extension MessageStreamManager {
         // (Receipt flushes on stream-open used to live here — removed with `sendReceipt`
         // on 2026-08-02. E2E receipts go through the normal queued send path instead.)
 
-        // Start heartbeat sender
+        // Start heartbeat sender.
+        //
+        // The first one goes out immediately — see StreamHeartbeatSchedule. A gRPC
+        // server-streaming handler flushes no response headers until it has something to send, so
+        // a client that subscribes and then stays quiet for 25s is not accepted for 25s, and the
+        // 2.0s direct accept timeout kills a perfectly healthy stream. Speaking first turns
+        // "accepted" back into a fact about the transport rather than about whether the server
+        // happened to have mail waiting.
         let hbInterval = self.heartbeatInterval
         let hbTask = Task { [weak self] () -> Void in
+            var index = 0
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(hbInterval))
+                let delay = StreamHeartbeatSchedule.delayBeforeHeartbeat(index: index, interval: hbInterval)
+                if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+                guard !Task.isCancelled else { return }
                 await MainActor.run { self?.sendHeartbeat() }
+                index += 1
             }
         }
         self.heartbeatTask = hbTask
