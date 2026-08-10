@@ -16,21 +16,62 @@ import UniformTypeIdentifiers
 
 /// In-memory store for full-resolution images already downloaded by MediaMessageView bubbles.
 /// Gallery pages check here first to avoid re-downloading.
-@Observable
+///
+/// Bounded, and that is the point. This was a plain `[String: PlatformImage]` — no limit, no
+/// eviction, no memory-warning handler — so every full-resolution image ever shown stayed for the
+/// life of the process. A 1440×2048 photo decodes to ~11.8 MB regardless of the 600 KB it
+/// occupied on the wire, and the device log shows the consequence: footprint climbing 127 MB →
+/// 447 MB across nine minutes of ordinary chatting.
+///
+/// `MediaManager` already learned this — its own comment says "prefer `NSCache` over a
+/// `Dictionary`: it evicts under pressure and enforces `totalCostLimit`". The lesson was applied
+/// in one cache and not in the one holding objects twenty times larger.
 final class MediaImageCache {
     static let shared = MediaImageCache()
-    private init() {}
 
-    private(set) var images: [String: PlatformImage] = [:]
+    /// Roughly four full-screen photos. Enough that scrolling back over a recent burst still
+    /// hits, small enough that a long session cannot accumulate hundreds of megabytes.
+    private static let costLimit = 48 * 1024 * 1024
 
-    private static func key(_ messageId: String, _ index: Int) -> String { "\(messageId)_\(index)" }
+    private let cache = NSCache<NSString, PlatformImage>()
+
+    private init() {
+        cache.totalCostLimit = Self.costLimit
+        cache.countLimit = 24
+        cache.name = "MediaImageCache"
+        #if canImport(UIKit)
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.cache.removeAllObjects()
+            Log.info("Media image cache cleared (memory warning)", category: "MediaManager")
+        }
+        #endif
+    }
+
+    private static func key(_ messageId: String, _ index: Int) -> NSString {
+        "\(messageId)_\(index)" as NSString
+    }
+
+    /// Cost is the decoded bitmap, not the file: `NSCache` can only bound what it is told, and
+    /// the file size understates a JPEG by an order of magnitude.
+    private static func decodedBytes(_ image: PlatformImage) -> Int {
+        #if canImport(UIKit)
+        let scale = image.scale
+        return Int(image.size.width * scale * image.size.height * scale * 4)
+        #else
+        return Int(image.size.width * image.size.height * 4)
+        #endif
+    }
 
     func store(_ image: PlatformImage, for messageId: String, at index: Int = 0) {
-        images[Self.key(messageId, index)] = image
+        cache.setObject(image, forKey: Self.key(messageId, index), cost: Self.decodedBytes(image))
     }
 
     func image(for messageId: String, at index: Int = 0) -> PlatformImage? {
-        images[Self.key(messageId, index)]
+        cache.object(forKey: Self.key(messageId, index))
     }
 
     // Legacy single-image accessor kept for callers that don't need index
