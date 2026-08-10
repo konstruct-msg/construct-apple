@@ -767,6 +767,15 @@ class KeychainManager {
     }
 
     private func load(forKey key: String) -> Data? {
+        read(forKey: key).data
+    }
+
+    /// Like `load`, but keeps "not there" and "could not read it" apart.
+    ///
+    /// Use this wherever acting on a wrong answer is destructive — see `KeychainRead` and the
+    /// 2026-08-09 account-reset incident. `load` remains correct for the many callers that only
+    /// need the value.
+    func read(forKey key: String) -> KeychainRead {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
@@ -775,11 +784,13 @@ class KeychainManager {
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data, !data.isEmpty else {
-            return nil
-        }
-        return data
+        return KeychainRead.classify(status: status, data: result as? Data)
     }
+
+    /// The three-state reads behind the device identity. Their `nil` used to mean "register
+    /// a new account", which is why they get the careful API.
+    func readDeviceID() -> KeychainRead { read(forKey: "deviceId") }
+    func readDeviceSigningKey() -> KeychainRead { read(forKey: "deviceSigningKey") }
 
     private func delete(forKey key: String) {
         let query: [String: Any] = [

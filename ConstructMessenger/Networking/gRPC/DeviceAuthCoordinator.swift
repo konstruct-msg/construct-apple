@@ -15,8 +15,12 @@ import GRPCCore
 /// Outcome of a device-auth attempt (signing key → new access+refresh tokens).
 enum DeviceAuthOutcome: Sendable {
     case success(userId: String)
-    /// No deviceId / signing key in Keychain — caller must route to registration.
+    /// Both device keys are genuinely absent (`errSecItemNotFound`) — registration is correct.
     case noDeviceKeys
+    /// The keys could not be read, or only some of them exist. The identity may be intact
+    /// (locked device before first unlock, protected data unavailable). The caller MUST route
+    /// to recovery, never to registration — see `DeviceKeyAvailability`.
+    case keysUnreadable(detail: String)
     case failed(message: String)
 }
 
@@ -57,10 +61,29 @@ actor DeviceAuthCoordinator {
 
     @MainActor
     private static func performDeviceAuth() async -> DeviceAuthOutcome {
-        guard let deviceId = KeychainManager.shared.loadDeviceID(),
-              let rawSigningKey = KeychainManager.shared.loadDeviceSigningKey() else {
-            Log.info("DeviceAuthCoordinator: no device keys — cannot re-auth", category: "Auth")
+        let idRead = KeychainManager.shared.readDeviceID()
+        let keyRead = KeychainManager.shared.readDeviceSigningKey()
+        let detail = "deviceId=\(idRead.description) signingKey=\(keyRead.description)"
+
+        switch DeviceKeyAvailability.resolve(deviceId: idRead, signingKey: keyRead) {
+        case .present:
+            break
+        case .absent:
+            Log.info("DeviceAuthCoordinator: no device keys — \(detail)", category: "Auth")
             return .noDeviceKeys
+        case .unreadable:
+            // Do NOT report this as "no keys": that routes to onboarding, and registering there
+            // replaces an identity that is probably still on this device (2026-08-09 incident).
+            Log.error("DeviceAuthCoordinator: device keys unreadable — \(detail)", category: "Auth")
+            return .keysUnreadable(detail: detail)
+        }
+
+        guard let deviceId = idRead.data.flatMap({ String(data: $0, encoding: .utf8) }),
+              let rawSigningKey = keyRead.data else {
+            // `.present` guarantees bytes; a deviceId that is not UTF-8 is corruption, and the
+            // safe reading of corruption is still "do not re-register over it".
+            Log.error("DeviceAuthCoordinator: device keys unusable — \(detail)", category: "Auth")
+            return .keysUnreadable(detail: detail)
         }
 
         do {
