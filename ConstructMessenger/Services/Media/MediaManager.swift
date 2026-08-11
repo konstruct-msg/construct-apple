@@ -59,26 +59,103 @@ class MediaManager {
 
     // MARK: - Persistent Disk Cache
 
-    /// Library/Caches/media/ — survives app updates, can be evicted by OS under disk pressure
-    private let diskCacheDirectory: URL = {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        let dir = caches.appendingPathComponent("media", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    /// `Application Support/media/` — the user's copy of everything they have received.
+    ///
+    /// This lived in `Library/Caches/media/` until 2026-08-11, which was wrong in a way that only
+    /// shows up as a photo that is simply not there any more. iOS purges Caches whenever the disk
+    /// gets tight, without telling the app, and the server drops an uploaded object 7 days after
+    /// upload regardless of downloads. Those two facts compose: on day nine, a system purge takes
+    /// the last copy in existence.
+    ///
+    /// Application Support is not purged. See `MediaEvictionPolicy` for the other half — our own
+    /// quota sweep was deleting oldest-first, i.e. exactly the files that could never come back.
+    private let mediaDirectory: URL = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dir = base.appendingPathComponent("media", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: dir,
+            withIntermediateDirectories: true,
+            // Matches the Core Data store (PersistenceController) and MessageKeyStore: readable
+            // after the first unlock so a background push can decrypt and attach media, but not
+            // while the device has never been unlocked since boot.
+            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+        )
+        // Caches is never included in an iCloud backup, so simply moving the directory would have
+        // started shipping plaintext photos to iCloud as a side effect of a durability fix. That is
+        // a privacy change and it is not this one's to make: excluded, so the posture is unchanged.
+        // COST, stated because it is real: restoring the device to a new phone does not bring media
+        // with it. Revisit only as a deliberate decision, with the at-rest encryption question
+        // answered first.
+        var mutable = dir
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? mutable.setResourceValues(values)
         return dir
     }()
 
+    /// Where media used to live. Read-only now: drained by `migrateMediaOutOfCaches()` at launch
+    /// and opportunistically on read, exactly like ThumbnailStore.
+    private let legacyCacheDirectory: URL = {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        return caches.appendingPathComponent("media", isDirectory: true)
+    }()
+
     private func diskCacheURL(for mediaId: String) -> URL {
-        diskCacheDirectory.appendingPathComponent(mediaId)
+        mediaDirectory.appendingPathComponent(mediaId)
     }
 
     private func saveToDiskcache(_ data: Data, mediaId: String) {
         let url = diskCacheURL(for: mediaId)
-        try? data.write(to: url, options: .atomic)
+        try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 
     private func loadFromDiskCache(mediaId: String) -> Data? {
-        let url = diskCacheURL(for: mediaId)
-        return try? Data(contentsOf: url)
+        if let data = try? Data(contentsOf: diskCacheURL(for: mediaId)) { return data }
+
+        // Not migrated yet. Move it rather than copy: two copies of a video is not a rounding error.
+        let legacy = legacyCacheDirectory.appendingPathComponent(mediaId)
+        guard let data = try? Data(contentsOf: legacy) else { return nil }
+        try? FileManager.default.moveItem(at: legacy, to: diskCacheURL(for: mediaId))
+        return data
+    }
+
+    /// Moves everything still sitting in `Library/Caches/media/` into the durable store.
+    ///
+    /// Bulk *and* on-read (above), for the reason the thumbnail migration needed both: a rule that
+    /// only runs when someone asks for a specific file never reaches the files nobody opens — and
+    /// those are precisely the ones a system purge takes without anyone noticing.
+    @discardableResult
+    func migrateMediaOutOfCaches() -> (files: Int, bytes: Int64) {
+        let fm = FileManager.default
+        guard let entries = try? fm.contentsOfDirectory(
+            at: legacyCacheDirectory, includingPropertiesForKeys: [.fileSizeKey]
+        ), !entries.isEmpty else { return (0, 0) }
+
+        var moved = 0
+        var bytes: Int64 = 0
+        for source in entries {
+            let destination = mediaDirectory.appendingPathComponent(source.lastPathComponent)
+            let size = Int64((try? source.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            if fm.fileExists(atPath: destination.path) {
+                try? fm.removeItem(at: source)       // already migrated; drop the duplicate
+                continue
+            }
+            do {
+                try fm.moveItem(at: source, to: destination)
+                try? fm.setAttributes(
+                    [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                    ofItemAtPath: destination.path
+                )
+                moved += 1
+                bytes += size
+            } catch {
+                Log.error("Media migration failed for \(source.lastPathComponent.prefix(8))…: \(error)", category: "MediaManager")
+            }
+        }
+        if moved > 0 {
+            Log.info("Media migration: \(moved) file(s), \(bytes / 1024)KB moved out of Caches", category: "MediaManager")
+        }
+        return (moved, bytes)
     }
 
     // MARK: - Cache Management
@@ -86,7 +163,7 @@ class MediaManager {
     /// Total bytes used by the disk cache.
     func diskCacheSize() -> Int64 {
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: diskCacheDirectory,
+            at: mediaDirectory,
             includingPropertiesForKeys: [.fileSizeKey]
         ) else { return 0 }
         return files.reduce(Int64(0)) { total, url in
@@ -95,44 +172,76 @@ class MediaManager {
         }
     }
 
-    /// Evict oldest files (by modification date) until cache is under quota.
+    /// Free space up to the quota, deleting only media that could still be fetched again.
+    ///
+    /// This used to be plain LRU — oldest first — which on a store whose contents expire server-side
+    /// after 7 days meant it deleted the irreplaceable files and kept the replaceable ones. Exactly
+    /// backwards. `MediaEvictionPolicy` holds the reasoning; the short version is that the only
+    /// thing we know is when *we* downloaded a file, and that is enough to prove the server copy is
+    /// gone, never that it is still there.
     private func evictToQuota() {
         let maxBytes = UserDefaults.standard.object(forKey: Self.maxDiskCacheBytesKey) as? Int
             ?? Self.defaultMaxDiskCacheBytes
         guard maxBytes > 0 else { return } // 0 = unlimited
 
-        var currentSize = diskCacheSize()
-        guard currentSize > Int64(maxBytes) else { return }
+        let totalSize = diskCacheSize()
+        guard totalSize > Int64(maxBytes) else { return }
 
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: diskCacheDirectory,
+            at: mediaDirectory,
             includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey]
         ) else { return }
 
-        let sorted = files.sorted {
-            let aDate = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            let bDate = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            return aDate < bDate
+        let now = Date()
+        let candidates = files.map { url -> (id: String, bytes: Int64, secondsSinceDownload: TimeInterval) in
+            let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+            let modified = values?.contentModificationDate ?? .distantPast
+            return (
+                id: url.lastPathComponent,
+                bytes: Int64(values?.fileSize ?? 0),
+                secondsSinceDownload: now.timeIntervalSince(modified)
+            )
         }
 
-        for file in sorted {
-            guard currentSize > Int64(maxBytes) else { break }
-            let size = Int64((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
-            try? FileManager.default.removeItem(at: file)
-            mediaCache.removeObject(forKey: file.lastPathComponent as NSString)
-            currentSize -= size
-            Log.debug("Evicted \(file.lastPathComponent.prefix(8))… (\(size / 1024)KB) — quota", category: "MediaManager")
+        let doomed = MediaEvictionPolicy.filesToEvict(
+            candidates: candidates, totalBytes: totalSize, quotaBytes: Int64(maxBytes)
+        )
+        var freed: Int64 = 0
+        for id in doomed {
+            let url = mediaDirectory.appendingPathComponent(id)
+            freed += Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            try? FileManager.default.removeItem(at: url)
+            mediaCache.removeObject(forKey: id as NSString)
+        }
+
+        if totalSize - freed > Int64(maxBytes) {
+            // Over quota with nothing safe left to delete. Reported rather than resolved: the rest
+            // exists only here, and a full disk is a problem the user can see and act on where a
+            // missing photo is not. If this line ever shows up in the field it is the signal that
+            // storage management has to become a user-facing choice, not a silent sweep.
+            Log.info(
+                "Media store over quota by \(((totalSize - freed) - Int64(maxBytes)) / 1024)KB — remaining files are past server retention and are the only copies",
+                category: "MediaManager"
+            )
+        } else if !doomed.isEmpty {
+            Log.info("Evicted \(doomed.count) re-downloadable file(s), \(freed / 1024)KB — quota", category: "MediaManager")
         }
     }
 
     /// Evict files older than the configured number of days. Call on app foreground.
+    ///
+    /// Note what this deletes now that the store is durable: files old enough to be past the
+    /// server's retention, i.e. the ones that exist nowhere else. That is the opposite of
+    /// `evictToQuota`'s rule, and deliberately so — this one only runs when the user has set a
+    /// number of days in settings, which is them saying "I do not want media older than this".
+    /// It defaults to 0 (off) and must stay that way.
     func evictOldFiles() {
         let days = UserDefaults.standard.object(forKey: Self.evictAfterDaysKey) as? Int ?? 0
         guard days > 0 else { return }
         let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
 
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: diskCacheDirectory,
+            at: mediaDirectory,
             includingPropertiesForKeys: [.contentModificationDateKey]
         ) else { return }
 
@@ -745,12 +854,20 @@ class MediaManager {
         Log.info("Decompressed: \(decryptedData.count) → \(decompressed.count) bytes", category: "MediaManager")
         return decompressed
     }
+    /// `includingDisk: true` deletes the user's received media permanently — anything past the
+    /// server's 7-day retention cannot be fetched again. That is a legitimate thing for a person to
+    /// ask for (it is wired to an explicit control in Data & Storage settings) and it is not
+    /// something anything else should call.
     func clearCache(includingDisk: Bool = false) {
         mediaCache.removeAllObjects()
         notFoundMedia.removeAll()
         if includingDisk {
-            try? FileManager.default.removeItem(at: diskCacheDirectory)
-            try? FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
+            try? FileManager.default.removeItem(at: mediaDirectory)
+            try? FileManager.default.createDirectory(
+                at: mediaDirectory,
+                withIntermediateDirectories: true,
+                attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+            )
             Log.info("Media cache cleared (memory + disk)", category: "MediaManager")
         } else {
             Log.info("Media cache cleared (memory only)", category: "MediaManager")

@@ -47,6 +47,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             // Drain message thumbnails out of UserDefaults — 37 MB of JPEG in a 4 MB domain, which
             // is why CFPreferences started refusing writes for everything else living there.
             // See ThumbnailStore. Reads migrate lazily too; this catches the ones nobody opens.
+            // Move received media out of Library/Caches, which iOS purges under disk pressure —
+            // and the server drops the object 7 days after upload, so a purge on day nine takes
+            // the last copy that exists. See MediaManager.mediaDirectory.
+            Task { @MainActor in MediaManager.shared.migrateMediaOutOfCaches() }
+
             let migrated = ThumbnailStore.shared.migrateFromUserDefaults()
             if migrated.keys > 0 {
                 Log.info(
