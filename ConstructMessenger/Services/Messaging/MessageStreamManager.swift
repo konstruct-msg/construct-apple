@@ -181,12 +181,46 @@ final class MessageStreamManager {
         }
     }
 
-    // v2: the record now carries the ladder rung and is keyed by network *identity* (interfaces +
-    // gateways), not interface names alone. Old v1 keys are ignored — a stale flat-300s record
-    // read as a rung would misstate what the device learned.
-    private static let quicSuppressedUntilKey = "quic_suppressed_until_v2"
-    private static let quicSuppressedNetworkKey = "quic_suppressed_network_v2"
-    private static let quicSuppressionStrikesKey = "quic_suppression_strikes_v2"
+    // v3: one record **per network** (`QuicSuppressionLedger`) instead of a single slot tagged with
+    // the network it came from. v2 held one record, and `resetDegradedModeOnNetworkChange` cleared
+    // it on every path switch — so leaving a network erased what the device had learned about it,
+    // and coming back started from rung 0. On a phone that is several times an hour. Old v1/v2 keys
+    // are ignored rather than migrated: a single record cannot say which network it described once
+    // the identity has moved on.
+    private static let quicLedgerKey = "quic_suppression_ledger_v3"
+    private static let quicLedgerSaltKey = "quic_suppression_ledger_salt_v3"
+
+    /// Per-install salt for the ledger's network keys. Random, local, and never leaves the device —
+    /// see QuicSuppressionLedger on why the identities themselves are not written down.
+    private static func ledgerSalt() -> Data {
+        let d = UserDefaults.standard
+        if let existing = d.data(forKey: quicLedgerSaltKey), existing.count == 16 { return existing }
+        let fresh = Data((0..<16).map { _ in UInt8.random(in: 0...255) })
+        d.set(fresh, forKey: quicLedgerSaltKey)
+        return fresh
+    }
+
+    private static func loadLedger() -> [String: QuicSuppressionLedger.Record] {
+        guard let data = UserDefaults.standard.data(forKey: quicLedgerKey),
+              let decoded = try? JSONDecoder().decode([String: QuicSuppressionLedger.Record].self, from: data)
+        else { return [:] }
+        return decoded
+    }
+
+    private static func saveLedger(_ ledger: [String: QuicSuppressionLedger.Record]) {
+        guard let data = try? JSONEncoder().encode(ledger) else { return }
+        UserDefaults.standard.set(data, forKey: quicLedgerKey)
+    }
+
+    /// Ledger key for the network the device is on right now, or "" when the monitor has not
+    /// reported yet (in which case nothing is stored or restored — an unattributed record is worse
+    /// than none, because it would be applied to whatever network comes next).
+    private static func currentLedgerKey() -> String {
+        QuicSuppressionLedger.key(
+            for: NetworkReachabilityManager.shared.currentNetworkIdentity,
+            salt: ledgerSalt()
+        )
+    }
     /// One-shot guard so the persisted suppression is restored at most once per launch (at the first
     /// connect, by when the network monitor has reported a fingerprint).
     private var didRestoreQuicSuppression = false
@@ -195,20 +229,43 @@ final class MessageStreamManager {
     /// the current network identity. Clearing the window keeps the rung: the two are separate
     /// facts, and conflating them is what made this unable to converge.
     private static func persistQuicSuppression(until: Date?, strikes: Int) {
-        let d = UserDefaults.standard
-        guard strikes > 0 || (until.map { $0 > Date() } ?? false) else {
-            d.removeObject(forKey: quicSuppressedUntilKey)
-            d.removeObject(forKey: quicSuppressedNetworkKey)
-            d.removeObject(forKey: quicSuppressionStrikesKey)
-            return
-        }
-        if let until, until > Date() {
-            d.set(until, forKey: quicSuppressedUntilKey)
+        let key = currentLedgerKey()
+        guard !key.isEmpty else { return }
+        let effectiveUntil = (until.map { $0 > Date() } ?? false) ? until : nil
+        saveLedger(
+            QuicSuppressionLedger.remembering(
+                loadLedger(),
+                network: key,
+                strikes: strikes,
+                suppressedUntil: effectiveUntil,
+                now: Date()
+            )
+        )
+    }
+
+    /// Load what this device already knows about the network it is on now.
+    ///
+    /// Used both at launch and on every path change. The path change is the important one: the
+    /// ladder is deliberately re-evaluated when you move, and before the ledger that re-evaluation
+    /// could only ever mean "forget everything", so returning to a network you had already judged
+    /// cost the full probe again.
+    private func adoptLadderForCurrentNetwork(reason: String) {
+        let key = Self.currentLedgerKey()
+        let state = QuicSuppressionLedger.stateOnArrival(
+            at: key,
+            store: Self.loadLedger(),
+            now: Date()
+        )
+        quicSuppressionStrikes = state.strikes
+        _fastUdpUnhealthyUntil = state.suppressedUntil   // read back from storage; do not re-persist
+        consecutiveH3OpenFailures = 0
+        if let until = state.suppressedUntil {
+            Log.info("QUIC suppression adopted (\(reason), rung \(state.strikes), \(Int(until.timeIntervalSinceNow))s left) — starting on H2", category: "MessageStream")
+        } else if state.strikes > 0 {
+            Log.info("QUIC suppression lapsed (\(reason), rung \(state.strikes)) — probing once; another failure suppresses for \(Int(QuicSuppressionPolicy.window(afterStrikes: state.strikes) / 60))min", category: "MessageStream")
         } else {
-            d.removeObject(forKey: quicSuppressedUntilKey)
+            Log.info("QUIC ladder clear (\(reason)) — this network has taught us nothing yet, probing", category: "MessageStream")
         }
-        d.set(strikes, forKey: quicSuppressionStrikesKey)
-        d.set(NetworkReachabilityManager.shared.currentNetworkIdentity, forKey: quicSuppressedNetworkKey)
     }
 
     /// Restore the persisted QUIC record once per launch, for this network only.
@@ -220,24 +277,7 @@ final class MessageStreamManager {
     private func restoreQuicSuppressionOnceIfNeeded() {
         guard !didRestoreQuicSuppression else { return }
         didRestoreQuicSuppression = true
-
-        let d = UserDefaults.standard
-        let persistedNet = d.string(forKey: Self.quicSuppressedNetworkKey) ?? ""
-        let currentNet = NetworkReachabilityManager.shared.currentNetworkIdentity
-        let restored = QuicSuppressionPolicy.restore(
-            persistedUntil: d.object(forKey: Self.quicSuppressedUntilKey) as? Date,
-            persistedStrikes: d.integer(forKey: Self.quicSuppressionStrikesKey),
-            sameNetwork: !persistedNet.isEmpty && !currentNet.isEmpty && persistedNet == currentNet
-        )
-        quicSuppressionStrikes = restored.strikes
-        _fastUdpUnhealthyUntil = restored.suppressedUntil   // already persisted; same value
-        if let until = restored.suppressedUntil {
-            Log.info("QUIC suppression restored (same network, rung \(restored.strikes), \(Int(until.timeIntervalSinceNow))s left) — starting on H2", category: "MessageStream")
-        } else if restored.strikes > 0 {
-            Log.info("QUIC suppression lapsed (same network, rung \(restored.strikes)) — probing once; another failure suppresses for \(Int(QuicSuppressionPolicy.window(afterStrikes: restored.strikes) / 60))min", category: "MessageStream")
-        } else {
-            Self.persistQuicSuppression(until: nil, strikes: 0)
-        }
+        adoptLadderForCurrentNetwork(reason: "launch")
     }
 
     /// One authority for "the fast-UDP transport failed to open". Both failure paths in
@@ -344,15 +384,18 @@ final class MessageStreamManager {
     func resetDegradedModeOnNetworkChange() {
         continuousFailureStreakStart = nil
         isInDegradedMode = false
-        // Re-arm fast-UDP: the new network may not block QUIC even if the old one did (and vice-versa).
-        // The ladder rung goes with it — it was a claim about the network we just left. This is the
-        // one event that resets it, and it is why the suppression can be a day long without
-        // stranding a user who moved: we re-probe when you move, not when you relaunch.
-        quicSuppressionStrikes = 0
-        fastUdpUnhealthyUntil = nil      // setter clears the persisted record (rung is 0 now)
-        consecutiveH3OpenFailures = 0
+        // Re-evaluate fast-UDP for the network we just arrived on: it may not block QUIC even if
+        // the old one did (and vice-versa). We re-probe when you move, not when you relaunch.
+        //
+        // This used to zero the ladder outright, which was half right. Re-probing an *unfamiliar*
+        // network is correct; forgetting a familiar one is not. Since there was a single persisted
+        // slot, zeroing it also deleted the only record — so a phone bouncing Wi-Fi↔cellular could
+        // never accumulate a rung, and every return to a QUIC-hostile network paid two failed opens
+        // and a pair of stream timeouts again (device, 2026-08-11 06:27→06:38). The ledger keeps
+        // one record per network, so arriving somewhere now *adopts* what that network taught us —
+        // and an unknown network still yields rung 0, which is the re-probe this reset was for.
+        adoptLadderForCurrentNetwork(reason: "network change")
         shouldFallbackToH2Direct = false
-        Log.debug("Network path — cleared degraded-mode window + fast-UDP suppression ladder (QUIC re-probe on next open)", category: "MessageStream")
     }
 
     /// Single entry for routing-driven reconnects. Bursts (network flap + VEIL port + invalidate)
