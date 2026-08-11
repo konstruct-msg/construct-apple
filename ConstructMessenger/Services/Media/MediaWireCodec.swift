@@ -38,7 +38,17 @@ enum MediaWireCodec {
             m.mimeType = item.mediaType
             m.mediaType = protoMediaType(for: item.mediaType)
             if let filename = item.filename { m.filename = filename }
-            if let thumbnail = item.thumbnail, !thumbnail.isEmpty { m.thumbnail = thumbnail }
+            // The thumbnail is the expensive part of a photo message — see InlinePreviewPolicy.
+            // The sender still generates and stores one locally for its own placeholder row; this
+            // only decides whether it goes on the wire.
+            let hasBlurhash = !(item.blurhash ?? "").isEmpty
+            if let thumbnail = item.thumbnail, !thumbnail.isEmpty,
+               InlinePreviewPolicy.shouldSendThumbnail(
+                   isVideo: InlinePreviewPolicy.isVideo(mimeType: item.mediaType),
+                   hasBlurhash: hasBlurhash
+               ) {
+                m.thumbnail = thumbnail
+            }
             if let w = item.width, let h = item.height, w > 0, h > 0 {
                 var dims = Shared_Proto_Messaging_V1_MediaDimensions()
                 dims.width = UInt32(w)
