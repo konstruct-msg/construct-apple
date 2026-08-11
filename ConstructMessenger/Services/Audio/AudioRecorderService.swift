@@ -213,38 +213,34 @@ final class AudioRecorderService: ObservableObject {
         }
     }
 
-    /// Why `.mixWithOthers` is in this list — it is not about mixing.
+    /// `.mixWithOthers` was here for one build and has been taken back out — recorded so nobody
+    /// adds it again for the same reason.
     ///
-    /// The keyboard collapses the moment recording starts, which made the voice composer jump and
-    /// forced the user back to the mic button to type again. The composer was not the cause: it
-    /// already keeps the text field alive under `opacity(0)` in a ZStack precisely so first
-    /// responder survives, and nothing on the record path resigns it. The keyboard tracer named the
-    /// culprit instead (device, 2026-08-11 11:38:27):
+    /// The keyboard collapses the moment a voice recording starts. On 2026-08-11 the theory was
+    /// that a *non-mixing* recording session makes the system tear down the software keyboard along
+    /// with the audio it interrupts, so declaring `.mixWithOthers` would leave it standing. The
+    /// stated test was that `KEYBOARD_TRACE: will HIDE — phase=recording` must stop appearing.
     ///
-    ///     KEYBOARD_TRACE: phase → audioSessionActivating
-    ///     KEYBOARD_TRACE: phase → recording
-    ///     KEYBOARD_TRACE: will HIDE — phase=recording (+26ms into that phase)
+    /// It did not. Device, 2026-08-11 11:48:50 and 11:49:00, with the option shipped:
     ///
-    /// 26 ms after the session goes active. Taking a non-mixing recording session makes the system
-    /// tear down the software keyboard along with the audio it owns; declaring that we do not need
-    /// to interrupt other audio leaves it standing. That is how messengers which keep the keyboard
-    /// up during a voice note behave.
+    ///     KEYBOARD_TRACE: will HIDE — phase=recording (+25ms into that phase)
+    ///     KEYBOARD_TRACE: will HIDE — phase=recording (+16ms into that phase)
     ///
-    /// THE TRADE-OFF IS REAL and was taken deliberately: with `.mixWithOthers`, audio already
-    /// playing from another app is no longer paused when recording starts, so it can bleed into the
-    /// recording through the speaker. Against that: today the keyboard drops on every voice note.
+    /// So it is reverted rather than kept "just in case": it buys nothing measurable and it costs
+    /// something real — with `.mixWithOthers`, audio already playing in another app is no longer
+    /// paused when recording starts and bleeds into the voice note through the speaker.
     ///
-    /// NOT verified beyond the timing above — the causal link is 26 ms and a named phase, not a
-    /// proof. The device answers it: `KEYBOARD_TRACE: will HIDE — phase=recording` must stop
-    /// appearing when a recording starts with the keyboard up. If it still appears, the session is
-    /// not the cause and this option should be reverted rather than kept "just in case".
+    /// This does NOT clear the audio session as the cause. The tracer's phase rule (see
+    /// KeyboardEventTracer) assumed a session-driven teardown would be synchronous with
+    /// `setActive(true)`; a system teardown arriving 20ms later also lands in `phase=recording`, so
+    /// the phase never separated the two candidates. `firstResponder=` in the trace does.
     private func configureAudioSession() throws {
         #if os(iOS) || targetEnvironment(macCatalyst)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(
             .playAndRecord,
             mode: .default,
-            options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers]
+            options: [.defaultToSpeaker, .allowBluetoothHFP]
         )
         try session.setActive(true)
         #endif

@@ -52,6 +52,11 @@ struct MessageInputTextBar: View {
             .textFieldStyle(.plain)
             .lineLimit(1...8)
             .focused($focused)
+            // Diagnostic only (no-op outside DEBUG): says whether SwiftUI believes the field still
+            // has focus when the keyboard disappears at the start of a voice recording.
+            .onChange(of: focused) { _, isFocused in
+                KeyboardEventTracer.shared.noteFocus(isFocused)
+            }
             .accessibilityIdentifier(A11y.Chat.input)
             .padding(.leading, ChatUIConstants.InputBar.textLeadingPad)
             .padding(.trailing, canSend ? ChatUIConstants.Bubble.tightVerticalPadding : CTLayout.inlinePad)
