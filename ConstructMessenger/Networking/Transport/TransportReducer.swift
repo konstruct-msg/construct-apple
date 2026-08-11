@@ -154,11 +154,14 @@ enum TransportReducer {
             // Skeleton: no FSM transition yet; UI/heartbeat SLO is ConnectionStatus follow-up.
             return (.direct(consecutiveFails: fails), [])
 
-        case .streamFailed(_, _, let via):
+        case .streamFailed(_, let kind, let via):
             guard !via.isVEIL else {
                 return (.direct(consecutiveFails: fails), [])
             }
-            return countDirectTransportFailure(fails: fails, config: config)
+            // A stream that established and then died is evidence a successful open cannot
+            // refute — see TransportConfig.midSessionDeathWeight.
+            let weight = kind.wasMidSession ? config.midSessionDeathWeight : 1
+            return countDirectTransportFailure(fails: fails, config: config, weight: weight)
 
         case .streamSuppressed:
             // Skeleton: method suppression is recorded by callers (Fast-UDP); router
@@ -183,8 +186,12 @@ enum TransportReducer {
     }
 
     /// Shared counter for short-RPC and long-lived stream failures on direct.
-    private static func countDirectTransportFailure(fails: Int, config: TransportConfig) -> Outcome {
-        let newFails = fails + 1
+    private static func countDirectTransportFailure(
+        fails: Int,
+        config: TransportConfig,
+        weight: Int = 1
+    ) -> Outcome {
+        let newFails = fails + max(1, weight)
         if config.allowDirectToVeilEscalation,
            newFails >= config.directFailThreshold {
             return (.veilProbing, [.requestProxyStart, .invalidateGRPCClient])

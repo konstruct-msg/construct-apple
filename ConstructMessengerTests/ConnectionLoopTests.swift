@@ -234,14 +234,20 @@ final class ConnectionLoopTests: XCTestCase {
 
     // MARK: - Stream (data plane) events — transport-connection-health-and-escalation
 
-    /// QUIC mid-session death must count like a direct transport failure (router must
-    /// not stay blind — regression for "not reported to router — experimental H3/QUIC").
+    /// QUIC failures must count like a direct transport failure (router must not stay blind —
+    /// regression for "not reported to router — experimental H3/QUIC"). An **open** failure is one
+    /// tick, as it always was: a failed open is refuted by the next successful open.
+    ///
+    /// Amended 2026-08-11: this used to assert the same for `.midSessionTimeout`, which is now
+    /// worth the whole threshold — see `MidSessionDeathEscalationTests` and
+    /// `TransportConfig.midSessionDeathWeight`. The original point of the test (QUIC reaches the
+    /// router at all) is preserved by moving it to the open-failure kind.
     func testTransportReducer_StreamFailedQuic_CountsTowardDirectFails() {
         let outcome = TransportReducer.reduce(
             state: .direct(consecutiveFails: 0),
             event: .streamFailed(
                 method: .quic,
-                kind: .midSessionTimeout,
+                kind: .openTimeout,
                 via: .direct(.h3)
             ),
             config: .default,
@@ -251,11 +257,30 @@ final class ConnectionLoopTests: XCTestCase {
         XCTAssertFalse(outcome.effects.contains(.requestProxyStart))
     }
 
-    /// Two stream failures on direct escalate to VEIL when allowed (same threshold as rpcFailed).
+    /// A QUIC stream that established and then died escalates on its own — one is enough.
+    ///
+    /// 2026-08-11: on a network that lets connections open (50-120ms) and unary RPCs succeed
+    /// (229ms) while killing every established stream ~10s in, one tick never reached a threshold
+    /// of two — `.streamOpened` and `.rpcSucceeded` both reset the counter, and this network keeps
+    /// granting both. The device stayed on direct indefinitely and never escalated.
+    func testTransportReducer_StreamDiedMidSession_EscalatesOnTheFirstOne() {
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 0),
+            event: .streamFailed(method: .quic, kind: .midSessionTimeout, via: .direct(.h3)),
+            config: .default,
+            now: Date()
+        )
+        XCTAssertEqual(outcome.state, .veilProbing)
+        XCTAssertTrue(outcome.effects.contains(.requestProxyStart))
+    }
+
+    /// Two stream **open** failures on direct escalate to VEIL when allowed (same threshold as
+    /// rpcFailed). Amended 2026-08-11: the first event was `.midSessionTimeout`, which now
+    /// escalates on its own; the two-tick path this test exists for is the open-failure one.
     func testTransportReducer_StreamFailedTwice_EscalatesToVeilProbing() {
         let first = TransportReducer.reduce(
             state: .direct(consecutiveFails: 0),
-            event: .streamFailed(method: .quic, kind: .midSessionTimeout, via: .direct(.h3)),
+            event: .streamFailed(method: .quic, kind: .openTimeout, via: .direct(.h3)),
             config: .default,
             now: Date()
         )

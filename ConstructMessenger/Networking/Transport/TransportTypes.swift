@@ -61,6 +61,26 @@ enum StreamFailureKind: Equatable, Sendable {
     case closed
     /// unclassified transport error on the stream
     case transportUnknown
+    /// the stream was established and then closed by peer/local — NOT an open failure
+    case midSessionClosed
+    /// the stream was established and then died for an unclassified reason
+    case midSessionUnknown
+
+    /// Did the stream reach the data plane before it failed?
+    ///
+    /// The distinction is the whole point: an open failure says the path could not be built, and
+    /// the next successful open refutes it. A mid-session death says the path *was* built and then
+    /// broke, and no number of successful opens refutes that — which is precisely the network
+    /// measured on 2026-08-11 (fresh TCP+TLS+unary in 50-120ms; the same connection stops being
+    /// acknowledged ~10s in, no RST, no ICMP; 12 HTTP/2 PINGs against ~7 ACKs over a 60s hold).
+    var wasMidSession: Bool {
+        switch self {
+        case .midSessionTimeout, .midSessionClosed, .midSessionUnknown, .writeFailed:
+            return true
+        case .openTimeout, .closed, .transportUnknown:
+            return false
+        }
+    }
 }
 
 // MARK: - State
@@ -256,6 +276,21 @@ struct TransportConfig: Sendable, Equatable {
     /// Direct-path transport failures before we escalate to VEIL.
     /// Counts both short `rpcFailed` and data-plane `streamFailed` on direct.
     var directFailThreshold: Int = 2
+
+    /// How much a mid-session stream death counts toward `directFailThreshold`.
+    ///
+    /// Full weight, i.e. one is enough. A mid-session death is not a louder open failure, it is a
+    /// different claim: the path was built and then broke. The counter it feeds is cleared by
+    /// `rpcSucceeded` and by a successful `streamOpened`, and on the network measured on
+    /// 2026-08-11 both of those keep happening — fresh connections open in 50-120ms and unary RPCs
+    /// return in 229ms while every established stream dies ~10s in. Counting a young death as one
+    /// tick therefore never reached the threshold: the device stayed on direct forever, opening
+    /// streams that could not survive, and never escalated to VEIL on its own.
+    ///
+    /// Requiring two would need the evidence to survive that clearing, which the current
+    /// `.direct(consecutiveFails:)` state cannot express. Escalation is reversible and VEIL is a
+    /// working path; a stream that establishes and dies is worth acting on the first time.
+    var midSessionDeathWeight: Int = 2
 
     /// Whether direct-path failures may escalate into VEIL probing.
     /// Disabled when the user explicitly sets VEIL mode to `.off`.

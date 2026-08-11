@@ -1193,9 +1193,14 @@ final class MessageStreamManager {
             return wasConnected ? .midSessionTimeout : .openTimeout
         }
         if lower.contains("closed") || lower.contains("cancel") {
-            return .closed
+            // `wasConnected` used to be consulted only on the timeout branch above, so a stream
+            // that had been live for 25s and died with "Stream unexpectedly closed" reached the
+            // router as a plain `.closed` — indistinguishable from a stream that never opened.
+            // The fact was computed and then discarded one line before the decision that needed it
+            // (device 2026-08-11: `router method=h2 kind=closed` after a 25s-old stream).
+            return wasConnected ? .midSessionClosed : .closed
         }
-        return .transportUnknown
+        return wasConnected ? .midSessionUnknown : .transportUnknown
     }
 
     /// Notify router that MessageStream is live (call from onAccepted).

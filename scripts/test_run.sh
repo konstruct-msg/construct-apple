@@ -8,18 +8,21 @@
 # run and a surviving mutation look identical from the outside, and that is exactly the failure
 # mode this repo has been bitten by before).
 #
-# What is established about those stalls:
-#   · They are in the BUILD phase, not the simulator. The last line printed was
-#     `builtin-swiftStdLibTool` (CopySwiftLibs) twice and `builtin-validationUtility` (Validate)
-#     twice — both immediately after a `codesign` step, both near the end of the build.
-#   · They never reached test execution: zero "Clone …" lines in any of the four captured logs.
-#     Parallel test cloning is therefore NOT the cause.
-#   · A healthy scoped run is 45–75s. A stall is 600s+. There is no ambiguous middle.
+# SOLVED 2026-08-11, by this script's own capture. It was never the build:
 #
-# What is not established: the cause. Seven consecutive runs after the fact were clean, so it
-# could not be reproduced on demand. Rather than guess, this script captures the state of the
-# machine the next time it happens — process list plus a `sample` of the build service — so the
-# next attempt starts from data.
+#     Executed 7 tests, with 7 failures (0 unexpected) in 0.189 (0.191) seconds
+#     Test Suite 'Selected tests' failed at 2026-08-11 10:52:51.634.
+#     … then 191 seconds of nothing.
+#
+# xcodebuild finishes the test run and then does not exit. Every stall happened on a run where
+# tests FAILED — which is every mutation run, which is why three days of evidence pointed at the
+# build phase: the last *printed* line was a build command, because printing is buffered and
+# nothing was printed after the verdict. The earlier reading below was wrong on the location and
+# wrong on ruling out test execution; it is kept because the reasoning from it (a stall is 600s+
+# against a 45-75s healthy run) is what made the capture worth writing.
+#
+# So the loop now waits for the verdict line, not for the process. The stall capture stays for
+# whatever comes next.
 #
 # Usage:
 #   scripts/test_run.sh                                  # whole test target
@@ -72,7 +75,16 @@ capture() {
 }
 
 while kill -0 "$BUILD_PID" 2>/dev/null; do
-    sleep 10
+    sleep 5
+    # xcodebuild can finish the tests and then fail to exit. Captured 2026-08-11: "Executed 7
+    # tests ... in 0.189 seconds" followed by 191s of nothing, on a run where tests FAILED — which
+    # is every mutation run, which is why this looked like a build stall for three days. The
+    # verdict line is the real completion signal; the process exiting is not.
+    if grep -qE "\*\* TEST (SUCCEEDED|FAILED) \*\*" "$LOG" 2>/dev/null; then
+        sleep 2
+        kill "$BUILD_PID" 2>/dev/null
+        break
+    fi
     if [ $(( $(date +%s) - START )) -gt "$STALL_SECONDS" ]; then
         capture
         kill "$BUILD_PID" 2>/dev/null; sleep 2; kill -9 "$BUILD_PID" 2>/dev/null
