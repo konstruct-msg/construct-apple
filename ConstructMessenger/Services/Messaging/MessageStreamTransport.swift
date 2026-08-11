@@ -139,30 +139,25 @@ extension MessageStreamManager {
         firstServerEventReceived = false
 
         // Consume the one-shot H2 fallback flag (set when the previous H3 attempt timed out
-        // on a direct path). Also check the failure counter: after the number of consecutive
-        // failures this network is allowed (QuicSuppressionPolicy — two on an unknown network,
-        // one on a network that has already proved it), switch to H2 until QUIC delivers data.
+        // on a direct path), and the session bit set by the first fast-UDP open failure.
         //
         // Global H3 disable: `FeatureFlags.h3Enabled` short-circuits everything when H3 is
         // turned off project-wide (see flag's docs for the 2026-05-29 disable reason).
         // Experimental engine-QUIC (construct-transport Rust stack) reuses the H3 "fast UDP"
         // slot: when on, it suppresses the H2-only short-circuit so the QUIC branch in
         // GRPCStreamTransport.open() is reached. It shares the same silent-UDP failover and
-        // open-failure counter as native H3 (consecutiveH3OpenFailures / shouldFallbackToH2Direct).
+        // session bit as native H3 (fastUdpFailedThisSession / shouldFallbackToH2Direct).
         let experimentalQuic = FeatureFlags.engineQuicExperimental
-        // Session cooldown: if the fast-UDP transport was flagged unhealthy (QUIC kept dying on
-        // this network), stay on H2 until the cooldown expires rather than re-trying QUIC.
-        let fastUdpInCooldown = (fastUdpUnhealthyUntil.map { $0 > Date() }) ?? false
-        // Same predicate the suppression ladder uses to decide it has seen enough — read from one
-        // place so "stop probing" and "arm the cooldown" cannot disagree about how many failures
-        // this network is allowed.
-        let failuresAllowed = QuicSuppressionPolicy.failuresBeforeSuppressing(strikes: quicSuppressionStrikes)
-        let useH2Fallback = (!FeatureFlags.h3Enabled && !experimentalQuic)
-            || shouldFallbackToH2Direct
-            || consecutiveH3OpenFailures >= failuresAllowed
-            || fastUdpInCooldown
-        if consecutiveH3OpenFailures >= failuresAllowed {
-            Log.info("Fast-UDP disabled — \(consecutiveH3OpenFailures) consecutive failures, using H2 direct", category: "MessageStream")
+        // One probe per session, per network change. No ladder, no window, no persisted record —
+        // see decisions/no-client-side-network-learning.
+        let useH2Fallback = FastUdpSelection.useH2Fallback(
+            h3Enabled: FeatureFlags.h3Enabled,
+            experimentalQuic: experimentalQuic,
+            oneShotFallback: shouldFallbackToH2Direct,
+            failedThisSession: fastUdpFailedThisSession
+        )
+        if fastUdpFailedThisSession {
+            Log.info("Fast-UDP disabled for this session — using H2 direct", category: "MessageStream")
         }
         shouldFallbackToH2Direct = false
 
@@ -373,7 +368,10 @@ extension MessageStreamManager {
                 self.lastActiveTransport = label
                 self.activeRoutingKey = metricsLabel
                 self.lastHeartbeatDate = Date()
-                if self.lastStreamTransportWasH3 { self.consecutiveH3OpenFailures = 0 }
+                // NOT `fastUdpFailedThisSession = false` here: an accept is not delivery. On a
+                // DPI'd network the QUIC handshake is allowed through and the connection then goes
+                // silent, so re-arming on accept would re-probe every reconnect. Only
+                // `noteFastUdpProvenHealthy` (real server data) clears it.
                 // The background fetch was a best-effort catch-up for messages missed
                 // while disconnected. Now that the stream is live the server will push
                 // everything from the cursor, so the in-flight fetch is no longer needed.
