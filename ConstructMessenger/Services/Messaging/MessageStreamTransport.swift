@@ -438,21 +438,17 @@ extension MessageStreamManager {
                         try await Task.sleep(for: .seconds(NetworkTiming.GRPC.streamOpenAcceptPollInterval))
                     }
                 }
-                // 2) Timeout — three tiers:
-                //   · H3 direct → 1.5s  (QUIC fails fast when not supported; tighter window)
-                //   · H2 direct → 2.0s  (TCP+TLS needs one extra round-trip)
-                //   · H2 / VEIL  → 6.0s  (obfs4/WebTunnel + relay→server hop on a censored network
-                //                        easily eats 3-5s; tighter timeout was rotating healthy relays)
+                // 2) Timeout — see StreamAcceptBudget. The stale summary that used to live here
+                //    said "H2 / VEIL → 6.0s" while the constant it described had been 20s since
+                //    2026-05; the tiers are now stated once, next to the values.
                 let usingVEIL = GRPCChannelManager.shared.veilProxyPort() != nil
+                let directAlreadyFailed = directFailedThisSession
                 group.addTask {
-                    let timeout: TimeInterval
-                    if isH3Transport {
-                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutH3
-                    } else if usingVEIL {
-                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutVEIL
-                    } else {
-                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeout
-                    }
+                    let timeout = StreamAcceptBudget.timeout(
+                        isFastUdp: isH3Transport,
+                        usingVEIL: usingVEIL,
+                        directAlreadyFailedThisSession: directAlreadyFailed
+                    )
                     try await Task.sleep(for: .seconds(timeout))
                     throw StreamAcceptTimeout()
                 }
