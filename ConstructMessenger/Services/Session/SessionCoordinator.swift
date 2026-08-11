@@ -33,6 +33,10 @@ final class SessionCoordinator: MessageRouterDelegate {
 
     /// Tracks when we last sent END_SESSION to each peer to prevent loop storms.
     private var endSessionSentAt: [String: Date] = [:]
+    /// How many times we have re-notified a peer that kept using a session we had torn down.
+    /// Bounded by `SessionReducer.endSessionMaxUnackedRetries` — evidence buys a few fast retries,
+    /// not an open channel. Cleared when a session is established (the teardown clearly landed).
+    private var endSessionUnackedRetries: [String: Int] = [:]
     private let endSessionCooldown: TimeInterval = 30.0
 
     /// When we last *received* END_SESSION from a peer (any role). Used to suppress an
@@ -317,11 +321,24 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// `SessionReducer.shouldSendEndSession` and, iff allowed, records the send time. Returns whether
     /// the caller may proceed. Both the general rate-limited path and the typed-OTPK reset path gate
     /// through this, so the cooldown read-and-record can't drift between the two sites.
-    private func recordEndSessionSendIfAllowed(_ userId: String, now: Date = Date()) -> Bool {
+    private func recordEndSessionSendIfAllowed(
+        _ userId: String,
+        peerStillOnDeadSession: Bool = false,
+        now: Date = Date()
+    ) -> Bool {
         guard SessionReducer.shouldSendEndSession(
-            lastSentAt: endSessionSentAt[userId], now: now, cooldown: endSessionCooldown
+            lastSentAt: endSessionSentAt[userId],
+            now: now,
+            cooldown: endSessionCooldown,
+            peerStillOnDeadSession: peerStillOnDeadSession,
+            unackedRetries: endSessionUnackedRetries[userId] ?? 0
         ) else { return false }
         endSessionSentAt[userId] = now
+        // Only evidence-driven sends consume the retry budget. A first send, or one on the
+        // ordinary cooldown, is not a re-notification.
+        if peerStillOnDeadSession {
+            endSessionUnackedRetries[userId, default: 0] += 1
+        }
         return true
     }
 
@@ -331,8 +348,12 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// manual reset, terminal init/heal failures — call `sendEndSession` directly and are
     /// intentionally not rate-limited.
     @discardableResult
-    private func sendEndSessionRateLimited(to userId: String, reason: String) async -> Bool {
-        guard recordEndSessionSendIfAllowed(userId) else {
+    private func sendEndSessionRateLimited(
+        to userId: String,
+        reason: String,
+        peerStillOnDeadSession: Bool = false
+    ) async -> Bool {
+        guard recordEndSessionSendIfAllowed(userId, peerStillOnDeadSession: peerStillOnDeadSession) else {
             Log.info("END_SESSION cooldown active for \(userId.prefix(8))…, skipping (\(reason))", category: "SessionCoordinator")
             return false
         }
@@ -467,7 +488,15 @@ final class SessionCoordinator: MessageRouterDelegate {
             guard let self else { return }
             // Cooldown gates the whole recovery sequence: if a recent END_SESSION is still in
             // its window, skip both the send AND the reinit/fallback below (avoids storms).
-            guard await self.sendEndSessionRateLimited(to: userId, reason: "session_out_of_sync") else {
+            // This callback fires because a message arrived on a session we no longer have —
+            // which is proof the peer never applied our last END_SESSION. Suppressing the
+            // re-notification on the plain cooldown is what left the two sides permanently
+            // disagreeing (device 2026-08-11 07:19:03, messageNumber 3 and 4 both skipped).
+            guard await self.sendEndSessionRateLimited(
+                to: userId,
+                reason: "session_out_of_sync",
+                peerStillOnDeadSession: true
+            ) else {
                 return
             }
             let myId = AuthSessionManager.shared.currentUserId ?? ""
@@ -736,6 +765,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             if success {
                 // New session established — reset END_SESSION cooldown so future failures are handled.
                 endSessionSentAt.removeValue(forKey: userId)
+                endSessionUnackedRetries.removeValue(forKey: userId)
                 lastInboundEndSessionAt.removeValue(forKey: userId)
                 // And stand down any END_SESSION-scheduled INITIATOR re-init: it would delete
                 // the RESPONDER session we just established.
@@ -1048,6 +1078,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         let endSessionTTL = endSessionCooldown * 2
         let resendTTL = resendCooldown * 2
 
+        endSessionUnackedRetries = endSessionUnackedRetries.filter { endSessionSentAt[$0.key] != nil }
         let beforeES = endSessionSentAt.count
         endSessionSentAt = endSessionSentAt.filter { now.timeIntervalSince($0.value) < endSessionTTL }
         let beforeRA = resendAttemptedAt.count

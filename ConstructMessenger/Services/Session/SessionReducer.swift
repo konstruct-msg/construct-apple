@@ -146,6 +146,53 @@ enum SessionReducer {
         return now.timeIntervalSince(lastSentAt) >= cooldown
     }
 
+    /// Budget for re-notifying a peer that is demonstrably still using a session we tore down.
+    ///
+    /// There is no acknowledgement for END_SESSION — nothing tells us the peer applied it. But the
+    /// opposite is observable: a message arriving on a session we have already destroyed is proof
+    /// the peer did **not** get it. The plain cooldown treated that evidence as a reason to stay
+    /// quiet, so a single lost teardown left the two sides permanently disagreeing.
+    ///
+    /// Device, 2026-08-11 07:19:03, on a network that silently drops long-lived flows:
+    ///
+    ///     SESSION_STATE[rust_end_session]: DR diverged for ffeeddc6… — sending END_SESSION
+    ///     END_SESSION sent successfully: 38eacda7-…
+    ///     Session archived / Removed from Rust core / Removed from Keychain
+    ///     … messageNumber=3, eph=95ac454b… → No session for ffeeddc6
+    ///     END_SESSION cooldown active for ffeeddc6…, skipping (session_out_of_sync)
+    ///     … messageNumber=4 → same
+    ///
+    /// The peer's own traffic was saying "I never heard you", and the answer was silence for
+    /// another 30 s. The peer's log for that window contains no END_SESSION at all.
+    ///
+    /// Bounded on purpose: this is the storm-prone path the cooldown exists for, so evidence buys
+    /// a few fast retries, not an open channel. After `maxRetries` the ordinary cooldown returns —
+    /// if that many re-notifications did not land, the next message is not going to fix it either.
+    static let endSessionUnackedRetryDelay: TimeInterval = 3.0
+    static let endSessionMaxUnackedRetries = 3
+
+    /// Whether an END_SESSION may be sent, given how the request arose.
+    ///
+    /// `peerStillOnDeadSession` is the caller's evidence that the last teardown did not land —
+    /// today that means an incoming message on a session we no longer have. Without evidence this
+    /// is exactly `shouldSendEndSession`, unchanged.
+    static func shouldSendEndSession(
+        lastSentAt: Date?,
+        now: Date,
+        cooldown: TimeInterval,
+        peerStillOnDeadSession: Bool,
+        unackedRetries: Int,
+        maxRetries: Int = endSessionMaxUnackedRetries,
+        retryDelay: TimeInterval = endSessionUnackedRetryDelay
+    ) -> Bool {
+        guard let lastSentAt else { return true }
+        let elapsed = now.timeIntervalSince(lastSentAt)
+        guard peerStillOnDeadSession, unackedRetries < maxRetries else {
+            return elapsed >= cooldown
+        }
+        return elapsed >= retryDelay
+    }
+
     /// Whether the local teardown that follows a sent END_SESSION still applies to the session we
     /// condemned, identified by its `SessionEpoch`.
     ///
