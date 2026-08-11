@@ -191,8 +191,8 @@ private struct SingleMediaCell: View {
     /// Video bubble: poster (sender) or blurhash preview (receiver) + play + duration.
     /// Never downloads the full video — playback happens on tap in the gallery.
     private var videoCell: some View {
-        let poster = MediaImageCache.shared.displayImage(for: message.id, at: itemIndex)
-            ?? MediaImageCache.shared.image(for: message.id, at: itemIndex) ?? thumbnailImage ?? blurPreview
+        let poster = MediaImageCache.shared.paintable(for: message.id, at: itemIndex)
+            ?? thumbnailImage ?? blurPreview
         let isUploading = isPlaceholder && message.deliveryStatus == .sending
         return ZStack {
             if let poster {
@@ -699,8 +699,8 @@ private struct GridCell: View {
 
     var body: some View {
         ZStack {
-            if isVideo, let poster = MediaImageCache.shared.displayImage(for: message.id, at: itemIndex)
-                ?? MediaImageCache.shared.image(for: message.id, at: itemIndex) ?? thumbnailImage ?? blurPreview {
+            if isVideo, let poster = MediaImageCache.shared.paintable(for: message.id, at: itemIndex)
+                ?? thumbnailImage ?? blurPreview {
                 Image(platformImage: poster).resizable().scaledToFill()
             } else if let img = thumbnailImage {
                 Image(platformImage: img).resizable().scaledToFill()
@@ -872,8 +872,7 @@ private struct GridCell: View {
         isMissingMedia = false
         hasReceivedBytes = false
         downloadProgress = 0
-        if let cached = MediaImageCache.shared.displayImage(for: message.id, at: itemIndex)
-            ?? MediaImageCache.shared.image(for: message.id, at: itemIndex) {
+        if let cached = MediaImageCache.shared.paintable(for: message.id, at: itemIndex) {
             thumbnailImage = cached
             return
         }
@@ -882,7 +881,7 @@ private struct GridCell: View {
            let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
            let img = PlatformImage(data: data) {
             thumbnailImage = img
-            MediaImageCache.shared.store(img, for: message.id, at: itemIndex)
+            MediaImageCache.shared.storePoster(img, for: message.id, at: itemIndex)
         }
         if blurPreview == nil, let bh = itemDict["blurhash"] as? String, !bh.isEmpty {
             blurPreview = BlurHash.decode(bh, size: CGSize(width: 32, height: 32))
@@ -930,7 +929,7 @@ private struct GridCell: View {
                 // Full image → gallery cache; a 200px thumb keeps the tile light.
                 let thumb = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 200)
                 await MainActor.run {
-                    MediaImageCache.shared.store(image, for: message.id, at: itemIndex)
+                    MediaImageCache.shared.storeOriginal(image, for: message.id, at: itemIndex)
                     thumbnailImage = thumb
                     isLoading = false
                     hasReceivedBytes = true
