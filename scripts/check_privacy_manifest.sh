@@ -65,12 +65,38 @@ else
     echo "✓ NSPrivacyTracking=$TRACKING with a consistent domain list"
 fi
 
-# Not a gate, but it is the thing most likely to be forgotten, and it is a submission blocker the
-# file itself already warns about.
-COLLECTED=$(plutil -extract NSPrivacyCollectedDataTypes raw "$MANIFEST" 2>/dev/null | tr -d '[:space:]')
-if [ "$COLLECTED" = "0" ] || [ -z "$COLLECTED" ]; then
-    echo "! NSPrivacyCollectedDataTypes is empty — must be reconciled with the App Store Connect"
-    echo "  nutrition labels before submitting (checklist A2.4, noted in the manifest itself)"
+# Collected data types. An empty array is not a blank — it is the claim "Data Not Collected", so
+# it is checked the same way as the required-reason APIs: derive what the code sends off-device.
+collects() { plutil -p "$MANIFEST" | grep -q "NSPrivacyCollectedDataType$1"; }
+
+PUSH=$(grep -rEn 'registerDeviceToken|registerVoipToken' "$SRC" --include='*.swift' 2>/dev/null \
+       | grep -v '/Generated/' || true)
+if [ -n "$PUSH" ]; then
+    if collects DeviceID; then
+        echo "✓ DeviceID — push tokens registered and declared"
+    else
+        echo "✗ DeviceID — the app registers a push token against the account but declares no"
+        echo "  DeviceID collection; that contradicts the manifest's own claim:"
+        echo "$PUSH" | sed "s|$ROOT/||" | head -3 | sed 's/^/    /'
+        STATUS=1
+    fi
 fi
+
+# A type flagged as used for tracking while NSPrivacyTracking=false is a contradiction inside one
+# file. Apple resolves it against us, and the nutrition labels would disagree with the binary.
+if plutil -p "$MANIFEST" | grep -A1 'NSPrivacyCollectedDataTypeTracking' | grep -q '=> 1'; then
+    if [ "$TRACKING" = "false" ]; then
+        echo "✗ a collected type is marked Tracking=true while NSPrivacyTracking=false"
+        STATUS=1
+    fi
+fi
+
+# The App Store Connect questionnaire is the binding form; this file only has to agree with it.
+# Print what to carry across rather than asking anyone to re-read the plist by hand.
+echo "· declare these in App Store Connect (A2.4) — App Functionality, linked, not tracking:"
+plutil -p "$MANIFEST" \
+    | grep -oE '"NSPrivacyCollectedDataType[A-Za-z]+"' \
+    | grep -vE 'Linked|Tracking|Purpose|DataTypes"' \
+    | tr -d '"' | sed 's/NSPrivacyCollectedDataType//' | sort -u | sed 's/^/    /'
 
 exit $STATUS

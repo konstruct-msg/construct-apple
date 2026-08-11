@@ -8,14 +8,63 @@
 	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<!--
-	  NSPrivacyCollectedDataTypes must be reconciled with the App Store Connect
-	  privacy nutrition labels (checklist A2.4). Message content and keys are E2EE
-	  and never collected by the developer; the server holds only routing identifiers
-	  and push tokens for functionality (not tracking). Left empty pending the A2.4
-	  labelling decision — do not ship the store submission until reconciled.
+	  An EMPTY array here is not a blank to be filled in later — it is the positive claim
+	  "Data Not Collected", and for Construct it was very slightly untrue.
+
+	  Apple's definition of "collect" is not "hold personal data" and not "track". It is:
+	  transmitting data off the device such that the developer or its partners can access it
+	  for longer than is needed to service the request in real time. Two things Construct
+	  sends meet that definition — both purely so the product works, neither for tracking,
+	  and Apple's vocabulary has no way to say "and we cannot read any of it".
+
+	  What is deliberately NOT declared, so the omission is visible rather than forgotten:
+
+	    · User Content. The server's offline queue holds ciphertext until the recipient
+	      collects it — retained beyond real time, and therefore arguably collected, but it
+	      is E2EE and unreadable by us. Apple publishes no exception for encryption. This is
+	      an open developer judgement call (see below), not an oversight.
+	    · Usage Data / Diagnostics / Analytics. Genuinely none: no analytics SDK, and the
+	      MetricKit crash reports stay on device, leaving only when the user shares them
+	      (CrashDiagnosticsCollector → LogCollector.createLogArchive).
+	    · Contact Info. Registration takes a username, not an email or phone number.
+
+	  These entries must AGREE with the App Store Connect privacy nutrition labels, which are
+	  the binding form (this manifest feeds the privacy report). Copy them across at A2.4:
+	  both are "App Functionality", both "Linked to You", both "Not used for tracking".
 	-->
 	<key>NSPrivacyCollectedDataTypes</key>
-	<array/>
+	<array>
+		<dict>
+			<!-- Account identifier (ServerUserId). Every session address, contact list and
+			     routing decision is keyed by it, so the server necessarily stores it. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeUserID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- APNs and PushKit/VoIP tokens, registered against the account by
+			     NotificationServiceClient.registerDeviceToken / registerVoipToken and stored
+			     server-side keyed by user_id. Without this the device cannot be woken for a
+			     message or an incoming call. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
 	<!-- Required Reason APIs actually used (audited 2026-07-24). -->
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
