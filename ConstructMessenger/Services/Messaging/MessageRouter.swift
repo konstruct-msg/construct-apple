@@ -1288,7 +1288,7 @@ final class MessageRouter {
                                           storagePayload: storagePayload,
                                           e2eMessageId: e2eMessageId, in: context)
             if let mediaAlbum {
-                MediaWireCodec.storeThumbnails(from: mediaAlbum, for: canonicalId)
+                MediaWireCodec.receiveAlbum(mediaAlbum, for: canonicalId)
             }
             try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId, in: context)
         } catch {
@@ -2328,7 +2328,7 @@ final class MessageRouter {
 
         msg.applyStoredEncryption(plaintextData: storagePayload, contactId: partnerUserId)
         if let mediaAlbum {
-            MediaWireCodec.storeThumbnails(from: mediaAlbum, for: rowId)
+            MediaWireCodec.receiveAlbum(mediaAlbum, for: rowId)
         }
 
         chat.applyPreview(text: previewText, timestamp: msg.timestamp)

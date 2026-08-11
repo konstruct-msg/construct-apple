@@ -533,6 +533,11 @@
 "storage_limit_footer" = "Старые файлы удаляются автоматически, когда кэш превышает этот предел.";
 "storage_no_limit" = "Без лимита";
 "storage_no_limit_footer" = "Медиафайлы хранятся до ручной очистки или пока iOS не освободит место.";
+"media_autodownload" = "Автозагрузка медиа";
+"media_autodownload_never" = "Никогда";
+"media_autodownload_unmetered" = "Только Wi-Fi";
+"media_autodownload_always" = "Всегда";
+"media_autodownload_footer" = "Вложения загружаются по мере поступления сообщений. Сервер хранит файлы 7 дней, поэтому медиа в чате, который не открывали неделю, скачать уже не получится.";
 "storage_auto_clear" = "Хранить медиа";
 "storage_auto_clear_footer" = "Медиафайлы старше выбранного периода удаляются при каждом запуске приложения.";
 "storage_keep_forever" = "Всегда";

@@ -532,6 +532,11 @@
 "storage_limit_footer" = "Oldest files are automatically removed when the cache exceeds this limit.";
 "storage_no_limit" = "No Limit";
 "storage_no_limit_footer" = "Media files will be kept until you clear them manually or iOS reclaims the space.";
+"media_autodownload" = "Auto-Download Media";
+"media_autodownload_never" = "Never";
+"media_autodownload_unmetered" = "Wi-Fi Only";
+"media_autodownload_always" = "Always";
+"media_autodownload_footer" = "Attachments are fetched as messages arrive. The server keeps files for 7 days, so media in a chat you have not opened within a week cannot be downloaded later.";
 "storage_auto_clear" = "Keep Media For";
 "storage_auto_clear_footer" = "Media older than the selected period is removed each time the app launches.";
 "storage_keep_forever" = "Forever";

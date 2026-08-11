@@ -17,6 +17,13 @@ class NetworkReachabilityManager {
     var isReachable = true
     var connectionType: ConnectionType = .unknown
 
+    /// Cellular or a personal hotspot — the system's own answer, which also covers cases
+    /// `connectionType` cannot see, such as Wi-Fi tethered to a phone.
+    var isExpensive = false
+    /// Low Data Mode. Treated as metered even on Wi-Fi: the user has told the system to hold back
+    /// on speculative transfers, and media prefetch is exactly that (see MediaAutoDownloadPolicy).
+    var isConstrained = false
+
     enum ConnectionType: Equatable {
         case wifi
         case cellular
@@ -103,6 +110,8 @@ class NetworkReachabilityManager {
             DispatchQueue.main.async {
                 let wasReachable = self.isReachable
                 self.isReachable = path.status == .satisfied
+                self.isExpensive = path.isExpensive
+                self.isConstrained = path.isConstrained
                 
                 // Determine connection type
                 if path.status == .satisfied {
