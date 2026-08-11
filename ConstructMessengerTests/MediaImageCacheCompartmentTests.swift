@@ -103,6 +103,27 @@ final class MediaImageCacheCompartmentTests: XCTestCase {
                        "a bubble should draw the copy sized for it, not decode 1440px again")
     }
 
+    // MARK: - "something to show" is not "done loading"
+
+    /// The trap introduced when the stored thumbnail started being painted for received media too:
+    /// the bubble's loader returns early once it has an image, so if a poster counted as loaded, a
+    /// download that failed would leave that photo at 320px forever — no error, no retry, and a
+    /// tile that looks fine. `resolvedCopy` is the question a loader may act on; `paintable` is not.
+    func testAPosterIsPaintableButIsNotAResolvedCopy() {
+        cache.storePoster(image(side: 320), for: messageId)
+        XCTAssertNotNil(cache.paintable(for: messageId), "there is something to draw")
+        XCTAssertNil(cache.resolvedCopy(for: messageId), "but nothing that ends the load")
+    }
+
+    func testADisplayCopyOrAnOriginalCountsAsResolved() {
+        cache.storeDisplay(image(side: 1024), for: messageId)
+        XCTAssertNotNil(cache.resolvedCopy(for: messageId))
+
+        let other = "8b23f2f6-69c4-4300-b382-f610ecfa8bbd"
+        cache.storeOriginal(image(side: 1440), for: other)
+        XCTAssertNotNil(cache.resolvedCopy(for: other))
+    }
+
     func testCompartmentsAreKeyedByIndex() {
         cache.storeOriginal(image(side: 800), for: messageId, at: 1)
         XCTAssertNil(cache.original(for: messageId, at: 0))

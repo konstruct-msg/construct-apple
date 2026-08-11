@@ -138,11 +138,21 @@ final class MediaImageCache {
         posterCache.object(forKey: Self.key(messageId, index))
     }
 
-    /// Anything paintable for this key, best first. For drawing only — never for save or share.
+    /// A real decode of the media — the bubble's copy, or the original.
+    ///
+    /// Separate from `paintable` because the two answer different questions. This one answers
+    /// "is the media loaded", which is what a loader may return early on. `paintable` may answer
+    /// with a poster, and a poster means "there is something to show", never "we are done": a
+    /// loader that treats a 320px preview as loaded leaves a failed download permanently stuck at
+    /// thumbnail quality, with no error and no retry.
+    func resolvedCopy(for messageId: String, at index: Int = 0) -> PlatformImage? {
+        displayImage(for: messageId, at: index) ?? original(for: messageId, at: index)
+    }
+
+    /// Anything paintable for this key, best first. For drawing only — never for save or share,
+    /// and never as evidence that loading has finished (see `resolvedCopy`).
     func paintable(for messageId: String, at index: Int = 0) -> PlatformImage? {
-        displayImage(for: messageId, at: index)
-            ?? original(for: messageId, at: index)
-            ?? poster(for: messageId, at: index)
+        resolvedCopy(for: messageId, at: index) ?? poster(for: messageId, at: index)
     }
 
     // Legacy single-image accessors kept for callers that don't need index
