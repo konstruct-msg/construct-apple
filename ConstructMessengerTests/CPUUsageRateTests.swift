@@ -112,4 +112,39 @@ final class CPUUsageRateTests: XCTestCase {
         )
         XCTAssertEqual(percent ?? 0, 0.833, accuracy: 0.001)
     }
+
+    // MARK: - A rate is not a sample (2026-08-11)
+
+    func testASubSecondWindowIsNotWorthPrinting() {
+        // The two lines that looked exactly like the QUIC endpoint spin we had just spent three
+        // days chasing, on a device whose every 30s window that session read 3.5%-12.4%:
+        //
+        //   RUNTIME reason=will_resign_active   … cpu=75.5%  over=0.3s
+        //   RUNTIME reason=did_enter_background … cpu=103.1% over=0.0s
+        //
+        // The sampler fires on lifecycle events as well as the timer, so these windows happen
+        // routinely. The arithmetic was right; printing it as a measurement was not.
+        XCTAssertFalse(CPUUsageRate.isMeaningful(window: 0.0))
+        XCTAssertFalse(CPUUsageRate.isMeaningful(window: 0.04))
+        XCTAssertFalse(CPUUsageRate.isMeaningful(window: 0.3))
+        XCTAssertFalse(CPUUsageRate.isMeaningful(window: 0.99))
+    }
+
+    func testTheWindowsWeActuallyMeasureOnStillCount() {
+        // Must NOT fire: the 30s timer tick is the main reading, and the lifecycle windows that
+        // are long enough (observed 1.5s, 2.4s, 17.5s, 25.0s in the same session) stay useful.
+        for window in [1.0, 1.5, 2.4, 17.5, 25.0, 30.0] {
+            XCTAssertTrue(CPUUsageRate.isMeaningful(window: window), "\(window)s must still report")
+        }
+    }
+
+    func testTheArithmeticItselfIsUnchangedAtAnyWindow() {
+        // The rate is the rate — this is deliberately still true, and is why the fix is at the
+        // reporting boundary rather than inside `percent`.
+        XCTAssertEqual(
+            CPUUsageRate.percent(from: sample(cpu: 100, uptime: 500),
+                                 to: sample(cpu: 100.6, uptime: 500.4)) ?? -1,
+            150, accuracy: 0.01
+        )
+    }
 }

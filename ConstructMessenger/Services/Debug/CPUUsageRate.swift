@@ -48,4 +48,30 @@ enum CPUUsageRate {
 
         return burned / elapsed * 100.0
     }
+
+    /// The shortest interval over which a process-CPU rate is worth printing.
+    ///
+    /// `percent` is arithmetically right at any interval — the rate is the rate, and
+    /// `testTheRateIsIndependentOfIntervalLength` pins that. But a rate and a *sample* are not the
+    /// same thing: over 40 ms, process CPU is dominated by whichever thread happened to be
+    /// scheduled, and the answer swings between 0% and several hundred percent with no relation to
+    /// what the app is doing.
+    ///
+    /// This is not hypothetical. The sampler fires on lifecycle events as well as on the 30s
+    /// timer, so a `will_resign_active` immediately followed by `did_enter_background` produced:
+    ///
+    ///     RUNTIME reason=will_resign_active … cpu=75.5% over=0.3s
+    ///     RUNTIME reason=did_enter_background … cpu=103.1% over=0.0s
+    ///
+    /// on a device whose every 30-second window that session read between 3.5% and 12.4%. Those two
+    /// lines look exactly like the QUIC endpoint spin that cost three days of investigation in the
+    /// same week — same magnitude, same field, same log. The interval was printed beside them and
+    /// was still read past.
+    static let minimumMeaningfulWindow: TimeInterval = 1.0
+
+    /// Is a window long enough that the percentage over it describes the process rather than the
+    /// scheduler? Separate from `percent` on purpose: the arithmetic is not what was wrong.
+    static func isMeaningful(window: TimeInterval) -> Bool {
+        window >= minimumMeaningfulWindow
+    }
 }

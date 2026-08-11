@@ -128,12 +128,21 @@ final class RuntimeDiagnostics {
         // claims, and the sampler fires on lifecycle events as well as on the timer.
         var cpuField = "n/a"
         if let current = snapshot.cpuSample {
-            if let previous = lastCPUSample,
-               let percent = CPUUsageRate.percent(from: previous, to: current) {
+            if let previous = lastCPUSample {
                 let window = current.uptimeSeconds - previous.uptimeSeconds
-                cpuField = String(format: "%.1f%% over=%.1fs", percent, window)
+                if let percent = CPUUsageRate.percent(from: previous, to: current),
+                   CPUUsageRate.isMeaningful(window: window) {
+                    cpuField = String(format: "%.1f%% over=%.1fs", percent, window)
+                    // Re-anchor only when we reported. A lifecycle burst that produced no usable
+                    // number must not also reset the interval, or the next reading covers a window
+                    // just as short and the whole burst goes unmeasured.
+                    lastCPUSample = current
+                } else {
+                    cpuField = String(format: "n/a window=%.2fs", max(0, window))
+                }
+            } else {
+                lastCPUSample = current
             }
-            lastCPUSample = current
         }
 
         var message = [
