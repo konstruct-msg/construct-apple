@@ -30,9 +30,11 @@
 //       `OutgoingWirePayloadStore` accumulate: a rule that only runs when someone asks for that
 //       specific key never reaches the entries nobody asks for.
 //
-//  NOT addressed: at ~35 KB each these are large for thumbnails, and the store has no quota. On
-//  disk that is 15 MB of Caches, which the OS may evict — acceptable, and a size budget belongs
-//  with whoever generates them, not here.
+//  On the ~35 KB average seen on that device: the budget already exists and is 12 KB
+//  (`MediaOptimizer.thumbnailMaxBytes`), added after a three-photo album turned into 30 wire
+//  messages and spent 30 stealth tokens. The oversized entries are simply older than the cap, so
+//  they drain rather than accumulate. No quota here for that reason — on disk this is ~15 MB of
+//  Caches the OS may evict, and losing one costs a preview until the full image loads.
 //
 
 import Foundation
