@@ -232,10 +232,7 @@ class MediaManager {
         // Upload with 1 automatic retry on stream failure
         let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType, onProgress: onProgress)
         Log.info("Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
-        // Cache the full plaintext locally so the SENDER sees full quality (bubble +
-        // gallery) without re-downloading their own upload.
-        cacheSentMedia(optimized.data, mediaId: uploadResult.mediaId)
-        
+
         let width = optimized.metadata.width
         let height = optimized.metadata.height
         let blurhash = BlurHash.encode(image)
@@ -272,8 +269,6 @@ class MediaManager {
         }
         let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType, onProgress: onProgress)
         Log.info("Original image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
-        // Cache the full original locally so the SENDER sees full quality offline.
-        cacheSentMedia(data, mediaId: uploadResult.mediaId)
 
         let thumbnail = attachment.displayImage.flatMap { try? MediaOptimizer.generateThumbnail(from: $0) }
         let (width, height) = Self.pixelDimensions(of: attachment.displayImage)
@@ -337,8 +332,6 @@ class MediaManager {
             onProgress: onProgress.map { cb in { @Sendable v in cb(0.5 + v * 0.5) } }
         )
         Log.info("Video uploaded: \(uploadResult.mediaId) (\(videoData.count) bytes)", category: "MediaManager")
-        // Cache the plaintext so the SENDER can play their own upload without re-downloading.
-        cacheSentMedia(videoData, mediaId: uploadResult.mediaId)
 
         let (width, height) = await Self.videoDisplayDimensions(AVURLAsset(url: transcodedURL))
         let loadedDuration = (try? await asset.load(.duration))?.seconds
@@ -412,9 +405,15 @@ class MediaManager {
     /// same memory + disk cache the download path reads. The sender's bubble/gallery then
     /// resolve full quality via the normal `downloadAndDecryptMedia` cache-first path —
     /// no network, no low-res-thumbnail fallback.
+    /// Seed the local caches with something we just uploaded. Called from `uploadWithRetry` for
+    /// every path — see the note there.
     func cacheSentMedia(_ plaintext: Data, mediaId: String) {
         saveToDiskcache(plaintext, mediaId: mediaId)
         storeInMemoryCache(plaintext, mediaId: mediaId)
+        // The quota used to be enforced only on the download path, so sent media grew the disk
+        // cache with nothing bounding it until the user happened to receive something. That was
+        // survivable while only images and video came through here; now every upload does.
+        evictToQuota()
     }
 
     /// Pixel dimensions of an image (nil when unavailable).
@@ -441,6 +440,7 @@ class MediaManager {
         if let cached = await MediaSendCache.shared.cachedUpload(for: data) {
             Log.info("Media send cache hit — reusing \(cached.mediaId)", category: "MediaManager")
             onProgress?(1.0)
+            MediaManager.shared.cacheSentMedia(data, mediaId: cached.mediaId)
             return cached
         }
 
@@ -462,6 +462,19 @@ class MediaManager {
                 let result = try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType, onProgress: onProgress)
                 onProgress?(1.0)
                 await MediaSendCache.shared.storeUpload(result, for: data)
+                // Keep the plaintext locally so the SENDER never re-downloads their own upload.
+                //
+                // This used to be the caller's job, and three of the six upload paths did it while
+                // three did not — so playing back your own voice note fetched it from the server,
+                // seconds after the microphone produced it. There is nothing to decide here and no
+                // reason for a caller to know about it: every successful upload passes through this
+                // function, so the cache is seeded here and the per-path calls are gone.
+                //
+                // `data` is exactly what went to the server on every path (video: the transcoded
+                // bytes; file: the possibly-ZLIB-compressed bytes), which is also exactly what
+                // `downloadAndDecryptMedia` returns — so a cache hit and a download are the same
+                // value, not merely similar ones.
+                MediaManager.shared.cacheSentMedia(data, mediaId: result.mediaId)
                 return result
             } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
                 lastError = error
