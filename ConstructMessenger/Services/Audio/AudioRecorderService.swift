@@ -103,6 +103,13 @@ final class AudioRecorderService: ObservableObject {
         startDate  = nil
         state = .recorded(url: url, duration: duration, waveform: waveform)
 
+        // The phase must leave `.recording` here, or every keyboard event for the rest of the
+        // session is stamped with it. Device 2026-08-11 17:00: `will HIDE — phase=recording
+        // (+238804ms into that phase)` — four minutes after the voice note was sent, on an
+        // ordinary dismissal. Read quickly that is a recording bug firing repeatedly; it is not,
+        // and the same class of misreading is what sent the previous fix at the wrong suspect.
+        KeyboardEventTracer.shared.enter(.stoppingRecording)
+
         deactivateAudioSession()
     }
 
@@ -120,6 +127,7 @@ final class AudioRecorderService: ObservableObject {
         startDate  = nil
         waveformSamples = []
         state = .idle
+        KeyboardEventTracer.shared.enter(.idle)
         deactivateAudioSession()
     }
 
@@ -129,6 +137,7 @@ final class AudioRecorderService: ObservableObject {
         startDate  = nil
         waveformSamples = []
         state = .idle
+        KeyboardEventTracer.shared.enter(.idle)
     }
 
     // MARK: - Errors
