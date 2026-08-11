@@ -213,10 +213,39 @@ final class AudioRecorderService: ObservableObject {
         }
     }
 
+    /// Why `.mixWithOthers` is in this list — it is not about mixing.
+    ///
+    /// The keyboard collapses the moment recording starts, which made the voice composer jump and
+    /// forced the user back to the mic button to type again. The composer was not the cause: it
+    /// already keeps the text field alive under `opacity(0)` in a ZStack precisely so first
+    /// responder survives, and nothing on the record path resigns it. The keyboard tracer named the
+    /// culprit instead (device, 2026-08-11 11:38:27):
+    ///
+    ///     KEYBOARD_TRACE: phase → audioSessionActivating
+    ///     KEYBOARD_TRACE: phase → recording
+    ///     KEYBOARD_TRACE: will HIDE — phase=recording (+26ms into that phase)
+    ///
+    /// 26 ms after the session goes active. Taking a non-mixing recording session makes the system
+    /// tear down the software keyboard along with the audio it owns; declaring that we do not need
+    /// to interrupt other audio leaves it standing. That is how messengers which keep the keyboard
+    /// up during a voice note behave.
+    ///
+    /// THE TRADE-OFF IS REAL and was taken deliberately: with `.mixWithOthers`, audio already
+    /// playing from another app is no longer paused when recording starts, so it can bleed into the
+    /// recording through the speaker. Against that: today the keyboard drops on every voice note.
+    ///
+    /// NOT verified beyond the timing above — the causal link is 26 ms and a named phase, not a
+    /// proof. The device answers it: `KEYBOARD_TRACE: will HIDE — phase=recording` must stop
+    /// appearing when a recording starts with the keyboard up. If it still appears, the session is
+    /// not the cause and this option should be reverted rather than kept "just in case".
     private func configureAudioSession() throws {
         #if os(iOS) || targetEnvironment(macCatalyst)
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        try session.setCategory(
+            .playAndRecord,
+            mode: .default,
+            options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers]
+        )
         try session.setActive(true)
         #endif
     }
