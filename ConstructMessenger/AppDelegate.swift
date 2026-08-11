@@ -43,8 +43,20 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // decodes every stored entry, and by the time this matters there are a lot of them.
         DispatchQueue.global(qos: .utility).async {
             OutgoingWirePayloadStore.shared.sweepExpired()
+
+            // Drain message thumbnails out of UserDefaults — 37 MB of JPEG in a 4 MB domain, which
+            // is why CFPreferences started refusing writes for everything else living there.
+            // See ThumbnailStore. Reads migrate lazily too; this catches the ones nobody opens.
+            let migrated = ThumbnailStore.shared.migrateFromUserDefaults()
+            if migrated.keys > 0 {
+                Log.info(
+                    "ThumbnailStore migration: \(migrated.keys) key(s), \(migrated.bytes / 1024)KB moved to disk",
+                    category: "MediaManager"
+                )
+            }
+
             #if DEBUG
-            // Measured after the sweep, so the number reflects what the user actually carries.
+            // Measured after the sweep and the migration, so the number is what the user carries now.
             UserDefaultsFootprint.logSummary()
             #endif
         }

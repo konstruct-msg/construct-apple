@@ -849,48 +849,28 @@ class MediaManager {
         #endif
     }
     
-    // MARK: - Thumbnail Storage (UserDefaults - temporary solution)
-    
-    /// Store thumbnail locally for message
-    /// - Parameters:
-    ///   - thumbnailData: Thumbnail image data
-    ///   - messageId: Message ID to associate with
+    // MARK: - Thumbnail Storage
+
+    /// These used to live in UserDefaults — the header here said "temporary solution" and it was
+    /// still true four months later, at 37 MB across 994 keys and nine times the CFPreferences
+    /// limit. `ThumbnailStore` holds the reasoning; these three stay as the call-site API because
+    /// twelve views and two services already speak it.
+
     func storeThumbnail(_ thumbnailData: Data, for messageId: String, at index: Int = 0) {
-        UserDefaults.standard.set(thumbnailData, forKey: "message_thumbnail_\(messageId)_\(index)")
-        // Keep legacy key for index 0 — backward compat with existing thumbnails
-        if index == 0 {
-            UserDefaults.standard.set(thumbnailData, forKey: "message_thumbnail_\(messageId)")
-        }
+        ThumbnailStore.shared.store(thumbnailData, for: messageId, at: index)
         Log.debug("Stored thumbnail[\(index)] for message: \(messageId)", category: "MediaManager")
     }
-    
-    /// Retrieve stored thumbnail for message
-    /// - Parameter messageId: Message ID
-    /// - Returns: Thumbnail data if exists
+
     func retrieveThumbnail(for messageId: String, at index: Int = 0) -> Data? {
-        // Try indexed key first
-        if let data = UserDefaults.standard.data(forKey: "message_thumbnail_\(messageId)_\(index)") {
-            return data
-        }
-        // Fall back to legacy unindexed key for index 0
-        if index == 0 {
-            return UserDefaults.standard.data(forKey: "message_thumbnail_\(messageId)")
-        }
-        return nil
+        ThumbnailStore.shared.load(for: messageId, at: index)
     }
 
     func retrieveThumbnail(for messageId: String) -> Data? {
         retrieveThumbnail(for: messageId, at: 0)
     }
-    
-    /// Remove stored thumbnail for message
-    /// - Parameter messageId: Message ID
+
     func removeThumbnail(for messageId: String) {
-        // Remove indexed keys (up to 10) + legacy key
-        for i in 0..<10 {
-            UserDefaults.standard.removeObject(forKey: "message_thumbnail_\(messageId)_\(i)")
-        }
-        UserDefaults.standard.removeObject(forKey: "message_thumbnail_\(messageId)")
+        ThumbnailStore.shared.remove(for: messageId)
     }
 }
 
