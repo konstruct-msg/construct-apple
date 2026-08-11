@@ -268,20 +268,10 @@ final class ChatMessageStore: NSObject {
         Log.debug("FRC updated: \(window.count) message(s) in window", category: "ChatViewModel")
     }
 
-    /// Cheap structural fingerprint: ordered ids + delivery status + edit flag.
-    /// Ignores pure fault refreshes that don't change what the user sees.
+    /// Structural signature only — which rows, in which order. See `TranscriptSignature` for why
+    /// every per-row field was removed from it, and for the flicker that removal fixes.
     private static func fingerprint(_ messages: [Message]) -> UInt64 {
-        var hasher = Hasher()
-        hasher.combine(messages.count)
-        for msg in messages {
-            hasher.combine(msg.id)
-            hasher.combine(msg.deliveryStatusRaw)
-            hasher.combine(msg.isEdited)
-            hasher.combine(msg.timestamp.timeIntervalSince1970)
-            // Transcript / display can land after STT without changing delivery status.
-            hasher.combine(msg.transcriptText as String?)
-        }
-        return UInt64(bitPattern: Int64(hasher.finalize()))
+        TranscriptSignature.of(ids: messages.map(\.id))
     }
 
     /// Schedule a coalesced snapshot apply. Cancels prior debounce so only the last
