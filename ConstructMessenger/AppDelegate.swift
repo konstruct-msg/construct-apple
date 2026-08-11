@@ -37,6 +37,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return true
         }
 
+        // Bound the outgoing wire-payload store. Its 24h TTL was only ever evaluated when a
+        // specific message's key was read back, so payloads for messages that were never retried
+        // accumulated without limit — see OutgoingWirePayloadRetention. Off the main thread: it
+        // decodes every stored entry, and by the time this matters there are a lot of them.
+        DispatchQueue.global(qos: .utility).async {
+            OutgoingWirePayloadStore.shared.sweepExpired()
+            #if DEBUG
+            // Measured after the sweep, so the number reflects what the user actually carries.
+            UserDefaultsFootprint.logSummary()
+            #endif
+        }
+
         // CRITICAL: Register background tasks BEFORE app finishes launching
         // This must be done early in the launch process
         BackgroundFetchManager.shared.registerBackgroundTasks()
