@@ -29,12 +29,39 @@
 			</array>
 		</dict>
 		<dict>
-			<!-- File timestamps: media/attachment metadata for display and ordering. -->
+			<!-- File timestamps: media/attachment metadata for display and ordering.
+			     Real call sites: MediaManager (cache eviction ordered by
+			     .contentModificationDate), MediaAssetExporter and MessageValidator
+			     (attributesOfItem for size/date). -->
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>C617.1</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- System boot time: `ProcessInfo.processInfo.systemUptime`, used ONLY as a
+			     monotonic clock for measuring intervals inside the app — never read as a
+			     device characteristic and never sent anywhere.
+
+			     Call sites (audited 2026-08-11):
+			       · RuntimeDiagnostics.cpuSample — the elapsed side of the CPU rate; a
+			         monotonic source is required there precisely so a wall-clock adjustment
+			         mid-interval cannot distort the reading (see CPUUsageRate).
+			       · ChatScrollManager.noteComposerHeightChanged and the scroll-settle check —
+			         debounce windows.
+
+			     Reason 35F9.1: "measure the amount of time that has elapsed between events
+			     that occurred within the app". Missing this declaration is ITMS-91053 on
+			     submission, and it was missing: `systemUptime` arrived in the diagnostics on
+			     2026-08-08 and in ChatScrollManager earlier, while this file was last audited
+			     2026-07-24. -->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>35F9.1</string>
 			</array>
 		</dict>
 	</array>

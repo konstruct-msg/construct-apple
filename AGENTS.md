@@ -313,6 +313,16 @@ xcodebuild -scheme ConstructMessenger -destination 'platform=iOS Simulator,name=
 answers **0** for a run where everything passed — the same shape of lie as a build failure reading
 like "no test failed".
 
+### Privacy manifest
+
+`scripts/check_privacy_manifest.sh` — derives which required-reason APIs the source actually calls
+and fails if `PrivacyInfo.xcprivacy` does not declare them. Run it before any archive: Apple checks
+this on the **binary at upload** (ITMS-91053), so a gap surfaces after the build, after the archive,
+at the worst moment. The manifest is hand-audited and the code is not — on 2026-08-11 the header
+read "audited 2026-07-24" and was accurate for that date, while `ProcessInfo.systemUptime` had
+arrived in the diagnostics on 2026-08-08. A document re-derived by hand every time someone adds a
+line will drift again; this derives it in a second.
+
 ### Running one class (mutation verification)
 
 `scripts/test_run.sh ConstructMessengerTests/FooTests` — scoped, no simulator clones (~40s vs
