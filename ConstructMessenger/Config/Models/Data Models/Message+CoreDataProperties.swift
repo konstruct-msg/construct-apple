@@ -107,44 +107,30 @@ enum MessageContentType: Int16 {
 }
 
 // MARK: - Delivery Status Enum
+/// Rendering lives in `MessageBubbleRegularView.deliveryStatusView` and the labels in
+/// `DeliveryStatus.a11yLabel` (`Localizable.strings`, `msg_status_*`). This enum deliberately
+/// carries no `icon`/`iconColor`/`displayName`: it had all three, none had a caller, and all
+/// three disagreed with what the view actually drew — `.sending` was documented as
+/// `checkmark.circle` while the bubble drew a plain `circle`, and `.queued` as `tray` while it
+/// drew `arrow.clockwise`. Unreferenced display properties read like documentation and rot
+/// silently, because nothing exercises them. One place decides how a status looks.
 enum DeliveryStatus: Int16 {
     case sending = 0           // Отправляется (локально)
     case sent = 1              // Отправлено на сервер, подтверждение получено
     /// Peer confirmed receipt via E2E delivery receipt (content_type=14), NOT the
     /// stream-cursor `ReceiptStatus.delivered` which only means "stop server redelivery".
     case delivered = 2
-    case queued = 3            // В очереди (получатель offline)
-    case failed = 4            // Ошибка отправки
+    /// Not sent yet, and something will try again: a send that timed out
+    /// (`MessageQueueManager`), a message buffered until the peer's session is established
+    /// (`ChatSendCoordinator`, waiting for `session_ready`), a server rejection flagged
+    /// retryable, or a send interrupted by the app being killed (reset on launch).
+    ///
+    /// NOT "the recipient is offline" — that is what the comment here used to say, and it is
+    /// what got published on the website's FAQ before anyone checked the call sites.
+    case queued = 3
+    /// Rejected for a reason a retry will not fix; nothing happens automatically.
+    case failed = 4
 
-    var displayName: String {
-        switch self {
-        case .sending: return "Sending"
-        case .sent: return "Sent to server"           // Сервер подтвердил получение
-        case .delivered: return "Delivered"           // Peer E2E receipt (not stream cursor ACK)
-        case .queued: return "Queued locally"         // В локальной очереди
-        case .failed: return "Failed"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .sending: return "checkmark.circle"           // Серый пустой круг с галочкой
-        case .sent: return "checkmark.circle.fill"         // Серый заполненный круг с галочкой
-        case .delivered: return "checkmark.circle.fill"    // Зелёный заполненный (в UI)
-        case .queued: return "tray"
-        case .failed: return "exclamationmark.circle.fill"
-        }
-    }
-    
-    var iconColor: String {
-        switch self {
-        case .sending: return "gray"
-        case .sent: return "gray"
-        case .delivered: return "green"
-        case .queued: return "orange"
-        case .failed: return "red"
-        }
-    }
 }
 
 extension Message {
