@@ -14,7 +14,7 @@
 //      plaintext=1217ch  → c3      payloadBytes = 2550
 //
 //  The descriptor is 396 bytes. Everything else — four wire messages, four ratchet advances, four
-//  RPCs — is the 12 KB thumbnail. That was already the cheap version: before `thumbnailMaxBytes`
+//  RPCs — is the 12 KB thumbnail. That was already the cheap version: before `ThumbnailBudget`
 //  capped it, a three-photo album became thirty wire messages and drained the stealth wallet.
 //
 //  Two changes on 2026-08-11 removed its reason to exist for photos:

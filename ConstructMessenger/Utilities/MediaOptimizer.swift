@@ -53,25 +53,10 @@ struct MediaOptimizer {
     private static let maxImageDimension: CGFloat = 1920
     /// Budget per image. Binary search maximises quality within this limit.
     private static let maxImageBytes: Int = 4 * 1024 * 1024
-    private static let thumbnailMaxDimension: CGFloat = 320
-    private static let thumbnailSize = CGSize(width: 200, height: 200)  // kept for legacy callers
     private static let thumbnailQuality: CGFloat = 0.70
-    /// Hard ceiling on an inline preview, because a thumbnail is not a file — it travels inside
-    /// the E2EE message and is chunked with it.
-    ///
-    /// Build 593, a three-photo album: thumbnails of 32286 + 44866 + 34195 bytes went into one
-    /// message, which became **30 wire messages** (`9dc663cb…` plus `-c1` … `-c29`). Every chunk
-    /// is separately sealed and separately redeemable, so the album spent thirty stealth tokens
-    /// and hit the issuance ceiling on its own:
-    ///
-    ///     BlindToken: replenishment failed [rate limited (20/hr)]
-    ///       — resourceExhausted: "token issuance rate limit exceeded (30/hr, new-account tier)"
-    ///
-    /// after which the wallet fell to 6 and every later send ran on the remainder. The token
-    /// economics are a separate problem (one token per chunk is wrong), but the payload is the
-    /// input that made it bite, and 40 KB of preview for a photo the recipient downloads anyway
-    /// is indefensible on its own.
-    private static let thumbnailMaxBytes: Int = 12 * 1024
+    // The thumbnail ceiling and the resolution ladder that enforces it live in `ThumbnailBudget`.
+    // A `thumbnailMaxDimension = 320` used to sit here beside them: two carriers for one rule, and
+    // only one of them was the authority.
 
     static func optimizeImage(_ image: PlatformImage) throws -> OptimizedMedia {
         #if canImport(UIKit)
@@ -136,27 +121,42 @@ struct MediaOptimizer {
 
     static func generateThumbnail(from image: PlatformImage) throws -> Data {
         #if canImport(UIKit)
-        // Work in pixel space (scale=1.0 throughout)
+        // Quality alone does not bound a detailed image, and the quality search floors at 0.35 —
+        // so when a photo could not fit at that floor the old code returned the q=0.70 rendering
+        // it had made first, i.e. the *largest* candidate rather than the smallest. Device
+        // 2026-08-12: 31872 bytes against a 12 KB ceiling. The full-size path already solved this
+        // with resolution tiers; this walks the same ladder. See ThumbnailBudget.
+        var candidates: [(dimension: CGFloat, bytes: Int)] = []
+        var rendered: [Data] = []
+
         let pixelW = image.size.width * image.scale
         let pixelH = image.size.height * image.scale
-        let scale = thumbnailMaxDimension / max(pixelW, pixelH)
-        let targetPixels = CGSize(width: pixelW * scale, height: pixelH * scale)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1.0
-        format.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: targetPixels, format: format)
-        let thumb = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: targetPixels)) }
-        guard let data = thumb.jpegData(compressionQuality: thumbnailQuality) else {
+
+        for dimension in ThumbnailBudget.dimensionLadder {
+            let scale = dimension / max(pixelW, pixelH)
+            let targetPixels = CGSize(width: pixelW * scale, height: pixelH * scale)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1.0
+            format.opaque = false
+            let renderer = UIGraphicsImageRenderer(size: targetPixels, format: format)
+            let thumb = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: targetPixels)) }
+
+            guard var data = thumb.jpegData(compressionQuality: thumbnailQuality) else { continue }
+            if data.count > ThumbnailBudget.maxBytes,
+               let (_, fitted) = binarySearchQuality(for: thumb, budget: ThumbnailBudget.maxBytes) {
+                data = fitted
+            }
+            candidates.append((dimension: dimension, bytes: data.count))
+            rendered.append(data)
+
+            // Usual case: the first tier fits and the rest of the ladder is never rendered.
+            if data.count <= ThumbnailBudget.maxBytes { break }
+        }
+
+        guard let index = ThumbnailBudget.choose(candidates: candidates) else {
             throw MediaOptimizationError.thumbnailGenerationFailed
         }
-        // Quality alone does not bound the result — a detailed photo at 0.70 produced 45 KB. Fall
-        // back to the same budget search the full-size path uses, so the ceiling is a byte count
-        // rather than a hope.
-        if data.count > thumbnailMaxBytes,
-           let (_, fitted) = binarySearchQuality(for: thumb, budget: thumbnailMaxBytes) {
-            return fitted
-        }
-        return data
+        return rendered[index]
         #else
         guard let tiff = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiff),

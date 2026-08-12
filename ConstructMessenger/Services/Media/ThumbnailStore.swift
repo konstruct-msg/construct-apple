@@ -31,9 +31,10 @@
 //       specific key never reaches the entries nobody asks for.
 //
 //  On the ~35 KB average seen on that device: the budget already exists and is 12 KB
-//  (`MediaOptimizer.thumbnailMaxBytes`), added after a three-photo album turned into 30 wire
-//  messages and spent 30 stealth tokens. The oversized entries are simply older than the cap, so
-//  they drain rather than accumulate. No quota here for that reason — on disk this is ~15 MB of
+//  (`ThumbnailBudget.maxBytes`), added after a three-photo album turned into 30 wire messages and
+//  spent 30 stealth tokens. The oversized entries are simply older than the cap, so they drain
+//  rather than accumulate. (They were also older than the *enforcement* of the cap — until
+//  2026-08-12 the ceiling was a quality search that could overshoot it threefold.) No quota here for that reason — on disk this is ~15 MB of
 //  Caches the OS may evict, and losing one costs a preview until the full image loads.
 //
 
