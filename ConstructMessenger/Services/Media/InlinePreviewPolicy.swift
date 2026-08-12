@@ -27,6 +27,12 @@
 //  thirty bytes inside the descriptor that is being sent anyway. So a photo becomes one wire
 //  message instead of four.
 //
+//  Video cannot follow, for the reason on `shouldSendThumbnail` below. It got the other half of
+//  the saving instead: what a poster is allowed to weigh is now `ThumbnailBudget.wireMaxBytes`,
+//  derived from `chunkPayloadSize` so descriptor + poster fit one chunk. Same arithmetic as the
+//  trace above, read the other way round — the cost is not the kilobytes, it is where they fall
+//  relative to 3770.
+//
 
 import Foundation
 

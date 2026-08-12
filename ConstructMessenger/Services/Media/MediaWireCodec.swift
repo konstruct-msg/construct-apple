@@ -41,6 +41,14 @@ enum MediaWireCodec {
             // The thumbnail is the expensive part of a photo message — see InlinePreviewPolicy.
             // The sender still generates and stores one locally for its own placeholder row; this
             // only decides whether it goes on the wire.
+            //
+            // NOT COVERED BY A TEST: that `item.thumbnail` was rendered at `ThumbnailBudget
+            // .wireMaxBytes` rather than the disk budget. `ThumbnailBudgetTests` proves the two
+            // numbers and the choice between candidates; nothing proves the three producers in
+            // `MediaManager` pass the right one, and passing the wrong one is silent — a 12 KB
+            // poster still sends, just as four wire messages instead of one. The log line below is
+            // what answers it on device: `Wire thumbnail Nb` against `wireMaxBytes`, next to the
+            // `…-c1` chunk ids of the same send.
             let hasBlurhash = !(item.blurhash ?? "").isEmpty
             if let thumbnail = item.thumbnail, !thumbnail.isEmpty,
                InlinePreviewPolicy.shouldSendThumbnail(
@@ -48,6 +56,7 @@ enum MediaWireCodec {
                    hasBlurhash: hasBlurhash
                ) {
                 m.thumbnail = thumbnail
+                Log.debug("Wire thumbnail \(thumbnail.count)B (budget \(ThumbnailBudget.wireMaxBytes)B) for \(item.mediaType)", category: "MediaWireCodec")
             }
             if let w = item.width, let h = item.height, w > 0, h > 0 {
                 var dims = Shared_Proto_Messaging_V1_MediaDimensions()

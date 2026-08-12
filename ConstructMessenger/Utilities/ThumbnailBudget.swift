@@ -29,8 +29,12 @@ import CoreGraphics
 
 enum ThumbnailBudget {
 
-    /// Hard ceiling on an inline preview, because a thumbnail is not a file — it travels inside
-    /// the E2EE message and is chunked with it.
+    /// Ceiling for a thumbnail kept **on disk** — the sender's own placeholder row, the first paint
+    /// of a bubble that scrolled back in. Disk is cheap; this bounds an unbounded number of them.
+    /// What goes on the wire is bounded by `wireMaxBytes`, which is a different and much smaller
+    /// number for a different reason.
+    ///
+    /// It began as a wire limit, and this is the incident that set it:
     ///
     /// Build 593, a three-photo album: thumbnails of 32286 + 44866 + 34195 bytes went into one
     /// message, which became **30 wire messages** (`9dc663cb…` plus `-c1` … `-c29`). Every chunk
@@ -45,6 +49,25 @@ enum ThumbnailBudget {
     /// input that made it bite, and 40 KB of preview for a photo the recipient downloads anyway
     /// is indefensible on its own.
     static let maxBytes = 12 * 1024
+
+    /// Descriptor bytes to leave for the item the thumbnail belongs to: media id, URL, key, mime,
+    /// size, dimensions, hash, blurhash. Measured at 396 bytes; 512 leaves room for a filename.
+    static let descriptorReserve = 512
+
+    /// Ceiling for a thumbnail that goes **on the wire**, which is a different thing to buy than
+    /// disk. Local storage costs bytes; the wire costs *messages*.
+    ///
+    /// `ChunkedDeliveryConfig.chunkPayloadSize` is 3770, and a plaintext one byte over it becomes
+    /// two wire messages — two seals, two ratchet advances, two stealth tokens. So the only
+    /// meaningful ceiling here is "the item still fits in one chunk", and `maxBytes` (12 KB) was
+    /// not it: it was chosen as *smaller than the 40 KB that hurt*, which put the limit nowhere
+    /// near the cliff. A 12 KB poster is four wire messages; a 3 KB one is a single message.
+    ///
+    /// Photos stopped sending a thumbnail at all (`InlinePreviewPolicy`) — the recipient prefetches
+    /// the full image. Two paths still send one and are what this bounds: a video poster, always,
+    /// because prefetching a whole video on arrival is not acceptable; and a photo whose BlurHash
+    /// failed to build.
+    static let wireMaxBytes = ChunkedDeliveryConfig.chunkPayloadSize - descriptorReserve
 
     /// Longest-side pixel sizes to try, largest first. Below 128 a preview stops being a preview;
     /// if even that overflows the budget the smallest rendering is shipped anyway, because

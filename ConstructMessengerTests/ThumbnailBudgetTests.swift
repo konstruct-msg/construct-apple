@@ -96,4 +96,52 @@ final class ThumbnailBudgetTests: XCTestCase {
         XCTAssertEqual(ThumbnailBudget.dimensionLadder, ThumbnailBudget.dimensionLadder.sorted(by: >))
         XCTAssertEqual(ThumbnailBudget.dimensionLadder.first, 320)
     }
+
+    // MARK: - The wire budget
+    //
+    // Disk buys bytes. The wire buys whole messages: one byte over `chunkPayloadSize` and the
+    // message is sealed, ratcheted and token-redeemed twice instead of once. The disk ceiling was
+    // picked as "smaller than the 40 KB that hurt", which put it nowhere near that cliff — a 12 KB
+    // poster is four wire messages.
+
+    /// The point of the whole thing: descriptor + thumbnail must fit one chunk.
+    func testAWireThumbnailPlusItsDescriptorFitsOneChunk() {
+        let worstCaseItem = ThumbnailBudget.wireMaxBytes + ThumbnailBudget.descriptorReserve
+        XCTAssertLessThanOrEqual(worstCaseItem, ChunkedDeliveryConfig.chunkPayloadSize,
+                                 "an item at budget must not spill into a second chunk")
+    }
+
+    /// Derived from the transport, not copied from it. A literal here would survive a change to
+    /// `chunkPayloadSize` and go on claiming a fit it no longer has — the two-carriers defect this
+    /// file exists to document, one layer up.
+    func testTheWireBudgetTracksTheChunkSize() {
+        XCTAssertEqual(ThumbnailBudget.wireMaxBytes,
+                       ChunkedDeliveryConfig.chunkPayloadSize - ThumbnailBudget.descriptorReserve)
+    }
+
+    /// The reserve must cover a real descriptor. Measured at 396 bytes on device (media id, URL,
+    /// key, mime, size, dimensions, hash, blurhash); the slack is for a filename.
+    func testTheDescriptorReserveCoversAMeasuredDescriptor() {
+        XCTAssertGreaterThanOrEqual(ThumbnailBudget.descriptorReserve, 396)
+    }
+
+    /// Two budgets, and the wire one is the strict one. Equal values would mean someone collapsed
+    /// them back into one number and the wire silently inherited the disk ceiling.
+    func testTheWireBudgetIsStricterThanDisk() {
+        XCTAssertLessThan(ThumbnailBudget.wireMaxBytes, ThumbnailBudget.maxBytes)
+    }
+
+    /// `choose` must honour whichever budget it is handed — the same candidates resolve differently
+    /// under the two. A 4 KB rendering is fine on disk and is a second chunk on the wire.
+    func testTheSameCandidatesResolveDifferentlyUnderEachBudget() throws {
+        let candidates: [(dimension: CGFloat, bytes: Int)] = [
+            (dimension: 320, bytes: 9_000),
+            (dimension: 240, bytes: 4_000),
+            (dimension: 180, bytes: 3_000),
+        ]
+        XCTAssertEqual(try XCTUnwrap(ThumbnailBudget.choose(candidates: candidates,
+                                                           budget: ThumbnailBudget.maxBytes)), 0)
+        XCTAssertEqual(try XCTUnwrap(ThumbnailBudget.choose(candidates: candidates,
+                                                           budget: ThumbnailBudget.wireMaxBytes)), 2)
+    }
 }

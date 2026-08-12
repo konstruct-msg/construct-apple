@@ -61,7 +61,10 @@ struct MediaOptimizer {
     static func optimizeImage(_ image: PlatformImage) throws -> OptimizedMedia {
         #if canImport(UIKit)
         let (optimizedImage, optimizedData) = try progressiveCompress(image)
-        let thumbnail = try generateThumbnail(from: optimizedImage)
+        // `OptimizedMedia.thumbnail` has exactly one consumer — `MediaMessageData.thumbnail`, which
+        // is the wire copy. The sender's own on-disk placeholder is generated separately in
+        // `MediaUploadManager` at the disk budget, so this one is sized for the chunk.
+        let thumbnail = try generateThumbnail(from: optimizedImage, budget: ThumbnailBudget.wireMaxBytes)
         // After compress, optimizedImage has scale=1.0, so .size == pixel dimensions
         let pw = Int(optimizedImage.size.width), ph = Int(optimizedImage.size.height)
         let metadata = MediaMetadata(
@@ -119,7 +122,11 @@ struct MediaOptimizer {
         return try optimizeImage(image)
     }
 
-    static func generateThumbnail(from image: PlatformImage) throws -> Data {
+    /// - Parameter budget: `ThumbnailBudget.maxBytes` for a thumbnail that will be stored locally,
+    ///   `ThumbnailBudget.wireMaxBytes` for one that will be sent. Disk buys bytes; the wire buys
+    ///   whole messages, so the two ceilings differ by ~4x and must not be conflated.
+    static func generateThumbnail(from image: PlatformImage,
+                                  budget: Int = ThumbnailBudget.maxBytes) throws -> Data {
         #if canImport(UIKit)
         // Quality alone does not bound a detailed image, and the quality search floors at 0.35 —
         // so when a photo could not fit at that floor the old code returned the q=0.70 rendering
@@ -142,19 +149,25 @@ struct MediaOptimizer {
             let thumb = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: targetPixels)) }
 
             guard var data = thumb.jpegData(compressionQuality: thumbnailQuality) else { continue }
-            if data.count > ThumbnailBudget.maxBytes,
-               let (_, fitted) = binarySearchQuality(for: thumb, budget: ThumbnailBudget.maxBytes) {
+            if data.count > budget,
+               let (_, fitted) = binarySearchQuality(for: thumb, budget: budget) {
                 data = fitted
             }
             candidates.append((dimension: dimension, bytes: data.count))
             rendered.append(data)
 
             // Usual case: the first tier fits and the rest of the ladder is never rendered.
-            if data.count <= ThumbnailBudget.maxBytes { break }
+            if data.count <= budget { break }
         }
 
-        guard let index = ThumbnailBudget.choose(candidates: candidates) else {
+        guard let index = ThumbnailBudget.choose(candidates: candidates, budget: budget) else {
             throw MediaOptimizationError.thumbnailGenerationFailed
+        }
+        // Overshoot is possible and deliberate: at the wire budget a detailed frame may not fit
+        // even at the bottom of the ladder, and a slightly-too-big preview beats none. The cost is
+        // one extra chunk, so say it out loud rather than let it be invisible.
+        if rendered[index].count > budget {
+            Log.debug("Thumbnail over budget: \(rendered[index].count)B > \(budget)B at \(Int(candidates[index].dimension))px", category: "MediaOptimizer")
         }
         return rendered[index]
         #else
@@ -190,21 +203,10 @@ struct MediaOptimizer {
         #endif
     }
 
-    static func optimizeVideo(from url: URL) async throws -> OptimizedMedia {
-        let videoData = try Data(contentsOf: url)
-        let thumbnail = try await generateVideoThumbnail(from: url)
-        let asset = AVURLAsset(url: url)
-        let duration = try await asset.load(.duration).seconds
-        let tracks = try await asset.load(.tracks)
-        let videoTrack = tracks.first(where: { $0.mediaType == .video })
-        let size = try await videoTrack?.load(.naturalSize)
-        let metadata = MediaMetadata(
-            originalSize: videoData.count, optimizedSize: videoData.count,
-            width: size.map { Int($0.width) }, height: size.map { Int($0.height) },
-            duration: duration, mimeType: "video/mp4"
-        )
-        return OptimizedMedia(data: videoData, thumbnail: thumbnail, metadata: metadata)
-    }
+    // `optimizeVideo(from:)` was removed here: no caller anywhere in the repo, and it loaded the
+    // whole video into memory to build an `OptimizedMedia` nobody read. The real video path is
+    // `MediaManager.uploadVideo`, which transcodes to a file. A producer with no consumer would
+    // have quietly acquired the wire budget below and made it look load-bearing.
 
     // MARK: - Private (iOS only)
 

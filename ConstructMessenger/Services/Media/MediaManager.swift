@@ -379,7 +379,11 @@ class MediaManager {
         let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType, onProgress: onProgress)
         Log.info("Original image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
 
-        let thumbnail = attachment.displayImage.flatMap { try? MediaOptimizer.generateThumbnail(from: $0) }
+        // Wire budget: this thumbnail's only consumer is `MediaWireCodec.albumContent`. The local
+        // placeholder copy is generated separately in MediaUploadManager at the disk budget.
+        let thumbnail = attachment.displayImage.flatMap {
+            try? MediaOptimizer.generateThumbnail(from: $0, budget: ThumbnailBudget.wireMaxBytes)
+        }
         let (width, height) = Self.pixelDimensions(of: attachment.displayImage)
         let blurhash = attachment.displayImage.flatMap { BlurHash.encode($0) }
 
@@ -445,7 +449,11 @@ class MediaManager {
         let (width, height) = await Self.videoDisplayDimensions(AVURLAsset(url: transcodedURL))
         let loadedDuration = (try? await asset.load(.duration))?.seconds
         let duration = attachment.duration ?? loadedDuration
-        let thumbnail = attachment.displayImage.flatMap { try? MediaOptimizer.generateThumbnail(from: $0) }
+        // A video poster always goes on the wire — the recipient cannot prefetch a whole video on
+        // arrival — so it is sized to fit one chunk rather than to look best on disk.
+        let thumbnail = attachment.displayImage.flatMap {
+            try? MediaOptimizer.generateThumbnail(from: $0, budget: ThumbnailBudget.wireMaxBytes)
+        }
         let blurhash = attachment.displayImage.flatMap { BlurHash.encode($0) }
 
         return MediaMessageData(
