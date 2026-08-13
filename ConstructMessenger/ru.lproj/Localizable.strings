@@ -1139,3 +1139,11 @@
 "msg_status_delivered" = "Доставлено";
 "msg_status_queued" = "В очереди, получатель офлайн";
 "msg_status_failed" = "Не отправлено";
+
+/* Multi-invite (one one-time link per person) */
+"invite_several" = "Пригласить нескольких";
+"invite_several_hint_fmt" = "По одной ссылке на человека. Каждая срабатывает один раз и живёт %@.";
+"invite_link_index_fmt" = "Ссылка %d";
+"invite_one_more" = "ещё одна";
+"invite_create_failed" = "Не удалось создать приглашение. Попробуйте ещё раз.";
+"copy_contact_link_hint_fmt" = "Одноразовая ссылка, действует %@";

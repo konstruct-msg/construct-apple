@@ -114,6 +114,18 @@ struct InviteConfig {
     /// How long the post-redeem safety toast stays visible (with Block action).
     static let postRedeemSafetyToastSeconds: TimeInterval = 8
 
+    /// Localized duration of `ttlSeconds` for UI copy ("12 h" / "12 ч").
+    ///
+    /// Derived, never typed. A screen that says "valid 12 hours" beside a constant
+    /// somebody later sets to 6 is the same defect as a comment describing code that
+    /// changed underneath it — and unlike a comment, users act on this one.
+    static var ttlDescription: String {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.hour, .minute]
+        formatter.unitsStyle = .abbreviated
+        return formatter.string(from: ttlSeconds) ?? ""
+    }
+
     /// Invite protocol versions that still carry a (unused) ephemeral X25519 pub.
     static func carriesEphKey(version: Int) -> Bool { version <= 3 }
 }

@@ -73,6 +73,23 @@ final class InviteSystemCompletionTests: XCTestCase {
         XCTAssertTrue(InviteConfig.carriesEphKey(version: 3))
     }
 
+    /// `ttlDescription` is interpolated straight into user-facing copy ("Одноразовая
+    /// ссылка, действует %@"). `DateComponentsFormatter.string(from:)` returns an
+    /// Optional, and the `?? ""` behind it would turn a nil into a sentence that just
+    /// stops — visible to the user, invisible to the compiler.
+    ///
+    /// NOT COVERED: MultiInviteView itself. That every tap of [ещё одна] yields a
+    /// *distinct* invite rests on `UUID()` inside `InviteGenerator.generate`, which needs
+    /// a signing key from `CryptoManager.shared.orchestratorCore` and so cannot be reached
+    /// from here. On device the answer is five different `jti=` prefixes in the
+    /// "Generated invite v4" log lines.
+    func testTTLDescriptionIsNeverEmpty() {
+        XCTAssertFalse(
+            InviteConfig.ttlDescription.isEmpty,
+            "UI copy interpolates this — an empty value ships a sentence with a hole in it."
+        )
+    }
+
     /// Rotation is what makes "show my QR to several people" work: an invite is burned by
     /// its first redeemer and the sender never learns it happened, so the second scanner of
     /// a static code is told the invite is already used.

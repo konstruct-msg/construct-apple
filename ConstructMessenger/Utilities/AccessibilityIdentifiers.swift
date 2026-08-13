@@ -96,6 +96,15 @@ enum A11y {
         /// undrivable, but this row puts the same invite on the pasteboard — which
         /// `simctl pbpaste` can read and `simctl openurl` can hand to the other sim.
         static let copyContactLink = "settings.copyContactLink"
+        static let inviteSeveral = "settings.inviteSeveral"
+    }
+
+    /// One-time invites minted in bulk (one per person).
+    enum MultiInvite {
+        /// Addressed by position, unlike chats and messages — this list only grows at the
+        /// end and never reorders, so the index is stable for the life of the screen.
+        static func link(_ index: Int) -> String { "multiInvite.link.\(index)" }
+        static let oneMore = "multiInvite.oneMore"
     }
 }
 

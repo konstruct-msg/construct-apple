@@ -16,6 +16,7 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     private var connectionStatus = ConnectionStatusManager.shared
     @State private var showingQRCode = false
+    @State private var showingMultiInvite = false
     @State private var linkCopied = false
     @State private var showingRecoverySetup = false
     @State private var showingOrientation = false
@@ -120,6 +121,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingQRCode) {
                 ContactQRCodeView(userId: viewModel.userId, username: viewModel.username)
+            }
+            .sheet(isPresented: $showingMultiInvite) {
+                MultiInviteView(userId: viewModel.userId)
             }
             .sheet(isPresented: $showingOrientation) {
                 OrientationView(openSynapsOnFinish: false) {
@@ -246,6 +250,35 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .disabled(linkCopied)
             .accessibilityIdentifier(A11y.Settings.copyContactLink)
+
+            // An invite is burned by its first redeemer, and until 2026-08-13 nothing said
+            // so — one link in a group chat worked for one person and told the rest it was
+            // already used, which reads as a broken link. The duration comes from
+            // InviteConfig so this line cannot outlive the constant it describes.
+            Text(
+                String(
+                    format: NSLocalizedString("copy_contact_link_hint_fmt", comment: ""),
+                    InviteConfig.ttlDescription
+                )
+            )
+            .font(CTFont.regular(10))
+            .foregroundStyle(Color.CT.textDim)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, CTLayout.edgePad)
+            .padding(.bottom, 8)
+
+            CTSep(style: .thin)
+
+            Button { showingMultiInvite = true } label: {
+                CTSettingsRow(
+                    label: NSLocalizedString("invite_several", comment: "").uppercased(),
+                    icon: "person.2",
+                    isAction: true,
+                    disclosure: true
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(A11y.Settings.inviteSeveral)
 
             if let ownFingerprint {
                 CTSep(style: .thin)
