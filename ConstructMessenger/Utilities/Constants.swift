@@ -100,12 +100,17 @@ struct InviteConfig {
     static let qrWarningThresholdSeconds: TimeInterval = 60
     static let qrCodePrefixScheme = "konstruct://add"
     static let qrCountdownTickSeconds: TimeInterval = 1
-    // REMOVED 2026-08-13: `qrRotateIntervalSeconds` (30s auto-rotation of the on-screen jti).
-    // Its stated purpose was to defeat a screenshot of the screen, and at a 5-minute TTL it
-    // did. At 12 hours it does the opposite: every rotation MINTS another invite that stays
-    // redeemable for 12 hours, so a screen left open five minutes left ten live one-time
-    // capabilities behind, while the screenshot it was defending against stayed valid anyway.
-    // One invite per presentation; the [generate new code] button still gives a fresh one.
+    /// While the invite QR is on-screen, mint a fresh jti this often.
+    ///
+    /// Removed earlier on 2026-08-13 and restored the same day. The removal reasoned that at
+    /// a 12-hour TTL each rotation mints another long-lived capability — true, and not the
+    /// point. A screenshot captures ONE code whether or not the screen rotates, and ten
+    /// capabilities naming the same identity are one exposure repeated, not ten. Rotation
+    /// was never screenshot defence; it is what lets three people at a table scan in
+    /// sequence and all three succeed, because an invite is burned by the first redeemer.
+    /// [[decisions/invite-two-modes-deferred]] lists it as load-bearing for personal mode,
+    /// which is the sentence that should have been read before deleting it.
+    static let qrRotateIntervalSeconds: TimeInterval = 30
     /// How long the post-redeem safety toast stays visible (with Block action).
     static let postRedeemSafetyToastSeconds: TimeInterval = 8
 

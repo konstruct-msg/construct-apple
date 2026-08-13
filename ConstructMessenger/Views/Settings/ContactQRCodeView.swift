@@ -107,6 +107,7 @@ struct ContactQRCodeView: View {
         }
         .onReceive(timer) { _ in
             updateTimeRemaining()
+            maybeRotateQR()
         }
     }
 
@@ -259,6 +260,22 @@ struct ContactQRCodeView: View {
     /// same formatter printed "720:00", which is not a time anyone reads — so the
     /// last hour keeps the countdown and everything above it switches to units the
     /// OS localizes for us (no new strings, and correct in ru/ja on arrival).
+    /// Mint a fresh jti every `qrRotateIntervalSeconds` while the code is on screen.
+    ///
+    /// An invite is burned by its first redeemer, and the sender gets no signal that it
+    /// happened — so without this, the second person to scan the same screen is told the
+    /// invite is already used. Rotation is the only thing making "show my QR to a few
+    /// people" work at all, until [[decisions/invite-two-modes-deferred]] is revisited.
+    private func maybeRotateQR() {
+        guard previewPayload == nil else { return }
+        guard generationError == nil, qrPayloadBytes != nil else { return }
+        guard let generatedAt else { return }
+        let elapsed = Date().timeIntervalSince(generatedAt)
+        guard elapsed >= InviteConfig.qrRotateIntervalSeconds else { return }
+        Log.debug("Rotating invite QR after \(Int(elapsed))s", category: "ContactQR")
+        regenerateQRCode()
+    }
+
     private func formatTime(_ seconds: TimeInterval) -> String {
         if seconds >= 3600 {
             let formatter = DateComponentsFormatter()

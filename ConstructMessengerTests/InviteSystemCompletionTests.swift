@@ -73,6 +73,25 @@ final class InviteSystemCompletionTests: XCTestCase {
         XCTAssertTrue(InviteConfig.carriesEphKey(version: 3))
     }
 
+    /// Rotation is what makes "show my QR to several people" work: an invite is burned by
+    /// its first redeemer and the sender never learns it happened, so the second scanner of
+    /// a static code is told the invite is already used.
+    ///
+    /// It was deleted on 2026-08-13 alongside the TTL change, on the reasoning that at 12
+    /// hours each rotation mints another long-lived capability. That traded a working
+    /// scenario for a threat that does not scale — a screenshot captures one code either
+    /// way. [[decisions/invite-two-modes-deferred]] had already recorded rotation as
+    /// load-bearing for personal-invite mode. Restored the same day; this test exists so
+    /// the next person to find it wasteful reads the reason first.
+    func testQRRotatesFastEnoughForSequentialScanners() {
+        XCTAssertGreaterThan(InviteConfig.qrRotateIntervalSeconds, 0, "Rotation removed — the second person to scan the same screen will be told the invite is already used.")
+        XCTAssertLessThanOrEqual(
+            InviteConfig.qrRotateIntervalSeconds, 60,
+            "Rotation slower than a minute stops covering the case it exists for: people scanning one after another."
+        )
+        XCTAssertLessThan(InviteConfig.qrRotateIntervalSeconds, InviteConfig.ttlSeconds)
+    }
+
     /// The invite TTL has three carriers: this constant, `INVITE_TTL_SECONDS` in
     /// construct-server (`crates/crypto-agility/src/invites.rs`), and the burn-row
     /// retention derived from it. They are two languages in two repositories, so no
