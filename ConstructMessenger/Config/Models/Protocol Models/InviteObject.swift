@@ -12,7 +12,7 @@ import Foundation
 /// Security model:
 /// - Ed25519 signature from sender's identity key (client verifies locally)
 /// - JTI (JWT ID) for one-time use tracking
-/// - 3-5 minute time-to-live (TTL)
+/// - Bounded time-to-live (`InviteConfig.ttlSeconds`, mirrored server-side)
 /// - v4+: no unused ephKey; pure signed capability
 ///
 /// On-the-wire transport (not the in-memory field model):
@@ -164,7 +164,7 @@ struct InviteObject: Codable, Equatable {
     }
     
     /// Check if invite has expired
-    /// - Parameter ttlSeconds: Time-to-live in seconds (default: 300 = 5 minutes)
+    /// - Parameter ttl: Time-to-live in seconds (default: `InviteConfig.ttlSeconds`)
     /// - Returns: true if expired
     func isExpired(ttl: TimeInterval = InviteConfig.ttlSeconds) -> Bool {
         let now = Date().timeIntervalSince1970
@@ -173,7 +173,7 @@ struct InviteObject: Codable, Equatable {
     }
     
     /// Get remaining time until expiry
-    /// - Parameter ttlSeconds: Time-to-live in seconds (default: 300)
+    /// - Parameter ttl: Time-to-live in seconds (default: `InviteConfig.ttlSeconds`)
     /// - Returns: Seconds remaining, or 0 if expired
     func timeRemaining(ttl: TimeInterval = InviteConfig.ttlSeconds) -> TimeInterval {
         let now = Date().timeIntervalSince1970

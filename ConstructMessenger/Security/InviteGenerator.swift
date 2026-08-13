@@ -121,7 +121,7 @@ class InviteGenerator {
 
         let ttlMinutes = Int(InviteConfig.ttlSeconds / 60)
         Log.info(
-            "Generated invite v\(InviteConfig.currentVersion): jti=\(jti.prefix(8))..., expires in \(ttlMinutes) minutes",
+            "Generated invite v\(InviteConfig.currentVersion): jti=\(jti.prefix(8))..., expires in \(ttlMinutes) min",
             category: "InviteGenerator"
         )
         return signedInvite

@@ -70,7 +70,28 @@ struct InviteConfig {
     /// Version used when GENERATING new invites.
     /// v4: no ephKey in canonical string / wire; server crypto-agility must accept v4.
     static let currentVersion: Int = 4
-    static let ttlSeconds: TimeInterval = 300 // 5 minutes
+    /// How long a signed invite stays redeemable.
+    ///
+    /// **Must equal `INVITE_TTL_SECONDS` in construct-server**
+    /// (`crates/crypto-agility/src/invites.rs`). The server checks expiry first,
+    /// so raising this alone changes nothing except which side reports the
+    /// failure, and `used_invites.expires_at` — the row that makes an invite
+    /// one-time — is derived from the server's copy. Three carriers, one meaning,
+    /// nothing in either build that can enforce the agreement; the only guard is
+    /// `testInviteTTLMatchesServerConstant` plus this sentence.
+    ///
+    /// 2026-08-13: 300 → 43200 (12h). Five minutes worked for a QR held between
+    /// two phones and could not work for a link sent through another messenger —
+    /// it expired in the clipboard, and until this session the redeem side failed
+    /// silently, so it read as "links are broken". One-time use and the TOFU
+    /// `deviceId` pin carry what the short window was standing in for.
+    static let ttlSeconds: TimeInterval = 43_200 // 12 hours
+
+    /// Tolerance for a sender whose clock runs fast. Unrelated to `ttlSeconds`.
+    /// NOTE: the server is stricter — `InviteToken::is_future` allows 60s. A sender
+    /// 90s ahead is accepted here and rejected there; the server's answer is the
+    /// one that decides, so this number is the more forgiving of the two, not the
+    /// effective one.
     static let maxFutureSkewSeconds: TimeInterval = 300 // 5 minutes
     static let deviceIdLength = 32
     static let deviceIdRegex = "^[a-f0-9]{32}$"
@@ -79,8 +100,12 @@ struct InviteConfig {
     static let qrWarningThresholdSeconds: TimeInterval = 60
     static let qrCodePrefixScheme = "konstruct://add"
     static let qrCountdownTickSeconds: TimeInterval = 1
-    /// While the invite QR is on-screen, rotate jti this often to defeat screenshot-of-screen.
-    static let qrRotateIntervalSeconds: TimeInterval = 30
+    // REMOVED 2026-08-13: `qrRotateIntervalSeconds` (30s auto-rotation of the on-screen jti).
+    // Its stated purpose was to defeat a screenshot of the screen, and at a 5-minute TTL it
+    // did. At 12 hours it does the opposite: every rotation MINTS another invite that stays
+    // redeemable for 12 hours, so a screen left open five minutes left ten live one-time
+    // capabilities behind, while the screenshot it was defending against stayed valid anyway.
+    // One invite per presentation; the [generate new code] button still gives a fresh one.
     /// How long the post-redeem safety toast stays visible (with Block action).
     static let postRedeemSafetyToastSeconds: TimeInterval = 8
 

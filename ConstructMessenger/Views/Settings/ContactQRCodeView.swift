@@ -107,7 +107,6 @@ struct ContactQRCodeView: View {
         }
         .onReceive(timer) { _ in
             updateTimeRemaining()
-            maybeRotateQR()
         }
     }
 
@@ -256,7 +255,17 @@ struct ContactQRCodeView: View {
         generateInitialQRCode()
     }
 
+    /// m:ss is only readable while the remainder is minutes. At a 12-hour TTL the
+    /// same formatter printed "720:00", which is not a time anyone reads — so the
+    /// last hour keeps the countdown and everything above it switches to units the
+    /// OS localizes for us (no new strings, and correct in ru/ja on arrival).
     private func formatTime(_ seconds: TimeInterval) -> String {
+        if seconds >= 3600 {
+            let formatter = DateComponentsFormatter()
+            formatter.allowedUnits = [.hour, .minute]
+            formatter.unitsStyle = .abbreviated
+            return formatter.string(from: seconds) ?? ""
+        }
         let m = Int(seconds) / 60
         let s = Int(seconds) % 60
         return String(format: "%d:%02d", m, s)
@@ -267,18 +276,6 @@ struct ContactQRCodeView: View {
         timeRemaining = max(InviteConfig.ttlSeconds - Date().timeIntervalSince(generatedAt), 0)
     }
 
-    /// Rotate jti every `qrRotateIntervalSeconds` while the code is still live.
-    private func maybeRotateQR() {
-        guard previewPayload == nil else { return }
-        guard generationError == nil, qrPayloadBytes != nil else { return }
-        guard let generatedAt else { return }
-        let elapsed = Date().timeIntervalSince(generatedAt)
-        guard elapsed >= InviteConfig.qrRotateIntervalSeconds else { return }
-        // Still within overall TTL window after rotation would reset the clock —
-        // always rotate; each code is one-time and short-lived by design.
-        Log.debug("Rotating invite QR after \(Int(elapsed))s", category: "ContactQR")
-        regenerateQRCode()
-    }
 }
 
 #Preview {

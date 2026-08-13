@@ -73,9 +73,49 @@ final class InviteSystemCompletionTests: XCTestCase {
         XCTAssertTrue(InviteConfig.carriesEphKey(version: 3))
     }
 
-    func testQRRotateIntervalIsPositiveAndBelowTTL() {
-        XCTAssertGreaterThan(InviteConfig.qrRotateIntervalSeconds, 0)
-        XCTAssertLessThan(InviteConfig.qrRotateIntervalSeconds, InviteConfig.ttlSeconds)
+    /// The invite TTL has three carriers: this constant, `INVITE_TTL_SECONDS` in
+    /// construct-server (`crates/crypto-agility/src/invites.rs`), and the burn-row
+    /// retention derived from it. They are two languages in two repositories, so no
+    /// build can compare them.
+    ///
+    /// This is therefore a **ratchet, not a proof**. It fails when the client number
+    /// moves, and its message is the instruction to move the other two. It CANNOT tell
+    /// you the server was redeployed with the new value — the symptom of that gap is a
+    /// redeem rejected as "expired" on a link the sender's app still shows as live, and
+    /// the only place that answer exists is the identity-service log line
+    /// `Invite validation failed … error=Expired`.
+    ///
+    /// 2026-08-13: 300 → 43200. Five minutes meant a copied link expired in the
+    /// clipboard before the recipient opened it; the QR, rotated every 30s and scanned
+    /// on the spot, never hit it. That asymmetry read as "links are broken".
+    func testInviteTTLMatchesServerConstant() {
+        XCTAssertEqual(
+            InviteConfig.ttlSeconds, 43_200,
+            "Client invite TTL changed. construct-server INVITE_TTL_SECONDS (and the "
+                + "INVITE_BURN_RETENTION_SECONDS derived from it) must move with it — the "
+                + "server checks expiry first, so a client-only change is invisible."
+        )
+    }
+
+    /// Guards the arithmetic in `isExpired`, not the policy: a sign error or a
+    /// seconds/minutes mixup inside it survives the pin above, because that one only
+    /// compares the constant to itself.
+    ///
+    /// The second half is the case that must NOT fire. A rule that expires invites can
+    /// misfire, and rejecting a still-valid invite is worse than the bug it fixes: the
+    /// sender sees a live code and the recipient is told to ask for a new one.
+    func testInviteIsLiveJustInsideTTLAndDeadJustOutside() {
+        let now = Date().timeIntervalSince1970
+
+        let almostExpired = sampleV4(ts: Int(now - InviteConfig.ttlSeconds + 60))
+        XCTAssertFalse(
+            almostExpired.isExpired(),
+            "An invite one minute short of the TTL is still live — rejecting it strands a "
+                + "sender whose code is visibly counting down."
+        )
+
+        let justExpired = sampleV4(ts: Int(now - InviteConfig.ttlSeconds - 60))
+        XCTAssertTrue(justExpired.isExpired())
     }
 
     // MARK: - Canonical string (signing surface)

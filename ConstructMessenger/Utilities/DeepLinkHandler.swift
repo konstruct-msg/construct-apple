@@ -64,9 +64,11 @@ class DeepLinkHandler {
                     // the app opened, nothing happened, no message. Indistinguishable from
                     // "links are broken", which is exactly how it was reported on 2026-08-13.
                     //
-                    // Expiry is the case that actually fires. An invite lives 5 minutes; the
-                    // QR screen rotates its code every 30s so it is never stale when scanned,
-                    // while a copied link starts dying the moment it reaches the clipboard.
+                    // Expiry was the case that actually fired, while an invite lived five
+                    // minutes and a copied link began dying in the clipboard. The TTL is 12
+                    // hours now, so this path should go quiet — which is precisely why it has
+                    // to speak: the remaining reasons (already used, bad signature, unknown
+                    // device) are rarer and far harder to guess from silence.
                     //
                     // NOT COVERED BY A TEST: that this reaches the screen. The toast reads
                     // `router.currentError` with a plain `if let`, so an error published
