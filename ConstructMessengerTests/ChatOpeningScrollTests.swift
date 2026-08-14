@@ -124,6 +124,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testLoadOlder_refusesDuringOpeningEvenAtTop() {
         XCTAssertFalse(
             ChatScrollManager.shouldLoadOlderHistory(
+                hasMeasuredViewportTop: true,
                 isOpening: true,
                 contentFits: false,
                 visibleMinY: atTop,
@@ -134,6 +135,7 @@ final class ChatOpeningScrollTests: XCTestCase {
         )
         XCTAssertFalse(
             ChatScrollManager.shouldLoadOlderHistory(
+                hasMeasuredViewportTop: true,
                 isOpening: true,
                 contentFits: true,
                 visibleMinY: atTop,
@@ -149,6 +151,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testLoadOlder_refusesWhenFollowingOverflow() {
         XCTAssertFalse(
             ChatScrollManager.shouldLoadOlderHistory(
+                hasMeasuredViewportTop: true,
                 isOpening: false,
                 contentFits: false,
                 visibleMinY: midList,
@@ -163,6 +166,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testLoadOlder_allowsNearTopWhileReadingHistory() {
         XCTAssertTrue(
             ChatScrollManager.shouldLoadOlderHistory(
+                hasMeasuredViewportTop: true,
                 isOpening: false,
                 contentFits: false,
                 visibleMinY: atTop,
@@ -173,6 +177,7 @@ final class ChatOpeningScrollTests: XCTestCase {
         )
         XCTAssertTrue(
             ChatScrollManager.shouldLoadOlderHistory(
+                hasMeasuredViewportTop: true,
                 isOpening: false,
                 contentFits: false,
                 visibleMinY: ChatScrollManager.Threshold.nearTop,
@@ -184,6 +189,7 @@ final class ChatOpeningScrollTests: XCTestCase {
         )
         XCTAssertFalse(
             ChatScrollManager.shouldLoadOlderHistory(
+                hasMeasuredViewportTop: true,
                 isOpening: false,
                 contentFits: false,
                 visibleMinY: ChatScrollManager.Threshold.nearTop + 1,
@@ -198,6 +204,7 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testLoadOlder_allowsContentFitsFillAfterOpening() {
         XCTAssertTrue(
             ChatScrollManager.shouldLoadOlderHistory(
+                hasMeasuredViewportTop: true,
                 isOpening: false,
                 contentFits: true,
                 visibleMinY: midList,
@@ -211,21 +218,113 @@ final class ChatOpeningScrollTests: XCTestCase {
     func testLoadOlder_respectsBusyAndSearchAndExhausted() {
         XCTAssertFalse(
             ChatScrollManager.shouldLoadOlderHistory(
-                isOpening: false, contentFits: true, visibleMinY: atTop,
+                hasMeasuredViewportTop: true, isOpening: false, contentFits: true, visibleMinY: atTop,
                 isSearchActive: true, isLoadingMore: false, hasMoreMessages: true
             )
         )
         XCTAssertFalse(
             ChatScrollManager.shouldLoadOlderHistory(
-                isOpening: false, contentFits: true, visibleMinY: atTop,
+                hasMeasuredViewportTop: true, isOpening: false, contentFits: true, visibleMinY: atTop,
                 isSearchActive: false, isLoadingMore: true, hasMoreMessages: true
             )
         )
         XCTAssertFalse(
             ChatScrollManager.shouldLoadOlderHistory(
-                isOpening: false, contentFits: true, visibleMinY: atTop,
+                hasMeasuredViewportTop: true, isOpening: false, contentFits: true, visibleMinY: atTop,
                 isSearchActive: false, isLoadingMore: false, hasMoreMessages: false
             )
+        )
+    }
+
+    /// Device log 2026-08-14, five times in one session — the defect `isOpening` was meant to
+    /// stop and never got the chance:
+    ///
+    ///     FRC initial fetch: 30 messages (oldest-first)
+    ///     Loading more messages before 2026-08-11 10:53:41 [trigger=indicatorAppeared]
+    ///     Loaded 20 more messages (total: 50)
+    ///     ChatView: messages count changed to 30      ← beginOpening only here
+    ///     PIN arm reason=opening
+    ///
+    /// The sentinel's `onAppear` runs before the transcript count ever changes, so `isOpening` is
+    /// still false. What admitted the fetch was `visibleMinY` holding its initial `0`, because no
+    /// geometry tick had happened yet — and `0 <= nearTop` is true. Unmeasured must not read as
+    /// "the person is at the oldest edge".
+    func testLoadOlder_refusesBeforeViewportTopIsMeasured() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldLoadOlderHistory(
+                hasMeasuredViewportTop: false,
+                isOpening: false,
+                contentFits: false,
+                visibleMinY: atTop,
+                isSearchActive: false,
+                isLoadingMore: false,
+                hasMoreMessages: true
+            ),
+            "visibleMinY == 0 before the first tick is an initial value, not a viewport at the top"
+        )
+        XCTAssertFalse(
+            ChatScrollManager.shouldLoadOlderHistory(
+                hasMeasuredViewportTop: false,
+                isOpening: false,
+                contentFits: true,
+                visibleMinY: atTop,
+                isSearchActive: false,
+                isLoadingMore: false,
+                hasMoreMessages: true
+            ),
+            "contentFits is also just its initial false before the first tick — no prefetch either"
+        )
+    }
+
+    /// The guard must not become permanent: once a tick lands, the old behaviour is unchanged.
+    func testLoadOlder_allowsOnceViewportTopIsMeasured() {
+        XCTAssertTrue(
+            ChatScrollManager.shouldLoadOlderHistory(
+                hasMeasuredViewportTop: true,
+                isOpening: false,
+                contentFits: false,
+                visibleMinY: atTop,
+                isSearchActive: false,
+                isLoadingMore: false,
+                hasMoreMessages: true
+            )
+        )
+    }
+
+    /// Instance path, in the order the device produces it: the sentinel asks before any geometry
+    /// tick, then a bottom-anchored tick lands, and only a real scroll to the top may widen.
+    func testLoadOlder_instanceRefusesUntilFirstGeometryTick() {
+        let manager = ChatScrollManager()
+        XCTAssertFalse(
+            manager.shouldLoadOlderHistory(
+                isSearchActive: false, isLoadingMore: false, hasMoreMessages: true
+            ),
+            "fresh manager: nothing has been measured, the sentinel must be refused"
+        )
+        // Bottom-anchored entry: viewport top is far down the content.
+        manager.updateScrollOffset(
+            distanceFromBottom: 0,
+            contentFits: false,
+            contentHeight: 4000,
+            visibleMinY: 3200
+        )
+        XCTAssertFalse(
+            manager.shouldLoadOlderHistory(
+                isSearchActive: false, isLoadingMore: false, hasMoreMessages: true
+            ),
+            "measured and far from the top → still no"
+        )
+        manager.updateScrollOffset(
+            distanceFromBottom: 3800,
+            contentFits: false,
+            contentHeight: 4000,
+            visibleMinY: 10
+        )
+        XCTAssertTrue(
+            manager.shouldLoadOlderHistory(
+                isSearchActive: false, isLoadingMore: false, hasMoreMessages: true
+            ),
+            "person actually scrolled to the oldest edge"
         )
     }
 

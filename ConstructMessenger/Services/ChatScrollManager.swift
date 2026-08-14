@@ -176,6 +176,20 @@ class ChatScrollManager {
     @ObservationIgnored
     private(set) var visibleMinY: CGFloat = 0
 
+    /// Whether ``visibleMinY`` above holds a measurement rather than its initial value.
+    ///
+    /// It is the only honest reading of "is the viewport near the top of the content", and until
+    /// the first geometry tick there is no such reading — only a `0` that happens to satisfy every
+    /// near-top comparison. Device log 2026-08-14: the sentinel's `onAppear` runs *before* the
+    /// transcript count ever changes, so `isOpening` is still false and the load-more gate fell
+    /// through to `visibleMinY <= nearTop`, which `0 <= 120` answered yes. Every chat open widened
+    /// 30 → 50 unasked (TODO 34), five times in one short session.
+    ///
+    /// The comment on ``Threshold/nearTop`` says bottom-anchored entry is refused because
+    /// `visibleMinY ≫ this`. That is true of a *measured* viewport and false of an unmeasured one,
+    /// and nothing distinguished the two.
+    @ObservationIgnored private(set) var hasMeasuredViewportTop = false
+
     /// Content shorter than the viewport. Kept so load-more policy can fill a short window after
     /// opening without waiting for a second sentinel `onAppear` (which may never come).
     @ObservationIgnored
@@ -538,6 +552,7 @@ class ChatScrollManager {
         }
         if let newVisibleMinY, newVisibleMinY.isFinite {
             visibleMinY = newVisibleMinY
+            hasMeasuredViewportTop = true
         }
 
         let next = Self.flags(
@@ -569,11 +584,20 @@ class ChatScrollManager {
     /// used to prepend a batch (30 → 50) while the opening pin was still landing. Opening already
     /// stopped that growth from taking the animated branch; this stops the fetch itself.
     ///
+    /// `isOpening` was supposed to be the whole guard, and on device it never got the chance:
+    /// the sentinel's `onAppear` fires *before* the transcript count first changes, so
+    /// `beginOpening` has not run yet and `isOpening` is still false. What actually admitted the
+    /// fetch was `visibleMinY`, holding its initial `0` because no geometry tick had happened —
+    /// and `0 <= nearTop` is true. `hasMeasuredViewportTop` is what separates "the viewport is at
+    /// the top" from "nobody has looked yet".
+    ///
     /// Allowed only when:
+    /// - the viewport top has been measured at least once, and
     /// - not opening (layout is settled enough to read intent), and
     /// - either the viewport is at the oldest edge (`visibleMinY` near 0), or the whole transcript
     ///   fits on screen (short window of a longer history — keep filling until it can scroll).
     static func shouldLoadOlderHistory(
+        hasMeasuredViewportTop: Bool,
         isOpening: Bool,
         contentFits: Bool,
         visibleMinY: CGFloat,
@@ -582,6 +606,9 @@ class ChatScrollManager {
         hasMoreMessages: Bool
     ) -> Bool {
         guard hasMoreMessages, !isLoadingMore, !isSearchActive else { return false }
+        // Before the first tick `contentFits` is also just its initial `false`, so this guard
+        // sits above both branches on purpose: neither input means anything yet.
+        guard hasMeasuredViewportTop else { return false }
         if isOpening { return false }
         if contentFits { return true }
         return visibleMinY <= Threshold.nearTop
@@ -595,6 +622,7 @@ class ChatScrollManager {
         hasMoreMessages: Bool
     ) -> Bool {
         Self.shouldLoadOlderHistory(
+            hasMeasuredViewportTop: hasMeasuredViewportTop,
             isOpening: isOpening,
             contentFits: contentFits,
             visibleMinY: visibleMinY,
