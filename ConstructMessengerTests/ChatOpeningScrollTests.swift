@@ -194,13 +194,52 @@ final class ChatOpeningScrollTests: XCTestCase {
         XCTAssertFalse(ChatScrollManager.isDragPhase(.idle))
     }
 
-    func testFingerAndItsMomentumBothCountAsDrag() {
+    func testOnlyATouchCountsAsDrag() {
         XCTAssertTrue(ChatScrollManager.isDragPhase(.tracking))
         XCTAssertTrue(ChatScrollManager.isDragPhase(.interacting))
-        XCTAssertTrue(
+    }
+
+    /// The flicker of 2026-08-14 18:39. `.decelerating` was in the drag set for one build on the
+    /// reasoning "the finger has left but the movement is still theirs". The device disagreed:
+    /// within 150 ms of `will SHOW` — before the keyboard pin's first tick — the log has
+    /// `PIN aborted at tick 0 — auto-scroll was switched off` and then four
+    /// `Scrolled to bottom (animated: true)`. Nobody scrolled in those 150 ms. The keyboard was
+    /// rising and the content settling beneath it, and SwiftUI reported that as deceleration.
+    /// Trusted as intent, it unfroze `flags` mid-animation and the flags oscillated.
+    ///
+    /// Deceleration is content in motion, and content in motion is what this signal must not
+    /// trust — the same reason `.animating` is out.
+    func testDecelerationIsNotEvidenceOfIntent() {
+        XCTAssertFalse(
             ChatScrollManager.isDragPhase(.decelerating),
-            "the finger has left but the movement is still theirs"
+            "the keyboard rising also decelerates the content, and that is not a person"
         )
+    }
+
+    /// Narrowing the drag set must not narrow the opening handover: once a flick is coasting the
+    /// opening window is over, even though the coast says nothing about where the person wants
+    /// to be. Two questions off one phase, kept apart on purpose.
+    func testDecelerationStillEndsTheOpeningWindow() {
+        XCTAssertTrue(ChatScrollManager.endsOpening(.decelerating))
+        XCTAssertTrue(ChatScrollManager.endsOpening(.tracking))
+        XCTAssertTrue(ChatScrollManager.endsOpening(.interacting))
+        XCTAssertFalse(ChatScrollManager.endsOpening(.animating), "our own pin never ends it")
+        XCTAssertFalse(ChatScrollManager.endsOpening(.idle))
+    }
+
+    /// The wiring, not just the function: `noteScrollPhase` must ask `endsOpening`, not
+    /// `isUserDragging`. Collapsing the two back into one compiles, passes every pure test, and
+    /// silently makes a coasting flick stop ending the opening window.
+    func testDecelerationEndsOpeningThroughTheInstance() {
+        let manager = ChatScrollManager()
+        manager.beginOpening(settleAfterMs: 10_000)
+        XCTAssertEqual(manager.viewportMode, .opening)
+        manager.noteScrollPhase(.decelerating)
+        XCTAssertNotEqual(
+            manager.viewportMode, .opening,
+            "a coasting flick ends the opening window even though it is not evidence of intent"
+        )
+        XCTAssertFalse(manager.isUserDragging, "and it must not register as a finger")
     }
 
     /// The instance path, so the wiring from phase to flag is covered too.
@@ -211,6 +250,12 @@ final class ChatOpeningScrollTests: XCTestCase {
         XCTAssertTrue(manager.isUserDragging)
         manager.noteScrollPhase(.animating)
         XCTAssertFalse(manager.isUserDragging, "a pin animation must not keep the drag latched")
+        manager.noteScrollPhase(.tracking)
+        manager.noteScrollPhase(.decelerating)
+        XCTAssertFalse(
+            manager.isUserDragging,
+            "the coast after a flick is content in motion, not a finger — this is the flicker"
+        )
     }
 
     // MARK: - countChangeAction

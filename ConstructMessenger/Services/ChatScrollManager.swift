@@ -160,17 +160,40 @@ class ChatScrollManager {
     /// `endOpening` already avoids on the same signal.
     @ObservationIgnored private(set) var isUserDragging = false
 
-    /// Which scroll phases are the *person* moving the list.
+    /// Which scroll phases prove a **finger is on the list right now**.
     ///
-    /// Extracted rather than left as a `switch` in each view because it is a decision, and a
-    /// decision inside a SwiftUI body cannot be reached by a test: the first version of this shipped
-    /// with `.animating` folded in beside `.idle`, and a mutation that made `.animating` count as a
-    /// drag was killed by nothing. That mutation is not academic — `.animating` is our own
-    /// corrective pin, so counting it would let the pin's motion be read as the person's intent, at
-    /// exactly the moment the layout is least settled.
+    /// `.decelerating` was in this set for one build and caused visible flicker (device log
+    /// 2026-08-14, 18:39). Within 150 ms of `KEYBOARD_TRACE: will SHOW` — before the keyboard pin's
+    /// own first tick — the log shows `PIN aborted at tick 0 — auto-scroll was switched off`,
+    /// followed by four `Scrolled to bottom (animated: true)`. Nobody scrolled in those 150 ms; the
+    /// keyboard was rising and the content settling under it, and SwiftUI reported that settling as
+    /// deceleration. Read as intent, it unfroze `flags` mid-animation, switched auto-scroll off,
+    /// flashed the FAB on, and the next follow switched it all back — which is the flicker.
     ///
-    /// `.decelerating` counts: the finger has left, but the movement is still theirs.
+    /// So the set is only the phases that require a touch: `.tracking` (finger down, dragging) and
+    /// `.interacting` (finger down, e.g. grabbing momentum). Deceleration is content in motion, and
+    /// content in motion is exactly what this signal must not trust — the same reason `.animating`
+    /// is excluded, since that one is our own corrective pin.
+    ///
+    /// Losing `.decelerating` costs nothing: the freeze **preserves** whatever the drag established
+    /// (`testDragEndedWithKeyboardUp_preservesReadingHistory`), so the verdict reached while the
+    /// finger was down survives the coast.
     static func isDragPhase(_ phase: ScrollPhase) -> Bool {
+        switch phase {
+        case .tracking, .interacting:
+            return true
+        case .decelerating, .idle, .animating:
+            return false
+        @unknown default:
+            return false
+        }
+    }
+
+    /// Whether a phase means the person has taken the transcript over from the opening settle
+    /// timer. Wider than ``isDragPhase(_:)`` on purpose, and unchanged since before that existed:
+    /// once a flick is coasting the opening is over, even though the coast is not evidence about
+    /// where the person wants to be.
+    static func endsOpening(_ phase: ScrollPhase) -> Bool {
         switch phase {
         case .tracking, .interacting, .decelerating:
             return true
@@ -183,9 +206,11 @@ class ChatScrollManager {
 
     /// Single entry for scroll phase. Both hosts call this from `onScrollPhaseChange`.
     func noteScrollPhase(_ phase: ScrollPhase) {
+        // Two questions, two answers, one phase. "Is a finger down" gates the keyboard freeze;
+        // "has the person taken over" ends the opening window. Conflating them is what put
+        // `.decelerating` into the first set and produced the flicker.
         isUserDragging = Self.isDragPhase(phase)
-        if isUserDragging {
-            // A person touching the list outranks the opening settle timer.
+        if Self.endsOpening(phase) {
             endOpening()
         }
     }
