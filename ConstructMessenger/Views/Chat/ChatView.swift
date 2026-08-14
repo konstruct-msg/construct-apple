@@ -70,21 +70,6 @@ struct ChatView: View {
         static let geometryLogThreshold = ChatScrollManager.heightRepinThreshold
     }
 
-    /// Combined scroll metrics so a single `onScrollGeometryChange` drives both
-    /// offset tracking and container width (two modifiers caused multi-update-per-frame).
-    private struct ChatScrollGeometry: Equatable {
-        /// Points of content below the visible rect (0 ≈ at bottom). Uses `visibleRect`,
-        /// not the inset-blind `contentOffset + container − contentSize` formula.
-        var distanceFromBottom: CGFloat
-        var width: CGFloat
-        /// Content shorter than the viewport ⇒ nothing to jump to — the FAB must never show.
-        var contentFits: Bool
-        /// Total laid-out height. Grows after the opening pins when media resolves.
-        var contentHeight: CGFloat
-        /// Top of the viewport in content coordinates — the missing half of every blank-chat report.
-        var visibleMinY: CGFloat
-    }
-
     /// Probe log for viewport moves. Gated by ``ChatScrollManager.verboseGeometryLogging`` —
     /// default off so thermal/export sessions stay readable. Requires a real move/growth even
     /// during opening (the old `|| isOpening` branch logged every layout pass).
@@ -117,207 +102,20 @@ struct ChatView: View {
             Color.CT.bg.ignoresSafeArea()
 
             // Message list — base layer, scrolls underneath the floating capsules
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: ChatUIConstants.Shell.listSpacing) {
-                        // Infinite-scroll sentinel at the TOP (oldest edge). No button — history
-                        // loads as the user reaches the oldest edge. LazyVStack materialises this
-                        // on first layout even when bottom-anchored; the load is gated by
-                        // `ChatScrollManager.shouldLoadOlderHistory` (TODO 34) so entry no longer
-                        // unprompted-prefetches 30 → 50.
-                        if viewModel.hasMoreMessages && !renderedMessages.isEmpty {
-                            Group {
-                                if viewModel.isLoadingMore {
-                                    ProgressView()
-                                        .padding(.vertical, ChatUIConstants.Shell.listSpacing)
-                                } else {
-                                    Color.clear
-                                        .frame(height: 1)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .id("loadMoreIndicator")
-                            .accessibilityHidden(true)
-                            .onAppear {
-                                attemptLoadOlderHistory()
-                            }
-                        }
-
-                        // Messages in oldest-first order (ScrollView anchored to bottom via .defaultScrollAnchor)
-                        ForEach(Array(renderedMessages.enumerated()), id: \.element.id) { index, message in
-                            VStack(spacing: 0) {
-                                MessageBubble(
-                                    message: message,
-                                    isLastInGroup: message.isLastInGroup(at: index, in: renderedMessages),
-                                    isSelected: selectedMessages.contains(message.id),
-                                    isEditMode: isEditMode,
-                                    onRetry: { msg in
-                                        viewModel.retryMessage(msg)
-                                    },
-                                    onReply: { msg in
-                                        replyingTo = msg
-                                        replyQuoteText = nil
-                                        setComposeReplyFocus(messageId: msg.id)
-                                    },
-                                    onDelete: { msg in
-                                        viewModel.deleteMessage(msg)
-                                    },
-                                    onSelect: { msg in
-                                        toggleMessageSelection(msg)
-                                    },
-                                    onEnterSelectMode: { msg in
-                                        withAnimation {
-                                            isEditMode = true
-                                            isSearchActive = false
-                                            searchText = ""
-                                        }
-                                        selectedMessages.insert(msg.id)
-                                    },
-                                    onTapMedia: { msg, itemIndex in
-                                        galleryStartItem = GalleryStartItem(id: msg.id, itemIndex: itemIndex)
-                                    },
-                                    onEdit: { msg in
-                                        viewModel.editingMessage = msg
-                                    },
-                                    onReplyWithQuote: { msg, _ in
-                                        quotingMessage = msg
-                                    },
-                                    onJumpToReply: { msg in
-                                        peekReplyChain(for: msg)
-                                    }
-                                )
-                                .id(message.id)
-                                // The LAST message only, and no longer just a probe. Auto-scroll
-                                // promises the newest message is on screen; this is the only place
-                                // that can tell whether the promise holds. Build 583 showed it
-                                // broken for seconds at a time — the transcript measured 5792pt,
-                                // the pin anchored there, the height settled at 3952pt and the
-                                // viewport was left 922pt past the end. See
-                                // `ChatScrollManager.shouldRecoverStrandedViewport`.
-                                .onAppear {
-                                    if index == renderedMessages.count - 1 {
-                                        ChatScrollManager.logGeometry(
-                                            "SCROLL_ANCHOR last message visible (\(message.id.prefix(8))…, idx=\(index)/\(renderedMessages.count))"
-                                        )
-                                        scrollManager.noteLastMessageVisible(true, searchActive: isSearchActive)
-                                    }
-                                }
-                                .onDisappear {
-                                    if index == renderedMessages.count - 1 {
-                                        ChatScrollManager.logGeometry(
-                                            "SCROLL_ANCHOR last message left the viewport (\(message.id.prefix(8))…)"
-                                        )
-                                        scrollManager.noteLastMessageVisible(false, searchActive: isSearchActive)
-                                    }
-                                }
-                                .opacity(replyFocusOpacity(for: message))
-                                .animation(
-                                    .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
-                                    value: replyFocusIds
-                                )
-
-                                // Add spacing after each message
-                                if index < renderedMessages.count - 1 {
-                                    Spacer()
-                                        .frame(height: message.spacingAfterMessage(at: index, in: renderedMessages))
-                                }
-                            }
-                        }
-                        // Breathing room below the last message once the composer itself is
-                        // installed via `safeAreaInset`.
-                        Color.clear
-                            .frame(height: Layout.messageBottomClearance)
-                        // Bottom anchor for scrollToBottom.
-                        //
-                        // Its appearance is the probe that separates the two readings of a blank
-                        // chat, which no log has ever been able to do: if this fires while the
-                        // screen is empty, the viewport IS at the end of the list and the cells
-                        // are not drawing; if it never fires, the offset is somewhere else. One
-                        // of those is a rendering bug and the other is a scrolling bug, and we
-                        // have been guessing between them since 2026-08-03.
-                        Color.clear
-                            .frame(height: 1)
-                            .id("bottom")
-                            .onAppear {
-                                ChatScrollManager.logGeometry(
-                                    "SCROLL_ANCHOR bottom visible (msgs=\(renderedMessages.count), opening=\(scrollManager.isOpening))"
-                                )
-                            }
-                            .onDisappear {
-                                ChatScrollManager.logGeometry("SCROLL_ANCHOR bottom left the viewport")
-                            }
-                    }
-                    // Top space for floating nav capsule (+ call mini-bar when a call is active).
-                    .padding(.top, ChatUIConstants.Shell.scrollContentTopPad + callBarInset)
-                    .padding(.horizontal)
-                }
-                .background(Color.CT.bg) // base under glass
-                .accessibilityIdentifier(A11y.Chat.messageList)
-                .defaultScrollAnchor(.bottom)
-                .scrollDismissesKeyboard(.interactively)
-                .environment(\.containerWidth, containerWidth)
-                .onTapGesture {
-                    hideKeyboard()
-                }
-                .onScrollGeometryChange(for: ChatScrollGeometry.self) { geo in
-                    // visibleRect is in content coordinates and already reflects safeAreaInset
-                    // (composer). Subtracting maxY from content height is the true "how far up".
-                    let distance = geo.contentSize.height - geo.visibleRect.maxY
-                    return ChatScrollGeometry(
-                        distanceFromBottom: distance,
-                        width: geo.containerSize.width,
-                        contentFits: geo.contentSize.height <= geo.visibleRect.height + 8,
-                        contentHeight: geo.contentSize.height,
-                        visibleMinY: geo.visibleRect.minY
-                    )
-                } action: { old, metrics in
-                    scrollManager.updateScrollOffset(
-                        distanceFromBottom: metrics.distanceFromBottom,
-                        contentFits: metrics.contentFits,
-                        contentHeight: metrics.contentHeight,
-                        visibleMinY: metrics.visibleMinY
-                    )
-                    // The blank chat is a *geometry* state and no log has ever shown it: we know
-                    // where the messages are and nothing about where the viewport is. One line per
-                    // meaningful move answers "was the offset wrong, or were the cells absent".
-                    logScrollGeometryIfChanged(from: old, to: metrics)
-                    // Ignore zero-width passes during mid-layout; avoid thrashing on sub-pixel noise.
-                    if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
-                        containerWidth = metrics.width
-                    }
-                    // Near-top geometry is the reliable trigger once the user scrolls up: sentinel
-                    // `onAppear` alone misses the case where the top stayed materialised from entry
-                    // (no second appear) and would never widen the window.
-                    attemptLoadOlderHistory()
-                }
-                .onAppear {
-                    scrollManager.registerProxy(proxy)
-                    LocalNotificationManager.shared.clearBadge()
-                    // .defaultScrollAnchor(.bottom) + LazyVStack + composer safeAreaInset often
-                    // lands the first offset out of range → blank list until a gesture.
-                    // Multi-pass non-animated pin covers inset settle and FRC load-more churn.
-                    //
-                    // Only when there is a transcript to open. On a cold entry there is not: the
-                    // store publishes from `viewModel.onViewAppear()`, which runs after this, so
-                    // the list is empty here and the opening is armed by the 0 → N change below.
-                    // Declaring the opening finished on an empty list is what let the load-more
-                    // growth take the animated branch and blank the chat.
-                    if !viewModel.messages.isEmpty {
-                        scrollManager.beginOpening()
-                    }
-                }
-                .onScrollPhaseChange { _, phase in
-                    // A person touching the list outranks the settle timer. `.animating` is our
-                    // own corrective pin, so it must not count as a touch.
-                    switch phase {
-                    case .tracking, .interacting, .decelerating:
-                        scrollManager.endOpening()
-                    case .idle, .animating:
-                        break
-                    @unknown default:
-                        break
-                    }
-                }
+            ChatTranscriptContainer(
+                rowSpacing: ChatUIConstants.Shell.listSpacing,
+                topContentPad: ChatUIConstants.Shell.scrollContentTopPad + callBarInset,
+                bottomContentPad: Layout.messageBottomClearance,
+                accessibilityIdentifier: A11y.Chat.messageList,
+                onProxyReady: registerTranscriptProxy,
+                onGeometryChange: handleTranscriptGeometry,
+                onScrollPhaseChange: handleTranscriptScrollPhase,
+                onTapBackground: hideKeyboard,
+                onBottomAnchorVisible: logBottomAnchorVisibility,
+                sentinel: { loadMoreSentinel(renderedMessages) },
+                rows: { transcriptRows(renderedMessages) }
+            )
+            .environment(\.containerWidth, containerWidth)
                 .onChange(of: viewModel.messages.count) { oldCount, count in
                     if AppConstants.enableDebugLogging {
                         Log.info("ChatView: messages count changed to \(count)")
@@ -391,7 +189,6 @@ struct ChatView: View {
                         }
                     }
                 }
-            }
 
             // Top scrim so scrolling text fades before the status bar / floating nav.
             GeometryReader { geo in
@@ -752,6 +549,182 @@ struct ChatView: View {
 
     /// Infinite-scroll entry point. Policy lives in `ChatScrollManager.shouldLoadOlderHistory` so
     /// entry-time LazyVStack top materialisation cannot widen the window (TODO 34).
+    // MARK: - Transcript container wiring
+    //
+    // Each of these was an inline closure at the call site until PR-2. Twelve arguments, five of
+    // them multi-line closures, over a two-generic view: the type checker gave up
+    // ("unable to type-check this expression in reasonable time"). Named methods are also what
+    // makes the next PR readable — the flag will swap the container, not four hundred lines.
+
+    private func registerTranscriptProxy(_ proxy: ScrollViewProxy) {
+        scrollManager.registerProxy(proxy)
+        LocalNotificationManager.shared.clearBadge()
+        // .defaultScrollAnchor(.bottom) + LazyVStack + composer safeAreaInset often lands the
+        // first offset out of range → blank list until a gesture. Multi-pass non-animated pin
+        // covers inset settle and FRC load-more churn.
+        //
+        // Only when there is a transcript to open. On a cold entry there is not: the store
+        // publishes from `viewModel.onViewAppear()`, which runs after this, so the list is empty
+        // here and the opening is armed by the 0 → N change instead. Declaring the opening
+        // finished on an empty list is what let load-more growth take the animated branch and
+        // blank the chat.
+        if !viewModel.messages.isEmpty {
+            scrollManager.beginOpening()
+        }
+    }
+
+    private func handleTranscriptGeometry(from old: ChatScrollGeometry, to metrics: ChatScrollGeometry) {
+        scrollManager.updateScrollOffset(
+            distanceFromBottom: metrics.distanceFromBottom,
+            contentFits: metrics.contentFits,
+            contentHeight: metrics.contentHeight,
+            visibleMinY: metrics.visibleMinY
+        )
+        // The blank chat is a *geometry* state and no log has ever shown it: we know where the
+        // messages are and nothing about where the viewport is. One line per meaningful move
+        // answers "was the offset wrong, or were the cells absent".
+        logScrollGeometryIfChanged(from: old, to: metrics)
+        // Ignore zero-width passes during mid-layout; avoid thrashing on sub-pixel noise.
+        if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
+            containerWidth = metrics.width
+        }
+        // Near-top geometry is the reliable trigger once the user scrolls up: sentinel `onAppear`
+        // alone misses the case where the top stayed materialised from entry (no second appear)
+        // and would never widen the window.
+        attemptLoadOlderHistory()
+    }
+
+    private func handleTranscriptScrollPhase(_ phase: ScrollPhase) {
+        // A person touching the list outranks the settle timer. `.animating` is our own
+        // corrective pin, so it must not count as a touch.
+        switch phase {
+        case .tracking, .interacting, .decelerating:
+            scrollManager.endOpening()
+        case .idle, .animating:
+            break
+        @unknown default:
+            break
+        }
+    }
+
+    private func logBottomAnchorVisibility(_ visible: Bool) {
+        ChatScrollManager.logGeometry(
+            visible
+                ? "SCROLL_ANCHOR bottom visible (opening=\(scrollManager.isOpening))"
+                : "SCROLL_ANCHOR bottom left the viewport"
+        )
+    }
+
+    /// Infinite-scroll sentinel at the TOP (oldest edge). No button — history loads as the person
+    /// reaches the oldest edge. `LazyVStack` materialises this on first layout even when
+    /// bottom-anchored; the load is gated by `ChatScrollManager.shouldLoadOlderHistory` (TODO 34).
+    @ViewBuilder
+    private func loadMoreSentinel(_ renderedMessages: [Message]) -> some View {
+        if viewModel.hasMoreMessages && !renderedMessages.isEmpty {
+            Group {
+                if viewModel.isLoadingMore {
+                    ProgressView()
+                        .padding(.vertical, ChatUIConstants.Shell.listSpacing)
+                } else {
+                    Color.clear
+                        .frame(height: 1)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .id("loadMoreIndicator")
+            .accessibilityHidden(true)
+            .onAppear {
+                attemptLoadOlderHistory()
+            }
+        }
+    }
+
+    /// The message rows, lifted out of `body` so `ChatTranscriptContainer` owns only the scroll.
+    /// Every callback still belongs to `ChatView` — the container never sees a view model.
+    @ViewBuilder
+    private func transcriptRows(_ renderedMessages: [Message]) -> some View {
+                // Messages in oldest-first order (ScrollView anchored to bottom via .defaultScrollAnchor)
+                ForEach(Array(renderedMessages.enumerated()), id: \.element.id) { index, message in
+                    VStack(spacing: 0) {
+                        MessageBubble(
+                            message: message,
+                            isLastInGroup: message.isLastInGroup(at: index, in: renderedMessages),
+                            isSelected: selectedMessages.contains(message.id),
+                            isEditMode: isEditMode,
+                            onRetry: { msg in
+                                viewModel.retryMessage(msg)
+                            },
+                            onReply: { msg in
+                                replyingTo = msg
+                                replyQuoteText = nil
+                                setComposeReplyFocus(messageId: msg.id)
+                            },
+                            onDelete: { msg in
+                                viewModel.deleteMessage(msg)
+                            },
+                            onSelect: { msg in
+                                toggleMessageSelection(msg)
+                            },
+                            onEnterSelectMode: { msg in
+                                withAnimation {
+                                    isEditMode = true
+                                    isSearchActive = false
+                                    searchText = ""
+                                }
+                                selectedMessages.insert(msg.id)
+                            },
+                            onTapMedia: { msg, itemIndex in
+                                galleryStartItem = GalleryStartItem(id: msg.id, itemIndex: itemIndex)
+                            },
+                            onEdit: { msg in
+                                viewModel.editingMessage = msg
+                            },
+                            onReplyWithQuote: { msg, _ in
+                                quotingMessage = msg
+                            },
+                            onJumpToReply: { msg in
+                                peekReplyChain(for: msg)
+                            }
+                        )
+                        .id(message.id)
+                        // The LAST message only, and no longer just a probe. Auto-scroll
+                        // promises the newest message is on screen; this is the only place
+                        // that can tell whether the promise holds. Build 583 showed it
+                        // broken for seconds at a time — the transcript measured 5792pt,
+                        // the pin anchored there, the height settled at 3952pt and the
+                        // viewport was left 922pt past the end. See
+                        // `ChatScrollManager.shouldRecoverStrandedViewport`.
+                        .onAppear {
+                            if index == renderedMessages.count - 1 {
+                                ChatScrollManager.logGeometry(
+                                    "SCROLL_ANCHOR last message visible (\(message.id.prefix(8))…, idx=\(index)/\(renderedMessages.count))"
+                                )
+                                scrollManager.noteLastMessageVisible(true, searchActive: isSearchActive)
+                            }
+                        }
+                        .onDisappear {
+                            if index == renderedMessages.count - 1 {
+                                ChatScrollManager.logGeometry(
+                                    "SCROLL_ANCHOR last message left the viewport (\(message.id.prefix(8))…)"
+                                )
+                                scrollManager.noteLastMessageVisible(false, searchActive: isSearchActive)
+                            }
+                        }
+                        .opacity(replyFocusOpacity(for: message))
+                        .animation(
+                            .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
+                            value: replyFocusIds
+                        )
+
+                        // Add spacing after each message
+                        if index < renderedMessages.count - 1 {
+                            Spacer()
+                                .frame(height: message.spacingAfterMessage(at: index, in: renderedMessages))
+                        }
+                    }
+                }
+    }
+
     private func attemptLoadOlderHistory() {
         guard scrollManager.shouldLoadOlderHistory(
             isSearchActive: isSearchActive,

@@ -43,17 +43,6 @@ struct DesktopChatView: View {
     @State private var isSessionAtRisk = false
     @State private var containerWidth: CGFloat = 800
 
-    private struct ChatScrollGeometry: Equatable {
-        /// Points of content below the visible rect (0 ≈ at bottom).
-        var distanceFromBottom: CGFloat
-        var width: CGFloat
-        /// Content shorter than the viewport ⇒ nothing to jump to — the FAB must never show.
-        var contentFits: Bool
-        /// Stored for stranded recovery geometry (not a re-pin trigger — see ChatScrollManager).
-        var contentHeight: CGFloat
-        var visibleMinY: CGFloat
-    }
-
     init(chat: Chat, context: NSManagedObjectContext) {
         _lazyViewModel = State(wrappedValue: LazyChatViewModel {
             ChatViewModel(chat: chat, context: context)
@@ -62,141 +51,20 @@ struct DesktopChatView: View {
 
     var body: some View {
         ZStack() {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        // Infinite-scroll sentinel (same policy as iOS ChatView) — no manual button.
-                        // Load gated by `ChatScrollManager.shouldLoadOlderHistory` (TODO 34).
-                        if viewModel.hasMoreMessages && !filteredMessages.isEmpty {
-                            Group {
-                                if viewModel.isLoadingMore {
-                                    ProgressView()
-                                        .padding(.vertical, 8)
-                                } else {
-                                    Color.clear
-                                        .frame(height: 1)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .id("loadMoreIndicator")
-                            .accessibilityHidden(true)
-                            .onAppear {
-                                attemptLoadOlderHistory()
-                            }
-                        }
-
-                        ForEach(Array(filteredMessages.enumerated()), id: \.element.id) { index, message in
-                            VStack(spacing: 0) {
-                                MessageBubble(
-                                    message: message,
-                                    isLastInGroup: message.isLastInGroup(at: index, in: filteredMessages),
-                                    isSelected: selectedMessages.contains(message.id),
-                                    isEditMode: isEditMode,
-                                    onRetry: { msg in viewModel.retryMessage(msg) },
-                                    onReply: { msg in
-                                        replyingTo = msg
-                                        replyQuoteText = nil
-                                        setComposeReplyFocus(messageId: msg.id)
-                                    },
-                                    onDelete: { msg in viewModel.deleteMessage(msg) },
-                                    onSelect: { msg in toggleMessageSelection(msg) },
-                                    onEnterSelectMode: { msg in
-                                        withAnimation {
-                                            isEditMode = true
-                                            isSearchActive = false
-                                            searchText = ""
-                                        }
-                                        selectedMessages.insert(msg.id)
-                                    },
-                                    onTapMedia: { msg, itemIndex in
-                                        galleryStartItem = GalleryStartItem(id: msg.id, itemIndex: itemIndex)
-                                    },
-                                    onEdit: { msg in viewModel.editingMessage = msg },
-                                    onReplyWithQuote: { msg, _ in quotingMessage = msg },
-                                    onJumpToReply: { msg in peekReplyChain(for: msg) }
-                                )
-                                .id(message.id)
-                                .onAppear {
-                                    if index == filteredMessages.count - 1 {
-                                        scrollManager.noteLastMessageVisible(true, searchActive: isSearchActive)
-                                    }
-                                }
-                                .onDisappear {
-                                    if index == filteredMessages.count - 1 {
-                                        scrollManager.noteLastMessageVisible(false, searchActive: isSearchActive)
-                                    }
-                                }
-                                .opacity(replyFocusOpacity(for: message))
-                                .animation(
-                                    .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
-                                    value: replyFocusIds
-                                )
-
-                                if index < filteredMessages.count - 1 {
-                                    Spacer()
-                                        .frame(height: message.spacingAfterMessage(at: index, in: filteredMessages))
-                                }
-                            }
-                        }
-                        // Bottom anchor for scrollToBottom
-                        Color.clear
-                            .frame(height: 1)
-                            .id("bottom")
-                    }
-                    // Padding so latest messages stay visible above the floating glass input,
-                    // and top messages are not hidden under the glass nav bar.
-                    // Reduced because nav is now flush (0 top padding) at the pane top.
-                    .padding(.top, 70)
-                    .padding(.bottom, 130)
-                    .padding(.horizontal)
-                }
-                .background(Color.CT.bg) // base dark for the area under glass panels
-                .defaultScrollAnchor(.bottom)
-                .scrollDismissesKeyboard(.interactively)
-                .environment(\.containerWidth, containerWidth)
-                .onTapGesture { hideKeyboard() }
-                .onScrollGeometryChange(for: ChatScrollGeometry.self) { geo in
-                    let distance = geo.contentSize.height - geo.visibleRect.maxY
-                    return ChatScrollGeometry(
-                        distanceFromBottom: distance,
-                        width: geo.containerSize.width,
-                        contentFits: geo.contentSize.height <= geo.visibleRect.height + 8,
-                        contentHeight: geo.contentSize.height,
-                        visibleMinY: geo.visibleRect.minY
-                    )
-                } action: { _, metrics in
-                    // Same contract as iOS: record geometry only — never re-pin on height change
-                    // (that loop heated the phone: pin → rematerialize → new height → pin).
-                    scrollManager.updateScrollOffset(
-                        distanceFromBottom: metrics.distanceFromBottom,
-                        contentFits: metrics.contentFits,
-                        contentHeight: metrics.contentHeight,
-                        visibleMinY: metrics.visibleMinY
-                    )
-                    if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
-                        containerWidth = metrics.width
-                    }
-                    attemptLoadOlderHistory()
-                }
-                .onAppear {
-                    scrollManager.registerProxy(proxy)
-                    LocalNotificationManager.shared.clearBadge()
-                    // Same as iOS: only arm opening when a transcript is already present.
-                    // Empty → 0→N is handled by handleTranscriptCountChange.
-                    if !viewModel.messages.isEmpty {
-                        scrollManager.beginOpening()
-                    }
-                }
-                .onScrollPhaseChange { _, phase in
-                    switch phase {
-                    case .tracking, .interacting, .decelerating:
-                        scrollManager.endOpening()
-                    case .idle, .animating:
-                        break
-                    @unknown default:
-                        break
-                    }
-                }
+            ChatTranscriptContainer(
+                rowSpacing: 0,
+                topContentPad: 70,
+                bottomContentPad: 130,
+                accessibilityIdentifier: nil,
+                onProxyReady: registerTranscriptProxy,
+                onGeometryChange: handleTranscriptGeometry,
+                onScrollPhaseChange: handleTranscriptScrollPhase,
+                onTapBackground: hideKeyboard,
+                onBottomAnchorVisible: { _ in },
+                sentinel: { loadMoreSentinel },
+                rows: { transcriptRows }
+            )
+            .environment(\.containerWidth, containerWidth)
                 .onChange(of: viewModel.messages.count) { oldCount, count in
                     // Shared with iOS ChatView: open / corrective pin / animated follow.
                     scrollManager.handleTranscriptCountChange(
@@ -242,7 +110,6 @@ struct DesktopChatView: View {
                         }
                     }
                 }
-            }
         
         
             VStack(spacing: 10) {
@@ -728,6 +595,124 @@ struct DesktopChatView: View {
     }
 
     /// Same gate as iOS `ChatView.attemptLoadOlderHistory` — see `ChatScrollManager.shouldLoadOlderHistory`.
+    // MARK: - Transcript container wiring (shared type, see ChatTranscriptContainer)
+
+    private func registerTranscriptProxy(_ proxy: ScrollViewProxy) {
+        scrollManager.registerProxy(proxy)
+        LocalNotificationManager.shared.clearBadge()
+        // Same as iOS: only arm opening when a transcript is already present.
+        // Empty → 0→N is handled by handleTranscriptCountChange.
+        if !viewModel.messages.isEmpty {
+            scrollManager.beginOpening()
+        }
+    }
+
+    private func handleTranscriptGeometry(from _: ChatScrollGeometry, to metrics: ChatScrollGeometry) {
+        // Same contract as iOS: record geometry only — never re-pin on height change
+        // (that loop heated the phone: pin → rematerialize → new height → pin).
+        scrollManager.updateScrollOffset(
+            distanceFromBottom: metrics.distanceFromBottom,
+            contentFits: metrics.contentFits,
+            contentHeight: metrics.contentHeight,
+            visibleMinY: metrics.visibleMinY
+        )
+        if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
+            containerWidth = metrics.width
+        }
+        attemptLoadOlderHistory()
+    }
+
+    private func handleTranscriptScrollPhase(_ phase: ScrollPhase) {
+        switch phase {
+        case .tracking, .interacting, .decelerating:
+            scrollManager.endOpening()
+        case .idle, .animating:
+            break
+        @unknown default:
+            break
+        }
+    }
+
+    /// Infinite-scroll sentinel (same policy as iOS ChatView) — no manual button.
+    /// Load gated by `ChatScrollManager.shouldLoadOlderHistory` (TODO 34).
+    @ViewBuilder
+    private var loadMoreSentinel: some View {
+        if viewModel.hasMoreMessages && !filteredMessages.isEmpty {
+            Group {
+                if viewModel.isLoadingMore {
+                    ProgressView()
+                        .padding(.vertical, 8)
+                } else {
+                    Color.clear
+                        .frame(height: 1)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .id("loadMoreIndicator")
+            .accessibilityHidden(true)
+            .onAppear {
+                attemptLoadOlderHistory()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var transcriptRows: some View {
+                ForEach(Array(filteredMessages.enumerated()), id: \.element.id) { index, message in
+                    VStack(spacing: 0) {
+                        MessageBubble(
+                            message: message,
+                            isLastInGroup: message.isLastInGroup(at: index, in: filteredMessages),
+                            isSelected: selectedMessages.contains(message.id),
+                            isEditMode: isEditMode,
+                            onRetry: { msg in viewModel.retryMessage(msg) },
+                            onReply: { msg in
+                                replyingTo = msg
+                                replyQuoteText = nil
+                                setComposeReplyFocus(messageId: msg.id)
+                            },
+                            onDelete: { msg in viewModel.deleteMessage(msg) },
+                            onSelect: { msg in toggleMessageSelection(msg) },
+                            onEnterSelectMode: { msg in
+                                withAnimation {
+                                    isEditMode = true
+                                    isSearchActive = false
+                                    searchText = ""
+                                }
+                                selectedMessages.insert(msg.id)
+                            },
+                            onTapMedia: { msg, itemIndex in
+                                galleryStartItem = GalleryStartItem(id: msg.id, itemIndex: itemIndex)
+                            },
+                            onEdit: { msg in viewModel.editingMessage = msg },
+                            onReplyWithQuote: { msg, _ in quotingMessage = msg },
+                            onJumpToReply: { msg in peekReplyChain(for: msg) }
+                        )
+                        .id(message.id)
+                        .onAppear {
+                            if index == filteredMessages.count - 1 {
+                                scrollManager.noteLastMessageVisible(true, searchActive: isSearchActive)
+                            }
+                        }
+                        .onDisappear {
+                            if index == filteredMessages.count - 1 {
+                                scrollManager.noteLastMessageVisible(false, searchActive: isSearchActive)
+                            }
+                        }
+                        .opacity(replyFocusOpacity(for: message))
+                        .animation(
+                            .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
+                            value: replyFocusIds
+                        )
+
+                        if index < filteredMessages.count - 1 {
+                            Spacer()
+                                .frame(height: message.spacingAfterMessage(at: index, in: filteredMessages))
+                        }
+                    }
+                }
+    }
+
     private func attemptLoadOlderHistory() {
         guard scrollManager.shouldLoadOlderHistory(
             isSearchActive: isSearchActive,
