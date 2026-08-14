@@ -38,6 +38,8 @@ struct DiagnosticsView: View {
     @State private var showReinitPicker = false
     @State private var reinitStatus: String = "—"
     @State private var reinitOk = true
+    /// PR-0 spike sheet. Goes away with `ScrollPositionSpikeView`.
+    @State private var showScrollSpike = false
 
     private struct ReinitTarget: Identifiable {
         let id: String
@@ -159,6 +161,15 @@ struct DiagnosticsView: View {
                             }
                             ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
                             diagRow(label: "Last OTPK pool replace", value: otpkReplaceStatus, ok: otpkReplaceOk)
+                            ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
+                            ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
+                            // PR-0 of the chat viewport migration. Measures whether
+                            // `.scrollPosition(id:)` or `.defaultScrollAnchor(.bottom)` wins when
+                            // both are applied and the bottom pad moves. Remove with the spike —
+                            // see client/ios/CHAT_VIEWPORT_MIGRATION.md.
+                            ConstructActionRow(systemImage: "ruler", title: "SCROLL POSITION SPIKE", role: .secondary) {
+                                showScrollSpike = true
+                            }
                             ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
                             ConstructActionRow(systemImage: "exclamationmark.triangle", title: LocalizedStringKey("diagnostics_reset_local_data_keychain"), role: .destructive) {
                                 resetLocalData()
@@ -299,6 +310,9 @@ struct DiagnosticsView: View {
                 Button(target.name) { forceSilentReinit(target) }
             }
             Button(LocalizedStringKey("cancel"), role: .cancel) {}
+        }
+        .sheet(isPresented: $showScrollSpike) {
+            ScrollPositionSpikeView()
         }
         #endif
     }
