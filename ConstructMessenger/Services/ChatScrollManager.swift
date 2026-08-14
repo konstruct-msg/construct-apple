@@ -290,15 +290,6 @@ class ChatScrollManager {
         runPinSeries(delaysMs: delays, messageId: messageId)
     }
 
-    /// Multi-pass non-animated pin. Prefer ``pinToBottom(reason:)`` so delays stay in ``PinPolicy``.
-    /// Kept for rare call sites that already chose a series (tests / migration).
-    func pinToBottomCorrective(
-        delaysMs: [UInt64],
-        messageId: String = "bottom"
-    ) {
-        runPinSeries(delaysMs: delaysMs, messageId: messageId)
-    }
-
     private func runPinSeries(delaysMs: [UInt64], messageId: String) {
         // Prefer non-animated corrective pin over any pending animated jump / follow.
         followTask?.cancel()
@@ -652,25 +643,10 @@ class ChatScrollManager {
         return ScrollFlags(autoScroll: nearBottom, showJumpButton: farUp)
     }
 
-    /// A list anchored to the bottom must stay anchored when the content grows under it — and
-    /// message *count* is only one of the two ways it grows. The other is height: a media bubble
-    /// is laid out small and becomes tall when its image resolves, and nothing re-pinned for that.
-    ///
-    /// Build 579 (video 2026-08-05 18:22, blank chat): the corrective pins land at 0/80/200/400ms,
-    /// the images resolve later, and the transcript settles ~470pt lower than where the pins put
-    /// it — the viewport is left over a region the content has since vacated.
-    ///
-    /// **Either direction.** Build 583: pin at 5792pt, settle at 3952pt, viewport 922pt past end.
-    static func shouldRepinForHeightChange(
-        previousHeight: CGFloat,
-        currentHeight: CGFloat,
-        autoScrollOn: Bool,
-        isOpening: Bool
-    ) -> Bool {
-        guard autoScrollOn || isOpening else { return false }
-        guard previousHeight > 0 else { return false }   // first measurement is not a change
-        return abs(currentHeight - previousHeight) >= heightRepinThreshold
-    }
+    /// Height is not a re-pin trigger. Build 585: pin→materialise→new height→pin looped
+    /// unbounded (631 re-pins). ``shouldRecoverStrandedViewport`` names the end state instead.
+    /// ``PinReason/heightSettle`` stays in ``PinPolicy`` so a future caller cannot reintroduce
+    /// a leading-0 tick; nothing in production arms it.
 
     /// Whether the transcript is anchored to the bottom but the newest message is not on screen.
     ///
@@ -805,30 +781,6 @@ class ChatScrollManager {
         // LazyVStack dematerialized → black flash.
         guard newCount > oldCount else { return .none }
         return .animatedFollow
-    }
-
-    /// Reset scroll state (e.g., when switching chats)
-    func reset() {
-        pinTask?.cancel()
-        pinTask = nil
-        animatedScrollTask?.cancel()
-        animatedScrollTask = nil
-        followTask?.cancel()
-        followTask = nil
-        openingTask?.cancel()
-        openingTask = nil
-        isOpening = false
-        shouldScrollToBottom = true
-        shouldShowScrollToBottomButton = false
-        distanceFromBottom = 0
-        contentHeight = 0
-        contentFits = false
-        visibleMinY = 0
-        lastComposerInsetPinUptime = 0
-        isLastMessageVisible = true
-        proxy = nil
-
-        Log.debug("ChatScrollManager reset", category: "ChatScrollManager")
     }
 
     // MARK: - Keyboard Handling

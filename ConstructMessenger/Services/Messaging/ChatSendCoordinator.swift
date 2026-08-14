@@ -578,7 +578,6 @@ final class ChatSendCoordinator {
                     case "sent", "success": deliveryStatus = .sent
                     case "blocked":
                         deliveryStatus = .failed
-                        self.viewModel?.blockedByRecipient = true
                         Log.error("Message blocked by recipient — suppressing retry for \(messageId)\(traceTag)", category: "ChatViewModel")
                     case "failed":
                         if aggregated.errorCode == "encryptionFailed" {

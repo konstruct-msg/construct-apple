@@ -120,41 +120,6 @@ struct OpacityLevel {
 // MARK: - ChatView Specific Constants
 
 struct ChatViewConstants {
-    /// Swipe-to-dismiss gesture threshold
-    struct Gesture {
-        /// Maximum drag distance (20% of screen width)
-        static let maxDragRatio: CGFloat = 0.2
-        
-        /// Minimum drag to trigger dismiss (100pt or 30% of screen)
-        static let dismissThreshold: CGFloat = 100
-        static let dismissThresholdRatio: CGFloat = 0.3
-        
-        /// Spring animation parameters for dismissal
-        static let dismissSpringResponse: Double = 0.3
-        static let dismissSpringDamping: Double = 0.8
-    }
-    
-    /// Status banner configuration
-    struct StatusBanner {
-        /// Vertical padding inside banner
-        static let verticalPadding: CGFloat = 8
-        
-        /// Horizontal padding inside banner
-        static let horizontalPadding: CGFloat = 12
-        
-        /// Top spacing from navbar
-        static let topSpacing: CGFloat = 4
-        
-        /// Background opacity
-        static let backgroundOpacity: Double = 0.95
-        
-        /// Tint color opacity
-        static let tintOpacity: Double = 0.2
-        
-        /// Loading indicator scale
-        static let loadingIndicatorScale: CGFloat = 0.7
-    }
-    
     /// Search functionality delays
     struct SearchDelay {
         /// Delay before scrolling to first search result

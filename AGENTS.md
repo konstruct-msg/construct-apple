@@ -26,8 +26,11 @@ Privacy-first E2EE messenger, terminal/ASCII aesthetic. The cryptographic core i
 (`construct-core`, separate repo) exposed to Swift via UniFFI. The client is SwiftUI-only.
 
 Layout: `ConstructMessenger/` iOS app · `Construct Desktop/` macOS · `ConstructMessengerTests/` ·
-`ConstructUI/` standalone preview package (see below) · `scripts/` · `tests/` Python network probes
-· `docs/` repo-local reference · `logs/` (gitignored).
+`scripts/` · `tests/` Python network probes · `docs/` repo-local reference · `logs/` (gitignored).
+
+CI (`.github/workflows/checks.yml`) runs only what needs no build: localization and the privacy
+manifest. It cannot build the app — the xcframeworks are not in git and come from sibling repos —
+so a green CI says nothing about compilation. Build and test locally.
 
 Sibling repos: `~/Code/construct-core` (crypto), `~/Code/construct-transport` (QUIC/H3/gRPC),
 `~/Code/construct-veil` (obfuscation), `~/Code/construct-docs` (vault).
@@ -75,18 +78,26 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 - Tab bar is the standard SwiftUI `TabView`; hide it in a conversation only via
   `.toolbar(.hidden, for: .tabBar)` on the `ChatView` destination.
 
-**`ConstructUI/` holds a second `ConstructTheme.swift`.** It is a standalone SwiftPM package that
-exists so Xcode Previews work at all: the app target links WebRTC and WhisperKit, and the preview
-process dies with `_objc_fatal: Attempt to use unknown class` whenever those load. That package has
-no dependency on the app, so its previews run. It is **not** linked into any target, and its copy
-of the theme has drifted from the app's — treat the app's file as authoritative and expect to port
-a change by hand if you use the preview sandbox.
+**Xcode Previews do not run in the app target.** It links WebRTC and WhisperKit, and the preview
+process dies at launch with `_objc_fatal: Attempt to use unknown class` whenever those load — on
+any iOS runtime, independent of app code, and compile flags cannot help because the frameworks stay
+linked. The 53 `#Preview` blocks in the app are therefore decorative today.
+
+A standalone SwiftPM package (`ConstructUI/`) was added 2026-06-08 to work around this: no
+dependency on the app, so its preview process ran. It was **removed 2026-08-14** — it held a copy
+of `ConstructTheme.swift` that nothing kept in sync, and by deletion it had drifted ~900 lines from
+the app's. A preview surface showing a design the app no longer has is worse than no preview
+surface. Recover it from history (`git show 95e73323`) if you rebuild the idea, but solve the
+sync problem first: one theme file, shared, not copied.
 
 ## Localization
 
 - **All** visible strings use `NSLocalizedString("key", comment: "")` — no hardcoded English.
-- New keys go to **both** `en.lproj` and `ru.lproj` `Localizable.strings` in the same commit
-  (`ja.lproj` planned; app name **共創**).
+- New keys go to **both** `en.lproj` and `ru.lproj` `Localizable.strings` in the same commit.
+  `scripts/check_localization.sh` enforces this, plus no duplicate keys and no key that resolves
+  to nothing; CI runs it. A key with no entry is displayed to the user verbatim — twelve of them
+  are on real screens right now, listed in that script's `BASELINE`. `ja.lproj` and `fr.lproj` are
+  partial by design and not checked for parity (app name **共創**).
 - Nav titles: `CTNavBar` applies `.uppercased()` + `.tracking(4)` — pass the raw localized string.
 - UI copy is plain language ("people / chats / device", never "node / stream / replica"). Code
   identifiers keep domain names — no renames.

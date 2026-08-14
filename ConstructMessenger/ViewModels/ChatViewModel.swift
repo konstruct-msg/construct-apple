@@ -5,9 +5,6 @@
 
 import Foundation
 import CoreData
-#if canImport(UIKit)
-import UIKit
-#endif
 
 @MainActor
 @Observable
@@ -22,7 +19,6 @@ class ChatViewModel {
     /// Set by continuous voice playback to ask the view to scroll the now-playing
     /// message into view. The view scrolls on change, then resets it to nil.
     var voicePlaybackScrollTarget: String?
-    var blockedByRecipient = false
     var isSessionReady = false
     var isInitializingSession = false
 

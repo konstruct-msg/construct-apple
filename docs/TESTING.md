@@ -43,6 +43,36 @@ like "no test failed".
 `ConstructMessenger` is the only scheme with the test target attached. `Construct Messenger Beta`
 also carries it; a scheme that builds the app alone would run zero tests and report success.
 
+## What CI does and does not cover
+
+`.github/workflows/checks.yml` runs `check_localization.sh` (ubuntu) and
+`check_privacy_manifest.sh` (macOS, needs `plutil`). That is all of it.
+
+There is **no build or test job**, because the app links `ConstructCore.xcframework` and
+`ConstructTransport.xcframework`, which are not in git and come from cross-compiling sibling Rust
+repositories. A green CI badge therefore says nothing about whether the app compiles or the suite
+passes — those are local, via `test_run.sh` or a full `xcodebuild test`.
+
+## Localization
+
+```bash
+scripts/check_localization.sh
+```
+
+Enforces the AGENTS.md rule that a new key lands in both `en.lproj` and `ru.lproj`, that no key is
+declared twice in one file, and that every literal `NSLocalizedString("…")` key in the sources
+resolves. An unresolved key is displayed to the user verbatim.
+
+The third check is a **ratchet**: twelve keys were already unresolved when the script was written
+(`DEVELOPER`, `PUSH_NOTIFICATIONS`, `text_size`, `transcription`, the `stt_error_*` and `spam_*`
+pairs, and more) and are listed in `BASELINE` so the check could be enabled the same day rather
+than after someone wrote twelve strings of product copy. It fails on a new one, and it also fails
+if a `BASELINE` entry starts resolving — a fixed key left in the list would hide the next
+regression behind it.
+
+Both behaviours were verified by mutation: an injected `NSLocalizedString("mutation_probe_key")`
+and a key deleted from `ru.lproj` each turned the script red, and it went green again on restore.
+
 ## Privacy manifest
 
 ```bash

@@ -8,7 +8,6 @@
 import SwiftUI
 import CoreData
 import UniformTypeIdentifiers
-import Combine
 
 struct ChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -67,8 +66,8 @@ struct ChatView: View {
         /// Extra band below the status-bar safe area (≈ nav capsule height + margin) covered
         /// by the top scrim so scrolling text blurs/fades before it reaches the clock & signal.
         static let topScrimUnderSafeArea = ChatUIConstants.Shell.topScrimUnderSafeArea
-        /// Below this a viewport move / content growth is layout noise and is not logged.
-        static let geometryLogThreshold: CGFloat = 24
+        /// Same cutoff as ``ChatScrollManager/heightRepinThreshold`` — layout noise, not a pin trigger.
+        static let geometryLogThreshold = ChatScrollManager.heightRepinThreshold
     }
 
     /// Combined scroll metrics so a single `onScrollGeometryChange` drives both
