@@ -29,9 +29,8 @@ struct SettingsView: View {
     @State private var showEmergencyImport = false
     @State private var emergencyPasteText = ""
     @State private var emergencyImportMsg: String?
-    /// Short identity-key fingerprint (user-facing external identity, thread 5.3).
-    @State private var ownFingerprint: String?
-    @State private var fingerprintCopied = false
+    /// Last successful mint. Debounce only — each tap still creates a new jti.
+    @State private var lastCopyAt: Date?
 
     private let inviteGenerator = InviteGenerator()
 
@@ -110,7 +109,6 @@ struct SettingsView: View {
                 if viewModel.needsUserInfoRefresh(from: authViewModel) {
                     viewModel.loadUserInfo(from: authViewModel)
                 }
-                refreshOwnFingerprint()
             }
             .task { await recoveryVM.loadStatus() }
             .sheet(isPresented: $showingRecoverySetup) {
@@ -232,75 +230,93 @@ struct SettingsView: View {
 
     private var shareSection: some View {
         CTSectionGroup {
-            Button { showingQRCode = true } label: {
-                CTSettingsRow(label: NSLocalizedString("show_qr_code", comment: "").uppercased(), icon: "qrcode", isAction: true, disclosure: true)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier(A11y.Settings.showQR)
-            CTSep(style: .thin)
+            HStack(spacing: 0) {
+                shareActionButton(
+                    title: NSLocalizedString("share_action_qr", comment: ""),
+                    accessibilityTitle: NSLocalizedString("show_qr_code", comment: ""),
+                    icon: "qrcode",
+                    emphasized: false
+                ) {
+                    showingQRCode = true
+                }
+                .accessibilityIdentifier(A11y.Settings.showQR)
 
-            Button { copyContactLink() } label: {
-                CTSettingsRow(
-                    label: linkCopied ? NSLocalizedString("link_copied", comment: "").uppercased() : NSLocalizedString("copy_contact_link", comment: "").uppercased(),
+                Rectangle()
+                    .fill(Color.CT.noise)
+                    .frame(width: SettingsShareLayout.dividerWidth)
+                    .padding(.vertical, SettingsShareLayout.dividerVerticalPadding)
+
+                shareActionButton(
+                    title: linkCopied
+                        ? NSLocalizedString("share_copied", comment: "")
+                        : NSLocalizedString("share_action_copy", comment: ""),
+                    accessibilityTitle: NSLocalizedString("copy_contact_link", comment: ""),
+                    accessibilityHint: String(
+                        format: NSLocalizedString("copy_contact_link_hint_fmt", comment: ""),
+                        InviteConfig.ttlDescription
+                    ),
                     icon: linkCopied ? "checkmark" : "link",
-                    labelColor: linkCopied ? Color.CT.accentDim : Color.CT.text,
-                    disclosure: !linkCopied
-                )
+                    emphasized: linkCopied
+                ) {
+                    copyContactLink()
+                }
+                .accessibilityIdentifier(A11y.Settings.copyContactLink)
             }
-            .buttonStyle(.plain)
-            .disabled(linkCopied)
-            .accessibilityIdentifier(A11y.Settings.copyContactLink)
+            .frame(minHeight: SettingsShareLayout.actionMinHeight)
 
-            // An invite is burned by its first redeemer, and until 2026-08-13 nothing said
-            // so — one link in a group chat worked for one person and told the rest it was
-            // already used, which reads as a broken link. The duration comes from
-            // InviteConfig so this line cannot outlive the constant it describes.
-            Text(
-                String(
-                    format: NSLocalizedString("copy_contact_link_hint_fmt", comment: ""),
-                    InviteConfig.ttlDescription
-                )
-            )
-            .font(CTFont.regular(10))
-            .foregroundStyle(Color.CT.textDim)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, CTLayout.edgePad)
-            .padding(.bottom, 8)
-
-            CTSep(style: .thin)
-
-            Button { showingMultiInvite = true } label: {
-                CTSettingsRow(
-                    label: NSLocalizedString("invite_several", comment: "").uppercased(),
-                    icon: "person.2",
-                    isAction: true,
-                    disclosure: true
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier(A11y.Settings.inviteSeveral)
-
-            if let ownFingerprint {
-                CTSep(style: .thin)
-                Button {
-                    PlatformClipboard.copy(ownFingerprint)
-                    fingerprintCopied = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        fingerprintCopied = false
-                    }
-                } label: {
-                    CTSettingsRow(
-                        label: NSLocalizedString("identity_fingerprint", comment: "").uppercased(),
-                        value: fingerprintCopied
-                            ? NSLocalizedString("identity_fingerprint_copied", comment: "")
-                            : ownFingerprint,
-                        icon: "touchid",
-                        valueColor: Color.CT.accent
+            HStack(spacing: 0) {
+                Text(
+                    String(
+                        format: NSLocalizedString("share_once_ttl_fmt", comment: ""),
+                        InviteConfig.ttlDescription
                     )
+                )
+                .font(CTFont.regular(10))
+                .foregroundStyle(Color.CT.textDim)
+                Spacer(minLength: CTLayout.inlinePad)
+                Button { showingMultiInvite = true } label: {
+                    HStack(spacing: SettingsShareLayout.captionLinkSpacing) {
+                        Text(NSLocalizedString("invite_several_short", comment: "").lowercased())
+                            .font(CTFont.regular(10))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: SettingsShareLayout.captionChevronSize, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.CT.accent)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(NSLocalizedString("invite_several", comment: ""))
+                .accessibilityIdentifier(A11y.Settings.inviteSeveral)
             }
+            .padding(.horizontal, SettingsShareLayout.captionHorizontalPadding)
+            .padding(.vertical, SettingsShareLayout.captionVerticalPadding)
         }
+    }
+
+    private func shareActionButton(
+        title: String,
+        accessibilityTitle: String,
+        accessibilityHint: String? = nil,
+        icon: String,
+        emphasized: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: SettingsShareLayout.actionSpacing) {
+                Image(systemName: icon)
+                    .font(.system(size: SettingsShareLayout.actionIconSize, weight: .regular))
+                Text(title.uppercased())
+                    .font(CTFont.regular(11))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .foregroundStyle(emphasized ? Color.CT.accent : Color.CT.text)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: SettingsShareLayout.actionMinHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityTitle)
+        .accessibilityHint(accessibilityHint ?? "")
     }
 
     private var mainSettingsSection: some View {
@@ -479,20 +495,11 @@ struct SettingsView: View {
         return String(name.prefix(2)).uppercased()
     }
 
-    private func refreshOwnFingerprint() {
-        guard CryptoManager.shared.isInitialized else {
-            ownFingerprint = nil
+    private func copyContactLink() {
+        if let lastCopyAt, Date().timeIntervalSince(lastCopyAt) < SettingsShareLayout.copyDebounce {
             return
         }
-        do {
-            let (ik, _) = try CryptoManager.shared.localBundlePublicKeys()
-            ownFingerprint = IdentityFingerprint.short(from: ik)
-        } catch {
-            ownFingerprint = nil
-        }
-    }
-
-    private func copyContactLink() {
+        lastCopyAt = Date()
         Task { await copyContactLinkAsync() }
     }
 
@@ -502,6 +509,8 @@ struct SettingsView: View {
         guard let deviceId = KeychainManager.shared.loadDeviceID() else { return }
         let serverHostname = ServerConfig.inviteHost
         // HTTPS share can land in third-party messenger logs/previews — never embed `un`.
+        // Each tap mints a fresh one-time jti. Clipboard holds only the latest;
+        // minting N links for a group is MultiInviteView, not repeated copy.
         guard let link = try? inviteGenerator.generateDeepLink(
             userId: viewModel.userId,
             deviceId: deviceId,
@@ -511,7 +520,7 @@ struct SettingsView: View {
         ) else { return }
         PlatformClipboard.copy(link)
         withAnimation { linkCopied = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + SettingsShareLayout.copyFlashDuration) {
             withAnimation { linkCopied = false }
         }
     }

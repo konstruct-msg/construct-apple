@@ -1131,8 +1131,16 @@
 
 /* Multi-invite (one one-time link per person) */
 "invite_several" = "Invite Several";
+"invite_several_short" = "Several";
 "invite_several_hint_fmt" = "One link per person. Each works once and expires in %@.";
 "invite_link_index_fmt" = "Link %d";
 "invite_one_more" = "one more";
 "invite_create_failed" = "Could not create an invite. Try again.";
 "copy_contact_link_hint_fmt" = "One-time link, valid %@";
+"share_action_qr" = "QR";
+"share_action_copy" = "Copy link";
+"share_copied" = "Copied";
+"share_once_ttl_fmt" = "Once · %@";
+"qr_new_in" = "New in %@";
+"qr_new_code" = "New code";
+"qr_each_code_once_fmt" = "Each code works once, up to %@.";

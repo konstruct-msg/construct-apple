@@ -1142,8 +1142,16 @@
 
 /* Multi-invite (one one-time link per person) */
 "invite_several" = "Пригласить нескольких";
+"invite_several_short" = "Нескольким";
 "invite_several_hint_fmt" = "По одной ссылке на человека. Каждая срабатывает один раз и живёт %@.";
 "invite_link_index_fmt" = "Ссылка %d";
 "invite_one_more" = "ещё одна";
 "invite_create_failed" = "Не удалось создать приглашение. Попробуйте ещё раз.";
 "copy_contact_link_hint_fmt" = "Одноразовая ссылка, действует %@";
+"share_action_qr" = "QR";
+"share_action_copy" = "Копировать";
+"share_copied" = "Скопировано";
+"share_once_ttl_fmt" = "Один раз · %@";
+"qr_new_in" = "Новый через %@";
+"qr_new_code" = "Новый код";
+"qr_each_code_once_fmt" = "Каждый код — один человек, до %@.";

@@ -203,6 +203,23 @@ enum SettingsRootLayout {
     static let recoveryBannerDismissIconSize: CGFloat = 11
 }
 
+/// Compact invite card on Settings root (QR | Copy + several).
+enum SettingsShareLayout {
+    static let actionMinHeight: CGFloat = CTLayout.hitTarget
+    static let actionIconSize: CGFloat = 16
+    static let actionSpacing: CGFloat = CTLayout.inlinePad
+    static let dividerWidth: CGFloat = 0.5
+    static let dividerVerticalPadding: CGFloat = CTLayout.inlinePad
+    static let captionHorizontalPadding: CGFloat = CTLayout.edgePad
+    static let captionVerticalPadding: CGFloat = CTLayout.inlinePad
+    static let captionLinkSpacing: CGFloat = 4
+    static let captionChevronSize: CGFloat = 8
+    /// Debounce only — each tap mints a new one-time link. A multi-second disable
+    /// made "copy again for the next person" feel broken.
+    static let copyDebounce: TimeInterval = 0.3
+    static let copyFlashDuration: TimeInterval = 2
+}
+
 enum ContactQRCodeLayout {
     static let contentSpacing: CGFloat = 0
     static let identityHeaderSpacing: CGFloat = 6
@@ -217,7 +234,7 @@ enum ContactQRCodeLayout {
     static let qrCodeErrorSpacing: CGFloat = CTLayout.chromeGap
     static let qrCodeErrorHorizontalPadding: CGFloat = CTLayout.sectionGap
     static let timerRowSpacing: CGFloat = 6
-    static let expiredBlockSpacing: CGFloat = 14
+    static let timerIconSize: CGFloat = 11
     static let refreshButtonHorizontalPadding: CGFloat = 20
     static let refreshButtonVerticalPadding: CGFloat = CTLayout.chromeGap
     static let refreshButtonStrokeOpacity: Double = 0.4
@@ -287,6 +304,7 @@ enum AccountSettingsLayout {
 
     static let editableFieldMaxWidth: CGFloat = 190
     static let editableSavingIndicatorScale: CGFloat = 0.8
+    static let fingerprintCopiedFlashDuration: TimeInterval = 1.5
 }
 
 enum DeleteAccountSheetLayout {

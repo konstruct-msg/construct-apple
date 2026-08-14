@@ -623,14 +623,8 @@ struct DesktopChatView: View {
     }
 
     private func handleTranscriptScrollPhase(_ phase: ScrollPhase) {
-        switch phase {
-        case .tracking, .interacting, .decelerating:
-            scrollManager.endOpening()
-        case .idle, .animating:
-            break
-        @unknown default:
-            break
-        }
+        // Same contract as iOS — the decision lives in ChatScrollManager.
+        scrollManager.noteScrollPhase(phase)
     }
 
     /// Infinite-scroll sentinel (same policy as iOS ChatView) — no manual button.

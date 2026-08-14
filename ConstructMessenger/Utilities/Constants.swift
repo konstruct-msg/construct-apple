@@ -97,7 +97,6 @@ struct InviteConfig {
     static let deviceIdRegex = "^[a-f0-9]{32}$"
     static let ephKeyLengthBytes = 32
     static let signatureLengthBytes = 64
-    static let qrWarningThresholdSeconds: TimeInterval = 60
     static let qrCodePrefixScheme = "konstruct://add"
     static let qrCountdownTickSeconds: TimeInterval = 1
     /// While the invite QR is on-screen, mint a fresh jti this often.

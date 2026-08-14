@@ -18,7 +18,7 @@ struct ContactQRCodeView: View {
     
     @State private var qrPayloadBytes: Data?
     @State private var qrImage: UIImage?
-    @State private var timeRemaining: TimeInterval = InviteConfig.ttlSeconds
+    @State private var rotateIn: TimeInterval = InviteConfig.qrRotateIntervalSeconds
     @State private var generationError: String?
     @State private var generatedAt: Date?
     
@@ -81,12 +81,17 @@ struct ContactQRCodeView: View {
                     Rectangle().fill(Color.CT.noise).frame(height: 1)
 
                     // Footer hint
-                    Text("> \(NSLocalizedString("qr_scan_hint", comment: ""))")
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.textDim)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, ContactQRCodeLayout.footerHorizontalPadding)
-                        .padding(.vertical, ContactQRCodeLayout.footerVerticalPadding)
+                    Text(
+                        "> " + String(
+                            format: NSLocalizedString("qr_each_code_once_fmt", comment: ""),
+                            InviteConfig.ttlDescription
+                        )
+                    )
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.textDim)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, ContactQRCodeLayout.footerHorizontalPadding)
+                    .padding(.vertical, ContactQRCodeLayout.footerVerticalPadding)
                 }
             }
         }
@@ -99,14 +104,14 @@ struct ContactQRCodeView: View {
             if let preview = previewPayload {
                 qrPayloadBytes = preview
                 qrImage = QRCodeGenerator.generate(from: preview)
-                timeRemaining = InviteConfig.ttlSeconds
+                rotateIn = InviteConfig.qrRotateIntervalSeconds
                 generatedAt = Date()
             } else {
                 generateInitialQRCode()
             }
         }
         .onReceive(timer) { _ in
-            updateTimeRemaining()
+            updateRotateIn()
             maybeRotateQR()
         }
     }
@@ -161,25 +166,21 @@ struct ContactQRCodeView: View {
 
     @ViewBuilder
     private var timerBlock: some View {
-        if timeRemaining > 0 {
-            let isWarning = timeRemaining < InviteConfig.qrWarningThresholdSeconds
+        if previewPayload != nil { EmptyView() }
+        else if qrPayloadBytes != nil, qrImage != nil {
+            // Rotation countdown, not TTL. The on-screen code changes every
+            // `qrRotateIntervalSeconds`; 12h is how long a captured frame stays redeemable.
             HStack(spacing: ContactQRCodeLayout.timerRowSpacing) {
                 Image(systemName: "timer")
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundStyle(isWarning ? Color.CT.danger : Color.CT.textDim)
-                Text(String(format: NSLocalizedString("expires_in", comment: ""), formatTime(timeRemaining)))
+                    .font(.system(size: ContactQRCodeLayout.timerIconSize, weight: .regular))
+                    .foregroundStyle(Color.CT.textDim)
+                Text(String(format: NSLocalizedString("qr_new_in", comment: ""), formatTime(rotateIn)))
                     .font(CTFont.regular(13))
-                    .foregroundStyle(isWarning ? Color.CT.danger : Color.CT.text)
+                    .foregroundStyle(Color.CT.text)
                     .monospacedDigit()
-            }
-        } else {
-            VStack(spacing: ContactQRCodeLayout.expiredBlockSpacing) {
-                Text("[ \(NSLocalizedString("code_expired", comment: "").lowercased()) ]")
-                    .font(CTFont.regular(14))
-                    .foregroundStyle(Color.CT.danger)
-
+                Spacer(minLength: CTLayout.inlinePad)
                 Button { regenerateQRCode() } label: {
-                    Text("[\(NSLocalizedString("generate_new_code", comment: "").lowercased())]")
+                    Text(NSLocalizedString("qr_new_code", comment: "").lowercased())
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                         .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
@@ -196,8 +197,30 @@ struct ContactQRCodeView: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(NSLocalizedString("qr_new_code", comment: ""))
                 .accessibilityIdentifier(A11y.ContactQR.regenerate)
             }
+            .padding(.horizontal, ContactQRCodeLayout.footerHorizontalPadding)
+        } else if generationError != nil {
+            Button { regenerateQRCode() } label: {
+                Text("[\(NSLocalizedString("generate_new_code", comment: "").lowercased())]")
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.accent)
+                    .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
+                    .padding(.vertical, ContactQRCodeLayout.refreshButtonVerticalPadding)
+                    .background(
+                        CTShape.card()
+                            .fill(Color.CT.bgMsg)
+                            .overlay(
+                                CTShape.card().strokeBorder(
+                                    Color.CT.accent.opacity(ContactQRCodeLayout.refreshButtonStrokeOpacity),
+                                    lineWidth: ContactQRCodeLayout.refreshButtonStrokeWidth
+                                )
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(A11y.ContactQR.regenerate)
         }
     }
 
@@ -235,7 +258,7 @@ struct ContactQRCodeView: View {
             qrPayloadBytes = binary
             qrImage = QRCodeGenerator.generate(from: textPayload)
             generatedAt = Date()
-            timeRemaining = InviteConfig.ttlSeconds
+            rotateIn = InviteConfig.qrRotateIntervalSeconds
             generationError = nil
             #if DEBUG
             Log.debug(
@@ -256,16 +279,13 @@ struct ContactQRCodeView: View {
         generateInitialQRCode()
     }
 
-    /// m:ss is only readable while the remainder is minutes. At a 12-hour TTL the
-    /// same formatter printed "720:00", which is not a time anyone reads — so the
-    /// last hour keeps the countdown and everything above it switches to units the
-    /// OS localizes for us (no new strings, and correct in ru/ja on arrival).
     /// Mint a fresh jti every `qrRotateIntervalSeconds` while the code is on screen.
     ///
     /// An invite is burned by its first redeemer, and the sender gets no signal that it
     /// happened — so without this, the second person to scan the same screen is told the
     /// invite is already used. Rotation is the only thing making "show my QR to a few
     /// people" work at all, until [[decisions/invite-two-modes-deferred]] is revisited.
+    /// Manual "new code" is the same mint, on demand, so the next person does not wait.
     private func maybeRotateQR() {
         guard previewPayload == nil else { return }
         guard generationError == nil, qrPayloadBytes != nil else { return }
@@ -277,20 +297,15 @@ struct ContactQRCodeView: View {
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
-        if seconds >= 3600 {
-            let formatter = DateComponentsFormatter()
-            formatter.allowedUnits = [.hour, .minute]
-            formatter.unitsStyle = .abbreviated
-            return formatter.string(from: seconds) ?? ""
-        }
-        let m = Int(seconds) / 60
-        let s = Int(seconds) % 60
+        let clamped = max(0, seconds)
+        let m = Int(clamped) / 60
+        let s = Int(clamped) % 60
         return String(format: "%d:%02d", m, s)
     }
 
-    private func updateTimeRemaining() {
+    private func updateRotateIn() {
         guard let generatedAt else { return }
-        timeRemaining = max(InviteConfig.ttlSeconds - Date().timeIntervalSince(generatedAt), 0)
+        rotateIn = max(InviteConfig.qrRotateIntervalSeconds - Date().timeIntervalSince(generatedAt), 0)
     }
 
 }

@@ -11,6 +11,7 @@
 //
 
 import XCTest
+import SwiftUI   // ScrollPhase — isDragPhase is a decision over it
 @testable import Construct_Messenger
 
 @MainActor
@@ -31,6 +32,7 @@ final class ChatOpeningScrollTests: XCTestCase {
             distanceFromBottom: farUp,
             contentFits: false,
             keyboardVisible: false,
+            userIsDragging: false,
             isOpening: true
         )
         XCTAssertTrue(next.autoScroll, "layout noise during the opening must not read as intent")
@@ -44,6 +46,7 @@ final class ChatOpeningScrollTests: XCTestCase {
             distanceFromBottom: atBottom,
             contentFits: false,
             keyboardVisible: false,
+            userIsDragging: false,
             isOpening: true
         )
         XCTAssertTrue(next.autoScroll)
@@ -57,6 +60,7 @@ final class ChatOpeningScrollTests: XCTestCase {
             distanceFromBottom: farUp,
             contentFits: false,
             keyboardVisible: false,
+            userIsDragging: false,
             isOpening: false
         )
         XCTAssertFalse(next.autoScroll)
@@ -70,6 +74,7 @@ final class ChatOpeningScrollTests: XCTestCase {
                 distanceFromBottom: farUp,
                 contentFits: true,
                 keyboardVisible: false,
+                userIsDragging: false,
                 isOpening: opening
             )
             XCTAssertTrue(next.autoScroll, "opening=\(opening)")
@@ -86,9 +91,126 @@ final class ChatOpeningScrollTests: XCTestCase {
             distanceFromBottom: farUp,
             contentFits: false,
             keyboardVisible: true,
+            userIsDragging: false,
             isOpening: false
         )
         XCTAssertEqual(next, current)
+    }
+
+    // MARK: - Keyboard freeze must not outlive the keyboard animation
+    //
+    //  Device log 2026-08-14, 18:00:45 → 18:01:29. `KEYBOARD_TRACE: will SHOW` with no matching
+    //  `will HIDE` for the rest of the session. In that window:
+    //
+    //      Loading more messages … Loaded 20 more messages (total: 72)
+    //      … five more batches …
+    //      Loaded 6 more messages (total: 158)
+    //      ChatView: messages count changed to 158
+    //      Scrolled to bottom (messageId: bottom, animated: true)   ← the yank
+    //
+    //  The person scrolled 128 messages up with the composer focused. The FAB never returned
+    //  (`keyboardWillShow` cleared it, and `return current` could never set it again) and
+    //  `autoScroll` could not switch off, so the count change read as "we are following" and
+    //  animated them back to the newest message.
+    //
+    //  The branch was written as "while the keyboard is visible" and means "while the keyboard is
+    //  animating". A finger on the list is the difference, and it is the same signal this file
+    //  already trusts over the opening timer.
+
+    func testKeyboardVisible_farUpWhileDragging_disablesAutoScrollAndShowsJump() {
+        let next = ChatScrollManager.flags(
+            current: both,
+            distanceFromBottom: farUp,
+            contentFits: false,
+            keyboardVisible: true,
+            userIsDragging: true,
+            isOpening: false
+        )
+        XCTAssertFalse(next.autoScroll, "a finger on the list outranks the keyboard freeze")
+        XCTAssertTrue(next.showJumpButton, "and the way back must be offered")
+    }
+
+    /// The freeze itself is kept: without a finger, keyboard geometry is still not intent.
+    func testKeyboardVisible_farUpWithoutDragging_leavesFlagsUnchanged() {
+        let current = ChatScrollManager.ScrollFlags(autoScroll: true, showJumpButton: false)
+        let next = ChatScrollManager.flags(
+            current: current,
+            distanceFromBottom: farUp,
+            contentFits: false,
+            keyboardVisible: true,
+            userIsDragging: false,
+            isOpening: false
+        )
+        XCTAssertEqual(next, current)
+    }
+
+    /// After the finger lifts the freeze resumes, and freezing must preserve what the drag
+    /// established — otherwise the reader is pulled back the moment they stop moving.
+    func testDragEndedWithKeyboardUp_preservesReadingHistory() {
+        let afterDrag = ChatScrollManager.ScrollFlags(autoScroll: false, showJumpButton: true)
+        let next = ChatScrollManager.flags(
+            current: afterDrag,
+            distanceFromBottom: farUp,
+            contentFits: false,
+            keyboardVisible: true,
+            userIsDragging: false,
+            isOpening: false
+        )
+        XCTAssertEqual(next, afterDrag, "the freeze preserves the drag's verdict, it does not undo it")
+    }
+
+    /// Raising the keyboard must not take away the reader's way back. Before 2026-08-14 it did,
+    /// unconditionally, and the freeze in `flags` then made the loss permanent for the session.
+    func testKeyboardShow_whileReadingHistory_keepsJumpButton() {
+        XCTAssertFalse(
+            ChatScrollManager.shouldClearJumpButtonOnKeyboardShow(
+                isFollowing: false, jumpButtonVisible: true
+            ),
+            "tapping the composer is not a request to lose the way back to the newest message"
+        )
+    }
+
+    func testKeyboardShow_whileFollowing_clearsAStaleJumpButton() {
+        XCTAssertTrue(
+            ChatScrollManager.shouldClearJumpButtonOnKeyboardShow(
+                isFollowing: true, jumpButtonVisible: true
+            )
+        )
+        XCTAssertFalse(
+            ChatScrollManager.shouldClearJumpButtonOnKeyboardShow(
+                isFollowing: true, jumpButtonVisible: false
+            ),
+            "nothing to clear"
+        )
+    }
+
+    /// `.animating` is our own corrective pin. Counting it as a drag would let a pin's motion
+    /// read as the person's intent — and the pin runs precisely when the layout is least settled.
+    func testCorrectivePinMotionIsNotADrag() {
+        XCTAssertFalse(
+            ChatScrollManager.isDragPhase(.animating),
+            "`.animating` is our own corrective pin — reading it as intent lets a pin justify itself"
+        )
+        XCTAssertFalse(ChatScrollManager.isDragPhase(.idle))
+    }
+
+    func testFingerAndItsMomentumBothCountAsDrag() {
+        XCTAssertTrue(ChatScrollManager.isDragPhase(.tracking))
+        XCTAssertTrue(ChatScrollManager.isDragPhase(.interacting))
+        XCTAssertTrue(
+            ChatScrollManager.isDragPhase(.decelerating),
+            "the finger has left but the movement is still theirs"
+        )
+    }
+
+    /// The instance path, so the wiring from phase to flag is covered too.
+    func testNoteScrollPhaseSetsAndClearsDragging() {
+        let manager = ChatScrollManager()
+        XCTAssertFalse(manager.isUserDragging)
+        manager.noteScrollPhase(.tracking)
+        XCTAssertTrue(manager.isUserDragging)
+        manager.noteScrollPhase(.animating)
+        XCTAssertFalse(manager.isUserDragging, "a pin animation must not keep the drag latched")
     }
 
     // MARK: - countChangeAction

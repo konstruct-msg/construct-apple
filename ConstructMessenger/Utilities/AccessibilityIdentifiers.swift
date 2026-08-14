@@ -99,6 +99,10 @@ enum A11y {
         static let inviteSeveral = "settings.inviteSeveral"
     }
 
+    enum Account {
+        static let fingerprint = "account.fingerprint"
+    }
+
     /// One-time invites minted in bulk (one per person).
     enum MultiInvite {
         /// Addressed by position, unlike chats and messages — this list only grows at the

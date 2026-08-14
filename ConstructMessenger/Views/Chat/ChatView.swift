@@ -595,16 +595,8 @@ struct ChatView: View {
     }
 
     private func handleTranscriptScrollPhase(_ phase: ScrollPhase) {
-        // A person touching the list outranks the settle timer. `.animating` is our own
-        // corrective pin, so it must not count as a touch.
-        switch phase {
-        case .tracking, .interacting, .decelerating:
-            scrollManager.endOpening()
-        case .idle, .animating:
-            break
-        @unknown default:
-            break
-        }
+        // Phase → intent is a decision, so it lives in ChatScrollManager where a test can reach it.
+        scrollManager.noteScrollPhase(phase)
     }
 
     private func logBottomAnchorVisibility(_ visible: Bool) {

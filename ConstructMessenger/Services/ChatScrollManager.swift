@@ -151,6 +151,45 @@ class ChatScrollManager {
     /// "Jump to bottom" FAB — only flips when crossing the threshold (not every pixel).
     var shouldShowScrollToBottomButton = false
 
+    /// A finger is on the list (or the list is still carrying that finger's momentum).
+    ///
+    /// Fed by `onScrollPhaseChange`, and the reason `flags` can tell "the keyboard inset is
+    /// animating" from "the keyboard has been up for a minute while someone reads". `.animating`
+    /// is deliberately **not** dragging: that phase is our own corrective pin, and counting it
+    /// would let a pin's own motion be read as the person's intent — the exact confusion
+    /// `endOpening` already avoids on the same signal.
+    @ObservationIgnored private(set) var isUserDragging = false
+
+    /// Which scroll phases are the *person* moving the list.
+    ///
+    /// Extracted rather than left as a `switch` in each view because it is a decision, and a
+    /// decision inside a SwiftUI body cannot be reached by a test: the first version of this shipped
+    /// with `.animating` folded in beside `.idle`, and a mutation that made `.animating` count as a
+    /// drag was killed by nothing. That mutation is not academic — `.animating` is our own
+    /// corrective pin, so counting it would let the pin's motion be read as the person's intent, at
+    /// exactly the moment the layout is least settled.
+    ///
+    /// `.decelerating` counts: the finger has left, but the movement is still theirs.
+    static func isDragPhase(_ phase: ScrollPhase) -> Bool {
+        switch phase {
+        case .tracking, .interacting, .decelerating:
+            return true
+        case .idle, .animating:
+            return false
+        @unknown default:
+            return false
+        }
+    }
+
+    /// Single entry for scroll phase. Both hosts call this from `onScrollPhaseChange`.
+    func noteScrollPhase(_ phase: ScrollPhase) {
+        isUserDragging = Self.isDragPhase(phase)
+        if isUserDragging {
+            // A person touching the list outranks the opening settle timer.
+            endOpening()
+        }
+    }
+
     /// Process-wide last keyboard pin — coalesces duplicate NC deliveries and multi-manager
     /// observers (build 586: one willShow → two PIN arm keyboardShow).
     @ObservationIgnored private static var lastKeyboardPinReason: PinReason?
@@ -560,6 +599,7 @@ class ChatScrollManager {
             distanceFromBottom: distance,
             contentFits: contentFits,
             keyboardVisible: isKeyboardVisible,
+            userIsDragging: isUserDragging,
             isOpening: isOpening
         )
         if next.autoScroll != shouldScrollToBottom {
@@ -645,6 +685,7 @@ class ChatScrollManager {
         distanceFromBottom distance: CGFloat,
         contentFits: Bool,
         keyboardVisible: Bool,
+        userIsDragging: Bool,
         isOpening: Bool
     ) -> ScrollFlags {
         if contentFits {
@@ -654,9 +695,24 @@ class ChatScrollManager {
         let nearBottom = distance <= Threshold.nearBottom
         let farUp = distance >= Threshold.showJumpButton
 
-        // Keyboard / composer-height animation produces transient distances.
-        // Never latch the FAB ON while the keyboard is up; still allow hide + near-bottom.
-        if keyboardVisible {
+        // Keyboard / composer-height animation produces transient distances, so geometry alone is
+        // not intent while the inset moves. But this branch was written as "while the keyboard is
+        // *visible*" and it means "while the keyboard is *animating*" — and the difference is a
+        // whole reading session.
+        //
+        // Device log 2026-08-14, 18:00:45 → 18:01:29: `will SHOW` with no matching `will HIDE`,
+        // then six load-more batches (30 → 158 messages) as the person scrolled up. The FAB never
+        // came back — `keyboardWillShow` had cleared it and `return current` could never set it
+        // again — and `autoScroll` could not switch off either, so the count change at 158 read as
+        // "we are following" and animated them back to the newest message. They had scrolled 128
+        // messages up. It is the same yank `keyboardHideAction` closed, entered by a different
+        // door: not "the keyboard was dismissed", but "the keyboard was never dismissed".
+        //
+        // A finger on the list outranks the heuristic — the rule this file already applies to the
+        // opening window via `endOpening`. While the person drags, geometry IS intent, keyboard or
+        // not. When the drag ends the freeze resumes and simply preserves whatever the drag
+        // established, which is the desired behaviour and needs no timer.
+        if keyboardVisible && !userIsDragging {
             guard nearBottom else { return current }
             return ScrollFlags(autoScroll: true, showJumpButton: false)
         }
@@ -853,6 +909,21 @@ class ChatScrollManager {
         return true
     }
 
+    /// Whether raising the keyboard may take away the "jump to newest" button.
+    ///
+    /// It used to, unconditionally, to drop a latch that keyboard geometry thrash might have
+    /// produced. That also took the way back from someone reading history who merely tapped the
+    /// composer, and once cleared the `keyboardVisible` freeze in ``flags(current:distanceFromBottom:contentFits:keyboardVisible:userIsDragging:isOpening:)``
+    /// could never light it again — the FAB stayed gone for the rest of the session
+    /// (device log 2026-08-14, 18:00:45 onward).
+    ///
+    /// The thrash it guarded against can no longer latch anything: with no finger on the list that
+    /// branch returns `current` unchanged. So the answer is yes only for someone already at the
+    /// tail, where the button is false anyway and this is belt and braces.
+    static func shouldClearJumpButtonOnKeyboardShow(isFollowing: Bool, jumpButtonVisible: Bool) -> Bool {
+        isFollowing && jumpButtonVisible
+    }
+
     /// What a `keyboardWillHide` is allowed to do to the viewport.
     enum KeyboardHideAction: Equatable {
         /// Touch nothing. The person is reading history, or the keyboard was never up.
@@ -938,7 +1009,18 @@ class ChatScrollManager {
                 self.keyboardHeight = height
                 // Corrective pin only — animated scroll during keyboard animation
                 // dematerializes LazyVStack (empty chat flash).
-                if self.shouldShowScrollToBottomButton {
+                //
+                // Clearing the FAB here used to be unconditional, to drop a latch that keyboard
+                // geometry thrash might have produced. It also took away the way back from
+                // someone reading history who merely tapped the composer — and once cleared, the
+                // `keyboardVisible` freeze in `flags` could never light it again. The thrash it
+                // guarded against cannot latch anything now: without a finger on the list that
+                // branch returns `current` unchanged. So clear it only for a follower, where it
+                // is already false and this is belt and braces.
+                if Self.shouldClearJumpButtonOnKeyboardShow(
+                    isFollowing: self.shouldScrollToBottom,
+                    jumpButtonVisible: self.shouldShowScrollToBottomButton
+                ) {
                     self.shouldShowScrollToBottomButton = false
                 }
                 guard self.shouldScrollToBottom else { return }
