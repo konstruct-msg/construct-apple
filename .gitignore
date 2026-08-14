@@ -27,10 +27,6 @@ logs/
 *.xcuserstate
 
 
-# Static library symbol files (macOS)
-__.SYMDEF
-*.SYMDEF
-
 # Environment
 .env
 .env.local
@@ -44,7 +40,6 @@ __.SYMDEF
 *.swp
 *.swo
 *~
-.DS_Store
 
 # Testing
 coverage/
@@ -60,9 +55,11 @@ temp/
 Thumbs.db
 
 # Rust object files (accidentally extracted from .a archives)
+# and the symbol tables macOS `ar` writes into them.
 *.o
 *.rcgu.o
 __.SYMDEF
+*.SYMDEF
 
 # Python
 test_*.py
@@ -73,7 +70,6 @@ venv/
 *.egg-info/
 .mypy_cache/
 
-ConstructEngine.xcframework/**/*.a
 ConstructTransport.xcframework/**/*.a
 screenshots/
 

@@ -146,9 +146,12 @@ cd ~/Code/construct-messenger
 
 # 4. Build & run
 xcodebuild -scheme ConstructMessenger \
-  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' build
+  -destination 'platform=iOS Simulator,name=iPhone 17' build
 # …or open ConstructMessenger.xcodeproj in Xcode and ⌘R
 ```
+
+> Do not pin `OS=` in a destination — simulator runtimes are replaced with every Xcode upgrade and
+> a pinned one stops resolving. Check `xcrun simctl list devices available`.
 
 **Requirements:** Rust 1.92+ · Xcode 16+ · iOS 18.5+ deployment target · UniFFI 0.30.
 
@@ -168,13 +171,18 @@ construct-messenger/
 │   ├── Utilities/              # CT design tokens (ConstructTheme.swift)
 │   ├── en.lproj / ru.lproj/    # localization (Japanese planned)
 │   └── construct_core.swift    # generated UniFFI bindings (do not edit)
+├── ConstructUI/                # standalone SwiftPM package — Xcode Previews sandbox
+├── scripts/                    # build/test/simulator tooling
+├── tests/                      # Python network + DPI probes (not the Xcode suite)
+├── docs/                       # reference for tooling in this repo
 ├── build_crypto_lib.sh         # rebuild construct-core → ConstructCore.xcframework
 ├── generate_swift_bindings.sh  # regenerate UniFFI bindings
-└── AGENTS.md                   # conventions & deep architecture notes
+└── AGENTS.md                   # hard invariants for contributors and AI agents
 ```
 
-See **`AGENTS.md`** for design-system rules, the session lifecycle, the binary-data
-pipeline, and identity-space invariants.
+See **[`AGENTS.md`](AGENTS.md)** for design-system rules, the session lifecycle, the binary-data
+pipeline, and identity-space invariants. Longer-form docs live in the `construct-docs` vault; the
+index at the top of `AGENTS.md` says which document covers what.
 
 ---
 
@@ -187,14 +195,20 @@ cd ~/Code/construct-core && cargo test --features post-quantum
 # iOS app (unit + crypto-wire integration)
 cd ~/Code/construct-messenger
 xcodebuild test -scheme ConstructMessenger \
-  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6'
+  -destination 'platform=iOS Simulator,name=iPhone 17'
+
+# a single class, without simulator clones
+scripts/test_run.sh ConstructMessengerTests/FooTests
 ```
+
+See [`docs/TESTING.md`](docs/TESTING.md) for the tooling and
+[`docs/TWO_SIM_STAND.md`](docs/TWO_SIM_STAND.md) for the two-simulator send/receive stand.
 
 ---
 
 ## Status
 
-**App:** v0.13.x (Alpha) · **Core:** construct-core v0.9.4
+**App:** v0.17.x (Alpha, TestFlight) · **Core:** construct-core v0.12.x
 
 ### Working
 - [x] Rust crypto core — X3DH + Double Ratchet, crypto-agile suites

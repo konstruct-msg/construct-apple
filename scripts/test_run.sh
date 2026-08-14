@@ -105,7 +105,7 @@ fi
 #   Test case 'FooTests.testBar()' passed
 # while a non-parallel run prints
 #   Test Case '-[ConstructMessengerTests.FooTests testBar]' passed
-# The counting command in AGENTS.md matches only the first, so it reports 0 against a run that
+# The counting command in docs/TESTING.md matches only the first, so it reports 0 against a run that
 # passed everything — the same shape of lie as a build failure reading like "nothing failed".
 PASSED=$(grep -oiE "^Test case '[^']+' passed" "$LOG" | sort -u | wc -l | tr -d ' ')
 echo "$(grep -oE '\*\* TEST (SUCCEEDED|FAILED)' "$LOG" | tail -1) — $PASSED unique passed, $(( $(date +%s) - START ))s"
