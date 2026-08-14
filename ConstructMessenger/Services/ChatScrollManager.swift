@@ -825,6 +825,60 @@ class ChatScrollManager {
         return true
     }
 
+    /// What a `keyboardWillHide` is allowed to do to the viewport.
+    enum KeyboardHideAction: Equatable {
+        /// Touch nothing. The person is reading history, or the keyboard was never up.
+        case ignore
+        /// We were already following — the pin may re-land the tail. `shouldScrollToBottom`
+        /// is **not** written: in this branch it is already `true` by construction.
+        case keepFollowing
+    }
+
+    /// Dismissing the keyboard is not a request to leave history.
+    ///
+    /// Until 2026-08-14 the hide observer ran, unconditionally and *above* its own
+    /// `guard wasVisible`:
+    ///
+    /// ```swift
+    /// self.shouldScrollToBottom = true
+    /// self.shouldShowScrollToBottomButton = false
+    /// guard wasVisible else { return }
+    /// ```
+    ///
+    /// Two defects in three lines. A reader who had scrolled up, tapped the composer and
+    /// dismissed the keyboard was dragged to the newest message — build 588 closed the same yank
+    /// for a *visible* keyboard via stranded-recover and left hide untouched. And because the
+    /// writes sat above the guard, the system's second hide delivery (~20 ms later, which the
+    /// comment on that guard explicitly describes) re-forced auto-scroll even when the first
+    /// delivery had correctly done nothing.
+    ///
+    /// `.opening` counts as following: that window belongs to the corrective pin series, and a
+    /// person who has not touched anything has not left the tail.
+    ///
+    /// This is a decision over two scalars precisely so the yank can be pinned by a test —
+    /// `testKeyboardHide_whileReadingHistory_doesNotYank` and
+    /// `testKeyboardHide_duplicateDelivery_doesNotForceFollowing`. The second is not redundant:
+    /// without it, moving the writes back above the guard stays green.
+    ///
+    /// **NOT COVERED BY A TEST: that the observer below actually asks this function.** The
+    /// decision is verified by mutation; the wiring is not, because reaching it means a live
+    /// `NotificationCenter` and UIKit. Someone could reintroduce an unconditional
+    /// `shouldScrollToBottom = true` in the sink and every test here would stay green.
+    ///
+    /// What answers it on device: scroll up in a chat, tap the composer, dismiss the keyboard.
+    /// With `verboseGeometryLogging` on, a correct build logs **no** `PIN arm reason=keyboardHide`
+    /// and the transcript does not move. A regression shows that line and jumps to the newest
+    /// message. The two-sim stand cannot answer it — it drives no software keyboard dismissal.
+    static func keyboardHideAction(mode: ViewportMode, keyboardWasVisible: Bool) -> KeyboardHideAction {
+        guard keyboardWasVisible else { return .ignore }
+        switch mode {
+        case .following, .opening:
+            return .keepFollowing
+        case .readingHistory:
+            return .ignore
+        }
+    }
+
     private func tryArmKeyboardPin(reason: PinReason) {
         let now = ProcessInfo.processInfo.systemUptime
         guard Self.shouldArmKeyboardPin(
@@ -870,14 +924,21 @@ class ChatScrollManager {
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
             .sink { [weak self] _ in
                 guard let self else { return }
-                // Second hide on the same instance (system double-delivery ~20ms later) is a no-op.
+                // Second hide on the same instance (system double-delivery ~20ms later) is a
+                // no-op — and that now holds for the whole block, not just the pin. The two
+                // flag writes used to sit above this evidence and re-fired on the redelivery.
                 let wasVisible = self.keyboardHeight > 0
                 self.keyboardHeight = 0
-                // After keyboard dismisses, re-enable auto-scroll and clear any FAB that
-                // latched during the keyboard geometry thrash.
-                self.shouldScrollToBottom = true
+                // Decide before mutating: `viewportMode` is derived from `shouldScrollToBottom`,
+                // so writing it first would make the decision read its own output.
+                let action = Self.keyboardHideAction(
+                    mode: self.viewportMode,
+                    keyboardWasVisible: wasVisible
+                )
+                guard action == .keepFollowing else { return }
+                // Only for someone already at the tail: clear a FAB that latched during the
+                // keyboard geometry thrash. A reader in history keeps theirs — it is their way back.
                 self.shouldShowScrollToBottomButton = false
-                guard wasVisible else { return }
                 self.tryArmKeyboardPin(reason: .keyboardHide)
             }
             .store(in: &cancellables)

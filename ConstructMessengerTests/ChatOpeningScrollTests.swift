@@ -758,6 +758,61 @@ final class ChatOpeningScrollTests: XCTestCase {
         )
     }
 
+    // MARK: - Keyboard hide must not force following
+    //
+    //  Study 2026-08-14. `keyboardWillHide` ran, unconditionally and above its own
+    //  `guard wasVisible`:
+    //
+    //      self.shouldScrollToBottom = true            // 878
+    //      self.shouldShowScrollToBottomButton = false // 879
+    //      guard wasVisible else { return }            // 880
+    //
+    //  Build 588 closed this yank for a *visible* keyboard through stranded-recover and left the
+    //  hide path alone: a reader who scrolled up, tapped the composer and dismissed the keyboard
+    //  was still dragged to the newest message. The placement above the guard is a second defect —
+    //  the system's ~20ms redelivery re-forced auto-scroll even when the first hide was correctly
+    //  a no-op, which is exactly what the comment on that guard claims cannot happen.
+
+    func testKeyboardHide_whileReadingHistory_doesNotYank() {
+        XCTAssertEqual(
+            ChatScrollManager.keyboardHideAction(mode: .readingHistory, keyboardWasVisible: true),
+            .ignore,
+            "dismissing the keyboard is not a request to leave history"
+        )
+    }
+
+    func testKeyboardHide_whileFollowing_staysFollowing() {
+        XCTAssertEqual(
+            ChatScrollManager.keyboardHideAction(mode: .following, keyboardWasVisible: true),
+            .keepFollowing
+        )
+    }
+
+    /// The opening window belongs to the corrective pin series. Someone who has touched nothing
+    /// has not left the tail, so a hide during opening must not be read as intent either way.
+    func testKeyboardHide_whileOpening_keepsFollowing() {
+        XCTAssertEqual(
+            ChatScrollManager.keyboardHideAction(mode: .opening, keyboardWasVisible: true),
+            .keepFollowing
+        )
+    }
+
+    /// Not redundant with the history case: this is the one that fails if the flag writes move
+    /// back above `guard wasVisible`. The first hide is real, the second is the system's ~20ms
+    /// redelivery — by then `keyboardHeight` is already 0, so `keyboardWasVisible` is false and
+    /// nothing may be written a second time, in any mode.
+    func testKeyboardHide_duplicateDelivery_doesNotForceFollowing() {
+        for mode in [ChatScrollManager.ViewportMode.following,
+                     .readingHistory,
+                     .opening] {
+            XCTAssertEqual(
+                ChatScrollManager.keyboardHideAction(mode: mode, keyboardWasVisible: false),
+                .ignore,
+                "redelivered hide must not touch scroll state (mode: \(mode))"
+            )
+        }
+    }
+
     // MARK: - Composer inset pin coalesce
 
     /// Media/reply height settles in several geometry steps; each used to arm `[0, 120]`.
