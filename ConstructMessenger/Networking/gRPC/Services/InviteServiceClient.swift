@@ -15,18 +15,17 @@ final class InviteServiceClient: Sendable {
 
     private init() {}
 
-    // MARK: - Generate Invite
-
-    func generateInvite(ttlSeconds: Int64 = 86400) async throws -> Shared_Proto_Services_V1_GenerateInviteResponse {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.generateInvite) { grpcClient in
-            let client = Shared_Proto_Services_V1_InviteService.Client(wrapping: grpcClient)
-
-            var request = Shared_Proto_Services_V1_GenerateInviteRequest()
-            request.ttlSeconds = ttlSeconds
-
-            return try await client.generateInvite(request: .init(message: request))
-        }
-    }
+    // Two RPCs were removed from InviteService on 2026-08-15 (server-side, see
+    // construct-docs backend/INVITE_LIST_REVOKE_SERVER_SPEC.md), and their wrappers with
+    // them:
+    //
+    //   GenerateInvite — a second invite issuer with a 300 s TTL against the device-minted
+    //     v4's 12 h. Nothing on iOS or Android called it; it was the parallel invite system
+    //     decisions/invite-two-modes-deferred forbids, arrived at by accretion.
+    //   ListInvites — answered OK with an empty list, always. The server never sees an
+    //     invite before it is redeemed or revoked, so there is nothing to list; a screen
+    //     built on it would have reported "no outstanding invites" forever. The issuing
+    //     device keeps that journal.
 
     // MARK: - Accept Invite
 
@@ -35,20 +34,6 @@ final class InviteServiceClient: Sendable {
             let client = Shared_Proto_Services_V1_InviteService.Client(wrapping: grpcClient)
 
             return try await client.acceptInvite(request: .init(message: invite))
-        }
-    }
-
-    // MARK: - List Invites
-
-    func listInvites(limit: Int32 = 20, includeExpired: Bool = false) async throws -> Shared_Proto_Services_V1_ListInvitesResponse {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.listInvites) { grpcClient in
-            let client = Shared_Proto_Services_V1_InviteService.Client(wrapping: grpcClient)
-
-            var request = Shared_Proto_Services_V1_ListInvitesRequest()
-            request.limit = limit
-            request.includeExpired = includeExpired
-
-            return try await client.listInvites(request: .init(message: request))
         }
     }
 

@@ -256,7 +256,8 @@ cmd_env() {
 # Pair the two sims without a camera.
 #
 # The simulator has no camera, so the QR pairing path is undrivable. Settings ▸
-# COPY CONTACT LINK puts the same invite on the pasteboard, and `simctl pbpaste`
+# ПРИГЛАСИТЬ ▸ СКОПИРОВАТЬ ССЫЛКУ puts the same invite on the pasteboard, and
+# `simctl pbpaste`
 # reads it back out. The copied form is the HTTPS share link, which needs an
 # apple-app-site-association fetch to open the app — a simulator will just hand it
 # to Safari. The custom scheme carries the identical payload and always resolves,
@@ -274,7 +275,7 @@ cmd_pair() {
   payload="${link#*invite=}"
   if [[ "$link" != *"invite="* || -z "$payload" ]]; then
     warn "в буфере не приглашение, а: ${link:0:60}"
-    die "открой на источнике Settings ▸ COPY CONTACT LINK и повтори"
+    die "открой на источнике Settings ▸ ПРИГЛАСИТЬ ▸ СКОПИРОВАТЬ ССЫЛКУ и повтори"
   fi
 
   info "передаю приглашение (payload ${#payload} симв.)"

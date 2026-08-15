@@ -23,7 +23,7 @@ delivery, stream replay) do not reproduce faithfully on a simulator. Those belon
 
 ## Pairing goes through the pasteboard, never the QR
 
-A simulator has no camera, so the scan path is undrivable. Settings ▸ COPY CONTACT LINK carries
+A simulator has no camera, so the scan path is undrivable. Settings ▸ INVITE ▸ COPY LINK carries
 the same invite; `simctl pbpaste` reads it and `pair` hands it to the other sim.
 
 That command rewrites the copied HTTPS share link to the `konstruct://` scheme on purpose — the

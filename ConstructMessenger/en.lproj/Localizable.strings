@@ -610,7 +610,6 @@
 
 // MARK: - QR Code
 "code_expired" = "Code expired";
-"generate_new_code" = "Generate New Code";
 "expires_in" = "Expires in %@";
 
 // MARK: - Settings & Diagnostics
@@ -787,9 +786,6 @@
 "edit_identity" = "edit identity";
 "delete_account_abort_hint" = "tap to abort · %ds";
 "share" = "Share";
-"show_qr_code" = "Show QR Code";
-"copy_contact_link" = "Copy Contact Link";
-"link_copied" = "Link Copied";
 "recovery_not_configured_title" = "Recovery Not Configured";
 "developer" = "Developer";
 "change_photo" = "change photo";
@@ -1130,17 +1126,9 @@
 "msg_status_failed" = "Failed to send";
 
 /* Multi-invite (one one-time link per person) */
-"invite_several" = "Invite Several";
-"invite_several_short" = "Several";
-"invite_several_hint_fmt" = "One link per person. Each works once and expires in %@.";
-"invite_link_index_fmt" = "Link %d";
-"invite_one_more" = "one more";
 "invite_create_failed" = "Could not create an invite. Try again.";
-"copy_contact_link_hint_fmt" = "One-time link, valid %@";
-"share_action_qr" = "QR";
-"share_action_copy" = "Copy link";
 "share_copied" = "Copied";
-"share_once_ttl_fmt" = "Once · %@";
-"qr_new_in" = "New in %@";
 "qr_new_code" = "New code";
-"qr_each_code_once_fmt" = "Each code works once, up to %@.";
+"invite_copy_link" = "Copy link";
+"invite_copied_nth_fmt" = "Copied · %d";
+"invite_share_rule_fmt" = "Every tap makes a new link, and the code refreshes itself. Any invite works once and expires in %@.";

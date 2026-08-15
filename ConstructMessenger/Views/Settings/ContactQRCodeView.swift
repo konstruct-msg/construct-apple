@@ -4,6 +4,15 @@
 //
 //  Created by Maxim Eliseyev on 30.12.2025.
 //  Updated for Dynamic Invites on 30.01.2026.
+//  Merged with the copy-link action and MultiInviteView on 2026-08-15.
+//
+//  One surface for inviting someone, replacing three.
+//
+//  Settings used to carry a [QR][COPY LINK] pair plus a caption linking to
+//  `MultiInviteView`, which pre-minted five capabilities on open so a group could be
+//  invited. That screen existed only because the rule making it unnecessary — every tap
+//  of "copy" mints a fresh one-time invite — was never stated anywhere the user could
+//  read it. The rule now sits under the button, and the screen is gone.
 //
 
 import SwiftUI
@@ -15,19 +24,24 @@ struct ContactQRCodeView: View {
     @Environment(\.containerWidth) private var containerWidth
     let userId: String
     let username: String
-    
+
     @State private var qrPayloadBytes: Data?
     @State private var qrImage: UIImage?
-    @State private var rotateIn: TimeInterval = InviteConfig.qrRotateIntervalSeconds
     @State private var generationError: String?
     @State private var generatedAt: Date?
-    
+
+    /// Links minted from the copy button in this sitting. Drives the button's feedback:
+    /// tap two is only distinguishable from tap one because this number moved.
+    @State private var copiedCount = 0
+    @State private var lastCopyAt: Date?
+    @State private var copyError: String?
+
     private let timer = Timer.publish(every: InviteConfig.qrCountdownTickSeconds, on: .main, in: .common).autoconnect()
     private let generator = InviteGenerator()
-    
+
     /// Preview-only compact binary (or empty → live generate).
     private let previewPayload: Data?
-    
+
     init(userId: String, username: String, previewPayload: Data? = nil) {
         self.userId = userId
         self.username = username
@@ -40,7 +54,6 @@ struct ContactQRCodeView: View {
 
     var body: some View {
         VStack(spacing: ContactQRCodeLayout.contentSpacing) {
-            // Nav bar
             CTNavBar(
                 title: NSLocalizedString("invite", comment: ""),
                 showBack: true,
@@ -73,25 +86,19 @@ struct ContactQRCodeView: View {
                     VStack(spacing: ContactQRCodeLayout.qrBlockSpacing) {
                         qrBlock
                             .accessibilityIdentifier(A11y.ContactQR.code)
-                        timerBlock
+                        refreshRow
                     }
                     .padding(.vertical, ContactQRCodeLayout.qrBlockVerticalPadding)
                     .frame(maxWidth: .infinity)
 
                     Rectangle().fill(Color.CT.noise).frame(height: 1)
 
-                    // Footer hint
-                    Text(
-                        "> " + String(
-                            format: NSLocalizedString("qr_each_code_once_fmt", comment: ""),
-                            InviteConfig.ttlDescription
-                        )
-                    )
-                    .font(CTFont.regular(11))
-                    .foregroundStyle(Color.CT.textDim)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, ContactQRCodeLayout.footerHorizontalPadding)
-                    .padding(.vertical, ContactQRCodeLayout.footerVerticalPadding)
+                    copyLinkButton
+                        .accessibilityIdentifier(A11y.ContactQR.copyLink)
+
+                    Rectangle().fill(Color.CT.noise).frame(height: 1)
+
+                    footer
                 }
             }
         }
@@ -104,16 +111,12 @@ struct ContactQRCodeView: View {
             if let preview = previewPayload {
                 qrPayloadBytes = preview
                 qrImage = QRCodeGenerator.generate(from: preview)
-                rotateIn = InviteConfig.qrRotateIntervalSeconds
                 generatedAt = Date()
             } else {
                 generateInitialQRCode()
             }
         }
-        .onReceive(timer) { _ in
-            updateRotateIn()
-            maybeRotateQR()
-        }
+        .onReceive(timer) { _ in maybeRotateQR() }
     }
 
     // MARK: - QR block
@@ -162,48 +165,18 @@ struct ContactQRCodeView: View {
         }
     }
 
-    // MARK: - Timer block
-
+    /// Manual re-mint for the person the code did not scan for.
+    ///
+    /// The countdown that used to live here ("new in 0:23") was removed with the rest of
+    /// the multi-invite scaffolding: it counted down to something the user cannot act on,
+    /// and it invited the question "what happens at zero" whose answer — your code is
+    /// already a different one — is not what a countdown normally means. Rotation itself
+    /// stays; see `maybeRotateQR`.
     @ViewBuilder
-    private var timerBlock: some View {
-        if previewPayload != nil { EmptyView() }
-        else if qrPayloadBytes != nil, qrImage != nil {
-            // Rotation countdown, not TTL. The on-screen code changes every
-            // `qrRotateIntervalSeconds`; 12h is how long a captured frame stays redeemable.
-            HStack(spacing: ContactQRCodeLayout.timerRowSpacing) {
-                Image(systemName: "timer")
-                    .font(.system(size: ContactQRCodeLayout.timerIconSize, weight: .regular))
-                    .foregroundStyle(Color.CT.textDim)
-                Text(String(format: NSLocalizedString("qr_new_in", comment: ""), formatTime(rotateIn)))
-                    .font(CTFont.regular(13))
-                    .foregroundStyle(Color.CT.text)
-                    .monospacedDigit()
-                Spacer(minLength: CTLayout.inlinePad)
-                Button { regenerateQRCode() } label: {
-                    Text(NSLocalizedString("qr_new_code", comment: "").lowercased())
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.accent)
-                        .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
-                        .padding(.vertical, ContactQRCodeLayout.refreshButtonVerticalPadding)
-                        .background(
-                            CTShape.card()
-                                .fill(Color.CT.bgMsg)
-                                .overlay(
-                                    CTShape.card().strokeBorder(
-                                        Color.CT.accent.opacity(ContactQRCodeLayout.refreshButtonStrokeOpacity),
-                                        lineWidth: ContactQRCodeLayout.refreshButtonStrokeWidth
-                                    )
-                                )
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(NSLocalizedString("qr_new_code", comment: ""))
-                .accessibilityIdentifier(A11y.ContactQR.regenerate)
-            }
-            .padding(.horizontal, ContactQRCodeLayout.footerHorizontalPadding)
-        } else if generationError != nil {
+    private var refreshRow: some View {
+        if previewPayload == nil, qrPayloadBytes != nil || generationError != nil {
             Button { regenerateQRCode() } label: {
-                Text("[\(NSLocalizedString("generate_new_code", comment: "").lowercased())]")
+                Text(NSLocalizedString("qr_new_code", comment: "").lowercased())
                     .font(CTFont.regular(13))
                     .foregroundStyle(Color.CT.accent)
                     .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
@@ -220,7 +193,111 @@ struct ContactQRCodeView: View {
                     )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(NSLocalizedString("qr_new_code", comment: ""))
             .accessibilityIdentifier(A11y.ContactQR.regenerate)
+        }
+    }
+
+    // MARK: - Copy link
+
+    private var copyFeedback: InviteShareDecision.CopyFeedback {
+        InviteShareDecision.feedback(copiedCount: copiedCount)
+    }
+
+    private var copyLabel: String {
+        switch copyFeedback {
+        case .idle:
+            return NSLocalizedString("invite_copy_link", comment: "")
+        case .copied:
+            return NSLocalizedString("share_copied", comment: "")
+        case .copiedAgain(let n):
+            return String(format: NSLocalizedString("invite_copied_nth_fmt", comment: ""), n)
+        }
+    }
+
+    private var copyLinkButton: some View {
+        Button { copyLink() } label: {
+            HStack(spacing: SettingsShareLayout.actionSpacing) {
+                Image(systemName: copyFeedback == .idle ? "link" : "checkmark")
+                    .font(.system(size: SettingsShareLayout.actionIconSize, weight: .regular))
+                Text(copyLabel.uppercased())
+                    .font(CTFont.regular(11))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .contentTransition(.numericText())
+            }
+            .foregroundStyle(copyFeedback == .idle ? Color.CT.text : Color.CT.accent)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: SettingsShareLayout.actionMinHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(NSLocalizedString("invite_copy_link", comment: ""))
+        .accessibilityHint(
+            String(
+                format: NSLocalizedString("invite_share_rule_fmt", comment: ""),
+                InviteConfig.ttlDescription
+            )
+        )
+    }
+
+    // MARK: - Footer
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: ContactQRCodeLayout.identityHeaderSpacing) {
+            Text(
+                "> " + String(
+                    format: NSLocalizedString("invite_share_rule_fmt", comment: ""),
+                    InviteConfig.ttlDescription
+                )
+            )
+            .font(CTFont.regular(11))
+            .foregroundStyle(Color.CT.textDim)
+
+            if let copyError {
+                Text("> \(copyError)")
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.danger)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, ContactQRCodeLayout.footerHorizontalPadding)
+        .padding(.vertical, ContactQRCodeLayout.footerVerticalPadding)
+    }
+
+    // MARK: - Actions
+
+    /// Mint a fresh one-time invite and put it on the clipboard.
+    ///
+    /// Failure is surfaced, never swallowed: `try?` here leaves a button that reports
+    /// "copied" over a clipboard holding whatever was there before.
+    private func copyLink() {
+        guard InviteShareDecision.shouldMint(
+            now: Date(),
+            lastMintAt: lastCopyAt,
+            debounce: SettingsShareLayout.copyDebounce
+        ) else { return }
+
+        guard let deviceId = KeychainManager.shared.loadDeviceID() else {
+            copyError = NSLocalizedString("invite_create_failed", comment: "")
+            return
+        }
+        do {
+            // HTTPS share can land in third-party messenger logs/previews — never embed `un`.
+            let link = try generator.generateDeepLink(
+                userId: userId,
+                deviceId: deviceId,
+                username: nil,
+                server: ServerConfig.inviteHost,
+                useHTTPS: true
+            )
+            PlatformClipboard.copy(link)
+            lastCopyAt = Date()
+            copyError = nil
+            withAnimation { copiedCount += 1 }
+        } catch {
+            Log.error("ContactQRCodeView: invite generation failed: \(error)", category: "Invite")
+            copyError = NSLocalizedString("invite_create_failed", comment: "")
         }
     }
 
@@ -258,7 +335,6 @@ struct ContactQRCodeView: View {
             qrPayloadBytes = binary
             qrImage = QRCodeGenerator.generate(from: textPayload)
             generatedAt = Date()
-            rotateIn = InviteConfig.qrRotateIntervalSeconds
             generationError = nil
             #if DEBUG
             Log.debug(
@@ -295,19 +371,6 @@ struct ContactQRCodeView: View {
         Log.debug("Rotating invite QR after \(Int(elapsed))s", category: "ContactQR")
         regenerateQRCode()
     }
-
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        let clamped = max(0, seconds)
-        let m = Int(clamped) / 60
-        let s = Int(clamped) % 60
-        return String(format: "%d:%02d", m, s)
-    }
-
-    private func updateRotateIn() {
-        guard let generatedAt else { return }
-        rotateIn = max(InviteConfig.qrRotateIntervalSeconds - Date().timeIntervalSince(generatedAt), 0)
-    }
-
 }
 
 #Preview {

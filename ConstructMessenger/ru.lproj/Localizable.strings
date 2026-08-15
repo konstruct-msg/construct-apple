@@ -611,7 +611,6 @@
 
 // MARK: - QR Code
 "code_expired" = "Код устарел";
-"generate_new_code" = "Создать новый код";
 "expires_in" = "Истекает через %@";
 
 // MARK: - Settings & Diagnostics
@@ -819,9 +818,6 @@
 "device_link_scan_hint" = "отсканируй с другой реплики для связи";
 
 // MARK: - Settings rows
-"show_qr_code" = "Показать QR-код";
-"copy_contact_link" = "Скопировать ссылку";
-"link_copied" = "Ссылка скопирована";
 "recovery_not_configured_title" = "Резервный ключ не настроен";
 "developer" = "Разработчик";
 "share" = "Поделиться";
@@ -1141,17 +1137,9 @@
 "msg_status_failed" = "Не отправлено";
 
 /* Multi-invite (one one-time link per person) */
-"invite_several" = "Пригласить нескольких";
-"invite_several_short" = "Нескольким";
-"invite_several_hint_fmt" = "По одной ссылке на человека. Каждая срабатывает один раз и живёт %@.";
-"invite_link_index_fmt" = "Ссылка %d";
-"invite_one_more" = "ещё одна";
 "invite_create_failed" = "Не удалось создать приглашение. Попробуйте ещё раз.";
-"copy_contact_link_hint_fmt" = "Одноразовая ссылка, действует %@";
-"share_action_qr" = "QR";
-"share_action_copy" = "Копировать";
 "share_copied" = "Скопировано";
-"share_once_ttl_fmt" = "Один раз · %@";
-"qr_new_in" = "Новый через %@";
 "qr_new_code" = "Новый код";
-"qr_each_code_once_fmt" = "Каждый код — один человек, до %@.";
+"invite_copy_link" = "Скопировать ссылку";
+"invite_copied_nth_fmt" = "Скопировано · %d";
+"invite_share_rule_fmt" = "Каждое нажатие создаёт новую ссылку, код обновляется сам. Любое приглашение срабатывает один раз и живёт %@.";

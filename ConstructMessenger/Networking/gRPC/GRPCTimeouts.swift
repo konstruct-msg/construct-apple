@@ -55,9 +55,7 @@ enum GRPCTimeouts {
     static let unblockUser: TimeInterval = NetworkTiming.GRPC.Timeouts.unblockUser
 
     // Invites
-    static let generateInvite: TimeInterval = NetworkTiming.GRPC.Timeouts.generateInvite
     static let acceptInvite: TimeInterval = NetworkTiming.GRPC.Timeouts.acceptInvite
-    static let listInvites: TimeInterval = NetworkTiming.GRPC.Timeouts.listInvites
     static let revokeInvite: TimeInterval = NetworkTiming.GRPC.Timeouts.revokeInvite
 
     // Sentinel / trust

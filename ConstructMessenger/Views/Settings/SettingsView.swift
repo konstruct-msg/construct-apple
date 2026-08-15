@@ -16,8 +16,6 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     private var connectionStatus = ConnectionStatusManager.shared
     @State private var showingQRCode = false
-    @State private var showingMultiInvite = false
-    @State private var linkCopied = false
     @State private var showingRecoverySetup = false
     @State private var showingOrientation = false
     @State private var recoveryBannerDismissed = UserDefaults.standard.bool(forKey: "recovery_banner_dismissed")
@@ -29,10 +27,6 @@ struct SettingsView: View {
     @State private var showEmergencyImport = false
     @State private var emergencyPasteText = ""
     @State private var emergencyImportMsg: String?
-    /// Last successful mint. Debounce only — each tap still creates a new jti.
-    @State private var lastCopyAt: Date?
-
-    private let inviteGenerator = InviteGenerator()
 
     /// Content cap on regular width (iPad two-column); unbounded on compact iPhone.
     private var settingsContentMaxWidth: CGFloat {
@@ -119,9 +113,6 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingQRCode) {
                 ContactQRCodeView(userId: viewModel.userId, username: viewModel.username)
-            }
-            .sheet(isPresented: $showingMultiInvite) {
-                MultiInviteView(userId: viewModel.userId)
             }
             .sheet(isPresented: $showingOrientation) {
                 OrientationView(openSynapsOnFinish: false) {
@@ -228,95 +219,25 @@ struct SettingsView: View {
         }
     }
 
+    /// One row, opening one sheet.
+    ///
+    /// This was a [QR][COPY LINK] pair plus a caption linking to a third screen for
+    /// inviting several people. All three did the same thing — mint a v4 one-time invite —
+    /// and the split forced the user to decide which shape they wanted before seeing
+    /// either. `ContactQRCodeView` now shows both and states the rule that made the third
+    /// screen unnecessary.
     private var shareSection: some View {
         CTSectionGroup {
-            HStack(spacing: 0) {
-                shareActionButton(
-                    title: NSLocalizedString("share_action_qr", comment: ""),
-                    accessibilityTitle: NSLocalizedString("show_qr_code", comment: ""),
-                    icon: "qrcode",
-                    emphasized: false
-                ) {
-                    showingQRCode = true
-                }
-                .accessibilityIdentifier(A11y.Settings.showQR)
-
-                Rectangle()
-                    .fill(Color.CT.noise)
-                    .frame(width: SettingsShareLayout.dividerWidth)
-                    .padding(.vertical, SettingsShareLayout.dividerVerticalPadding)
-
-                shareActionButton(
-                    title: linkCopied
-                        ? NSLocalizedString("share_copied", comment: "")
-                        : NSLocalizedString("share_action_copy", comment: ""),
-                    accessibilityTitle: NSLocalizedString("copy_contact_link", comment: ""),
-                    accessibilityHint: String(
-                        format: NSLocalizedString("copy_contact_link_hint_fmt", comment: ""),
-                        InviteConfig.ttlDescription
-                    ),
-                    icon: linkCopied ? "checkmark" : "link",
-                    emphasized: linkCopied
-                ) {
-                    copyContactLink()
-                }
-                .accessibilityIdentifier(A11y.Settings.copyContactLink)
-            }
-            .frame(minHeight: SettingsShareLayout.actionMinHeight)
-
-            HStack(spacing: 0) {
-                Text(
-                    String(
-                        format: NSLocalizedString("share_once_ttl_fmt", comment: ""),
-                        InviteConfig.ttlDescription
-                    )
+            Button { showingQRCode = true } label: {
+                CTSettingsRow(
+                    label: NSLocalizedString("invite", comment: "").uppercased(),
+                    icon: "person.badge.plus",
+                    disclosure: true
                 )
-                .font(CTFont.regular(10))
-                .foregroundStyle(Color.CT.textDim)
-                Spacer(minLength: CTLayout.inlinePad)
-                Button { showingMultiInvite = true } label: {
-                    HStack(spacing: SettingsShareLayout.captionLinkSpacing) {
-                        Text(NSLocalizedString("invite_several_short", comment: "").lowercased())
-                            .font(CTFont.regular(10))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: SettingsShareLayout.captionChevronSize, weight: .semibold))
-                    }
-                    .foregroundStyle(Color.CT.accent)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(NSLocalizedString("invite_several", comment: ""))
-                .accessibilityIdentifier(A11y.Settings.inviteSeveral)
             }
-            .padding(.horizontal, SettingsShareLayout.captionHorizontalPadding)
-            .padding(.vertical, SettingsShareLayout.captionVerticalPadding)
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(A11y.Settings.invite)
         }
-    }
-
-    private func shareActionButton(
-        title: String,
-        accessibilityTitle: String,
-        accessibilityHint: String? = nil,
-        icon: String,
-        emphasized: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: SettingsShareLayout.actionSpacing) {
-                Image(systemName: icon)
-                    .font(.system(size: SettingsShareLayout.actionIconSize, weight: .regular))
-                Text(title.uppercased())
-                    .font(CTFont.regular(11))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .foregroundStyle(emphasized ? Color.CT.accent : Color.CT.text)
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: SettingsShareLayout.actionMinHeight)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityTitle)
-        .accessibilityHint(accessibilityHint ?? "")
     }
 
     private var mainSettingsSection: some View {
@@ -495,35 +416,6 @@ struct SettingsView: View {
         return String(name.prefix(2)).uppercased()
     }
 
-    private func copyContactLink() {
-        if let lastCopyAt, Date().timeIntervalSince(lastCopyAt) < SettingsShareLayout.copyDebounce {
-            return
-        }
-        lastCopyAt = Date()
-        Task { await copyContactLinkAsync() }
-    }
-
-    @MainActor
-    private func copyContactLinkAsync() async {
-        guard authViewModel.currentUserId != nil else { return }
-        guard let deviceId = KeychainManager.shared.loadDeviceID() else { return }
-        let serverHostname = ServerConfig.inviteHost
-        // HTTPS share can land in third-party messenger logs/previews — never embed `un`.
-        // Each tap mints a fresh one-time jti. Clipboard holds only the latest;
-        // minting N links for a group is MultiInviteView, not repeated copy.
-        guard let link = try? inviteGenerator.generateDeepLink(
-            userId: viewModel.userId,
-            deviceId: deviceId,
-            username: nil,
-            server: serverHostname,
-            useHTTPS: true
-        ) else { return }
-        PlatformClipboard.copy(link)
-        withAnimation { linkCopied = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + SettingsShareLayout.copyFlashDuration) {
-            withAnimation { linkCopied = false }
-        }
-    }
 }
 
 #if DEBUG

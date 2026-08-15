@@ -88,27 +88,21 @@ enum A11y {
     enum ContactQR {
         static let code       = "contactQR.code"
         static let regenerate = "contactQR.regenerate"
+        /// The camera-free pairing path: the simulator has no camera, so the QR is
+        /// undrivable, but this button puts the same invite on the pasteboard — which
+        /// `simctl pbpaste` can read and `simctl openurl` can hand to the other sim.
+        /// It moved out of Settings into this sheet on 2026-08-15; `scripts/two_sims.sh`
+        /// documents the extra tap.
+        static let copyLink   = "contactQR.copyLink"
     }
 
     enum Settings {
-        static let showQR = "settings.showQR"
-        /// The camera-free pairing path: the simulator has no camera, so the QR is
-        /// undrivable, but this row puts the same invite on the pasteboard — which
-        /// `simctl pbpaste` can read and `simctl openurl` can hand to the other sim.
-        static let copyContactLink = "settings.copyContactLink"
-        static let inviteSeveral = "settings.inviteSeveral"
+        /// Opens `ContactQRCodeView` — the single invite surface (QR + copy link).
+        static let invite = "settings.invite"
     }
 
     enum Account {
         static let fingerprint = "account.fingerprint"
-    }
-
-    /// One-time invites minted in bulk (one per person).
-    enum MultiInvite {
-        /// Addressed by position, unlike chats and messages — this list only grows at the
-        /// end and never reorders, so the index is stable for the life of the screen.
-        static func link(_ index: Int) -> String { "multiInvite.link.\(index)" }
-        static let oneMore = "multiInvite.oneMore"
     }
 }
 
