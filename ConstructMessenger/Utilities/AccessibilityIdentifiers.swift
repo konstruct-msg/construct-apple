@@ -104,6 +104,15 @@ enum A11y {
     enum Account {
         static let fingerprint = "account.fingerprint"
     }
+
+    /// Invites this device issued and has not yet let expire.
+    enum IssuedInvites {
+        static let row   = "settings.issuedInvites"
+        static let empty = "issuedInvites.empty"
+        /// Addressed by the act's own id, not by position: the list re-sorts as acts
+        /// expire out of it, so an index would name a different row minute to minute.
+        static func act(_ id: UUID) -> String { "issuedInvites.act.\(id.uuidString)" }
+    }
 }
 
 extension DeliveryStatus {

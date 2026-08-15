@@ -117,6 +117,10 @@ struct ContactQRCodeView: View {
             }
         }
         .onReceive(timer) { _ in maybeRotateQR() }
+        // Closes the journal's QR sitting. Without it the next code minted — possibly days
+        // later — would append to an act timestamped by a sheet the user no longer
+        // remembers opening.
+        .onDisappear { InviteJournal.shared.closeQRSession() }
     }
 
     // MARK: - QR block
@@ -284,14 +288,18 @@ struct ContactQRCodeView: View {
         }
         do {
             // HTTPS share can land in third-party messenger logs/previews — never embed `un`.
-            let link = try generator.generateDeepLink(
+            let minted = try generator.generateDeepLink(
                 userId: userId,
                 deviceId: deviceId,
                 username: nil,
                 server: ServerConfig.inviteHost,
                 useHTTPS: true
             )
-            PlatformClipboard.copy(link)
+            PlatformClipboard.copy(minted.artifact)
+            // Recorded only once the link is actually on the clipboard: a jti journalled
+            // for a link the user never received is an entry they cannot account for, and
+            // the screen listing it has no way to tell the difference.
+            InviteJournal.shared.recordCopiedLink(jti: minted.jti, at: minted.issuedAt)
             lastCopyAt = Date()
             copyError = nil
             withAnimation { copiedCount += 1 }
@@ -325,20 +333,23 @@ struct ContactQRCodeView: View {
             // byte-mode for already-printed binary QRs.
             // Metadata minimization (thread 5): do not embed plaintext username in the
             // signed invite by default — identity chrome stays in UI only (`displayName`).
-            let binary = try generator.generateQRBinary(
+            let minted = try generator.generateQRBinary(
                 userId: userId,
                 deviceId: deviceId,
                 username: nil,
                 server: serverHostname
             )
-            let textPayload = InviteBinaryCodec.base64URLEncode(binary)
-            qrPayloadBytes = binary
+            let textPayload = InviteBinaryCodec.base64URLEncode(minted.artifact)
+            qrPayloadBytes = minted.artifact
             qrImage = QRCodeGenerator.generate(from: textPayload)
             generatedAt = Date()
             generationError = nil
+            // Every rotation joins the sitting opened by the first code, so a sheet held up
+            // at a table is one entry in the journal rather than one per 30 seconds.
+            InviteJournal.shared.recordQRCode(jti: minted.jti, at: minted.issuedAt)
             #if DEBUG
             Log.debug(
-                "Invite QR binary=\(binary.count)B textPayload=\(textPayload.count) chars",
+                "Invite QR binary=\(minted.artifact.count)B textPayload=\(textPayload.count) chars",
                 category: "ContactQR"
             )
             #endif

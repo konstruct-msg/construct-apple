@@ -217,9 +217,12 @@ struct QRScannerView: View {
             return
         }
         do {
+            // Not journalled: this mints an invite to feed straight back into the scanner
+            // on this same device, so it is never handed to anyone and listing it under
+            // "issued invites" would be a row the user cannot account for.
             let testCode = try generator.generateDeepLink(userId: userId, deviceId: deviceId, useHTTPS: false)
             Log.info("QRScannerView: Simulating Dynamic Invite scan")
-            handleScannedCode(testCode)
+            handleScannedCode(testCode.artifact)
         } catch {
             Log.info("Failed to generate test invite: \(error)")
         }

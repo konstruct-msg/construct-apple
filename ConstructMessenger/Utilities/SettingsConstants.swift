@@ -143,6 +143,13 @@ enum BackgroundFetchSettingsConfig {
     static let intervalPresets: [Int] = [5, 15, 30, 60]
 }
 
+enum IssuedInvitesLayout {
+    /// Slow on purpose: the screen shows hours remaining, so a faster tick would redraw
+    /// for a number that has not changed.
+    static let refreshIntervalSeconds: TimeInterval = 30
+    static let emptyVerticalPadding: CGFloat = CTLayout.sectionGap
+}
+
 enum SecuritySettingsLayout {
     static let rowHorizontalPadding: CGFloat = CTLayout.edgePad
     static let rowVerticalPadding: CGFloat = CTLayout.edgePad

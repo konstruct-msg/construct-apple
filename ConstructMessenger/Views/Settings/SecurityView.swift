@@ -272,6 +272,22 @@ struct SecurityView: View {
 
                 CTSep()
 
+                // MARK: - Issued invites
+                // Local by construction: the server holds no record of an invite until it
+                // is redeemed or revoked, so the issuing device is the only party that can
+                // list what is outstanding.
+                NavigationLink(destination: IssuedInvitesView()) {
+                    CTSettingsRow(
+                        label: NSLocalizedString("issued_invites", comment: "").uppercased(),
+                        icon: "person.badge.clock",
+                        disclosure: true
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(A11y.IssuedInvites.row)
+
+                CTSep()
+
                 // MARK: - Key Transparency
                 KTStatusSection()
 

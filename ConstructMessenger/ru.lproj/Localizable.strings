@@ -1143,3 +1143,9 @@
 "invite_copy_link" = "Скопировать ссылку";
 "invite_copied_nth_fmt" = "Скопировано · %d";
 "invite_share_rule_fmt" = "Каждое нажатие создаёт новую ссылку, код обновляется сам. Любое приглашение срабатывает один раз и живёт %@.";
+"issued_invites" = "Выданные приглашения";
+"issued_invites_hint_fmt" = "Выдано с этого устройства за последние %@. На другом устройстве список свой.";
+"issued_invites_empty_fmt" = "С этого устройства за последние %@ ничего не выдано.";
+"issued_invite_link" = "Ссылка";
+"issued_invite_qr_fmt" = "QR-код · %d";
+"issued_invite_expires_fmt" = "ещё %@";

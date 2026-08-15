@@ -1132,3 +1132,9 @@
 "invite_copy_link" = "Copy link";
 "invite_copied_nth_fmt" = "Copied · %d";
 "invite_share_rule_fmt" = "Every tap makes a new link, and the code refreshes itself. Any invite works once and expires in %@.";
+"issued_invites" = "Issued invites";
+"issued_invites_hint_fmt" = "Issued from this device in the last %@. Another device keeps its own list.";
+"issued_invites_empty_fmt" = "Nothing issued from this device in the last %@.";
+"issued_invite_link" = "Link";
+"issued_invite_qr_fmt" = "QR code · %d";
+"issued_invite_expires_fmt" = "%@ left";

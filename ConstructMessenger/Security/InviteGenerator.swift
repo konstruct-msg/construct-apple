@@ -129,6 +129,19 @@ class InviteGenerator {
     
     // MARK: - QR Code & Link Generation
 
+    /// A minted invite together with the artifact carrying it.
+    ///
+    /// The `jti` leaves the generator alongside the artifact on purpose. These methods used
+    /// to return the URL or the payload alone, discarding the identifier of the capability
+    /// they had just signed — and a `jti` the issuing device does not keep is a capability
+    /// nobody can revoke, because the server holds no record of an invite until someone
+    /// redeems it. `InviteJournal` is the intended keeper.
+    struct MintedInvite<Artifact> {
+        let jti: String
+        let issuedAt: Date
+        let artifact: Artifact
+    }
+
     /// Generate compact binary payload for QR **byte mode** (no base64).
     ///
     /// Smaller than legacy base64(JSON) deep links; pair with `QRCodeGenerator.generate(from:)`.
@@ -137,14 +150,18 @@ class InviteGenerator {
         deviceId: String,
         username: String? = nil,
         server: String? = nil
-    ) throws -> Data {
+    ) throws -> MintedInvite<Data> {
         let invite = try generate(
             userId: userId,
             deviceId: deviceId,
             username: username,
             serverFQDN: normalizeServer(server ?? defaultServer)
         )
-        return try invite.encodeBinary()
+        return MintedInvite(
+            jti: invite.jti,
+            issuedAt: Date(timeIntervalSince1970: TimeInterval(invite.ts)),
+            artifact: try invite.encodeBinary()
+        )
     }
 
     /// Generate text-safe payload for clipboard / base64-like QR fallbacks.
@@ -154,14 +171,18 @@ class InviteGenerator {
         deviceId: String,
         username: String? = nil,
         server: String? = nil
-    ) throws -> String {
+    ) throws -> MintedInvite<String> {
         let binary = try generateQRBinary(
             userId: userId,
             deviceId: deviceId,
             username: username,
             server: server
         )
-        return InviteBinaryCodec.base64URLEncode(binary)
+        return MintedInvite(
+            jti: binary.jti,
+            issuedAt: binary.issuedAt,
+            artifact: InviteBinaryCodec.base64URLEncode(binary.artifact)
+        )
     }
 
     /// Generate deep link URL for sharing
@@ -176,7 +197,7 @@ class InviteGenerator {
         username: String? = nil,
         server: String? = nil,
         useHTTPS: Bool = false
-    ) throws -> String {
+    ) throws -> MintedInvite<String> {
         let normalizedServer = normalizeServer(server ?? defaultServer)
         let payload = try generateQRPayload(
             userId: userId,
@@ -185,11 +206,10 @@ class InviteGenerator {
             server: normalizedServer
         )
 
-        if useHTTPS {
-            return "https://\(normalizedServer)/add?invite=\(payload)"
-        } else {
-            return "konstruct://add?invite=\(payload)"
-        }
+        let url = useHTTPS
+            ? "https://\(normalizedServer)/add?invite=\(payload.artifact)"
+            : "konstruct://add?invite=\(payload.artifact)"
+        return MintedInvite(jti: payload.jti, issuedAt: payload.issuedAt, artifact: url)
     }
     
     // MARK: - Helper Methods
