@@ -11,7 +11,12 @@
 #   3. Every literal NSLocalizedString("…") key in the Swift sources exists in
 #      en.lproj. A key that does not resolve is displayed to the user verbatim —
 #      that is how `text_size` and `PUSH_NOTIFICATIONS` reached production screens.
-#   4. A translation carries the same format specifiers as its English source, by
+#   4. InfoPlist.strings declares the same keys in every locale, and every
+#      *UsageDescription in Info.plist has an entry there. A permission prompt is
+#      shown at the moment a person is most suspicious of an app; four of the seven
+#      here were English in every locale until 2026-08-16 because nothing compared
+#      the two files.
+#   5. A translation carries the same format specifiers as its English source, by
 #      position and by conversion type. `%@` where the caller passes an Int is not a
 #      wrong word on screen, it is a crash or a garbage pointer read, and it only
 #      happens in the one locale nobody on the team runs.
@@ -108,7 +113,38 @@ if [ -n "$stale" ]; then
     FAIL=1
 fi
 
-# ── 4. format specifiers survive translation ──────────────────────────────────
+# ── 4. InfoPlist.strings parity, and coverage of Info.plist ───────────────────
+info_en="$STRINGS/en.lproj/InfoPlist.strings"
+plist="$STRINGS/Info.plist"
+info_ok=1
+if [ -f "$info_en" ] && [ -f "$plist" ]; then
+    info_en_keys=$(keys_of "$info_en" | sort -u)
+    for L in ru ja fr; do
+        f="$STRINGS/$L.lproj/InfoPlist.strings"
+        if [ ! -f "$f" ]; then
+            echo "✗ $L.lproj has no InfoPlist.strings — its permission prompts are English"
+            FAIL=1; info_ok=0; continue
+        fi
+        d=$(comm -3 <(echo "$info_en_keys") <(keys_of "$f" | sort -u))
+        if [ -n "$d" ]; then
+            echo "✗ $L.lproj/InfoPlist.strings differs from en:"; echo "$d" | sed 's/^/    /'
+            FAIL=1; info_ok=0
+        fi
+    done
+    # A usage description in Info.plist with no entry here is shown in English.
+    plist_keys=$(grep -oE '<key>NS[A-Za-z]+UsageDescription</key>' "$plist" \
+                 | sed -E 's|</?key>||g' | sort -u)
+    uncovered=$(comm -23 <(echo "$plist_keys") <(echo "$info_en_keys"))
+    if [ -n "$uncovered" ]; then
+        echo "✗ Info.plist usage descriptions with no InfoPlist.strings entry — English everywhere:"
+        echo "$uncovered" | sed 's/^/    /'
+        FAIL=1; info_ok=0
+    fi
+    [ "$info_ok" -eq 1 ] && \
+        echo "✓ InfoPlist.strings — $(echo "$info_en_keys" | wc -l | tr -d ' ') keys in each locale, every Info.plist prompt covered"
+fi
+
+# ── 5. format specifiers survive translation ──────────────────────────────────
 #
 # Compared by position and conversion type, not as raw text: Japanese reorders
 # arguments with %1$d / %2$d on purpose, and that is correct, not a defect.

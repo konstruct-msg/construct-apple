@@ -1,7 +1,13 @@
-/* Japanese InfoPlist localization */
+/* Japanese InfoPlist localization — permission prompts and the home-screen name.
+   Keys must match ConstructMessenger/Info.plist exactly; a key present there and
+   absent here falls back to English, which is what happened to four of these
+   seven prompts until 2026-08-16. */
 
-CFBundleDisplayName = "共創";
-
-NSMicrophoneUsageDescription = "共創は、ボイスメッセージの録音と暗号化通話のためにマイクを使用します。";
-NSUserNotificationsUsageDescription = "共創は新着メッセージの通知をお送りします。";
-NSLocalNetworkUsageDescription = "WiFiを通じて近くのデバイスにバックアップを直接転送するために使用します。";
+"CFBundleDisplayName" = "コンストラクト";
+"NSCameraUsageDescription" = "コンストラクトは、招待QRコードの読み取りと、メッセージ用の写真・動画の撮影にカメラを使用します。";
+"NSPhotoLibraryUsageDescription" = "メッセージに写真や動画を添付できるよう、写真ライブラリへのアクセスが必要です。";
+"NSPhotoLibraryAddUsageDescription" = "チャットから保存を選んだときに、写真や動画をライブラリに保存します。";
+"NSMicrophoneUsageDescription" = "コンストラクトは、ボイスメッセージの録音と暗号化通話のためにマイクを使用します。";
+"NSSpeechRecognitionUsageDescription" = "Appleの音声認識を使って、ボイスメッセージを端末内で文字起こしするために使用します。音声が端末を離れることはありません。";
+"NSUserNotificationsUsageDescription" = "コンストラクトは新着メッセージの通知をお送りします。";
+"NSLocalNetworkUsageDescription" = "Wi-Fiを通じて近くのデバイスにバックアップを直接転送するために使用します。";

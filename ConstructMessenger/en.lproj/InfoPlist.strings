@@ -1,7 +1,13 @@
-/* English InfoPlist localization */
+/* English InfoPlist localization — permission prompts and the home-screen name.
+   Keys must match ConstructMessenger/Info.plist exactly; a key present there and
+   absent here falls back to English, which is what happened to four of these
+   seven prompts until 2026-08-16. */
 
-CFBundleDisplayName = "Construct";
-
-NSMicrophoneUsageDescription = "Construct uses the microphone to record voice messages and make encrypted calls.";
-NSUserNotificationsUsageDescription = "Construct sends you notifications for new messages.";
-NSLocalNetworkUsageDescription = "Used to transfer your backup directly to a nearby device over WiFi.";
+"CFBundleDisplayName" = "Konstruct";
+"NSCameraUsageDescription" = "Konstruct uses the camera to scan invite QR codes and to capture photos and videos for your messages.";
+"NSPhotoLibraryUsageDescription" = "Konstruct needs access to your photo library so you can attach photos and videos to messages.";
+"NSPhotoLibraryAddUsageDescription" = "Konstruct saves photos and videos to your library when you choose to save them from a chat.";
+"NSMicrophoneUsageDescription" = "Konstruct uses the microphone to record voice messages and make encrypted calls.";
+"NSSpeechRecognitionUsageDescription" = "To transcribe your voice messages into text on-device using Apple’s Speech Recognition. Audio never leaves your device.";
+"NSUserNotificationsUsageDescription" = "Konstruct sends you notifications for new messages.";
+"NSLocalNetworkUsageDescription" = "Used to transfer your backup directly to a nearby device over WiFi.";

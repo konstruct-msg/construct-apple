@@ -1,0 +1,13 @@
+/* Russian InfoPlist localization — permission prompts and the home-screen name.
+   Keys must match ConstructMessenger/Info.plist exactly; a key present there and
+   absent here falls back to English, which is what happened to four of these
+   seven prompts until 2026-08-16. */
+
+"CFBundleDisplayName" = "Конструкт";
+"NSCameraUsageDescription" = "Конструкт использует камеру, чтобы сканировать QR-коды приглашений и снимать фото и видео для сообщений.";
+"NSPhotoLibraryUsageDescription" = "Конструкту нужен доступ к медиатеке, чтобы вы могли прикреплять фото и видео к сообщениям.";
+"NSPhotoLibraryAddUsageDescription" = "Конструкт сохраняет фото и видео в медиатеку, когда вы сами выбираете сохранить их из чата.";
+"NSMicrophoneUsageDescription" = "Конструкт использует микрофон для записи голосовых сообщений и зашифрованных звонков.";
+"NSSpeechRecognitionUsageDescription" = "Чтобы расшифровывать голосовые сообщения в текст прямо на устройстве средствами Apple. Звук не покидает устройство.";
+"NSUserNotificationsUsageDescription" = "Конструкт присылает уведомления о новых сообщениях.";
+"NSLocalNetworkUsageDescription" = "Используется, чтобы передать резервную копию напрямую на ближайшее устройство по Wi-Fi.";
