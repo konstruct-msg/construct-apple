@@ -75,7 +75,7 @@
 "camera_access_required" = "Требуется доступ к камере";
 "open_settings" = "Открыть настройки";
 "allow_camera_access_for_qr" = "Разрешите доступ к камере в настройках, чтобы сканировать QR-коды";
-"invalid_qr_code_construct" = "Неверный QR-код. Пожалуйста, отсканируйте контактный код Konstruct.";
+"invalid_qr_code_construct" = "Неверный QR-код. Пожалуйста, отсканируйте контактный код Конструкта.";
 
 // MARK: - Settings Main
 "user" = "Пользователь";
@@ -185,7 +185,7 @@
 "denied" = "Запрещено";
 
 // MARK: - Background Fetch & Local Notifications
-"construct_app_name" = "Construct";
+"construct_app_name" = "Конструкт";
 "construct_new_message" = "Новое сообщение";
 "construct_new_messages" = "Новые сообщения";
 "construct_new_messages_count" = "У вас %d новое(ых) сообщение(ий)";
@@ -288,9 +288,9 @@
 "onboarding_existing_title" = "Существующая идентичность";
 "onboarding_existing_intro" = "Выберите, как перенести её на это устройство.";
 "onboarding_restore_title" = "Восстановить по фразе";
-"onboarding_restore_subtitle" = "Нет другого устройства с Konstruct. Используйте вашу фразу из 12 слов.";
+"onboarding_restore_subtitle" = "Нет другого устройства с Конструктом. Используйте вашу фразу из 12 слов.";
 "onboarding_link_title" = "Привязать это устройство";
-"onboarding_link_subtitle" = "Konstruct ещё есть на другом телефоне или компьютере.";
+"onboarding_link_subtitle" = "Конструкт ещё есть на другом телефоне или компьютере.";
 "onboarding_restore" = "Восстановить из ключа восстановления";
 "onboarding_recovery_coming_soon" = "Восстановление скоро будет доступно";
 "onboarding_network_settings" = "Настройки сети";
@@ -362,7 +362,7 @@
 
 // Invite / contact links
 "invite_error_invalid_url" = "Указан некорректный URL.";
-"invite_error_unsupported_link" = "Это не поддерживаемая ссылка-приглашение Construct.";
+"invite_error_unsupported_link" = "Это не поддерживаемая ссылка-приглашение Конструкта.";
 "invite_error_expired" = "Срок действия приглашения истёк. Попросите новое.";
 "invite_error_invalid_fmt" = "Недействительное приглашение: %@";
 "invite_error_already_used" = "Это приглашение уже использовано. Попросите новое.";
@@ -502,7 +502,7 @@
 
 // Защита от блокировок (продуктовый soft-control — без VEIL / адресов релеев)
 "censorship_protection" = "Защита от блокировок";
-"censorship_protection_footer_off" = "Выкл. Подключение напрямую к Construct.";
+"censorship_protection_footer_off" = "Выкл. Подключение напрямую к Конструкту.";
 "censorship_protection_footer_auto" = "Включается автоматически при обнаружении блокировки. Настройка идёт в фоне.";
 "censorship_protection_footer_on" = "Всегда обходит сетевые блокировки. Настройка идёт в фоне.";
 
@@ -624,10 +624,10 @@
 "diagnostics_apns_token" = "APNs-токен";
 "diagnostics_apns_token_missing" = "отсутствует";
 "diagnostics_apns_token_received_format" = "получен (%@…)";
-"diagnostics_registered_with_server" = "Зарегистрирован в Construct";
+"diagnostics_registered_with_server" = "Зарегистрирован в Конструкте";
 "diagnostics_yes" = "да";
 "diagnostics_not_registered_with_server" = "нет — уведомления не будут приходить";
-"diagnostics_server_token_warning" = "Токен не зарегистрирован в Construct. Вернитесь в чаты — повторная регистрация выполнится автоматически при возврате приложения на передний план.";
+"diagnostics_server_token_warning" = "Токен не зарегистрирован в Конструкте. Вернитесь в чаты — повторная регистрация выполнится автоматически при возврате приложения на передний план.";
 "diagnostics_log_collection" = "Сбор логов";
 "diagnostics_status_active" = "Активен";
 "diagnostics_status_off" = "Выкл";
@@ -652,7 +652,7 @@
 "onboarding_link_device" = "Привязать существующую идентичность";
 "device_link_scan_title" = "Сканировать для привязки";
 "link_method_title" = "Привязать устройство";
-"link_method_intro" = "Добавьте это устройство к вашей существующей идентичности Konstruct. Выберите способ по тому, какой камерой удобнее навести.";
+"link_method_intro" = "Добавьте это устройство к вашей существующей идентичности в Конструкте. Выберите способ по тому, какой камерой удобнее навести.";
 "link_method_scan_title" = "Сканировать код";
 "link_method_scan_subtitle" = "Другое устройство показывает QR-код";
 "link_method_show_title" = "Показать код";
@@ -677,12 +677,12 @@
 // MARK: - Device Join Request (Desktop onboarding)
 "device_link_request_title" = "Привязать к существующей идентичности";
 "device_link_request_instruction" = "Отсканируйте с iPhone";
-"device_link_request_steps" = "Откройте Construct на iPhone → Настройки → Устройства → нажмите «Привязать новое устройство» — или просто отсканируйте этот код, если Construct уже открыт.";
+"device_link_request_steps" = "Откройте Конструкт на iPhone → Настройки → Устройства → нажмите «Привязать новое устройство» — или просто отсканируйте этот код, если Конструкт уже открыт.";
 "device_link_waiting_approval" = "Ожидание подтверждения на iPhone…";
-"device_link_scan_on_phone" = "Отсканируйте этот код через Construct на iPhone";
+"device_link_scan_on_phone" = "Отсканируйте этот код через Конструкт на iPhone";
 "device_link_request_timeout" = "Время ожидания истекло — попробуйте снова";
 "device_link_feature_unavailable" = "Функция требует обновления сервера. Попробуйте позже.";
-"device_link_invalid_qr" = "Неверный QR-код — убедитесь, что сканируете код Construct.";
+"device_link_invalid_qr" = "Неверный QR-код — убедитесь, что сканируете код Конструкта.";
 "device_link_approve_title" = "Привязать «%@» к вашей идентичности?";
 "device_link_approve_title_fallback" = "Привязать новое устройство к вашей идентичности?";
 "device_link_approve" = "Привязать устройство";
@@ -869,7 +869,7 @@
 "username_not_set" = "username не задан";
 "searchable_indicator" = "в поиске";
 "searchable_indicator_off" = "не в поиске";
-"synapses_remote_result_header" = "найдено в construct";
+"synapses_remote_result_header" = "найдено в Конструкте";
 "synapses_searching" = "поиск...";
 "synapses_not_found" = "не найдено";
 
@@ -1007,7 +1007,7 @@
 "backup_restore_success_message" = "Резервная копия проверена и подготовлена. Закройте и откройте приложение снова, чтобы завершить восстановление.";
 
 "backup_error_invalid_mnemonic" = "Неверная фраза восстановления. Проверьте все 12 слов и попробуйте снова.";
-"backup_error_invalid_file" = "Это не корректная резервная копия Construct, или фраза восстановления неверна.";
+"backup_error_invalid_file" = "Это не корректная резервная копия Конструкта, или фраза восстановления неверна.";
 
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "отправить на соседнее устройство";
