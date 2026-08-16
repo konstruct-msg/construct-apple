@@ -109,6 +109,14 @@ sync problem first: one theme file, shared, not copied.
   2026-08-16: a reader had no way to connect it to the Konstruct in the App Store, and spoken
   aloud "kyōsō" is an exact homophone of 競争, "competition". The one deliberate exception is
   `onboarding_tagline`, where "identity is a construct" is the common noun and the pun.
+- **App Store listing copy lives in `fastlane/metadata/<locale>/`**, not only in App Store
+  Connect, so a change to it has a diff and a reviewer. Four store locales: `en-US`, `ru`, `ja`,
+  `fr-FR`. `scripts/check_appstore_metadata.sh` enforces Apple's field limits **in characters,
+  not bytes** — a Japanese subtitle is 28 characters and 84 bytes — plus locale parity and the
+  keyword formatting that wastes budget. Fastlane itself is not a dependency; the layout is
+  borrowed so `deliver` can consume it later. `fastlane/metadata/README.md` states what must
+  never go in the copy: a claim we cannot show today, protocol jargon, or any number that also
+  lives in code.
 - Nav titles: `CTNavBar` applies `.uppercased()` + `.tracking(4)` — pass the raw localized string.
 - UI copy is plain language ("people / chats / device", never "node / stream / replica"). Code
   identifiers keep domain names — no renames.

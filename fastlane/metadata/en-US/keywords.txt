@@ -1,0 +1,1 @@
+encrypted,messenger,e2ee,secure messaging,anonymous,no sim,qr code,end to end,confidential

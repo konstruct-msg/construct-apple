@@ -311,7 +311,7 @@
 "orientation_page2_body" = "Чтобы добавить собеседника, покажите QR-код или поделитесь ссылкой. Поиск по @псевдониму работает только если он включён в настройках безопасности.";
 "orientation_page2_caption" = "Никто не напишет вам без вашего согласия.";
 "orientation_page2_path_qr_title" = "QR / ссылка";
-"orientation_page2_path_qr_sub" = "Показать или сканировать. Действует 5 минут.";
+"orientation_page2_path_qr_sub" = "Показать или сканировать. Каждый код срабатывает один раз.";
 "orientation_page2_path_search_title" = "Поиск";
 "orientation_page2_path_search_sub" = "Только если включили в настройсках безопасности.";
 "orientation_page3_title" = "Три места";

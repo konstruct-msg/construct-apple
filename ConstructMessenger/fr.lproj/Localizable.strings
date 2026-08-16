@@ -575,7 +575,7 @@
 "orientation_page2_body" = "Pour ajouter quelqu’un, montrez un code QR ou partagez un lien. La recherche par @alias ne marche que si la personne l’a activée dans Sécurité — désactivée par défaut.";
 "orientation_page2_caption" = "Personne ne peut vous écrire sans votre accord.";
 "orientation_page2_path_qr_title" = "QR / lien";
-"orientation_page2_path_qr_sub" = "Montrez ou scannez. Valable 5 minutes.";
+"orientation_page2_path_qr_sub" = "Montrez ou scannez. Chaque code ne sert qu’une fois.";
 "orientation_page2_path_search_title" = "Recherche";
 "orientation_page2_path_search_sub" = "Seulement si la personne l’a activée dans Sécurité.";
 "orientation_page3_title" = "Trois endroits";

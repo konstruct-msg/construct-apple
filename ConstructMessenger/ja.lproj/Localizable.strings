@@ -332,7 +332,7 @@
 "orientation_page2_body" = "相手を追加するには QR を見せるかリンクを共有します。@エイリアス検索は、相手がセキュリティでオンにした場合だけ（既定はオフ）。";
 "orientation_page2_caption" = "同意なしにメッセージは届きません。";
 "orientation_page2_path_qr_title" = "QR / リンク";
-"orientation_page2_path_qr_sub" = "見せる・スキャン。有効 5 分。";
+"orientation_page2_path_qr_sub" = "見せる・スキャン。どのコードも一度きり。";
 "orientation_page2_path_search_title" = "検索";
 "orientation_page2_path_search_sub" = "セキュリティでオンにした相手のみ。";
 "orientation_page3_title" = "3 つの場所";

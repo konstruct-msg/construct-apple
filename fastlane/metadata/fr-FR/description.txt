@@ -1,0 +1,40 @@
+Des conversations qui restent les vôtres.
+
+Pas de numéro de téléphone. Pas d’e-mail. Pas de publicité ni de fil d’actualité. Vous créez une identité sur cet appareil et vous décidez qui peut vous joindre.
+
+
+POURQUOI C’EST PRIVÉ
+
+• Chiffrement de bout en bout. Le texte et les médias ne sont déchiffrés que sur votre appareil et sur celui de votre correspondant. Le serveur manipule un contenant scellé, pas son contenu.
+
+• Les clés restent sur l’appareil. Elles ne partent pas vers un compte dans le cloud et ne sont liées à aucune carte SIM.
+
+• Personne ne vous écrit sans y avoir été invité. Une nouvelle personne arrive par un code QR, un lien, ou une recherche par @alias — et cette recherche est désactivée tant que vous ne l’activez pas.
+
+• L’accès vous appartient. Votre phrase de récupération et vos appareils liés sont à vous, pas à un opérateur.
+
+
+POURQUOI C’EST LÉGER
+
+• Uniquement de la messagerie. Pas de mini-applications, pas de boutique, pas de jeux — tout ce qui alourdit une messagerie et vide une batterie.
+
+• Un client léger. La cryptographie est du code natif écrit pour la vitesse, pas un cadriciel écrit pour afficher des publicités.
+
+• Trois endroits. Les chats, les personnes, les réglages. Rien d’autre à apprendre.
+
+
+COMMENT ÇA MARCHE
+
+1. Vous créez une identité sur votre téléphone. Pas une inscription par numéro.
+2. Vous montrez un code QR ou vous partagez un lien.
+3. Vous écrivez.
+
+En option : un @alias public (désactivé par défaut), plusieurs appareils sur une même identité, une récupération par phrase de 12 mots.
+
+
+POUR QUI
+
+Pour celles et ceux qui veulent un endroit où parler, pas un réseau social de plus. Pour celles et ceux qui préfèrent ne pas confier un numéro et un historique de conversations à un tiers. Pour celles et ceux qui préfèrent un outil simple à une usine à gaz.
+
+
+Vos messages sont les vôtres. Identity is a construct.

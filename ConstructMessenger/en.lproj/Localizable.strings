@@ -351,7 +351,7 @@
 "orientation_page2_body" = "To add someone, show a QR code or share a link. Search by @alias only works if they turned it on in Security — off by default.";
 "orientation_page2_caption" = "Nobody can message you without your consent.";
 "orientation_page2_path_qr_title" = "QR / link";
-"orientation_page2_path_qr_sub" = "Show or scan. Valid for 5 minutes.";
+"orientation_page2_path_qr_sub" = "Show or scan. Each code works once.";
 "orientation_page2_path_search_title" = "Search";
 "orientation_page2_path_search_sub" = "Only if they enabled it in Security.";
 "orientation_page3_title" = "Three places";
