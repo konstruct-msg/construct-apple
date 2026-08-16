@@ -24,7 +24,6 @@ struct SecurityView: View {
     @State private var showingDiscoverableConfirm = false
     @State private var showingLockDelayPicker = false
     @State private var lockdown = LockdownManager.shared
-    @State private var tokenWallet = TokenWalletService.shared
 
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
@@ -225,50 +224,46 @@ struct SecurityView: View {
                 CTSep()
 
                 // MARK: - Stealth
-                // stealth-sealed-sender-v2 Phase 4: always on (StealthPolicy.isEnabled),
-                // no user-facing toggle. Reflects StealthPolicy.shared.isEnabled directly
-                // so a DEBUG developer override (Diagnostics → Developer) shows correctly.
+                //
+                // A statement, not a setting. stealth-sealed-sender-v2 Phase 4 made this
+                // always on with no toggle, and the row kept the shape of the switch it used
+                // to be — a title reading "stealth mode" beside a state nobody chose.
+                //
+                // The token wallet balance was removed from here on 2026-08-16. It answered
+                // a question the user cannot act on: an empty wallet costs them nothing,
+                // because `StealthSenderService` seals and sends regardless ("anti-abuse
+                // degraded, anonymity intact — the invariant we deliberately preserve").
+                // Whether issuance is keeping up is an operator's question, and the operator's
+                // view of it already exists in Diagnostics, with the two numbers that make it
+                // legible — token-less sends and the last issuance outcome — which this row
+                // never had. If server-side enforce ever lands, an unsendable message must
+                // say so on the message, not as a counter three screens away.
+                //
+                // Reads `StealthPolicy.shared.isEnabled` rather than assuming true, so the
+                // DEBUG developer override shows honestly.
+                let stealthOn = StealthPolicy.shared.isEnabled
                 HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                    CTRowIcon(sf: "eye.slash.fill", color: StealthPolicy.shared.isEnabled ? Color.CT.accent : Color.CT.textDim)
-                    VStack(alignment: .leading, spacing: SecuritySettingsLayout.lockStatusSpacing) {
-                        Text(LocalizedStringKey("stealth_toggle_title"))
-                            .font(CTFont.regular(13))
-                            .foregroundStyle(Color.CT.text)
-                        Text(LocalizedStringKey(StealthPolicy.shared.isEnabled ? "stealth_toggle_active_hint" : "stealth_hint"))
-                            .font(CTFont.regular(11))
-                            .foregroundStyle(StealthPolicy.shared.isEnabled ? Color.CT.accent.opacity(0.8) : Color.CT.textDim)
-                    }
+                    CTRowIcon(sf: "eye.slash.fill", color: stealthOn ? Color.CT.accent : Color.CT.danger)
+                    Text(LocalizedStringKey("stealth_title"))
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.text)
                     Spacer()
+                    CTStatusBadge(status: stealthOn ? .on : .error, size: 11)
                 }
                 .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
+
+                // The off branch used to show the on copy — it described the protection as
+                // active while it was overridden away. Reachable only in DEBUG, and still a
+                // sentence that was false on screen.
+                securityHintText(
+                    LocalizedStringKey(stealthOn ? "stealth_always_on_hint" : "stealth_off_hint"),
+                    color: stealthOn ? Color.CT.textDim : Color.CT.danger,
+                    top: SecuritySettingsLayout.hintCompactTopPadding
+                )
 
                 // (Scope selector removed 2026-07-15: per-message is the only token model —
                 // per-stream is incompatible with server-side enforce. See
                 // decisions/sealed-sender-anti-abuse-economics.md.)
-
-                Rectangle()
-                    .fill(Color.CT.noise.opacity(SecuritySettingsLayout.separatorOpacity))
-                    .frame(height: 1)
-                    .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
-
-                // Token wallet balance
-                HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                    CTRowIcon("[T]", color: tokenWallet.balance > 0 ? Color.CT.accent : Color.CT.textDim)
-                    Text(LocalizedStringKey("stealth_token_wallet"))
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.textDim)
-                    Spacer()
-                    Text(String(format: NSLocalizedString("stealth_token_count", comment: ""), tokenWallet.balance))
-                        .font(CTFont.regular(12))
-                        .foregroundStyle(tokenWallet.balance > 0 ? Color.CT.accent : Color.CT.textDim.opacity(0.6))
-                }
-                .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
-
-                securityHintText(
-                    LocalizedStringKey("stealth_token_wallet_hint"),
-                    color: Color.CT.textDim.opacity(SecuritySettingsLayout.hintDisabledOpacity),
-                    top: SecuritySettingsLayout.hintCompactTopPadding
-                )
 
                 CTSep()
 

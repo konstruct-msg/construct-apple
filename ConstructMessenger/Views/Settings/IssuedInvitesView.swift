@@ -98,6 +98,9 @@ struct IssuedInvitesView: View {
             }
         }
         .ctBackground()
+        // Every pushed settings screen hides the system bar and draws its own CTNavBar;
+        // without this the two stack up and the screen shows two back buttons.
+        .toolbar(.hidden, for: .navigationBar)
         .onReceive(tick) { _ in now = Date() }
         .onAppear { now = Date() }
         .confirmationDialog(
