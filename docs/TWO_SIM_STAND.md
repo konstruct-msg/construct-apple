@@ -47,6 +47,28 @@ failure looks like a broken app. `up` forces `en_US`, but iOS restores the previ
 on app relaunch, so always read the field back. A first burst into an empty field also loses
 everything after the first character — type with `replaceExisting`, and expect to repeat it.
 
+## Driving the stand does not need the MCP server
+
+Taps and typing normally come from XcodeBuildMCP. When it is not connected, the stand is not
+stuck at looking: the `axe` binary that server drives ships inside its own brew package and
+takes the same arguments directly.
+
+```bash
+AXE=/opt/homebrew/Cellar/xcodebuildmcp/*/libexec/bundled/axe
+"$AXE" describe-ui --udid "$UDID_A"                 # a11y tree as JSON
+"$AXE" tap --id contactQR.copyLink --udid "$UDID_A" # by identifier, as below
+```
+
+`describe-ui` lags a navigation by a second or two, and a pushed destination appears *after* the
+presenting screen's subtree rather than replacing it — so a `head -30` of the tree reads as "the
+tap did nothing" when the screen has in fact changed. Re-read, and screenshot before concluding.
+
+The app writes its own log to `Documents/Logs/current.log` inside the data container
+(`xcrun simctl get_app_container <udid> <bundle> data`). That file, not `log stream`, is where
+`[LinkParser]`, `[InviteVerifier]` and `[Retry]` live — and `[Retry]` prints the raw error, which
+is how a gRPC status gets read without rebuilding to add a log line. The container path changes
+on reinstall; resolve it every time rather than caching it.
+
 ## Address the UI by identifier, never by pixels or position
 
 a11y-tree reads are cheap and stable; pixel comparison is neither. New UI on a happy path gets an
@@ -69,6 +91,12 @@ Each cost a live run to learn.
    to the whole bubble row, so it stamped the delivery-status icon too and `.status.delivered`
    never existed. Scope an identifier to the leaf it names, never to a row that also holds
    independently-addressed children.
+
+   This recurred on 2026-08-16 in `IssuedInvitesView`, written after the rule was recorded here:
+   the act identifier on the row stamped the revoke button, and `A11y.IssuedInvites.revoke(id)`
+   matched nothing. Writing the rule down did not prevent it, so **check it** — after adding a
+   row with an addressable control inside, grep the identifier out of a live `describe-ui`. A
+   declared identifier that is not in the tree is the normal outcome, not the surprising one.
 
 2. **An unlabeled `Image` is dropped from the accessibility tree, identifier and all.** The status
    icons carried an identifier for a whole session and matched nothing. The `accessibilityLabel`
