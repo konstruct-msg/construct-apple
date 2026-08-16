@@ -153,6 +153,12 @@ struct IssuedInvitesView: View {
                     .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.textDim)
             }
+            // Scoped to the label, not to the row. An identifier on a container overwrites
+            // its descendants': while this sat on the whole HStack it stamped the revoke
+            // button too, and `A11y.IssuedInvites.revoke(id)` matched nothing on a live
+            // simulator — the one control a scenario needs to reach was unaddressable.
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier(A11y.IssuedInvites.act(act.id))
 
             Spacer(minLength: CTLayout.inlinePad)
 
@@ -162,7 +168,6 @@ struct IssuedInvitesView: View {
         }
         .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
         .padding(.vertical, SecuritySettingsLayout.compactRowVerticalPadding)
-        .accessibilityIdentifier(A11y.IssuedInvites.act(act.id))
     }
 
     @ViewBuilder

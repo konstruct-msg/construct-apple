@@ -128,7 +128,11 @@ struct LinkParser {
                 try await InviteServiceClient.shared.acceptInvite(invite: acceptRequest)
             }
         } catch {
-            throw ContactLinkError.verificationFailed(error)
+            // The server's verdict, not the bridged NSError description. `AcceptInvite` is
+            // where a revoked link is refused, and until this classification existed that
+            // refusal reached the user as "(GRPCCore.RPCError error 1.)" — a digit that is
+            // the same for every error Swift ever bridges.
+            throw mapAcceptError(InviteAcceptClassification.outcome(from: error))
         }
 
         let userId = response.userID.isEmpty ? invite.uuid : response.userID
@@ -185,6 +189,35 @@ struct LinkParser {
             token.ttl = ttl
         }
         return token
+    }
+
+    /// The server's `AcceptInvite` verdict as the error the UI already knows how to say.
+    ///
+    /// `.alreadyUsed` reuses the same sentence as a locally-detected replay on purpose:
+    /// from the redeemer's side a burned `jti` is a burned `jti`, and whether this device
+    /// or the server noticed is not their business.
+    static func mapAcceptError(_ outcome: InviteAcceptOutcome) -> ContactLinkError {
+        switch outcome {
+        case .alreadyUsed:
+            return .inviteAlreadyUsed
+        case .expired:
+            return .inviteExpired
+        case .badSignature:
+            return .inviteInvalid(NSLocalizedString("invite_error_malformed", comment: ""))
+        case .refused(let detail):
+            return .inviteInvalid(detail)
+        case .unreachable(let detail):
+            // Never `.inviteInvalid` — nothing was learned about the invite, and telling
+            // someone to ask for a new link when the old one is fine wastes both sides.
+            return .verificationFailed(InviteTransportFailure(detail: detail))
+        }
+    }
+
+    /// Carries a server/transport detail through `ContactLinkError.verificationFailed`,
+    /// whose message is built from `localizedDescription`.
+    struct InviteTransportFailure: LocalizedError {
+        let detail: String
+        var errorDescription: String? { detail }
     }
 
     private static func mapVerificationError(_ error: InviteVerificationError) -> ContactLinkError {
