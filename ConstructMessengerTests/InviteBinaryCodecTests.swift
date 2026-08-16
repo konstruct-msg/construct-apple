@@ -22,7 +22,8 @@ final class InviteBinaryCodecTests: XCTestCase {
             ephKey: eph,
             ts: 1_738_156_800,
             sig: sig,
-            un: un
+            un: un,
+            ttl: nil
         )
     }
 
@@ -37,7 +38,8 @@ final class InviteBinaryCodecTests: XCTestCase {
             ephKey: "",
             ts: 1_738_156_800,
             sig: sig,
-            un: un
+            un: un,
+            ttl: nil
         )
     }
 
@@ -49,9 +51,9 @@ final class InviteBinaryCodecTests: XCTestCase {
         XCTAssertEqual(decoded.v, 4)
         XCTAssertEqual(decoded.ephKey, "")
         XCTAssertEqual(decoded.un, "alice")
-        XCTAssertEqual(decoded.canonicalString(), original.canonicalString())
+        XCTAssertEqual(try decoded.canonicalString(), try original.canonicalString())
         XCTAssertEqual(
-            decoded.canonicalString(),
+            try decoded.canonicalString(),
             "4|550e8400-e29b-41d4-a716-446655440000|14f28d31-1234-4abc-8def-0123456789ab|4e1f9dbe209c1bedb33ee32dda5a28f0|konstruct.cc|1738156800|alice"
         )
     }
@@ -130,7 +132,8 @@ final class InviteBinaryCodecTests: XCTestCase {
             ephKey: Data(repeating: 1, count: 32).base64EncodedString(),
             ts: 1_738_156_800,
             sig: sig,
-            un: nil
+            un: nil,
+            ttl: nil
         )
         XCTAssertThrowsError(try bad.validate())
     }

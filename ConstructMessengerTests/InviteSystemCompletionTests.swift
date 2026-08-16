@@ -46,7 +46,8 @@ final class InviteSystemCompletionTests: XCTestCase {
             ephKey: "",
             ts: ts,
             sig: validSig(),
-            un: un
+            un: un,
+            ttl: nil
         )
     }
 
@@ -60,7 +61,8 @@ final class InviteSystemCompletionTests: XCTestCase {
             ephKey: validEph(),
             ts: 1_738_156_800,
             sig: validSig(),
-            un: "alice"
+            un: "alice",
+            ttl: nil
         )
     }
 
@@ -156,8 +158,8 @@ final class InviteSystemCompletionTests: XCTestCase {
 
     // MARK: - Canonical string (signing surface)
 
-    func testCanonicalV4HasNoEphKey() {
-        let c = sampleV4(un: "bob").canonicalString()
+    func testCanonicalV4HasNoEphKey() throws {
+        let c = try sampleV4(un: "bob").canonicalString()
         XCTAssertEqual(
             c,
             "4|550e8400-e29b-41d4-a716-446655440000|14f28d31-1234-4abc-8def-0123456789ab|4e1f9dbe209c1bedb33ee32dda5a28f0|konstruct.cc|1738156800|bob"
@@ -165,15 +167,15 @@ final class InviteSystemCompletionTests: XCTestCase {
         XCTAssertFalse(c.contains(validEph().prefix(8)))
     }
 
-    func testCanonicalV3StillHasEphKey() {
-        let c = sampleV3().canonicalString()
+    func testCanonicalV3StillHasEphKey() throws {
+        let c = try sampleV3().canonicalString()
         XCTAssertTrue(c.contains(validEph()))
         XCTAssertTrue(c.hasPrefix("3|"))
         XCTAssertTrue(c.hasSuffix("|alice"))
     }
 
-    func testCanonicalV4EmptyUn() {
-        let c = sampleV4(un: nil).canonicalString()
+    func testCanonicalV4EmptyUn() throws {
+        let c = try sampleV4(un: nil).canonicalString()
         XCTAssertTrue(c.hasSuffix("|"))
     }
 
@@ -190,7 +192,8 @@ final class InviteSystemCompletionTests: XCTestCase {
             ephKey: validEph(),
             ts: base.ts,
             sig: validSig(),
-            un: nil
+            un: nil,
+            ttl: nil
         )
         XCTAssertThrowsError(try invite.validate())
     }
@@ -205,7 +208,8 @@ final class InviteSystemCompletionTests: XCTestCase {
             ephKey: "",
             ts: 1_738_156_800,
             sig: validSig(),
-            un: nil
+            un: nil,
+            ttl: nil
         )
         XCTAssertThrowsError(try invite.validate())
     }
@@ -227,7 +231,7 @@ final class InviteSystemCompletionTests: XCTestCase {
         XCTAssertFalse(wire.contains("/"))
         XCTAssertFalse(wire.contains("="))
         let decoded = try InviteObject.fromBase64(wire)
-        XCTAssertEqual(decoded.canonicalString(), original.canonicalString())
+        XCTAssertEqual(try decoded.canonicalString(), try original.canonicalString())
     }
 
     func testLegacyJSONStillDecodable() throws {

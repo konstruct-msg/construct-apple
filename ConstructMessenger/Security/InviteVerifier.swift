@@ -179,7 +179,7 @@ class InviteVerifier {
             throw InviteVerificationError.invalidSignature
         }
 
-        let dataToVerify = invite.canonicalString()
+        let dataToVerify = try invite.canonicalString()
         var isValid = try verifyInviteSignature(
             data: dataToVerify,
             signature: [UInt8](signatureData),
@@ -198,10 +198,14 @@ class InviteVerifier {
                 ephKey: invite.ephKey,
                 ts: invite.ts,
                 sig: invite.sig,
-                un: invite.un
+                un: invite.un,
+                // Carried, not dropped: on v5 the canonical string ends with `ttl`, so a
+                // rebuild that omitted it would hash a different string and report the
+                // signature invalid — with the server as the last place anyone would look.
+                ttl: invite.ttl
             )
             isValid = try verifyInviteSignature(
-                data: normalizedInvite.canonicalString(),
+                data: try normalizedInvite.canonicalString(),
                 signature: [UInt8](signatureData),
                 verifyingKey: [UInt8](verifyingKeyData)
             )

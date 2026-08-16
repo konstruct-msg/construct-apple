@@ -35,9 +35,23 @@ struct InviteIssuance: Codable, Identifiable, Equatable {
     struct Mint: Codable, Equatable {
         let jti: String
         let at: Date
+        /// The life this capability was minted with — v5 states its own, below that the
+        /// global maximum applies. Optional so journals written before v5 decode unchanged;
+        /// absent means "whatever the global TTL is", which is what those entries had.
+        var ttl: UInt32?
+
+        init(jti: String, at: Date, ttl: UInt32? = nil) {
+            self.jti = jti
+            self.at = at
+            self.ttl = ttl
+        }
+
+        /// Clamped the same way the server clamps it, so this list and the redeem result
+        /// cannot disagree about whether an invite is still good.
+        var livesFor: TimeInterval { InviteConfig.effectiveTTL(stated: ttl) }
 
         func isLive(at now: Date) -> Bool {
-            now.timeIntervalSince(at) < InviteConfig.ttlSeconds
+            now.timeIntervalSince(at) < livesFor
         }
     }
 
@@ -62,9 +76,11 @@ struct InviteIssuance: Codable, Identifiable, Equatable {
     /// by the last rotation, because that is the moment the user remembers.
     var startedAt: Date { mints.first?.at ?? .distantPast }
 
-    /// The act stays live while any of its codes does.
+    /// The act stays live while any of its codes does — so it expires when the last of
+    /// them does, which is not the same as the newest one's timestamp once codes can carry
+    /// different lives.
     func expiresAt() -> Date {
-        (mints.map(\.at).max() ?? .distantPast).addingTimeInterval(InviteConfig.ttlSeconds)
+        mints.map { $0.at.addingTimeInterval($0.livesFor) }.max() ?? .distantPast
     }
 
     func liveMints(at now: Date) -> [Mint] {
@@ -136,7 +152,7 @@ enum InviteJournalDecision {
 /// Persisted in `UserDefaults`: the contents are random UUIDs and timestamps, never the
 /// link itself and never anything about the recipient — the issuer does not learn who
 /// redeemed, and this journal does not either. It self-empties one TTL after the last
-/// mint, so it is a 12-hour window rather than a history.
+/// mint, so it is a bounded window rather than a history.
 @MainActor
 @Observable
 final class InviteJournal {
@@ -166,14 +182,14 @@ final class InviteJournal {
     // MARK: Writing
 
     /// Record a link the user copied. Always its own act.
-    func recordCopiedLink(jti: String, at issuedAt: Date = Date()) {
-        record(kind: .link, jti: jti, at: issuedAt)
+    func recordCopiedLink(jti: String, at issuedAt: Date = Date(), ttl: UInt32? = nil) {
+        record(kind: .link, jti: jti, at: issuedAt, ttl: ttl)
     }
 
     /// Record a QR code minted while the sheet is open — the first rotation of a sitting
     /// opens the act, the rest join it.
-    func recordQRCode(jti: String, at issuedAt: Date = Date()) {
-        record(kind: .qrSession, jti: jti, at: issuedAt)
+    func recordQRCode(jti: String, at issuedAt: Date = Date(), ttl: UInt32? = nil) {
+        record(kind: .qrSession, jti: jti, at: issuedAt, ttl: ttl)
     }
 
     /// The QR sheet went away. The next code minted starts a new sitting.
@@ -196,8 +212,8 @@ final class InviteJournal {
         save()
     }
 
-    private func record(kind: InviteIssuance.Kind, jti: String, at issuedAt: Date) {
-        let mint = InviteIssuance.Mint(jti: jti, at: issuedAt)
+    private func record(kind: InviteIssuance.Kind, jti: String, at issuedAt: Date, ttl: UInt32?) {
+        let mint = InviteIssuance.Mint(jti: jti, at: issuedAt, ttl: ttl)
         let openIndex = openQRSessionID.flatMap { id in issuances.firstIndex { $0.id == id } }
 
         switch InviteJournalDecision.placement(kind: kind, hasOpenQRSession: openIndex != nil) {

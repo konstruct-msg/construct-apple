@@ -109,24 +109,8 @@ struct LinkParser {
         }
 
         // 3. AcceptInvite — one-time jti burn + transitional contact edge recording
-        var inviteToken = Shared_Proto_Services_V1_InviteToken()
-        inviteToken.v = Int32(invite.v)
-        inviteToken.jti = invite.jti
-        inviteToken.uuid = invite.uuid
-        inviteToken.server = invite.server
-        inviteToken.ts = Int64(invite.ts)
-        // v4+: empty; v1–v3: still sent for server dual-read of old invites
-        inviteToken.ephPub = invite.ephKey
-        inviteToken.sig = invite.sig
-        if !invite.deviceId.isEmpty {
-            inviteToken.deviceID = invite.deviceId
-        }
-        if let un = invite.un, !un.isEmpty {
-            inviteToken.un = un
-        }
-
         var acceptRequest = Shared_Proto_Services_V1_AcceptInviteRequest()
-        acceptRequest.invite = inviteToken
+        acceptRequest.invite = protoToken(from: invite)
 
         // Retry AcceptInvite with backoff — "Stream unexpectedly closed" happens when
         // VEIL is reconnecting. A few attempts let the transport stabilize.
@@ -170,6 +154,37 @@ struct LinkParser {
             isDynamic: true,
             identityPublicKey: verified.identityPublic
         )
+    }
+
+    /// The decoded invite, rebuilt as the wire message `AcceptInvite` carries.
+    ///
+    /// A named boundary rather than twelve assignments inside `parseDynamicInvite`, because
+    /// the server rebuilds the canonical string from exactly these fields and re-checks the
+    /// signature against it. A field omitted here does not read as missing data — it reads
+    /// as a bad signature, on the server, for an invite that verified perfectly on this
+    /// device a moment earlier. That was not hypothetical: `ttl` could be dropped from this
+    /// mapping and the whole suite still passed, because nothing could reach the mapping.
+    static func protoToken(from invite: InviteObject) -> Shared_Proto_Services_V1_InviteToken {
+        var token = Shared_Proto_Services_V1_InviteToken()
+        token.v = Int32(invite.v)
+        token.jti = invite.jti
+        token.uuid = invite.uuid
+        token.server = invite.server
+        token.ts = Int64(invite.ts)
+        // v4+: empty; v1–v3: still sent for server dual-read of old invites
+        token.ephPub = invite.ephKey
+        token.sig = invite.sig
+        if !invite.deviceId.isEmpty {
+            token.deviceID = invite.deviceId
+        }
+        if let un = invite.un, !un.isEmpty {
+            token.un = un
+        }
+        // v5 only, and mandatory there: the canonical string ends with it.
+        if let ttl = invite.ttl {
+            token.ttl = ttl
+        }
+        return token
     }
 
     private static func mapVerificationError(_ error: InviteVerificationError) -> ContactLinkError {

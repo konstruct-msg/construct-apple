@@ -98,7 +98,7 @@ final class BinaryParserOriginTests: XCTestCase {
         let sliced = asSlice(try original.encodeBinary(), pad: 64)
 
         let decoded = try InviteObject.decodeBinary(sliced)
-        XCTAssertEqual(decoded.canonicalString(), original.canonicalString())
+        XCTAssertEqual(try decoded.canonicalString(), try original.canonicalString())
     }
 
     func testInviteRejectsTruncatedSliceWithoutTrapping() throws {
@@ -116,7 +116,8 @@ final class BinaryParserOriginTests: XCTestCase {
             ephKey: "",
             ts: 1_738_156_800,
             sig: Data(repeating: 0xCD, count: 64).base64EncodedString(),
-            un: "alice"
+            un: "alice",
+            ttl: nil
         )
     }
 }

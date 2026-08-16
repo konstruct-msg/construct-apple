@@ -299,7 +299,7 @@ struct ContactQRCodeView: View {
             // Recorded only once the link is actually on the clipboard: a jti journalled
             // for a link the user never received is an entry they cannot account for, and
             // the screen listing it has no way to tell the difference.
-            InviteJournal.shared.recordCopiedLink(jti: minted.jti, at: minted.issuedAt)
+            InviteJournal.shared.recordCopiedLink(jti: minted.jti, at: minted.issuedAt, ttl: minted.ttl)
             lastCopyAt = Date()
             copyError = nil
             withAnimation { copiedCount += 1 }
@@ -346,7 +346,7 @@ struct ContactQRCodeView: View {
             generationError = nil
             // Every rotation joins the sitting opened by the first code, so a sheet held up
             // at a table is one entry in the journal rather than one per 30 seconds.
-            InviteJournal.shared.recordQRCode(jti: minted.jti, at: minted.issuedAt)
+            InviteJournal.shared.recordQRCode(jti: minted.jti, at: minted.issuedAt, ttl: minted.ttl)
             #if DEBUG
             Log.debug(
                 "Invite QR binary=\(minted.artifact.count)B textPayload=\(textPayload.count) chars",

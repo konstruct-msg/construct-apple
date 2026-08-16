@@ -65,11 +65,19 @@ struct ServerConfig {
 struct InviteConfig {
     /// Versions the client can DECODE and accept.
     /// v4 drops dead `ephKey` (F2); v1–v3 remain for dual-read within TTL.
-    static let supportedVersions: Set<Int> = [1, 2, 3, 4]
+    /// v5 adds a signed per-invite `ttl`.
+    ///
+    /// **Reading a version always ships before writing it.** v5 is accepted here from the
+    /// build that introduces it, while `currentVersion` stays 4 until enough of the fleet
+    /// can read v5 — a client that mints a version its peers reject has made its invites
+    /// undeliverable, and the peer's error says "unsupported version", which points at the
+    /// sender rather than at the rollout.
+    static let supportedVersions: Set<Int> = [1, 2, 3, 4, 5]
 
     /// Version used when GENERATING new invites.
     /// v4: no ephKey in canonical string / wire; server crypto-agility must accept v4.
-    static let currentVersion: Int = 4
+    /// Becomes 5 when `FeatureFlags.inviteV5Minting` is on.
+    static var currentVersion: Int { FeatureFlags.inviteV5Minting ? 5 : 4 }
     /// How long a signed invite stays redeemable.
     ///
     /// **Must equal `INVITE_TTL_SECONDS` in construct-server**
@@ -127,6 +135,41 @@ struct InviteConfig {
 
     /// Invite protocol versions that still carry a (unused) ephemeral X25519 pub.
     static func carriesEphKey(version: Int) -> Bool { version <= 3 }
+
+    /// Invite protocol versions that carry a signed per-invite `ttl`.
+    ///
+    /// Presence is decided by the version and by nothing else — no flag bit in the binary
+    /// container, no "is the field non-nil". One meaning, one carrier; a flag that could
+    /// disagree with `v` is the defect this codebase keeps paying for.
+    static func carriesTTL(version: Int) -> Bool { version >= 5 }
+
+    /// How long a QR code stays redeemable, once v5 minting is on.
+    ///
+    /// A QR is scanned within seconds of being displayed; a link waits in someone's inbox,
+    /// which is the whole reason `ttlSeconds` is twelve hours. Sharing that window gave the
+    /// QR eleven hours and fifty-five minutes it has no use for, and left a code shown at a
+    /// table redeemable all day by anyone who photographed the screen.
+    ///
+    /// 300 s is not a guess: the 2026-08-13 TTL change records that five minutes worked for
+    /// a QR held between two phones and could not work for a link sent through another
+    /// messenger. It also caps a QR sitting at `300 / 30 = 10` live codes instead of 1440,
+    /// which is what makes revoking a sitting a loop rather than a design problem.
+    static let qrTTLSeconds: UInt32 = 300
+
+    /// Server floor for a client-stated TTL (`INVITE_LIST_REVOKE_SERVER_SPEC` §4 rule 6).
+    /// Mirrored here so a bad value is caught before it is signed, not after it is rejected.
+    static let minTTLSeconds: UInt32 = 60
+
+    /// What a decoded invite is actually worth, in seconds.
+    ///
+    /// The server computes `min(INVITE_TTL_SECONDS, token.ttl)`, so the client must clamp
+    /// identically. Trusting a stated `ttl` above the server maximum would show an invite as
+    /// live for hours after the server had begun refusing it — the sender's screen and the
+    /// recipient's result disagreeing, with nothing to explain why.
+    static func effectiveTTL(stated: UInt32?) -> TimeInterval {
+        guard let stated else { return ttlSeconds }
+        return min(ttlSeconds, TimeInterval(stated))
+    }
 }
 
 
@@ -319,6 +362,18 @@ struct FeatureFlags {
     /// is deployed fleet-wide and this path has been validated (see
     /// construct-docs/decisions/stealth-sealed-sender-v2-always-on.md Phase 2).
     static let sealedSenderUnauthenticatedTransport = false
+
+    /// Mint invites as v5, carrying a signed per-invite `ttl` (QR 300 s, links 12 h).
+    ///
+    /// **Default off, and the order matters.** This build *reads* v5 already
+    /// (`InviteConfig.supportedVersions`); it must not *write* v5 until enough of the fleet
+    /// can read it. A v5 invite handed to an older iOS or Android build is refused with
+    /// "unsupported version" — an error that names the sender's invite rather than the
+    /// rollout, on the one screen where the user has no way to act on it.
+    ///
+    /// Flip once the reading build is out. Server side is already deployed
+    /// (construct-docs backend/INVITE_LIST_REVOKE_SERVER_SPEC.md §4, 2026-08-16).
+    static let inviteV5Minting = false
 
     // (stealthPerMessageDefault removed 2026-07-15: per-message is the only token model
     // now — the per-stream scope and its SecurityView picker are gone. A token rides
