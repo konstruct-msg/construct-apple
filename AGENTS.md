@@ -93,11 +93,22 @@ sync problem first: one theme file, shared, not copied.
 ## Localization
 
 - **All** visible strings use `NSLocalizedString("key", comment: "")` — no hardcoded English.
-- New keys go to **both** `en.lproj` and `ru.lproj` `Localizable.strings` in the same commit.
-  `scripts/check_localization.sh` enforces this, plus no duplicate keys and no key that resolves
-  to nothing; CI runs it. A key with no entry is displayed to the user verbatim — twelve of them
-  are on real screens right now, listed in that script's `BASELINE`. `ja.lproj` and `fr.lproj` are
-  partial by design and not checked for parity (app name **共創**).
+- New keys go to **all four** locales — `en`, `ru`, `ja`, `fr` — in the same commit.
+  `scripts/check_localization.sh` enforces parity, no duplicate keys, no key that resolves to
+  nothing, and that a translation carries the same format specifiers as its English source by
+  position and conversion type; CI runs it. A key with no entry is displayed to the user
+  verbatim — twelve of them are on real screens right now, listed in that script's `BASELINE`.
+  A wrong specifier is worse than a wrong word: it crashes, and only in the locale nobody on the
+  team runs.
+- `ja` and `fr` were exempt from parity until 2026-08-16 as "partial translations in progress",
+  and were 922 and 472 of 966 keys by the time anyone counted. The exemption is what let them
+  fall behind — nothing reported the gap, so it grew by whatever each release added. A locale
+  allowed to lag does. Both are complete now and held to the same rule.
+- **One product name per script.** `Konstruct` in Latin, `Конструкт` in Russian, `コンストラクト`
+  in Japanese. The Japanese used to be **共創** — a kanji reading meaning "co-creation", changed
+  2026-08-16: a reader had no way to connect it to the Konstruct in the App Store, and spoken
+  aloud "kyōsō" is an exact homophone of 競争, "competition". The one deliberate exception is
+  `onboarding_tagline`, where "identity is a construct" is the common noun and the pun.
 - Nav titles: `CTNavBar` applies `.uppercased()` + `.tracking(4)` — pass the raw localized string.
 - UI copy is plain language ("people / chats / device", never "node / stream / replica"). Code
   identifiers keep domain names — no renames.

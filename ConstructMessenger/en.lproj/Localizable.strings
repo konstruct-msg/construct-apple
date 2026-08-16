@@ -142,7 +142,7 @@
 
 // MARK: - Settings -> Appearance
 "theme" = "Theme";
-"theme_footer" = "Choose how Construct Messenger looks. Automatic adjusts based on your system settings.";
+"theme_footer" = "Choose how Konstruct looks. Automatic adjusts based on your system settings.";
 "automatic" = "Automatic";
 "light" = "Light";
 "dark" = "Dark";
@@ -402,7 +402,7 @@
 
 // Invite / contact links
 "invite_error_invalid_url" = "The provided URL is invalid.";
-"invite_error_unsupported_link" = "This is not a supported Construct invite link.";
+"invite_error_unsupported_link" = "This is not a supported Konstruct invite link.";
 "invite_error_expired" = "This invite has expired. Ask for a new one.";
 "invite_error_invalid_fmt" = "Invalid invite: %@";
 "invite_error_already_used" = "This invite was already used. Ask for a new one.";
@@ -501,7 +501,7 @@
 
 // Censorship protection (production soft control — no VEIL / relay disclosure)
 "censorship_protection" = "Censorship protection";
-"censorship_protection_footer_off" = "Off. Connection goes directly to Construct.";
+"censorship_protection_footer_off" = "Off. Connection goes directly to Konstruct.";
 "censorship_protection_footer_auto" = "Turns on automatically when blocking is detected. Setup happens in the background.";
 "censorship_protection_footer_on" = "Always routes around network blocks. Setup happens in the background.";
 
@@ -623,10 +623,10 @@
 "diagnostics_apns_token" = "APNs Token";
 "diagnostics_apns_token_missing" = "missing";
 "diagnostics_apns_token_received_format" = "received (%@…)";
-"diagnostics_registered_with_server" = "Registered with Construct";
+"diagnostics_registered_with_server" = "Registered with Konstruct";
 "diagnostics_yes" = "yes";
 "diagnostics_not_registered_with_server" = "no — notifications won't arrive";
-"diagnostics_server_token_warning" = "Token is not registered on Construct. Return to chats — registration will retry automatically when the app becomes active.";
+"diagnostics_server_token_warning" = "Token is not registered on Konstruct. Return to chats — registration will retry automatically when the app becomes active.";
 "diagnostics_log_collection" = "Log collection";
 "diagnostics_status_active" = "Active";
 "diagnostics_status_off" = "Off";
@@ -676,12 +676,12 @@
 // MARK: - Device Join Request (Desktop onboarding)
 "device_link_request_title" = "Link to Existing Identity";
 "device_link_request_instruction" = "Scan with your iPhone";
-"device_link_request_steps" = "Open Construct on your iPhone → Settings → Linked Devices → tap 'Link New Device' — or just scan this code if you have Construct open.";
+"device_link_request_steps" = "Open Konstruct on your iPhone → Settings → Linked Devices → tap 'Link New Device' — or just scan this code if you have Konstruct open.";
 "device_link_waiting_approval" = "Waiting for approval on your iPhone…";
-"device_link_scan_on_phone" = "Scan this code with Construct on your iPhone";
+"device_link_scan_on_phone" = "Scan this code with Konstruct on your iPhone";
 "device_link_request_timeout" = "Link request timed out — please try again";
 "device_link_feature_unavailable" = "This feature requires a server update. Please try again later.";
-"device_link_invalid_qr" = "Invalid QR code — make sure you are scanning a Construct link code.";
+"device_link_invalid_qr" = "Invalid QR code — make sure you are scanning a Konstruct link code.";
 "device_link_approve_title" = "Link \"%@\" to your identity?";
 "device_link_approve_title_fallback" = "Link new device to your identity?";
 "device_link_approve" = "Link Device";
@@ -859,7 +859,7 @@
 "username_not_set" = "no username";
 "searchable_indicator" = "searchable";
 "searchable_indicator_off" = "not searchable";
-"synapses_remote_result_header" = "found on construct";
+"synapses_remote_result_header" = "found on Konstruct";
 "synapses_searching" = "searching...";
 "synapses_not_found" = "not found";
 
@@ -892,8 +892,8 @@
 // Stealth mode
 "stealth_section" = "stealth";
 "stealth_title" = "sender anonymity";
-"stealth_always_on_hint" = "The construct never learns who sent a message. Always on — there is no switch, and nothing to keep topped up.";
-"stealth_off_hint" = "Off — your sends disclose who you are to the construct. Debug override only.";
+"stealth_always_on_hint" = "Konstruct never learns who sent a message. Always on — there is no switch, and nothing to keep topped up.";
+"stealth_off_hint" = "Off — your sends disclose who you are to Konstruct. Debug override only.";
 
 
 // Key Transparency
@@ -996,7 +996,7 @@
 "backup_restore_success_message" = "Your backup has been verified and staged. Close and reopen the app to complete the restore.";
 
 "backup_error_invalid_mnemonic" = "Invalid recovery phrase. Check all 12 words and try again.";
-"backup_error_invalid_file" = "This is not a valid Construct backup, or the recovery phrase is incorrect.";
+"backup_error_invalid_file" = "This is not a valid Konstruct backup, or the recovery phrase is incorrect.";
 
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "send to nearby device";

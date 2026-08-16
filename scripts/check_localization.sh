@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # check_localization.sh — the localization rules in AGENTS.md, enforced.
 #
-# Three checks, no build required:
+# Four checks, no build required:
 #
-#   1. en.lproj and ru.lproj declare the same key set. AGENTS.md requires a new key
-#      to land in both in the same commit; nothing enforced it until now.
+#   1. All four .lproj declare the same key set. AGENTS.md requires a new key to land
+#      in every locale in the same commit; nothing enforced it until now.
 #   2. No key is declared twice in one file. A duplicate is silently resolved by
 #      whichever line the parser reads last, so the visible string stops matching
 #      the one you edited.
 #   3. Every literal NSLocalizedString("…") key in the Swift sources exists in
 #      en.lproj. A key that does not resolve is displayed to the user verbatim —
 #      that is how `text_size` and `PUSH_NOTIFICATIONS` reached production screens.
+#   4. A translation carries the same format specifiers as its English source, by
+#      position and by conversion type. `%@` where the caller passes an Int is not a
+#      wrong word on screen, it is a crash or a garbage pointer read, and it only
+#      happens in the one locale nobody on the team runs.
 #
 # Check 3 is a ratchet, not a proof. Twelve keys were already unresolved when this
 # script was written (see BASELINE below) and are listed so the check can be turned
@@ -18,9 +22,11 @@
 # check fails on a *new* one. Deleting a name from BASELINE after fixing it is the
 # point; adding one is not.
 #
-# ja.lproj and fr.lproj are deliberately not checked for parity: both are partial
-# translations in progress (922 and 472 of 966 keys), and iOS falls back to the
-# development language per missing key. Only en/ru are release-blocking.
+# ja.lproj and fr.lproj used to be exempt from check 1 — "partial translations in
+# progress", 922 and 472 of 966 keys, with iOS falling back per missing key. They were
+# completed on 2026-08-16 and are now held to the same rule, because the exemption is
+# what let them fall behind: nothing reported the gap, so it grew by exactly as much as
+# each release added. A locale that is allowed to lag does.
 
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -47,21 +53,25 @@ EOF
 
 keys_of() { grep -oE '^"[^"]+"' "$1" | sed 's/^"//; s/"$//' | sort; }
 
-# ── 1. en/ru parity ───────────────────────────────────────────────────────────
+# ── 1. parity across every locale ─────────────────────────────────────────────
 en_keys=$(keys_of "$STRINGS/en.lproj/Localizable.strings" | sort -u)
-ru_keys=$(keys_of "$STRINGS/ru.lproj/Localizable.strings" | sort -u)
-
-missing_ru=$(comm -23 <(echo "$en_keys") <(echo "$ru_keys"))
-missing_en=$(comm -13 <(echo "$en_keys") <(echo "$ru_keys"))
-
-if [ -n "$missing_ru" ]; then
-    echo "✗ in en.lproj but not ru.lproj:"; echo "$missing_ru" | sed 's/^/    /'; FAIL=1
-fi
-if [ -n "$missing_en" ]; then
-    echo "✗ in ru.lproj but not en.lproj:"; echo "$missing_en" | sed 's/^/    /'; FAIL=1
-fi
-[ -z "$missing_ru$missing_en" ] && \
-    echo "✓ en/ru parity — $(echo "$en_keys" | wc -l | tr -d ' ') keys in both"
+parity_ok=1
+for L in ru ja fr; do
+    l_keys=$(keys_of "$STRINGS/$L.lproj/Localizable.strings" | sort -u)
+    absent=$(comm -23 <(echo "$en_keys") <(echo "$l_keys"))
+    extra=$(comm -13 <(echo "$en_keys") <(echo "$l_keys"))
+    if [ -n "$absent" ]; then
+        echo "✗ in en.lproj but not $L.lproj:"; echo "$absent" | sed 's/^/    /'
+        FAIL=1; parity_ok=0
+    fi
+    if [ -n "$extra" ]; then
+        echo "✗ in $L.lproj but not en.lproj — the English entry was removed, so this"
+        echo "  one resolves to nothing anyone can read:"; echo "$extra" | sed 's/^/    /'
+        FAIL=1; parity_ok=0
+    fi
+done
+[ "$parity_ok" -eq 1 ] && \
+    echo "✓ en/ru/ja/fr parity — $(echo "$en_keys" | wc -l | tr -d ' ') keys in each"
 
 # ── 2. duplicates within a file ───────────────────────────────────────────────
 for L in en ru ja fr; do
@@ -97,5 +107,36 @@ if [ -n "$stale" ]; then
     echo "$stale" | sed 's/^/    /'
     FAIL=1
 fi
+
+# ── 4. format specifiers survive translation ──────────────────────────────────
+#
+# Compared by position and conversion type, not as raw text: Japanese reorders
+# arguments with %1$d / %2$d on purpose, and that is correct, not a defect.
+python3 - "$STRINGS" <<'PY' || FAIL=1
+import re, sys, io, os
+root = sys.argv[1]
+SPEC = re.compile(r'%(?:(\d+)\$)?(l{0,2}[du]|[@fs])')
+def types(s):
+    out, nxt = {}, 1
+    for pos, conv in SPEC.findall(s):
+        if pos: out[int(pos)] = conv
+        else:   out[nxt] = conv; nxt += 1
+    return out
+def kv(loc):
+    p = os.path.join(root, f"{loc}.lproj", "Localizable.strings")
+    return dict(re.findall(r'^"([^"]+)"\s*=\s*"(.*)";\s*$', io.open(p, encoding="utf-8").read(), re.M))
+en, bad = kv("en"), 0
+for loc in ("ru", "ja", "fr"):
+    for k, v in kv(loc).items():
+        if k in en and types(en[k]) != types(v):
+            print(f"\u2717 {loc}.lproj/{k} does not match the English format specifiers")
+            print(f"    en: {en[k]}")
+            print(f"    {loc}: {v}")
+            bad += 1
+if bad:
+    print("  A mismatched specifier is a crash in that locale, not a typo.")
+    sys.exit(1)
+print("\u2713 format specifiers match English in every locale")
+PY
 
 exit $FAIL
