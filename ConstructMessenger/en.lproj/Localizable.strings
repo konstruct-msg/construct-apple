@@ -4,7 +4,7 @@
 "cancel" = "Cancel";
 "done" = "Done";
 "unknown" = "Unknown";
-"construct_titlte" = "KONSTRUCT";
+"construct_title" = "KONSTRUCT";
 "search_prompt" = "Search";
 
 // MARK: - Loading Screen
@@ -191,7 +191,7 @@
 "denied" = "Denied";
 
 // MARK: - Background Fetch & Local Notifications
-"construct_app_name" = "Construct";
+"construct_app_name" = "Konstruct";
 "construct_new_message" = "New Message";
 "construct_new_messages" = "New Messages";
 "construct_new_messages_count" = "You have %d new messages";

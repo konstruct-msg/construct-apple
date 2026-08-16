@@ -31,7 +31,7 @@ struct OnboardingView: View {
                 VStack(spacing: 60) {
                     CTLogoView(size: 100, color: Color.CT.text)
 
-                    Text("construct_titlte")
+                    Text("construct_title")
                         .font(CTFont.bold(26))
                         .foregroundColor(Color.CT.text)
                         .tracking(8)
