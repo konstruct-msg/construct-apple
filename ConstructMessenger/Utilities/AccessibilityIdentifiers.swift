@@ -112,6 +112,8 @@ enum A11y {
         /// Addressed by the act's own id, not by position: the list re-sorts as acts
         /// expire out of it, so an index would name a different row minute to minute.
         static func act(_ id: UUID) -> String { "issuedInvites.act.\(id.uuidString)" }
+        static func revoke(_ id: UUID) -> String { "issuedInvites.revoke.\(id.uuidString)" }
+        static let notice = "issuedInvites.notice"
     }
 }
 

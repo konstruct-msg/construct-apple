@@ -181,6 +181,21 @@ final class InviteJournal {
         openQRSessionID = nil
     }
 
+    /// Drop an act that is no longer outstanding — revoked, or found already redeemed.
+    ///
+    /// Only ever called with a confirmed answer from the server. Removing on an unconfirmed
+    /// attempt would state in the one place the user can check that a live capability is
+    /// gone; `InviteRevocationDecision.removesFromJournal` is what guards that.
+    /// `openQRSessionID` is deliberately left as it is. Clearing it here looks prudent and
+    /// is not: `record` resolves the open sitting by searching for that id among the acts,
+    /// so once the act is gone the lookup yields nil and the next code starts a new sitting
+    /// on its own. A mutation removing the clear survived every test, which is what a line
+    /// with no observable effect looks like.
+    func forget(actID: UUID) {
+        issuances.removeAll { $0.id == actID }
+        save()
+    }
+
     private func record(kind: InviteIssuance.Kind, jti: String, at issuedAt: Date) {
         let mint = InviteIssuance.Mint(jti: jti, at: issuedAt)
         let openIndex = openQRSessionID.flatMap { id in issuances.firstIndex { $0.id == id } }

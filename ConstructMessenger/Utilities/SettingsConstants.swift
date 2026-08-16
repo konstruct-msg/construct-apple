@@ -148,6 +148,8 @@ enum IssuedInvitesLayout {
     /// for a number that has not changed.
     static let refreshIntervalSeconds: TimeInterval = 30
     static let emptyVerticalPadding: CGFloat = CTLayout.sectionGap
+    static let iconColumnWidth: CGFloat = 20
+    static let rowMetaSpacing: CGFloat = 2
 }
 
 enum SecuritySettingsLayout {

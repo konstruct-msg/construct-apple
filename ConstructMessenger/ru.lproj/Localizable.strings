@@ -1149,3 +1149,10 @@
 "issued_invite_link" = "Ссылка";
 "issued_invite_qr_fmt" = "QR-код · %d";
 "issued_invite_expires_fmt" = "ещё %@";
+"revoke" = "Отозвать";
+"invite_revoked" = "Отозвано. Ссылка больше не работает.";
+"invite_already_used" = "Уже использовано — по этой ссылке кто-то перешёл.";
+"invite_revoke_unconfirmed" = "Не удалось подтвердить. Ссылка может быть ещё активна, попробуйте снова.";
+"invite_revoke_confirm_title" = "Отозвать эту ссылку?";
+"invite_revoke_confirm_message" = "У того, кому вы её дали, она перестанет работать без предупреждения. Новую можно скопировать в любой момент.";
+"issued_invites_revoke_scope" = "Отозвать можно ссылку. Код QR перестанет работать сам — по истечении срока.";
