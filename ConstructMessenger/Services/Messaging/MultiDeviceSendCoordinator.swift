@@ -78,7 +78,6 @@ final class MultiDeviceSendCoordinator {
         recipientUserId: String,
         senderUserId: String,
         senderDeviceId: String,
-        conversationId: String,
         timestamp: UInt64
     ) async {
         guard !senderDeviceId.isEmpty else { return }
@@ -99,7 +98,6 @@ final class MultiDeviceSendCoordinator {
                     senderUserId: senderUserId,
                     senderDeviceId: senderDeviceId,
                     recipientDeviceId: device.deviceId,
-                    conversationId: conversationId,
                     timestamp: timestamp,
                     contentType: .e2EeSignal
                 )
@@ -135,7 +133,6 @@ final class MultiDeviceSendCoordinator {
         originalRecipientUserId: String,
         senderUserId: String,
         senderDeviceId: String,
-        conversationId: String,
         timestamp: UInt64
     ) async {
         guard !senderDeviceId.isEmpty else { return }
@@ -202,7 +199,6 @@ final class MultiDeviceSendCoordinator {
                         senderUserId: senderUserId,
                         senderDeviceId: senderDeviceId,
                         recipientDeviceId: device.deviceId,
-                        conversationId: conversationId,
                         timestamp: timestamp,
                         contentType: .senderSync
                     )
@@ -249,7 +245,6 @@ final class MultiDeviceSendCoordinator {
         senderUserId: String,
         senderDeviceId: String,
         recipientDeviceId: String,
-        conversationId: String,
         timestamp: UInt64,
         contentType: Shared_Proto_Core_V1_ContentType
     ) async {
@@ -281,11 +276,23 @@ final class MultiDeviceSendCoordinator {
                 recipientId: contactId
             )
 
+            // conversation_id stays empty on purpose. Multi-device traffic is deliberately not
+            // sealed — the reasoning being that the server already knows this is one account,
+            // which is true of the sender and the recipient, both of them us. It is not true of
+            // `direct:<me>:<partner>`: that names the person on the other side, in the clear, on
+            // an unsealed envelope, once per own device per message sent. For a multi-device
+            // account it handed the server exactly the pairing that sealed sender exists to hide.
+            //
+            // Nothing wanted it. `Envelope.conversation_id` has no reader anywhere on the server —
+            // the only consumers of a field by that name are APNs payloads fed from group and
+            // request ids, the message push path passes None, and it is in no migration — and the
+            // server blanks it on delivery besides. The client stopped reading it from a received
+            // envelope when SENDER_SYNC began routing from inside the ciphertext.
             _ = try await MessagingServiceClient.shared.sendMessage(
                 messageId: messageId,
                 recipientId: networkRecipientUserId,
                 senderId: senderUserId,
-                conversationId: conversationId,
+                conversationId: "",
                 encryptedPayload: encPayload,
                 timestamp: timestamp,
                 senderDeviceId: senderDeviceId,

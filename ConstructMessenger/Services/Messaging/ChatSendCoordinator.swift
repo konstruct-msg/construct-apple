@@ -560,10 +560,6 @@ final class ChatSendCoordinator {
                                 originalRecipientUserId: recipientId,
                                 senderUserId: currentUserId,
                                 senderDeviceId: myDeviceId,
-                                conversationId: ConversationId.direct(
-                                    myUserId: currentUserId,
-                                    theirUserId: recipientId
-                                ),
                                 timestamp: message.timestamp
                             )
                         }
