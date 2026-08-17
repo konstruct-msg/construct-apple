@@ -231,7 +231,7 @@ struct SettingsView: View {
             Button { showingQRCode = true } label: {
                 CTSettingsRow(
                     label: NSLocalizedString("invite", comment: "").uppercased(),
-                    icon: "person.badge.plus",
+                    icon: "qrcode",
                     disclosure: true
                 )
             }
