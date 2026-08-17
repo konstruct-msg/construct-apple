@@ -53,9 +53,10 @@ enum SealedEnvelopeType: CaseIterable {
     /// Everything whose real type rides in KNST byte 5: message bodies, delivery receipts, call
     /// signals, heartbeat, session ping/ready.
     case generic
-    /// 21 — carries no ciphertext to hide a frame in.
+    /// 21 — sent when the ratchet may be unusable, so it cannot be encrypted with it.
     case sessionReset
-    /// 24 — wire-identical to an ordinary X3DH carrier; the receiver must know before it decrypts.
+    /// 24 — the instruction is "archive the session you hold", and reading it from inside the
+    /// ciphertext would require establishing the new session, which *is* the archive.
     case sessionResetInit
 
     var proto: Shared_Proto_Core_V1_ContentType {
@@ -119,11 +120,20 @@ enum ContentTypeRouting {
 
     /// Content types that still ride on `SealedInner.content_type` under stealth.
     ///
-    /// Narrowed on 2026-08-03 to the two that genuinely cannot be moved: END_SESSION carries no
-    /// ciphertext to hide a frame in, and SESSION_RESET_INIT is wire-identical to an ordinary
-    /// X3DH carrier — both must be recognised *before* decryption. Call signal (12), delivery
-    /// receipt (14) and ping/ready (25/26) now carry their type in KNST byte 5, inside the
-    /// ciphertext, so the server can no longer distinguish them.
+    /// Narrowed on 2026-08-03 to the two that genuinely cannot be moved, both traced 2026-08-17:
+    ///
+    /// - **21 (END_SESSION)** is sent when the ratchet may be unusable — encrypting it would lose
+    ///   the message in the case it exists for.
+    /// - **24 (SESSION_RESET_INIT)** does not announce "this is X3DH": the wire payload already
+    ///   says that, since `ephemeralPublicKey` / `oneTimePreKeyId` / `kemCiphertext` are readable
+    ///   before any decryption. It says *archive the session you currently hold* — and the
+    ///   RESPONDER init path (`MessageRouter.handleFirstMessage`) runs only when no session
+    ///   exists, so without it a peer's fresh X3DH meets the old ratchet, fails, and drives the
+    ///   END_SESSION reset loop. That instruction cannot live inside the ciphertext, because
+    ///   reading it means establishing the new session, which is the archive itself.
+    ///
+    /// Call signal (12), delivery receipt (14) and ping/ready (25/26) now carry their type in KNST
+    /// byte 5, inside the ciphertext, so the server can no longer distinguish them.
     /// See decisions/sealed-content-type-inside-the-plaintext-frame.md.
     ///
     /// `1` (e2EeSignal) was listed here as the "regular body baseline" until 2026-08-17. It was not
