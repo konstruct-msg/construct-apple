@@ -102,29 +102,73 @@ final class StealthSenderService: SealedSenderResolving {
         UserDefaults.standard.removeObject(forKey: Self.certOwnerKey)
     }
 
-    // MARK: - Seal (send path)
+    // MARK: - Anonymous box to an identity key
 
-    /// Encrypts `certBytes` (serialized SenderCertificate proto) to the recipient's
-    /// X25519 identity key. Returns the sealed box:
-    ///   ephemeral_pub(32) || nonce(12) || ciphertext || tag(16)
-    func sealSenderCert(_ certBytes: Data, recipientIdentityKey: Data) throws -> Data {
+    /// Header of a sealed box: `ephemeral_pub(32) || nonce(12) || ciphertext || tag(16)`.
+    nonisolated static let identityBoxOverhead = 32 + 12 + 16
+
+    /// Encrypts `plaintext` to a recipient's X25519 **identity** key, with a fresh ephemeral per
+    /// call — two boxes to the same recipient share no bytes, so the relay cannot link them.
+    ///
+    /// The ratchet is not involved, which is what makes this usable on messages that must survive
+    /// a session too broken to encrypt with: the recipient's long-term identity key is enough.
+    /// `domain` separates uses — a box sealed for one purpose must not open under another.
+    nonisolated static func sealToIdentity(_ plaintext: Data, recipientIdentityKey: Data, domain: String) throws -> Data {
         let ephemeralPrivKey = Curve25519.KeyAgreement.PrivateKey()
         let recipientPubKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: recipientIdentityKey)
         let sharedSecret = try ephemeralPrivKey.sharedSecretFromKeyAgreement(with: recipientPubKey)
         let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
             using: SHA256.self,
-            salt: Data("ConstructSEALED-v1".utf8),
+            salt: Data(domain.utf8),
             sharedInfo: Data(),
             outputByteCount: 32
         )
-        let sealedBox = try ChaChaPoly.seal(certBytes, using: symmetricKey)
+        let sealedBox = try ChaChaPoly.seal(plaintext, using: symmetricKey)
         let nonce = sealedBox.nonce.withUnsafeBytes { Data($0) }
-        var box = Data(capacity: 32 + 12 + sealedBox.ciphertext.count + 16)
+        var box = Data(capacity: identityBoxOverhead + sealedBox.ciphertext.count)
         box.append(ephemeralPrivKey.publicKey.rawRepresentation)
         box.append(nonce)
         box.append(sealedBox.ciphertext)
         box.append(sealedBox.tag)
         return box
+    }
+
+    /// Opens a box produced by `sealToIdentity` with our identity private key. Throws when the box
+    /// is malformed, was sealed for another recipient, or was sealed under a different `domain`.
+    nonisolated static func openFromIdentity(_ sealedBox: Data, ourIdentityPrivKeyBytes: Data, domain: String) throws -> Data {
+        guard sealedBox.count >= identityBoxOverhead else {
+            throw StealthError.invalidBoxLength
+        }
+        let base = sealedBox.startIndex
+        let epPubBytes = sealedBox[base ..< base + 32]
+        let nonceBytes = sealedBox[base + 32 ..< base + 44]
+        let ciphertextAndTag = sealedBox[(base + 44)...]
+        let ciphertext = ciphertextAndTag.dropLast(16)
+        let tag = ciphertextAndTag.suffix(16)
+
+        let ourPrivKey = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: ourIdentityPrivKeyBytes)
+        let epPubKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: epPubBytes)
+        let sharedSecret = try ourPrivKey.sharedSecretFromKeyAgreement(with: epPubKey)
+        let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
+            using: SHA256.self,
+            salt: Data(domain.utf8),
+            sharedInfo: Data(),
+            outputByteCount: 32
+        )
+        let nonce = try ChaChaPoly.Nonce(data: nonceBytes)
+        let box = try ChaChaPoly.SealedBox(nonce: nonce, ciphertext: ciphertext, tag: tag)
+        return try ChaChaPoly.open(box, using: symmetricKey)
+    }
+
+    // MARK: - Seal (send path)
+
+    nonisolated private static let senderCertDomain = "ConstructSEALED-v1"
+
+    /// Encrypts `certBytes` (serialized SenderCertificate proto) to the recipient's
+    /// X25519 identity key.
+    func sealSenderCert(_ certBytes: Data, recipientIdentityKey: Data) throws -> Data {
+        try Self.sealToIdentity(certBytes, recipientIdentityKey: recipientIdentityKey,
+                                domain: Self.senderCertDomain)
     }
 
     // MARK: - Unseal (receive path)
@@ -135,30 +179,9 @@ final class StealthSenderService: SealedSenderResolving {
         _ sealedBox: Data,
         ourIdentityPrivKeyBytes: Data
     ) throws -> Shared_Proto_Core_V1_SenderCertificate {
-        guard sealedBox.count >= 32 + 12 + 16 else {
-            throw StealthError.invalidBoxLength
-        }
-        let epPubBytes = sealedBox[..<32]
-        let nonceBytes = sealedBox[32..<44]
-        let ciphertextAndTag = sealedBox[44...]
-        guard ciphertextAndTag.count >= 16 else {
-            throw StealthError.invalidBoxLength
-        }
-        let ciphertext = ciphertextAndTag.dropLast(16)
-        let tag = ciphertextAndTag.suffix(16)
-
-        let ourPrivKey = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: ourIdentityPrivKeyBytes)
-        let epPubKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: epPubBytes)
-        let sharedSecret = try ourPrivKey.sharedSecretFromKeyAgreement(with: epPubKey)
-        let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
-            using: SHA256.self,
-            salt: Data("ConstructSEALED-v1".utf8),
-            sharedInfo: Data(),
-            outputByteCount: 32
-        )
-        let nonce = try ChaChaPoly.Nonce(data: nonceBytes)
-        let box = try ChaChaPoly.SealedBox(nonce: nonce, ciphertext: ciphertext, tag: tag)
-        let certBytes = try ChaChaPoly.open(box, using: symmetricKey)
+        let certBytes = try Self.openFromIdentity(sealedBox,
+                                                  ourIdentityPrivKeyBytes: ourIdentityPrivKeyBytes,
+                                                  domain: Self.senderCertDomain)
         return try Shared_Proto_Core_V1_SenderCertificate(serializedBytes: certBytes)
     }
 

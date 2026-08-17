@@ -250,14 +250,11 @@ final class MessagingServiceClient: Sendable {
 
     // MARK: - Send End Session (replaces MessagingAPI.sendEndSession)
 
-    /// - Parameter resetReason: optional machine-readable recovery hint carried in the
-    ///   END_SESSION payload as a typed `SessionControl{op: .end, reason}`. When set (≠
-    ///   `.unspecified`), it tells the peer HOW to re-initialise — notably
-    ///   `.otpkUnreproducible`, which asks the initiator to re-init WITHOUT a one-time
-    ///   prekey (3-DH) instead of looping 4-DH. When `.unspecified`, the legacy 16-byte
-    ///   sentinel payload is sent so pre-`reason` peers are unaffected. The serialized
-    ///   SessionControl stays < WirePayloadCoder.headerSize so the receiver's payload-size
-    ///   END_SESSION heuristic still fires even if the server strips content_type.
+    /// - Parameter resetReason: optional machine-readable recovery hint telling the peer HOW to
+    ///   re-initialise — notably `.otpkUnreproducible`, which asks the initiator to re-init WITHOUT
+    ///   a one-time prekey (3-DH) instead of looping 4-DH. It is sealed to the peer's identity key
+    ///   and padded to a fixed size by `EndSessionPayload`; a peer that cannot read it recovers
+    ///   without a hint, which is what every peer did before hints existed.
     func sendEndSession(
         to recipientId: String,
         reason: String? = nil,
@@ -265,19 +262,6 @@ final class MessagingServiceClient: Sendable {
     ) async throws -> EndSessionResponse {
         let myUserId = await MainActor.run { AuthSessionManager.shared.currentUserId } ?? ""
         let messageId = UUID().uuidString
-
-        // Control payload: typed SessionControl when a reason is set, else the legacy 16-byte
-        // sentinel (server validates the payload is non-empty either way). No nonce: END_SESSION
-        // dedup is by message id/timestamp, and omitting it keeps the payload tiny.
-        let controlPayload: Data
-        if resetReason != .unspecified {
-            var control = Shared_Proto_Messaging_V1_SessionControl()
-            control.op = .end
-            control.reason = resetReason
-            controlPayload = (try? control.serializedData()).flatMap { $0.isEmpty ? nil : $0 } ?? Data(count: 16)
-        } else {
-            controlPayload = Data(count: 16)
-        }
 
         // Stealth: seal END_SESSION like a message body — the real content type (.sessionReset)
         // rides inside SealedInner and is recovered on receive, so the outer envelope leaks no
@@ -293,6 +277,17 @@ final class MessagingServiceClient: Sendable {
                 )
             }
         }
+
+        // Built before the stealth branch, and deliberately: `buildEnvelope` fills
+        // `encrypted_payload` *before* it decides whether the send is sealed, so this payload is on
+        // the wire under stealth exactly as it is without it. Until 2026-08-17 that meant the relay
+        // read a plaintext reset reason on a 4- or 16-byte envelope — a length no padded body has —
+        // while `SealedInner` was busy hiding the content type. See EndSessionPayload.
+        let controlPayload = EndSessionPayload.build(
+            reason: resetReason,
+            recipientIdentityKey: await resolveRecipientIK()
+        )
+
         var sealedInner: Data? = nil
         if await StealthPolicy.shared.shouldUseSealedSender() {
             guard let recipientIK = await resolveRecipientIK() else {

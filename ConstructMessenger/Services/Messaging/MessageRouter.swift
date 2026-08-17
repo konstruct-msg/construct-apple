@@ -479,14 +479,17 @@ final class MessageRouter {
         // 3. Check if this is an END_SESSION control message
         if message.isEndSession {
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            // Typed reason hint (if the sender is new enough to attach a SessionControl payload):
+            // Typed reason hint, sealed to our identity key since 2026-08-17 (before that it was a
+            // plaintext SessionControl the relay could read; see EndSessionPayload).
             // .otpkUnreproducible means the peer, as our RESPONDER, could not reproduce the 4-DH
             // OTPK our last X3DH used. Re-initiating with another OTPK would loop, so mark the peer
-            // to force a 3-DH re-init (no OTPK) on our next session init. Legacy END_SESSION carries
-            // a 16-byte sentinel that simply won't decode → no hint, default behaviour preserved.
+            // to force a 3-DH re-init (no OTPK) on our next session init. No readable hint — old
+            // sender, unsealable payload, sealed to another device — means default behaviour.
             if !message.rawPayload.isEmpty,
-               let control = try? Shared_Proto_Messaging_V1_SessionControl(serializedBytes: message.rawPayload),
-               control.reason == .otpkUnreproducible {
+               EndSessionPayload.reason(
+                   from: message.rawPayload,
+                   ourIdentityPrivateKey: KeychainManager.shared.loadDeviceIdentityKey()
+               ) == .otpkUnreproducible {
                 Log.info("END_SESSION from \(otherUserId.prefix(8))… hints OTPK-unreproducible — forcing 3-DH re-init", category: "MessageRouter")
                 SessionReinitHintStore.shared.requestThreeDHReinit(for: otherUserId)
             }
