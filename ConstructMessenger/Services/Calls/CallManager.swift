@@ -1361,7 +1361,7 @@ final class CallManager: CallUIManaging {
                 recipientUserId: recipient,
                 recipientIdentityKey: ik,
                 encryptedPayload: payload,
-                contentType: .unspecified
+                contentType: .generic
             )
             Log.debug("STEALTH: built SealedInner for call signal (payload \(payload.count)b)", category: "Calls")
             return sealed

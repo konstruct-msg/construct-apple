@@ -1141,6 +1141,9 @@ final class SessionCoordinator: MessageRouterDelegate {
         // type left on `SealedInner`.
         let frameType = SessionControlCodec.frameContentType(for: codecOp)
         let wireContentType: Shared_Proto_Core_V1_ContentType = frameType == nil ? contentType : .unspecified
+        // The sealed envelope declares strictly less than the identified one: anything that is not
+        // one of the two pre-decryption exceptions collapses to `.generic`, i.e. to no field at all.
+        let sealedType = SealedEnvelopeType(declaring: wireContentType)
 
         // The session this send speaks for, pinned before the first attempt. A retry crosses the
         // network, and a session can be replaced underneath it: on 2026-08-04 attempts 1 and 2
@@ -1194,14 +1197,14 @@ final class SessionCoordinator: MessageRouterDelegate {
                         recipientUserId: userId,
                         recipientIdentityKey: recipientIK,
                         encryptedPayload: encryptedPayload,
-                        contentType: wireContentType
+                        contentType: sealedType
                     )
                     _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
                         try await StealthSenderService.buildSealedInner(
                             recipientUserId: userId,
                             recipientIdentityKey: recipientIK,
                             encryptedPayload: encryptedPayload,
-                            contentType: wireContentType
+                            contentType: sealedType
                         )
                     }, send: { inner in
                         try await MessagingServiceClient.shared.sendMessage(

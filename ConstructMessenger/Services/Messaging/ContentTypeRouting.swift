@@ -36,6 +36,50 @@ enum WireMessageKind: String, Codable, Equatable, CaseIterable {
     }
 }
 
+/// Everything a sealed envelope is allowed to declare in `SealedInner.content_type` — the whole set.
+///
+/// That field is server-visible: `SealedInner` is a plaintext proto the relay parses. So every type
+/// that moved into KNST byte 5 must leave it at `.generic`, which maps to `UNSPECIFIED` = 0 — proto3
+/// omits a zero enum, so the field is *absent* from the wire rather than present and vague.
+///
+/// This is a closed type rather than a `Shared_Proto_Core_V1_ContentType` argument because the
+/// argument allowed two spellings of "generic" to coexist: call signals, receipts and session pings
+/// passed `.unspecified`, message bodies and retries passed `.e2EeSignal`. Both route as `.direct`
+/// on receipt (`kind(for:)` defaults there), so nothing ever failed — but on the wire one is absent
+/// and the other present, and that difference told the server, on every sealed send, whether the
+/// envelope was conversation or control. Found 2026-08-17 by asking why a value meaning "nothing"
+/// had two forms.
+enum SealedEnvelopeType: CaseIterable {
+    /// Everything whose real type rides in KNST byte 5: message bodies, delivery receipts, call
+    /// signals, heartbeat, session ping/ready.
+    case generic
+    /// 21 — carries no ciphertext to hide a frame in.
+    case sessionReset
+    /// 24 — wire-identical to an ordinary X3DH carrier; the receiver must know before it decrypts.
+    case sessionResetInit
+
+    var proto: Shared_Proto_Core_V1_ContentType {
+        switch self {
+        case .generic:          return .unspecified
+        case .sessionReset:     return .sessionReset
+        case .sessionResetInit: return .sessionResetInit
+        }
+    }
+
+    /// Narrow a wire content type to what a sealed envelope may declare.
+    ///
+    /// Anything but the two structural exceptions collapses to `.generic`, deliberately: a content
+    /// type added later stays off the sealed wire by default, rather than appearing on it because
+    /// nobody remembered this boundary existed.
+    init(declaring contentType: Shared_Proto_Core_V1_ContentType) {
+        switch contentType {
+        case .sessionReset:     self = .sessionReset
+        case .sessionResetInit: self = .sessionResetInit
+        default:                self = .generic
+        }
+    }
+}
+
 /// Named mapping used at the unseal boundary and by ingest parsers.
 /// Phase-1 hotfix + Phase-2 sole classifier — do not duplicate these cases inline.
 enum ContentTypeRouting {
@@ -81,11 +125,14 @@ enum ContentTypeRouting {
     /// receipt (14) and ping/ready (25/26) now carry their type in KNST byte 5, inside the
     /// ciphertext, so the server can no longer distinguish them.
     /// See decisions/sealed-content-type-inside-the-plaintext-frame.md.
+    ///
+    /// `1` (e2EeSignal) was listed here as the "regular body baseline" until 2026-08-17. It was not
+    /// a baseline: it was one of two values a generic sealed send could carry, and the server could
+    /// read the difference. The baseline is now the field's absence — see `SealedEnvelopeType`.
     static var sealedControlContentTypes: [UInt8] {
         [
             21, // sessionReset / END_SESSION
             24, // sessionResetInit
-            1,  // e2EeSignal (regular body — baseline)
         ]
     }
 }

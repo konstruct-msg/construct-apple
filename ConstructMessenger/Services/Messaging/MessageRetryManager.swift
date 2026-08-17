@@ -201,14 +201,14 @@ class MessageRetryManager {
         do {
             sealedInner = try await StealthSenderService.buildSealedInner(
                 recipientUserId: recipientId, recipientIdentityKey: recipientIK,
-                encryptedPayload: wirePayload, contentType: .e2EeSignal)
+                encryptedPayload: wirePayload, contentType: .generic)
         } catch {
             throw StealthDowngradeBlocked(reason: "retry seal failed: \(error)")
         }
         return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
             try await StealthSenderService.buildSealedInner(
                 recipientUserId: recipientId, recipientIdentityKey: recipientIK,
-                encryptedPayload: wirePayload, contentType: .e2EeSignal)
+                encryptedPayload: wirePayload, contentType: .generic)
         }, send: { inner in
             if FeatureFlags.sealedSenderUnauthenticatedTransport {
                 return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)

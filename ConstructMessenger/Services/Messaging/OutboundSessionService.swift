@@ -317,7 +317,7 @@ final class OutboundSessionService {
                         recipientUserId: contactId,
                         recipientIdentityKey: identityKey,
                         encryptedPayload: wirePayload,
-                        contentType: .unspecified
+                        contentType: .generic
                     )
                 } catch {
                     Log.error("E2E receipt: seal failed: \(error)", category: "OutboundSession")
@@ -350,7 +350,7 @@ final class OutboundSessionService {
                         recipientUserId: contactId,
                         recipientIdentityKey: identityKey,
                         encryptedPayload: wirePayload,
-                        contentType: .unspecified
+                        contentType: .generic
                     )
                 }, send: { inner in
                     if FeatureFlags.sealedSenderUnauthenticatedTransport {

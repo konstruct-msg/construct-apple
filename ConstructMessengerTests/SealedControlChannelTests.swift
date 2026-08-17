@@ -11,6 +11,7 @@
 //
 
 import XCTest
+import SwiftProtobuf
 @testable import Construct_Messenger
 
 final class SealedControlChannelTests: XCTestCase {
@@ -105,7 +106,7 @@ final class SealedControlChannelTests: XCTestCase {
     /// Negative: a known control contentType must be classified as requiring a routing
     /// decision (so MessageRouter promotes fallthrough to ERROR + metric).
     func testKnownControlContentTypes_NeverSilentFallthrough() {
-        for ct in ContentTypeRouting.sealedControlContentTypes where ct != 1 {
+        for ct in ContentTypeRouting.sealedControlContentTypes {
             XCTAssertTrue(
                 ContentTypeRouting.isKnownControlContentType(ct),
                 "ct=\(ct) must be watched for no-routing-decision fallthrough"
@@ -114,6 +115,58 @@ final class SealedControlChannelTests: XCTestCase {
         XCTAssertFalse(ContentTypeRouting.isKnownControlContentType(1),
                         "plain e2EeSignal is not a control fallthrough watch")
         XCTAssertFalse(ContentTypeRouting.isKnownControlContentType(0))
+    }
+
+    // MARK: - SealedInner.content_type declares one of three things and nothing else
+
+    /// The set is closed at three. A fourth case cannot be added without this test being edited,
+    /// which is the point: `SealedInner` is a plaintext proto the relay parses, so every value
+    /// here is a fact handed to the server.
+    func testSealedEnvelopeType_DeclaresExactlyTheThreeAllowedValues() {
+        XCTAssertEqual(
+            SealedEnvelopeType.allCases.map { $0.proto },
+            [.unspecified, .sessionReset, .sessionResetInit]
+        )
+    }
+
+    /// Anything that is not one of the two pre-decryption exceptions must collapse to `.generic`.
+    /// A content type added later therefore stays off the sealed wire by default.
+    func testSealedEnvelopeType_CollapsesEverythingButTheTwoExceptions() {
+        for ct in [Shared_Proto_Core_V1_ContentType.unspecified, .e2EeSignal, .callSignal,
+                   .deliveryReceipt, .senderSync, .sessionPing, .sessionReady] {
+            XCTAssertEqual(SealedEnvelopeType(declaring: ct), .generic,
+                           "ct=\(ct) must not reach SealedInner.content_type")
+        }
+        XCTAssertEqual(SealedEnvelopeType(declaring: .sessionReset), .sessionReset)
+        XCTAssertEqual(SealedEnvelopeType(declaring: .sessionResetInit), .sessionResetInit)
+    }
+
+    /// The reason the two spellings of "generic" mattered, pinned at the byte level.
+    ///
+    /// Until 2026-08-17 message bodies and retries sealed with `.e2EeSignal` while call signals,
+    /// receipts and session pings sealed with `.unspecified`. Both route as `.direct` on receipt,
+    /// so nothing failed — but proto3 omits a zero enum and emits a non-zero one, so the serialised
+    /// envelope was one byte-pair longer for conversation than for control. That difference is
+    /// readable by the relay on every sealed send.
+    func testSealedInner_GenericContentTypeIsAbsentFromTheWire() throws {
+        func serialise(_ ct: Shared_Proto_Core_V1_ContentType) throws -> Data {
+            var inner = Shared_Proto_Core_V1_SealedInner()
+            inner.recipientUserID = "14f28d31-0000-0000-0000-000000000000"
+            inner.encryptedPayload = Data(repeating: 0xAB, count: 64)
+            inner.contentType = ct
+            return try inner.serializedData()
+        }
+
+        let generic = try serialise(SealedEnvelopeType.generic.proto)
+        let e2ee = try serialise(.e2EeSignal)
+        let reset = try serialise(SealedEnvelopeType.sessionReset.proto)
+
+        XCTAssertLessThan(generic.count, e2ee.count,
+                          "a generic sealed envelope must be shorter — the field is not on the wire")
+        XCTAssertLessThan(generic.count, reset.count)
+        // Field 5, varint → tag byte 0x28. Present for the exceptions, absent for generic.
+        XCTAssertFalse(generic.contains(0x28), "content_type must not be serialised for .generic")
+        XCTAssertTrue(reset.contains(0x28), "the two structural exceptions still declare themselves")
     }
 
     // MARK: - contentType is the only type

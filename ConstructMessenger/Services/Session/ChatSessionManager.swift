@@ -203,6 +203,7 @@ final class ChatSessionManager {
         let pingId = UUID().uuidString.lowercased()
         let nonce = UUID().uuidString
         // The ping's type rides in KNST byte 5, inside the ciphertext; the server is told nothing.
+        // Outer envelope only — the sealed path declares `.generic` (see `SealedEnvelopeType`).
         let contentType: Shared_Proto_Core_V1_ContentType = .unspecified
         let conversationId = ConversationId.direct(myUserId: myId, theirUserId: userId)
         let timestamp = UInt64(Date().timeIntervalSince1970)
@@ -223,14 +224,14 @@ final class ChatSessionManager {
                     recipientUserId: userId,
                     recipientIdentityKey: recipientIK,
                     encryptedPayload: payload,
-                    contentType: contentType
+                    contentType: .generic
                 )
                 _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
                     try await StealthSenderService.buildSealedInner(
                         recipientUserId: userId,
                         recipientIdentityKey: recipientIK,
                         encryptedPayload: payload,
-                        contentType: contentType
+                        contentType: .generic
                     )
                 }, send: { inner in
                     try await MessagingServiceClient.shared.sendMessage(

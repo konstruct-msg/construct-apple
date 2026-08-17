@@ -312,15 +312,18 @@ final class StealthSenderService: SealedSenderResolving {
     // MARK: - Build SealedInner for sending
 
     /// Builds SealedInner proto bytes for a sealed sender message.
-    /// `contentType` travels inside SealedInner (not the outer Envelope, which stays
-    /// generic for sealed sends) so the recipient can recover message/receipt/call-signal
-    /// kind after unsealing — stealth-sealed-sender-v2 Phase 3.
+    ///
+    /// `SealedInner` is a **plaintext** proto — the relay parses it — so `content_type` here is
+    /// server-visible. Since 2026-08-03 the real type rides in KNST byte 5 inside the ciphertext,
+    /// and this field is limited to the two types that must be recognised before decryption. The
+    /// parameter is a `SealedEnvelopeType` and not a raw proto enum so that limit is a compile
+    /// error rather than a convention: `.generic` serialises to nothing at all.
     func buildSealedInner(
         recipientUserId: String,
         certBytes: Data,
         recipientIdentityKey: Data,
         encryptedPayload: Data,
-        contentType: Shared_Proto_Core_V1_ContentType,
+        contentType: SealedEnvelopeType,
         spendUnit: TokenSpendUnit? = nil
     ) async throws -> Data {
         let sealedCert = try sealSenderCert(certBytes, recipientIdentityKey: recipientIdentityKey)
@@ -328,7 +331,8 @@ final class StealthSenderService: SealedSenderResolving {
         inner.recipientUserID = recipientUserId
         inner.senderCertCiphertext = sealedCert
         inner.encryptedPayload = encryptedPayload
-        inner.contentType = contentType
+        // `.generic` is UNSPECIFIED = 0, which proto3 omits — the field does not reach the wire.
+        inner.contentType = contentType.proto
         inner.deliveryTag = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
         // Present only on multi-envelope messages. A nil unit leaves the field empty, which the
         // server reads as legacy per-envelope redemption — the path every single-envelope send
@@ -415,7 +419,7 @@ final class StealthSenderService: SealedSenderResolving {
         recipientUserId: String,
         recipientIdentityKey: Data,
         encryptedPayload: Data,
-        contentType: Shared_Proto_Core_V1_ContentType,
+        contentType: SealedEnvelopeType,
         spendUnit: TokenSpendUnit? = nil
     ) async throws -> Data {
         // getSenderCertificate is @MainActor async — call it directly (will hop automatically)

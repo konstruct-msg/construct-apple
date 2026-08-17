@@ -65,7 +65,7 @@ final class ChunkedMessageSender {
                         recipientUserId: recipientId,
                         recipientIdentityKey: recipientIK,
                         encryptedPayload: encryptedPayload,
-                        contentType: .e2EeSignal,
+                        contentType: .generic,
                         spendUnit: spendUnit
                     )
                 } catch {
@@ -91,7 +91,7 @@ final class ChunkedMessageSender {
                         recipientUserId: recipientId,
                         recipientIdentityKey: recipientIK,
                         encryptedPayload: encryptedPayload,
-                        contentType: .e2EeSignal,
+                        contentType: .generic,
                         spendUnit: spendUnit
                     )
                 }, send: { inner in
