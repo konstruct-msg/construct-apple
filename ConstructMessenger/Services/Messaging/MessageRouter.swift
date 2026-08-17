@@ -2177,15 +2177,20 @@ final class MessageRouter {
         // per-device streams — so on a three-device account each device receives the two copies
         // meant for the other two and can decrypt neither.
         //
-        // The target is already on the wire in the id suffix the sender writes, `-ss-<tag>`, so
-        // recognising a foreign copy costs a string compare. Without it every foreign copy walks
-        // the whole candidate list, fails each decrypt, and logs an error for a message that was
-        // never ours to read.
-        if let target = SenderSyncWireId.targetDeviceTag(of: message.id),
-           let myDeviceId = AuthSessionManager.shared.currentDeviceId,
-           !SenderSyncWireId.tag(matches: myDeviceId, tag: target) {
+        // The target is on the wire in the id suffix the sender writes, `-ss-<tag>`, so recognising
+        // a foreign copy costs one X25519 per own device. Without it every foreign copy walks the
+        // whole candidate list, fails each decrypt, and — with messageNumber 0 — takes the recovery
+        // path into a bundle fetch, for a message that was never ours to read.
+        //
+        // The tag is a MAC under a secret only the two devices share, not the device id it used to
+        // be; see SenderSyncDeviceTag for what the readable form gave the relay.
+        if SenderSyncWireId.isForAnotherDevice(
+            wireId: message.id,
+            ourDeviceId: AuthSessionManager.shared.currentDeviceId,
+            pairSecrets: MultiDeviceSendCoordinator.shared.senderSyncPairSecrets(myUserId: currentUserId)
+        ) {
             Log.debug(
-                "SENDER_SYNC: \(message.id) is addressed to device \(target) — not ours, skipping",
+                "SENDER_SYNC: \(message.id) is addressed to another of our devices — skipping",
                 category: "MessageRouter"
             )
             PersistentACKStore.shared.markProcessed(message.id, senderId: message.from, in: context)

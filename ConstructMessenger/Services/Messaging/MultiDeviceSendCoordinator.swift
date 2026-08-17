@@ -25,6 +25,7 @@
 //
 
 import Foundation
+import CryptoKit
 
 @MainActor
 final class MultiDeviceSendCoordinator {
@@ -55,14 +56,66 @@ final class MultiDeviceSendCoordinator {
 
     /// Our own other devices, as far as this process currently knows — cache only, never a fetch.
     ///
-    /// Used by the SENDER_SYNC receive path to decide which sessions to try. It must not go to the
-    /// network: an incoming message is being routed, and the answer is needed now. An empty result
-    /// simply means the primary session is the only candidate, which is the state a single-device
-    /// account is in permanently. The cache fills on the first send that fans out.
-    func knownOwnDeviceIds(myUserId: String) -> [String] {
+    /// Used by the SENDER_SYNC receive path to decide which sessions to try and to derive the
+    /// tag secrets. It must not go to the network: an incoming message is being routed, and the
+    /// answer is needed now. An empty result simply means the primary session is the only
+    /// candidate, which is the state a single-device account is in permanently. The cache fills on
+    /// the first send that fans out.
+    func knownOwnDevices(myUserId: String) -> [DeviceBundleData] {
         guard let cache = ownDeviceCache,
               Date().timeIntervalSince(cache.fetchedAt) < cacheTTL else { return [] }
-        return cache.bundles.map(\.deviceId)
+        return cache.bundles
+    }
+
+    func knownOwnDeviceIds(myUserId: String) -> [String] {
+        knownOwnDevices(myUserId: myUserId).map(\.deviceId)
+    }
+
+    /// Shared secrets with our other devices, for reading the `-ss-<tag>` on an incoming copy.
+    ///
+    /// One X25519 per known device per message. Not cached: an account has units of devices, and a
+    /// cache of derived key material is state that has to be invalidated when a device is revoked —
+    /// a correctness risk out of proportion to ~50µs.
+    func senderSyncPairSecrets(myUserId: String) -> [SymmetricKey] {
+        guard let ourKey = KeychainManager.shared.loadDeviceIdentityKey() else { return [] }
+        let myDeviceId = AuthSessionManager.shared.currentDeviceId
+        return knownOwnDevices(myUserId: myUserId)
+            .filter { $0.deviceId != myDeviceId }
+            .compactMap {
+                SenderSyncDeviceTag.pairSecret(
+                    ourIdentityPrivateKey: ourKey,
+                    peerIdentityPublicKey: $0.bundle.identityPublic
+                )
+            }
+    }
+
+    /// The tag for a copy addressed to `targetDeviceId`, or the legacy plain-hex prefix when the
+    /// key material to compute one is missing.
+    ///
+    /// The fallback keeps a copy deliverable to a peer that would otherwise get an unreadable tag;
+    /// it costs the same metadata the whole change removes, so it is logged rather than silent.
+    static func senderSyncTag(
+        baseMessageId: String,
+        targetDeviceId: String,
+        targetIdentityPublic: Data,
+        ourIdentityPrivateKey: Data?
+    ) -> String {
+        guard let ourIdentityPrivateKey,
+              let secret = SenderSyncDeviceTag.pairSecret(
+                  ourIdentityPrivateKey: ourIdentityPrivateKey,
+                  peerIdentityPublicKey: targetIdentityPublic
+              ) else {
+            Log.error(
+                "SenderSync: no pair secret for \(targetDeviceId.prefix(8))… — falling back to the plain device tag, which the relay can read",
+                category: "MultiDevice"
+            )
+            return String(targetDeviceId.prefix(SenderSyncDeviceTag.legacyHexLength))
+        }
+        return SenderSyncDeviceTag.tag(
+            baseMessageId: baseMessageId,
+            targetDeviceId: targetDeviceId,
+            pairSecret: secret
+        )
     }
 
     /// Fan-out: send `plaintext` to ALL of the recipient's devices.
@@ -183,9 +236,22 @@ final class MultiDeviceSendCoordinator {
                 return
             }
 
+            // Our identity private key: the other half of the X25519 pair whose public half is in
+            // every device's bundle. Absent only before registration completes, and then there are
+            // no own devices to sync to either.
+            let ourIdentityKey = KeychainManager.shared.loadDeviceIdentityKey()
+
             for device in otherDevices {
                 let contactId = Self.sessionKey(userId: senderUserId, deviceId: device.deviceId)
-                let deviceTag = String(device.deviceId.prefix(8))
+                // The tag names the device this copy is for, to that device only. It used to be
+                // `device.deviceId.prefix(8)` — the id in plain hex, which the relay reads on every
+                // copy it routes. See SenderSyncDeviceTag.
+                let deviceTag = Self.senderSyncTag(
+                    baseMessageId: messageId,
+                    targetDeviceId: device.deviceId,
+                    targetIdentityPublic: device.bundle.identityPublic,
+                    ourIdentityPrivateKey: ourIdentityKey
+                )
                 for (index, payload) in plan.payloads.enumerated() {
                     let chunkWireId: String = plan.payloads.count == 1
                         ? "\(messageId)-ss-\(deviceTag)"

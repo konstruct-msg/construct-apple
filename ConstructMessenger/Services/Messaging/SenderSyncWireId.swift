@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import CryptoKit
 
 /// Reading of the `-ss-<tag>` suffix `MultiDeviceSendCoordinator` puts on a SENDER_SYNC copy.
 ///
@@ -14,12 +15,13 @@ import Foundation
 /// writing the same envelope to every one of the recipient's per-device streams. An account with
 /// three devices therefore receives, on each of them, the two copies meant for the other two.
 ///
-/// Recognising those costs a string compare here. Without it each foreign copy walks the whole
-/// candidate-session list, fails every decrypt, and — on a first message — reaches for a key
-/// bundle over the network, all for a message that was never ours to read.
+/// Recognising those costs one X25519 per own device. Without it each foreign copy walks the whole
+/// candidate-session list, fails every decrypt, and — on a first message — reaches for a key bundle
+/// over the network, all for a message that was never ours to read.
 ///
-/// This reads what is already on the wire; it puts nothing new there. The suffix has been part of
-/// the id since multi-device shipped, and the server has always seen it.
+/// What the tag *is* changed on 2026-08-17: it was the device id in plain hex, readable by the
+/// relay; it is now a per-message MAC under a secret only the two devices share. See
+/// `SenderSyncDeviceTag` for the derivation and for what the old form gave away.
 enum SenderSyncWireId {
 
     private static let marker = "-ss-"
@@ -39,12 +41,57 @@ enum SenderSyncWireId {
         return tag.isEmpty ? nil : tag
     }
 
-    /// Whether `tag` names `deviceId`.
+    /// The id the tag was computed over: everything before `-ss-`.
     ///
-    /// The sender writes `deviceId.prefix(8)`, so this is a prefix test rather than equality —
-    /// comparing the whole id against a truncated tag would never match, and a copy of every
-    /// message would be dropped as foreign.
-    static func tag(matches deviceId: String, tag: String) -> Bool {
-        !tag.isEmpty && deviceId.hasPrefix(tag)
+    /// The sender MACs this rather than the full wire id, so every chunk of one message carries the
+    /// same tag and the receiver can recompute it from any chunk it happens to see first.
+    static func baseId(of wireId: String) -> String? {
+        guard let range = wireId.range(of: marker, options: .backwards) else { return nil }
+        let base = String(wireId[..<range.lowerBound])
+        return base.isEmpty ? nil : base
+    }
+
+    /// Whether `wireId` addresses one of our *other* devices — i.e. whether this copy is not ours
+    /// to open. Also true of the sending device's own echo, which delivery hands back to it.
+    ///
+    /// `pairSecrets` are the shared secrets with our other devices, one per device; `ourDeviceId`
+    /// is what the sender would have bound into the tag had it been addressing us.
+    ///
+    /// Fails **open** everywhere it cannot decide: an unrecognised tag shape, no secrets to hand,
+    /// no device id. Wrongly opening a copy costs failed decrypts; wrongly discarding one loses a
+    /// message from the transcript, and silently, which is the failure mode this feature already
+    /// spent months in.
+    static func isForAnotherDevice(
+        wireId: String,
+        ourDeviceId: String?,
+        pairSecrets: [SymmetricKey]
+    ) -> Bool {
+        guard let tag = targetDeviceTag(of: wireId), let base = baseId(of: wireId) else {
+            return false  // not a SENDER_SYNC wire id — not ours to judge
+        }
+
+        switch tag.count {
+        case SenderSyncDeviceTag.hexLength:
+            // Sender on this build or newer. Ours when one of our pair secrets reproduces the tag
+            // *for our own device id* — the target is bound into the MAC, so a copy we sent to
+            // another device does not match here even though we share its secret.
+            guard let ourDeviceId, !ourDeviceId.isEmpty, !pairSecrets.isEmpty else { return false }
+            return !pairSecrets.contains {
+                SenderSyncDeviceTag.matches(tag, baseMessageId: base, ourDeviceId: ourDeviceId, pairSecret: $0)
+            }
+
+        case SenderSyncDeviceTag.legacyHexLength:
+            // Sender at or below 0.18.0 wrote `deviceId.prefix(8)`. Prefix, not equality —
+            // comparing a full device id against a truncated tag never matches, and every copy
+            // including our own would be discarded as foreign.
+            //
+            // Removal condition: no builds at or below 0.18.0 left in the field. Until then
+            // dropping this stops placing copies from a tester who has not updated.
+            guard let ourDeviceId, !ourDeviceId.isEmpty else { return false }
+            return !ourDeviceId.hasPrefix(tag)
+
+        default:
+            return false
+        }
     }
 }
