@@ -595,7 +595,7 @@
 "invite_error_verification_failed_fmt" = "Impossible de vérifier l’invitation : %@";
 "invite_error_legacy_unsupported" = "Ce format de lien n’est plus pris en charge. Demandez un nouveau QR ou lien d’invitation.";
 "invite_error_malformed" = "Données d’invitation malformées";
-"invite_redeem_safety_message_fmt" = "Connecté avec %@. Ce n’est pas la personne attendue ?";
+"invite_redeem_safety_message" = "Contact ajouté via une invitation. Le nom s’affichera dès qu’il sera partagé.";
 "invite_redeem_safety_block" = "Bloquer";
 "invite_accepted_inviter_message" = "Quelqu’un s’est connecté via votre invitation.";
 "show_chat_list" = "Afficher la liste des chats";

@@ -409,7 +409,7 @@
 "invite_error_verification_failed_fmt" = "Could not verify invite: %@";
 "invite_error_legacy_unsupported" = "This link format is no longer supported. Ask for a fresh invite QR or link.";
 "invite_error_malformed" = "Malformed invite data";
-"invite_redeem_safety_message_fmt" = "Connected with %@. Not who you expected?";
+"invite_redeem_safety_message" = "Contact added from an invite. Their name appears once they share it.";
 "invite_redeem_safety_block" = "Block";
 "invite_accepted_inviter_message" = "Someone connected via your invite.";
 

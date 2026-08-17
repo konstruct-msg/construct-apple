@@ -369,7 +369,7 @@
 "invite_error_verification_failed_fmt" = "Не удалось проверить приглашение: %@";
 "invite_error_legacy_unsupported" = "Этот формат ссылки больше не поддерживается. Попросите свежий QR или ссылку.";
 "invite_error_malformed" = "Повреждённые данные приглашения";
-"invite_redeem_safety_message_fmt" = "Вы соединились с %@. Не тот человек?";
+"invite_redeem_safety_message" = "Контакт добавлен по приглашению. Имя появится, когда собеседник им поделится.";
 "invite_redeem_safety_block" = "Блок";
 "invite_accepted_inviter_message" = "Кто-то подключился по вашему приглашению.";
 

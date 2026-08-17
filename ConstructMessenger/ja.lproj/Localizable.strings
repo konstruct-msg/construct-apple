@@ -1090,7 +1090,7 @@
 "invite_error_verification_failed_fmt" = "招待を確認できませんでした：%@";
 "invite_error_legacy_unsupported" = "このリンク形式はサポートされなくなりました。新しい招待QRかリンクをもらってください。";
 "invite_error_malformed" = "招待データが壊れています";
-"invite_redeem_safety_message_fmt" = "%@とつながりました。心当たりのない相手ですか？";
+"invite_redeem_safety_message" = "招待から連絡先を追加しました。名前は相手が共有すると表示されます。";
 "invite_redeem_safety_block" = "ブロック";
 "invite_accepted_inviter_message" = "あなたの招待から誰かがつながりました。";
 "media_autodownload" = "メディアの自動ダウンロード";

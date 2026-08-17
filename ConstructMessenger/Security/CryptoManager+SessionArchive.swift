@@ -119,6 +119,23 @@ extension CryptoManager {
                 KeychainManager.shared.deleteSession(for: userId)
                 return
             }
+            // Third case, previously folded into the failure above: there was never a session
+            // here to archive. `archiveSession` is reached from teardown paths that do not
+            // check first — a fresh invite redeem calls it one line after logging "No stored
+            // session for <peer>" — and the outcome was an error-level line claiming deletion
+            // was withheld "to prevent data loss" for something that never existed. A device
+            // log from 2026-08-17 shows that pair one second after a QR was scanned.
+            //
+            // The export attempt stays the authority on whether an archive was written, so the
+            // outcome is unchanged in every case: both branches return without deleting. Only
+            // the severity moves, and only when the core agrees nothing is there.
+            if core.hasSession(contactId: userId) == false {
+                Log.info(
+                    "archiveSession: nothing to archive for \(userId.prefix(8))… (reason: \(reason.rawValue))",
+                    category: "CryptoManager"
+                )
+                return
+            }
             Log.error("Failed to export session for archiving — session NOT deleted to prevent data loss: \(error)", category: "CryptoManager")
             // Do not proceed with deletion: losing the session without an archive
             // would permanently break communication with this contact.
