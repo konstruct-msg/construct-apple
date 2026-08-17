@@ -2156,94 +2156,195 @@ final class MessageRouter {
     private func handleSenderSync(_ message: ChatMessage, in context: NSManagedObjectContext) {
         guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
 
-        let partnerUserId = extractPartnerUserId(from: message.conversationId, myUserId: currentUserId)
-        guard !partnerUserId.isEmpty else {
-            // This branch is not reachable-by-accident: it is where SENDER_SYNC always ends up.
-            //
-            // We do send both fields — `buildEnvelope` sets `conversationID` and `senderDevice` on
-            // every non-sealed envelope, and SENDER_SYNC is explicitly never sealed. The server
-            // blanks them on delivery **on purpose** (`messaging-service/src/envelope.rs`:
-            // `sender_device: None` and "conversation_id is intentionally empty: it is
-            // server-visible metadata and must not carry E2E semantics"). Observed 2026-08-05, one
-            // message id on both sides of a single device:
-            //
-            //   sent      1aa6abac…-ss-b3ed60ab  conversationId = direct:0a1c609f…:ea134859…
-            //   received  conversationId = ''    senderDevice = ''
-            //
-            // So this is a design contradiction, not a relay bug: SENDER_SYNC routes on metadata
-            // the server is designed never to deliver, which means multi-device sync of one's own
-            // sent messages cannot work as currently specified. The partner id and sender device
-            // have to travel *inside* the ciphertext, where the server neither sees nor strips
-            // them — a protocol change, not a patch, so it is not made here. The message id is no
-            // fallback either: `-ss-<deviceTag>` carries the *recipient* device, not the sender's.
-            //
-            // What is fixed here is the diagnosis. The previous line named neither the message nor
-            // the second missing field, so fifteen distinct failures read exactly like one failure
-            // logged fifteen times.
-            Log.error(
-                "SENDER_SYNC: unroutable \(message.id) — conversationId='\(message.conversationId)' senderDeviceId='\(message.senderDeviceId)'; both are set on send and blanked by the server by design, so this message cannot be placed in a conversation. The copy of what the other device sent will not appear here.",
-                category: "MessageRouter"
-            )
-            PerformanceMetrics.shared.record(
-                .senderSyncUnroutable,
-                label: message.senderDeviceId.isEmpty ? "no_conversation_no_device" : "no_conversation"
-            )
+        // Which of our own devices sent this is settled by decryption, not by a field: the sender
+        // device selects the Double Ratchet session, so it is needed *before* the plaintext exists
+        // and cannot travel inside it. We try our own-device sessions; the one that opens the
+        // message is the answer, and it is a cryptographic one rather than a claim.
+        //
+        // `message.senderDeviceId` is always empty here — the server does not deliver it — so the
+        // old code took the `message.from` branch, looked up a session that is the *primary*
+        // session with ourselves, and got nowhere. It is still tried first, since a single-device
+        // account has nothing else.
+        let candidates = senderSyncSessionCandidates(myUserId: currentUserId, message: message)
+        guard let opened = openSenderSync(message, candidates: candidates) else {
+            handleUnopenedSenderSync(message, candidates: candidates, in: context)
             return
         }
 
-        let contactId = message.senderDeviceId.isEmpty
-            ? message.from
-            : MultiDeviceSendCoordinator.sessionKey(userId: message.from, deviceId: message.senderDeviceId)
+        routeOpenedSenderSync(opened.plaintext, original: message, myUserId: currentUserId, in: context)
+    }
 
-        let hasSession = CryptoManager.shared.hasSession(for: contactId)
-
-        if hasSession {
-            do {
-                let decryptResult = try CryptoManager.shared.decryptMessage(message, contactIdOverride: contactId)
-                saveSenderSyncMessage(decryptResult.plaintext, original: message, partnerUserId: partnerUserId, in: context)
-            } catch {
-                Log.error("SENDER_SYNC: decryption failed for contactId=\(contactId.prefix(20))…: \(error)", category: "MessageRouter")
-                return
-            }
-        } else if message.messageNumber == 0 {
-            // New device: init receiving session async, then save
-            guard !message.senderDeviceId.isEmpty else {
-                Log.error("SENDER_SYNC: no senderDeviceId for first message — cannot init session", category: "MessageRouter")
-                return
-            }
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                await self.initAndDecryptSenderSync(
-                    message: message,
-                    contactId: contactId,
-                    partnerUserId: partnerUserId,
-                    in: context
-                )
-            }
-        } else {
-            Log.error("SENDER_SYNC: no session for \(contactId.prefix(20))… and messageNumber=\(message.messageNumber) > 0 — dropping", category: "MessageRouter")
+    /// Reassemble → strip the routing header → save. The one implementation of what happens to a
+    /// SENDER_SYNC once it is open, so the session-already-existed path and the
+    /// session-established-just-now path cannot come to differ.
+    ///
+    /// `assemble` stops before content decoding on purpose: the header has to come off in between,
+    /// and it is only present once in a reassembled multi-chunk stream — see `SenderSyncRouting`.
+    private func routeOpenedSenderSync(
+        _ plaintext: Data,
+        original: ChatMessage,
+        myUserId: String,
+        in context: NSManagedObjectContext
+    ) {
+        switch chunkReassembler.assemble(data: plaintext, envelopeId: original.id) {
+        case .incomplete:
+            Log.debug("SENDER_SYNC: chunk incomplete — waiting for more", category: "MessageRouter")
+        case .invalid(let reason):
+            Log.error("SENDER_SYNC: framing invalid for \(original.id): \(reason)", category: "MessageRouter")
+        case .notFramed(let raw):
+            saveSenderSyncFromRouted(raw, original: original, myUserId: myUserId, in: context)
+        case .complete(let assembled, let e2eMessageId):
+            saveSenderSyncFromRouted(
+                assembled,
+                original: original,
+                myUserId: myUserId,
+                e2eMessageId: e2eMessageId,
+                in: context
+            )
         }
     }
 
-    /// Extract the OTHER user's ID from a direct conversation ID.
-    /// Format: "direct:{sorted_user1}:{sorted_user2}"
-    private func extractPartnerUserId(from conversationId: String, myUserId: String) -> String {
-        let parts = conversationId.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
-        guard parts.count == 3, parts[0] == "direct" else { return "" }
-        let a = String(parts[1]), b = String(parts[2])
-        if a == myUserId { return b }
-        if b == myUserId { return a }
-        return ""
+    /// Strip the routing header, then hand the content to the ordinary decoder.
+    private func saveSenderSyncFromRouted(
+        _ assembled: Data,
+        original: ChatMessage,
+        myUserId: String,
+        e2eMessageId: String? = nil,
+        in context: NSManagedObjectContext
+    ) {
+        guard let (routing, content) = SenderSyncRouting.decode(prefixOf: assembled) else {
+            // No header: the sender is running a build from before this existed, and nothing in
+            // the delivery says which conversation the copy belongs to. Same outcome as every
+            // SENDER_SYNC before this change, and the same message.
+            legacySenderSyncUnroutable(original)
+            return
+        }
+        guard routing.partnerUserId != myUserId else {
+            Log.error(
+                "SENDER_SYNC: routing header names ourselves as the partner for \(original.id) — dropping",
+                category: "MessageRouter"
+            )
+            return
+        }
+        saveSenderSyncMessage(
+            content,
+            original: original,
+            partnerUserId: routing.partnerUserId,
+            e2eMessageId: e2eMessageId,
+            in: context
+        )
     }
+
+    /// A sync we could open but cannot place: the sender did not send a routing header.
+    ///
+    /// This was every SENDER_SYNC before 2026-08-17. `buildEnvelope` sets `conversationID` and
+    /// `senderDevice` on every non-sealed envelope and SENDER_SYNC is never sealed, but the server
+    /// blanks both on delivery **on purpose** (`messaging-service/src/envelope.rs`:
+    /// `sender_device: None`, and "conversation_id is intentionally empty: it is server-visible
+    /// metadata and must not carry E2E semantics"). Observed 2026-08-05, one message id on both
+    /// sides of a single account:
+    ///
+    ///     sent      1aa6abac…-ss-b3ed60ab  conversationId = direct:0a1c609f…:ea134859…
+    ///     received  conversationId = ''    senderDevice = ''
+    ///
+    /// The message routed on metadata the server is designed never to deliver — a design
+    /// contradiction rather than a relay bug. It is now carried inside the ciphertext, so this path
+    /// means only "the other device is on an older build".
+    private func legacySenderSyncUnroutable(_ message: ChatMessage) {
+        Log.error(
+            "SENDER_SYNC: no routing header in \(message.id) — the sending device predates the header, and conversationId is blanked by the server by design, so this copy cannot be placed in a conversation.",
+            category: "MessageRouter"
+        )
+        PerformanceMetrics.shared.record(.senderSyncUnroutable, label: "no_routing_header")
+    }
+
+    /// Own-device sessions to try, most likely first.
+    ///
+    /// The plain `message.from` session comes first because a single-device account has nothing
+    /// else, and because it is what every build before this one used.
+    private func senderSyncSessionCandidates(myUserId: String, message: ChatMessage) -> [String] {
+        var keys: [String] = [message.from]
+        if !message.senderDeviceId.isEmpty {
+            // Only ever populated by a local/federated path that does not go through the blanking
+            // server. Free to try, and it short-circuits the loop when present.
+            keys.insert(MultiDeviceSendCoordinator.sessionKey(userId: message.from, deviceId: message.senderDeviceId), at: 0)
+        }
+        for deviceId in MultiDeviceSendCoordinator.shared.knownOwnDeviceIds(myUserId: myUserId) {
+            let key = MultiDeviceSendCoordinator.sessionKey(userId: myUserId, deviceId: deviceId)
+            if !keys.contains(key) { keys.append(key) }
+        }
+        return keys
+    }
+
+    /// Try each candidate session until one opens the message.
+    ///
+    /// A failed Double Ratchet decrypt does not advance the ratchet, so trying the wrong session
+    /// costs nothing but the attempt — and there are as many attempts as the account has devices.
+    private func openSenderSync(
+        _ message: ChatMessage,
+        candidates: [String]
+    ) -> (plaintext: Data, contactId: String)? {
+        for contactId in candidates where CryptoManager.shared.hasSession(for: contactId) {
+            if let result = try? CryptoManager.shared.decryptMessage(message, contactIdOverride: contactId) {
+                return (result.plaintext, contactId)
+            }
+        }
+        return nil
+    }
+
+    /// No candidate session opened it. A first message from a device we have never talked to is
+    /// the one recoverable case: init a receiving session against each candidate until one takes.
+    private func handleUnopenedSenderSync(
+        _ message: ChatMessage,
+        candidates: [String],
+        in context: NSManagedObjectContext
+    ) {
+        guard message.messageNumber == 0 else {
+            Log.error(
+                "SENDER_SYNC: no own-device session opened \(message.id) and messageNumber=\(message.messageNumber) > 0 — dropping",
+                category: "MessageRouter"
+            )
+            return
+        }
+        guard let myUserId = AuthSessionManager.shared.currentUserId else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            for contactId in candidates where !CryptoManager.shared.hasSession(for: contactId) {
+                // The device id is the suffix of the session key; the plain `message.from`
+                // candidate has none and is skipped, since a bundle fetch needs one.
+                let parts = contactId.split(separator: ":", maxSplits: 1)
+                guard parts.count == 2 else { continue }
+                await self.initAndDecryptSenderSync(
+                    message: message,
+                    contactId: contactId,
+                    senderDeviceId: String(parts[1]),
+                    myUserId: myUserId,
+                    in: context
+                )
+                if CryptoManager.shared.hasSession(for: contactId) { return }
+            }
+        }
+    }
+
+    // `extractPartnerUserId(from:myUserId:)` was removed 2026-08-17 with its only caller. It read
+    // the partner out of `Envelope.conversation_id`, which the server blanks on delivery by
+    // design, so it returned "" for every SENDER_SYNC ever received. The partner now travels
+    // inside the ciphertext — see `SenderSyncRouting`.
 
     /// Save a decrypted SENDER_SYNC message as an outgoing bubble.
     ///
     /// Wire payload is the same binary path as a normal receive (KNST → MessageContent).
     /// Local store uses CTM1 `storagePayload` when the reassembler provides it (C1c).
+    /// - Parameters:
+    ///   - content: the message content with its routing header already removed, and already
+    ///     reassembled — the caller had to split those two steps to reach the header, so this must
+    ///     not run the framing again.
+    ///   - e2eMessageId: the sender's message id from the KNST header, carried over from `assemble`.
     private func saveSenderSyncMessage(
-        _ decryptedBytes: Data,
+        _ content: Data,
         original: ChatMessage,
         partnerUserId: String,
+        e2eMessageId: String?,
         in context: NSManagedObjectContext
     ) {
         let chat: Chat
@@ -2261,7 +2362,7 @@ final class MessageRouter {
         let e2eRowId: String?
         let mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage?
 
-        switch ChunkedMessageReassembler.shared.process(data: decryptedBytes, envelopeId: original.id) {
+        switch ChunkedMessageReassembler.shared.decodeAssembled(content, e2eMessageId: e2eMessageId) {
         case .assembled(let text, _, let e2eId, let album, let storage):
             e2eRowId = e2eId
             mediaAlbum = album
@@ -2284,8 +2385,9 @@ final class MessageRouter {
             Log.info("SENDER_SYNC: edit in sync payload, ignoring", category: "MessageRouter")
             return
         case .incomplete:
-            // Multi-chunk SENDER_SYNC: wait for remaining KNST fragments (same reassembler state).
-            Log.debug("SENDER_SYNC: chunk incomplete — waiting for more", category: "MessageRouter")
+            // Unreachable: reassembly finished before the caller stripped the routing header.
+            // Kept because the result type is shared with `process`.
+            Log.error("SENDER_SYNC: decoder reported incomplete on assembled bytes", category: "MessageRouter")
             return
         case .invalid:
             Log.info(
@@ -2359,15 +2461,20 @@ final class MessageRouter {
     private func initAndDecryptSenderSync(
         message: ChatMessage,
         contactId: String,
-        partnerUserId: String,
+        senderDeviceId: String,
+        myUserId: String,
         in context: NSManagedObjectContext
     ) async {
         do {
             // SENDER_SYNC from one of our own devices. initReceivingSession below uses only
             // identity / SPK / verifying key — no one-time pre-key — so don't burn one.
+            //
+            // `senderDeviceId` comes from the candidate session key, not from the envelope: the
+            // server does not deliver `sender_device`, so `message.senderDeviceId` is empty here
+            // and this fetch used to ask for a bundle with no device at all.
             let bundle = try await KeyServiceClient.shared.getPreKeyBundle(
                 userId: message.from,
-                deviceId: message.senderDeviceId,
+                deviceId: senderDeviceId,
                 consumeOneTimePrekey: false
             )
             let bundleWithSuite = (
@@ -2386,7 +2493,7 @@ final class MessageRouter {
                 kyberSpkUploadedAt: bundle.kyberSpkUploadedAt,
                 kyberSpkRotationEpoch: bundle.kyberSpkRotationEpoch
             )
-            saveSenderSyncMessage(decrypted, original: message, partnerUserId: partnerUserId, in: context)
+            routeOpenedSenderSync(decrypted, original: message, myUserId: myUserId, in: context)
 
             // Replenish any OTPKs consumed during this session init
             Task {

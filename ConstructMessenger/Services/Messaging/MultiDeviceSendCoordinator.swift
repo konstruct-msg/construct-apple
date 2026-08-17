@@ -53,6 +53,18 @@ final class MultiDeviceSendCoordinator {
         "\(userId):\(deviceId)"
     }
 
+    /// Our own other devices, as far as this process currently knows — cache only, never a fetch.
+    ///
+    /// Used by the SENDER_SYNC receive path to decide which sessions to try. It must not go to the
+    /// network: an incoming message is being routed, and the answer is needed now. An empty result
+    /// simply means the primary session is the only candidate, which is the state a single-device
+    /// account is in permanently. The cache fills on the first send that fans out.
+    func knownOwnDeviceIds(myUserId: String) -> [String] {
+        guard let cache = ownDeviceCache,
+              Date().timeIntervalSince(cache.fetchedAt) < cacheTTL else { return [] }
+        return cache.bundles.map(\.deviceId)
+    }
+
     /// Fan-out: send `plaintext` to ALL of the recipient's devices.
     ///
     /// Intended for use after the primary send (which already covers the recipient's
@@ -141,7 +153,34 @@ final class MultiDeviceSendCoordinator {
             // Same framing as the primary send path so the peer reassembler can rebuild
             // MessageContent → CTM1. UUID from base messageId when well-formed.
             let planId = UUID(uuidString: messageId) ?? UUID()
-            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: plaintext, messageId: planId)
+
+            // The routing header goes on before chunking, so a multi-chunk sync carries it once
+            // and the receiver strips it once, after reassembly. Without it the receiving device
+            // cannot tell which conversation this copy belongs to: sender and recipient on the
+            // wire are both us, and `conversation_id` is blanked by the server by design.
+            //
+            // A partner id that is not a UUID yields no header rather than a malformed one; that
+            // send lands on the same unroutable path as a sender running an older build, which is
+            // where all of them landed before this existed.
+            let framedPlaintext: Data
+            if let header = SenderSyncRouting(partnerUserId: originalRecipientUserId).encoded() {
+                framedPlaintext = header + plaintext
+            } else {
+                Log.error(
+                    "SenderSync: partner id '\(originalRecipientUserId.prefix(8))…' is not a UUID — sending without routing header, the copy will not be placeable",
+                    category: "MultiDevice"
+                )
+                framedPlaintext = plaintext
+            }
+
+            let plan = ChunkedMessageSender.shared.buildPlan(
+                plaintext: framedPlaintext,
+                messageId: planId,
+                // Byte 5 of the KNST header exists to carry the content type inside the ciphertext.
+                // SENDER_SYNC was leaving it at the default 1, so the frame described itself as an
+                // ordinary chat message while the envelope said 23.
+                contentType: WireMessageKind.senderSync.canonicalContentType
+            )
             guard !plan.payloads.isEmpty else {
                 Log.info("SenderSync: chunk plan empty (payload too large?) — skip", category: "MultiDevice")
                 return

@@ -157,6 +157,30 @@ final class ChunkedMessageReassembler {
     ///
     /// `now` is a parameter only so expiry is testable without waiting out the retention window.
     func process(data: Data, envelopeId: String, now: Date = Date()) -> ChunkedMessageResult {
+        switch assemble(data: data, envelopeId: envelopeId, now: now) {
+        case .complete(let assembled, let e2eMessageId):
+            return decodeAssembled(assembled, e2eMessageId: e2eMessageId)
+        case .notFramed(let raw):
+            return decodeRaw(raw)
+        case .incomplete:
+            return .incomplete
+        case .invalid(let reason):
+            return .invalid(reason)
+        }
+    }
+
+    /// Reassemble the KNST framing without decoding what it carries.
+    ///
+    /// `process` is this plus a decode, and is what every ordinary content type uses. SENDER_SYNC
+    /// needs the two apart: a routing header precedes its content inside the ciphertext (see
+    /// `SenderSyncRouting`), and it has to come off after reassembly — a multi-chunk sync carries
+    /// it only in the first chunk's share of the stream — but before the content decoder, which
+    /// would otherwise be handed 20 bytes of header and reject the whole message.
+    ///
+    /// Splitting rather than special-casing: the framing logic stays in one place and `process`
+    /// keeps calling it, so a sender-sync stream and an ordinary one cannot drift apart in how
+    /// they are reassembled.
+    func assemble(data: Data, envelopeId: String, now: Date = Date()) -> ChunkedAssembly {
         // Sweep on every decrypted message, not only on chunked ones: a stalled reassembly is
         // most likely to be noticed while ordinary traffic keeps flowing from other peers.
         store.sweepExpired(now: now)
@@ -169,22 +193,22 @@ final class ChunkedMessageReassembler {
         {
             guard let parsed = ChunkedMessageCodec.parseChunk(data: data) else {
                 Log.info("Binary KNST magic found but header invalid, falling through", category: "ChunkedDelivery")
-                return decodeRaw(data)
+                return .notFramed(data)
             }
-            return processKnstChunk(parsed, envelopeId: envelopeId, now: now)
+            return assembleKnstChunk(parsed, envelopeId: envelopeId, now: now)
         }
 
-        return decodeRaw(data)
+        return .notFramed(data)
     }
 
-    private func processKnstChunk(
+    private func assembleKnstChunk(
         _ parsed: ChunkedMessageCodec.ParsedChunk,
         envelopeId: String,
         now: Date
-    ) -> ChunkedMessageResult {
+    ) -> ChunkedAssembly {
         if parsed.totalChunks == 1 {
             let trimmed = parsed.payload.prefix(parsed.plaintextLength)
-            return decodeAssembled(Data(trimmed), e2eMessageId: Self.e2eId(from: parsed.messageId))
+            return .complete(Data(trimmed), e2eMessageId: Self.e2eId(from: parsed.messageId))
         }
         if parsed.totalChunks > ChunkedDeliveryConfig.maxChunks {
             return .invalid("total_chunks exceeds max")
@@ -208,7 +232,7 @@ final class ChunkedMessageReassembler {
             return .invalid("Plaintext length exceeds assembled size")
         }
         store.remove(messageId: parsed.messageId)
-        return decodeAssembled(assembled, e2eMessageId: Self.e2eId(from: parsed.messageId))
+        return .complete(assembled, e2eMessageId: Self.e2eId(from: parsed.messageId))
     }
 
     /// Normalize a KNST-header UUID to the row-id format (lowercased). Rejects the all-zero
@@ -218,7 +242,9 @@ final class ChunkedMessageReassembler {
         return id == "00000000-0000-0000-0000-000000000000" ? nil : id
     }
 
-    private func decodeAssembled(_ data: Data, e2eMessageId: String?) -> ChunkedMessageResult {
+    /// Decode reassembled plaintext into a message. Internal because SENDER_SYNC calls it itself,
+    /// after taking its routing header off what `assemble` returned.
+    func decodeAssembled(_ data: Data, e2eMessageId: String?) -> ChunkedMessageResult {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
@@ -323,6 +349,17 @@ final class ChunkedMessageReassembler {
     func cleanupExpired(now: Date = Date()) {
         store.sweepExpired(now: now)
     }
+}
+
+/// The framing layer's answer, before anything looks at what was carried.
+enum ChunkedAssembly {
+    /// Every chunk is in. `e2eMessageId` is the sender's message id from the KNST header.
+    case complete(Data, e2eMessageId: String?)
+    /// A chunk landed and more are outstanding.
+    case incomplete
+    /// Not a KNST frame at all — a direct proto or a legacy plain-text payload.
+    case notFramed(Data)
+    case invalid(String)
 }
 
 enum ChunkedMessageResult {
