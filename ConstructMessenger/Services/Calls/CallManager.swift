@@ -84,7 +84,17 @@ final class CallManager: CallUIManaging {
         let startedAt: Date = Date()
         var answeredAt: Date? = nil
         /// SDP offer received via MessagingService before the user answered.
+        ///
+        /// Read it through `usableRemoteOfferSdp`, never directly: the raw field answers "is there
+        /// an offer" differently depending on whether the asker tests `!= nil` or `!isEmpty`, and
+        /// that disagreement is what killed the 2026-08-17 call (see `offerSdpIsUsable`).
         var pendingRemoteOfferSdp: String? = nil
+        /// The stored offer when it is negotiable, `nil` otherwise. The single reading of
+        /// "we are holding an offer" — used by `answer()` and by both ICE-buffering paths, which
+        /// must agree or candidates queue against an offer no one will ever apply.
+        var usableRemoteOfferSdp: String? {
+            offerSdpIsUsable(pendingRemoteOfferSdp) ? pendingRemoteOfferSdp : nil
+        }
         /// The user answered before the SDP offer arrived, and `answer()` has already run to
         /// completion with nothing to apply.
         ///
@@ -434,7 +444,7 @@ final class CallManager: CallUIManaging {
 
                 // If the offer arrived via E2EE before the user answered, apply it now
                 // and immediately send back an answer so the caller can proceed with ICE.
-                if let pendingSdp = self.active?.pendingRemoteOfferSdp, !pendingSdp.isEmpty {
+                if let pendingSdp = self.active?.usableRemoteOfferSdp {
                     try await self.applyOfferAndAnswer(sdp: pendingSdp, for: active)
                     return
                 }
@@ -1063,9 +1073,19 @@ final class CallManager: CallUIManaging {
             endActiveCall(reason: .local("Offer handling failed"))
             return
         }
+        // Same refusal as the message path: holding an empty offer is what made `answer()` and the
+        // ICE paths disagree about whether an offer was present at all.
+        guard offerSdpIsUsable(sdp) else {
+            Log.error(
+                "Held offer for call \(call.session.id.prefix(8))… carries no SDP — ending rather than waiting on it",
+                category: "Calls"
+            )
+            endActiveCall(reason: .local("Offer handling failed"))
+            return
+        }
         call.pendingRemoteOfferSdp = sdp
         Log.info(
-            "Holding offer for unanswered call \(call.session.id.prefix(8))… — negotiation waits for the user",
+            "Holding offer for unanswered call \(call.session.id.prefix(8))… — negotiation waits for the user (sdp=\(sdp.utf8.count)b)",
             category: "Calls"
         )
         // Already waiting on an SDP because the user answered first? Then consent exists and the
@@ -1088,6 +1108,12 @@ final class CallManager: CallUIManaging {
         guard let active, active.session == session else { return }
         do {
             let sdp = try CallSignalCrypto.shared.decryptField(offer.sdp, from: session.peerUserId)
+            // Renegotiation path. `setRemoteOffer("")` would fail deeper in WebRTC with an error
+            // that names neither the call nor the offer, so refuse it where both are still in hand.
+            guard offerSdpIsUsable(sdp) else {
+                throw WebRTCSessionError.invalidState("remote offer carries no SDP")
+            }
+            Log.info("Remote offer for \(session.id.prefix(8))… sdp=\(sdp.utf8.count)b", category: "Calls")
             try ensureWebRTC(role: .callee)
             guard let webrtc = active.webrtc else {
                 throw WebRTCSessionError.invalidState("WebRTC nil after ensureWebRTC")
@@ -1435,7 +1461,7 @@ final class CallManager: CallUIManaging {
             let c = WebRTCIceCandidate(sdp: candidateSdp, sdpMid: ice.sdpMid, sdpMLineIndex: Int32(ice.sdpMLineIndex))
             // Buffer ICE candidates until the remote offer has been applied.
             // addRemoteIceCandidate silently fails when there's no remote description.
-            if active.pendingRemoteOfferSdp != nil {
+            if active.usableRemoteOfferSdp != nil {
                 active.pendingIceCandidates.append(c)
                 Log.debug("Buffered E2EE ICE candidate (pending SDP)", category: "Calls")
             } else {
@@ -1450,7 +1476,7 @@ final class CallManager: CallUIManaging {
                     continue
                 }
                 let c = WebRTCIceCandidate(sdp: candidateSdp, sdpMid: ice.sdpMid, sdpMLineIndex: Int32(ice.sdpMLineIndex))
-                if active.pendingRemoteOfferSdp != nil {
+                if active.usableRemoteOfferSdp != nil {
                     active.pendingIceCandidates.append(c)
                     buffered += 1
                 } else {
@@ -1490,6 +1516,19 @@ final class CallManager: CallUIManaging {
             Log.error("Failed to decrypt incoming offer SDP from \(callerUserId.prefix(8))…: \(error)", category: "Calls")
             return
         }
+        // Refused here rather than stored: an unusable offer that gets filed rings CallKit for a
+        // call that cannot be negotiated, and the caller learns nothing until a human hangs up.
+        guard offerSdpIsUsable(sdp) else {
+            Log.error(
+                "Incoming offer from \(callerUserId.prefix(8))… carries no SDP — not ringing for a call that cannot connect (callId=\(callId.prefix(8))…)",
+                category: "Calls"
+            )
+            return
+        }
+        Log.info(
+            "Incoming offer SDP from \(callerUserId.prefix(8))… callId=\(callId.prefix(8))… sdp=\(sdp.utf8.count)b",
+            category: "Calls"
+        )
         let matchingIncoming: ActiveCall? = {
             guard let active, active.session.id == callId,
                   case .incoming = active.session.direction else { return nil }
@@ -1600,12 +1639,39 @@ final class CallManager: CallUIManaging {
     private func sendOffer(toUserId: String) async throws {
         guard let active else { throw RPCError(code: .failedPrecondition, message: "No active call") }
         try ensureWebRTC(role: .caller)
-        let plainSdp = try await active.webrtc?.createOffer() ?? ""
+        // Was `?? ""`, which turned "there is no WebRTC session" into "an offer carrying no SDP"
+        // and sent it. The callee has no way to tell that apart from a real offer: it files the
+        // empty string, buffers ICE against it, and fails 45 s later. `createAnswer` and
+        // `restartIce` have both refused an empty SDP for a while; the first offer was the one
+        // path out of the three without the check.
+        guard let webrtc = active.webrtc else {
+            throw WebRTCSessionError.invalidState("WebRTC not ready after ensureWebRTC")
+        }
+        let plainSdp = try await webrtc.createOffer()
         sendOffer(sdp: plainSdp, toUserId: toUserId, isIceRestart: false)
     }
 
     private func sendOffer(sdp plainSdp: String, toUserId: String, isIceRestart: Bool) {
         guard let active else { return }
+        // The one place every offer leaves through, so the refusal belongs here rather than at
+        // each producer. An offer with no SDP cannot be negotiated by anybody; sending it only
+        // moves the failure to the far side, where it looks like a network problem.
+        //
+        // Ending the call is right for the *first* offer — there is no call yet to protect, and
+        // failing now is what the caller's own catch already does. It is wrong for an ICE restart:
+        // that runs on a call the user is in, and `restartIce` deliberately only logs its failures
+        // so a recoverable blip does not become a dropped call. Same refusal, different remedy.
+        guard offerSdpIsUsable(plainSdp) else {
+            Log.error(
+                "Refusing to send an offer with no SDP to \(toUserId.prefix(8))… "
+                + "(iceRestart=\(isIceRestart), call_id=\(active.session.id.prefix(8))…)",
+                category: "Calls"
+            )
+            if !isIceRestart {
+                endActiveCall(reason: .local("Offer build failed"))
+            }
+            return
+        }
         var offer = Shared_Proto_Signaling_V1_CallOffer()
         offer.sdp = plainSdp
         offer.callType = .audio
@@ -1619,7 +1685,13 @@ final class CallManager: CallUIManaging {
         sig.signal = .offer(offer)
         sendCallSignalProto(sig, to: toUserId)
         let kind = isIceRestart ? "ICE restart offer" : "Offer"
-        Log.info("\(kind) (proto) sent via E2EE to \(toUserId.prefix(8))… call_id=\(active.session.id.prefix(8))…", category: "Calls")
+        // sdp=<bytes> because nothing on either side measured it. The 2026-08-17 call had to be
+        // reconstructed from which of two disagreeing checks fired; one number on each boundary
+        // would have named it outright.
+        Log.info(
+            "\(kind) (proto) sent via E2EE to \(toUserId.prefix(8))… call_id=\(active.session.id.prefix(8))… sdp=\(plainSdp.utf8.count)b",
+            category: "Calls"
+        )
     }
 
     /// ICE candidates are batched with a 200ms debounce before sending to stay under the

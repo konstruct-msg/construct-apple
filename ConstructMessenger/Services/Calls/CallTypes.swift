@@ -104,6 +104,31 @@ func remoteOfferDisposition(isIncomingCall: Bool, hasAnswered: Bool) -> RemoteOf
     return .holdUntilAnswered
 }
 
+/// Whether a stored offer SDP is something that can actually be negotiated.
+///
+/// Thin on purpose, and it exists because the same question was asked two different ways. Until
+/// 2026-08-17 `answer()` asked `!sdp.isEmpty` while the ICE paths asked `sdp != nil`, and an empty
+/// string answers those two differently: candidates buffer against an offer that is "present", and
+/// the answer that would drain them arms a 45-second wait for an offer that is "absent". Build 613,
+/// 2026-08-17:
+///
+///     Max   12:16:06  Offer (proto) sent via E2EE           ← sdp length never logged, by anyone
+///     Annie 12:16:07  Incoming call via E2EE offer          ← stored
+///     Annie 12:16:08  Buffered 24/24 E2EE ICE (pending SDP) ← so it is present
+///     Annie 12:16:10  "Answered before the offer arrived"   ← so it is absent
+///     Annie 12:16:20  Call end   state=connecting answered=false
+///
+/// Neither side ever applied a remote description, so ICE had nothing to check against and the
+/// call died in `connecting` with both peers waiting on each other — the callee for an SDP that had
+/// arrived, the caller for an answer nobody could build.
+///
+/// One predicate, consulted everywhere, is the fix. The empty offer that started it is refused at
+/// both the send and the receive boundary; this is what keeps the two readings from parting again.
+func offerSdpIsUsable(_ sdp: String?) -> Bool {
+    guard let sdp else { return false }
+    return !sdp.isEmpty
+}
+
 enum CallState: Equatable {
     case idle
     case incoming(CallSession)

@@ -214,4 +214,38 @@ final class CallOfferOrderingTests: XCTestCase {
             remoteOfferDisposition(isIncomingCall: true, hasAnswered: true)
         )
     }
+
+    // MARK: - An offer with no SDP (build 613, 2026-08-17)
+
+    /// The empty string is the exact value on which the old pair of checks split: the ICE paths
+    /// asked `pendingRemoteOfferSdp != nil` and got "yes, we are holding an offer", while `answer()`
+    /// asked `!isEmpty` and got "no, nothing to apply". So 24 candidates queued against an offer
+    /// the answer had already given up on, and the call died in `connecting` with the callee waiting
+    /// for an SDP that had arrived three seconds before it answered.
+    ///
+    /// Mutation: `return sdp != nil` — restores the ICE-side reading, and the disagreement with it.
+    func testAnEmptyOfferIsNotAnOfferWeAreHolding() {
+        XCTAssertFalse(
+            offerSdpIsUsable(""),
+            "an empty SDP read as a held offer is what buffered ICE candidates against a "
+            + "negotiation that could never start"
+        )
+    }
+
+    /// No offer at all reads the same as an unusable one. Both sites ask this one question now, so
+    /// the two states they must not confuse are the same state.
+    func testAMissingOfferIsNotAnOfferWeAreHolding() {
+        XCTAssertFalse(offerSdpIsUsable(nil))
+    }
+
+    /// The other direction, and the reason the predicate is not simply `false`: a real offer must
+    /// still be negotiable. Refusing every offer would turn one dead call into all of them.
+    ///
+    /// Mutation: `return false` — every call stops connecting.
+    func testARealOfferIsUsable() {
+        XCTAssertTrue(
+            offerSdpIsUsable("v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\n"),
+            "the guard exists to refuse the empty offer, not to refuse offers"
+        )
+    }
 }
