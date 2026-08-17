@@ -134,6 +134,42 @@ enum SessionReducer {
         return isNaturalInitiator && !sessionExistsOrRestorable
     }
 
+    /// Why a chat is being opened. The two differ in exactly one thing — whether whatever session
+    /// state already exists is still meant to be used.
+    enum ChatStartOrigin {
+        /// Tapping a contact, a search result, a push. The session, if any, is the one to keep.
+        case existingContact
+        /// A scanned QR or an invite link was redeemed.
+        case inviteRedeem
+    }
+
+    /// Whether starting a chat means retiring whatever session already exists with that peer.
+    ///
+    /// Redeeming an invite is a statement that the two sides are establishing a session now — it
+    /// is the one place where an existing ratchet is evidence of the *past*, not of a working
+    /// present. `shouldPrewarm` cannot tell those apart: it asks "does a session exist or can one
+    /// be restored", and a session left over from a deleted contact answers yes.
+    ///
+    /// That is what happened on 2026-08-17. The peer had deleted the contact, so his side had no
+    /// session; hers survived in the Keychain. The redeem restored it, `shouldPrewarm` saw a
+    /// session and skipped, and her first message went out on a ratchet he had thrown away:
+    ///
+    ///     annie 12:11:52  Cleared all archived sessions for ffeeddc6…
+    ///     annie 12:11:52  Restored session (CFE): ffeeddc6…      ← the orphan, back
+    ///     annie 12:11:59  "Пупу" sent                            status=sent
+    ///     Max   12:12:00  initReceivingSession failed: All 1 prekey(s) failed
+    ///     annie 12:12:01  END_SESSION: skipped 1 message(s) — already accepted by server
+    ///
+    /// The message was never resent and never arrived, and it read as delivered to her. Note the
+    /// order of the first two lines: the archives — the only thing that could have decrypted
+    /// anything old — were cleared, and the one item that breaks the new session was kept.
+    ///
+    /// Retiring is archiving, not deleting: an in-flight message from the old session can still
+    /// be read from the archive by the fallback-decrypt path.
+    static func chatStartRetiresExistingSession(origin: ChatStartOrigin) -> Bool {
+        origin == .inviteRedeem
+    }
+
     /// Per-peer END_SESSION rate limit. Returns true iff enough time has elapsed since the
     /// last send (or none was ever sent) to send again.
     ///

@@ -956,6 +956,21 @@ class CryptoManager {
         return orchestratorCore?.hasSession(contactId: userId) ?? false
     }
 
+    /// Whether session state exists for `userId` **anywhere** — loaded in the core, or on disk.
+    ///
+    /// `hasSession(for:)` answers only the first, because that is what "can I encrypt right now"
+    /// needs. Teardown needs the other question: a contact nobody has messaged this run has its
+    /// session in the Keychain and not in the core, so a delete guarded on `hasSession` archived
+    /// nothing and left the entry behind — where the next invite redeem imported it and encrypted
+    /// with a ratchet the peer had already thrown away (2026-08-17).
+    ///
+    /// Ask this one wherever the question is "is there anything here to put away", never the
+    /// other one.
+    func hasStoredSessionState(for userId: String) -> Bool {
+        if orchestratorCore?.hasSession(contactId: userId) == true { return true }
+        return KeychainManager.shared.loadSessionData(for: userId) != nil
+    }
+
     /// True once the OrchestratorCore exists. Before this, `hasSession(for:)` returns
     /// false for *every* contact, so any "session missing → END_SESSION / re-init"
     /// decision (e.g. prewarm) MUST be gated on this. Otherwise, during the startup

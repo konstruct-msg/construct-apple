@@ -142,7 +142,11 @@ struct ContentView: View {
 
             if let chat = chatsViewModel.startChat(
                 with: publicUserInfo,
-                identityPublicKey: contactInfo.identityPublicKey
+                identityPublicKey: contactInfo.identityPublicKey,
+                // The only redeem entry point: a scanned QR or an opened invite link lands here as
+                // a `.contact` deep link. Every other `startChat` caller is opening a chat with a
+                // contact that already exists, where an existing session is the one to keep.
+                origin: .inviteRedeem
             ) {
                 Log.info("ContentView: Chat created successfully, opening chat with id: \(chat.id)", category: "DeepLink")
                 chatsViewModel.chatToOpen = chat.id

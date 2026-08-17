@@ -93,6 +93,37 @@ extension CryptoManager {
 
         Log.info("Archiving session for \(userId), reason: \(reason.rawValue)", category: "CryptoManager")
 
+        // A session lives in two places — the core's memory and the Keychain — and only the first
+        // is loaded eagerly. `restoreRecentSessions` imports the recent ones at launch; a contact
+        // nobody has messaged this run has its session on disk only, and `hasSession(for:)` says
+        // no for it. Callers guarded on that answer, so deleting such a contact archived nothing
+        // and deleted nothing: the Keychain entry outlived the contact.
+        //
+        // It then came back. On 2026-08-17 annie re-added a contact by QR; the redeem path called
+        // `restoreSession`, the orphan was imported as if healthy, and her first message was
+        // encrypted with a ratchet the peer had discarded when he deleted her. He could not
+        // decrypt it — `All 1 prekey(s) failed` — and it was never resent.
+        //
+        // Import it here rather than making every caller ask twice. If the entry is unusable the
+        // import throws, the branch below reports nothing to archive, and `restoreSession` deletes
+        // it the next time anything reaches for it — so an entry that cannot be imported also
+        // cannot resurrect a session.
+        if core.hasSession(contactId: userId) == false,
+           let stored = KeychainManager.shared.loadSessionData(for: userId) {
+            do {
+                _ = try core.importSession(contactId: userId, data: [UInt8](stored))
+                Log.info(
+                    "archiveSession: imported on-disk session for \(userId.prefix(8))… before archiving",
+                    category: "CryptoManager"
+                )
+            } catch {
+                Log.error(
+                    "archiveSession: stored session for \(userId.prefix(8))… could not be imported: \(error)",
+                    category: "CryptoManager"
+                )
+            }
+        }
+
         // 1. Export current session to CFE binary format and store archive.
         //    IMPORTANT: only proceed with deletion if export succeeded — otherwise the session
         //    would be permanently lost with no archive to restore from.
