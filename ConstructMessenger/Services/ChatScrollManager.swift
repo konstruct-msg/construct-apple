@@ -304,7 +304,15 @@ class ChatScrollManager {
     static var heightSettleDelaysMs: [UInt64] { PinPolicy.delays(for: .heightSettle) }
 
     /// Below this a growth is layout noise and re-pinning would be visible churn.
-    static let heightRepinThreshold: CGFloat = 24
+    ///
+    /// `nonisolated` because it is a constant, not state: the class is `@MainActor`, so without
+    /// this the threshold inherits main-actor isolation and `ChatView.Layout.geometryLogThreshold`
+    /// — a nested enum's static, initialized off the main actor — cannot read it. That is an error
+    /// under the Swift 6 language mode, and the tempting fix is to write `24` again in `ChatView`.
+    /// Two copies of the same cutoff is exactly what this property exists to prevent: the log
+    /// threshold and the re-pin threshold must move together or the log stops describing the
+    /// decision it is there to explain.
+    nonisolated static let heightRepinThreshold: CGFloat = 24
 
     // MARK: - Initialization
 
