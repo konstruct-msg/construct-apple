@@ -19,6 +19,12 @@ enum WireMessageKind: String, Codable, Equatable, CaseIterable {
     case senderSync = "SENDER_SYNC"
     case sessionResetInit = "SESSION_RESET_INIT"
 
+    /// Liveness probe for a session that has been silent. Not a `WireMessageKind` case: it is
+    /// never a routing *kind* — the receiver discards it — and it has no counterpart on the outer
+    /// envelope any more, so there is nothing for `kind(for:)` to map. Named here because two
+    /// files need the same byte and neither should spell it `13`.
+    static let heartbeatContentType: UInt8 = 13
+
     /// Canonical proto content-type byte for this kind (0 = regular / non-control).
     var canonicalContentType: UInt8 {
         switch self {

@@ -65,16 +65,20 @@ final class MessagingServiceClient: Sendable {
             envelope.contentType = contentType
         }
 
-        if let senderDeviceId, !senderDeviceId.isEmpty {
-            var senderDevice = Shared_Proto_Core_V1_DeviceId()
-            senderDevice.deviceID = senderDeviceId
-            envelope.senderDevice = senderDevice
-        }
-        if let recipientDeviceId, !recipientDeviceId.isEmpty {
-            var recipientDevice = Shared_Proto_Core_V1_DeviceId()
-            recipientDevice.deviceID = recipientDeviceId
-            envelope.recipientDevice = recipientDevice
-        }
+        // `sender_device` and `recipient_device` are deliberately left unset — removed 2026-08-17.
+        //
+        // Neither has a reader. Measured across both repositories: no server code reads either
+        // field, and the server blanks both on delivery besides, so no client has ever seen one
+        // arrive. Every client-side read is guarded by `!isEmpty` and has therefore never fired.
+        //
+        // Delivery does not need them. `messaging-service/src/core.rs` fans a message out with
+        // `fetch_recipient_device_ids` — it asks the database for the recipient's devices and
+        // writes the same envelope to each per-device stream. Which device a message is *for* is
+        // settled by which one can decrypt it.
+        //
+        // What they cost is a description of your device topology, handed to a server that does
+        // not use it. Same reasoning as `conversation_id` on the multi-device path, one step
+        // milder: see architecture/WIRE_FORMAT.md.
         return envelope
     }
 

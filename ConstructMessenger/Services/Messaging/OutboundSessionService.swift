@@ -185,11 +185,25 @@ final class OutboundSessionService {
         do {
             // Heartbeats intentionally do **not** use sealed sender.
             // We never pass recipientIdentityKey here.
+            // The type rides in KNST byte 5, inside the ciphertext, like the call signal and the
+            // delivery receipt before it. It used to be announced on the outer envelope
+            // (`contentType: .heartbeat`), which let the server count liveness probes and tell
+            // them apart from messages — the exact distinguishability 12/14/25/26 were moved
+            // inside to remove. See decisions/sealed-content-type-inside-the-plaintext-frame.md.
+            //
+            // The body is empty. It used to be the string "__heartbeat__", which nothing ever
+            // read: the whole codebase had one occurrence of it, this send. Routing was on the
+            // content type then and is on the content type now, so the string was 13 bytes of
+            // filler in the same shape as `__session_reset_notify__` — the magic string that
+            // shipped with no reader and spent four months rendering as a visible bubble.
             let payload = try encryptOutgoing(
-                plaintext: Data("__heartbeat__".utf8),
+                plaintext: ChunkedMessageCodec.frameWhole(
+                    Data(),
+                    contentType: WireMessageKind.heartbeatContentType,
+                    messageId: UUID(uuidString: heartbeatId) ?? UUID()
+                ),
                 messageId: heartbeatId,
-                recipientId: contactId,
-                contentType: 13
+                recipientId: contactId
             )
             _ = try await MessagingServiceClient.shared.sendMessage(
                 messageId: heartbeatId,
@@ -198,7 +212,9 @@ final class OutboundSessionService {
                 conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
                 encryptedPayload: payload,
                 timestamp: UInt64(Date().timeIntervalSince1970),
-                contentType: .heartbeat
+                // Indistinguishable from an ordinary message on the outer envelope, which is the
+                // point: the real type is in byte 5, inside the ciphertext.
+                contentType: .e2EeSignal
             )
             Log.debug("Heartbeat sent to \(contactId.prefix(8))…", category: "OutboundSession")
         } catch {

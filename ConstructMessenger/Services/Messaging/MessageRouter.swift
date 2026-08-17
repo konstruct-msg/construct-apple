@@ -1081,6 +1081,17 @@ final class MessageRouter {
                     handleSessionControlSignal(op, for: message, from: otherUserId, chat: chat, in: context)
                     continue
                 }
+                // HEARTBEAT: a silent liveness probe for a session that has been quiet. Decrypting
+                // it is the whole point — that exercises the ratchet — so there is nothing to do
+                // but acknowledge and drop it. Read from KNST byte 5 since 2026-08-17; the outer
+                // `content_type = 13` it used to travel under told the server which of your
+                // messages were probes.
+                if let control = ChunkedMessageCodec.controlFrame(plaintext),
+                   control.contentType == WireMessageKind.heartbeatContentType {
+                    Log.debug("Heartbeat received from \(otherUserId.prefix(8))… — session healthy", category: "MessageRouter")
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    continue
+                }
                 if let control = ChunkedMessageCodec.controlFrame(plaintext),
                    control.contentType != 0, control.contentType != 1 {
                     // A peer speaking a dialect we do not have. Fall through to the body pipeline
@@ -1241,13 +1252,15 @@ final class MessageRouter {
         chat: Chat,
         in context: NSManagedObjectContext
     ) {
-        // HEARTBEAT (content_type=13): silent liveness probe — discard.
-        // No receipt: a heartbeat has no row on the sender's side, so a receipt could never
-        // move anything. (The old comment claimed the peer "treats a heartbeat as answered
-        // when the receipt comes back" — nothing on the sending side reads it; stream liveness
-        // is tracked by `lastHeartbeatDate` off the stream-level heartbeatAck, a different
-        // mechanism entirely.)
-        if message.contentType == 13 {
+        // HEARTBEAT announced on the OUTER envelope — a sender running a build from before
+        // 2026-08-17, when the type moved into KNST byte 5. Kept so those peers are still
+        // understood; new senders are caught earlier, before this function.
+        //
+        // No receipt either way: a heartbeat has no row on the sender's side, so a receipt could
+        // never move anything. (The old comment claimed the peer "treats a heartbeat as answered
+        // when the receipt comes back" — nothing on the sending side reads it; stream liveness is
+        // tracked by `lastHeartbeatDate` off the stream-level heartbeatAck, a different mechanism.)
+        if message.contentType == WireMessageKind.heartbeatContentType {
             Log.debug("Heartbeat received from \(otherUserId.prefix(8))… — session healthy", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             return
@@ -2155,6 +2168,26 @@ final class MessageRouter {
     /// the message as an outgoing bubble in the correct conversation.
     private func handleSenderSync(_ message: ChatMessage, in context: NSManagedObjectContext) {
         guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
+
+        // A copy addressed to one of our *other* devices. The server does not route per device —
+        // `messaging-service/src/core.rs` fans every envelope out to all of the recipient's
+        // per-device streams — so on a three-device account each device receives the two copies
+        // meant for the other two and can decrypt neither.
+        //
+        // The target is already on the wire in the id suffix the sender writes, `-ss-<tag>`, so
+        // recognising a foreign copy costs a string compare. Without it every foreign copy walks
+        // the whole candidate list, fails each decrypt, and logs an error for a message that was
+        // never ours to read.
+        if let target = SenderSyncWireId.targetDeviceTag(of: message.id),
+           let myDeviceId = AuthSessionManager.shared.currentDeviceId,
+           !SenderSyncWireId.tag(matches: myDeviceId, tag: target) {
+            Log.debug(
+                "SENDER_SYNC: \(message.id) is addressed to device \(target) — not ours, skipping",
+                category: "MessageRouter"
+            )
+            PersistentACKStore.shared.markProcessed(message.id, senderId: message.from, in: context)
+            return
+        }
 
         // Which of our own devices sent this is settled by decryption, not by a field: the sender
         // device selects the Double Ratchet session, so it is needed *before* the plaintext exists
