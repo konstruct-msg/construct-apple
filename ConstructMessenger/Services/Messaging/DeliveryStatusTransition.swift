@@ -53,4 +53,42 @@ enum DeliveryStatusTransition {
         guard evidenceRank(proposed) >= evidenceRank(current) else { return nil }
         return proposed
     }
+
+    // MARK: - What a session archive does to that evidence
+
+    /// What must happen to an outgoing message when the session it was encrypted under is archived.
+    enum ArchiveOutcome: Equatable {
+        /// Send it again. The retry path re-sends the stored ciphertext when it still has it, and
+        /// otherwise re-encrypts the recoverable plaintext under the new session with a fresh id.
+        case resend
+        /// Attempts exhausted. Mark it failed so it stops re-queuing — and so the user can see that
+        /// it did not arrive, instead of reading a checkmark that means nothing.
+        case giveUp
+        /// The peer confirmed it. No session change unsays that.
+        case keep
+    }
+
+    /// `.sent` means the server took the ciphertext. That was evidence of *arrival* only for as
+    /// long as the peer could decrypt it — and archiving the session ends exactly that. From the
+    /// archive on, a `.sent` message the peer never confirmed is in the same position as one that
+    /// never left this device.
+    ///
+    /// Until 2026-08-17 the archive path read it the other way round: a message whose stored wire
+    /// payload had been dropped was skipped as "already accepted by server". The payload is dropped
+    /// the moment the status becomes `.sent`, so that skipped every ordinary message — each one
+    /// left at `.sent` forever, with a ciphertext on the server that the peer had just lost the
+    /// keys for. On 2026-08-17, devices `7574fdec…`/`ffeeddc6…`: four messages, "already accepted
+    /// by server", never seen by the recipient.
+    ///
+    /// The skip's own reasoning was sound when it was written on 2026-04-26 — re-queuing a message
+    /// with no payload did fail instantly as `payload_expired`. The re-encrypt fallback that made
+    /// it false landed on 2026-06-29 (`4519018c`), and nothing came back to this decision.
+    static func afterSessionArchive(
+        status: DeliveryStatus,
+        retryCount: Int,
+        maxRetries: Int
+    ) -> ArchiveOutcome {
+        if evidenceRank(status) >= evidenceRank(.delivered) { return .keep }
+        return retryCount < maxRetries ? .resend : .giveUp
+    }
 }

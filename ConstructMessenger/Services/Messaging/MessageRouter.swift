@@ -1822,36 +1822,45 @@ final class MessageRouter {
         var requeuedCount = 0
         var droppedCount = 0
 
-        var serverAcceptedCount = 0
+        // A message whose stored wire payload is gone is re-queued like any other. The retry path
+        // re-sends stored ciphertext when it has it and otherwise re-encrypts the recoverable
+        // plaintext under the new session with a fresh wire id (`MessageRetryManager`, 4519018c).
+        //
+        // It used to be skipped here as "already accepted by server". The payload is dropped the
+        // moment the status becomes `.sent`, so that skipped every ordinary message — and the
+        // ciphertext the server holds is exactly what the peer can no longer decrypt, which is what
+        // archiving the session means. See `DeliveryStatusTransition.afterSessionArchive`.
+        var reencryptCount = 0
         for msg in messages {
             let msgId = msg.id
             guard !msgId.isEmpty else { continue }
 
-            // Wire payload is removed immediately after the server accepts the message
-            // (status="sent"/"delivered"). If the payload is gone, the server already has
-            // the ciphertext — re-queuing would cause retryMessage to fail instantly with
-            // "payload_expired", permanently marking the message failed even though it was
-            // accepted. Leave it as .sent; a delivery receipt may still arrive later.
-            if OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: msgId) == nil {
-                serverAcceptedCount += 1
-                // Per-message INFO here flooded device logs during END_SESSION storms
-                // (dozens of lines per control message). Count is logged once below.
+            switch DeliveryStatusTransition.afterSessionArchive(
+                status: msg.deliveryStatus,
+                retryCount: Int(msg.retryCount),
+                maxRetries: maxRetries
+            ) {
+            case .keep:
                 continue
-            }
-
-            if msg.retryCount < maxRetries {
+            case .resend:
+                if OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: msgId) == nil {
+                    // Per-message INFO here flooded device logs during END_SESSION storms
+                    // (dozens of lines per control message). Counts are logged once below.
+                    reencryptCount += 1
+                }
                 msg.deliveryStatus = .queued
                 requeuedCount += 1
-            } else {
-                // Message has survived maxRetries session resets without delivery receipt.
-                // Mark permanently failed to break re-queue amplification cycle.
+            case .giveUp:
+                // Survived maxRetries session resets with no delivery receipt. Failing it breaks
+                // the re-queue amplification cycle, and — unlike the old skip — says so to the user
+                // rather than leaving a checkmark that stands for nothing.
                 msg.deliveryStatus = .failed
                 droppedCount += 1
                 Log.error("END_SESSION: dropping re-queue for \(msg.id.prefix(8))… after \(msg.retryCount) attempts — marking failed", category: "MessageRouter")
             }
         }
-        if serverAcceptedCount > 0 {
-            Log.info("END_SESSION: skipped \(serverAcceptedCount) message(s) for \(userId.prefix(8))… — already accepted by server", category: "MessageRouter")
+        if reencryptCount > 0 {
+            Log.info("END_SESSION: \(reencryptCount) of them have no stored payload for \(userId.prefix(8))… — retry will re-encrypt", category: "MessageRouter")
         }
         context.saveAndLog()
 

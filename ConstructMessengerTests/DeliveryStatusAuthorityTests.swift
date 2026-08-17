@@ -141,4 +141,90 @@ final class DeliveryStatusAuthorityTests: XCTestCase {
         message.deliveryStatus = .delivered
         XCTAssertEqual(message.deliveryStatus, .delivered)
     }
+
+    // MARK: - What a session archive does to `.sent`
+    //
+    // Devices 7574fdec…/ffeeddc6…, 2026-08-17 17:56:33, right after a SESSION_RESET_INIT:
+    //
+    //     END_SESSION: skipped 4 message(s) for ffeeddc6… — already accepted by server
+    //
+    // Those four were never seen by the recipient. The server did hold their ciphertext — and the
+    // archive is precisely the peer losing the keys to it.
+
+    private let maxRetries = 3
+
+    /// The regression. `.sent` is evidence that the message left this device, not that it arrived,
+    /// and archiving the session withdraws even the possibility of arrival.
+    ///
+    /// Mutation: `return .keep` for `.sent` — this is the state that shipped, and it reddens here.
+    func testSentIsResentAfterAnArchive() {
+        XCTAssertEqual(
+            DeliveryStatusTransition.afterSessionArchive(status: .sent, retryCount: 0, maxRetries: maxRetries),
+            .resend
+        )
+    }
+
+    /// `.delivered` is the peer's own word. No session change unsays it, and re-sending would show
+    /// the recipient a duplicate of something they already have.
+    ///
+    /// Mutation: drop the rank check — a delivered message is re-sent on every session reset.
+    func testDeliveredSurvivesAnArchive() {
+        XCTAssertEqual(
+            DeliveryStatusTransition.afterSessionArchive(status: .delivered, retryCount: 0, maxRetries: maxRetries),
+            .keep
+        )
+    }
+
+    /// Statuses that describe only our own attempt carry no evidence of arrival, so they are in the
+    /// same position as `.sent` once the session is gone.
+    func testLocalAttemptStatusesAreAlsoResent() {
+        for status in [DeliveryStatus.sending, .queued, .failed] {
+            XCTAssertEqual(
+                DeliveryStatusTransition.afterSessionArchive(status: status, retryCount: 0, maxRetries: maxRetries),
+                .resend,
+                "\(status) says nothing about arrival"
+            )
+        }
+    }
+
+    /// The re-queue cycle still has to terminate: a message that has survived maxRetries archives
+    /// without a receipt is failed, so it stops re-sending — and so the user sees that it did not
+    /// arrive, instead of a checkmark that stands for nothing.
+    ///
+    /// Mutation: `retryCount <= maxRetries` — off-by-one, one extra resend per message forever.
+    func testAttemptsAreBounded() {
+        XCTAssertEqual(
+            DeliveryStatusTransition.afterSessionArchive(status: .sent, retryCount: maxRetries - 1, maxRetries: maxRetries),
+            .resend
+        )
+        XCTAssertEqual(
+            DeliveryStatusTransition.afterSessionArchive(status: .sent, retryCount: maxRetries, maxRetries: maxRetries),
+            .giveUp
+        )
+        XCTAssertEqual(
+            DeliveryStatusTransition.afterSessionArchive(status: .sent, retryCount: maxRetries + 9, maxRetries: maxRetries),
+            .giveUp
+        )
+    }
+
+    /// Exhausting the attempts must not silence a delivered message: `.keep` outranks the bound.
+    func testDeliveredIsKeptEvenWithAttemptsExhausted() {
+        XCTAssertEqual(
+            DeliveryStatusTransition.afterSessionArchive(status: .delivered, retryCount: 99, maxRetries: maxRetries),
+            .keep
+        )
+    }
+
+    /// The archive rule and the writer-precedence rule must agree on what counts as evidence —
+    /// they are two readings of one ranking, and a change to `evidenceRank` has to move both.
+    func testArchiveRuleAgreesWithWriterPrecedence() {
+        for status in [DeliveryStatus.sending, .queued, .failed, .sent, .delivered] {
+            let keptByArchive = DeliveryStatusTransition.afterSessionArchive(
+                status: status, retryCount: 0, maxRetries: maxRetries
+            ) == .keep
+            let outranksSent = DeliveryStatusTransition.evidenceRank(status)
+                > DeliveryStatusTransition.evidenceRank(.sent)
+            XCTAssertEqual(keptByArchive, outranksSent, "\(status)")
+        }
+    }
 }
