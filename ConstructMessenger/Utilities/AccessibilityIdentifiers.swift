@@ -99,6 +99,26 @@ enum A11y {
     enum Settings {
         /// Opens `ContactQRCodeView` — the single invite surface (QR + copy link).
         static let invite = "settings.invite"
+        /// Opens `DevicesView`. Linking two simulators to **one account** is the only way to
+        /// exercise SENDER_SYNC: two sims are two accounts by default, which is the pairing
+        /// scenario and a different thing entirely.
+        static let devices = "settings.devices"
+    }
+
+    /// Linking a second device to this account.
+    enum Devices {
+        /// Opens the scanner. The camera-free route is the scanner's own paste button.
+        static let linkNew = "devices.linkNew"
+        /// Shows this device's link QR — the token the other device consumes.
+        static let showQR  = "devices.showQR"
+    }
+
+    /// Shared by every QR sheet, including the device-link scanner.
+    enum QRScanner {
+        /// The camera-free entry point: a simulator has no camera, and the device-link token
+        /// is accepted here exactly as if it had been scanned (`konstruct://link` is one of the
+        /// prefixes `handleScannedCode` allows).
+        static let paste = "qrScanner.paste"
     }
 
     enum Account {

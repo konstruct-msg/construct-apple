@@ -246,6 +246,10 @@ struct SettingsView: View {
                 CTSettingsRow(label: NSLocalizedString("linked_devices", comment: "").uppercased(), icon: "laptopcomputer", disclosure: true)
             }
             .buttonStyle(.plain)
+            // On the link, not on the row inside it: an identifier applied within `CTSettingsRow`
+            // is inherited by each of its children, and the tree comes back with the string
+            // tripled on the container plus a copy on the icon, the label and the chevron.
+            .accessibilityIdentifier(A11y.Settings.devices)
             CTSep(style: .thin)
             NavigationLink(destination: AppearanceSettingsView()) {
                 CTSettingsRow(label: NSLocalizedString("appearance", comment: "").uppercased(), icon: "paintbrush", disclosure: true)

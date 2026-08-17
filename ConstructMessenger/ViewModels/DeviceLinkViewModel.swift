@@ -70,6 +70,13 @@ final class DeviceLinkViewModel {
             qrContent = url
             tokenExpiresAt = Date(timeIntervalSince1970: TimeInterval(result.expiresAt))
             Log.info("Device link QR generated — expires \(result.expiresAt)", category: "DeviceLink")
+            #if DEBUG
+            // The QR is the only place this token is shown, and a simulator has no camera — so on
+            // a DEBUG build it also goes to the log, where `scripts/two_sims.sh link` reads it and
+            // pastes it into the other simulator's scanner. Release builds never print it: it
+            // authorises joining this account, and the log is exportable from Settings.
+            Log.debug("DeviceLink stand token: \(url)", category: "DeviceLink")
+            #endif
         } catch {
             errorMessage = localizedError(error)
             Log.error("initiateDeviceLink failed: \(error)", category: "DeviceLink")

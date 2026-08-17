@@ -116,6 +116,7 @@ struct QRScannerView: View {
                     .foregroundColor(.white)
                     .clipShape(Capsule())
             }
+            .accessibilityIdentifier(A11y.QRScanner.paste)
 
             if testMode {
                 Button { simulateQRCodeScan() } label: {

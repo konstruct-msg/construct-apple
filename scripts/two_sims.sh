@@ -16,7 +16,8 @@
 #   ./scripts/two_sims.sh install   # поставить свежий .app на оба
 #   ./scripts/two_sims.sh launch    # запустить на обоих
 #   ./scripts/two_sims.sh run       # up + build + install + launch
-#   ./scripts/two_sims.sh pair a    # связать: ссылка из буфера A → openurl на B
+#   ./scripts/two_sims.sh pair a    # два аккаунта: ссылка из буфера A → openurl на B
+#   ./scripts/two_sims.sh link a    # один аккаунт на двух устройствах: токен A → буфер B
 #   ./scripts/two_sims.sh status    # UDID, состояние, установлен ли app
 #   ./scripts/two_sims.sh env       # export-строки для MCP/других скриптов
 #   ./scripts/two_sims.sh shot      # скриншоты обоих
@@ -283,6 +284,50 @@ cmd_pair() {
   ok "приглашение открыто на втором симуляторе"
 }
 
+# Связать оба симулятора в ОДИН аккаунт (в отличие от `pair`, который делает из них
+# двух собеседников).
+#
+# Это единственный способ проверить SENDER_SYNC: копия своего сообщения уходит на
+# другое устройство того же аккаунта, а два симулятора по умолчанию — два разных
+# аккаунта, то есть совсем другой сценарий.
+#
+# Камеры у симулятора нет, а `konstruct://link?token=…` намеренно НЕ обрабатывается
+# как глубокая ссылка: `DeepLinkHandler` отдаёт всё, кроме veil-config, разбору
+# контактных ссылок. Это не упущение — токен связывания подключает устройство к
+# аккаунту, и делать это по нажатию на присланную ссылку небезопасно. Сканер такой
+# префикс принимает (`QRScannerView.handleScannedCode`), поэтому путь без камеры —
+# положить токен в буфер приёмника и нажать «вставить» в сканере.
+#
+# Токен берётся из лога DEBUG-сборки: на экране он есть только внутри QR-картинки.
+cmd_link() {
+  resolve_sims
+  local from="${1:-a}" from_udid to_udid token
+
+  case "$(echo "$from" | tr '[:upper:]' '[:lower:]')" in
+    a) from_udid="$UDID_A"; to_udid="$UDID_B" ;;
+    b) from_udid="$UDID_B"; to_udid="$UDID_A" ;;
+    *) die "укажи, кто показывает код: a или b" ;;
+  esac
+
+  local container log
+  container="$(xcrun simctl get_app_container "$from_udid" "$BUNDLE_ID" data 2>/dev/null || true)"
+  [[ -n "$container" ]] || die "приложение не установлено на источнике — сначала ./scripts/two_sims.sh run"
+  log="$container/Documents/Logs/current.log"
+  [[ -f "$log" ]] || die "нет лога $log — запусти приложение на источнике"
+
+  # Последний сгенерированный токен: экран можно открывать несколько раз, годится свежий.
+  token="$(grep -o 'konstruct://link?token=[A-Za-z0-9._~+/=-]*' "$log" | tail -1 || true)"
+  if [[ -z "$token" ]]; then
+    warn "в логе источника нет токена связывания"
+    die "открой на нём Настройки ▸ УСТРОЙСТВА ▸ показать QR и повтори"
+  fi
+
+  xcrun simctl pbcopy "$to_udid" <<< "$token"
+  ok "токен (${#token} симв.) положен в буфер приёмника"
+  info "на приёмнике: Настройки ▸ УСТРОЙСТВА ▸ привязать устройство ▸ вставить из буфера"
+  info "идентификаторы: settings.devices → devices.linkNew → qrScanner.paste"
+}
+
 cmd_shot() {
   resolve_sims
   mkdir -p "$SHOT_DIR"
@@ -333,6 +378,7 @@ case "${1:-}" in
   launch)  cmd_launch ;;
   run)     cmd_run ;;
   pair)    cmd_pair "${2:-a}" ;;
+  link)    cmd_link "${2:-a}" ;;
   status)  cmd_status ;;
   env)     cmd_env ;;
   shot)    cmd_shot ;;

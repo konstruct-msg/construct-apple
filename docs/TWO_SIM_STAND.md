@@ -40,6 +40,41 @@ or environment flags to the app to distinguish them: the app reads no launch arg
 (`ProcessInfo` use is Preview detection only), and a test-only branch in production code is a
 worse price than one `reset`.
 
+## `link` is the other topology, and the only one that exercises SENDER_SYNC
+
+`pair` makes the two sims into two accounts talking to each other. `link` makes them **one account
+on two devices** — which is what a multi-device copy needs, and what two sims are not by default.
+Testing SENDER_SYNC against a `pair`ed stand exercises nothing: the code never runs.
+
+```bash
+./scripts/two_sims.sh link a   # token from A's log → B's pasteboard
+```
+
+Then on B: `settings.devices` → `devices.linkNew` → `qrScanner.paste`. On a **fresh** B the
+designed route is onboarding instead: `onboarding.existingIdentity` → LINK THIS DEVICE → SCAN A
+CODE → the same paste button.
+
+Three things the flow needs that `pair` does not:
+
+- **The token is only inside the QR image.** A DEBUG-only line in `DeviceLinkViewModel` prints the
+  full `konstruct://link?token=…`, and `link` greps it out of A's log. Release builds never print
+  it — it authorises joining the account, and the log is exportable from Settings.
+- **`konstruct://link` is deliberately not a deep link.** `DeepLinkHandler` routes everything but
+  veil-config to the contact parser, so `simctl openurl` does not work here and must not be made
+  to: a tapped link that silently joins your device to someone's account is the wrong default.
+  The scanner accepts the prefix (`QRScannerView.handleScannedCode`), and pasting is a deliberate
+  act, which is the point.
+- **iOS asks before pasting** ("would like to paste from CoreSimulatorBridge"). Allow it; the tap
+  lands on the alert, not the app, and nothing is logged until you do.
+
+Linking wipes B's own account (`confirmLink` → `deleteDeviceKeys` → fresh device id). If A's only
+contact *was* B's old account, the stand is left with a conversation whose peer has no devices —
+erase B and re-link rather than trying to reason about the result.
+
+**Restart both after linking.** A learns its new sibling only when its own-device cache expires
+(1 h) or the process restarts, and B's message stream stays authenticated as the old identity
+until relaunch — copies then arrive addressed to an account B no longer is.
+
 ## Typing goes through the simulator's active keyboard, so verify what landed
 
 UI automation sends HID key codes: under a Russian layout `alice` arrives as `фдш`, and the
