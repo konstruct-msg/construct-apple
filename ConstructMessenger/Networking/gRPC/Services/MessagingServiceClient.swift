@@ -46,7 +46,6 @@ final class MessagingServiceClient: Sendable {
         var envelope = Shared_Proto_Core_V1_Envelope()
         envelope.messageID = messageId
         envelope.recipient = recipient
-        envelope.encryptedPayload = encryptedPayload
         envelope.timestamp = Int64(timestamp)
 
         if let sealedInner = sealedInnerBytes, !sealedInner.isEmpty {
@@ -56,8 +55,20 @@ final class MessagingServiceClient: Sendable {
             // recipient after unsealing.
             var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
             sealedEnvelope.sealedInner = sealedInner
+            // Read by the federation forward (`send_sealed_message(target, id, inner, timestamp)`)
+            // and never written until 2026-08-17 — every federated sealed message carried 0. A
+            // consumer with no producer, the mirror of the defect class this envelope keeps
+            // producing.
+            sealedEnvelope.timestamp = Int64(timestamp)
             envelope.sealedSender = sealedEnvelope
         } else {
+            // Only the unsealed path puts the ciphertext here. A sealed send carries the identical
+            // bytes inside `SealedInner.encrypted_payload`, and the relay drops this copy: the
+            // sealed branch of `send_message` returns before reading it, and the envelope it
+            // delivers is rebuilt by `MessageEnvelope::from_sealed_sender` out of `sealed_inner`
+            // alone. So the padded ciphertext — 1024, 4096 or 16384 bytes, per chunk — used to go
+            // up the wire twice on every message this app sends.
+            envelope.encryptedPayload = encryptedPayload
             var sender = Shared_Proto_Core_V1_UserId()
             sender.userID = senderId
             envelope.sender = sender

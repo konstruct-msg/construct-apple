@@ -239,7 +239,60 @@ final class SealedSenderEnvelopeTests: XCTestCase {
         XCTAssertEqual(env.sealedSender.sealedInner, Data([0x09, 0x09, 0x09]))
         // Routing metadata the server legitimately needs is still present.
         XCTAssertEqual(env.recipient.userID, "recipient-abc")
-        XCTAssertEqual(env.encryptedPayload, Data([0x01, 0x02, 0x03]))
+    }
+
+    /// The padded ciphertext went up the wire twice on every sealed send: once on the outer
+    /// envelope and once inside `SealedInner`. The relay drops the outer copy — its sealed branch
+    /// returns before reading `encrypted_payload`, and the envelope it delivers is rebuilt by
+    /// `MessageEnvelope::from_sealed_sender` from `sealed_inner` alone — so the duplicate bought
+    /// nothing and cost 1024, 4096 or 16384 bytes per chunk.
+    ///
+    /// Mutation: set `encryptedPayload` unconditionally again — this reddens, and it is what
+    /// shipped until 2026-08-17.
+    func testSealedSend_DoesNotDuplicateTheCiphertextOnTheOuterEnvelope() {
+        let payload = Data(repeating: 0xAB, count: 1024)
+        let env = MessagingServiceClient.buildEnvelope(
+            messageId: "m1",
+            recipientId: "recipient-abc",
+            senderId: "sender",
+            conversationId: "conv",
+            encryptedPayload: payload,
+            timestamp: 42,
+            senderDeviceId: nil,
+            recipientDeviceId: nil,
+            contentType: .e2EeSignal,
+            sealedInnerBytes: Data([0x09, 0x09, 0x09])
+        )
+        XCTAssertTrue(env.encryptedPayload.isEmpty,
+                      "the ciphertext is inside SealedInner; the relay never reads this copy")
+        XCTAssertEqual(env.sealedSender.sealedInner, Data([0x09, 0x09, 0x09]))
+    }
+
+    /// The unsealed path — multi-device fan-out and SENDER_SYNC — is the only one whose delivery
+    /// depends on the outer payload. Removing it there would stop those copies dead.
+    func testIdentifiedSend_StillCarriesTheCiphertext() {
+        let payload = Data(repeating: 0xCD, count: 512)
+        let env = MessagingServiceClient.buildEnvelope(
+            messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
+            encryptedPayload: payload, timestamp: 42,
+            senderDeviceId: nil, recipientDeviceId: nil,
+            contentType: .e2EeSignal, sealedInnerBytes: nil
+        )
+        XCTAssertEqual(env.encryptedPayload, payload)
+    }
+
+    /// `SealedSenderEnvelope.timestamp` is read by the federation forward and was never written,
+    /// so every federated sealed message arrived stamped 0.
+    ///
+    /// Mutation: drop the assignment — this reddens.
+    func testSealedSend_StampsTheEnvelopeFederationForwards() {
+        let env = MessagingServiceClient.buildEnvelope(
+            messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
+            encryptedPayload: Data([0x01]), timestamp: 1786992000,
+            senderDeviceId: nil, recipientDeviceId: nil,
+            contentType: .e2EeSignal, sealedInnerBytes: Data([0x09])
+        )
+        XCTAssertEqual(env.sealedSender.timestamp, 1786992000)
     }
 
     func testIdentifiedSend_populatesSender() {
