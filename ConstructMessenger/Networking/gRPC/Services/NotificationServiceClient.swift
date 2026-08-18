@@ -35,36 +35,34 @@ final class NotificationServiceClient: Sendable {
 
     /// The APNs environment the running binary's token actually belongs to.
     ///
-    /// Read from `APSEnvironment` in Info.plist, which expands the same
-    /// `$(APS_ENVIRONMENT)` build setting as the `aps-environment` entitlement — so
-    /// what we report is by construction the environment APNs minted the token for.
-    ///
-    /// This must NOT be `#if DEBUG`: the Beta config includes Release.xcconfig
-    /// (`APS_ENVIRONMENT = production`) but defines DEBUG to keep debug UI visible in
-    /// TestFlight. The old check therefore registered production TestFlight tokens as
-    /// `sandbox`, and the server routed them to api.sandbox.push.apple.com, where a
-    /// production token is rejected as BadDeviceToken — every TestFlight push dropped.
+    /// The signed `aps-environment` entitlement decides this, not the Info.plist declaration —
+    /// see `PushEnvironmentResolver` for the pair that disagreed on 2026-08-18 and cost every
+    /// push. Undecidable resolves to `.unspecified`, which the server reads as "probe both"
+    /// rather than as a value to trust.
     private var pushEnvironment: Shared_Proto_Services_V1_PushEnvironment {
-        let declared = (Bundle.main.object(forInfoDictionaryKey: "APSEnvironment") as? String)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let signed = PushEnvironmentResolver.apsEnvironmentFromEmbeddedProfile()
+        let declared = Bundle.main.object(forInfoDictionaryKey: "APSEnvironment") as? String
 
-        switch declared {
-        case "production":
-            return .production
-        case "development":
-            return .sandbox
-        default:
-            // Missing key or an unexpanded build setting — fall back to the compile-time
-            // guess rather than guessing wrong silently on a target we forgot to configure.
+        if PushEnvironmentResolver.disagree(signedEntitlement: signed, infoPlist: declared) {
+            // Loud on purpose: this is the state that deletes tokens, and every reading of it
+            // in isolation looks fine. A locally installed Beta build is the usual cause.
             Log.error(
-                "APSEnvironment missing from Info.plist (got \(declared ?? "nil")) — falling back to build-config default. Push may be routed to the wrong APNs endpoint.",
+                "aps-environment mismatch — signed profile says \(signed ?? "nil"), Info.plist says \(declared ?? "nil"). Trusting the signed profile; APNs does.",
                 category: "Notifications"
             )
-            #if DEBUG
+        }
+
+        switch PushEnvironmentResolver.resolve(signedEntitlement: signed, infoPlist: declared) {
+        case .sandbox:
             return .sandbox
-            #else
+        case .production:
             return .production
-            #endif
+        case .unknown:
+            Log.error(
+                "APNs environment undecidable (profile=\(signed ?? "nil"), Info.plist=\(declared ?? "nil")) — declaring UNSPECIFIED so the server probes both.",
+                category: "Notifications"
+            )
+            return .unspecified
         }
     }
 
