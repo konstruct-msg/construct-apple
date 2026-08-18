@@ -18,11 +18,14 @@
 
 Konstruct is an E2EE messenger with a terminal / ASCII aesthetic. The cryptographic core
 is written in Rust and shared verbatim across platforms via UniFFI, so iOS, macOS, and the
-in-progress Android client run the *same* audited crypto rather than reimplementing it.
+in-progress Android client run the *same* crypto rather than reimplementing it. No external
+security audit has been done yet — that is on the roadmap, not behind us.
 
 ### Principles
 
-- ✅ **100% E2EE** — the server never sees plaintext, contact graphs in the clear, or keys.
+- ✅ **100% E2EE** — the server never sees plaintext, contact graphs in the clear, or private keys.
+  Contact edges are stored as keyed hashes of both user ids, which keeps the graph out of a
+  database leak — not out of the operator's reach, since the operator holds the key.
 - ✅ **Forward secrecy & post-compromise security** — Double Ratchet; compromised keys don't reveal history.
 - ✅ **Crypto-agility** — pluggable cipher suites negotiated per session (`suite_id`).
 - ✅ **Post-quantum hybrid** — classical ⊕ PQ, so an attacker must break *both* to win.
@@ -110,7 +113,7 @@ mailbox — not a permanent inbox. This is a privacy choice, not a limitation to
   (idempotent by `temp_id`), so a network failure mid-send never duplicates or loses a message.
 
 **The TTL nuance — read this:** queued messages are held in Redis **only**. They are
-**never written to a database** (no server-side history, no social-graph metadata at rest),
+**never written to a database** (no server-side history, and no record of who sent them),
 and they **expire after a TTL** (tied to the session TTL; streams are also trimmed by age).
 If a recipient stays offline **longer than the TTL**, undelivered messages are
 **auto-deleted** and will not arrive. The offline window is finite by design — Konstruct is
@@ -219,7 +222,7 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the tooling and
 - [x] VEIL obfuscation (obfs4 + WebTunnel pluggable transports, opt-in)
 - [x] 1:1 messaging, session healing, multi-device linking, account recovery (BIP39)
 - [x] Offline delivery — ephemeral per-device Redis-Streams mailbox (no DB persistence, TTL-bounded), drained on reconnect; Redpanda/Kafka bus with 2-phase-commit send; APNs silent-push wake-up
-- [x] Voice/video calls (WebRTC + CallKit)
+- [x] Voice calls (WebRTC + CallKit) — video is not implemented (`CallsFeature.isVideoEnabled`)
 - [x] App-lock (PIN + biometrics, duress PIN)
 
 ### In progress / planned
