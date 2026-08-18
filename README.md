@@ -211,7 +211,7 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the tooling and
 
 ## Status
 
-**App:** v0.17.x (Alpha, TestFlight) · **Core:** construct-core v0.12.x
+**App:** v0.18.1 (Alpha, TestFlight) · **Core:** construct-core v0.12.4
 
 ### Working
 - [x] Rust crypto core — X3DH + Double Ratchet, crypto-agile suites
@@ -220,17 +220,20 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the tooling and
 - [x] UniFFI iOS integration; binary (CFE) session persistence
 - [x] QUIC / HTTP-3 / gRPC transport engine (H2 fallback on iOS)
 - [x] VEIL obfuscation (obfs4 + WebTunnel pluggable transports, opt-in)
-- [x] 1:1 messaging, session healing, multi-device linking, account recovery (BIP39)
+- [x] 1:1 messaging, session healing, account recovery (BIP39)
 - [x] Offline delivery — ephemeral per-device Redis-Streams mailbox (no DB persistence, TTL-bounded), drained on reconnect; Redpanda/Kafka bus with 2-phase-commit send; APNs silent-push wake-up
 - [x] Voice calls (WebRTC + CallKit) — video is not implemented (`CallsFeature.isVideoEnabled`)
 - [x] App-lock (PIN + biometrics, duress PIN)
 
 ### In progress / planned
+- [ ] Multi-device. Linking and transcript sync (SENDER_SYNC) are implemented and unit-tested,
+      and that is not the same as working: the two-simulator stand has not yet carried a copy
+      through to a second device's transcript, so nothing here has been confirmed on hardware.
+      It stays out of the Working list until it has.
 - [ ] Activate hybrid ML-DSA-65 identity signatures on the wire (with smooth migration for existing accounts)
 - [ ] Cluster (group) messaging
-- [x] macOS Desktop uses direct core + gRPC path
+- [ ] macOS Desktop — direct core + gRPC path builds; no public build
 - [ ] Android client
-- [ ] Japanese localization (共創)
 
 ---
 
