@@ -203,6 +203,33 @@ final class SenderSyncWireIdTests: XCTestCase {
         XCTAssertEqual(secret(a, b), secret(b, a))
     }
 
+    // MARK: - Recovering on a device that has never sent anything
+
+    /// The state every freshly linked device was in: own devices were known only from a cache the
+    /// send path filled, so a device that had linked and not yet sent had none. The candidate list
+    /// was the plain `userId` alone, which names no device, so no bundle could be fetched and no
+    /// session established — and the loop returned having logged nothing.
+    ///
+    /// Mutation: `return false` — the refresh never fires and a linked device keeps dropping every
+    /// copy in silence, which is what the stand caught on 2026-08-17.
+    func testCandidateListWithNoDeviceIdNeedsARefresh() {
+        XCTAssertTrue(SenderSyncRecovery.needsOwnDeviceRefresh(
+            candidates: ["289b95ca-8260-4b99-a79a-acaba5681b71"]
+        ))
+        XCTAssertTrue(SenderSyncRecovery.needsOwnDeviceRefresh(candidates: []))
+    }
+
+    /// Once a sibling is known the list can recover by itself, and the receive path must not reach
+    /// for the network while routing an incoming message.
+    ///
+    /// Mutation: `return true` — every SENDER_SYNC copy triggers a bundle fetch.
+    func testCandidateListNamingADeviceDoesNot() {
+        XCTAssertFalse(SenderSyncRecovery.needsOwnDeviceRefresh(candidates: [
+            "289b95ca-8260-4b99-a79a-acaba5681b71",
+            "289b95ca-8260-4b99-a79a-acaba5681b71:37617f2c0617c888fa4750e0799c49ff",
+        ]))
+    }
+
     func testPairSecretRejectsMalformedKeyMaterial() {
         let a = Device(id: "a")
         XCTAssertNil(SenderSyncDeviceTag.pairSecret(ourIdentityPrivateKey: Data([0x01]), peerIdentityPublicKey: a.pub))

@@ -71,6 +71,39 @@ final class MultiDeviceSendCoordinator {
         knownOwnDevices(myUserId: myUserId).map(\.deviceId)
     }
 
+    /// Fill the own-device cache from the server, for the **receive** path.
+    ///
+    /// Until 2026-08-18 the cache had exactly one filler — the send path — so a device that had
+    /// linked and not yet sent anything knew of no siblings at all. A SENDER_SYNC copy then had no
+    /// candidate session to try, no device id to fetch a bundle for, and
+    /// `handleUnopenedSenderSync` walked a list of one entry that carried no `:` and returned
+    /// having done nothing and logged nothing. Observed on the two-simulator stand 2026-08-17: a
+    /// freshly linked device received both copies and neither reached the transcript.
+    ///
+    /// Not a hot-path call: the receive side reaches for it only when it has no siblings on record
+    /// **and** a copy from one has just arrived, which is once per device lifetime in the ordinary
+    /// case. Never burns a one-time pre-key — these are our own devices.
+    @discardableResult
+    func refreshOwnDevices(myUserId: String) async -> [DeviceBundleData] {
+        do {
+            let all = try await KeyServiceClient.shared.getPreKeyBundles(
+                userId: myUserId, consumeOneTimePrekey: false
+            )
+            ownDeviceCache = DeviceCache(bundles: all, fetchedAt: Date())
+            Log.info(
+                "MultiDevice: own-device list refreshed on the receive path — \(all.count) device(s)",
+                category: "MultiDevice"
+            )
+            return all
+        } catch {
+            Log.error(
+                "MultiDevice: own-device refresh failed for \(myUserId.prefix(8))…: \(error)",
+                category: "MultiDevice"
+            )
+            return []
+        }
+    }
+
     /// Shared secrets with our other devices, for reading the `-ss-<tag>` on an incoming copy.
     ///
     /// One X25519 per known device per message. Not cached: an account has units of devices, and a

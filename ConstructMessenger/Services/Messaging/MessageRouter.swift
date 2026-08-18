@@ -2359,6 +2359,26 @@ final class MessageRouter {
         guard let myUserId = AuthSessionManager.shared.currentUserId else { return }
         Task { @MainActor [weak self] in
             guard let self else { return }
+
+            // A device that linked and has not yet sent anything knows of no siblings: the
+            // own-device cache had one filler and it was the send path. So the candidate list is
+            // `[message.from]` alone, which carries no device id, and the loop below skips it —
+            // silently, which is how this went unnoticed until the two-sim stand showed a freshly
+            // linked device dropping both copies without a line in the log.
+            var candidates = candidates
+            if SenderSyncRecovery.needsOwnDeviceRefresh(candidates: candidates) {
+                await MultiDeviceSendCoordinator.shared.refreshOwnDevices(myUserId: myUserId)
+                candidates = self.senderSyncSessionCandidates(myUserId: myUserId, message: message)
+                // The refresh may also have produced a session-bearing candidate that already
+                // works; retry the cheap path before reaching for bundles.
+                if let opened = self.openSenderSync(message, candidates: candidates) {
+                    self.routeOpenedSenderSync(
+                        opened.plaintext, original: message, myUserId: myUserId, in: context
+                    )
+                    return
+                }
+            }
+
             for contactId in candidates where !CryptoManager.shared.hasSession(for: contactId) {
                 // The device id is the suffix of the session key; the plain `message.from`
                 // candidate has none and is skipped, since a bundle fetch needs one.
@@ -2373,6 +2393,15 @@ final class MessageRouter {
                 )
                 if CryptoManager.shared.hasSession(for: contactId) { return }
             }
+
+            // Reaching here means the copy is unrecoverable. Say so: the previous version ended
+            // exactly here having done nothing, and an unroutable transcript copy that leaves no
+            // trace is indistinguishable from one that never arrived.
+            Log.error(
+                "SENDER_SYNC: \(message.id.prefix(8))… opened under no own-device session and none could be established (\(candidates.count) candidate(s)) — dropping",
+                category: "MessageRouter"
+            )
+            PerformanceMetrics.shared.record(.senderSyncUnroutable, label: "no_own_device_session")
         }
     }
 
