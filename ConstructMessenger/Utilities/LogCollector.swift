@@ -53,8 +53,35 @@ class LogCollector {
         
         // Log initial state
         if isEnabled {
+            preservePreviousSession()
             writeSystemInfo()
         }
+    }
+
+    /// Roll the previous session aside before starting a new one.
+    ///
+    /// `writeSystemInfo()` writes the session header with `.atomic`, which replaces the file. It
+    /// runs from `init`, so until 2026-08-18 every launch destroyed the log of the session before
+    /// it — and a crash or a force-quit is exactly when the interesting session is the previous
+    /// one. Diagnosing why offline messages went missing that day needed the window from 14:08 to
+    /// 14:20, and it had been overwritten by the relaunch that went looking for it.
+    ///
+    /// `rotateLogFile()` already existed and was wired only to the size limit. Reusing it here
+    /// keeps the last three sessions, and `getAllLogFiles()` already exports `1.log`–`3.log`, so
+    /// the previous session now travels with the report without any change to the share path.
+    private func preservePreviousSession() {
+        let size = (try? FileManager.default.attributesOfItem(atPath: currentLogFile.path))?[.size] as? Int64
+        guard Self.shouldPreserveSession(existingSize: size) else { return }
+        rotateLogFile()
+    }
+
+    /// Whether a previous session's file is worth keeping.
+    ///
+    /// Empty or absent means nothing was recorded, and rotating it would push a real session out
+    /// of the three-file window for nothing — three launches that write no logs would otherwise
+    /// erase every log we have.
+    static func shouldPreserveSession(existingSize: Int64?) -> Bool {
+        (existingSize ?? 0) > 0
     }
     
     // MARK: - Logging
