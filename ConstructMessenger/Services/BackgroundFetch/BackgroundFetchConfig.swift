@@ -92,3 +92,47 @@ struct BackgroundFetchConfig {
         }
     }
 }
+
+/// Whether an offline fetch may proceed, given the two places a session token can live.
+///
+/// `GRPCAuthCache` is empty until `AuthSessionManager.loadSessionToken()` runs. Background
+/// fetch and `fetchMissedMessages` used to read only the cache, so a silent push or stream
+/// reconnect that beat restore logged ERROR "No session token available" / `unavailable`
+/// four times in a row (2026-08-19) — the token was in Keychain the whole time.
+enum BackgroundFetchAuthGate {
+    enum Decision: Equatable {
+        /// Cache already has a token.
+        case proceed
+        /// Cache is empty, Keychain is not — hydrate then proceed.
+        case hydrateThenProceed
+        /// Neither store has a token. Skip; this is not a network failure.
+        case skipNotAuthenticated
+    }
+
+    static func decision(cacheHasToken: Bool, keychainHasToken: Bool) -> Decision {
+        if cacheHasToken { return .proceed }
+        if keychainHasToken { return .hydrateThenProceed }
+        return .skipNotAuthenticated
+    }
+}
+
+enum SessionTokenHydrator {
+    /// Fill `GRPCAuthCache` from Keychain when the cache is empty. Returns whether a
+    /// token is available afterwards. Must run on the main actor because it touches
+    /// `AuthSessionManager`.
+    @MainActor
+    static func ensureCached() -> Bool {
+        switch BackgroundFetchAuthGate.decision(
+            cacheHasToken: GRPCAuthCache.shared.snapshot.token != nil,
+            keychainHasToken: KeychainManager.shared.loadSessionToken() != nil
+        ) {
+        case .proceed:
+            return true
+        case .hydrateThenProceed:
+            AuthSessionManager.shared.loadSessionToken()
+            return GRPCAuthCache.shared.snapshot.token != nil
+        case .skipNotAuthenticated:
+            return false
+        }
+    }
+}

@@ -730,95 +730,114 @@ final class MessageRouter {
             }
         }
 
-        for action in actions {
-            switch action {
-            case .messageDecrypted:
-                // Disposition is observed for metrics/signals only. Incomplete multi-chunk must
-                // NOT hold the stream watermark (one partial media message would stall every
-                // later cursor for the device). Reassembly that never completes is reported by
-                // `.chunkReassemblyExpired`; durable reassembly is the real fix.
-                _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
-                applyIncomingPqContribution(plan.kemCiphertext, for: message, contactId: otherUserId)
-                return
-            case .callSignalDecrypted:
-                // ct=12: Rust decrypted the call signal — dispatch to CallManager directly.
-                // There is no .messageDecrypted in the action list for call signals, so this
-                // case must be handled here before the loop falls through to "no routing decision".
-                _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
-                return
-            case .sessionHealNeeded(let contactId, let role):
-                handleRustHealDecision(role: role, contactId: contactId, message: message, in: context)
-                if isNewChat { context.delete(chat) }
-                // Queued for heal — hold the cursor until heal drains (success) or clears (give-up).
-                streamOutcome = .deferred
-                return
-            case .sendEndSession(let contactId):
-                // While our own SESSION_RESET_INIT is still unacked we are the side that replaced
-                // the session; the peer is necessarily behind. A decrypt failure here is the
-                // expected consequence of our own re-init, not evidence that the ratchet diverged,
-                // and tearing down answers our own reset with another reset — taking the message
-                // with it. 2026-08-04: a user's first message after a re-init died on exactly this
-                // line, one second after its own msgNum=0 was discarded by the gate above; A held
-                // it at `sent` forever and B never rendered it. Hold instead; the confirm (peer ack
-                // or watchdog give-up) resolves it, and a genuine divergence still tears down then,
-                // one confirm window later.
-                if case .hold = SessionReducer.confirmGateAction(
-                    isPending: SessionConfirmationTracker.shared.isPending(contactId),
-                    isControlCarrier: message.isEndSession || message.isSessionResetInit,
-                    isPeerInit: message.messageNumber == 0,
-                    decryptFailed: true
-                ) {
-                    Log.info("SESSION_STATE[end_session_deferred]: decrypt failed for \(contactId.prefix(8))… while our SESSION_RESET_INIT is unacked — holding, not tearing down", category: "SessionInit")
-                    streamOutcome = holdUntilConfirmResolves(message, from: contactId, reason: "dr_fail_pending_confirm")
-                    if isNewChat { context.delete(chat) }
-                    return
-                }
-                Log.info("SESSION_STATE[rust_end_session]: DR diverged for \(contactId.prefix(8))… — sending END_SESSION", category: "SessionInit")
-                PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "rust_end_session")
-                // Give-up: resolve each discarded message's watermark as it goes. Bare `remove`
-                // left held messages deferred forever, pinning the device cursor behind messages
-                // nothing would ever revisit — invisible while the queue only ever held inits.
-                removePendingMessages(for: contactId)
-                SessionHealingService.shared.clearQueue(for: contactId, in: context)
-                PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-                delegate?.messageRouter(self, needsEndSession: contactId)
+        switch OrchestratorActionPlan.routingVerdict(from: actions) {
+        case .decrypted:
+            // Disposition is observed for metrics/signals only. Incomplete multi-chunk must
+            // NOT hold the stream watermark (one partial media message would stall every
+            // later cursor for the device). Reassembly that never completes is reported by
+            // `.chunkReassemblyExpired`; durable reassembly is the real fix.
+            _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+            applyIncomingPqContribution(plan.kemCiphertext, for: message, contactId: otherUserId)
+            return
+        case .callSignalDecrypted:
+            // ct=12: Rust decrypted the call signal — dispatch to CallManager directly.
+            // There is no .messageDecrypted in the action list for call signals, so this
+            // case must be handled here before the loop falls through to "no routing decision".
+            _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+            return
+        case .sessionHealNeeded(let contactId, let role):
+            handleRustHealDecision(role: role, contactId: contactId, message: message, in: context)
+            if isNewChat { context.delete(chat) }
+            // Queued for heal — hold the cursor until heal drains (success) or clears (give-up).
+            streamOutcome = .deferred
+            return
+        case .sendEndSession(let contactId):
+            // While our own SESSION_RESET_INIT is still unacked we are the side that replaced
+            // the session; the peer is necessarily behind. A decrypt failure here is the
+            // expected consequence of our own re-init, not evidence that the ratchet diverged,
+            // and tearing down answers our own reset with another reset — taking the message
+            // with it. 2026-08-04: a user's first message after a re-init died on exactly this
+            // line, one second after its own msgNum=0 was discarded by the gate above; A held
+            // it at `sent` forever and B never rendered it. Hold instead; the confirm (peer ack
+            // or watchdog give-up) resolves it, and a genuine divergence still tears down then,
+            // one confirm window later.
+            if case .hold = SessionReducer.confirmGateAction(
+                isPending: SessionConfirmationTracker.shared.isPending(contactId),
+                isControlCarrier: message.isEndSession || message.isSessionResetInit,
+                isPeerInit: message.messageNumber == 0,
+                decryptFailed: true
+            ) {
+                Log.info("SESSION_STATE[end_session_deferred]: decrypt failed for \(contactId.prefix(8))… while our SESSION_RESET_INIT is unacked — holding, not tearing down", category: "SessionInit")
+                streamOutcome = holdUntilConfirmResolves(message, from: contactId, reason: "dr_fail_pending_confirm")
                 if isNewChat { context.delete(chat) }
                 return
-            case .fetchPublicKeyBundle(let userId):
-                Log.info("SESSION_STATE[rust_session_lost]: re-queuing \(message.id.prefix(8))… for \(userId.prefix(8))…", category: "SessionInit")
-                pendingQueue.enqueue(message, for: userId)
-                delegate?.messageRouter(self, needsPublicKeyBundle: userId, for: message)
-                // Re-queued for session re-establishment — hold the cursor until drained/cleared.
-                streamOutcome = .deferred
-                return
-            case .endSessionSuppressed(let contactId, let retryAfterMs):
-                // The core hit its END_SESSION cooldown and has taken ownership of sending the
-                // teardown when the cooldown clears. This message is not readable — it is bound to
-                // a ratchet we no longer hold — and it is the peer's re-send after that teardown
-                // that recovers it. Before 2026-08-07 the core answered this case with an empty
-                // action list and never sent the teardown: build 585 lost three media messages
-                // inside one five-second window.
-                Log.info(
-                    "SESSION_STATE[end_session_owed]: teardown for \(contactId.prefix(8))… deferred by cooldown, core sends it in \(retryAfterMs)ms — \(message.id.prefix(8))… awaits the peer's re-send",
-                    category: "SessionInit"
-                )
-                streamOutcome = .deferred
-                if isNewChat { context.delete(chat) }
-                return
-            case .messageQueuedPendingInit(let contactId, let queuedCount):
-                // Held inside the core behind an in-flight init, drained on SessionInitCompleted.
-                // Nothing is required here — but the watermark must not move past a message the
-                // core has not finished with.
-                Log.info(
-                    "SESSION_STATE[queued_in_core]: \(message.id.prefix(8))… held behind session init for \(contactId.prefix(8))… (\(queuedCount) waiting)",
-                    category: "SessionInit"
-                )
-                streamOutcome = .deferred
-                if isNewChat { context.delete(chat) }
-                return
-            default:
-                break
             }
+            Log.info("SESSION_STATE[rust_end_session]: DR diverged for \(contactId.prefix(8))… — sending END_SESSION", category: "SessionInit")
+            PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "rust_end_session")
+            // Give-up: resolve each discarded message's watermark as it goes. Bare `remove`
+            // left held messages deferred forever, pinning the device cursor behind messages
+            // nothing would ever revisit — invisible while the queue only ever held inits.
+            removePendingMessages(for: contactId)
+            SessionHealingService.shared.clearQueue(for: contactId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            delegate?.messageRouter(self, needsEndSession: contactId)
+            if isNewChat { context.delete(chat) }
+            return
+        case .fetchPublicKeyBundle(let userId):
+            Log.info("SESSION_STATE[rust_session_lost]: re-queuing \(message.id.prefix(8))… for \(userId.prefix(8))…", category: "SessionInit")
+            pendingQueue.enqueue(message, for: userId)
+            delegate?.messageRouter(self, needsPublicKeyBundle: userId, for: message)
+            // Re-queued for session re-establishment — hold the cursor until drained/cleared.
+            streamOutcome = .deferred
+            return
+        case .endSessionSuppressed(let contactId, let retryAfterMs):
+            // The core hit its END_SESSION cooldown and has taken ownership of sending the
+            // teardown when the cooldown clears. This message is not readable — it is bound to
+            // a ratchet we no longer hold — and it is the peer's re-send after that teardown
+            // that recovers it. Before 2026-08-07 the core answered this case with an empty
+            // action list and never sent the teardown: build 585 lost three media messages
+            // inside one five-second window.
+            //
+            // The list always carries `scheduleTimer(cooldown_expired:…)` alongside this
+            // verdict — that is the only thing that wakes the core to pay the debt. Execute
+            // it here; falling through used to log "no routing decision" and skip the timer.
+            SessionActionExecutor.shared.execute(actions)
+            Log.info(
+                "SESSION_STATE[end_session_owed]: teardown for \(contactId.prefix(8))… deferred by cooldown, core sends it in \(retryAfterMs)ms — \(message.id.prefix(8))… awaits the peer's re-send",
+                category: "SessionInit"
+            )
+            streamOutcome = .deferred
+            if isNewChat { context.delete(chat) }
+            return
+        case .healSuppressed(let contactId, let retryAfterMs):
+            // Sibling of `endSessionSuppressed`. The core declined to heal inside its cooldown
+            // and asked us to hold: do not ACK, do not advance the cursor, schedule the timer
+            // so a redelivery after `retryAfterMs` is actually attempted. Device logs 2026-08-19
+            // classified this pair as `unknown(healSuppressed),unknown(scheduleTimer)` and
+            // fell through to ERROR with the default `.durable` cursor — the cooldown never
+            // ran and re-inits fired without delay.
+            SessionActionExecutor.shared.execute(actions)
+            Log.info(
+                "SESSION_STATE[heal_suppressed]: heal for \(contactId.prefix(8))… deferred by cooldown, retry in \(retryAfterMs)ms — \(message.id.prefix(8))… held for redelivery",
+                category: "SessionInit"
+            )
+            streamOutcome = .deferred
+            if isNewChat { context.delete(chat) }
+            return
+        case .messageQueuedPendingInit(let contactId, let queuedCount):
+            // Held inside the core behind an in-flight init, drained on SessionInitCompleted.
+            // Nothing is required here — but the watermark must not move past a message the
+            // core has not finished with.
+            SessionActionExecutor.shared.execute(actions)
+            Log.info(
+                "SESSION_STATE[queued_in_core]: \(message.id.prefix(8))… held behind session init for \(contactId.prefix(8))… (\(queuedCount) waiting)",
+                category: "SessionInit"
+            )
+            streamOutcome = .deferred
+            if isNewChat { context.delete(chat) }
+            return
+        case .none:
+            break
         }
 
         // No actionable routing decision. Duplicates no longer reach here — they are answered at
@@ -841,7 +860,10 @@ final class MessageRouter {
             case .pruneAckStore:                 return "pruneAckStore"
             case .checkAckInDb:                  return "checkAckInDb"
             case .endSessionSuppressed:          return "endSessionSuppressed"
+            case .healSuppressed:                return "healSuppressed"
             case .messageQueuedPendingInit:      return "messageQueuedPendingInit"
+            case .scheduleTimer:                 return "scheduleTimer"
+            case .cancelTimer:                   return "cancelTimer"
             default:                             return "unknown(\(action))"
             }
         }.joined(separator: ",")
@@ -1404,11 +1426,19 @@ final class MessageRouter {
             return .deferred
         }
 
-        // Guard: initReceivingSession requires messageNumber=0 (X3DH handshake).
-        // If we have no session and the message is already mid-ratchet, we can never
-        // initialize from it — request the sender to restart their session instead.
-        if message.messageNumber > 0 && isFirstForUser {
-            Log.info("No session for \(userId.prefix(8)) but messageNumber=\(message.messageNumber) — requesting END_SESSION so sender restarts", category: "MessageRouter")
+        // Guard: initReceivingSession requires a handshake carrier (X3DH / PQXDH / 3-DH /
+        // SESSION_RESET_INIT). `messageNumber == 0` is not enough — a DH sending chain also
+        // starts at N=0, and feeding that leftover to the RESPONDER init fails AEAD / PQ-epoch
+        // then clears the queue, including any real handshake behind it (2026-08-19).
+        let initKind = SessionReducer.receivingInitKind(
+            messageNumber: message.messageNumber,
+            oneTimePreKeyId: message.oneTimePreKeyId,
+            kemCiphertextBytes: message.kemCiphertext.count,
+            pqMessageEpoch: message.pqMessageEpoch,
+            isSessionResetInit: message.isSessionResetInit
+        )
+        if initKind != .handshake && isFirstForUser {
+            Log.info("No session for \(userId.prefix(8)) but \(initKind) (msgNum=\(message.messageNumber) otpk=\(message.oneTimePreKeyId) kem=\(message.kemCiphertext.count)B epoch=\(message.pqMessageEpoch)) — requesting END_SESSION so sender restarts", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "mid_ratchet_no_session")
             pendingQueue.touch(userId)

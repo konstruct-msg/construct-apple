@@ -196,6 +196,14 @@ class PublicKeyBundleHandler {
                 return false
             }
             
+        } catch SessionError.notAHandshakeCarrier {
+            let initDuration = Date().timeIntervalSince(initStartTime)
+            Log.info(
+                "SESSION_STATE[init_refused_not_handshake]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s — leftover is not an X3DH carrier",
+                category: "SessionInit"
+            )
+            return false
+
         } catch CryptoError.SessionInitializationFailed(let message) {
             // Log detailed error from Rust core
             let initDuration = Date().timeIntervalSince(initStartTime)

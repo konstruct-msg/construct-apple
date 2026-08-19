@@ -14,6 +14,10 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
     /// meaning they never uploaded a Kyber SPK. Session init must be refused to
     /// avoid silently downgrading to classical-only key agreement.
     case kyberEpochRequired
+    /// The envelope is not an X3DH / PQXDH handshake — feeding it to
+    /// `initReceivingSession` can only fail (AEAD / unknown PQ epoch) and then
+    /// clear the pending queue, including any real handshake behind it.
+    case notAHandshakeCarrier
 
     var errorDescription: String? {
         switch self {
@@ -23,6 +27,8 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
             return "Contact's encryption keys are \(String(format: "%.0f", days)) days old and need to be refreshed — ask them to open the app"
         case .kyberEpochRequired:
             return "Contact's post-quantum keys are incomplete — ask them to update the app"
+        case .notAHandshakeCarrier:
+            return "Incoming message is not a session handshake"
         }
     }
 }

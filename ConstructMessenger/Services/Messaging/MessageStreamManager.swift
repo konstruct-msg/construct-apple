@@ -908,6 +908,12 @@ final class MessageStreamManager {
     /// sat above the committed cursor re-reads from the lower one: redelivery, which the client
     /// dedups by message id, and never a gap.
     private func fetchMissedMessages() async {
+        let hasToken = await MainActor.run { SessionTokenHydrator.ensureCached() }
+        guard hasToken else {
+            Log.info("fetchMissedMessages skipped — session token not yet restored", category: "MessageStream")
+            return
+        }
+
         let fetchStart = Date()
         do {
             let cursor: String? = StreamCursorStore.load()
@@ -965,7 +971,14 @@ final class MessageStreamManager {
             return
         } catch {
             if let rpcError = error as? RPCError {
-                Log.error("fetchMissedMessages RPC error: code=\(rpcError.code) message=\"\(rpcError.message)\"", category: "MessageStream")
+                // Unavailable during connect is the channel coming up (local VEIL proxy,
+                // transient failure) — connectLoop retries. ERROR made a launch race look
+                // like an outage (2026-08-19, 127.0.0.1:50858).
+                if rpcError.code == .unavailable {
+                    Log.info("fetchMissedMessages unavailable — stream will retry: \(rpcError.message)", category: "MessageStream")
+                } else {
+                    Log.error("fetchMissedMessages RPC error: code=\(rpcError.code) message=\"\(rpcError.message)\"", category: "MessageStream")
+                }
             } else {
                 Log.debug("fetchMissedMessages failed: \(error)", category: "MessageStream")
             }

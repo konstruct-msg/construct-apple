@@ -23,6 +23,7 @@
 
 import XCTest
 import CoreData
+import CryptoKit
 @testable import Construct_Messenger
 
 @MainActor
@@ -190,5 +191,57 @@ final class IdentityKeyRetentionTests: XCTestCase {
     func testResolverStillReturnsNilForARowWithoutAKey() {
         makeUser(id: peerId)
         XCTAssertNil(StealthSenderService.recipientIdentityKey(recipientId: peerId, context: context))
+    }
+
+    // MARK: - Sealed-cert TOFU (IK_MISS[no_key])
+
+    /// Device logs 2026-08-19: four `IK_MISS[no_key]` for a contact we had been receiving
+    /// sealed mail from all session. The certs were `.unvouched(.expired)`, so `attest`
+    /// never looked at the signature, and the identity key in every envelope was thrown
+    /// away. Pinning a signature-vouched key — even from an expired cert — is the same
+    /// TOFU a bundle fetch already does.
+    func testExpiredButSignedCert_PinsTheIdentityKey() {
+        makeUser(id: peerId)
+        XCTAssertNil(storedKey(for: peerId))
+
+        let signingKey = Curve25519.Signing.PrivateKey()
+        StealthSenderService.shared.extraTrustedBundleKeysForTesting = [signingKey.publicKey.rawRepresentation]
+        defer { StealthSenderService.shared.extraTrustedBundleKeysForTesting = [] }
+
+        var cert = Shared_Proto_Core_V1_SenderCertificate()
+        cert.senderUserID = peerId
+        cert.senderDomain = "construct.example"
+        cert.senderIdentityKey = fetchedKey
+        cert.senderDeviceID = "device-1"
+        let now = Int64(Date().timeIntervalSince1970)
+        cert.issuedAt = now - 86_400
+        cert.expiresAt = now - 60
+        let payload = StealthSenderService.buildCertPayload(
+            userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey,
+            deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt
+        )
+        cert.serverSignature = try! signingKey.signature(for: payload)
+
+        XCTAssertEqual(
+            StealthSenderService.shared.attest(cert),
+            .unvouched(.expired),
+            "expiry still governs delivery trust — we are only pinning the key"
+        )
+        StealthSenderService.shared.rememberIdentityFromCertificate(cert, context: context)
+
+        XCTAssertEqual(storedKey(for: peerId), fetchedKey)
+        XCTAssertNotNil(StealthSenderService.recipientIdentityKey(recipientId: peerId, context: context))
+    }
+
+    func testUnsignedCert_DoesNotPin() {
+        makeUser(id: peerId)
+
+        var cert = Shared_Proto_Core_V1_SenderCertificate()
+        cert.senderUserID = peerId
+        cert.senderIdentityKey = fetchedKey
+
+        StealthSenderService.shared.rememberIdentityFromCertificate(cert, context: context)
+
+        XCTAssertNil(storedKey(for: peerId), "an unvouched identity key is not TOFU")
     }
 }

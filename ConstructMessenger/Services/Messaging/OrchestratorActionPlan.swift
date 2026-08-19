@@ -52,6 +52,59 @@ struct OrchestratorActionPlan {
         self.kemCiphertext = kemCiphertext
         self.ackCheckMessageId = ackCheckMessageId
     }
+
+    /// The routing verdict the incoming-message loop must follow. Independent of the
+    /// platform-side actions (`scheduleTimer`, `saveSessionToSecureStore`, …) that ride
+    /// alongside it: those are executed, not classified.
+    ///
+    /// First matching action in list order wins — the same scan `MessageRouter` used to
+    /// do inline. `scheduleTimer` and `healSuppressed` arriving together must yield
+    /// `.healSuppressed`, not `.none`: treating that pair as "no decision" (device logs
+    /// 2026-08-19) skipped the timer, advanced the cursor past an un-ACKed message, and
+    /// let re-init fire without the cooldown the core had just asked for.
+    static func routingVerdict(from actions: [CfeAction]) -> IncomingRoutingVerdict {
+        for action in actions {
+            switch action {
+            case .messageDecrypted:
+                return .decrypted
+            case .callSignalDecrypted:
+                return .callSignalDecrypted
+            case .sessionHealNeeded(let contactId, let role):
+                return .sessionHealNeeded(contactId: contactId, role: role)
+            case .sendEndSession(let contactId):
+                return .sendEndSession(contactId: contactId)
+            case .fetchPublicKeyBundle(let userId):
+                return .fetchPublicKeyBundle(userId: userId)
+            case .endSessionSuppressed(let contactId, let retryAfterMs):
+                return .endSessionSuppressed(contactId: contactId, retryAfterMs: retryAfterMs)
+            case .healSuppressed(let contactId, let retryAfterMs):
+                return .healSuppressed(contactId: contactId, retryAfterMs: retryAfterMs)
+            case .messageQueuedPendingInit(let contactId, let queuedCount):
+                return .messageQueuedPendingInit(contactId: contactId, queuedCount: queuedCount)
+            default:
+                continue
+            }
+        }
+        return .none
+    }
+}
+
+/// What `MessageRouter` does with an orchestrator action list after the ACK round-trip.
+///
+/// A non-empty list is not automatically a routing verdict: the core prepends/appends
+/// platform chores (`scheduleTimer`, `applyPqContribution`, `persistAck`) around the
+/// named decision. Reading those chores as "unknown" and falling through to ERROR is
+/// how a cooldown the core had decided became a storm.
+enum IncomingRoutingVerdict: Equatable {
+    case decrypted
+    case callSignalDecrypted
+    case sessionHealNeeded(contactId: String, role: String)
+    case sendEndSession(contactId: String)
+    case fetchPublicKeyBundle(userId: String)
+    case endSessionSuppressed(contactId: String, retryAfterMs: UInt64)
+    case healSuppressed(contactId: String, retryAfterMs: UInt64)
+    case messageQueuedPendingInit(contactId: String, queuedCount: UInt32)
+    case none
 }
 
 /// What the core meant by the action list it returned from an answered `checkAckInDb`.

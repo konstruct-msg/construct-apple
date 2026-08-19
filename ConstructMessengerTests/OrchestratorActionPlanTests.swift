@@ -112,4 +112,56 @@ final class OrchestratorActionPlanTests: XCTestCase {
         XCTAssertEqual(plan.kemCiphertext, kem)
         XCTAssertNil(plan.ackCheckMessageId)
     }
+
+    // MARK: - Routing verdict (healSuppressed is a decision, not "unknown")
+
+    /// Device logs 2026-08-19: the core returned
+    /// `[healSuppressed(..., retryAfterMs: 5068), scheduleTimer(cooldown_expired:…)]`
+    /// and the router logged `unknown(healSuppressed),unknown(scheduleTimer)` then ERROR
+    /// "no routing decision". That pair is a cooldown verdict. Treating it as `.none`
+    /// skipped the timer and advanced the cursor past an un-ACKed message.
+    func testHealSuppressedPlusTimer_IsAHealSuppressedVerdict() {
+        let verdict = OrchestratorActionPlan.routingVerdict(from: [
+            .healSuppressed(contactId: peer, retryAfterMs: 5068),
+            .scheduleTimer(timerId: "cooldown_expired:\(peer)", delayMs: 5068)
+        ])
+        XCTAssertEqual(
+            verdict,
+            .healSuppressed(contactId: peer, retryAfterMs: 5068),
+            "scheduleTimer is a chore riding alongside the verdict, not a missing decision"
+        )
+    }
+
+    func testEndSessionSuppressedPlusTimer_IsAnEndSessionSuppressedVerdict() {
+        let verdict = OrchestratorActionPlan.routingVerdict(from: [
+            .endSessionSuppressed(contactId: peer, retryAfterMs: 5077),
+            .scheduleTimer(timerId: "cooldown_expired:\(peer)", delayMs: 5077)
+        ])
+        XCTAssertEqual(
+            verdict,
+            .endSessionSuppressed(contactId: peer, retryAfterMs: 5077)
+        )
+    }
+
+    func testTimerAlone_IsNotARoutingVerdict() {
+        let verdict = OrchestratorActionPlan.routingVerdict(from: [
+            .scheduleTimer(timerId: "cooldown_expired:\(peer)", delayMs: 100)
+        ])
+        XCTAssertEqual(verdict, .none, "a timer without a named decision is still nothing to route")
+    }
+
+    func testEmptyList_IsNone() {
+        XCTAssertEqual(OrchestratorActionPlan.routingVerdict(from: []), .none)
+    }
+
+    /// Order is the core's. The first named verdict in the list wins, matching the
+    /// scan MessageRouter used to do inline.
+    func testFirstNamedVerdictWinsRegardlessOfChores() {
+        let decrypted = OrchestratorActionPlan.routingVerdict(from: [
+            .scheduleTimer(timerId: "x", delayMs: 1),
+            .messageDecrypted(contactId: peer, messageId: messageId, plaintext: Data("hi".utf8)),
+            .healSuppressed(contactId: peer, retryAfterMs: 1)
+        ])
+        XCTAssertEqual(decrypted, .decrypted)
+    }
 }

@@ -34,6 +34,11 @@ final class OutboundSessionService {
     private var rustTimers: [String: Task<Void, Never>] = [:]
     private let rustTimersLock = NSLock()
 
+    /// Timer-fired `sendEndSession` — the incoming-message path handles this action in
+    /// `MessageRouter`, but a cooldown timer fires off that path. SessionCoordinator
+    /// registers the same `needsEndSession` consumer so the owed teardown actually goes out.
+    var onTimerSendEndSession: ((String) -> Void)?
+
     /// Schedules (or reschedules) a Rust-requested timer. Fires `timerFired` after `delayMs`.
     func scheduleRustTimer(timerId: String, delayMs: UInt64) {
         cancelRustTimer(timerId: timerId)
@@ -67,6 +72,16 @@ final class OutboundSessionService {
         // notifyError, saveSessionToSecureStore, sessionTerminated, and the rest of the
         // CfeAction surface exhaustively. See SessionActionExecutor.
         SessionActionExecutor.shared.execute(actions)
+
+        // Router-owned actions the executor deliberately no-ops: on the incoming-message
+        // path MessageRouter consumes them after `execute` returns. A timer fire never
+        // reaches that loop, so without this the cooldown-expired `sendEndSession` the
+        // core emits (`orchestrator.rs` handle_timer_fired) has no consumer.
+        for action in actions {
+            if case .sendEndSession(let contactId) = action {
+                onTimerSendEndSession?(contactId)
+            }
+        }
     }
 
     // MARK: - Outgoing Encryption

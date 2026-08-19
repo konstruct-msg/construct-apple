@@ -1055,6 +1055,8 @@ class CryptoManager {
             Log.error("Failed to initialize receiving session", category: "CryptoManager")
             logLocalKeyDiagnostics()
             throw CryptoManagerError.sessionInitializationFailed
+        } catch SessionError.notAHandshakeCarrier {
+            throw SessionError.notAHandshakeCarrier
         } catch {
             Log.error("Unexpected error initializing receiving session: \(error)", category: "CryptoManager")
             logLocalKeyDiagnostics()

@@ -207,6 +207,12 @@ final class SessionCoordinator: MessageRouterDelegate {
     func configure(streamManager: MessageStreamManager) {
         self.streamManager = streamManager
         messageRouter.delegate = self
+        // Cooldown timer fires off the incoming-message path; reuse the same END_SESSION
+        // consumer so an owed teardown actually leaves the device.
+        OutboundSessionService.shared.onTimerSendEndSession = { [weak self] contactId in
+            guard let self else { return }
+            self.messageRouter(self.messageRouter, needsEndSession: contactId)
+        }
         startCooldownPurgeTimer()
     }
 
@@ -742,6 +748,18 @@ final class SessionCoordinator: MessageRouterDelegate {
 
     // MARK: - RECEIVER session init
 
+    private static func handshakeCarrier(preferred: ChatMessage, queued: [ChatMessage]) -> ChatMessage? {
+        SessionReducer.pickHandshakeCarrier(preferred: preferred, queued: queued) { message in
+            SessionReducer.receivingInitKind(
+                messageNumber: message.messageNumber,
+                oneTimePreKeyId: message.oneTimePreKeyId,
+                kemCiphertextBytes: message.kemCiphertext.count,
+                pqMessageEpoch: message.pqMessageEpoch,
+                isSessionResetInit: message.isSessionResetInit
+            )
+        }
+    }
+
     private func handlePublicKeyBundleNeeded(userId: String, message: ChatMessage) async {
         if isInitializing(userId) {
             Log.info("Session init already in progress for \(userId.prefix(8))..., skipping duplicate attempt", category: "SessionInit")
@@ -751,13 +769,29 @@ final class SessionCoordinator: MessageRouterDelegate {
         Log.debug("Locked session init for \(userId.prefix(8))...", category: "SessionInit")
 
         do {
+            // The message that triggered the fetch may be a mid-session leftover that
+            // arrived first after we lost the session. Prefer a real handshake from the
+            // pending queue; refusing to init from a leftover is what stops
+            // `init_receiving_failed` from clearing a handshake sitting behind it.
+            // Pick BEFORE the consuming bundle fetch so we don't burn an OTPK for a
+            // leftover we will not init from.
+            let carrier = Self.handshakeCarrier(preferred: message, queued: messageRouter.pendingQueue.messages(for: userId))
+            guard let carrier else {
+                Log.info(
+                    "SESSION_STATE[init_skipped_not_handshake]: no X3DH carrier for \(userId.prefix(8))… — not calling initReceivingSession",
+                    category: "SessionInit"
+                )
+                endInit()
+                return
+            }
+
             let fetchStart = Date()
             let bundle = try await publicKeyBundleHandler.fetchPublicKeyWithRetry(userId: userId)
             Log.info("SESSION_STATE[bundle_fetched]: userId=\(userId.prefix(8))..., duration=\(String(format: "%.2f", Date().timeIntervalSince(fetchStart)))s", category: "SessionInit")
 
             let success = publicKeyBundleHandler.handlePublicKeyBundleForIncomingMessage(
                 bundle,
-                message: message
+                message: carrier
             ) { [weak self] chat, msg, decryptedBytes in
                 self?.saveMessage(for: chat, with: msg, decryptedBytes: decryptedBytes)
             }
@@ -774,8 +808,8 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // Receipt only after we successfully decrypted + persisted the first message —
                 // it is in the transcript, so the sender's checkmark is now true.
                 if let context = viewContext {
-                    OutboundSessionService.sendDeliveryReceipt(for: [message.id], to: userId, in: context)
-                    PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+                    OutboundSessionService.sendDeliveryReceipt(for: [carrier.id], to: userId, in: context)
+                    PersistentACKStore.shared.markProcessed(carrier.id, senderId: userId, in: context)
                 }
 
                 // Notify Rust orchestrator that RESPONDER-side session init completed.
@@ -844,10 +878,10 @@ final class SessionCoordinator: MessageRouterDelegate {
                 PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "init_fail")
                 // Track as permanently failed so the orphaned-init exception in MessageRouter
                 // does not re-process this message ID on subsequent reconnects.
-                FailedInitMessageStore.shared.add(message.id)
+                FailedInitMessageStore.shared.add(carrier.id)
                 // Mark as permanently processed in ACK store (belt-and-suspenders).
                 if let context = viewContext {
-                    PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+                    PersistentACKStore.shared.markProcessed(carrier.id, senderId: userId, in: context)
                 }
                 // init failed → reset phase to absent + clear the pending queue, via the reducer.
                 perform(apply(.initFailed, for: userId), for: userId)

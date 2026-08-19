@@ -133,7 +133,13 @@ final class SessionActionExecutor {
             break  // scaffold
 
         case .healSuppressed(let contactId, let retryAfterMs):
-            Log.debug("Heal suppressed for \(contactId.prefix(8))… retry in \(retryAfterMs)ms", category: "SessionActionExecutor")
+            // Verdict, not a chore: MessageRouter holds the cursor and this executor runs
+            // `scheduleTimer` from the same list. The log is informational so a future
+            // fallthrough cannot hide behind DEBUG.
+            Log.info(
+                "Heal suppressed for \(contactId.prefix(8))… — core will retry after \(retryAfterMs)ms",
+                category: "SessionActionExecutor"
+            )
 
         case .endSessionSuppressed(let contactId, let retryAfterMs):
             // The core owes this teardown and will send it when the cooldown clears; nothing to do

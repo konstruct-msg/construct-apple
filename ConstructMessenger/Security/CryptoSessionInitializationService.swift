@@ -121,6 +121,21 @@ final class CryptoSessionInitializationService {
             throw CryptoManagerError.invalidKeyData
         }
 
+        let initKind = SessionReducer.receivingInitKind(
+            messageNumber: firstMessage.messageNumber,
+            oneTimePreKeyId: firstMessage.oneTimePreKeyId,
+            kemCiphertextBytes: firstMessage.kemCiphertext.count,
+            pqMessageEpoch: firstMessage.pqMessageEpoch,
+            isSessionResetInit: firstMessage.isSessionResetInit
+        )
+        guard initKind == .handshake else {
+            Log.error(
+                "SESSION_STATE[init_refused_not_handshake]: \(userId.prefix(8))… kind=\(initKind) msgNum=\(firstMessage.messageNumber) otpk=\(firstMessage.oneTimePreKeyId) kem=\(firstMessage.kemCiphertext.count)B epoch=\(firstMessage.pqMessageEpoch)",
+                category: "CryptoManager"
+            )
+            throw SessionError.notAHandshakeCarrier
+        }
+
         #if DEBUG
         Log.debug("RESPONDER bundle: ik=\(recipientBundle.identityPublic.count)B spk=\(recipientBundle.signedPrekeyPublic.count)B suite=\(suiteID)", category: "CryptoManager")
         Log.debug("ik_prefix: \(recipientBundle.identityPublic.prefix(8).hexString)", category: "CryptoManager")

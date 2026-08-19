@@ -329,7 +329,31 @@ final class StealthSenderService: SealedSenderResolving {
         case .unvouched(let reason):
             Log.info("Stealth: resolved sender \(cert.senderUserID.prefix(8))… UNVOUCHED (\(reason)) — delivering via ratchet", category: "Stealth")
         }
+        // Expiry bounds replay of this envelope; the identity key is still theirs if the
+        // signature vouches. Pinning it here is what lets a later sealed *send* proceed
+        // for a contact whose bundle path never kept the key (IK_MISS[no_key], 2026-08-19).
+        rememberIdentityFromCertificate(cert)
         return ResolvedSender(senderId: cert.senderUserID, contentType: contentType, trust: trust)
+    }
+
+    /// Pin `cert.senderIdentityKey` when the signature vouches, ignoring expiry.
+    ///
+    /// `attest` returns `.unvouched(.expired)` before it ever looks at the signature, so a
+    /// contact we have been receiving sealed mail from can still have `knownIdentityKey ==
+    /// nil`. The send path then fails closed forever. Signature-vouched is the same TOFU
+    /// `rememberIdentityKeyIfUnknown` already accepts from a bundle fetch.
+    func rememberIdentityFromCertificate(
+        _ cert: Shared_Proto_Core_V1_SenderCertificate,
+        context: NSManagedObjectContext = PersistenceController.shared.container.viewContext
+    ) {
+        guard case .vouched = attestSignature(cert) else { return }
+        guard !cert.senderUserID.isEmpty, !cert.senderIdentityKey.isEmpty else { return }
+        ContactLinkService.shared.rememberIdentityKeyIfUnknown(
+            userId: cert.senderUserID,
+            identityKey: cert.senderIdentityKey,
+            source: "sealed_cert",
+            context: context
+        )
     }
 
     // MARK: - Build SealedInner for sending

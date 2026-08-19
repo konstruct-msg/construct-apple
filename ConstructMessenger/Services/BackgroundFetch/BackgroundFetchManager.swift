@@ -220,16 +220,18 @@ class BackgroundFetchManager: NSObject {
     /// Target execution time: 2-5 seconds
     private func performQuickMessageFetch(completion: @escaping (Result<Int, Error>) -> Void) {
         Log.info("Starting quick message fetch", category: "BackgroundFetch")
-        
-        // Check authentication
-        guard GRPCAuthCache.shared.snapshot.token != nil else {
-            Log.error("No session token available", category: "BackgroundFetch")
-            completion(.failure(BackgroundFetchError.notAuthenticated))
-            return
-        }
-        
-        // Fetch pending messages via gRPC (unary, cursor-paginated)
+
         Task {
+            let hasToken = await MainActor.run { SessionTokenHydrator.ensureCached() }
+            guard hasToken else {
+                // Launch race, not a broken session: the cache is empty because restore
+                // has not run yet. INFO — this used to be ERROR and looked like an outage.
+                Log.info("Background fetch skipped — session token not yet restored", category: "BackgroundFetch")
+                completion(.failure(BackgroundFetchError.notAuthenticated))
+                return
+            }
+
+            // Fetch pending messages via gRPC (unary, cursor-paginated)
             do {
                 var allMessages: [ChatMessage] = []
                 // Start where we left off, not at the beginning of the offline stream.

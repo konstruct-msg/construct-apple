@@ -105,6 +105,57 @@ enum SessionReducer {
         }
     }
 
+    /// What a message is, when we have no session and are considering `initReceivingSession`.
+    ///
+    /// `messageNumber == 0` is **not** "this is an X3DH handshake". After a DH ratchet the new
+    /// sending chain starts at N=0 with a fresh ephemeral, and feeding that leftover to
+    /// `initReceivingSession` fails with "PQ epoch N secret unavailable (current epoch 0)"
+    /// or AEAD — then the coordinator clears the pending queue, including any real handshake
+    /// sitting behind it. Device logs 2026-08-19, both sides, six times in one session:
+    /// `eph=95ac454b` (a live sending-chain key) with `oneTimePrekeyId: 0 kemCiphertext: 0B`.
+    enum ReceivingInitKind: Equatable {
+        /// X3DH / PQXDH / 3-DH / SESSION_RESET_INIT — the only input `initReceivingSession` accepts.
+        case handshake
+        /// First message of a DH sending chain from a session we no longer hold. Cannot init from it.
+        case midSessionLeftover
+        /// Already mid-ratchet (`messageNumber > 0`). Cannot init from it.
+        case midRatchet
+    }
+
+    /// Classify an incoming envelope for the RESPONDER init path.
+    ///
+    /// Handshake evidence, any one of which is enough: SESSION_RESET_INIT, a consumed OTPK,
+    /// or a PQXDH KEM ciphertext. A PQ epoch on a message with none of those is the leftover
+    /// — the epoch is what a live PQ ratchet stamps, and a fresh session starts at 0.
+    /// 3-DH classic (no OTPK, no KEM, epoch 0) stays a handshake: that is the reproducible
+    /// fallback after `otpkUnreproducible`.
+    static func receivingInitKind(
+        messageNumber: UInt32,
+        oneTimePreKeyId: UInt32,
+        kemCiphertextBytes: Int,
+        pqMessageEpoch: UInt32,
+        isSessionResetInit: Bool
+    ) -> ReceivingInitKind {
+        if messageNumber != 0 { return .midRatchet }
+        if isSessionResetInit { return .handshake }
+        if oneTimePreKeyId != 0 { return .handshake }
+        if kemCiphertextBytes > 0 { return .handshake }
+        if pqMessageEpoch > 0 { return .midSessionLeftover }
+        return .handshake
+    }
+
+    /// The envelope to feed `initReceivingSession`: the triggering message if it is a
+    /// handshake, otherwise the first handshake in the pending queue. `nil` means we
+    /// must not init — calling it on a leftover fails and clears the queue.
+    static func pickHandshakeCarrier<T>(
+        preferred: T,
+        queued: [T],
+        kind: (T) -> ReceivingInitKind
+    ) -> T? {
+        if kind(preferred) == .handshake { return preferred }
+        return queued.first { kind($0) == .handshake }
+    }
+
     /// Pure disposition for an incoming message, fed by the authoritative facts MessageRouter
     /// holds. Stateless on purpose (no phase mutation) so it can never trip the init
     /// executor's reentrancy guard.

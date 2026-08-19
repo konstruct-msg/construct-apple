@@ -145,6 +145,21 @@ final class SessionQueueWiringTests: XCTestCase {
                        "incomingDisposition must start init exactly once for a burst (double-init guard)")
     }
 
+    func testPqEpochLeftoverFirstMessage_RequestsEndSession_NotQueued() {
+        let peer = UUID().uuidString
+        var leftover = incoming(from: peer, msgNum: 0)
+        leftover.pqMessageEpoch = 2
+
+        // Same shape as the 2026-08-19 leftover: N=0, no OTPK, no KEM, PQ epoch 2.
+        // Must NOT start a bundle fetch — that path called initReceivingSession, failed,
+        // and cleared the queue, including any real handshake behind it.
+        router.routeIncomingMessage(leftover, in: context)
+
+        XCTAssertEqual(delegate.endSessionRequests, [peer], "Leftover first message must trigger END_SESSION")
+        XCTAssertTrue(delegate.bundleRequests.isEmpty, "Must not fetch a bundle for a mid-session leftover")
+        XCTAssertEqual(router.pendingQueue.count(for: peer), 0, "Must not queue an un-initialisable leftover")
+    }
+
     func testMidRatchetFirstMessage_RequestsEndSession_NotQueued() {
         let peer = UUID().uuidString
 
