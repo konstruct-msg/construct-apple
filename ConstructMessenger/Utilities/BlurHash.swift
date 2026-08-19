@@ -228,7 +228,65 @@ enum BlurHash {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
-        return (pixels, w, h, bytesPerRow)
+        return (straightened(premultiplied: pixels, width: w, height: h, bytesPerRow: bytesPerRow),
+                w, h, bytesPerRow)
+    }
+
+    /// Undo alpha premultiplication before the transform reads the bytes as colour.
+    ///
+    /// The buffer above starts zeroed — transparent black — and `CGContext` composites into
+    /// it premultiplied, so a pixel's stored red is `red × alpha`. The transform then read
+    /// those bytes as though they were straight sRGB, which multiplies every colour by its
+    /// own coverage: 50%-opaque white encoded as mid grey, a transparent margin as pure
+    /// black. That is the "dirty dark" placeholder — and it appeared under a picture that
+    /// then loaded correctly, because the delivered JPEG had been flattened separately.
+    /// Reported 2026-08-19; screenshots and stickers are PNG, so it was most of what people
+    /// send.
+    ///
+    /// BlurHash has no alpha channel and cannot acquire one — it is nine to twelve colours
+    /// and a size flag. What it can do is describe the colours that are *there*. Fully
+    /// transparent pixels carry no colour at all, so they take the image's mean visible
+    /// colour rather than black: the grid the DCT needs stays full, and empty regions read
+    /// as a soft continuation instead of a hole punched in the preview.
+    static func straightened(
+        premultiplied pixels: [UInt8],
+        width: Int,
+        height: Int,
+        bytesPerRow: Int
+    ) -> [UInt8] {
+        var out = pixels
+        var sumR = 0, sumG = 0, sumB = 0, covered = 0
+
+        for y in 0..<height {
+            for x in 0..<width {
+                let i = 4 * x + y * bytesPerRow
+                let a = Int(pixels[i + 3])
+                guard a > 0 else { continue }
+                // Rounded divide, and clamped: a premultiplied channel should never exceed
+                // its alpha, but a malformed source can say otherwise and 8-bit wraps.
+                func straighten(_ c: UInt8) -> UInt8 {
+                    UInt8(clamping: (Int(c) * 255 + a / 2) / a)
+                }
+                let r = straighten(pixels[i]), g = straighten(pixels[i + 1]), b = straighten(pixels[i + 2])
+                out[i] = r; out[i + 1] = g; out[i + 2] = b
+                sumR += Int(r); sumG += Int(g); sumB += Int(b)
+                covered += 1
+            }
+        }
+
+        guard covered > 0 else { return out }
+        let meanR = UInt8(clamping: sumR / covered)
+        let meanG = UInt8(clamping: sumG / covered)
+        let meanB = UInt8(clamping: sumB / covered)
+
+        for y in 0..<height {
+            for x in 0..<width {
+                let i = 4 * x + y * bytesPerRow
+                guard pixels[i + 3] == 0 else { continue }
+                out[i] = meanR; out[i + 1] = meanG; out[i + 2] = meanB
+            }
+        }
+        return out
     }
 
     private static func cgImage(from image: PlatformImage) -> CGImage? {

@@ -46,8 +46,34 @@ struct MediaMetadata {
     let mimeType: String
 }
 
+// MARK: - Image encoding choice
+/// Which container the compressed path writes.
+///
+/// JPEG has no alpha channel. Every picked image used to go through `jpegData`, so a PNG
+/// with transparency arrived with its transparent regions flattened to black — the whole
+/// sticker case, and the reason a screenshot with rounded corners had black notches.
+enum ImageEncoding: Equatable {
+    case jpeg
+    case png
+
+    var mimeType: String { self == .png ? "image/png" : "image/jpeg" }
+}
+
 // MARK: - Media Optimizer
 struct MediaOptimizer {
+
+    /// PNG only where it buys something, and only where it fits.
+    ///
+    /// PNG is lossless: for a photograph it is several times the size of a JPEG at the same
+    /// dimensions and buys nothing, because a photograph has no transparency to keep. So the
+    /// question is not "does this file have an alpha channel" — an opaque screenshot has one
+    /// too — but "does it use it", and then whether the result is small enough to send. A
+    /// transparent image over budget still has to arrive: it falls back to JPEG and loses the
+    /// transparency, which is worse than a sticker and better than a failed send.
+    static func chooseEncoding(usesAlpha: Bool, pngBytes: Int, budget: Int) -> ImageEncoding {
+        guard usesAlpha, pngBytes <= budget else { return .jpeg }
+        return .png
+    }
 
     /// Max pixel dimension on the longest side. 1920px is a good chat quality/size balance.
     private static let maxImageDimension: CGFloat = 1920
@@ -60,19 +86,43 @@ struct MediaOptimizer {
 
     static func optimizeImage(_ image: PlatformImage) throws -> OptimizedMedia {
         #if canImport(UIKit)
-        let (optimizedImage, optimizedData) = try progressiveCompress(image)
+        let (optimizedImage, jpegBytes) = try progressiveCompress(image)
+        // Alpha is read from the resized rendering, not the original: `resizeToPixels` draws
+        // with `opaque = false`, so transparency survives it, and this is the image that will
+        // actually be encoded.
+        let transparent = usesAlpha(optimizedImage)
+        let png = transparent ? optimizedImage.pngData() : nil
+        let encoding = chooseEncoding(
+            usesAlpha: transparent,
+            pngBytes: png?.count ?? .max,
+            budget: maxImageBytes
+        )
+        let optimizedData = encoding == .png ? (png ?? jpegBytes) : jpegBytes
+
+        if transparent && encoding == .jpeg {
+            // Say it out loud: the recipient gets black where the sender saw through.
+            Log.info(
+                "Transparent image too large for PNG (\(png?.count ?? -1)B > \(maxImageBytes)B) — sending JPEG, transparency lost",
+                category: "MediaOptimizer"
+            )
+        }
+
         // `OptimizedMedia.thumbnail` has exactly one consumer — `MediaMessageData.thumbnail`, which
         // is the wire copy. The sender's own on-disk placeholder is generated separately in
         // `MediaUploadManager` at the disk budget, so this one is sized for the chunk.
-        let thumbnail = try generateThumbnail(from: optimizedImage, budget: ThumbnailBudget.wireMaxBytes)
+        let thumbnail = try generateThumbnail(
+            from: optimizedImage,
+            budget: ThumbnailBudget.wireMaxBytes,
+            encoding: encoding
+        )
         // After compress, optimizedImage has scale=1.0, so .size == pixel dimensions
         let pw = Int(optimizedImage.size.width), ph = Int(optimizedImage.size.height)
         let metadata = MediaMetadata(
             originalSize: optimizedData.count, optimizedSize: optimizedData.count,
             width: pw, height: ph,
-            duration: nil, mimeType: "image/jpeg"
+            duration: nil, mimeType: encoding.mimeType
         )
-        Log.info("Image optimized → \(optimizedData.count) bytes (\(pw)×\(ph)px)", category: "MediaOptimizer")
+        Log.info("Image optimized → \(optimizedData.count) bytes (\(pw)×\(ph)px, \(encoding.mimeType))", category: "MediaOptimizer")
         return OptimizedMedia(data: optimizedData, thumbnail: thumbnail, metadata: metadata)
         #else
         guard let tiff = image.tiffRepresentation,
@@ -125,8 +175,12 @@ struct MediaOptimizer {
     /// - Parameter budget: `ThumbnailBudget.maxBytes` for a thumbnail that will be stored locally,
     ///   `ThumbnailBudget.wireMaxBytes` for one that will be sent. Disk buys bytes; the wire buys
     ///   whole messages, so the two ceilings differ by ~4x and must not be conflated.
+    /// - Parameter encoding: `.png` keeps a sticker's transparency in the preview. PNG has no
+    ///   quality dial, so only the resolution ladder applies there — the quality search is
+    ///   skipped rather than silently doing nothing.
     static func generateThumbnail(from image: PlatformImage,
-                                  budget: Int = ThumbnailBudget.maxBytes) throws -> Data {
+                                  budget: Int = ThumbnailBudget.maxBytes,
+                                  encoding: ImageEncoding = .jpeg) throws -> Data {
         #if canImport(UIKit)
         // Quality alone does not bound a detailed image, and the quality search floors at 0.35 —
         // so when a photo could not fit at that floor the old code returned the q=0.70 rendering
@@ -148,8 +202,11 @@ struct MediaOptimizer {
             let renderer = UIGraphicsImageRenderer(size: targetPixels, format: format)
             let thumb = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: targetPixels)) }
 
-            guard var data = thumb.jpegData(compressionQuality: thumbnailQuality) else { continue }
-            if data.count > budget,
+            guard var data = (encoding == .png ? thumb.pngData()
+                                               : thumb.jpegData(compressionQuality: thumbnailQuality))
+            else { continue }
+            if encoding == .jpeg,
+               data.count > budget,
                let (_, fitted) = binarySearchQuality(for: thumb, budget: budget) {
                 data = fitted
             }
@@ -207,6 +264,44 @@ struct MediaOptimizer {
     // whole video into memory to build an `OptimizedMedia` nobody read. The real video path is
     // `MediaManager.uploadVideo`, which transcodes to a file. A producer with no consumer would
     // have quietly acquired the wire budget below and made it look load-bearing.
+
+    #if canImport(UIKit)
+    /// Whether the image actually uses transparency, not merely whether it has a channel for it.
+    ///
+    /// An opaque screenshot is RGBA with every alpha at 255; encoding it as PNG would multiply
+    /// its size for nothing. Only a pixel that is genuinely not fully opaque justifies the
+    /// lossless container. Scanned at ≤64px on the long side: a single translucent pixel in the
+    /// full-resolution original can vanish under downsampling, and one that does is not
+    /// transparency anyone will see.
+    static func usesAlpha(_ image: UIImage, sampleDimension: Int = 64) -> Bool {
+        guard let cg = image.cgImage else { return false }
+        switch cg.alphaInfo {
+        case .none, .noneSkipFirst, .noneSkipLast:
+            return false
+        default:
+            break
+        }
+
+        let scale = min(1.0, CGFloat(sampleDimension) / CGFloat(max(cg.width, cg.height)))
+        let w = max(1, Int(CGFloat(cg.width) * scale))
+        let h = max(1, Int(CGFloat(cg.height) * scale))
+        let bytesPerRow = w * 4
+        var pixels = [UInt8](repeating: 0, count: bytesPerRow * h)
+        guard let ctx = CGContext(
+            data: &pixels, width: w, height: h, bitsPerComponent: 8, bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return false }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        for y in 0..<h {
+            for x in 0..<w where pixels[4 * x + y * bytesPerRow + 3] < 255 {
+                return true
+            }
+        }
+        return false
+    }
+    #endif
 
     // MARK: - Private (iOS only)
 
