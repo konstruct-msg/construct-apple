@@ -113,6 +113,44 @@ final class ImageOrientationTests: XCTestCase {
         }
     }
 
+    /// Pinch to enlarge and let the frame trim the rest — no aspect chosen, just zoom. It runs
+    /// through the same cut as a framed crop, so it failed the same way, and this is the shape
+    /// the defect was actually reported in.
+    ///
+    /// Composes the real arithmetic with the real cut rather than asserting on a hand-written
+    /// rect: the two agreeing is the thing that was broken.
+    func testZoomingIntoARotatedPhotoKeepsTheMiddleOfWhatWasOnScreen() {
+        // Buffer 80×40; displayed `.right` that is a 40×80 portrait. The band painted here
+        // lands exactly on the middle of the picture as the viewer sees it.
+        let buffer = Self.image(size: CGSize(width: 80, height: 40), opaque: true) { ctx, rect in
+            UIColor.red.setFill()
+            ctx.fill(rect)
+            UIColor.green.setFill()
+            ctx.fill(CGRect(x: 20, y: 10, width: 40, height: 20))
+        }
+        let photo = UIImage(cgImage: buffer.cgImage!, scale: 1, orientation: .right)
+
+        // Free aspect: the window takes the picture's own shape, so at rest the whole photo
+        // is in frame. Pinch to 2×.
+        let window = CGSize(width: 40, height: 80)
+        let rect = CropGeometry.cropRect(
+            imagePixelSize: photo.size,
+            displayedImageSize: window,
+            scale: 2,
+            offset: .zero,
+            window: window
+        )
+        XCTAssertEqual(rect, CGRect(x: 10, y: 20, width: 20, height: 40), "the middle at 2×")
+
+        let cropped = photo.cropped(to: rect)
+
+        XCTAssertEqual(cropped.size, CGSize(width: 20, height: 40))
+        for point in [CGPoint(x: 2, y: 2), CGPoint(x: 10, y: 20), CGPoint(x: 18, y: 38)] {
+            XCTAssertEqual(Self.pixel(cropped, at: point), .green,
+                           "at \(point) the zoom kept a region the viewer never framed")
+        }
+    }
+
     func testCroppingAnUprightImageIsUnaffected() {
         let image = Self.image(size: CGSize(width: 100, height: 100), opaque: true) { ctx, rect in
             UIColor.green.setFill()
