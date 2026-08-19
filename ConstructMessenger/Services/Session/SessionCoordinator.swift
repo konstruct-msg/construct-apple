@@ -760,6 +760,77 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
     }
 
+    /// Stop trying to establish a receiving session for `userId`, release everything held on its
+    /// behalf, and ask the peer to restart.
+    ///
+    /// One authority for the give-up, because there are now two ways to reach it and they must not
+    /// drift: `initReceivingSession` failed, or there was no handshake carrier to call it with.
+    /// Both leave the same debts — a pending queue holding the device's stream cursor, and a peer
+    /// who does not know we lost the session. The second path used to pay neither.
+    ///
+    /// No delivery receipt: nothing here was decrypted, so a checkmark would be a lie. Redelivery
+    /// stops via `.clearQueuedMessages` → `removePendingMessages`, which resolves each held
+    /// message's watermark — the server trims from `Subscribe.since_cursor`, never from a receipt.
+    ///
+    /// - Parameter blamedMessageId: the message recorded as permanently failed so the
+    ///   orphaned-init exception in `MessageRouter` does not re-process it on the next reconnect.
+    private func giveUpInit(for userId: String, blamedMessageId: String, metricLabel: String) {
+        PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: metricLabel)
+        FailedInitMessageStore.shared.add(blamedMessageId)
+        // Belt-and-suspenders alongside the failure store.
+        if let context = viewContext {
+            PersistentACKStore.shared.markProcessed(blamedMessageId, senderId: userId, in: context)
+        }
+        // Reset phase to absent + clear the pending queue, via the reducer.
+        perform(apply(.initFailed, for: userId), for: userId)
+
+        let withinPostEndSessionGrace: Bool = {
+            guard let t = lastInboundEndSessionAt[userId] else { return false }
+            return Date().timeIntervalSince(t) < postEndSessionInitFailGrace
+        }()
+
+        // If the init failed because we couldn't reproduce the sender's OTPK, ask them
+        // (via the typed END_SESSION reason) to re-init WITHOUT one — 3-DH is always
+        // reproducible, so this breaks the 4-DH retry loop instead of perpetuating it.
+        let otpkUnreproducible = SessionReinitHintStore.shared.consumeResponderOtpkUnreproducible(for: userId)
+        Task { [weak self] in
+            guard let self else { return }
+            await self.replenishOtpksAfterFailure(reason: "init_failed")
+
+            // Single branch authority — grace/otpk/plain decided by the reducer.
+            // Cooldown (per-peer storm rate limit) is still applied at each send site.
+            switch SessionReducer.initFailureAction(
+                otpkUnreproducible: otpkUnreproducible,
+                withinInboundGrace: withinPostEndSessionGrace
+            ) {
+            case .suppressWithinGrace:
+                Log.info(
+                    "SESSION_STATE[init_fail_grace]: suppressed END_SESSION for \(userId.prefix(8))… (within \(Int(self.postEndSessionInitFailGrace))s of inbound END_SESSION)",
+                    category: "SessionInit"
+                )
+
+            case .sendTypedOtpk:
+                // Must carry the typed reason; still respect per-peer cooldown.
+                if self.recordEndSessionSendIfAllowed(userId) {
+                    do {
+                        try await self.sendEndSession(
+                            to: userId,
+                            reason: "session_init_failed_otpk_unreproducible",
+                            resetReason: .otpkUnreproducible
+                        )
+                    } catch {
+                        Log.error("SESSION_STATE[init_failed_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                    }
+                } else {
+                    Log.info("END_SESSION cooldown active for \(userId.prefix(8))…, skipping (session_init_failed_otpk_unreproducible)", category: "SessionCoordinator")
+                }
+
+            case .sendPlain:
+                _ = await self.sendEndSessionRateLimited(to: userId, reason: "session_init_failed")
+            }
+        }
+    }
+
     private func handlePublicKeyBundleNeeded(userId: String, message: ChatMessage) async {
         if isInitializing(userId) {
             Log.info("Session init already in progress for \(userId.prefix(8))..., skipping duplicate attempt", category: "SessionInit")
@@ -777,10 +848,21 @@ final class SessionCoordinator: MessageRouterDelegate {
             // leftover we will not init from.
             let carrier = Self.handshakeCarrier(preferred: message, queued: messageRouter.pendingQueue.messages(for: userId))
             guard let carrier else {
+                // Refusing to init is right, but refusing *silently* is not: the router has
+                // already enqueued this message and set `streamOutcome = .deferred`, so leaving
+                // now pins the device's stream cursor behind a message nothing will ever revisit
+                // and grows the queue with every redelivery (62 entries on device, 2026-08-19).
+                // Nobody would tell the peer either, and only the peer can produce the handshake
+                // we are missing.
+                //
+                // So take the same give-up the failed init takes. The difference between the two
+                // paths is that this one costs no bundle fetch, no OTPK and no doomed AEAD
+                // attempt — not that it owes the peer less.
                 Log.info(
-                    "SESSION_STATE[init_skipped_not_handshake]: no X3DH carrier for \(userId.prefix(8))… — not calling initReceivingSession",
+                    "SESSION_STATE[init_skipped_not_handshake]: no X3DH carrier for \(userId.prefix(8))… — giving up and asking the peer to restart",
                     category: "SessionInit"
                 )
+                giveUpInit(for: userId, blamedMessageId: message.id, metricLabel: "no_handshake_carrier")
                 endInit()
                 return
             }
@@ -866,71 +948,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // initReceivingSession failed — prekey exhausted, AEAD mismatch, or race after
                 // peer END_SESSION (stale msg0 on the wire).
                 Log.info("initReceivingSession failed — clearing queue for \(userId.prefix(8))…", category: "SessionInit")
-                // No receipt: this message was never decrypted, so telling the sender
-                // "delivered" would put a checkmark on something they never received.
-                //
-                // The old comment here claimed the receipt advanced the server's delivery
-                // cursor. It does not — the server trims strictly from `Subscribe.since_cursor`
-                // (`messaging-service/src/stream.rs`), which the client drives through
-                // `StreamCursorTracker`. The give-up below releases the watermark via
-                // `.clearQueuedMessages` → `removePendingMessages`, so redelivery stops
-                // without any receipt at all.
-                PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "init_fail")
-                // Track as permanently failed so the orphaned-init exception in MessageRouter
-                // does not re-process this message ID on subsequent reconnects.
-                FailedInitMessageStore.shared.add(carrier.id)
-                // Mark as permanently processed in ACK store (belt-and-suspenders).
-                if let context = viewContext {
-                    PersistentACKStore.shared.markProcessed(carrier.id, senderId: userId, in: context)
-                }
-                // init failed → reset phase to absent + clear the pending queue, via the reducer.
-                perform(apply(.initFailed, for: userId), for: userId)
-
-                let withinPostEndSessionGrace: Bool = {
-                    guard let t = lastInboundEndSessionAt[userId] else { return false }
-                    return Date().timeIntervalSince(t) < postEndSessionInitFailGrace
-                }()
-
-                // If the init failed because we couldn't reproduce the sender's OTPK, ask them
-                // (via the typed END_SESSION reason) to re-init WITHOUT one — 3-DH is always
-                // reproducible, so this breaks the 4-DH retry loop instead of perpetuating it.
-                let otpkUnreproducible = SessionReinitHintStore.shared.consumeResponderOtpkUnreproducible(for: userId)
-                Task { [weak self] in
-                    guard let self else { return }
-                    await self.replenishOtpksAfterFailure(reason: "init_failed")
-
-                    // Single branch authority — grace/otpk/plain now decided by the reducer.
-                    // Cooldown (per-peer storm rate limit) is still applied at each send site.
-                    switch SessionReducer.initFailureAction(
-                        otpkUnreproducible: otpkUnreproducible,
-                        withinInboundGrace: withinPostEndSessionGrace
-                    ) {
-                    case .suppressWithinGrace:
-                        Log.info(
-                            "SESSION_STATE[init_fail_grace]: suppressed END_SESSION for \(userId.prefix(8))… (within \(Int(self.postEndSessionInitFailGrace))s of inbound END_SESSION)",
-                            category: "SessionInit"
-                        )
-
-                    case .sendTypedOtpk:
-                        // Must carry the typed reason; still respect per-peer cooldown.
-                        if self.recordEndSessionSendIfAllowed(userId) {
-                            do {
-                                try await self.sendEndSession(
-                                    to: userId,
-                                    reason: "session_init_failed_otpk_unreproducible",
-                                    resetReason: .otpkUnreproducible
-                                )
-                            } catch {
-                                Log.error("SESSION_STATE[init_failed_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
-                            }
-                        } else {
-                            Log.info("END_SESSION cooldown active for \(userId.prefix(8))…, skipping (session_init_failed_otpk_unreproducible)", category: "SessionCoordinator")
-                        }
-
-                    case .sendPlain:
-                        _ = await self.sendEndSessionRateLimited(to: userId, reason: "session_init_failed")
-                    }
-                }
+                giveUpInit(for: userId, blamedMessageId: carrier.id, metricLabel: "init_fail")
             }
         } catch {
             Log.error("SESSION_STATE[bundle_fetch_failed]: userId=\(userId.prefix(8))..., error=\(error.localizedDescription)", category: "SessionInit")

@@ -244,4 +244,76 @@ final class IdentityKeyRetentionTests: XCTestCase {
 
         XCTAssertNil(storedKey(for: peerId), "an unvouched identity key is not TOFU")
     }
+
+    /// A cert that is still valid must pin too — and it is the case `resolveSender` routes
+    /// around the verification for, because `attest` has just done it. If the shortcut ever
+    /// stops covering this verdict, the live-cert path silently stops pinning and `IK_MISS`
+    /// comes back for exactly the contacts whose certs are freshest.
+    func testLiveSignedCert_AttestsBySignatureAndPins() {
+        makeUser(id: peerId)
+        XCTAssertNil(storedKey(for: peerId))
+
+        let signingKey = Curve25519.Signing.PrivateKey()
+        StealthSenderService.shared.extraTrustedBundleKeysForTesting = [signingKey.publicKey.rawRepresentation]
+        defer { StealthSenderService.shared.extraTrustedBundleKeysForTesting = [] }
+
+        var cert = Shared_Proto_Core_V1_SenderCertificate()
+        cert.senderUserID = peerId
+        cert.senderDomain = "construct.example"
+        cert.senderIdentityKey = fetchedKey
+        cert.senderDeviceID = "device-1"
+        let now = Int64(Date().timeIntervalSince1970)
+        cert.issuedAt = now - 60
+        cert.expiresAt = now + 86_400
+        let payload = StealthSenderService.buildCertPayload(
+            userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey,
+            deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt
+        )
+        cert.serverSignature = try! signingKey.signature(for: payload)
+
+        // The precondition of the shortcut in `resolveSender`.
+        XCTAssertEqual(StealthSenderService.shared.attest(cert), .vouched(.signature))
+
+        StealthSenderService.shared.rememberIdentityFromCertificate(cert, context: context)
+
+        XCTAssertEqual(storedKey(for: peerId), fetchedKey)
+    }
+
+    /// The key is pinned once and never overwritten from a later envelope. A second cert for
+    /// the same contact carrying a different key must not silently replace the first — that
+    /// would turn TOFU into trust-on-every-use, and the sealed path accepts certs from anyone
+    /// who can produce a server signature.
+    func testASecondCertDoesNotOverwriteAPinnedKey() {
+        makeUser(id: peerId)
+
+        let signingKey = Curve25519.Signing.PrivateKey()
+        StealthSenderService.shared.extraTrustedBundleKeysForTesting = [signingKey.publicKey.rawRepresentation]
+        defer { StealthSenderService.shared.extraTrustedBundleKeysForTesting = [] }
+
+        func signedCert(identityKey: Data) -> Shared_Proto_Core_V1_SenderCertificate {
+            var cert = Shared_Proto_Core_V1_SenderCertificate()
+            cert.senderUserID = peerId
+            cert.senderDomain = "construct.example"
+            cert.senderIdentityKey = identityKey
+            cert.senderDeviceID = "device-1"
+            let now = Int64(Date().timeIntervalSince1970)
+            cert.issuedAt = now - 60
+            cert.expiresAt = now + 86_400
+            cert.serverSignature = try! signingKey.signature(
+                for: StealthSenderService.buildCertPayload(
+                    userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey,
+                    deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt
+                )
+            )
+            return cert
+        }
+
+        StealthSenderService.shared.rememberIdentityFromCertificate(signedCert(identityKey: fetchedKey), context: context)
+        XCTAssertEqual(storedKey(for: peerId), fetchedKey)
+
+        let impostor = Data(repeating: 0xAB, count: 32)
+        StealthSenderService.shared.rememberIdentityFromCertificate(signedCert(identityKey: impostor), context: context)
+
+        XCTAssertEqual(storedKey(for: peerId), fetchedKey, "first key wins — this is TOFU, not TOEU")
+    }
 }

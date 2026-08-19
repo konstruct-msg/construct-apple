@@ -332,7 +332,18 @@ final class StealthSenderService: SealedSenderResolving {
         // Expiry bounds replay of this envelope; the identity key is still theirs if the
         // signature vouches. Pinning it here is what lets a later sealed *send* proceed
         // for a contact whose bundle path never kept the key (IK_MISS[no_key], 2026-08-19).
-        rememberIdentityFromCertificate(cert)
+        //
+        // `attest` above has already verified the signature whenever it returned
+        // `.vouched(.signature)`, and this runs once per incoming sealed message — the
+        // 2026-08-19 replay put 4211 of them through in 65 seconds, so verifying twice is
+        // not free. Every other verdict re-verifies, because none of them is a statement
+        // about the signature: `.expired` short-circuits before `attest` looks at it, and
+        // `.kt` is a different basis entirely.
+        if case .vouched(.signature) = trust {
+            pinIdentity(cert)
+        } else {
+            rememberIdentityFromCertificate(cert)
+        }
         return ResolvedSender(senderId: cert.senderUserID, contentType: contentType, trust: trust)
     }
 
@@ -342,11 +353,28 @@ final class StealthSenderService: SealedSenderResolving {
     /// contact we have been receiving sealed mail from can still have `knownIdentityKey ==
     /// nil`. The send path then fails closed forever. Signature-vouched is the same TOFU
     /// `rememberIdentityKeyIfUnknown` already accepts from a bundle fetch.
+    ///
+    /// Verifies the signature itself. The one caller that has already verified it takes
+    /// `pinIdentity` instead — see there for why that shortcut is not a parameter on this method.
     func rememberIdentityFromCertificate(
         _ cert: Shared_Proto_Core_V1_SenderCertificate,
         context: NSManagedObjectContext = PersistenceController.shared.container.viewContext
     ) {
         guard case .vouched = attestSignature(cert) else { return }
+        pinIdentity(cert, context: context)
+    }
+
+    /// Pin without verifying. **Only reachable from a branch that has just verified.**
+    ///
+    /// This started as an `alreadyAttested:` parameter on `rememberIdentityFromCertificate`,
+    /// which made "the signature is good" something a caller asserts rather than something the
+    /// code establishes — in the one method whose entire job is deciding whether to trust a key.
+    /// A private function whose proof is three lines above its only call site cannot be handed a
+    /// lie by a future caller; a defaulted parameter can.
+    private func pinIdentity(
+        _ cert: Shared_Proto_Core_V1_SenderCertificate,
+        context: NSManagedObjectContext = PersistenceController.shared.container.viewContext
+    ) {
         guard !cert.senderUserID.isEmpty, !cert.senderIdentityKey.isEmpty else { return }
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
             userId: cert.senderUserID,
