@@ -3,6 +3,9 @@
 "ok" = "OK";
 "cancel" = "Отмена";
 "done" = "Готово";
+"edit" = "Изменить";
+"editor_rotate" = "Повернуть";
+"editor_mirror" = "Отразить";
 "unknown" = "Неизвестно";
 "construct_title" = "КОНСТРУКТ";
 

@@ -3,6 +3,9 @@
 "ok" = "OK";
 "cancel" = "Annuler";
 "done" = "Terminé";
+"edit" = "Modifier";
+"editor_rotate" = "Pivoter";
+"editor_mirror" = "Retourner";
 "unknown" = "Inconnu";
 "construct_title" = "KONSTRUCT";
 "search_prompt" = "Rechercher";

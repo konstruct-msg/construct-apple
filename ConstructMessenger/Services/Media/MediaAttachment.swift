@@ -91,9 +91,20 @@ struct MediaAttachment: Identifiable, @unchecked Sendable {
         self.duration = nil
     }
 
-    /// Wrap an in-memory image (camera capture / drag-drop) — there is no source file,
-    /// so the "original" is a high-quality JPEG encode of the image.
+    /// Wrap an in-memory image (camera capture, drag-drop, or the crop editor's output) —
+    /// there is no source file, so the "original" is an encode of the image itself.
+    ///
+    /// PNG when the image uses transparency, JPEG otherwise. JPEG has no alpha channel, so
+    /// encoding a sticker here would flatten it to black before it ever reached the send
+    /// path — the same defect fixed there on 2026-08-19, re-entered one boundary earlier.
+    /// Camera frames and photos are opaque and still take the small lossy encode.
     init(image: PlatformImage, quality: MediaQuality = .compressed) {
+        #if canImport(UIKit)
+        if MediaOptimizer.usesAlpha(image), let png = image.pngData() {
+            self.init(originalData: png, mimeType: "image/png", displayImage: image, quality: quality)
+            return
+        }
+        #endif
         let data = image.platformJPEGData(quality: 0.95) ?? Data()
         self.init(originalData: data, mimeType: "image/jpeg", displayImage: image, quality: quality)
     }

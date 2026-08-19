@@ -3,6 +3,9 @@
 "ok" = "OK";
 "cancel" = "キャンセル";
 "done" = "完了";
+"edit" = "編集";
+"editor_rotate" = "回転";
+"editor_mirror" = "反転";
 "unknown" = "不明";
 "construct_title" = "コンストラクト";
      

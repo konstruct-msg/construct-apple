@@ -28,6 +28,9 @@ struct IOSMessageInputView: View {
     @StateObject private var audioRecorder = AudioRecorderService.shared
     @StateObject private var attachments = MessageInputAttachmentStore()
     @State private var showMicPermissionAlert = false
+    /// Which queued attachment the review sheet opened on. Nil means closed — one piece of
+    /// state rather than a bool plus an index that can disagree about which item is showing.
+    @State private var reviewingIndex: AttachmentReviewTarget?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,6 +49,14 @@ struct IOSMessageInputView: View {
         .animation(.easeInOut(duration: 0.2), value: editingMessage != nil)
         .animation(.easeInOut(duration: 0.2), value: !attachments.selectedAttachments.isEmpty)
         .animation(.easeInOut(duration: 0.15), value: audioRecorder.state)
+        .fullScreenCover(item: $reviewingIndex) { target in
+            AttachmentReviewView(
+                attachments: attachments.selectedAttachments,
+                initialIndex: target.index,
+                onEdit: { attachments.replaceImage(at: $0, with: $1) },
+                onDelete: { attachments.removeAttachment(at: $0) }
+            )
+        }
         .alert("Microphone Access Denied", isPresented: $showMicPermissionAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Settings") {
@@ -95,7 +106,8 @@ struct IOSMessageInputView: View {
             MessagePhotoPreviewBar(
                 images: attachments.selectedAttachments.compactMap { $0.displayImage },
                 onRemove: removePhoto,
-                onMove: attachments.moveAttachment
+                onMove: attachments.moveAttachment,
+                onOpen: { reviewingIndex = AttachmentReviewTarget(index: $0) }
             )
         }
         if !attachments.selectedFileURLs.isEmpty {

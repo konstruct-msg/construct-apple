@@ -70,6 +70,18 @@ final class MessageInputAttachmentStore: ObservableObject {
         min(max(destination, 0), max(0, count - 1))
     }
 
+    /// Swap in an edited image, keeping everything else about the attachment.
+    ///
+    /// The edit replaces `displayImage` **and** `originalData`: leaving the original bytes in
+    /// place would send the uncropped picture while the composer showed the cropped one, and
+    /// the sender would only find out by looking at the transcript. Quality falls back to
+    /// compressed — "original" means the file as picked, and this is no longer that file.
+    func replaceImage(at index: Int, with image: PlatformImage) {
+        guard selectedAttachments.indices.contains(index),
+              selectedAttachments[index].kind == .image else { return }
+        selectedAttachments[index] = MediaAttachment(image: image, quality: .compressed)
+    }
+
     func removeFile(at index: Int) {
         guard selectedFileURLs.indices.contains(index) else { return }
         selectedFileURLs.remove(at: index)

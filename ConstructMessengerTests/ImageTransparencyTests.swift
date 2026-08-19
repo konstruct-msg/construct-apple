@@ -116,6 +116,30 @@ final class ImageTransparencyTests: XCTestCase {
         XCTAssertEqual(optimised.metadata.mimeType, "image/jpeg")
     }
 
+    /// The edit boundary. `MediaAttachment(image:)` is what the crop editor's output is
+    /// wrapped in, and it used to encode JPEG unconditionally — so a sticker survived the
+    /// send path only to be flattened one step earlier, by cropping it.
+    func testWrappingAnEditedStickerKeepsItsTransparency() throws {
+        let sticker = Self.image(size: CGSize(width: 120, height: 120), opaque: false) { ctx, rect in
+            UIColor.systemTeal.setFill()
+            ctx.cgContext.fillEllipse(in: rect)
+        }
+
+        let attachment = MediaAttachment(image: sticker)
+
+        XCTAssertEqual(attachment.mimeType, "image/png")
+        let decoded = try XCTUnwrap(UIImage(data: attachment.originalData))
+        XCTAssertTrue(MediaOptimizer.usesAlpha(decoded), "the corners came back opaque")
+    }
+
+    func testWrappingAPhotoStillUsesTheSmallEncode() {
+        let photo = Self.image(size: CGSize(width: 120, height: 120), opaque: true) { ctx, rect in
+            UIColor.darkGray.setFill()
+            ctx.fill(rect)
+        }
+        XCTAssertEqual(MediaAttachment(image: photo).mimeType, "image/jpeg")
+    }
+
     // MARK: - Helper
 
     private static func image(
