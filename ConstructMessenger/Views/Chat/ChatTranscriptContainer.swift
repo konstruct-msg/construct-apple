@@ -50,6 +50,22 @@ struct ChatTranscriptContainer<Sentinel: View, Rows: View>: View {
     var bottomContentPad: CGFloat
     var accessibilityIdentifier: String?
 
+    /// Build every row up front instead of materialising them as they scroll into view.
+    ///
+    /// This is the fix, and everything else in the migration is arrangement around it. The blank
+    /// chat is not a wrong offset — device log 2026-08-19 has `fromBottom=-83` and 90 % coverage
+    /// over an empty screen, which is the viewport correctly at the end of a list whose rows were
+    /// never drawn. `LazyVStack` also reports height for those rows, so the geometry agrees the
+    /// layout is fine while nothing is on it. An eager stack has no such state: there is nothing
+    /// left to not-materialise, and `contentSize` becomes an honest witness again.
+    ///
+    /// The cost is real and bounded: 30 rows built on open instead of the handful on screen.
+    /// Measured at 30 / 90 / 230 in the PR-3 merge gate; if it hitches, the flag goes off — that is
+    /// what the flag is for.
+    ///
+    /// Desktop passes `false` and keeps the lazy stack until its own step (PR-3b).
+    var usesEagerStack: Bool = false
+
     /// Called once the `ScrollViewProxy` exists. The parent registers it with whoever owns scroll.
     var onProxyReady: (ScrollViewProxy) -> Void
     /// `(old, new)` so the parent can log only meaningful moves.
@@ -69,17 +85,12 @@ struct ChatTranscriptContainer<Sentinel: View, Rows: View>: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: rowSpacing) {
-                    sentinel()
-                    rows()
-                    // Breathing room below the last message, above the composer.
-                    Color.clear
-                        .frame(height: bottomContentPad)
-                    Color.clear
-                        .frame(height: 1)
-                        .id("bottom")
-                        .onAppear { onBottomAnchorVisible(true) }
-                        .onDisappear { onBottomAnchorVisible(false) }
+                Group {
+                    if usesEagerStack {
+                        VStack(spacing: rowSpacing) { stackContent }
+                    } else {
+                        LazyVStack(spacing: rowSpacing) { stackContent }
+                    }
                 }
                 .padding(.top, topContentPad)
                 .padding(.horizontal)
@@ -107,5 +118,25 @@ struct ChatTranscriptContainer<Sentinel: View, Rows: View>: View {
             }
             .onAppear { onProxyReady(proxy) }
         }
+    }
+
+    /// The stack's contents, written once so the two containers cannot drift.
+    ///
+    /// The order is the invariant from 2026-06-20 and is not negotiable:
+    /// `sentinel → rows → clearance → id("bottom")`. The pad is rendered **inside** the stack and
+    /// **before** the anchor, so a follow that targets the anchor lands above the composer glass
+    /// rather than flush with the viewport bottom.
+    @ViewBuilder
+    private var stackContent: some View {
+        sentinel()
+        rows()
+        // Breathing room below the last message, above the composer.
+        Color.clear
+            .frame(height: bottomContentPad)
+        Color.clear
+            .frame(height: 1)
+            .id("bottom")
+            .onAppear { onBottomAnchorVisible(true) }
+            .onDisappear { onBottomAnchorVisible(false) }
     }
 }
