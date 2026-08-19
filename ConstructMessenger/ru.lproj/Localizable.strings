@@ -1158,3 +1158,6 @@
 "issued_invites_revoke_scope" = "Отозвать можно ссылку. Код QR перестанет работать сам — по истечении срока.";
 
 "scroll_to_newest" = "К последнему сообщению";
+
+"diagnostics_owned_inset_title" = "Своя вставка в ленте";
+"diagnostics_owned_inset_hint" = "Контейнер прокрутки на UIKit. Применится к следующему открытому чату.";

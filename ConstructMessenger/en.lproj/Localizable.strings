@@ -1147,3 +1147,6 @@
 "issued_invites_revoke_scope" = "A link can be revoked. A QR code stops working on its own, once it expires.";
 
 "scroll_to_newest" = "Jump to newest";
+
+"diagnostics_owned_inset_title" = "Owned-inset transcript";
+"diagnostics_owned_inset_hint" = "UIKit scroll container. Applies to the next chat you open.";

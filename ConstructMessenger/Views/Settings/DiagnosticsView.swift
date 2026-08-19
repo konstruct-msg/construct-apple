@@ -24,6 +24,10 @@ struct DiagnosticsView: View {
     @State private var logSize: String = ""
     @State private var push = PushNotificationManager.shared
     #if DEBUG
+    /// The transcript path. Sampled once per chat push, so this lands on the *next* chat you open,
+    /// not on the one behind this screen.
+    @State private var ownedInsetStackEnabled = ChatViewportConfiguration.ownedInsetStackEnabled
+
     @AppStorage("stealth_mode_enabled") private var stealthOverrideEnabled = true
     // Stealth Privacy Pass token diagnostics — snapshotted on refresh (BlindTokenService
     // is not @Observable). Makes an empty wallet diagnosable: shows balance, the last
@@ -127,6 +131,22 @@ struct DiagnosticsView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         CTSettingsSectionHeader(title: NSLocalizedString("DEVELOPER", comment: ""), color: .orange)
                         CTSectionGroup {
+                            Toggle(isOn: $ownedInsetStackEnabled) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(LocalizedStringKey("diagnostics_owned_inset_title"))
+                                        .font(CTFont.regular(14))
+                                        .foregroundStyle(.orange)
+                                    Text(LocalizedStringKey("diagnostics_owned_inset_hint"))
+                                        .font(CTFont.regular(11))
+                                        .foregroundStyle(Color.CT.textDim)
+                                }
+                            }
+                            .tint(.orange)
+                            .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, SettingsLayout.rowVerticalPadding)
+                            .onChange(of: ownedInsetStackEnabled) { _, on in
+                                ChatViewportConfiguration.ownedInsetStackEnabled = on
+                            }
                             Toggle(isOn: $stealthOverrideEnabled) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("diagnostics_stealth_override_title"))

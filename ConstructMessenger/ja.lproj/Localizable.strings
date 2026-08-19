@@ -1146,3 +1146,6 @@
 "invite_revoke_confirm_message" = "リンクを持っている人には、予告なく使えなくなります。新しいリンクはいつでもコピーできます。";
 "issued_invites_revoke_scope" = "リンクは取り消せます。QRコードは期限が切れると自動で使えなくなります。";
 "scroll_to_newest" = "最新のメッセージへ";
+
+"diagnostics_owned_inset_title" = "自前インセットの履歴";
+"diagnostics_owned_inset_hint" = "UIKit のスクロールコンテナ。次に開くチャットから適用されます。";

@@ -117,6 +117,9 @@ struct ChatView: View {
         // One owner is constructed, never both: the legacy one subscribes to NotificationCenter in
         // its initialiser, and a second subscriber is what build 586 was.
         _viewport = State(wrappedValue: owned ? ChatViewport() : ChatScrollManager())
+        // Which owner ran is otherwise only inferable from the *absence* of `PIN arm` lines, and
+        // inferring a path from silence is how three flag-flip attempts were misread as working.
+        Log.info("CHAT_VIEWPORT: owner=\(owned ? "ChatViewport (UIKit scroll)" : "ChatScrollManager (SwiftUI scroll)")", category: "ChatView")
     }
 
     var body: some View {
