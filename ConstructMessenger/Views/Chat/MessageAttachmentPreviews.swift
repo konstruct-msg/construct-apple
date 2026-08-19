@@ -14,6 +14,16 @@ import Combine
 struct MessagePhotoPreviewBar: View {
     let images: [PlatformImage]
     let onRemove: (Int) -> Void
+    /// Long-press then drag to reorder. Album order is the order they arrive in, so this is
+    /// the only place the sender can choose it — after confirming the picker and before
+    /// sending. Optional so the existing call sites that cannot reorder stay honest: a strip
+    /// without a handler does not offer the gesture at all, rather than offering one that
+    /// silently does nothing.
+    var onMove: ((Int, Int) -> Void)? = nil
+    /// Tap to inspect a single item full-size.
+    var onOpen: ((Int) -> Void)? = nil
+
+    @State private var draggingIndex: Int?
 
     private let thumbSize: CGFloat = 80
 
@@ -27,12 +37,28 @@ struct MessagePhotoPreviewBar: View {
                             .scaledToFill()
                             .frame(width: thumbSize, height: thumbSize)
                             .clipShape(CTShape.card())
-                            .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
+                            .overlay(CTShape.card().stroke(
+                                draggingIndex == index ? Color.CT.accent : Color.CT.noise,
+                                lineWidth: draggingIndex == index ? 1.5 : 0.5
+                            ))
+                            .contentShape(CTShape.card())
+                            .onTapGesture { onOpen?(index) }
 
                         removeButton { onRemove(index) }
                             .offset(x: 6, y: -6)
                     }
                     .frame(width: thumbSize, height: thumbSize)
+                    // Lifted item rides above its neighbours and shrinks slightly, so the gap
+                    // it will drop into stays readable.
+                    .scaleEffect(draggingIndex == index ? 0.92 : 1)
+                    .zIndex(draggingIndex == index ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.18), value: draggingIndex)
+                    .modifier(ReorderableThumb(
+                        index: index,
+                        enabled: onMove != nil && images.count > 1,
+                        draggingIndex: $draggingIndex,
+                        onMove: onMove
+                    ))
                 }
             }
             .padding(.horizontal, CTLayout.edgePad)
@@ -43,6 +69,62 @@ struct MessagePhotoPreviewBar: View {
         .overlay(CTShape.control().stroke(Color.CT.noise.opacity(0.5), lineWidth: 0.5))
         .padding(.horizontal, 4)
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+}
+
+// MARK: - Reorder gesture
+
+/// Long-press to lift, drag to move, release to drop.
+///
+/// `.onDrag`/`.onDrop` was the other option and is wrong here: it routes through
+/// `NSItemProvider` and the system drag session, which on iPhone means a lift delay we do not
+/// control, a system drag preview that ignores the CT chrome, and item identity carried as a
+/// serialised payload — for a strip of at most a handful of local thumbnails that is a lot of
+/// machinery to move an index. This is a plain gesture over a known geometry.
+private struct ReorderableThumb: ViewModifier {
+    let index: Int
+    let enabled: Bool
+    @Binding var draggingIndex: Int?
+    let onMove: ((Int, Int) -> Void)?
+
+    /// Thumb width plus the gap between thumbs — one "slot" of travel.
+    private static let slot: CGFloat = 80 + CTLayout.inlinePad
+
+    @State private var translation: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        guard enabled else { return AnyView(content) }
+        return AnyView(
+            content
+                .offset(x: draggingIndex == index ? translation : 0)
+                .gesture(
+                    LongPressGesture(minimumDuration: 0.28)
+                        .onEnded { _ in
+                            draggingIndex = index
+                            #if canImport(UIKit)
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            #endif
+                        }
+                        .sequenced(before: DragGesture(minimumDistance: 0))
+                        .onChanged { value in
+                            // `.second(_, drag)` only carries a drag once the press has won,
+                            // so a plain scroll never enters this branch.
+                            if case .second(true, let drag?) = value, draggingIndex == index {
+                                translation = drag.translation.width
+                            }
+                        }
+                        .onEnded { _ in
+                            defer {
+                                draggingIndex = nil
+                                translation = 0
+                            }
+                            guard draggingIndex == index else { return }
+                            let steps = Int((translation / Self.slot).rounded())
+                            guard steps != 0 else { return }
+                            onMove?(index, index + steps)
+                        }
+                )
+        )
     }
 }
 

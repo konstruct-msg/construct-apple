@@ -94,7 +94,8 @@ struct IOSMessageInputView: View {
         if !attachments.selectedAttachments.isEmpty {
             MessagePhotoPreviewBar(
                 images: attachments.selectedAttachments.compactMap { $0.displayImage },
-                onRemove: removePhoto
+                onRemove: removePhoto,
+                onMove: attachments.moveAttachment
             )
         }
         if !attachments.selectedFileURLs.isEmpty {
