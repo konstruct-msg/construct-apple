@@ -13,7 +13,12 @@ import SwiftUI
 import UIKit
 
 struct MediaEditorView: View {
-    let image: UIImage
+    /// The picture exactly as it was handed in. Returned untouched when the edit is a no-op,
+    /// so opening the editor and changing nothing costs no re-encode.
+    private let source: UIImage
+    /// The same picture with its EXIF turn baked in — every measurement below is in this one
+    /// space. See `normalizedUp()` for why that matters.
+    private let base: UIImage
     let onConfirm: (UIImage) -> Void
     let onCancel: () -> Void
 
@@ -24,38 +29,46 @@ struct MediaEditorView: View {
     @State private var offset: CGSize = .zero
     @State private var committedScale: CGFloat = 1
     @State private var committedOffset: CGSize = .zero
-    @State private var minScale: CGFloat = 1
+
+    /// The area the crop window may occupy, as the last layout actually measured it.
+    ///
+    /// Held rather than re-derived on confirm: the output must be cut from the geometry the
+    /// user was looking at. `rendered()` used to rebuild it from `UIScreen.main.bounds`, which
+    /// is the screen including the safe areas the editor never had, so for a tall picture the
+    /// crop was computed against a window that was never on screen.
+    @State private var container: CGSize = .zero
 
     /// The image as the turns leave it. Recomputed only when a turn is tapped, so pinching
     /// and dragging never resample.
     @State private var oriented: UIImage
 
     init(image: UIImage, onConfirm: @escaping (UIImage) -> Void, onCancel: @escaping () -> Void) {
-        self.image = image
+        let normalized = image.normalizedUp()
+        self.source = image
+        self.base = normalized
         self.onConfirm = onConfirm
         self.onCancel = onCancel
-        _oriented = State(initialValue: image)
+        _oriented = State(initialValue: normalized)
     }
 
     var body: some View {
         GeometryReader { geo in
-            let container = stageSize(in: geo.size)
-            let window = CropGeometry.cropWindow(
-                container: container,
-                aspect: aspect,
-                imageAspect: orientedAspect
-            )
-            let displayed = displayedSize(window: window)
-
             VStack(spacing: 0) {
                 header
-                stage(container: container, window: window, displayed: displayed)
+                stage
                 controls
             }
             .frame(width: geo.size.width, height: geo.size.height)
-            .onAppear { reset(window: window, displayed: displayed) }
-            .onChange(of: aspect) { _, _ in reset(window: window, displayed: displayed) }
-            .onChange(of: orientation) { _, _ in reset(window: window, displayed: displayed) }
+            .onAppear { container = stageSize(in: geo.size) }
+            .onChange(of: geo.size) { _, new in
+                container = stageSize(in: new)
+                reset()
+            }
+            .onChange(of: aspect) { _, _ in reset() }
+            .onChange(of: orientation) { _, new in
+                oriented = base.applying(new)
+                reset()
+            }
         }
         .background(Color.CT.bg.ignoresSafeArea())
     }
@@ -88,7 +101,7 @@ struct MediaEditorView: View {
         .padding(.horizontal, 4)
     }
 
-    private func stage(container: CGSize, window: CGSize, displayed: CGSize) -> some View {
+    private var stage: some View {
         ZStack {
             Image(uiImage: oriented)
                 .resizable()
@@ -178,12 +191,26 @@ struct MediaEditorView: View {
 
     // MARK: - Geometry glue
 
+    /// One derivation, read by the layout and by the output alike.
+    private var window: CGSize {
+        CropGeometry.cropWindow(container: container, aspect: aspect, imageAspect: orientedAspect)
+    }
+
+    private var displayed: CGSize { displayedSize(window: window) }
+
+    /// Floor for pinch: below it the window would show empty space.
+    private var minScale: CGFloat {
+        CropGeometry.minimumScale(displayedImageSize: displayed, window: window)
+    }
+
+    /// Taken from the intent rather than from the rendered bitmap, so it is right on the pass
+    /// where the turn has been applied but `oriented` has not caught up yet.
     private var orientedAspect: CGFloat {
-        let size = oriented.size
+        let size = orientation.apply(to: base.size)
         return size.height > 0 ? size.width / size.height : 1
     }
 
-    /// The area the crop window may occupy: the screen minus the two bars.
+    /// The area the crop window may occupy: the editor's own bounds minus the two bars.
     private func stageSize(in total: CGSize) -> CGSize {
         CGSize(
             width: total.width - CTLayout.edgePad * 2,
@@ -202,11 +229,11 @@ struct MediaEditorView: View {
             : CGSize(width: window.width, height: window.width / a)
     }
 
-    private func reset(window: CGSize, displayed: CGSize) {
-        oriented = image.applying(orientation)
-        minScale = CropGeometry.minimumScale(displayedImageSize: displayed, window: window)
-        scale = minScale
-        committedScale = minScale
+    /// Back to the default framing. Touches only the gesture state — the geometry it used to
+    /// carry is derived from `container`, so there is nothing here that can go stale.
+    private func reset() {
+        scale = 1
+        committedScale = 1
         offset = .zero
         committedOffset = .zero
     }
@@ -214,14 +241,9 @@ struct MediaEditorView: View {
     // MARK: - Output
 
     private func rendered() -> UIImage {
-        let base = image.applying(orientation)
-        let pixels = CGSize(width: base.size.width * base.scale, height: base.size.height * base.scale)
-        let window = CropGeometry.cropWindow(
-            container: stageSize(in: UIScreen.main.bounds.size),
-            aspect: aspect,
-            imageAspect: orientedAspect
-        )
-        let displayed = displayedSize(window: window)
+        let turned = base.applying(orientation)
+        let pixels = CGSize(width: turned.size.width * turned.scale,
+                            height: turned.size.height * turned.scale)
         let rect = CropGeometry.cropRect(
             imagePixelSize: pixels,
             displayedImageSize: displayed,
@@ -234,10 +256,9 @@ struct MediaEditorView: View {
         // costs a generation for nothing, and on a transparent PNG a needless round trip is
         // the difference between a sticker and a black rectangle.
         if CropGeometry.isNoOp(cropRect: rect, imagePixelSize: pixels, orientation: orientation) {
-            return image
+            return source
         }
-        guard let cut = base.cgImage?.cropping(to: rect) else { return base }
-        return UIImage(cgImage: cut, scale: base.scale, orientation: .up)
+        return turned.cropped(to: rect)
     }
 }
 
@@ -268,16 +289,50 @@ private struct CropFrame: View {
     }
 }
 
-// MARK: - Applying an orientation
+// MARK: - One coordinate space
 
 extension UIImage {
+    /// Redraw so that `cgImage` and `size` describe the same picture.
+    ///
+    /// A `UIImage` carries the picture in two spaces at once: the raw `cgImage` buffer, and an
+    /// `imageOrientation` saying how to turn that buffer for display. `size` is measured in the
+    /// display space; `cgImage` lives in the buffer space; for anything shot on a phone the two
+    /// differ by a quarter turn. Every measurement in this editor — the window, the offsets,
+    /// the crop rect — is in display space, and `CGImage.cropping(to:)` reads buffer space, so
+    /// handing one to the other cut the wrong region out of the wrong picture and then
+    /// `UIImage(cgImage:scale:orientation: .up)` discarded the turn on the way back: a 1:1 crop
+    /// of a camera photo returned rotated and looking uncropped. Rotation was unaffected and
+    /// appeared to work, which is what made the report read as "cropping does not save".
+    ///
+    /// The space is decided once, here, on the way in. `opaque = false` keeps a sticker's
+    /// transparency through the redraw.
+    func normalizedUp() -> UIImage {
+        guard imageOrientation != .up else { return self }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
+
+    /// Cut `rect` — in display-space pixels — out of the picture.
+    ///
+    /// Normalises first, so the rect and the buffer are measured the same way whoever calls it.
+    func cropped(to rect: CGRect) -> UIImage {
+        let up = normalizedUp()
+        guard let cut = up.cgImage?.cropping(to: rect) else { return up }
+        return UIImage(cgImage: cut, scale: up.scale, orientation: .up)
+    }
+
     /// Bake accumulated turns and the mirror into pixels.
     ///
     /// `opaque = false` is load-bearing: a sticker edited on the way out must still be a
     /// sticker, and an opaque backing would flatten its transparency to black — the same
     /// defect the send path carried until 2026-08-19.
     func applying(_ orientation: CropOrientation) -> UIImage {
-        guard !orientation.isIdentity, let cg = cgImage else { return self }
+        guard !orientation.isIdentity else { return self }
+        guard let cg = normalizedUp().cgImage else { return self }
 
         let source = CGSize(width: CGFloat(cg.width), height: CGFloat(cg.height))
         let target = orientation.apply(to: source)
