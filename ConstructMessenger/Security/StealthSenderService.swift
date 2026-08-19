@@ -380,6 +380,10 @@ final class StealthSenderService: SealedSenderResolving {
             userId: cert.senderUserID,
             identityKey: cert.senderIdentityKey,
             source: "sealed_cert",
+            // Driven by an incoming envelope. A sender must not be able to put a row in our
+            // store by sending to us — that is how a deleted contact kept coming back while
+            // the server replayed their backlog (device logs 2026-08-19).
+            createIfMissing: false,
             context: context
         )
     }

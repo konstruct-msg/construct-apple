@@ -520,15 +520,29 @@ final class MessageRouter {
         }
 
         // 4. Handle messages from contacts whose chat was explicitly deleted.
-        //    messageNumber=0 means the sender fetched our *current* public keys (via a fresh invite)
-        //    and started a new session — this is a legitimate re-contact, so clear the deleted flag
+        //    A real handshake means the sender fetched our *current* public keys (via a fresh
+        //    invite) and started a new session — a legitimate re-contact, so clear the deleted flag
         //    and process normally (a new chat will be created by findOrCreateChat below).
-        //    messageNumber>0 is an old broken session we no longer have keys for — skip it.
+        //    Anything else is an old session we no longer have keys for — skip it.
         //    Exception: if this exact message is already in our pending queue (a previous heal
         //    attempt started and failed), the server is re-delivering a stuck undecryptable message.
         //    Do NOT resurrect the contact in that case — just ACK and discard.
+        //
+        //    This condition used to be `messageNumber == 0`, which is not what it was reading as.
+        //    A DH sending chain also starts at 0, so a mid-session leftover from the deleted
+        //    contact's replayed backlog satisfied it — and the server replays that backlog on
+        //    every reconnect (`since_cursor` is not honoured). The contact came back after every
+        //    single deletion, reported on device 2026-08-19. Same misreading as the RESPONDER init
+        //    guard; same classifier fixes both.
         if DeletedContactsStore.shared.isDeleted(otherUserId) {
-            if message.messageNumber == 0 {
+            let kind = SessionReducer.receivingInitKind(
+                messageNumber: message.messageNumber,
+                oneTimePreKeyId: message.oneTimePreKeyId,
+                kemCiphertextBytes: message.kemCiphertext.count,
+                pqMessageEpoch: message.pqMessageEpoch,
+                isSessionResetInit: message.isSessionResetInit
+            )
+            if kind == .handshake {
                 // Guard: don't resurrect a deleted contact for a message we already queued
                 // but couldn't decrypt. This prevents an infinite delete→re-appear loop when
                 // the server keeps re-delivering stuck undecryptable messages.
@@ -537,11 +551,11 @@ final class MessageRouter {
                     PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "stale_pending")
                     return
                 }
-                Log.info("Fresh session (msgNum=0) from previously-deleted contact \(otherUserId.prefix(8))… — clearing deleted flag", category: "MessageRouter")
+                Log.info("Handshake from previously-deleted contact \(otherUserId.prefix(8))… (otpk=\(message.oneTimePreKeyId) kem=\(message.kemCiphertext.count)B) — clearing deleted flag", category: "MessageRouter")
                 DeletedContactsStore.shared.remove(otherUserId)
                 // Fall through to normal processing below.
             } else {
-                Log.debug("Skipping old-session message (msgNum=\(message.messageNumber)) from deleted contact \(otherUserId.prefix(8))…", category: "MessageRouter")
+                Log.debug("Skipping \(kind) from deleted contact \(otherUserId.prefix(8))… (msgNum=\(message.messageNumber) epoch=\(message.pqMessageEpoch)) — not resurrecting", category: "MessageRouter")
                 return
             }
         }

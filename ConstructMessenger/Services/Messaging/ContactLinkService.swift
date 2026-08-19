@@ -186,13 +186,25 @@ final class ContactLinkService {
     /// what X3DH is about to run against. `ktStatus` continues to carry the verification verdict
     /// separately — pinned is not verified.
     ///
-    /// Creates the `User` row if it is missing. Fetching a peer's prekey bundle means a session
-    /// with them is being established, so the row is needed either way; it is created as a
-    /// non-contact, since fetching a bundle is not the user adding someone.
+    /// - Parameter createIfMissing: whether a missing `User` row may be created to hold the key.
+    ///
+    ///   True for a prekey-bundle fetch: **we** asked for that user, a session with them is being
+    ///   established, and the row is needed either way. It is created as a non-contact, since
+    ///   fetching a bundle is not the user adding someone.
+    ///
+    ///   False for anything driven by an **incoming** envelope. A sender we have never heard of —
+    ///   or have deliberately deleted — must not be able to put a row in our store by sending to
+    ///   us. Device logs 2026-08-19: a deleted contact came back after every deletion, because the
+    ///   server keeps replaying their backlog (`since_cursor` is not honoured) and each replayed
+    ///   sealed envelope re-created the row through this method. `IK_PIN[row_created] … source=
+    ///   sealed_cert` is that happening. Pinning a key for someone we do not have is also pointless
+    ///   on its own terms: the key exists to let a sealed *send* proceed, and there is nobody to
+    ///   send to.
     func rememberIdentityKeyIfUnknown(
         userId: String,
         identityKey: Data,
         source: String,
+        createIfMissing: Bool,
         context: NSManagedObjectContext
     ) {
         guard !userId.isEmpty, !identityKey.isEmpty else {
@@ -210,6 +222,13 @@ final class ContactLinkService {
             guard existing.knownIdentityKey == nil else { return }
             user = existing
         } else {
+            guard createIfMissing else {
+                Log.info(
+                    "IK_PIN[no_row]: no User row for \(userId.prefix(8))… — not creating one (source=\(source))",
+                    category: "ContactLink"
+                )
+                return
+            }
             user = User(context: context)
             user.id = userId
             user.isBlocked = false

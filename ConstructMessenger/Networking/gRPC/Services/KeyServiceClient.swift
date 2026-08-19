@@ -392,6 +392,8 @@ final class KeyServiceClient: Sendable {
                 userId: userId,
                 identityKey: fetched.data.identityPublic,
                 source: "bundle_fetch",
+                // We asked for this user; a session with them is being established either way.
+                createIfMissing: true,
                 context: PersistenceController.shared.container.viewContext
             )
         }

@@ -77,7 +77,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         XCTAssertNil(storedKey(for: peerId))
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: fetchedKey, source: "test", context: context
+            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
         )
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
@@ -93,7 +93,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         XCTAssertNil(storedKey(for: peerId))
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: fetchedKey, source: "test", context: context
+            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
         )
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
@@ -102,7 +102,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
     /// A row created to hold a key is not the user adding a contact. It must not appear as one.
     func testCreatedRowIsNotMarkedAsAContact() {
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: fetchedKey, source: "test", context: context
+            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
         )
 
         let fetch = User.fetchRequest()
@@ -110,6 +110,44 @@ final class IdentityKeyRetentionTests: XCTestCase {
         let user = (try? context.fetch(fetch))?.first
         XCTAssertNotNil(user)
         XCTAssertFalse(user!.isContact, "fetching a bundle is not the user adding someone")
+    }
+
+    // MARK: - An incoming envelope must not mint a row
+
+    /// The resurrection. Delete a contact, and the server keeps replaying their backlog
+    /// (`since_cursor` is not honoured); every replayed sealed envelope reached this method
+    /// through `pinIdentity`, and each one put the row back. `IK_PIN[row_created] …
+    /// source=sealed_cert` on device, 2026-08-19 — the user deleted the same contact repeatedly
+    /// and it returned every time.
+    ///
+    /// Nothing about the sender is trusted enough to create storage for them. A server-signed
+    /// certificate says the server issued it, not that we want to know this person.
+    func testAnIncomingCertDoesNotCreateARowForADeletedContact() {
+        XCTAssertNil(storedKey(for: peerId))
+
+        ContactLinkService.shared.rememberIdentityKeyIfUnknown(
+            userId: peerId, identityKey: fetchedKey, source: "sealed_cert",
+            createIfMissing: false, context: context
+        )
+
+        let fetch = User.fetchRequest()
+        fetch.predicate = NSPredicate(format: "id == %@", peerId)
+        XCTAssertEqual((try? context.count(for: fetch)) ?? -1, 0, "a sender may not mint their own row")
+    }
+
+    /// But a contact we *do* have still gets the key filled in — that is the `IK_MISS[no_key]`
+    /// fix, and refusing to create a row must not have taken it away.
+    func testAnIncomingCertStillFillsAnAbsenceOnAnExistingRow() {
+        makeUser(id: peerId)
+        XCTAssertNil(storedKey(for: peerId))
+
+        ContactLinkService.shared.rememberIdentityKeyIfUnknown(
+            userId: peerId, identityKey: fetchedKey, source: "sealed_cert",
+            createIfMissing: false, context: context
+        )
+
+        XCTAssertEqual(storedKey(for: peerId), fetchedKey)
+        XCTAssertNotNil(StealthSenderService.recipientIdentityKey(recipientId: peerId, context: context))
     }
 
     // MARK: - What it must never do
@@ -123,7 +161,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         makeUser(id: peerId, key: pinnedKey)
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: fetchedKey, source: "test", context: context
+            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
         )
 
         XCTAssertEqual(
@@ -137,7 +175,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         makeUser(id: peerId, key: fetchedKey)
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: fetchedKey, source: "test", context: context
+            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
         )
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
@@ -150,7 +188,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         makeUser(id: peerId)
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: Data(), source: "test", context: context
+            userId: peerId, identityKey: Data(), source: "test", createIfMissing: true, context: context
         )
 
         XCTAssertNil(storedKey(for: peerId))
@@ -159,7 +197,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
     /// An empty user id must not mint a row keyed on nothing.
     func testAnEmptyUserIdCreatesNoRow() {
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: "", identityKey: fetchedKey, source: "test", context: context
+            userId: "", identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
         )
 
         let fetch = User.fetchRequest()
@@ -173,7 +211,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         makeUser(id: otherId)
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: fetchedKey, source: "test", context: context
+            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
         )
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
