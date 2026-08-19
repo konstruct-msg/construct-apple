@@ -209,11 +209,6 @@ final class MessageStreamManager {
     static let transportToggleDebounceNs: UInt64 = 500_000_000
     private(set) var isPaused = false
     private(set) var subscriptionUserIds: [String] = []
-    private var lastPendingCursor: String = UserDefaults.standard.string(forKey: "construct.pendingCursor") ?? "" {
-        didSet {
-            UserDefaults.standard.set(lastPendingCursor, forKey: "construct.pendingCursor")
-        }
-    }
 
     /// Continuation for sending messages into the stream
     var outboundContinuation: AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.Continuation?
@@ -887,79 +882,68 @@ final class MessageStreamManager {
         Log.info("MessageStream connectLoop finished", category: "MessageStream")
     }
 
+    /// Ask once, from the cursor we can defend, and let the stream bring the rest.
+    ///
+    /// This used to page: request 50, feed `page.nextCursor` back as the next request's
+    /// `since_cursor`, repeat. `BackgroundFetchManager` did the same and was fixed; this
+    /// copy was not, and this is the one that runs on every reconnect.
+    ///
+    /// A page cursor is not a durability watermark. `GetPendingMessagesResponse` carries one
+    /// `next_cursor` per page, not per message, so it cannot say which messages inside the
+    /// page reached a durable terminal — and page 1 was still sitting in a local array,
+    /// unrouted and unpersisted, when page 2 was requested. `backgroundFetchTask?.cancel()`
+    /// fires at the top of every `connectLoop` iteration and the one-second cap lets this run
+    /// detached, so being cancelled mid-paging was routine, and the array was dropped whole.
+    ///
+    /// The server no longer deletes from a client-supplied cursor (minimal-server-delivery
+    /// steps 1–2), which is what made this destructive rather than merely wrong. It is fixed
+    /// on both sides on purpose: the client must not depend on the server declining to act on
+    /// what it sends.
+    ///
+    /// There is no `lastPendingCursor` any more. It was a second stored position, in its own
+    /// UserDefaults key, holding page boundaries — one meaning carried by two values with
+    /// nothing enforcing their agreement. `StreamCursorStore` is the only resume position, and
+    /// only `StreamCursorTracker` advances it, over the longest contiguous run of messages that
+    /// reached a durable terminal. On upgrade, an install whose abandoned `construct.pendingCursor`
+    /// sat above the committed cursor re-reads from the lower one: redelivery, which the client
+    /// dedups by message id, and never a gap.
     private func fetchMissedMessages() async {
         let fetchStart = Date()
-        // Drain ALL pending pages so the user sees every missed message on the first reconnect,
-        // not just the first 50 (the previous single-fetch behaviour — bug B08).
-        //
-        // IMPORTANT: use a single gRPC channel for the entire paging loop to avoid creating
-        // dozens of short-lived channels when there are many pending pages.
         do {
-            struct FetchResult: Sendable {
-                let messages: [ChatMessage]
-                let failed: [MessagingServiceClient.FailedMessage]
-                let nextCursor: String
-            }
+            let cursor: String? = StreamCursorStore.load()
+            Log.info(
+                "fetchMissedMessages from cursor=\(cursor ?? "beginning")",
+                category: "MessageStream"
+            )
 
-            let startCursor = lastPendingCursor
-            // INVARIANT: invalidatesConnectionOnFailure must remain false (default).
-            // A fetch failure must not kill the live stream or penalise the current relay.
-            let fetchResult: FetchResult = try await GRPCChannelManager.shared.performRPC(
-                timeout: GRPCTimeouts.getPendingMessages
-            ) { grpcClient in
-                var cursor: String? = startCursor.isEmpty ? nil : startCursor
-                var cursorToPersist: String = startCursor
-                var messages: [ChatMessage] = []
-                var failed: [MessagingServiceClient.FailedMessage] = []
-                var failedIds: Set<String> = []
-                var seenMessageIds: Set<String> = []
-
-                while !Task.isCancelled {
-                    // Snapshot the cursor to avoid capturing a mutable var across a suspension point.
-                    let cursorSnapshot = cursor
-                    let page: MessagingServiceClient.PendingMessagesResult = try await MessagingServiceClient.getPendingMessagesPage(
-                        grpcClient: grpcClient,
-                        sinceCursor: cursorSnapshot,
-                        limit: 50
-                    )
-
-                    cursorToPersist = page.nextCursor
-
-                    if !page.messages.isEmpty {
-                        let pageIds = Set(page.messages.map(\.id))
-                        let newIds = pageIds.subtracting(seenMessageIds)
-                        if newIds.isEmpty {
-                            // Server is cycling the same unACKed messages — receipts haven't been
-                            // sent yet (stream not open). Stop paging; openStream() will flush ACKs.
-                            break
-                        }
-                        seenMessageIds.formUnion(pageIds)
-                        messages.append(contentsOf: page.messages)
-                    }
-
-                    if !page.failedMessages.isEmpty {
-                        for item in page.failedMessages where !failedIds.contains(item.id) {
-                            failedIds.insert(item.id)
-                            failed.append(item)
-                        }
-                    }
-
-                    cursor = page.nextCursor.isEmpty ? nil : page.nextCursor
-                    if cursor == nil { break }
-                }
-
-                return FetchResult(messages: messages, failed: failed, nextCursor: cursorToPersist)
-            }
+            // INVARIANT: invalidatesConnectionOnFailure must remain false (it is the default on
+            // `performRPC`, which this call goes through). A fetch failure must not kill the live
+            // stream or penalise the current relay.
+            let fetchResult = try await MessagingServiceClient.shared.getPendingMessages(
+                sinceCursor: cursor,
+                limit: 50
+            )
 
             ConnectionStatusManager.shared.markRequestSucceeded()
 
-            lastPendingCursor = fetchResult.nextCursor
+            if fetchResult.hasMore {
+                // Not an error and not a reason to page: the backlog drains over successive
+                // reconnects, and the stream delivers the remainder with a per-message cursor
+                // the tracker can actually commit.
+                Log.info(
+                    "Offline backlog deeper than one page — remainder follows on the stream",
+                    category: "MessageStream"
+                )
+            }
 
-            if !fetchResult.failed.isEmpty {
+            // `fetchResult.nextCursor` is deliberately NOT persisted, for the same reason it is
+            // not sent back above: it is a page boundary, not a durability watermark.
+
+            if !fetchResult.failedMessages.isEmpty {
                 // These used to be flushed as `.failed` stream receipts, which the peer's parser
                 // discarded and the server never retried on — the ACK was inert. Count them so
                 // undecryptable backlog stays visible.
-                Log.error("fetchMissedMessages: \(fetchResult.failed.count) undecryptable message(s)", category: "MessageStream")
+                Log.error("fetchMissedMessages: \(fetchResult.failedMessages.count) undecryptable message(s)", category: "MessageStream")
                 PerformanceMetrics.shared.record(
                     .undeliveredNoReceipt,
                     label: "fetch_undecryptable"
