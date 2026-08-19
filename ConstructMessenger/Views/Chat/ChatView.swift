@@ -68,6 +68,19 @@ struct ChatView: View {
     /// animation as a settled layout.
     @State private var bottomSafeAreaInset: CGFloat = 0
     @State private var transcriptContainerHeight: CGFloat = 0
+    /// Where the held row sits in content coordinates, reported by that row alone.
+    ///
+    /// Only one row carries the measurement, and only while somebody is reading history — this is
+    /// the exact signal `TranscriptOffsetPolicy` needs and the reason the hold rule works for a
+    /// prepend *and* for a photo finishing its decode above the reader. Comparing content heights
+    /// cannot tell those from growth below the reader.
+    @State private var heldRowMinY: CGFloat?
+    /// Last geometry sample, so the new path can hand `handleTranscriptGeometry` an `old` value
+    /// the way the container's `(old, new)` callback does.
+    @State private var lastGeometry = ChatScrollGeometry(
+        distanceFromBottom: 0, width: 0, contentFits: false,
+        contentHeight: 0, visibleMinY: 0, containerHeight: 0
+    )
     // "Is the layout settled enough to read geometry as intent" lives with the owner
     // (`layoutPrimed`). It was a `@State` here and was armed from the wrong evidence.
 
@@ -533,6 +546,37 @@ struct ChatView: View {
     /// are named methods rather than inline closures.
     @ViewBuilder
     private func transcript(_ renderedMessages: [Message]) -> some View {
+        if usesOwnedInset {
+            ChatTranscriptScrollView(
+                bottomInset: transcriptBottomPad,
+                mode: (viewport as? ChatViewport)?.mode ?? .following,
+                layoutPrimed: viewport.layoutPrimed,
+                anchorMinY: heldRowMinY,
+                onLanded: { (viewport as? ChatViewport)?.noteTailLanded() },
+                onGeometry: { handleTranscriptGeometry(from: lastGeometry, to: $0) },
+                onUserInteraction: { viewport.noteScrollPhase(.tracking) }
+            ) {
+                VStack(spacing: ChatUIConstants.Shell.listSpacing) {
+                    loadMoreSentinel(renderedMessages)
+                    transcriptRows(renderedMessages)
+                    Color.clear.frame(height: Layout.messageBottomClearance)
+                }
+                .padding(.top, ChatUIConstants.Shell.scrollContentTopPad + callBarInset)
+                .padding(.horizontal)
+                .coordinateSpace(name: Self.transcriptContentSpace)
+                .environment(\.containerWidth, containerWidth)
+            }
+        } else {
+            legacyTranscript(renderedMessages)
+        }
+    }
+
+    /// Content-space name the held row reports its position in. One name, declared beside the only
+    /// two places that use it, so the reporter and the reader cannot drift apart.
+    static let transcriptContentSpace = "transcript.content"
+
+    @ViewBuilder
+    private func legacyTranscript(_ renderedMessages: [Message]) -> some View {
         ChatTranscriptContainer(
             rowSpacing: ChatUIConstants.Shell.listSpacing,
             topContentPad: ChatUIConstants.Shell.scrollContentTopPad + callBarInset,
@@ -637,6 +681,7 @@ struct ChatView: View {
             transcriptContainerHeight = metrics.containerHeight
             reportComposerGeometry()
         }
+        lastGeometry = metrics
         // Near-top geometry is the reliable trigger once the user scrolls up: sentinel `onAppear`
         // alone misses the case where the top stayed materialised from entry (no second appear)
         // and would never widen the window.
@@ -735,6 +780,19 @@ struct ChatView: View {
                         // the pin anchored there, the height settled at 3952pt and the
                         // viewport was left 922pt past the end. See
                         // `ChatScrollManager.shouldRecoverStrandedViewport`.
+                        .background {
+                            // Only the held row measures itself. Thirty reporters would be a
+                            // per-frame cost for a number that is meaningless for every row but
+                            // this one.
+                            if usesOwnedInset, message.id == viewport.heldMessageId {
+                                GeometryReader { proxy in
+                                    Color.clear.onChange(
+                                        of: proxy.frame(in: .named(Self.transcriptContentSpace)).minY,
+                                        initial: true
+                                    ) { _, y in heldRowMinY = y }
+                                }
+                            }
+                        }
                         .onAppear {
                             if index == renderedMessages.count - 1 {
                                 ChatScrollManager.logGeometry(

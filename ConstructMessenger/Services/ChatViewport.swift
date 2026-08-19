@@ -410,6 +410,16 @@ final class ChatViewport {
         if moved { stableQuietTicks = 0 }
     }
 
+    /// The container put the tail on screen. The one place `layoutPrimed` closes on the owned
+    /// path: it is a fact reported by whoever did it, not a threshold guessed from geometry.
+    ///
+    /// `shouldPrime` stays — it is still the landing predicate the missing-tail metric asks, and
+    /// it is what the lazy path uses. Here the container knows, so it says.
+    func noteTailLanded() {
+        guard !layoutPrimed else { return }
+        layoutPrimed = true
+    }
+
     /// The person has taken the transcript over. Outranks the landing heuristic in both
     /// directions: it primes the layout and it lets geometry switch following off.
     func noteUserInteraction() {
