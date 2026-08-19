@@ -14,9 +14,17 @@ enum ChatViewportConfiguration {
     /// Whether the transcript runs on the eager stack owned by `ChatViewport`, or the lazy stack
     /// owned by `ChatScrollManager`.
     ///
-    /// DEBUG defaults on so the new path is what we use daily; Release defaults off until the soak
-    /// in `decisions/chat-viewport-owned-inset.md` passes. Plain `UserDefaults`, not iCloud — this
-    /// is a property of a build under test, not of a person.
+    /// **Off by default on both configurations**, and that is a finding, not caution.
+    ///
+    /// The plan had DEBUG default on. The first live run of the eager path (stand, 2026-08-19)
+    /// opened a 40-message chat on the *oldest* message: `.defaultScrollAnchor(.bottom)` lands on
+    /// the first layout, and on that layout the transcript is empty, because the store publishes
+    /// after the first body pass. Adding `.defaultScrollAnchor(.bottom, for: .sizeChanges)` did not
+    /// change it. The plan's own rule for this outcome is the flag off, a note, and an analysis —
+    /// explicitly not a nudge — so leaving DEBUG on would ship a worse daily build than the lazy
+    /// path it replaces.
+    ///
+    /// Plain `UserDefaults`, not iCloud: this is a property of a build under test, not of a person.
     ///
     /// **Read exactly once, in a view's `init`.** Sampling it in `body` would let a mid-session
     /// flip put two owners on screen at once, which is build 586: two `ChatScrollManager`s on one
@@ -27,11 +35,7 @@ enum ChatViewportConfiguration {
             if let stored = UserDefaults.standard.object(forKey: key) as? Bool {
                 return stored
             }
-            #if DEBUG
-            return true
-            #else
             return false
-            #endif
         }
         set { UserDefaults.standard.set(newValue, forKey: key) }
     }

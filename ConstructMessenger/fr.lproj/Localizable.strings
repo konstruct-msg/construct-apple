@@ -1064,3 +1064,4 @@
 "invite_revoke_confirm_title" = "Révoquer ce lien ?";
 "invite_revoke_confirm_message" = "Toute personne qui le détient le verra cesser de fonctionner, sans préavis. Vous pouvez en copier un nouveau à tout moment.";
 "issued_invites_revoke_scope" = "Un lien peut être révoqué. Un code QR cesse de fonctionner tout seul, une fois expiré.";
+"scroll_to_newest" = "Aller au plus récent";

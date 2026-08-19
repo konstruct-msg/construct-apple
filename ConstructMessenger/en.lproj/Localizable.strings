@@ -1145,3 +1145,5 @@
 "invite_revoke_confirm_title" = "Revoke this link?";
 "invite_revoke_confirm_message" = "Anyone holding it will find it no longer works, with no notice. You can copy a new one at any time.";
 "issued_invites_revoke_scope" = "A link can be revoked. A QR code stops working on its own, once it expires.";
+
+"scroll_to_newest" = "Jump to newest";

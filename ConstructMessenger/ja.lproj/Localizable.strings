@@ -1145,3 +1145,4 @@
 "invite_revoke_confirm_title" = "このリンクを取り消しますか？";
 "invite_revoke_confirm_message" = "リンクを持っている人には、予告なく使えなくなります。新しいリンクはいつでもコピーできます。";
 "issued_invites_revoke_scope" = "リンクは取り消せます。QRコードは期限が切れると自動で使えなくなります。";
+"scroll_to_newest" = "最新のメッセージへ";

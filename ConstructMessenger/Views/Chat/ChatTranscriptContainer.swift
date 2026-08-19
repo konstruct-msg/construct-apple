@@ -32,6 +32,10 @@ struct ChatScrollGeometry: Equatable {
     /// Stored for stranded-recovery geometry (not a re-pin trigger — see `ChatScrollManager`).
     var contentHeight: CGFloat
     var visibleMinY: CGFloat
+    /// Height of the scroll view itself. Reported because the keyboard changes it without
+    /// touching the composer, and an inset latch that cannot see that reads the keyboard as a
+    /// settled layout.
+    var containerHeight: CGFloat
 }
 
 /// The transcript scroll view: sentinel, rows, bottom clearance, bottom anchor.
@@ -98,6 +102,13 @@ struct ChatTranscriptContainer<Sentinel: View, Rows: View>: View {
             .background(Color.CT.bg) // base under the glass panels
             .accessibilityIdentifier(accessibilityIdentifier ?? "")
             .defaultScrollAnchor(.bottom)
+            // The initial-offset anchor lands on the *first* layout, and on that layout the
+            // transcript is empty: the store publishes from `onViewAppear`, after the first body
+            // pass. Thirty rows then arrive and nothing takes the view back down — measured on the
+            // stand 2026-08-19, where the eager path opened on the oldest message with zero pins.
+            // This role is what keeps the bottom as the content grows, and it is why following
+            // needs no `scrollTo` at all.
+            .defaultScrollAnchor(.bottom, for: .sizeChanges)
             .scrollDismissesKeyboard(.interactively)
             .onTapGesture { onTapBackground() }
             .onScrollGeometryChange(for: ChatScrollGeometry.self) { geo in
@@ -108,7 +119,8 @@ struct ChatTranscriptContainer<Sentinel: View, Rows: View>: View {
                     width: geo.containerSize.width,
                     contentFits: geo.contentSize.height <= geo.visibleRect.height + 8,
                     contentHeight: geo.contentSize.height,
-                    visibleMinY: geo.visibleRect.minY
+                    visibleMinY: geo.visibleRect.minY,
+                    containerHeight: geo.containerSize.height
                 )
             } action: { old, new in
                 onGeometryChange(old, new)

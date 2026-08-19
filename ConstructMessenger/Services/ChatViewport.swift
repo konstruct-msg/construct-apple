@@ -223,12 +223,18 @@ final class ChatViewport {
     static func shouldPrime(
         alreadyPrimed: Bool,
         messageCount: Int,
+        contentHeight: CGFloat,
         distanceFromBottom: CGFloat,
         contentFits: Bool,
         visibleContentFraction: CGFloat
     ) -> Bool {
         if alreadyPrimed { return true }
         guard messageCount > 0 else { return false }
+        // Nothing has been laid out yet. `contentFits` is `contentSize <= viewport`, which an
+        // unmeasured stack satisfies with a height of zero — so on the stand (2026-08-19) the very
+        // first tick of a 40-message chat read as landed, and load-more went 30 → 40 unasked before
+        // a single row existed. Same shape as `visibleMinY == 0` meaning "nobody has looked".
+        guard contentHeight > 0 else { return false }
         // A transcript shorter than the viewport has nowhere else to be, so coverage stops being a
         // position and becomes a fill level — legitimately low for a short chat (build 593).
         if contentFits { return true }
@@ -251,6 +257,7 @@ final class ChatViewport {
         stableQuietTicks: Int,
         insetSettling: Bool,
         messageCount: Int,
+        contentHeight: CGFloat,
         padReady: Bool,
         userInteracted: Bool,
         alreadyPrimed: Bool,
@@ -265,6 +272,7 @@ final class ChatViewport {
         return !shouldPrime(
             alreadyPrimed: false,
             messageCount: messageCount,
+            contentHeight: contentHeight,
             distanceFromBottom: distanceFromBottom,
             contentFits: contentFits,
             visibleContentFraction: visibleContentFraction
@@ -360,6 +368,7 @@ final class ChatViewport {
         if Self.shouldPrime(
             alreadyPrimed: layoutPrimed,
             messageCount: messageCount,
+            contentHeight: contentHeight,
             distanceFromBottom: distance,
             contentFits: contentFits,
             visibleContentFraction: fraction

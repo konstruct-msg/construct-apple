@@ -37,6 +37,7 @@ final class ChatViewportTests: XCTestCase {
             Viewport.shouldPrime(
                 alreadyPrimed: false,
                 messageCount: 50,
+                contentHeight: 3952,
                 distanceFromBottom: -922,
                 contentFits: false,
                 visibleContentFraction: fraction
@@ -52,6 +53,7 @@ final class ChatViewportTests: XCTestCase {
             Viewport.shouldPrime(
                 alreadyPrimed: false,
                 messageCount: 8,
+                contentHeight: 2525,
                 distanceFromBottom: -83,
                 contentFits: false,
                 visibleContentFraction: 0.9
@@ -66,10 +68,29 @@ final class ChatViewportTests: XCTestCase {
             Viewport.shouldPrime(
                 alreadyPrimed: false,
                 messageCount: 11,
+                contentHeight: 798,
                 distanceFromBottom: -538,
                 contentFits: true,
                 visibleContentFraction: 0.42
             )
+        )
+    }
+
+    /// Found on the stand, 2026-08-19, on the first live run of the eager path: a 40-message chat
+    /// opened on the oldest message and load-more went 30 → 40 before a row existed. `contentFits`
+    /// is `contentSize <= viewport`, and an unmeasured stack satisfies that with a height of zero,
+    /// so the very first tick read as a landed tail.
+    func testShouldPrime_unmeasuredContentDoesNotCountAsFitting() {
+        XCTAssertFalse(
+            Viewport.shouldPrime(
+                alreadyPrimed: false,
+                messageCount: 40,
+                contentHeight: 0,
+                distanceFromBottom: 0,
+                contentFits: true,
+                visibleContentFraction: 1
+            ),
+            "nothing is laid out yet — that is not a transcript that fits"
         )
     }
 
@@ -78,6 +99,7 @@ final class ChatViewportTests: XCTestCase {
             Viewport.shouldPrime(
                 alreadyPrimed: false,
                 messageCount: 0,
+                contentHeight: 0,
                 distanceFromBottom: 0,
                 contentFits: true,
                 visibleContentFraction: 1
@@ -91,6 +113,7 @@ final class ChatViewportTests: XCTestCase {
             Viewport.shouldPrime(
                 alreadyPrimed: true,
                 messageCount: 50,
+                contentHeight: 3952,
                 distanceFromBottom: -922,
                 contentFits: false,
                 visibleContentFraction: 0.01
@@ -468,6 +491,7 @@ final class ChatViewportTests: XCTestCase {
                 stableQuietTicks: 1,
                 insetSettling: false,
                 messageCount: 50,
+                contentHeight: 3952,
                 padReady: true,
                 userInteracted: false,
                 alreadyPrimed: false,
@@ -485,6 +509,7 @@ final class ChatViewportTests: XCTestCase {
                 stableQuietTicks: ChatViewport.Threshold.missingTailStableTicks,
                 insetSettling: false,
                 messageCount: 50,
+                contentHeight: 3952,
                 padReady: true,
                 userInteracted: false,
                 alreadyPrimed: false,
@@ -503,6 +528,7 @@ final class ChatViewportTests: XCTestCase {
                 stableQuietTicks: 9,
                 insetSettling: false,
                 messageCount: 50,
+                contentHeight: 3952,
                 padReady: true,
                 userInteracted: true,
                 alreadyPrimed: false,
@@ -519,6 +545,7 @@ final class ChatViewportTests: XCTestCase {
                 stableQuietTicks: 9,
                 insetSettling: true,
                 messageCount: 50,
+                contentHeight: 3952,
                 padReady: true,
                 userInteracted: false,
                 alreadyPrimed: false,
@@ -535,6 +562,7 @@ final class ChatViewportTests: XCTestCase {
                 stableQuietTicks: 9,
                 insetSettling: false,
                 messageCount: 8,
+                contentHeight: 2525,
                 padReady: true,
                 userInteracted: false,
                 alreadyPrimed: false,
