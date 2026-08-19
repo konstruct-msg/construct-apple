@@ -107,6 +107,11 @@ enum MetricEvent: String {
     /// window (`ReceiptResendThrottle`). Under a healthy stream this stays near zero; a large
     /// number is the redelivery storm being absorbed instead of amplified. `label` = call site.
     case receiptResendThrottled = "receipt_resend_throttled"
+
+    /// More than one message id rode out in a single receipt (`DeliveryReceiptBatcher`). Every tick
+    /// is `label - 1` encrypt+ratchet+RPC cycles that did not happen; on a healthy stream this
+    /// stays near zero because receipts arrive alone. `label` = ids in that receipt.
+    case receiptsBatched = "receipts_batched"
     /// A redelivery dropped before the sealed-sender unseal. The counter is the point: it is the
     /// measure of how much work the server's cursor replay is costing this device, and it should
     /// track `redelivery_skipped ≈ incoming` while the server keeps replaying below the watermark.

@@ -254,7 +254,13 @@ final class OutboundSessionService {
     /// row on the sender's side, so a receipt for one could not move anything even if sent.
     ///
     /// Resolves the recipient identity key synchronously on the caller's context queue, then
-    /// hands off to the async send. Fail-closed under stealth: dropped, never sent identified.
+    /// hands the id to `DeliveryReceiptBatcher`. Fail-closed under stealth: dropped, never sent
+    /// identified.
+    ///
+    /// The send is **not** immediate. Ids owed to the same contact inside the batcher's window
+    /// leave as one receipt, which is what the `messageIds` list in the proto was always for. Under
+    /// a redelivery replay that is the difference between one encrypt+ratchet+RPC and several
+    /// hundred; a checkmark arriving half a second later is not the difference between anything.
     static func sendDeliveryReceipt(
         for messageIds: [String],
         to contactId: String,
@@ -273,11 +279,13 @@ final class OutboundSessionService {
             }
         }()
         Task { @MainActor in
-            await OutboundSessionService.shared.sendEncryptedDeliveryReceipt(
-                messageIds: messageIds,
-                to: contactId,
-                recipientIdentityKey: identityKey
-            )
+            for messageId in messageIds {
+                DeliveryReceiptBatcher.shared.enqueue(
+                    messageId: messageId,
+                    to: contactId,
+                    recipientIdentityKey: identityKey
+                )
+            }
         }
     }
 
