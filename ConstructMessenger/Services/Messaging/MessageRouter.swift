@@ -1537,15 +1537,9 @@ final class MessageRouter {
 
         // The server says this account does not exist. No session can ever be built for it, so
         // queueing its replayed backlog buys nothing and costs the stream cursor.
-        switch SessionReducer.vanishedPeerAction(
-            isVanished: VanishedPeerStore.shared.isVanished(userId),
-            kind: initKind
-        ) {
+        switch SessionReducer.vanishedPeerAction(markedAt: VanishedPeerStore.shared.markedAt(userId)) {
         case .proceed:
             break
-        case .revive:
-            Log.info("Handshake from vanished peer \(userId.prefix(8))… — account is back, retrying the bundle", category: "MessageRouter")
-            VanishedPeerStore.shared.clear(userId)
         case .discard:
             Log.debug("Discarding \(initKind) from vanished peer \(userId.prefix(8))… — no session is possible", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)

@@ -19,8 +19,12 @@
 //  user, the queue stood at 70, and deleting contacts locally did not help because none of this is
 //  contact state.
 //
-//  Revocable on purpose: an account can be re-registered, and the peer's first real handshake is
-//  the evidence that it was. See `SessionReducer.vanishedPeerAction`.
+//  Revocable on purpose: an account can be re-registered. What revokes it is the **server** — a
+//  successful bundle fetch, or the retry window in `SessionReducer.vanishedPeerAction` lapsing and
+//  letting one fetch through to ask again. Never the peer's own traffic: the first version revived
+//  on a handshake, `receivingInitKind` cannot tell a classic 3-DH handshake from a classic
+//  leftover, and the backlog is made of leftovers — so the mark oscillated every 20 seconds and
+//  the cursor never moved.
 //
 
 import Foundation
@@ -38,38 +42,43 @@ final class VanishedPeerStore {
         self.defaults = defaults
     }
 
-    private var ids: Set<String> {
-        get { Set(defaults.stringArray(forKey: Self.key) ?? []) }
-        set { defaults.set(Array(newValue).sorted(), forKey: Self.key) }
+    /// `userId → when the server last answered notFound`. A date rather than a flag so the mark
+    /// can expire on its own; a permanent flag would strand a re-registered account forever.
+    private var marks: [String: Date] {
+        get { (defaults.dictionary(forKey: Self.key) as? [String: Date]) ?? [:] }
+        set { defaults.set(newValue, forKey: Self.key) }
     }
 
-    func isVanished(_ userId: String) -> Bool {
-        guard !userId.isEmpty else { return false }
-        return ids.contains(userId)
+    /// When the server last said this peer does not exist, or nil.
+    func markedAt(_ userId: String) -> Date? {
+        guard !userId.isEmpty else { return nil }
+        return marks[userId]
     }
 
-    /// The server answered `notFound` for this peer's bundle.
-    func markVanished(_ userId: String) {
+    /// The server answered `notFound` for this peer's bundle. Refreshes an existing mark, which
+    /// is what restarts the retry window after a re-test came back `notFound` again.
+    func markVanished(_ userId: String, now: Date = Date()) {
         guard !userId.isEmpty else { return }
-        var current = ids
-        guard current.insert(userId).inserted else { return }
-        ids = current
-        Log.info(
-            "VANISHED_PEER[marked]: \(userId.prefix(8))… — server reports no such user; discarding their replayed traffic instead of queueing it",
-            category: "SessionInit"
-        )
+        let isNew = marks[userId] == nil
+        marks[userId] = now
+        if isNew {
+            Log.info(
+                "VANISHED_PEER[marked]: \(userId.prefix(8))… — server reports no such user; discarding their replayed traffic instead of queueing it",
+                category: "SessionInit"
+            )
+        }
     }
 
-    /// They are back — a real handshake arrived, or a bundle fetch succeeded.
+    /// They are back — a bundle fetch succeeded.
     func clear(_ userId: String) {
         guard !userId.isEmpty else { return }
-        var current = ids
-        guard current.remove(userId) != nil else { return }
-        ids = current
+        var current = marks
+        guard current.removeValue(forKey: userId) != nil else { return }
+        marks = current
         Log.info("VANISHED_PEER[cleared]: \(userId.prefix(8))… — reachable again", category: "SessionInit")
     }
 
-    #if DEBUG
+#if DEBUG
     func removeAllForTesting() { defaults.removeObject(forKey: Self.key) }
-    #endif
+#endif
 }

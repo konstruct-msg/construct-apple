@@ -124,20 +124,36 @@ enum SessionReducer {
 
     /// What to do with an envelope from a peer the server said does not exist.
     enum VanishedPeerAction: Equatable {
-        /// Not marked vanished — ordinary handling.
+        /// Not marked, or the mark is old enough to be worth re-testing. Ordinary handling —
+        /// which means a bundle fetch, whose answer is the only thing that can settle it.
         case proceed
-        /// Marked vanished, and this envelope is a real handshake: the account was re-registered,
-        /// or the mark was wrong. Clear it and try the bundle again — the handshake is the only
-        /// evidence that could distinguish those cases, and it costs one fetch to act on.
-        case revive
-        /// Marked vanished and this is more of their replayed backlog. Resolve it and move on:
-        /// queueing it would hold the stream cursor for a session that can never be built.
+        /// Marked and still fresh: this is more of their replayed backlog. Resolve it and move
+        /// on, because no session can be built and queueing it holds the stream cursor.
         case discard
     }
 
-    static func vanishedPeerAction(isVanished: Bool, kind: ReceivingInitKind) -> VanishedPeerAction {
-        guard isVanished else { return .proceed }
-        return kind == .handshake ? .revive : .discard
+    /// How long a `notFound` verdict stands before one more bundle fetch is allowed.
+    ///
+    /// The mark has to expire somehow, because an account can be re-registered and nothing else
+    /// would ever ask again. An hour is chosen against the cost of being wrong in each direction:
+    /// too long and a returning contact waits, too short and we hammer the key service — which we
+    /// measured, `resourceExhausted: "Too many bundle requests"`, 2026-08-20.
+    static let vanishedPeerRetryAfter: TimeInterval = 60 * 60
+
+    /// - Parameter markedAt: when the server last answered `notFound` for this peer, or nil if
+    ///   it never has.
+    ///
+    /// **Deliberately blind to the envelope.** The first version revived a peer on a handshake,
+    /// which read plausibly and was wrong: `receivingInitKind` cannot tell a classic 3-DH
+    /// handshake from a classic leftover (documented hole), and a deleted account's backlog is
+    /// full of `msgNum=0` leftovers. Every one of them revived the peer, so the mark oscillated
+    /// on a 20-second cycle — marked 17:45:33, cleared 17:45:53, marked 17:45:55, cleared
+    /// 17:45:58 — and the cursor never moved. Only the server can say an account exists, so only
+    /// the server's answer clears the mark: `KeyServiceClient` on a successful fetch, or this
+    /// window lapsing and letting one fetch through to ask again.
+    static func vanishedPeerAction(markedAt: Date?, now: Date = Date()) -> VanishedPeerAction {
+        guard let markedAt else { return .proceed }
+        return now.timeIntervalSince(markedAt) < vanishedPeerRetryAfter ? .discard : .proceed
     }
 
     /// Classify an incoming envelope for the RESPONDER init path.
