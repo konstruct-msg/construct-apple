@@ -1182,6 +1182,18 @@ final class MessageRouter {
                     }
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                     continue
+                case .reaction(let targetMessageID, let emoji, let action, _):
+                    // Metadata on the target, never a chat row. Store apply is the next
+                    // slice; ACK now so a reaction cannot redeliver as an empty bubble.
+                    handleIncomingReaction(
+                        targetMessageID: targetMessageID,
+                        emoji: emoji,
+                        action: action,
+                        from: otherUserId,
+                        envelopeId: message.id,
+                        in: context
+                    )
+                    continue
                 case .edit(let targetMessageID, let newText, _):
                     // Modern edit from MessageContent.edit (newText carries caption for media too).
                     // Scoped to the author: a peer may only edit messages it sent us.
@@ -1278,6 +1290,38 @@ final class MessageRouter {
             )
         }
         replayHeldMessages(for: userId, in: context)
+    }
+
+    /// `MessageContent.reaction` is metadata on the target, never a transcript row.
+    /// Apply (when the store is wired) then ACK. An invalid payload is still ACKed so it
+    /// cannot redeliver through `decodeAssembled`'s empty-text fallback.
+    private func handleIncomingReaction(
+        targetMessageID: String,
+        emoji: String,
+        action: Shared_Proto_Messaging_V1_ReactionAction,
+        from otherUserId: String,
+        envelopeId: String,
+        in context: NSManagedObjectContext
+    ) {
+        let incoming = ReactionReducer.incoming(actionRawValue: action.rawValue, emoji: emoji)
+        let decision = ReactionReducer.apply(
+            existing: nil,
+            incoming: incoming,
+            timestampMs: 0,
+            targetMessageId: targetMessageID
+        )
+        if decision == .dropInvalid {
+            Log.error(
+                "Invalid reaction envelope \(envelopeId.prefix(8))… target=\(targetMessageID.prefix(8))… from \(otherUserId.prefix(8))… — ACK, not a chat row",
+                category: "MessageRouter"
+            )
+        } else {
+            Log.info(
+                "Reaction on \(targetMessageID.prefix(8))… from \(otherUserId.prefix(8))… \(decision) — store not wired, ACK",
+                category: "MessageRouter"
+            )
+        }
+        PersistentACKStore.shared.markProcessed(envelopeId, senderId: otherUserId, in: context)
     }
 
     private func handleResolvedMessage(
@@ -2506,6 +2550,14 @@ final class MessageRouter {
             return
         case .edit:
             Log.info("SENDER_SYNC: edit in sync payload, ignoring", category: "MessageRouter")
+            return
+        case .reaction(let targetMessageID, let emoji, let action, _):
+            // Own reactions on linked replicas must apply (unlike .edit, which is still
+            // ignored). Store is not wired yet — still must not persist as a chat row.
+            Log.info(
+                "SENDER_SYNC: reaction on \(targetMessageID.prefix(8))… emoji=\(emoji) action=\(action) — not a chat row",
+                category: "MessageRouter"
+            )
             return
         case .incomplete:
             // Unreachable: reassembly finished before the caller stripped the routing header.

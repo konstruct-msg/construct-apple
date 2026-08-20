@@ -1466,6 +1466,11 @@ final class SessionCoordinator: MessageRouterDelegate {
         case .edit:
             plaintext = ""
             e2eMessageId = nil
+        case .reaction:
+            // A reaction is metadata, not a transcript row. Do not persist empty plaintext
+            // the way `.edit` currently falls through — that would be a blank bubble.
+            Log.info("Session-init carrier is a reaction — not persisting as a chat row", category: "SessionCoordinator")
+            return
         case .incomplete:
             Log.debug("Session-init message is a partial chunk — will be reassembled later", category: "SessionCoordinator")
             return

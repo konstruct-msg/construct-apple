@@ -248,6 +248,9 @@ final class ChunkedMessageReassembler {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
+            if let reaction = Self.reaction(from: content) {
+                return reaction
+            }
             if case .edit(let editMsg) = content.content {
                 return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: editMsg.newMedia)
             }
@@ -279,6 +282,9 @@ final class ChunkedMessageReassembler {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
+            if let reaction = Self.reaction(from: content) {
+                return reaction
+            }
             if case .edit(let editMsg) = content.content {
                 return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: editMsg.newMedia)
             }
@@ -309,6 +315,19 @@ final class ChunkedMessageReassembler {
             return text.isEmpty ? .invalid("empty plaintext") : .legacy(text)
         }
         return .invalid("non-decodable binary (\(data.count) bytes)")
+    }
+
+    /// Reaction payloads must not fall through to `.assembled` (empty text → blank bubble).
+    /// `timestampMs` is 0 until `ReactionMessage.timestamp_ms` is in generated Swift; the
+    /// apply site injects a fallback via `ReactionReducer.normalizeTimestamp`.
+    private static func reaction(from content: Shared_Proto_Messaging_V1_MessageContent) -> ChunkedMessageResult? {
+        guard case .reaction(let msg) = content.content else { return nil }
+        return .reaction(
+            targetMessageID: msg.targetMessageID,
+            emoji: msg.emoji,
+            action: msg.action,
+            timestampMs: 0
+        )
     }
 
     private func extract(_ content: Shared_Proto_Messaging_V1_MessageContent)
@@ -386,6 +405,14 @@ enum ChunkedMessageResult {
     case invalid(String)
     /// Modern edit inside MessageContent.
     case edit(targetMessageID: String, newText: Shared_Proto_Messaging_V1_TextMessage, newMedia: Shared_Proto_Messaging_V1_MediaMessage)
+    /// Emoji reaction inside MessageContent. Never a chat row — apply to the target, ACK.
+    /// `timestampMs` is 0 until proto regen of `ReactionMessage.timestamp_ms`.
+    case reaction(
+        targetMessageID: String,
+        emoji: String,
+        action: Shared_Proto_Messaging_V1_ReactionAction,
+        timestampMs: Int64
+    )
 }
 
 enum ChunkedMessageCodec {
