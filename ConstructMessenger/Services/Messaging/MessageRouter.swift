@@ -1182,13 +1182,13 @@ final class MessageRouter {
                     }
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                     continue
-                case .reaction(let targetMessageID, let emoji, let action, _):
-                    // Metadata on the target, never a chat row. Store apply is the next
-                    // slice; ACK now so a reaction cannot redeliver as an empty bubble.
+                case .reaction(let targetMessageID, let emoji, let action, let timestampMs):
                     handleIncomingReaction(
                         targetMessageID: targetMessageID,
                         emoji: emoji,
                         action: action,
+                        payloadTimestampMs: timestampMs,
+                        fallbackTimestampMs: ReactionStore.envelopeTimestampMs(message.timestamp),
                         from: otherUserId,
                         envelopeId: message.id,
                         in: context
@@ -1293,22 +1293,28 @@ final class MessageRouter {
     }
 
     /// `MessageContent.reaction` is metadata on the target, never a transcript row.
-    /// Apply (when the store is wired) then ACK. An invalid payload is still ACKed so it
-    /// cannot redeliver through `decodeAssembled`'s empty-text fallback.
+    /// Apply then ACK. An invalid payload is still ACKed so it cannot redeliver
+    /// through `decodeAssembled`'s empty-text fallback.
     private func handleIncomingReaction(
         targetMessageID: String,
         emoji: String,
         action: Shared_Proto_Messaging_V1_ReactionAction,
+        payloadTimestampMs: Int64,
+        fallbackTimestampMs: Int64,
         from otherUserId: String,
         envelopeId: String,
         in context: NSManagedObjectContext
     ) {
-        let incoming = ReactionReducer.incoming(actionRawValue: action.rawValue, emoji: emoji)
-        let decision = ReactionReducer.apply(
-            existing: nil,
-            incoming: incoming,
-            timestampMs: 0,
-            targetMessageId: targetMessageID
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let decision = ReactionStore.applyIncoming(
+            targetMessageId: targetMessageID,
+            reactorUserId: otherUserId,
+            actionRawValue: action.rawValue,
+            emoji: emoji,
+            payloadTimestampMs: payloadTimestampMs,
+            fallbackTimestampMs: fallbackTimestampMs,
+            nowMs: nowMs,
+            in: context
         )
         if decision == .dropInvalid {
             Log.error(
@@ -1317,7 +1323,7 @@ final class MessageRouter {
             )
         } else {
             Log.info(
-                "Reaction on \(targetMessageID.prefix(8))… from \(otherUserId.prefix(8))… \(decision) — store not wired, ACK",
+                "Reaction on \(targetMessageID.prefix(8))… from \(otherUserId.prefix(8))… \(decision)",
                 category: "MessageRouter"
             )
         }
@@ -2551,11 +2557,19 @@ final class MessageRouter {
         case .edit:
             Log.info("SENDER_SYNC: edit in sync payload, ignoring", category: "MessageRouter")
             return
-        case .reaction(let targetMessageID, let emoji, let action, _):
-            // Own reactions on linked replicas must apply (unlike .edit, which is still
-            // ignored). Store is not wired yet — still must not persist as a chat row.
+        case .reaction(let targetMessageID, let emoji, let action, let timestampMs):
+            let decision = ReactionStore.applyIncoming(
+                targetMessageId: targetMessageID,
+                reactorUserId: original.from,
+                actionRawValue: action.rawValue,
+                emoji: emoji,
+                payloadTimestampMs: timestampMs,
+                fallbackTimestampMs: ReactionStore.envelopeTimestampMs(original.timestamp),
+                nowMs: Int64(Date().timeIntervalSince1970 * 1000),
+                in: context
+            )
             Log.info(
-                "SENDER_SYNC: reaction on \(targetMessageID.prefix(8))… emoji=\(emoji) action=\(action) — not a chat row",
+                "SENDER_SYNC: reaction on \(targetMessageID.prefix(8))… \(decision) — not a chat row",
                 category: "MessageRouter"
             )
             return
