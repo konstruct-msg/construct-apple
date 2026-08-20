@@ -593,23 +593,25 @@ public struct Shared_Proto_Core_V1_Reaction: Sendable {
   public init() {}
 }
 
-/// SealedSenderEnvelope — outer wrapper visible to the home server
-/// Home server uses recipient_server for S2S routing, then forwards sealed_inner
-/// opaquely to the destination server.
+/// SealedSenderEnvelope — outer wrapper on the wire / federation hop
+/// For federation: home server routes by recipient_server and forwards
+/// sealed_inner opaquely. Local SendSealedMessage may leave recipient_server empty.
 public struct Shared_Proto_Core_V1_SealedSenderEnvelope: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Destination federation server domain
+  /// Destination federation server domain (empty = local destination server)
   /// Example: "eu.konstruct.cc"
   public var recipientServer: String = String()
 
-  /// Serialized SealedInner — opaque to home server (do NOT parse)
+  /// Serialized SealedInner
+  /// Federation home hop: treat as opaque. Destination may decode for routing
+  /// fields only (recipient_user_id, delivery_tag, token_*).
   public var sealedInner: Data = Data()
 
   /// Anti-replay HMAC: HMAC-SHA256(server_secret, sealed_inner || timestamp)
-  /// Home server validates freshness before forwarding
+  /// Home server validates freshness before forwarding (federation)
   public var forwardingToken: Data = Data()
 
   /// Timestamp for freshness check (reject if >5 min old)
@@ -620,8 +622,10 @@ public struct Shared_Proto_Core_V1_SealedSenderEnvelope: Sendable {
   public init() {}
 }
 
-/// SealedInner — delivered to the destination server
-/// Server sees recipient but NOT sender identity.
+/// SealedInner — opened only on the destination messaging path
+/// Server-allowed knowledge: recipient_user_id, delivery_tag, token_*,
+/// ciphertext size. Not allowed for routing/UI: content kind, priority, TTL
+/// (those belong inside the E2E payload — see content_type deprecation note).
 public struct Shared_Proto_Core_V1_SealedInner: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -642,22 +646,44 @@ public struct Shared_Proto_Core_V1_SealedInner: Sendable {
   /// Opaque E2EE payload (Double Ratchet encrypted message)
   public var encryptedPayload: Data = Data()
 
-  /// Content type (needed by server for priority routing / notification text)
+  /// DEPRECATED (server-visible metadata leak) — do not use for new protocol work.
+  /// Historical: real content type for sealed sends (outer Envelope cleared in Phase 3).
+  /// Destination server must ignore. Target: 1-byte type lives inside encrypted_payload
+  /// (or binary SessionControl / MessageContent only); then stop writing this field
+  /// (default UNSPECIFIED). Enum values 0–26 fit in a single u8.
+  /// Server MUST NOT use this for priority, notification text, or routing.
   public var contentType: Shared_Proto_Core_V1_ContentType = .unspecified
 
-  /// Message priority
+  /// DEPRECATED — same as content_type; ignore on server; do not write on new clients.
   public var priority: Shared_Proto_Core_V1_MessagePriority = .normal
 
-  /// TTL in seconds (0 = no expiration)
+  /// DEPRECATED — TTL belongs in E2E semantics if needed; server ignores.
   public var ttl: UInt32 = 0
 
   /// Privacy Pass blind token — anonymous spend credential (optional).
   /// When present, destination server verifies the token against the
   /// Privacy Pass issuer public key before delivering the message.
-  /// Sender consumes one token per STEALTH message from their local wallet.
+  ///
+  /// Economic unit is one *logical* message (e.g. a text, or a whole media
+  /// album / multi-chunk body), not one wire envelope. Chunked E2EE bodies
+  /// become many sealed sends; attaching a fresh token to every chunk burns
+  /// the young-account hourly wallet on a single album.
+  ///
+  /// Contract:
+  ///   • token_nonce / token_bytes — present on the *first* wire envelope of
+  ///     the logical message (pays for the whole set).
+  ///   • token_spend_id — optional 32-byte random id, identical on every
+  ///     wire envelope of that logical message. After the first envelope
+  ///     redeems a token, further envelopes that carry the same spend_id
+  ///     (token optional) are accepted without a new spend, up to the
+  ///     server chunk cap (256). Empty = legacy per-envelope redemption.
   public var tokenNonce: Data = Data()
 
   public var tokenBytes: Data = Data()
+
+  /// Shared across all wire envelopes of one logical message (see above).
+  /// Server-visible anti-abuse metadata only; not identity.
+  public var tokenSpendID: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1206,7 +1232,7 @@ extension Shared_Proto_Core_V1_SealedSenderEnvelope: SwiftProtobuf.Message, Swif
 
 extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SealedInner"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{4}\u{9}token_nonce\0\u{3}token_bytes\0\u{c}\u{8}\u{8}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{4}\u{9}token_nonce\0\u{3}token_bytes\0\u{3}token_spend_id\0\u{c}\u{8}\u{8}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1223,6 +1249,7 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
       case 7: try { try decoder.decodeSingularUInt32Field(value: &self.ttl) }()
       case 16: try { try decoder.decodeSingularBytesField(value: &self.tokenNonce) }()
       case 17: try { try decoder.decodeSingularBytesField(value: &self.tokenBytes) }()
+      case 18: try { try decoder.decodeSingularBytesField(value: &self.tokenSpendID) }()
       default: break
       }
     }
@@ -1256,6 +1283,9 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
     if !self.tokenBytes.isEmpty {
       try visitor.visitSingularBytesField(value: self.tokenBytes, fieldNumber: 17)
     }
+    if !self.tokenSpendID.isEmpty {
+      try visitor.visitSingularBytesField(value: self.tokenSpendID, fieldNumber: 18)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1269,6 +1299,7 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.ttl != rhs.ttl {return false}
     if lhs.tokenNonce != rhs.tokenNonce {return false}
     if lhs.tokenBytes != rhs.tokenBytes {return false}
+    if lhs.tokenSpendID != rhs.tokenSpendID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

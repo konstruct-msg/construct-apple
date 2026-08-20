@@ -25,6 +25,7 @@
 //
 
 import Foundation
+import CryptoKit
 
 @MainActor
 final class MultiDeviceSendCoordinator {
@@ -53,6 +54,103 @@ final class MultiDeviceSendCoordinator {
         "\(userId):\(deviceId)"
     }
 
+    /// Our own other devices, as far as this process currently knows — cache only, never a fetch.
+    ///
+    /// Used by the SENDER_SYNC receive path to decide which sessions to try and to derive the
+    /// tag secrets. It must not go to the network: an incoming message is being routed, and the
+    /// answer is needed now. An empty result simply means the primary session is the only
+    /// candidate, which is the state a single-device account is in permanently. The cache fills on
+    /// the first send that fans out.
+    func knownOwnDevices(myUserId: String) -> [DeviceBundleData] {
+        guard let cache = ownDeviceCache,
+              Date().timeIntervalSince(cache.fetchedAt) < cacheTTL else { return [] }
+        return cache.bundles
+    }
+
+    func knownOwnDeviceIds(myUserId: String) -> [String] {
+        knownOwnDevices(myUserId: myUserId).map(\.deviceId)
+    }
+
+    /// Fill the own-device cache from the server, for the **receive** path.
+    ///
+    /// Until 2026-08-18 the cache had exactly one filler — the send path — so a device that had
+    /// linked and not yet sent anything knew of no siblings at all. A SENDER_SYNC copy then had no
+    /// candidate session to try, no device id to fetch a bundle for, and
+    /// `handleUnopenedSenderSync` walked a list of one entry that carried no `:` and returned
+    /// having done nothing and logged nothing. Observed on the two-simulator stand 2026-08-17: a
+    /// freshly linked device received both copies and neither reached the transcript.
+    ///
+    /// Not a hot-path call: the receive side reaches for it only when it has no siblings on record
+    /// **and** a copy from one has just arrived, which is once per device lifetime in the ordinary
+    /// case. Never burns a one-time pre-key — these are our own devices.
+    @discardableResult
+    func refreshOwnDevices(myUserId: String) async -> [DeviceBundleData] {
+        do {
+            let all = try await KeyServiceClient.shared.getPreKeyBundles(
+                userId: myUserId, consumeOneTimePrekey: false
+            )
+            ownDeviceCache = DeviceCache(bundles: all, fetchedAt: Date())
+            Log.info(
+                "MultiDevice: own-device list refreshed on the receive path — \(all.count) device(s)",
+                category: "MultiDevice"
+            )
+            return all
+        } catch {
+            Log.error(
+                "MultiDevice: own-device refresh failed for \(myUserId.prefix(8))…: \(error)",
+                category: "MultiDevice"
+            )
+            return []
+        }
+    }
+
+    /// Shared secrets with our other devices, for reading the `-ss-<tag>` on an incoming copy.
+    ///
+    /// One X25519 per known device per message. Not cached: an account has units of devices, and a
+    /// cache of derived key material is state that has to be invalidated when a device is revoked —
+    /// a correctness risk out of proportion to ~50µs.
+    func senderSyncPairSecrets(myUserId: String) -> [SymmetricKey] {
+        guard let ourKey = KeychainManager.shared.loadDeviceIdentityKey() else { return [] }
+        let myDeviceId = AuthSessionManager.shared.currentDeviceId
+        return knownOwnDevices(myUserId: myUserId)
+            .filter { $0.deviceId != myDeviceId }
+            .compactMap {
+                SenderSyncDeviceTag.pairSecret(
+                    ourIdentityPrivateKey: ourKey,
+                    peerIdentityPublicKey: $0.bundle.identityPublic
+                )
+            }
+    }
+
+    /// The tag for a copy addressed to `targetDeviceId`, or the legacy plain-hex prefix when the
+    /// key material to compute one is missing.
+    ///
+    /// The fallback keeps a copy deliverable to a peer that would otherwise get an unreadable tag;
+    /// it costs the same metadata the whole change removes, so it is logged rather than silent.
+    static func senderSyncTag(
+        baseMessageId: String,
+        targetDeviceId: String,
+        targetIdentityPublic: Data,
+        ourIdentityPrivateKey: Data?
+    ) -> String {
+        guard let ourIdentityPrivateKey,
+              let secret = SenderSyncDeviceTag.pairSecret(
+                  ourIdentityPrivateKey: ourIdentityPrivateKey,
+                  peerIdentityPublicKey: targetIdentityPublic
+              ) else {
+            Log.error(
+                "SenderSync: no pair secret for \(targetDeviceId.prefix(8))… — falling back to the plain device tag, which the relay can read",
+                category: "MultiDevice"
+            )
+            return String(targetDeviceId.prefix(SenderSyncDeviceTag.legacyHexLength))
+        }
+        return SenderSyncDeviceTag.tag(
+            baseMessageId: baseMessageId,
+            targetDeviceId: targetDeviceId,
+            pairSecret: secret
+        )
+    }
+
     /// Fan-out: send `plaintext` to ALL of the recipient's devices.
     ///
     /// Intended for use after the primary send (which already covers the recipient's
@@ -66,12 +164,13 @@ final class MultiDeviceSendCoordinator {
         recipientUserId: String,
         senderUserId: String,
         senderDeviceId: String,
-        conversationId: String,
         timestamp: UInt64
     ) async {
         guard !senderDeviceId.isEmpty else { return }
         do {
-            let bundles = try await KeyServiceClient.shared.getPreKeyBundles(userId: recipientUserId)
+            // Per-device fan-out to a recipient: a device we have no session with yet needs
+            // X3DH, so this fetch legitimately consumes a one-time pre-key.
+            let bundles = try await KeyServiceClient.shared.getPreKeyBundles(userId: recipientUserId, consumeOneTimePrekey: true)
             guard !bundles.isEmpty else { return }
 
             for device in bundles {
@@ -85,7 +184,6 @@ final class MultiDeviceSendCoordinator {
                     senderUserId: senderUserId,
                     senderDeviceId: senderDeviceId,
                     recipientDeviceId: device.deviceId,
-                    conversationId: conversationId,
                     timestamp: timestamp,
                     contentType: .e2EeSignal
                 )
@@ -121,7 +219,6 @@ final class MultiDeviceSendCoordinator {
         originalRecipientUserId: String,
         senderUserId: String,
         senderDeviceId: String,
-        conversationId: String,
         timestamp: UInt64
     ) async {
         guard !senderDeviceId.isEmpty else { return }
@@ -139,15 +236,55 @@ final class MultiDeviceSendCoordinator {
             // Same framing as the primary send path so the peer reassembler can rebuild
             // MessageContent → CTM1. UUID from base messageId when well-formed.
             let planId = UUID(uuidString: messageId) ?? UUID()
-            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: plaintext, messageId: planId)
+
+            // The routing header goes on before chunking, so a multi-chunk sync carries it once
+            // and the receiver strips it once, after reassembly. Without it the receiving device
+            // cannot tell which conversation this copy belongs to: sender and recipient on the
+            // wire are both us, and `conversation_id` is blanked by the server by design.
+            //
+            // A partner id that is not a UUID yields no header rather than a malformed one; that
+            // send lands on the same unroutable path as a sender running an older build, which is
+            // where all of them landed before this existed.
+            let framedPlaintext: Data
+            if let header = SenderSyncRouting(partnerUserId: originalRecipientUserId).encoded() {
+                framedPlaintext = header + plaintext
+            } else {
+                Log.error(
+                    "SenderSync: partner id '\(originalRecipientUserId.prefix(8))…' is not a UUID — sending without routing header, the copy will not be placeable",
+                    category: "MultiDevice"
+                )
+                framedPlaintext = plaintext
+            }
+
+            let plan = ChunkedMessageSender.shared.buildPlan(
+                plaintext: framedPlaintext,
+                messageId: planId,
+                // Byte 5 of the KNST header exists to carry the content type inside the ciphertext.
+                // SENDER_SYNC was leaving it at the default 1, so the frame described itself as an
+                // ordinary chat message while the envelope said 23.
+                contentType: WireMessageKind.senderSync.canonicalContentType
+            )
             guard !plan.payloads.isEmpty else {
                 Log.info("SenderSync: chunk plan empty (payload too large?) — skip", category: "MultiDevice")
                 return
             }
 
+            // Our identity private key: the other half of the X25519 pair whose public half is in
+            // every device's bundle. Absent only before registration completes, and then there are
+            // no own devices to sync to either.
+            let ourIdentityKey = KeychainManager.shared.loadDeviceIdentityKey()
+
             for device in otherDevices {
                 let contactId = Self.sessionKey(userId: senderUserId, deviceId: device.deviceId)
-                let deviceTag = String(device.deviceId.prefix(8))
+                // The tag names the device this copy is for, to that device only. It used to be
+                // `device.deviceId.prefix(8)` — the id in plain hex, which the relay reads on every
+                // copy it routes. See SenderSyncDeviceTag.
+                let deviceTag = Self.senderSyncTag(
+                    baseMessageId: messageId,
+                    targetDeviceId: device.deviceId,
+                    targetIdentityPublic: device.bundle.identityPublic,
+                    ourIdentityPrivateKey: ourIdentityKey
+                )
                 for (index, payload) in plan.payloads.enumerated() {
                     let chunkWireId: String = plan.payloads.count == 1
                         ? "\(messageId)-ss-\(deviceTag)"
@@ -161,7 +298,6 @@ final class MultiDeviceSendCoordinator {
                         senderUserId: senderUserId,
                         senderDeviceId: senderDeviceId,
                         recipientDeviceId: device.deviceId,
-                        conversationId: conversationId,
                         timestamp: timestamp,
                         contentType: .senderSync
                     )
@@ -182,7 +318,9 @@ final class MultiDeviceSendCoordinator {
            Date().timeIntervalSince(cache.fetchedAt) < cacheTTL {
             return cache.bundles.filter { $0.deviceId != myDeviceId }
         }
-        let all = try await KeyServiceClient.shared.getPreKeyBundles(userId: myUserId)
+        // Enumerating OUR OWN devices — never burn our own one-time pre-keys just to
+        // list them. (The server also refuses to consume on a self-fetch.)
+        let all = try await KeyServiceClient.shared.getPreKeyBundles(userId: myUserId, consumeOneTimePrekey: false)
         ownDeviceCache = DeviceCache(bundles: all, fetchedAt: Date())
         // Sync our own SPK upload timestamp from the server-reported value.
         // This corrects stale local UserDefaults (e.g. set to Date.now during
@@ -206,7 +344,6 @@ final class MultiDeviceSendCoordinator {
         senderUserId: String,
         senderDeviceId: String,
         recipientDeviceId: String,
-        conversationId: String,
         timestamp: UInt64,
         contentType: Shared_Proto_Core_V1_ContentType
     ) async {
@@ -238,11 +375,23 @@ final class MultiDeviceSendCoordinator {
                 recipientId: contactId
             )
 
+            // conversation_id stays empty on purpose. Multi-device traffic is deliberately not
+            // sealed — the reasoning being that the server already knows this is one account,
+            // which is true of the sender and the recipient, both of them us. It is not true of
+            // `direct:<me>:<partner>`: that names the person on the other side, in the clear, on
+            // an unsealed envelope, once per own device per message sent. For a multi-device
+            // account it handed the server exactly the pairing that sealed sender exists to hide.
+            //
+            // Nothing wanted it. `Envelope.conversation_id` has no reader anywhere on the server —
+            // the only consumers of a field by that name are APNs payloads fed from group and
+            // request ids, the message push path passes None, and it is in no migration — and the
+            // server blanks it on delivery besides. The client stopped reading it from a received
+            // envelope when SENDER_SYNC began routing from inside the ciphertext.
             _ = try await MessagingServiceClient.shared.sendMessage(
                 messageId: messageId,
                 recipientId: networkRecipientUserId,
                 senderId: senderUserId,
-                conversationId: conversationId,
+                conversationId: "",
                 encryptedPayload: encPayload,
                 timestamp: timestamp,
                 senderDeviceId: senderDeviceId,
@@ -265,53 +414,32 @@ final class MultiDeviceSendCoordinator {
 
     // MARK: - Session Reset Broadcast (Изъян 8)
 
-    /// Изъян 8: Notify all own linked devices that the DR session with `contactId` was reset.
+    /// Изъян 8: tell the user's other devices that the DR session with `contactId` was reset, so
+    /// each can heal independently.
     ///
-    /// Each device receiving this notification should independently trigger a heal with the contact.
-    /// Failures are non-fatal — best-effort delivery.
+    /// **Not implemented — the send was removed on 2026-08-03 because it had no reader.**
+    ///
+    /// It used to encrypt `"__session_reset_notify__<contactId>__"` to every linked device with
+    /// `content_type = SENDER_SYNC`. A repository-wide search finds zero consumers of that string:
+    /// no device ever healed because of it. What it did do was arrive in `saveSenderSyncMessage`,
+    /// fail every control-format check, fall through to the plain-text branch and get **saved as a
+    /// visible message bubble containing that literal string** — so the feature's only observable
+    /// effect was littering the transcript of multi-device accounts.
+    ///
+    /// Deleting the send loses nothing (no behaviour depended on it) and stops the litter. The
+    /// metric below counts how often the notification *would* have gone out, which is the number
+    /// worth having before deciding whether to build the real thing: a working version needs a
+    /// routable content type plus a heal-trigger policy (when to heal, how not to loop two devices
+    /// into healing each other), and that is a design decision, not a wiring fix. See TODO 32.
     func broadcastSessionReset(contactId: String) async {
-        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
-        guard let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty else { return }
-        let ownDevices: [DeviceBundleData]
-        do {
-            ownDevices = try await fetchOwnOtherDevices(myUserId: myId, myDeviceId: myDeviceId)
-        } catch {
-            Log.info("broadcastSessionReset: failed to fetch own devices: \(error.localizedDescription)", category: "MultiDevice")
-            return
-        }
-        guard !ownDevices.isEmpty else {
-            Log.debug("No linked devices to notify of session reset with \(contactId.prefix(8))…", category: "MultiDevice")
-            return
-        }
-        let resetPayload = "__session_reset_notify__\(contactId)__"
-        for device in ownDevices {
-            let msgId = UUID().uuidString.lowercased()
-            let syncContactId = "\(myId):\(device.deviceId)"
-            do {
-                guard CryptoManager.shared.hasSession(for: syncContactId) else { continue }
-                // Explicitly no stealth for device-to-device session reset notifications
-                // (internal to the user, see multi-device exclusion in stealth scope).
-                let payload = try OutboundSessionService.shared.encryptSessionControl(
-                    plaintext: resetPayload,
-                    messageId: msgId,
-                    recipientId: syncContactId
-                )
-                _ = try await MessagingServiceClient.shared.sendMessage(
-                    messageId: msgId,
-                    recipientId: myId,
-                    senderId: myId,
-                    conversationId: ConversationId.direct(myUserId: myId, theirUserId: myId),
-                    encryptedPayload: payload,
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    senderDeviceId: myDeviceId,
-                    recipientDeviceId: device.deviceId,
-                    contentType: .senderSync
-                )
-                Log.debug("Session-reset notification sent to own device \(device.deviceId.prefix(8))…", category: "MultiDevice")
-            } catch {
-                Log.info("Session-reset notify failed for device \(device.deviceId.prefix(8))…: \(error.localizedDescription)", category: "MultiDevice")
-            }
-        }
+        PerformanceMetrics.shared.record(
+            .linkedDeviceResetNotifyUnimplemented,
+            label: String(contactId.prefix(8))
+        )
+        Log.info(
+            "Session reset with \(contactId.prefix(8))… — linked devices NOT notified (Изъян 8 unimplemented; they heal on their own next failed decrypt)",
+            category: "MultiDevice"
+        )
     }
 }
 

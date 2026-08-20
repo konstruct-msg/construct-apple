@@ -157,10 +157,111 @@ final class ContactLinkService {
         let fetch = User.fetchRequest()
         fetch.predicate = NSPredicate(format: "id == %@", userId)
         fetch.fetchLimit = 1
-        guard let user = try? context.fetch(fetch).first else { return }
+        guard let user = try? context.fetch(fetch).first else {
+            Log.error(
+                "IK_PIN[no_row]: dropping identity key for \(userId.prefix(8))… — no User row (source=pin_by_id)",
+                category: "ContactLink"
+            )
+            return
+        }
         pinKnownIdentityKey(on: user, identityKey: identityKey)
-        if context.hasChanges {
-            try? context.save()
+        saveOrReport(context, userId: userId, source: "pin_by_id")
+    }
+
+    /// Keep a peer's identity key when nothing else did — the backstop for the sealed-sender
+    /// send paths, which cannot seal without it.
+    ///
+    /// Four sites hold a peer's identity key and each independently decides whether to keep it:
+    /// `recordAndCheckHybrid` and `updateContactKTStatus` (both write only on the branches they
+    /// care about, and both bail silently when no `User` row exists), this file's invite TOFU, and
+    /// `startChat`. When none of them kept it, `knownIdentityKey` stays nil, `recipientIdentityKey`
+    /// returns nil, and every sealed send to that peer fails closed with `StealthDowngradeBlocked`
+    /// — a permanent, silent stall on session control (TODO #45).
+    ///
+    /// This never *overrides* an existing pin: a changed key is a security event owned by the KT
+    /// path and the invite path, and two owners raising the same alarm would raise it twice. It
+    /// only fills an absence.
+    ///
+    /// Pinning here extends no trust we have not already extended: the same `identityPublic` is
+    /// what X3DH is about to run against. `ktStatus` continues to carry the verification verdict
+    /// separately — pinned is not verified.
+    ///
+    /// - Parameter createIfMissing: whether a missing `User` row may be created to hold the key.
+    ///
+    ///   True for a prekey-bundle fetch: **we** asked for that user, a session with them is being
+    ///   established, and the row is needed either way. It is created as a non-contact, since
+    ///   fetching a bundle is not the user adding someone.
+    ///
+    ///   False for anything driven by an **incoming** envelope. A sender we have never heard of —
+    ///   or have deliberately deleted — must not be able to put a row in our store by sending to
+    ///   us. Device logs 2026-08-19: a deleted contact came back after every deletion, because the
+    ///   server keeps replaying their backlog (`since_cursor` is not honoured) and each replayed
+    ///   sealed envelope re-created the row through this method. `IK_PIN[row_created] … source=
+    ///   sealed_cert` is that happening. Pinning a key for someone we do not have is also pointless
+    ///   on its own terms: the key exists to let a sealed *send* proceed, and there is nobody to
+    ///   send to.
+    func rememberIdentityKeyIfUnknown(
+        userId: String,
+        identityKey: Data,
+        source: String,
+        createIfMissing: Bool,
+        context: NSManagedObjectContext
+    ) {
+        guard !userId.isEmpty, !identityKey.isEmpty else {
+            Log.error(
+                "IK_PIN[empty]: nothing to pin for \(userId.prefix(8))… (source=\(source), key=\(identityKey.count)B)",
+                category: "ContactLink"
+            )
+            return
+        }
+        let fetch = User.fetchRequest()
+        fetch.predicate = NSPredicate(format: "id == %@", userId)
+        fetch.fetchLimit = 1
+        let user: User
+        if let existing = try? context.fetch(fetch).first {
+            guard existing.knownIdentityKey == nil else { return }
+            user = existing
+        } else {
+            guard createIfMissing else {
+                Log.info(
+                    "IK_PIN[no_row]: no User row for \(userId.prefix(8))… — not creating one (source=\(source))",
+                    category: "ContactLink"
+                )
+                return
+            }
+            user = User(context: context)
+            user.id = userId
+            user.isBlocked = false
+            user.isSharingWithMe = false
+            user.amISharingWith = false
+            user.isContact = false
+            user.addedAt = Date()
+            user.applyServerUsername(nil, userId: userId)
+            Log.info(
+                "IK_PIN[row_created]: no User row for \(userId.prefix(8))… — created one to hold the identity key (source=\(source))",
+                category: "ContactLink"
+            )
+        }
+        user.knownIdentityKey = identityKey
+        Log.info(
+            "IK_PIN[pinned]: \(userId.prefix(8))… (source=\(source))",
+            category: "ContactLink"
+        )
+        saveOrReport(context, userId: userId, source: source)
+    }
+
+    /// A save that fails here loses the identity key for good — the in-memory object still answers,
+    /// so the send path keeps working until the next launch and then stops. `try?` made that
+    /// indistinguishable from success.
+    private func saveOrReport(_ context: NSManagedObjectContext, userId: String, source: String) {
+        guard context.hasChanges else { return }
+        do {
+            try context.save()
+        } catch {
+            Log.error(
+                "IK_PIN[save_failed]: identity key for \(userId.prefix(8))… is in memory only and will be lost on relaunch (source=\(source)): \(error)",
+                category: "ContactLink"
+            )
         }
     }
 

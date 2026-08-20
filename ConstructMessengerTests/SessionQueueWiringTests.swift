@@ -41,7 +41,6 @@ final class SessionQueueWiringTests: XCTestCase {
         var bundleRequests: [String] = []
         var endSessionRequests: [String] = []
         var healRequests: [String] = []
-        var receipts: [(ids: [String], to: String, status: Shared_Proto_Signaling_V1_ReceiptStatus)] = []
 
         func messageRouter(_ router: MessageRouter, needsPublicKeyBundle userId: String, for message: ChatMessage) {
             bundleRequests.append(userId)
@@ -51,13 +50,10 @@ final class SessionQueueWiringTests: XCTestCase {
         }
         func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64) {}
         func messageRouter(_ router: MessageRouter, isEndSessionStale userId: String, timestamp: UInt64) -> Bool { false }
-        func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64) -> Bool { false }
+        func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64, initEphemeral: Data) -> Bool { false }
         func messageRouter(_ router: MessageRouter, didWinTieBreak userId: String) {}
         func messageRouter(_ router: MessageRouter, needsSessionHeal userId: String, failedMessage: ChatMessage) {
             healRequests.append(userId)
-        }
-        func messageRouter(_ router: MessageRouter, needsReceipt messageIds: [String], to userId: String, status: Shared_Proto_Signaling_V1_ReceiptStatus) {
-            receipts.append((messageIds, userId, status))
         }
         func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {}
         func messageRouter(_ router: MessageRouter, needsUsernameUpdate userId: String) {}
@@ -69,14 +65,31 @@ final class SessionQueueWiringTests: XCTestCase {
     private var router: MessageRouter!
     private var delegate: RecordingDelegate!
     private var savedUserId: String?
-    private let me = "me-\(UUID().uuidString)"
+    // ServerUserId space: everything handed to the session layer is a bare 36-char UUID.
+    private let me = UUID().uuidString
 
-    override func setUp() {
-        super.setUp()
+    override func setUpWithError() throws {
+        try super.setUpWithError()
         // MessageRouter reads AuthSessionManager.shared.currentUserId at the top of
         // routeIncomingMessage; set a known local id and restore it afterwards.
         savedUserId = AuthSessionManager.shared.currentUserId
         AuthSessionManager.shared.updateUserId(me)
+
+        // routeIncomingMessage bails out immediately when the crypto core is absent
+        // (`!CryptoManager.shared.isInitialized` → locked-device defer, ccd6ff3a). Without a
+        // core every assertion below silently reads zero, which is how these tests rotted
+        // undetected. Bootstrap a real core so the disposition wiring is actually reached.
+        // Order matters: reloadCoreFromKeychain refuses to build a core until the local user
+        // id is cached, since that id is the Double Ratchet AAD binding.
+        if !CryptoManager.shared.isInitialized {
+            CryptoManager.shared.setLocalUserId(me)
+            _ = try CryptoManager.shared.generateRegistrationBundle()
+            CryptoManager.shared.reloadCoreFromKeychain()
+        }
+        XCTAssertTrue(
+            CryptoManager.shared.isInitialized,
+            "Crypto core failed to bootstrap — MessageRouter would defer every incoming message and every assertion below would vacuously read zero"
+        )
 
         context = PersistenceController(inMemory: true).container.viewContext
         router = MessageRouter()
@@ -100,7 +113,6 @@ final class SessionQueueWiringTests: XCTestCase {
             id: id,
             from: peer,
             to: me,
-            messageType: "DIRECT_MESSAGE",
             ephemeralPublicKey: Data(repeating: 1, count: 32),
             messageNumber: msgNum,
             content: Data(repeating: 2, count: 48),
@@ -112,7 +124,7 @@ final class SessionQueueWiringTests: XCTestCase {
     // MARK: - MessageRouter disposition wiring
 
     func testFirstMessageUnknownPeer_QueuedOnce_BundleRequestedOnce() {
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
 
         router.routeIncomingMessage(incoming(from: peer, msgNum: 0), in: context)
 
@@ -122,7 +134,7 @@ final class SessionQueueWiringTests: XCTestCase {
     }
 
     func testBurstBeforeInit_AllQueued_BundleRequestedExactlyOnce() {
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
 
         router.routeIncomingMessage(incoming(from: peer, msgNum: 0), in: context)
         router.routeIncomingMessage(incoming(from: peer, msgNum: 1), in: context)
@@ -133,8 +145,23 @@ final class SessionQueueWiringTests: XCTestCase {
                        "incomingDisposition must start init exactly once for a burst (double-init guard)")
     }
 
+    func testPqEpochLeftoverFirstMessage_RequestsEndSession_NotQueued() {
+        let peer = UUID().uuidString
+        var leftover = incoming(from: peer, msgNum: 0)
+        leftover.pqMessageEpoch = 2
+
+        // Same shape as the 2026-08-19 leftover: N=0, no OTPK, no KEM, PQ epoch 2.
+        // Must NOT start a bundle fetch — that path called initReceivingSession, failed,
+        // and cleared the queue, including any real handshake behind it.
+        router.routeIncomingMessage(leftover, in: context)
+
+        XCTAssertEqual(delegate.endSessionRequests, [peer], "Leftover first message must trigger END_SESSION")
+        XCTAssertTrue(delegate.bundleRequests.isEmpty, "Must not fetch a bundle for a mid-session leftover")
+        XCTAssertEqual(router.pendingQueue.count(for: peer), 0, "Must not queue an un-initialisable leftover")
+    }
+
     func testMidRatchetFirstMessage_RequestsEndSession_NotQueued() {
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
 
         // No session AND messageNumber>0 as the first message: cannot init from a mid-ratchet
         // message → the protective guard asks the sender to restart (END_SESSION). It must NOT
@@ -147,7 +174,7 @@ final class SessionQueueWiringTests: XCTestCase {
     }
 
     func testDuplicateMessageId_NotEnqueuedTwice() {
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
         let dup = incoming(from: peer, msgNum: 0)
 
         router.routeIncomingMessage(dup, in: context)
@@ -158,8 +185,8 @@ final class SessionQueueWiringTests: XCTestCase {
     }
 
     func testTwoPeers_Isolated() {
-        let alice = "alice-\(UUID().uuidString)"
-        let bob   = "bob-\(UUID().uuidString)"
+        let alice = UUID().uuidString
+        let bob   = UUID().uuidString
 
         router.routeIncomingMessage(incoming(from: alice, msgNum: 0), in: context)
         router.routeIncomingMessage(incoming(from: bob, msgNum: 0), in: context)
@@ -175,7 +202,7 @@ final class SessionQueueWiringTests: XCTestCase {
 
     func testQueue_DrainIsFIFO_SoSkippingFirstDropsTheInitCarrier() {
         let q = PendingSessionQueue()
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
         let m0 = incoming(from: peer, msgNum: 0)   // the X3DH init carrier
         let m1 = incoming(from: peer, msgNum: 1)
         let m2 = incoming(from: peer, msgNum: 2)
@@ -194,7 +221,7 @@ final class SessionQueueWiringTests: XCTestCase {
 
     func testQueue_RemoveClearsWithoutReturning() {
         let q = PendingSessionQueue()
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
         _ = q.enqueue(incoming(from: peer, msgNum: 0), for: peer)
         _ = q.enqueue(incoming(from: peer, msgNum: 1), for: peer)
 
@@ -206,7 +233,7 @@ final class SessionQueueWiringTests: XCTestCase {
 
     func testQueue_RespectsPerUserCap() {
         let q = PendingSessionQueue()
-        let peer = "peer-\(UUID().uuidString)"
+        let peer = UUID().uuidString
         // Cap is 100; the 101st enqueue is rejected (isInitInFlight stays meaningful).
         for i in 0..<100 {
             XCTAssertTrue(q.enqueue(incoming(from: peer, msgNum: UInt32(i)), for: peer))

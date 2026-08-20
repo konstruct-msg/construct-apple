@@ -97,11 +97,24 @@ final class CallAudioController {
     /// Media (ICE/DTLS) is up. Stop the ringback tone. Safety net: if CallKit never
     /// delivered `didActivate` (a documented failure when answering from background),
     /// audio is still disabled here and the call would be silent — so enable it now.
-    func notifyMediaConnected() {
+    ///
+    /// `hasAnswered` is the gate that was missing. The safety net was written for "answered from
+    /// the background and CallKit stayed silent", and could not tell that apart from "nobody has
+    /// answered at all" — the same absence standing for two different facts. On 2026-08-06 it ran
+    /// on an unanswered incoming call, four seconds before the user accepted, and tried to bring
+    /// the audio session up. iOS refused it (`Session activation failed`), so no microphone opened
+    /// — but the refusal came from the OS, not from us, and it is not a guarantee: had the session
+    /// been active for any other reason, the same line would have succeeded on a call the user had
+    /// not taken. Consent is ours to check.
+    func notifyMediaConnected(hasAnswered: Bool) {
         phase = .inCall
         DialTonePlayer.shared.stop()
         let rtc = RTCAudioSession.sharedInstance()
         guard !rtc.isAudioEnabled else { return }
+        guard hasAnswered else {
+            Log.info("CallAudio: media connected on a call nobody has answered — audio stays off", category: "Calls")
+            return
+        }
         Log.info("CallAudio: didActivate missing at media-connected — forcing audio enable", category: "Calls")
         rtc.lockForConfiguration()
         do {

@@ -152,7 +152,11 @@ final class PerformanceBenchmarks: XCTestCase {
         let firstMsg = BinaryFirstMessage(
             ephemeralPublicKey: init0.ephemeralPublicKey,
             messageNumber: init0.messageNumber,
-            content: [UInt8](init0Padded),
+            // Unpad before handing to the core, exactly like MessageRouter does on receive.
+            // `padCiphertext` prepends a magic+length header and appends random bytes, so a
+            // padded blob is not a valid AEAD ciphertext — passing it straight through made
+            // initReceivingSession fail with "All 1 prekey(s) failed … aead::Error".
+            content: [UInt8](MessagePadding.unpadCiphertext(init0Padded)),
             oneTimePrekeyId: init0.oneTimePrekeyId,
             suiteId: init0.suiteId,
             pqMessageEpoch: init0.pqMessageEpoch,

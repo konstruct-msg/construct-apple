@@ -43,11 +43,11 @@ final class ChunkedProfileShareTests: XCTestCase {
         let payload = profile.toBinaryData()
 
         // Frame exactly as the sender does.
-        let frames = ChunkedMessageCodec.encodeChunks(plaintext: payload, messageId: UUID())
+        let frames = ChunkedMessageCodec.encodeChunks(plaintext: payload, messageId: UUID(), contentType: 1)
         XCTAssertEqual(frames.count, 1, "a small profile is a single chunk")
 
         let reassembler = ChunkedMessageReassembler()
-        let result = reassembler.process(data: frames[0])
+        let result = reassembler.process(data: frames[0], envelopeId: "profile-test")
 
         switch result {
         case .profile(let data):

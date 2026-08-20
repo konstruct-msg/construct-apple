@@ -141,17 +141,22 @@ struct ReplyPreviewContent: View {
                 guard let posterData = try? await MediaOptimizer.generateVideoThumbnail(from: tempURL),
                       let poster = PlatformImage(data: posterData) else { return }
                 MediaManager.shared.storeThumbnail(posterData, for: id)
-                MediaImageCache.shared.store(poster, for: id)
+                MediaImageCache.shared.storePoster(poster, for: id)
                 thumbnail = poster
                 return
             }
 
             guard let image = PlatformImage(data: data) else { return }
+            // `thumbnailSize * 3` is 120px — a reply bar is 40pt. This went into the full-resolution
+            // compartment until 2026-08-11, which is what "save to Photos" and "share" write out:
+            // replying to a photo quietly downgraded that photo's saved copy to 120px.
+            // (`generateThumbnail(from:maxSize:)` ignores maxSize — MediaOptimizer owns the budget —
+            // so the persisted copy below is the normal 320px one, not 120px.)
             let preview = MediaManager.shared.generateThumbnailImage(from: image, maxSize: thumbnailSize * 3)
             if let previewData = MediaManager.shared.generateThumbnail(from: preview, maxSize: thumbnailSize * 3) {
                 MediaManager.shared.storeThumbnail(previewData, for: id)
             }
-            MediaImageCache.shared.store(preview, for: id)
+            MediaImageCache.shared.storePoster(preview, for: id)
             thumbnail = preview
         } catch {
             Log.debug("Reply preview thumbnail load failed: \(error)", category: "ReplyPreview")
@@ -166,7 +171,7 @@ struct ReplyPreviewContent: View {
             return img
         }
         if let id = messageId,
-           let cached = MediaImageCache.shared.image(for: id) {
+           let cached = MediaImageCache.shared.paintable(for: id) {
             return cached
         }
         return nil

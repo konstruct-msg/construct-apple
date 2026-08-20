@@ -37,6 +37,35 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return true
         }
 
+        // Bound the outgoing wire-payload store. Its 24h TTL was only ever evaluated when a
+        // specific message's key was read back, so payloads for messages that were never retried
+        // accumulated without limit — see OutgoingWirePayloadRetention. Off the main thread: it
+        // decodes every stored entry, and by the time this matters there are a lot of them.
+        DispatchQueue.global(qos: .utility).async {
+            OutgoingWirePayloadStore.shared.sweepExpired()
+
+            // Drain message thumbnails out of UserDefaults — 37 MB of JPEG in a 4 MB domain, which
+            // is why CFPreferences started refusing writes for everything else living there.
+            // See ThumbnailStore. Reads migrate lazily too; this catches the ones nobody opens.
+            // Move received media out of Library/Caches, which iOS purges under disk pressure —
+            // and the server drops the object 7 days after upload, so a purge on day nine takes
+            // the last copy that exists. See MediaManager.mediaDirectory.
+            Task { @MainActor in MediaManager.shared.migrateMediaOutOfCaches() }
+
+            let migrated = ThumbnailStore.shared.migrateFromUserDefaults()
+            if migrated.keys > 0 {
+                Log.info(
+                    "ThumbnailStore migration: \(migrated.keys) key(s), \(migrated.bytes / 1024)KB moved to disk",
+                    category: "MediaManager"
+                )
+            }
+
+            #if DEBUG
+            // Measured after the sweep and the migration, so the number is what the user carries now.
+            UserDefaultsFootprint.logSummary()
+            #endif
+        }
+
         // CRITICAL: Register background tasks BEFORE app finishes launching
         // This must be done early in the launch process
         BackgroundFetchManager.shared.registerBackgroundTasks()
@@ -49,6 +78,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         } else {
             Log.info("Background fetch is disabled by user or Low Power Mode")
         }
+
+        // Crash reports, delivered to us rather than through App Store Connect (TODO 40).
+        // Subscribed at launch because MetricKit hands over the *previous* run's crash — the
+        // later this registers, the more of that window we are not listening for.
+        CrashDiagnosticsCollector.shared.start()
 
         // Initialize local notification manager
         // This ensures it's ready when needed
@@ -272,10 +306,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // FIXME(masque): When MASQUE-over-TCP is implemented, the engine path replaces this.
         // For now the engine never starts on iOS (UDP 443 blocked by OS), so use the
         // legacy BackgroundFetchManager path directly.
+        let pushArrivedAt = Date()
         Task {
             await withTaskGroup(of: Void.self) { group in
                 group.addTask {
-                    await BackgroundFetchManager.shared.fetchPendingMessages()
+                    await BackgroundFetchManager.shared.fetchPendingMessagesForSilentPush(
+                        pushArrivedAt: pushArrivedAt
+                    )
                 }
                 group.addTask {
                     try? await Task.sleep(nanoseconds: 27_000_000_000)

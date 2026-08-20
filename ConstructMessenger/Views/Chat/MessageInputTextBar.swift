@@ -13,7 +13,6 @@ import Combine
 struct MessageInputTextBar: View {
     @Binding var text: String
     let canSend: Bool
-    let isSending: Bool
     let onSend: () -> Void
     let onStartVoice: (() -> Void)?     // nil on macOS
 
@@ -53,6 +52,12 @@ struct MessageInputTextBar: View {
             .textFieldStyle(.plain)
             .lineLimit(1...8)
             .focused($focused)
+            // Diagnostic only (no-op outside DEBUG): says whether SwiftUI believes the field still
+            // has focus when the keyboard disappears at the start of a voice recording.
+            .onChange(of: focused) { _, isFocused in
+                KeyboardEventTracer.shared.noteFocus(isFocused)
+            }
+            .accessibilityIdentifier(A11y.Chat.input)
             .padding(.leading, ChatUIConstants.InputBar.textLeadingPad)
             .padding(.trailing, canSend ? ChatUIConstants.Bubble.tightVerticalPadding : CTLayout.inlinePad)
             // Vertical padding keeps single-line height ≈ attach circle (controlHeight).
@@ -92,6 +97,12 @@ struct MessageInputTextBar: View {
 
     // MARK: - Send button
 
+    /// Always live while there is something to send. It used to be disabled for the whole
+    /// duration of an in-flight send — which on a media send is the entire upload, so the
+    /// composer went dead for minutes with nothing on screen explaining why. Send progress
+    /// belongs on the message: the upload placeholder shows a percentage badge and the
+    /// bubble carries its delivery status. Concurrent sends are safe — each one owns its
+    /// message id and its own task.
     @ViewBuilder
     private var sendButton: some View {
         if canSend {
@@ -106,7 +117,7 @@ struct MessageInputTextBar: View {
                     #endif
             }
             .buttonStyle(.plain)
-            .disabled(isSending)
+            .accessibilityIdentifier(A11y.Chat.send)
             .transition(.scale.combined(with: .opacity))
         }
     }
@@ -124,6 +135,7 @@ struct MessageInputTextBar: View {
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier(A11y.Chat.voice)
             .transition(.scale.combined(with: .opacity))
         }
     }
@@ -137,7 +149,6 @@ struct MessageInputTextBar: View {
         MessageInputTextBar(
             text: .constant(""),
             canSend: false,
-            isSending: false,
             onSend: {},
             onStartVoice: {}
         )
@@ -152,7 +163,6 @@ struct MessageInputTextBar: View {
         MessageInputTextBar(
             text: .constant("Hello there!"),
             canSend: true,
-            isSending: false,
             onSend: {},
             onStartVoice: {}
         )

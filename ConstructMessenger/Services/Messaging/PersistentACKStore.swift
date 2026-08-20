@@ -7,13 +7,17 @@
 //  Prevents duplicate message processing across app restarts caused by server
 //  re-delivering unacknowledged messages on reconnect.
 //
-//  Architecture:
-//  - Hot path: Rust RustAckStore (thread-safe in-memory HashMap, replaces Swift Set + NSLock)
-//  - Durable path: CoreData `ProcessedMessage` entity (survives restart)
-//  - TTL: entries older than `retentionDays` are pruned on app launch
+//  Architecture — one cache, one durable store:
+//  - Hot path: the orchestrator's ACK cache, reached via `CryptoManager`. Process-lifetime only.
+//  - Durable path: Core Data `ProcessedMessage` — the **owner** of dedup state, survives restart.
+//  - TTL: entries older than `retentionDays` are pruned on app launch.
 //
-//  Migration status: Phase M1 complete — in-memory cache fully delegated to Rust.
-//  Next: replace CoreData path with PlatformBridge calls via OrchestratorCore (Phase M4).
+//  This type used to hold its own `RustAckStore`, a second in-memory cache independent of the
+//  orchestrator's. The same question had two answers, written by different call sites and never
+//  reconciled: the Rust decrypt path marked only the orchestrator's, `preemptACK` marked only
+//  this one, and one site in `PublicKeyBundleHandler` wrote all three stores in a row under a
+//  comment claiming the orchestrator cache "persists with the next state save" — it does not.
+//  Removed 2026-08-02, see decisions/one-ack-cache-one-durable-store.md.
 
 import Foundation
 import CoreData
@@ -25,63 +29,106 @@ final class PersistentACKStore {
     /// Number of days to retain ACK entries. Matches server re-delivery window.
     static let retentionDays = 30
 
-    /// Rust-backed in-memory dedup cache. Replaces `cache: Set<String>` + `NSLock`.
-    /// Thread-safety is guaranteed by the Mutex inside RustAckStore.
-    private let rustAck = RustAckStore()
-
     private init() {}
+
+    // MARK: - Cache access
+    //
+    // The single in-memory cache lives in the Rust orchestrator. When the core is not up
+    // (pre-login, tests) every question falls through to Core Data, which is the owner.
+
+    /// A miss and "the core is not up" are both `false` here: neither is an answer, and every
+    /// caller either falls through to Core Data or is a hot-path guard that cannot run without
+    /// the core anyway.
+    private func isInCache(_ messageId: String) -> Bool {
+        if case .inCache = CryptoManager.shared.ackIsProcessedInOrchestrator(messageId: messageId) {
+            return true
+        }
+        return false
+    }
+
+    /// Warming is best-effort — the durable store is the owner. A skip is counted rather than
+    /// silent: it means a durable ACK exists that the hot-path guard will not see this launch.
+    private func warmCache(_ messageId: String) {
+        guard CryptoManager.shared.isOrchestratorCoreUp else {
+            PerformanceMetrics.shared.record(.ackCacheWarmSkippedNoCore, label: String(messageId.prefix(8)))
+            return
+        }
+        CryptoManager.shared.markAckProcessedInOrchestrator(messageId: messageId)
+    }
+
+    // MARK: - Durable-persistence expectations
+    //
+    // `CfeAction.persistAck` is documented in the core as "platform must durable-persist this
+    // record" (`ack_store.rs:109`). The platform never did: the handler re-marked the orchestrator
+    // — which cannot do anything, because `mark_processed` inserts into the cache *before* emitting
+    // the action, so the second call always short-circuits — and recorded a metric on every
+    // decrypted message. A counter that increments once per message measures traffic, not failure,
+    // and is exactly what rule 1a of decisions/ios-semantic-divergence-signals forbids.
+    //
+    // The L2 write really does happen, just somewhere else: `MessageRouter`'s terminal paths. So
+    // the action is not useless — it is the core stating an obligation that nothing checks. These
+    // two calls turn it into one that is checked: the executor records the obligation, the router
+    // settles it at the single point every routing pass exits through.
+
+    private let expectationLock = NSLock()
+    private var awaitingDurableWrite: Set<String> = []
+
+    /// The core requires `messageId` to survive a restart as "processed".
+    func expectDurableWrite(_ messageId: String) {
+        expectationLock.lock()
+        awaitingDurableWrite.insert(messageId)
+        expectationLock.unlock()
+    }
+
+    /// Clear the obligation and report whether it is still outstanding.
+    ///
+    /// Returns `true` only when the core asked for a durable write during this pass and Core Data
+    /// still does not have it. Callers use that to decide whether the pass ended in a real gap:
+    /// the cursor moves on, the core's in-memory cache dies with the process, and the message comes
+    /// back after a restart with nothing left that remembers handling it.
+    func settleDurableWrite(_ messageId: String, in context: NSManagedObjectContext) -> Bool {
+        expectationLock.lock()
+        let wasExpected = awaitingDurableWrite.remove(messageId) != nil
+        expectationLock.unlock()
+        guard wasExpected else { return false }
+        return !isProcessedInCoreData(messageId, in: context)
+    }
+
+    #if DEBUG
+    func hasOutstandingDurableWriteForTesting(_ messageId: String) -> Bool {
+        expectationLock.lock()
+        defer { expectationLock.unlock() }
+        return awaitingDurableWrite.contains(messageId)
+    }
+
+    func resetDurableWriteExpectationsForTesting() {
+        expectationLock.lock()
+        awaitingDurableWrite.removeAll()
+        expectationLock.unlock()
+    }
+    #endif
 
     // MARK: - Check
 
-    /// Returns `true` if the message was already processed (in-memory or persisted).
+    /// Returns `true` if the message was already processed (cache or durable store).
     func isProcessed(_ messageId: String, in context: NSManagedObjectContext) -> Bool {
-        switch rustAck.isProcessed(messageId: messageId) {
-        case .inCache:
-            return true
-        case .needDbCheck, .notProcessed:
-            var found = false
-            context.performAndWait {
-                let fetch = ProcessedMessage.fetchRequest()
-                fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
-                fetch.fetchLimit = 1
-                found = (try? context.fetch(fetch))?.isEmpty == false
-                if found {
-                    rustAck.markProcessed(messageId: messageId)
-                }
-            }
-            return found
-        }
+        if isInCache(messageId) { return true }
+        return isProcessedInCoreData(messageId, in: context)
     }
 
     /// Async variant for Rust orchestrator `CheckAckInDb` callbacks.
     /// Queries Core Data on a background context without requiring the caller to supply one.
     func isProcessed(messageId: String) async -> Bool {
-        let context = PersistenceController.shared.container.newBackgroundContext()
-        let rustAckCopy = rustAck
-        return await context.perform { [rustAck = rustAckCopy] in
-            switch rustAck.isProcessed(messageId: messageId) {
-            case .inCache:
-                return true
-            case .needDbCheck, .notProcessed:
-                let fetch = ProcessedMessage.fetchRequest()
-                fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
-                fetch.fetchLimit = 1
-                let found = (try? context.fetch(fetch))?.isEmpty == false
-                if found {
-                    rustAck.markProcessed(messageId: messageId)
-                }
-                return found
-            }
-        }
+        if isInCache(messageId) { return true }
+        return await isProcessedInCoreData(messageId: messageId)
     }
 
     /// Query ONLY Core Data — bypass the in-memory ACK cache.
     ///
-    /// Use this exclusively in the `CheckAckInDb` handler to avoid false-positive duplicates
-    /// caused by `preemptACK` being called before the Rust orchestrator processes the message.
-    /// `preemptACK` marks the message in the Swift-side RustAckStore to block BackgroundFetch,
-    /// but the `CheckAckInDb` question is "was this processed in a *prior* session?" — the
-    /// preempt mark must NOT answer that question with `true`.
+    /// Use this exclusively in the `CheckAckInDb` handler. That question is "was this processed
+    /// in a *prior* session?", and the cache cannot answer it: a mark made earlier in this same
+    /// launch — by the Rust decrypt path or by `markProcessedInCache` ahead of the durable
+    /// write — would answer `true` and turn a live message into a phantom duplicate.
     func isProcessedInCoreData(_ messageId: String, in context: NSManagedObjectContext) -> Bool {
         var found = false
         context.performAndWait {
@@ -89,56 +136,52 @@ final class PersistentACKStore {
             fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
             fetch.fetchLimit = 1
             found = (try? context.fetch(fetch))?.isEmpty == false
-            if found {
-                rustAck.markProcessed(messageId: messageId)
-            }
         }
+        if found { warmCache(messageId) }
         return found
     }
 
     /// Async Core-Data-only variant for the `CheckAckInDb` async callback path.
-    /// Same rationale as `isProcessedInCoreData(_:in:)` — bypasses the preempt cache.
+    /// Same rationale as `isProcessedInCoreData(_:in:)` — bypasses the cache.
     func isProcessedInCoreData(messageId: String) async -> Bool {
         let context = PersistenceController.shared.container.newBackgroundContext()
-        let rustAckCopy = rustAck
-        return await context.perform { [rustAck = rustAckCopy] in
+        let found = await context.perform {
             let fetch = ProcessedMessage.fetchRequest()
             fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
             fetch.fetchLimit = 1
-            let found = (try? context.fetch(fetch))?.isEmpty == false
-            if found {
-                rustAck.markProcessed(messageId: messageId)
-            }
-            return found
+            return (try? context.fetch(fetch))?.isEmpty == false
         }
+        if found { warmCache(messageId) }
+        return found
     }
 
     // MARK: - Mark
 
-    /// Synchronous in-memory-only duplicate check — does NOT touch Core Data.
+    /// Synchronous cache-only duplicate check — does NOT touch Core Data.
     ///
-    /// Returns `true` only if `preemptACK` or `markProcessed` was called for this
-    /// `messageId` in the current process lifetime.  Use this in hot paths (e.g. crypto
-    /// failure guards) where a fast, I/O-free check is needed.
+    /// Returns `true` only if the message was marked in the current process lifetime, by any
+    /// writer: the Rust decrypt path, `markProcessedInCache`, or the warm-up after a durable
+    /// hit. Use this in hot paths (e.g. crypto failure guards) where a fast, I/O-free check
+    /// is needed.
     ///
-    /// A `false` result does NOT mean the message was never processed — it may simply
-    /// not have been cached yet after an app restart.  Use `isProcessed(_:in:)` for a
-    /// definitive answer that also consults Core Data.
+    /// A `false` result does NOT mean the message was never processed — it may simply not be
+    /// cached yet after a restart, or the core may not be up. Use `isProcessed(_:in:)` for a
+    /// definitive answer that also consults the durable store.
     func isProcessedInMemory(_ messageId: String) -> Bool {
-        if case .inCache = rustAck.isProcessed(messageId: messageId) { return true }
-        return false
+        isInCache(messageId)
     }
 
-    /// Immediately marks `messageId` as processed **in the in-memory Rust cache only** (no IO).
+    /// Marks `messageId` as processed **in the cache only** (no IO).
     ///
-    /// Call this on the same thread as `decryptMessage` to close the race window with the
-    /// live gRPC stream.  The stream's `isProcessed` check consults the in-memory cache first
-    /// (`.inCache` → true), so this single call is sufficient to prevent double-decryption.
+    /// Call this on the same thread as `decryptMessage` to close the race window with the live
+    /// gRPC stream: the stream's `isProcessed` check consults the cache first, so this single
+    /// call is enough to prevent double-decryption.
     ///
-    /// Always follow up with `markProcessed(_:senderId:in:)` on the background thread to
-    /// persist the ACK to Core Data across app restarts.
-    func preemptACK(_ messageId: String) {
-        rustAck.markProcessed(messageId: messageId)
+    /// Always follow up with `markProcessed(_:senderId:in:)` to make the ACK survive a restart —
+    /// this cache does not. Was `preemptACK`, renamed 2026-08-02 so the name says which of the
+    /// two stores it writes.
+    func markProcessedInCache(_ messageId: String) {
+        warmCache(messageId)
     }
 
     /// Marks `messageId` as processed. Idempotent — safe to call multiple times.
@@ -179,7 +222,7 @@ final class PersistentACKStore {
         }
 
         if shouldWarmCache {
-            rustAck.markProcessed(messageId: messageId)
+            warmCache(messageId)
         }
 
         if let saveError {
@@ -191,9 +234,12 @@ final class PersistentACKStore {
     // MARK: - Cleanup
 
     /// Deletes ACK entries older than `retentionDays`. Call once per app launch.
+    ///
+    /// Durable store only. The cache is not pruned and cannot be: its entries carry no
+    /// timestamp, so there is nothing to age them by — it is bounded by process lifetime
+    /// instead (`AckStore::prune_expired` in construct-core says the same). The old
+    /// `rustAck.pruneExpired()` call here built a `PruneAckStore` action and dropped it.
     func pruneExpired(in context: NSManagedObjectContext) {
-        rustAck.pruneExpired()
-
         let cutoff = Calendar.current.date(byAdding: .day, value: -Self.retentionDays, to: Date()) ?? Date.distantPast
         let fetch = ProcessedMessage.fetchRequest()
         fetch.predicate = NSPredicate(format: "processedAt < %@", cutoff as NSDate)

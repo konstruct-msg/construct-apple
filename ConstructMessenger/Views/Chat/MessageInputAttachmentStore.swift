@@ -45,6 +45,43 @@ final class MessageInputAttachmentStore: ObservableObject {
         selectedAttachments.remove(at: index)
     }
 
+    /// Move an attachment within the send queue.
+    ///
+    /// Array order is album order on the wire — `MediaWireCodec` sends `items` in sequence and
+    /// the recipient's gallery reads them the same way — so this is the sender choosing how the
+    /// album will be read. `destination` is clamped rather than rejected: a drag that overshoots
+    /// the end of the strip means "put it last", which is what the gesture looked like.
+    func moveAttachment(from source: Int, to destination: Int) {
+        guard selectedAttachments.indices.contains(source) else { return }
+        let target = MessageInputAttachmentStore.clampedDestination(
+            destination,
+            count: selectedAttachments.count
+        )
+        guard target != source else { return }
+        let item = selectedAttachments.remove(at: source)
+        selectedAttachments.insert(item, at: target)
+    }
+
+    /// Where a drag of `destination` slots actually lands.
+    ///
+    /// Pure so the arithmetic is testable without a gesture: off-by-one at the end of the strip
+    /// is the classic way a reorder silently drops the last item.
+    nonisolated static func clampedDestination(_ destination: Int, count: Int) -> Int {
+        min(max(destination, 0), max(0, count - 1))
+    }
+
+    /// Swap in an edited image, keeping everything else about the attachment.
+    ///
+    /// The edit replaces `displayImage` **and** `originalData`: leaving the original bytes in
+    /// place would send the uncropped picture while the composer showed the cropped one, and
+    /// the sender would only find out by looking at the transcript. Quality falls back to
+    /// compressed — "original" means the file as picked, and this is no longer that file.
+    func replaceImage(at index: Int, with image: PlatformImage) {
+        guard selectedAttachments.indices.contains(index),
+              selectedAttachments[index].kind == .image else { return }
+        selectedAttachments[index] = MediaAttachment(image: image, quality: .compressed)
+    }
+
     func removeFile(at index: Int) {
         guard selectedFileURLs.indices.contains(index) else { return }
         selectedFileURLs.remove(at: index)

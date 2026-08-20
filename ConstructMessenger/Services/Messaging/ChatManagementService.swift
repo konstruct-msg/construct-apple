@@ -129,8 +129,10 @@ class ChatManagementService {
         let chatId = chat.id
         let otherUser = chat.otherUser
 
-        // Archive crypto session.
-        if let userId = otherUser?.id, CryptoManager.shared.hasSession(for: userId) {
+        // Archive crypto session. `hasStoredSessionState`, not `hasSession`: the latter sees only
+        // what the core has loaded, and a chat nobody opened this run has its session on disk
+        // only — so this guard used to skip, leaving a Keychain entry with no contact attached.
+        if let userId = otherUser?.id, CryptoManager.shared.hasStoredSessionState(for: userId) {
             CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
             Log.info("Archived crypto session for user: \(userId)", category: "ChatManagementService")
         }
@@ -165,8 +167,11 @@ class ChatManagementService {
             return
         }
 
-        // Archive crypto session if one exists.
-        if CryptoManager.shared.hasSession(for: userId) {
+        // Archive crypto session if one exists — in the core or on disk. Pruning is the
+        // irreversible action of the two, so leaving an unreachable session behind here is the
+        // worse half of the same defect: the contact is gone from every list and its ratchet is
+        // still in the Keychain, ready to be picked up by the next pairing with the same person.
+        if CryptoManager.shared.hasStoredSessionState(for: userId) {
             CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
         }
 

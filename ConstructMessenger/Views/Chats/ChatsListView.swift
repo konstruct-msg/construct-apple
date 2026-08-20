@@ -95,6 +95,7 @@ struct ChatsListView: View {
             .onAppear {
                     chatsViewModel.setContext(viewContext)
                     LocalNotificationManager.shared.clearBadge()
+                    reconcileStalePreviews(from: nil)
                     updateTotalUnreadCount()
             }
             .onChange(of: chatsViewModel.chatToOpen) { _, chatId in
@@ -119,6 +120,9 @@ struct ChatsListView: View {
             // crash (device log 2026-07-19, during END_SESSION re-init + openOrCreateChat).
             .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
                     guard notificationContainsChatChanges(note) else { return }
+                    // After a message write, denormalized previews can lag (missed applyPreview
+                    // or observation gap). Touch only chats present in the save.
+                    reconcileStalePreviews(from: note)
                     updateTotalUnreadCount()
             }
             .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { note in
@@ -132,6 +136,7 @@ struct ChatsListView: View {
 
     private var searchBar: some View {
         CTSearchBar(text: $searchQuery)
+            .accessibilityIdentifier(A11y.Chats.search)
     }
 
     // MARK: - Nav Bar
@@ -151,6 +156,7 @@ struct ChatsListView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier(A11y.Chats.scanQR)
             .accessibilityLabel(NSLocalizedString("scan_qr_code", comment: ""))
         }
         .padding(.horizontal, CTLayout.edgePad)
@@ -197,6 +203,7 @@ struct ChatsListView: View {
                         ChatRowView(chat: chat)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier(A11y.Chats.row(chat.id))
                     // Clear so the CTMatrixBackground watermark shows through the rows.
                     .listRowBackground(Color.clear)
                     .listRowSeparatorTint(Color.CT.noise)
@@ -247,6 +254,7 @@ struct ChatsListView: View {
         .contentMargins(.horizontal, CTLayout.edgePad, for: .scrollContent)
         // ASCII matrix watermark behind the rows (base #090909 comes from .ctBackground()).
         .background(CTMatrixBackground())
+        .accessibilityIdentifier(A11y.Chats.list)
     }
 
     /// Empty streams list — points users to invite paths (QR / Synaps).
@@ -275,18 +283,21 @@ struct ChatsListView: View {
                 ) {
                     showingQRScanner = true
                 }
+                .accessibilityIdentifier(A11y.Chats.emptyScanQR)
                 emptyActionButton(
                     titleKey: "chats_empty_show_qr",
                     systemImage: "qrcode"
                 ) {
                     showingMyQR = true
                 }
+                .accessibilityIdentifier(A11y.Chats.emptyShowQR)
                 emptyActionButton(
                     titleKey: "chats_empty_open_synaps",
                     systemImage: "circle.grid.cross"
                 ) {
                     NotificationCenter.default.post(name: .openSynapsTab, object: nil)
                 }
+                .accessibilityIdentifier(A11y.Chats.emptyOpenSynaps)
             }
             .padding(.top, CTLayout.inlinePad)
             .frame(maxWidth: 320)
@@ -294,6 +305,7 @@ struct ChatsListView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)
         .padding(.horizontal, CTLayout.edgePad)
+        .accessibilityIdentifier(A11y.Chats.empty)
     }
 
     private func emptyActionButton(
@@ -337,6 +349,43 @@ struct ChatsListView: View {
 
     private func updateTotalUnreadCount() {
         chatsViewModel.totalUnreadCount = chats.reduce(0) { $0 + Int($1.unreadCount) }
+    }
+
+    /// Re-align denormalized list previews with each chat's newest transcript message.
+    /// No-op when already in sync; saves once if any row was repaired.
+    /// - Parameter note: when non-nil, only chats touched by that save are scanned.
+    private func reconcileStalePreviews(from note: Notification?) {
+        let targets: [Chat]
+        if let note {
+            targets = chatsTouchedBySave(note)
+            guard !targets.isEmpty else { return }
+        } else {
+            targets = Array(chats)
+        }
+        var changed = false
+        for chat in targets {
+            if chat.reconcilePreviewFromTranscript(in: viewContext) {
+                changed = true
+            }
+        }
+        if changed {
+            viewContext.saveAndLog()
+        }
+    }
+
+    private func chatsTouchedBySave(_ note: Notification) -> [Chat] {
+        var ids = Set<NSManagedObjectID>()
+        for key in [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey] {
+            guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
+            for obj in objects {
+                if let msg = obj as? Message, let chat = msg.chat {
+                    ids.insert(chat.objectID)
+                } else if obj is Chat {
+                    ids.insert(obj.objectID)
+                }
+            }
+        }
+        return ids.compactMap { try? viewContext.existingObject(with: $0) as? Chat }
     }
 
     private func notificationContainsChatChanges(_ note: Notification) -> Bool {

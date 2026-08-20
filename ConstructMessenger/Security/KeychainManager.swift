@@ -27,7 +27,19 @@ class KeychainManager {
         "deviceSigningKey", "deviceIdentityKey",
         APIConstants.privateKeyKey,
         "identity_key", "signed_prekey", "signing_key",
-        "hybrid_sig_private_key", "crypto_private_keys", "crypto_otpks"
+        "hybrid_sig_private_key", "crypto_private_keys", "crypto_otpks",
+        // v2: written by callers that used to rely on the WhenUnlocked default.
+        "construct.kyber_session_state", "tracked_prekey_ids",
+        // v3: at-rest key for partial multi-chunk messages (background decrypt must read it).
+        "construct.reassembly_store_key"
+    ]
+
+    /// Account prefixes whose items are created dynamically (per key id / contact / user) and
+    /// therefore cannot be listed by name. Enumerated from the Keychain during migration.
+    private static let cryptoKeyAccountPrefixes: [String] = [
+        "construct.kyber.otpk.sk.",   // per-key-id Kyber OTPK secrets
+        "construct.pq_deferred.",     // per-contact deferred PQ contributions
+        "session_archives_"           // per-user archived sessions
     ]
 
     /// One-time migration of crypto key material from the legacy `WhenUnlockedThisDeviceOnly`
@@ -38,11 +50,15 @@ class KeychainManager {
     /// so the flag is only set once every present item was actually re-added — otherwise it
     /// retries on the next foreground launch.
     func migrateCryptoKeysAccessibility() {
-        let flagKey = "construct.cryptoKeys.afu_migrated.v1"
+        // v2 adds the accounts that were still being written under the WhenUnlocked default
+        // (Kyber OTPK secrets, deferred PQ contributions, Kyber session CFE, session archives,
+        // tracked prekey ids). Devices that already completed v1 must run again for those.
+        let flagKey = "construct.cryptoKeys.afu_migrated.v2"
         guard !UserDefaults.standard.bool(forKey: flagKey) else { return }
 
         var allResolved = true
-        for account in Self.cryptoKeyAccounts {
+        let dynamicAccounts = Self.cryptoKeyAccountPrefixes.flatMap { accounts(withPrefix: $0) }
+        for account in Self.cryptoKeyAccounts + dynamicAccounts {
             // Absent item: nothing to migrate (resolved). Present item: must re-add successfully.
             guard load(forKey: account) != nil else { continue }
             if !migrateAccessibility(forKey: account, to: Self.cryptoKeyAccessible) {
@@ -79,7 +95,7 @@ class KeychainManager {
             Log.error("Failed to convert Keychain data to UTF-8 string", category: "Keychain")
             return nil
         }
-        Log.debug("Session token loaded from Keychain (length: \(token.count), prefix: \(token.prefix(30))...)", category: "Keychain")
+        Log.debug("Session token loaded from Keychain (length: \(token.count))", category: "Keychain")
         return token
     }
 
@@ -134,7 +150,20 @@ class KeychainManager {
     func loadDeviceIdentityKey() -> Data? {
         return load(forKey: "deviceIdentityKey")
     }
-    
+
+    /// Key that encrypts half-arrived multi-chunk messages at rest (`PendingReassemblyStore`).
+    ///
+    /// `cryptoKeyAccessible` is required, not preferred: reassembly resumes during a background
+    /// push decrypt, and under `WhenUnlocked*` the key would be unreadable exactly then — the
+    /// partial message would be silently unrecoverable in the one situation the store exists for.
+    func saveReassemblyStoreKey(_ key: Data) {
+        _ = save(key, forKey: "construct.reassembly_store_key", accessible: Self.cryptoKeyAccessible)
+    }
+
+    func loadReassemblyStoreKey() -> Data? {
+        return load(forKey: "construct.reassembly_store_key")
+    }
+
     /// Check if device is registered (has device ID and keys)
     func isDeviceRegistered() -> Bool {
         let deviceId = loadDeviceID()
@@ -394,44 +423,36 @@ class KeychainManager {
         Log.info("All cryptographic keys and sessions deleted", category: "Keychain")
     }
     
-    /// Delete all per-contact E2EE session blobs (`session_*` keys).
+    /// Delete every Double Ratchet session blob, live and archived.
+    ///
+    /// Called on account deletion and before a device link, so the next identity cannot
+    /// inherit the previous one's ratchet state.
     func deleteAllE2EESessions() {
         deleteAllSessions()
     }
 
-    /// Delete all saved sessions (sessions are stored with keys like "session_<contactId>")
-    /// Note: Keychain doesn't provide a way to list keys, so we delete by pattern
-    /// This is called during account deletion to ensure clean state
+    /// Enumerates the `session_` namespace and deletes what `KeychainSessionAccounts` says is
+    /// session state — deliberately not everything under the prefix, because `session_token`
+    /// lives there too and this runs while the user is still signed in.
+    ///
+    /// Until 2026-08-08 this filtered on `kSecAttrService == Bundle.main.bundleIdentifier` and
+    /// therefore matched nothing: `save(_:forKey:accessible:)` writes no service attribute, so
+    /// every item this app owns has the empty service. See `KeychainSessionAccounts` for the
+    /// incident.
+    ///
+    /// Do NOT "fix" the schema by starting to write `kSecAttrService` here. Generic-password
+    /// identity is (account, service); adding a service to new writes would orphan every item
+    /// already on every device — the whole Keychain would read as empty. Changing it requires
+    /// the re-add migration described in
+    /// `construct-docs/decisions/share-extension-shared-container.md`.
     private func deleteAllSessions() {
-        // Since we can't enumerate Keychain keys, we'll delete all items with kSecClass = kSecClassGenericPassword
-        // and service matching our bundle identifier with "session_" prefix
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Bundle.main.bundleIdentifier ?? "dev.construct.messenger"
-        ]
-        
-        // Get all items
-        let queryWithReturnData = query.merging([
-            kSecReturnAttributes as String: true,
-            kSecMatchLimit as String: kSecMatchLimitAll
-        ]) { $1 }
-        
-        var result: AnyObject?
-        let status = SecItemCopyMatching(queryWithReturnData as CFDictionary, &result)
-        
-        if status == errSecSuccess, let items = result as? [[String: Any]] {
-            var deletedCount = 0
-            for item in items {
-                if let account = item[kSecAttrAccount as String] as? String,
-                   account.hasPrefix("session_") {
-                    delete(forKey: account)
-                    deletedCount += 1
-                }
-            }
-            if deletedCount > 0 {
-                Log.info("Deleted \(deletedCount) session(s) from Keychain", category: "Keychain")
-            }
+        let deleted = accounts(withPrefix: KeychainSessionAccounts.prefix)
+            .filter(KeychainSessionAccounts.isSessionState)
+        for account in deleted {
+            delete(forKey: account)
         }
+        // Logged unconditionally: a zero here is the finding, not the absence of one.
+        Log.info("Deleted \(deleted.count) session blob(s) from Keychain", category: "Keychain")
     }
 
     // MARK: - Session Persistence
@@ -700,6 +721,26 @@ class KeychainManager {
     }
 
     // MARK: - Generic Helpers
+    /// Every generic-password account this app owns whose name starts with `prefix`.
+    ///
+    /// Items keyed per contact / user / key id cannot be listed statically, so the
+    /// accessibility migration discovers them here. A locked device returns whatever the
+    /// current class allows; the migration only sets its completion flag when every item it
+    /// found was re-added, and it runs in the foreground, so a partial listing just retries.
+    private func accounts(withPrefix prefix: String) -> [String] {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true
+        ]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let items = result as? [[String: Any]] else { return [] }
+
+        return items.compactMap { $0[kSecAttrAccount as String] as? String }
+                    .filter { $0.hasPrefix(prefix) }
+    }
+
     private func save(_ data: Data, forKey key: String, accessible: CFString) -> Bool {
         guard !data.isEmpty else {
             // Treat empty-data saves as deletes to avoid silent Keychain corruption.
@@ -726,6 +767,15 @@ class KeychainManager {
     }
 
     private func load(forKey key: String) -> Data? {
+        read(forKey: key).data
+    }
+
+    /// Like `load`, but keeps "not there" and "could not read it" apart.
+    ///
+    /// Use this wherever acting on a wrong answer is destructive — see `KeychainRead` and the
+    /// 2026-08-09 account-reset incident. `load` remains correct for the many callers that only
+    /// need the value.
+    func read(forKey key: String) -> KeychainRead {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
@@ -734,11 +784,13 @@ class KeychainManager {
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data, !data.isEmpty else {
-            return nil
-        }
-        return data
+        return KeychainRead.classify(status: status, data: result as? Data)
     }
+
+    /// The three-state reads behind the device identity. Their `nil` used to mean "register
+    /// a new account", which is why they get the careful API.
+    func readDeviceID() -> KeychainRead { read(forKey: "deviceId") }
+    func readDeviceSigningKey() -> KeychainRead { read(forKey: "deviceSigningKey") }
 
     private func delete(forKey key: String) {
         let query: [String: Any] = [

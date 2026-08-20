@@ -121,6 +121,21 @@ final class CryptoSessionInitializationService {
             throw CryptoManagerError.invalidKeyData
         }
 
+        let initKind = SessionReducer.receivingInitKind(
+            messageNumber: firstMessage.messageNumber,
+            oneTimePreKeyId: firstMessage.oneTimePreKeyId,
+            kemCiphertextBytes: firstMessage.kemCiphertext.count,
+            pqMessageEpoch: firstMessage.pqMessageEpoch,
+            isSessionResetInit: firstMessage.isSessionResetInit
+        )
+        guard initKind == .handshake else {
+            Log.error(
+                "SESSION_STATE[init_refused_not_handshake]: \(userId.prefix(8))… kind=\(initKind) msgNum=\(firstMessage.messageNumber) otpk=\(firstMessage.oneTimePreKeyId) kem=\(firstMessage.kemCiphertext.count)B epoch=\(firstMessage.pqMessageEpoch)",
+                category: "CryptoManager"
+            )
+            throw SessionError.notAHandshakeCarrier
+        }
+
         #if DEBUG
         Log.debug("RESPONDER bundle: ik=\(recipientBundle.identityPublic.count)B spk=\(recipientBundle.signedPrekeyPublic.count)B suite=\(suiteID)", category: "CryptoManager")
         Log.debug("ik_prefix: \(recipientBundle.identityPublic.prefix(8).hexString)", category: "CryptoManager")
@@ -180,34 +195,22 @@ final class CryptoSessionInitializationService {
             )
 
             let plaintext = result.decryptedMessage
-            let plaintextPreview = String(bytes: plaintext.prefix(50), encoding: .utf8) ?? "<binary \(plaintext.count)B>"
-            Log.info("Session initialized successfully, decrypted: \(plaintextPreview)...", category: "CryptoManager")
+            // Never log the decrypted body itself. Release is protected by os_log's private-by-
+            // default `%@` and by LogCollector being off, but INTERNAL_TOOLS builds persist this
+            // line to a rotating file the user can export via DiagnosticLogShare — message
+            // plaintext must not be in it. Length alone is enough to diagnose an init.
+            Log.info("Session initialized successfully, decrypted \(plaintext.count)B", category: "CryptoManager")
 
             KeychainManager.shared.saveSessionSuiteId(userId: userId, suiteId: suiteID)
             // NOTE: saveSession deferred until after PQXDH strengthening completes.
 
             if !firstMessage.kemCiphertext.isEmpty {
                 do {
-                    let kyberOtpkId = firstMessage.kyberOtpkId
-                    if kyberOtpkId > 0 {
-                        guard let otpkSecret = PQCKeyManager.kyberOtpkSecret(forKeyId: kyberOtpkId) else {
-                            Log.error("PQC: Kyber OTPK id=\(kyberOtpkId) secret MISSING for \(userId.prefix(8))… — failing session init", category: "CryptoManager")
-                            throw CryptoManagerError.pqxdhOtpkMissing(kyberOtpkId)
-                        }
-                        try PQCKeyManager.shared.decapsulateAndStrengthen(
-                            kemCiphertext: firstMessage.kemCiphertext,
-                            contactId: userId,
-                            secretKeyOverride: otpkSecret
-                        )
-                        PQCKeyManager.deleteKyberOtpk(keyId: kyberOtpkId)
-                        Log.info("PQC: PQXDH Kyber OTPK id=\(kyberOtpkId) for \(userId.prefix(8))...", category: "CryptoManager")
-                    } else {
-                        try PQCKeyManager.shared.decapsulateAndStrengthen(
-                            kemCiphertext: firstMessage.kemCiphertext,
-                            contactId: userId
-                        )
-                        Log.info("PQC: PQXDH Kyber SPK for \(userId.prefix(8))...", category: "CryptoManager")
-                    }
+                    try PQCKeyManager.shared.applyIncomingContribution(
+                        kemCiphertext: firstMessage.kemCiphertext,
+                        kyberOtpkId: firstMessage.kyberOtpkId,
+                        contactId: userId
+                    )
                 } catch {
                     Log.error("PQC: PQXDH decapsulation FAILED for \(userId.prefix(8))...: \(error)", category: "CryptoManager")
                     KeychainManager.shared.savePQXDHDowngradeFlag(for: userId)

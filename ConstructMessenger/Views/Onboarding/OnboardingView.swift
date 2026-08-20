@@ -31,7 +31,7 @@ struct OnboardingView: View {
                 VStack(spacing: 60) {
                     CTLogoView(size: 100, color: Color.CT.text)
 
-                    Text("construct_titlte")
+                    Text("construct_title")
                         .font(CTFont.bold(26))
                         .foregroundColor(Color.CT.text)
                         .tracking(8)
@@ -52,6 +52,7 @@ struct OnboardingView: View {
                         text: $username,
                         alignment: .center
                     )
+                    .accessibilityIdentifier(A11y.Onboarding.username)
                     .onChange(of: username) { _, newValue in
                         let lowered = newValue.lowercased()
                         if newValue != lowered {
@@ -95,6 +96,7 @@ struct OnboardingView: View {
                     }
                     .frame(maxWidth: 360)
                     .padding(.bottom, 12)
+                    .accessibilityIdentifier(A11y.Onboarding.createIdentity)
 
                     Button { showingExistingIdentity = true } label: {
                         Text(NSLocalizedString("onboarding_already_have", comment: ""))
@@ -103,6 +105,7 @@ struct OnboardingView: View {
                             .multilineTextAlignment(.center)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier(A11y.Onboarding.existingIdentity)
                     .accessibilityHint(NSLocalizedString("onboarding_existing_intro", comment: ""))
 
                     // Pre-login diagnostics escape hatch (DEBUG/internal only): lets onboarding /

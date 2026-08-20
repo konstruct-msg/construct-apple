@@ -12,8 +12,10 @@ final class ChunkedMessageSender {
 
     private init() {}
 
-    func buildPlan(plaintext: Data, messageId: UUID) -> ChunkedMessagePlan {
-        let payloads = ChunkedMessageCodec.encodeChunks(plaintext: plaintext, messageId: messageId)
+    func buildPlan(plaintext: Data, messageId: UUID, contentType: UInt8 = 1) -> ChunkedMessagePlan {
+        let payloads = ChunkedMessageCodec.encodeChunks(
+            plaintext: plaintext, messageId: messageId, contentType: contentType
+        )
         return ChunkedMessagePlan(messageId: messageId, payloads: payloads, originalLength: plaintext.count)
     }
 
@@ -27,6 +29,13 @@ final class ChunkedMessageSender {
         onWirePayloadEncoded: ((String, Data) -> Void)? = nil
     ) async throws -> [SendMessageResponse] {
         var responses: [SendMessageResponse] = []
+
+        // One Privacy Pass spend for the whole logical message. A three-photo album is ~30 wire
+        // envelopes; paying per envelope emptied a young account's 30/hr allowance on one tap.
+        // Only created for genuinely multi-envelope sends — a single chunk leaves the spend id
+        // empty and keeps the legacy per-envelope path byte-for-byte, which is also the only
+        // shape the server has redeemed until now.
+        let spendUnit = await TokenSpendUnit.forEnvelopeCount(plan.payloads.count)
 
         for (index, payload) in plan.payloads.enumerated() {
             let chunkMessageId = index == 0 ? plan.messageId.uuidString.lowercased()
@@ -56,7 +65,8 @@ final class ChunkedMessageSender {
                         recipientUserId: recipientId,
                         recipientIdentityKey: recipientIK,
                         encryptedPayload: encryptedPayload,
-                        contentType: .e2EeSignal
+                        contentType: .generic,
+                        spendUnit: spendUnit
                     )
                 } catch {
                     Log.error("STEALTH: seal failed under stealth-on — refusing identified downgrade, queueing: \(error)", category: "ChunkedDelivery")
@@ -72,11 +82,17 @@ final class ChunkedMessageSender {
                 // delivery tag; the DR payload is reused — the ratchet does not advance).
                 // Never downgrades to an identified send (StealthSendRecovery invariant).
                 response = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
-                    try await StealthSenderService.buildSealedInner(
+                    // A privacy_pass rejection means the redemption we were counting on did not
+                    // happen — so the rebuilt envelope has to pay again. Without this the rebuild
+                    // would re-attach the same unpaid spend id and be rejected identically,
+                    // turning a one-shot recovery into a guaranteed second failure.
+                    await spendUnit?.invalidatePayment()
+                    return try await StealthSenderService.buildSealedInner(
                         recipientUserId: recipientId,
                         recipientIdentityKey: recipientIK,
                         encryptedPayload: encryptedPayload,
-                        contentType: .e2EeSignal
+                        contentType: .generic,
+                        spendUnit: spendUnit
                     )
                 }, send: { inner in
                     if FeatureFlags.sealedSenderUnauthenticatedTransport {
@@ -127,23 +143,48 @@ final class ChunkedMessageReassembler {
     /// reassembler interactions on the main thread, so no extra locking is needed.
     static let shared = ChunkedMessageReassembler()
 
-    private struct PendingMessage {
-        let messageId: UUID
-        let totalChunks: UInt16
-        let plaintextLength: Int
-        var receivedChunks: [UInt16: Data]
-        let startTime: Date
+    /// Partial reassembly lives in `PendingReassemblyStore` — on disk, encrypted, surviving a
+    /// restart. There is deliberately no in-memory map here any more: a chunk decrypted in this
+    /// process consumes its ratchet key, so a redelivery after a kill cannot be decrypted again
+    /// and an in-memory-only partial was simply lost. See decisions/durable-chunk-reassembly.md.
+    private let store = PendingReassemblyStore.shared
 
-        var isComplete: Bool {
-            receivedChunks.count == Int(totalChunks)
+    /// Decode one decrypted payload.
+    ///
+    /// `envelopeId` is the transport id that carried these bytes. It is recorded with the partial
+    /// so the caller can mark it processed the moment the bytes are durable — an intermediate
+    /// chunk that is never marked is what let the same ids loop through redelivery.
+    ///
+    /// `now` is a parameter only so expiry is testable without waiting out the retention window.
+    func process(data: Data, envelopeId: String, now: Date = Date()) -> ChunkedMessageResult {
+        switch assemble(data: data, envelopeId: envelopeId, now: now) {
+        case .complete(let assembled, let e2eMessageId):
+            return decodeAssembled(assembled, e2eMessageId: e2eMessageId)
+        case .notFramed(let raw):
+            return decodeRaw(raw)
+        case .incomplete:
+            return .incomplete
+        case .invalid(let reason):
+            return .invalid(reason)
         }
     }
 
-    private var pending: [UUID: PendingMessage] = [:]
+    /// Reassemble the KNST framing without decoding what it carries.
+    ///
+    /// `process` is this plus a decode, and is what every ordinary content type uses. SENDER_SYNC
+    /// needs the two apart: a routing header precedes its content inside the ciphertext (see
+    /// `SenderSyncRouting`), and it has to come off after reassembly — a multi-chunk sync carries
+    /// it only in the first chunk's share of the stream — but before the content decoder, which
+    /// would otherwise be handed 20 bytes of header and reject the whole message.
+    ///
+    /// Splitting rather than special-casing: the framing logic stays in one place and `process`
+    /// keeps calling it, so a sender-sync stream and an ordinary one cannot drift apart in how
+    /// they are reassembled.
+    func assemble(data: Data, envelopeId: String, now: Date = Date()) -> ChunkedAssembly {
+        // Sweep on every decrypted message, not only on chunked ones: a stalled reassembly is
+        // most likely to be noticed while ordinary traffic keeps flowing from other peers.
+        store.sweepExpired(now: now)
 
-    /// Process binary decrypted data — supports both binary KNST frames and legacy formats.
-    /// Extracts `QuotedMessage` from `MessageContent` proto when present.
-    func process(data: Data) -> ChunkedMessageResult {
         // ── Binary KNST frame ────────────────────────────────────────────────
         let magic = ChunkedDeliveryConfig.magic
         if data.count >= magic.count + 1,
@@ -152,49 +193,46 @@ final class ChunkedMessageReassembler {
         {
             guard let parsed = ChunkedMessageCodec.parseChunk(data: data) else {
                 Log.info("Binary KNST magic found but header invalid, falling through", category: "ChunkedDelivery")
-                return decodeRaw(data)
+                return .notFramed(data)
             }
-            return processKnstChunk(parsed)
+            return assembleKnstChunk(parsed, envelopeId: envelopeId, now: now)
         }
 
-        // ── Legacy KNST1:<base64> text framing ──────────────────────────────
-        let prefix = Data(ChunkedMessageCodec.legacyPrefix.utf8)
-        if data.starts(with: prefix), let text = String(data: data, encoding: .utf8) {
-            return process(decryptedText: text)
-        }
-
-        return decodeRaw(data)
+        return .notFramed(data)
     }
 
-    private func processKnstChunk(_ parsed: ChunkedMessageCodec.ParsedChunk) -> ChunkedMessageResult {
-        cleanupExpired()
+    private func assembleKnstChunk(
+        _ parsed: ChunkedMessageCodec.ParsedChunk,
+        envelopeId: String,
+        now: Date
+    ) -> ChunkedAssembly {
         if parsed.totalChunks == 1 {
             let trimmed = parsed.payload.prefix(parsed.plaintextLength)
-            return decodeAssembled(Data(trimmed), e2eMessageId: Self.e2eId(from: parsed.messageId))
+            return .complete(Data(trimmed), e2eMessageId: Self.e2eId(from: parsed.messageId))
         }
         if parsed.totalChunks > ChunkedDeliveryConfig.maxChunks {
             return .invalid("total_chunks exceeds max")
         }
-        var entry = pending[parsed.messageId] ?? PendingMessage(
+
+        guard let complete = store.put(
             messageId: parsed.messageId,
+            chunkIndex: parsed.chunkIndex,
             totalChunks: parsed.totalChunks,
             plaintextLength: parsed.plaintextLength,
-            receivedChunks: [:],
-            startTime: Date()
-        )
-        entry.receivedChunks[parsed.chunkIndex] = parsed.payload
-        pending[parsed.messageId] = entry
-        guard entry.isComplete else { return .incomplete }
-        var assembled = Data()
-        for index in 0..<entry.totalChunks {
-            guard let chunk = entry.receivedChunks[index] else { return .incomplete }
-            assembled.append(chunk)
+            contentType: parsed.contentType,
+            payload: parsed.payload,
+            envelopeId: envelopeId,
+            now: now
+        ) else {
+            return .incomplete
         }
-        pending.removeValue(forKey: parsed.messageId)
-        guard entry.plaintextLength <= assembled.count else {
+
+        guard let assembled = complete.assembled() else {
+            store.remove(messageId: parsed.messageId)
             return .invalid("Plaintext length exceeds assembled size")
         }
-        return decodeAssembled(Data(assembled.prefix(entry.plaintextLength)), e2eMessageId: Self.e2eId(from: parsed.messageId))
+        store.remove(messageId: parsed.messageId)
+        return .complete(assembled, e2eMessageId: Self.e2eId(from: parsed.messageId))
     }
 
     /// Normalize a KNST-header UUID to the row-id format (lowercased). Rejects the all-zero
@@ -204,7 +242,9 @@ final class ChunkedMessageReassembler {
         return id == "00000000-0000-0000-0000-000000000000" ? nil : id
     }
 
-    private func decodeAssembled(_ data: Data, e2eMessageId: String?) -> ChunkedMessageResult {
+    /// Decode reassembled plaintext into a message. Internal because SENDER_SYNC calls it itself,
+    /// after taking its routing header off what `assemble` returned.
+    func decodeAssembled(_ data: Data, e2eMessageId: String?) -> ChunkedMessageResult {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
@@ -256,8 +296,9 @@ final class ChunkedMessageReassembler {
         if ProfileShareData.fromBinaryData(data) != nil {
             return .profile(data)
         }
-        // Session control magic: prefix match on bytes (E8) then one UTF-8 decode for handlers.
-        if SessionControlCodec.isLegacyControlPlaintext(data) {
+        // END_SESSION marker: the one control payload that is a magic string rather than a frame,
+        // because it has no ciphertext to carry a frame in.
+        if SessionControlCodec.isEndSessionMarker(data) {
             if let text = String(data: data, encoding: .utf8), !text.isEmpty {
                 return .legacy(text)
             }
@@ -293,80 +334,32 @@ final class ChunkedMessageReassembler {
         }
     }
 
-    /// Legacy path: process a string decrypted with the old base64-KNST format.
-    /// Kept for BackgroundFetchManager compatibility with pre-migration messages.
-    func process(decryptedText: String) -> ChunkedMessageResult {
-        guard let encoded = ChunkedMessageCodec.extractPayloadString(from: decryptedText) else {
-            return .legacy(decryptedText)
-        }
+    // `process(decryptedText:)` and its second pending map were removed on 2026-08-03. The
+    // `KNST1:<base64>` text framing has no producer anywhere in the app — `encodeChunks` has
+    // emitted binary frames throughout — so the path was unreachable, and its private copy of the
+    // pending map was a second store of the one fact `PendingReassemblyStore` now owns.
 
-        guard let data = Data(base64Encoded: encoded) else {
-            Log.info("Chunked prefix found but Base64 decode failed, treating as legacy", category: "ChunkedDelivery")
-            return .legacy(decryptedText)
-        }
-
-        guard let parsed = ChunkedMessageCodec.parseChunk(data: data) else {
-            Log.info("Chunked prefix found but header invalid, treating as legacy", category: "ChunkedDelivery")
-            return .legacy(decryptedText)
-        }
-
-        cleanupExpired()
-
-        if parsed.totalChunks == 1 {
-            let payload = parsed.payload
-            guard parsed.plaintextLength <= payload.count else {
-                return .invalid("Plaintext length exceeds payload size")
-            }
-            let trimmed = payload.prefix(parsed.plaintextLength)
-            guard let text = String(data: trimmed, encoding: .utf8) else {
-                return .invalid("Failed to decode plaintext")
-            }
-            return .assembled(text: text, quoted: nil, e2eMessageId: Self.e2eId(from: parsed.messageId), mediaAlbum: nil, storagePayload: LocalMessagePayload.encodeText(text))
-        }
-
-        if parsed.totalChunks > ChunkedDeliveryConfig.maxChunks {
-            return .invalid("total_chunks exceeds max")
-        }
-
-        var entry = pending[parsed.messageId] ?? PendingMessage(
-            messageId: parsed.messageId,
-            totalChunks: parsed.totalChunks,
-            plaintextLength: parsed.plaintextLength,
-            receivedChunks: [:],
-            startTime: Date()
-        )
-
-        entry.receivedChunks[parsed.chunkIndex] = parsed.payload
-        pending[parsed.messageId] = entry
-
-        guard entry.isComplete else {
-            return .incomplete
-        }
-
-        var assembled = Data()
-        for index in 0..<entry.totalChunks {
-            guard let chunk = entry.receivedChunks[index] else {
-                return .incomplete
-            }
-            assembled.append(chunk)
-        }
-
-        pending.removeValue(forKey: parsed.messageId)
-
-        guard entry.plaintextLength <= assembled.count else {
-            return .invalid("Plaintext length exceeds assembled size")
-        }
-        let trimmed = assembled.prefix(entry.plaintextLength)
-        guard let text = String(data: trimmed, encoding: .utf8) else {
-            return .invalid("Failed to decode assembled plaintext")
-        }
-        return .assembled(text: text, quoted: nil, e2eMessageId: Self.e2eId(from: parsed.messageId), mediaAlbum: nil, storagePayload: LocalMessagePayload.encodeText(text))
+    /// Expiry moved into `PendingReassemblyStore.sweepExpired` on 2026-08-03, together with the
+    /// state it acts on. It reports the same way — ERROR naming the message, how many chunks of
+    /// how many arrived and which indices are missing, plus `chunkReassemblyExpired` — but the
+    /// window is now the store's 24 h retention rather than 60 s: the point of the durable copy is
+    /// to outlive a relaunch, and a one-minute expiry would have thrown it away first.
+    ///
+    /// Test seam kept here for callers that drive expiry directly.
+    func cleanupExpired(now: Date = Date()) {
+        store.sweepExpired(now: now)
     }
+}
 
-    private func cleanupExpired() {
-        let now = Date()
-        pending = pending.filter { now.timeIntervalSince($0.value.startTime) <= ChunkedDeliveryConfig.reassemblyTimeout }
-    }
+/// The framing layer's answer, before anything looks at what was carried.
+enum ChunkedAssembly {
+    /// Every chunk is in. `e2eMessageId` is the sender's message id from the KNST header.
+    case complete(Data, e2eMessageId: String?)
+    /// A chunk landed and more are outstanding.
+    case incomplete
+    /// Not a KNST frame at all — a direct proto or a legacy plain-text payload.
+    case notFramed(Data)
+    case invalid(String)
 }
 
 enum ChunkedMessageResult {
@@ -405,9 +398,13 @@ enum ChunkedMessageCodec {
         let totalChunks: UInt16
         let plaintextLength: Int
         let payload: Data
+        /// Content type recovered from header byte 5 — the authority for what this plaintext is.
+        /// Rides inside the ciphertext, so unlike `SealedInner.content_type` the server cannot
+        /// read it. See decisions/sealed-content-type-inside-the-plaintext-frame.md.
+        let contentType: UInt8
     }
 
-    static func encodeChunks(plaintext: Data, messageId: UUID) -> [Data] {
+    static func encodeChunks(plaintext: Data, messageId: UUID, contentType: UInt8) -> [Data] {
         let payloadSize = ChunkedDeliveryConfig.chunkPayloadSize
         let totalChunks = UInt16((plaintext.count + payloadSize - 1) / payloadSize)
         if totalChunks > ChunkedDeliveryConfig.maxChunks {
@@ -427,7 +424,8 @@ enum ChunkedMessageCodec {
                 messageId: messageId,
                 chunkIndex: UInt16(index),
                 totalChunks: clampedTotal,
-                plaintextLength: plaintext.count
+                plaintextLength: plaintext.count,
+                contentType: contentType
             )
             var frame = Data(capacity: header.count + chunkData.count)
             frame.append(header)
@@ -436,6 +434,38 @@ enum ChunkedMessageCodec {
         }
 
         return payloads
+    }
+
+    /// One frame holding the whole payload, whatever its size (`totalChunks == 1`).
+    ///
+    /// For control carriers — call signal, delivery receipt, ping/ready — which are sent as a
+    /// single message and never split. `encodeChunks` would cut a large SDP offer into several
+    /// frames that these producers have no way to send, so they must not use it.
+    ///
+    /// The frame exists here only to carry `contentType` in byte 5: inside the ciphertext, where
+    /// the server cannot read it, unlike `SealedInner.content_type`.
+    static func frameWhole(_ payload: Data, contentType: UInt8, messageId: UUID) -> Data {
+        var frame = Data(capacity: ChunkedDeliveryConfig.headerSize + payload.count)
+        frame.append(buildHeader(
+            messageId: messageId,
+            chunkIndex: 0,
+            totalChunks: 1,
+            plaintextLength: payload.count,
+            contentType: contentType
+        ))
+        frame.append(payload)
+        return frame
+    }
+
+    /// Read a single-frame control carrier: its content type and its unframed payload.
+    ///
+    /// Returns nil for anything that is not one whole KNST frame — a multi-chunk body belongs to
+    /// the reassembler, and unframed bytes are not ours. This is the sole post-decrypt routing
+    /// input for content types 12 / 14 / 25 / 26; those no longer appear on `SealedInner`.
+    static func controlFrame(_ data: Data) -> (contentType: UInt8, payload: Data)? {
+        guard let parsed = parseChunk(data: data), parsed.totalChunks == 1 else { return nil }
+        guard parsed.plaintextLength <= parsed.payload.count else { return nil }
+        return (parsed.contentType, Data(parsed.payload.prefix(parsed.plaintextLength)))
     }
 
     static func extractPayloadString(from decryptedText: String) -> String? {
@@ -460,6 +490,11 @@ enum ChunkedMessageCodec {
             return nil
         }
 
+        // Byte 5 was `flags`: written 0x00 and never read, so it was free and already on the
+        // wire. It now carries the content type — inside the ciphertext, where the server
+        // cannot reach it, unlike `SealedInner.content_type`.
+        let contentType = data[5]
+
         let messageIdData = data.subdata(in: 6..<22)
         let messageId = UUID(uuid: messageIdData.toUUIDBytes())
 
@@ -473,7 +508,8 @@ enum ChunkedMessageCodec {
             chunkIndex: chunkIndex,
             totalChunks: totalChunks,
             plaintextLength: plaintextLength,
-            payload: payload
+            payload: payload,
+            contentType: contentType
         )
     }
 
@@ -481,12 +517,13 @@ enum ChunkedMessageCodec {
         messageId: UUID,
         chunkIndex: UInt16,
         totalChunks: UInt16,
-        plaintextLength: Int
+        plaintextLength: Int,
+        contentType: UInt8
     ) -> Data {
         var data = Data(capacity: ChunkedDeliveryConfig.headerSize)
         data.append(contentsOf: ChunkedDeliveryConfig.magic)
         data.append(ChunkedDeliveryConfig.version)
-        data.append(ChunkedDeliveryConfig.flags)
+        data.append(contentType)
         data.append(contentsOf: messageId.uuidBytes)
         data.append(contentsOf: chunkIndex.bigEndianBytes)
         data.append(contentsOf: totalChunks.bigEndianBytes)

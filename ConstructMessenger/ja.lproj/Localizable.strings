@@ -3,8 +3,11 @@
 "ok" = "OK";
 "cancel" = "キャンセル";
 "done" = "完了";
+"edit" = "編集";
+"editor_rotate" = "回転";
+"editor_mirror" = "反転";
 "unknown" = "不明";
-"construct_titlte" = "共創";
+"construct_title" = "コンストラクト";
      
 // MARK: - Main Tabs
 "chats" = "チャット";
@@ -68,7 +71,7 @@
 "camera_access_required" = "カメラへのアクセスが必要です";
 "open_settings" = "設定を開く";
 "allow_camera_access_for_qr" = "QRコードをスキャンするために、設定からカメラへのアクセスを許可してください";
-"invalid_qr_code_construct" = "無効なQRコードです。共創の連絡先コードをスキャンしてください。";
+"invalid_qr_code_construct" = "無効なQRコードです。コンストラクトの連絡先コードをスキャンしてください。";
 
 // MARK: - Settings Main
 "user" = "ユーザー";
@@ -123,7 +126,7 @@
 
 // MARK: - Settings -> Appearance
 "theme" = "テーマ";
-"theme_footer" = "共創の外観を選択します。「自動」はシステムの設定に合わせて調整されます。";
+"theme_footer" = "コンストラクトの外観を選択します。「自動」はシステムの設定に合わせて調整されます。";
 "automatic" = "自動";
 "light" = "ライト";
 "dark" = "ダーク";
@@ -161,7 +164,7 @@
 "enable_push_notifications" = "プッシュ通知を有効にする";
 "push_notifications_footer" = "アプリがバックグラウンドにあるときに通知を受け取ります。メッセージはエンドツーエンドで暗号化されたままです。";
 "push_privacy_notice" = "プライバシーに関する注意";
-"push_privacy_notice_text" = "プッシュ通知は暗号化された匿名トークンで配信されます。Constructはメッセージを読んだり、誰と話しているかを特定したりできません。";
+"push_privacy_notice_text" = "プッシュ通知は暗号化された匿名トークンで配信されます。コンストラクトはメッセージを読んだり、誰と話しているかを特定したりできません。";
 "system_notification_settings" = "システムの通知設定";
 "open_system_settings" = "システム設定を開く";
 "system_settings_footer" = "iOSの設定で通知の許可を管理します";
@@ -172,7 +175,7 @@
 "denied" = "拒否";
 
 // MARK: - Background Fetch & Local Notifications
-"construct_app_name" = "共創";
+"construct_app_name" = "コンストラクト";
 "construct_new_message" = "新着メッセージ";
 "construct_new_messages" = "新着メッセージ";
 "construct_new_messages_count" = "%d件の新着メッセージがあります";
@@ -180,8 +183,7 @@
 "construct_sync_completed" = "メッセージの同期完了";
 "construct_sync_completed_count" = "%d件の新着メッセージを同期しました";
 "background_fetch" = "バックグラウンド更新";
-"background_fetch_footer" =
-       "ライブストリームが非アクティブなとき（アプリがバックグラウンドにある場合やネットワークが中断した場合など）、暗号化されたgRPC接続で未読メッセージを定期取得します。プッシュ通知だけに頼らず、受信トレイを最新に保ちます。";
+"background_fetch_footer" = "ライブストリームが非アクティブなとき（アプリがバックグラウンドにある場合やネットワークが中断した場合など）、暗号化されたgRPC接続で未読メッセージを定期取得します。プッシュ通知だけに頼らず、受信トレイを最新に保ちます。";
 "enable_background_fetch" = "バックグラウンド更新を有効にする";
 "background_fetch_status" = "バックグラウンド更新のステータス";
 "background_fetch_disabled" = "無効";
@@ -206,7 +208,7 @@
 "sharing_with_you" = "あなたと共有中";
 "not_sharing_with_you" = "あなたと共有していません";
 "profile_sharing_info" = "アイデンティティ共有について";
-"profile_sharing_info_footer" = "この相手は、暗号化メッセージ経由でアイデンティティ情報（表示名とアバター）を共有できます。これらの情報はConstructに保存されません。";
+"profile_sharing_info_footer" = "この相手は、暗号化メッセージ経由でアイデンティティ情報（表示名とアバター）を共有できます。これらの情報はコンストラクトに保存されません。";
 "share_my_data" = "自分のデータを共有";
 "block_user" = "ユーザーをブロック";
 "unblock_user" = "ユーザーのブロックを解除";
@@ -233,22 +235,19 @@
 "delete_selected" = "選択した項目を削除";
 "message_selected" = "件のメッセージを選択中";
 "messages_selected" = "件のメッセージを選択中";
-"load_older_messages" = "以前のメッセージを読み込む";
 "reachable" = "接続可能";
 "unreachable" = "接続不可";
 "delete_my_account" = "アイデンティティを削除";
-"delete_account_warning" = "Constructからあなたのアイデンティティを永久に削除します。削除が成功すると、このデバイスからすべてのローカル暗号化キーとアプリデータが自動的に消去されます。";
+"delete_account_warning" = "コンストラクトからあなたのアイデンティティを永久に削除します。削除が成功すると、このデバイスからすべてのローカル暗号化キーとアプリデータが自動的に消去されます。";
 "delete_account_warning_title" = "アイデンティティを削除しますか？";
-"delete_account_warning_message" =
-       "これにより、Constructからあなたのアイデンティティが永久に削除されます。Constructが削除を確認すると、このデバイス上のすべてのローカルキーとデータが自動的に消去されます。この操作は取り消せません。";
-"delete_account_confirmation_message" = "最終確認：あなたのアイデンティティはConstructから削除され、確認後にすべてのローカル暗号化キーが消去されます。この操作は元に戻せません。";
-"delete_account_irreversible_warning" = "この操作は元に戻せません。すべてのデータはConstructから永久に削除され、復元できません。";
+"delete_account_warning_message" = "これにより、コンストラクトからあなたのアイデンティティが永久に削除されます。コンストラクトが削除を確認すると、このデバイス上のすべてのローカルキーとデータが自動的に消去されます。この操作は取り消せません。";
+"delete_account_confirmation_message" = "最終確認：あなたのアイデンティティはコンストラクトから削除され、確認後にすべてのローカル暗号化キーが消去されます。この操作は元に戻せません。";
+"delete_account_irreversible_warning" = "この操作は元に戻せません。すべてのデータはコンストラクトから永久に削除され、復元できません。";
 "delete_account" = "アイデンティティを削除";
 "delete_account_countdown" = "%d秒後に削除";
 "delete_account_local_only" = "ローカルデータのみ削除";
 "delete_account_local_only_title" = "ローカルデータのみ削除しますか？";
-"delete_account_local_only_warning" =
-       "ネットワークリクエストが失敗した場合、Construct上のアイデンティティは残る可能性があります。このデバイス上のローカル暗号化キーとアプリデータはすべて永久に削除されます。";
+"delete_account_local_only_warning" = "ネットワークリクエストが失敗した場合、コンストラクト上のアイデンティティは残る可能性があります。このデバイス上のローカル暗号化キーとアプリデータはすべて永久に削除されます。";
 "delete_account_local_only_confirm" = "ローカルで削除";
 "warning" = "警告";"DANGER_ZONE" = "危険地帯";
 "account_recovery" = "アイデンティティ復旧";
@@ -266,7 +265,7 @@
 "duress_pin_change" = "破壊PINを変更";
 "create_duress_pin" = "破壊PINを作成";
 "confirm_duress_pin" = "破壊PINを確認";
-"duress_pin_setup_warning" = "ロック画面でこのPINを入力すると、すべてのローカルデータが密かに消去され、Constructからのアイデンティティ削除が試行されます。この操作は取り消せません。";
+"duress_pin_setup_warning" = "ロック画面でこのPINを入力すると、すべてのローカルデータが密かに消去され、コンストラクトからのアイデンティティ削除が試行されます。この操作は取り消せません。";
 "duress_pin_matches_main" = "破壊PINをメインのPINと同じにすることはできません。別のコードを選択してください。";
 "duress_pin_disable_warning" = "破壊PINが削除されます。ロック画面でのサイレント消去は実行されなくなります。";
 "duress_pin_requires_main_pin" = "破壊PINを使用するには、まずメインのPINを有効にしてください。";
@@ -297,9 +296,9 @@
 "scroll_to_bottom" = "最新へ戻る";
 
 // Network Settings
-"server" = "Construct";
+"server" = "サーバー";
 "port" = "ポート";
-"server_applied_title" = "Construct接続先を更新しました";
+"server_applied_title" = "コンストラクト接続先を更新しました";
 "server_applied_message" = "今後のすべての接続で新しいgRPC接続先を使用します。";
 "close" = "閉じる";
 "chat_nav_back" = "戻る";
@@ -313,9 +312,9 @@
 "onboarding_existing_title" = "既存のアイデンティティを使う";
 "onboarding_existing_intro" = "このデバイスへ持ち込む方法を選んでください。";
 "onboarding_restore_title" = "復旧フレーズから復元";
-"onboarding_restore_subtitle" = "共創のある他のデバイスがない場合。12語のフレーズを使います。";
+"onboarding_restore_subtitle" = "コンストラクトのある他のデバイスがない場合。12語のフレーズを使います。";
 "onboarding_link_title" = "このデバイスを連携";
-"onboarding_link_subtitle" = "別のスマホやパソコンに共創が残っている場合。";
+"onboarding_link_subtitle" = "別のスマホやパソコンにコンストラクトが残っている場合。";
 "onboarding_restore" = "復旧キーから復元";
 "onboarding_recovery_coming_soon" = "復旧機能は近日公開";
 "onboarding_network_settings" = "ネットワーク設定";
@@ -324,10 +323,10 @@
 "orientation_section_label" = "> orientation";
 "orientation_skip" = "スキップ";
 "orientation_next" = "続ける";
-"orientation_enter" = "共創に入る";
+"orientation_enter" = "コンストラクトに入る";
 "orientation_or" = "または";
 "orientation_page_a11y" = "%d / %d ページ";
-"orientation_settings_replay" = "共創の使い方";
+"orientation_settings_replay" = "コンストラクトの使い方";
 "orientation_page1_title" = "アイデンティティ";
 "orientation_page1_body" = "電話番号もメールも本名も不要。アイデンティティはこの端末上でゼロから作られ、外の何ものも指し示しません。ここでの自分は、自分で作るものです。";
 "orientation_page1_caption" = "公開 @エイリアスは任意。鍵はこの端末から出ません。";
@@ -336,7 +335,7 @@
 "orientation_page2_body" = "相手を追加するには QR を見せるかリンクを共有します。@エイリアス検索は、相手がセキュリティでオンにした場合だけ（既定はオフ）。";
 "orientation_page2_caption" = "同意なしにメッセージは届きません。";
 "orientation_page2_path_qr_title" = "QR / リンク";
-"orientation_page2_path_qr_sub" = "見せる・スキャン。有効 5 分。";
+"orientation_page2_path_qr_sub" = "見せる・スキャン。どのコードも一度きり。";
 "orientation_page2_path_search_title" = "検索";
 "orientation_page2_path_search_sub" = "セキュリティでオンにした相手のみ。";
 "orientation_page3_title" = "3 つの場所";
@@ -459,7 +458,7 @@
 
 // 検閲対策（本番向け soft-control — VEIL / リレー住所は出さない）
 "censorship_protection" = "検閲対策";
-"censorship_protection_footer_off" = "オフ。Constructへ直接接続します。";
+"censorship_protection_footer_off" = "オフ。コンストラクトへ直接接続します。";
 "censorship_protection_footer_auto" = "遮断が検出されると自動で有効になります。設定はバックグラウンドで行われます。";
 "censorship_protection_footer_on" = "常にネットワーク遮断を回避します。設定はバックグラウンドで行われます。";
 
@@ -477,9 +476,7 @@
 // Data & Storage
 "data_and_storage" = "データとストレージ";
 "storage_media_cache" = "メディアキャッシュ";
-"storage_media_cache_footer" =
-       "キャッシュされたメディアファイルにより、再ダウンロードせずに写真やファイルをすぐに表示できます。システムのキャッシュフォルダに保存され、ストレージが少なくなるとiOSによって自動的に消去される場合があります。"
-       ;
+"storage_media_cache_footer" = "キャッシュされたメディアファイルにより、再ダウンロードせずに写真やファイルをすぐに表示できます。システムのキャッシュフォルダに保存され、ストレージが少なくなるとiOSによって自動的に消去される場合があります。";
 "media_cache" = "メディアキャッシュ";
 "storage_of_quota" = "%2$@中%1$@使用";
 "storage_clearing" = "消去中...";
@@ -537,7 +534,6 @@
 
 // MARK: - QR Code
 "code_expired" = "コードの期限が切れました";
-"generate_new_code" = "新しいコードを生成";
 "expires_in" = "有効期限: %@";
 
 // MARK: - Settings & Diagnostics
@@ -551,10 +547,10 @@
 "diagnostics_apns_token" = "APNsトークン";
 "diagnostics_apns_token_missing" = "未取得";
 "diagnostics_apns_token_received_format" = "取得済み (%@…)";
-"diagnostics_registered_with_server" = "Constructへの登録";
+"diagnostics_registered_with_server" = "コンストラクトへの登録";
 "diagnostics_yes" = "はい";
 "diagnostics_not_registered_with_server" = "いいえ — 通知は届きません";
-"diagnostics_server_token_warning" = "トークンがConstructに登録されていません。チャット画面に戻ると、アプリがアクティブになったタイミングで自動再登録します。";
+"diagnostics_server_token_warning" = "トークンがコンストラクトに登録されていません。チャット画面に戻ると、アプリがアクティブになったタイミングで自動再登録します。";
 "diagnostics_log_collection" = "ログ収集";
 "diagnostics_status_active" = "有効";
 "diagnostics_status_off" = "無効";
@@ -594,17 +590,17 @@
 
 // MARK: - Device Join Request (Desktop onboarding)
 "device_link_request_title" = "既存のアイデンティティに連携";
-"device_link_request_instruction" = "iPhoneの共創でこのコードをスキャンしてください";
-"device_link_request_steps" = "iPhoneで共創を開き、設定 → 連携済みデバイス → 「新しいデバイスを連携」を選択して、このコードをスキャンしてください。";
+"device_link_request_instruction" = "iPhoneのコンストラクトでこのコードをスキャンしてください";
+"device_link_request_steps" = "iPhoneでコンストラクトを開き、設定 → 連携済みデバイス → 「新しいデバイスを連携」を選択して、このコードをスキャンしてください。";
 "device_link_waiting_approval" = "iPhoneでの承認を待機中...";
-"device_link_scan_on_phone" = "iPhoneの共創でこのコードをスキャンしてください";
+"device_link_scan_on_phone" = "iPhoneのコンストラクトでこのコードをスキャンしてください";
 "device_link_request_timeout" = "連携リクエストがタイムアウトしました。もう一度お試しください。";
-"device_link_feature_unavailable" = "この機能にはConstruct側のアップデートが必要です。後でもう一度お試しください。";
-"device_link_invalid_qr" = "無効なQRコードです。共創のリンク用コードをスキャンしていることを確認してください。";
+"device_link_feature_unavailable" = "この機能にはコンストラクト側のアップデートが必要です。後でもう一度お試しください。";
+"device_link_invalid_qr" = "無効なQRコードです。コンストラクトのリンク用コードをスキャンしていることを確認してください。";
 "device_link_approve_title" = "\"%@\" をアイデンティティに連携しますか？";
 "device_link_approve_title_fallback" = "新しいデバイスをアイデンティティに連携しますか？";
 "device_link_approve" = "デバイスを連携";
-"device_link_approve_message" = "このデバイスは、あなたの共創アイデンティティにフルアクセスできます。";
+"device_link_approve_message" = "このデバイスは、あなたのコンストラクトアイデンティティにフルアクセスできます。";
 "device_link_approved_title" = "デバイスを連携しました";
 "device_link_approved_message" = "デバイスが正常にアイデンティティに連携されました。";
 
@@ -696,9 +692,6 @@
 "call_dismiss" = "閉じる";
 "call_call_back" = "折り返し";
 "share" = "共有";
-"show_qr_code" = "QRコードを表示";
-"copy_contact_link" = "連絡先リンクをコピー";
-"link_copied" = "リンクをコピーしました";
 "recovery_not_configured_title" = "復旧未設定";
 "developer" = "開発者";
 "change_photo" = "写真を変更";
@@ -726,8 +719,7 @@
 // MARK: - Keys Recovery
 "keys_recovery_title" = "デバイスキーを利用できません";
 "keys_recovery_warning_title" = "⚠ 暗号化キーが見つかりません";
-"keys_recovery_warning_body" =
-       "キーチェーンからデバイスの暗号化キーを読み込めませんでした。一時的なシステム問題か、キーが失われた可能性があります。\n\n解決するまで、メッセージやセッションにアクセスできません。";
+"keys_recovery_warning_body" = "キーチェーンからデバイスの暗号化キーを読み込めませんでした。一時的なシステム問題か、キーが失われた可能性があります。\n\n解決するまで、メッセージやセッションにアクセスできません。";
 "keys_recovery_section_retry" = "再試行";
 "keys_recovery_retry_hint" = "システムの問題により、キーが一時的に利用できない場合があります。再読み込みをお試しください。";
 "keys_recovery_retry_action" = "キーチェーンの読み込みを再試行 [→]";
@@ -763,8 +755,7 @@
 
 // MARK: - Discoverable / User Search
 "searchable_toggle_title" = "ユーザー名で検索可能";
-"searchable_toggle_footer" =
-       "有効にすると、正確なユーザー名を知っている人があなたを見つけられます。ユーザー名の推測や列挙はできず、完全一致の場合のみ機能します。既定ではオフです。";
+"searchable_toggle_footer" = "有効にすると、正確なユーザー名を知っている人があなたを見つけられます。ユーザー名の推測や列挙はできず、完全一致の場合のみ機能します。既定ではオフです。";
 "searchable_confirm_title" = "検索を有効にしますか？";
 "searchable_confirm_message" = "あなたのユーザー名を正確に入力した人は、誰でもあなたを見つけることができるようになります。セキュリティ設定でいつでも無効にできます。";
 "searchable_confirm_action" = "有効にする";
@@ -772,7 +763,7 @@
 "username_not_set" = "ユーザー名未設定";
 "searchable_indicator" = "[⊙] 検索可能";
 "searchable_indicator_off" = "[ ] 検索可能";
-"synapses_remote_result_header" = "共創で見つかりました";
+"synapses_remote_result_header" = "コンストラクトで見つかりました";
 "synapses_searching" = "検索中...";
 "synapses_not_found" = "見つかりませんでした";
 
@@ -804,14 +795,8 @@
 
 // Stealth mode
 "stealth_section" = "ステルス";
-"stealth_toggle_title" = "ステルスモード";
-"stealth_toggle_active_hint" = "常時有効 — 送信者のアイデンティティは共創から隠されています";
-"stealth_hint" = "送信者のアイデンティティは共創に開示されません。メッセージは匿名トークン経由でルーティングされ、共創は送信トラフィックをあなたのアイデンティティに関連付けられません。";
 
 // Short labels for CTModeSelector
-"stealth_token_wallet" = "トークンウォレット";
-"stealth_token_count" = "%d個のトークン";
-"stealth_token_wallet_hint" = "各メッセージには匿名のprivacy passトークンが付きます。ウォレットは送信に応じて自動補充されます（最初のバッチは登録時に作成）。空のウォレットがあなたを明かすことはありません — トークンは共創をスパムから守るためのものです。";
 
 // Key Transparency
 "kt_section" = "キーの透明性";
@@ -872,8 +857,7 @@
 
 "backup_export_title" = "バックアップをエクスポート";
 "backup_warning_header" = "続行する前に";
-"backup_export_warning" =
-       "すべてのメッセージとキーを暗号化バックアップとして作成します。ファイルは12語の復旧フレーズで保護されるため、必ず書き留めて安全に保管してください。\n\nバックアップファイルと復旧フレーズは別々に保管してください。";
+"backup_export_warning" = "すべてのメッセージとキーを暗号化バックアップとして作成します。ファイルは12語の復旧フレーズで保護されるため、必ず書き留めて安全に保管してください。\n\nバックアップファイルと復旧フレーズは別々に保管してください。";
 "backup_mnemonic_warning" = "⚠ 復旧フレーズを紛失すると、バックアップを復号できません。救済策はありません。";
 "backup_generate_button" = "復旧フレーズを生成 [→]";
 "backup_mnemonic_title" = "復旧フレーズ";
@@ -898,7 +882,7 @@
 "backup_restore_success_message" = "バックアップが検証され、準備が整いました。アプリを閉じて再度開くと、復元が完了します。";
 
 "backup_error_invalid_mnemonic" = "復旧フレーズが無効です。12語すべてを確認して、もう一度お試しください。";
-"backup_error_invalid_file" = "これは有効な共創バックアップではないか、復旧フレーズが正しくありません。";
+"backup_error_invalid_file" = "これは有効なコンストラクトバックアップではないか、復旧フレーズが正しくありません。";
 
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "近くのデバイスに送信";
@@ -969,7 +953,7 @@
 "delete_locally_only" = "ローカルのみ削除（オフライン）";
 "delete_locally_question" = "ローカルで削除しますか？";
 "delete_locally_action" = "ローカルで削除";
-"delete_locally_message" = "これによりローカルデータがすべて削除されます。ネットワークリクエストに失敗した場合、Construct上のアイデンティティは残る可能性があります。";
+"delete_locally_message" = "これによりローカルデータがすべて削除されます。ネットワークリクエストに失敗した場合、コンストラクト上のアイデンティティは残る可能性があります。";
 "stt_section_title" = "文字起こし";
 "stt_auto_transcribe" = "音声メッセージを自動文字起こし";
 "stt_translate_toggle" = "英語に翻訳";
@@ -1051,7 +1035,7 @@
 
 // MARK: - Link device method picker
 "link_method_title" = "デバイスを連携";
-"link_method_intro" = "既存の共創アイデンティティにこのデバイスを追加します。カメラを向けやすい方のデバイスを選んでください。";
+"link_method_intro" = "既存のコンストラクトアイデンティティにこのデバイスを追加します。カメラを向けやすい方のデバイスを選んでください。";
 "link_method_scan_title" = "コードをスキャン";
 "link_method_scan_subtitle" = "もう一方のデバイスがQRコードを表示";
 "link_method_show_title" = "コードを表示";
@@ -1098,3 +1082,70 @@
 "liquid_logo.haptics" = "触覚";
 "liquid_logo.replay" = "再生";
 "liquid_logo.hint" = "画面をタップして再生";
+
+
+// Synced with en.lproj 2026-08-16.
+"invite_error_invalid_url" = "指定されたURLが無効です。";
+"invite_error_unsupported_link" = "コンストラクトの招待リンクではありません。";
+"invite_error_expired" = "この招待は期限切れです。新しいものをもらってください。";
+"invite_error_invalid_fmt" = "無効な招待：%@";
+"invite_error_already_used" = "この招待は使用済みです。新しいものをもらってください。";
+"invite_error_verification_failed_fmt" = "招待を確認できませんでした：%@";
+"invite_error_legacy_unsupported" = "このリンク形式はサポートされなくなりました。新しい招待QRかリンクをもらってください。";
+"invite_error_malformed" = "招待データが壊れています";
+"invite_redeem_safety_message" = "招待から連絡先を追加しました。名前は相手が共有すると表示されます。";
+"invite_redeem_safety_block" = "ブロック";
+"invite_accepted_inviter_message" = "あなたの招待から誰かがつながりました。";
+"media_autodownload" = "メディアの自動ダウンロード";
+"media_autodownload_never" = "しない";
+"media_autodownload_unmetered" = "Wi-Fiのみ";
+"media_autodownload_always" = "常に";
+"media_autodownload_footer" = "添付ファイルはメッセージの到着時に取得されます。サーバーはファイルを7日間だけ保持するため、1週間開かなかったチャットのメディアは後からダウンロードできません。";
+"diagnostics_force_silent_reinit" = "サイレント再初期化（相手には通知しない）";
+"diagnostics_replace_otpk_pool" = "OTPKプールを置き換え（一度きりの復旧）";
+"diagnostics_silent_reinit_footer" = "END_SESSIONを送らずにINITIATORとしてセッションを作り直すため、相手は古いセッションを保持したままになります。次のメッセージは既存セッション上のX3DHキャリアとして届きます。実行後は2通送ってください。PQ寄与が対称に混ざったことを示すのは2通目です。";
+"stealth_title" = "送信者の匿名性";
+"stealth_always_on_hint" = "コンストラクトが、誰がメッセージを送ったのかを知ることはありません。常時有効です — 切り替えるものはなく、補充も必要ありません。";
+"stealth_off_hint" = "オフ — 送信すると、あなたが誰であるかがコンストラクトに開示されます。デバッグ用の上書きのみ。";
+"key_change_banner_title" = "セキュリティキーが変わりました";
+"key_change_banner_title_failed" = "アイデンティティを確認できません";
+"key_change_banner_subtitle_fmt" = "%@のセキュリティキーが以前と異なります。このチャットを信頼する前に安全番号を照合してください。";
+"key_change_banner_subtitle_failed" = "この相手のセキュリティキーを透明性ログで確認できませんでした。可能であれば対面で確認してください。";
+"key_change_verify" = "照合";
+"key_change_accept" = "新しいキーを承認";
+"key_change_toast_fmt" = "%@のセキュリティキーが変わりました。チャットを開いて照合してください。";
+"key_change_toast_open" = "開く";
+"identity_fingerprint" = "フィンガープリント";
+"identity_fingerprint_unknown" = "まだ固定されていません";
+"identity_fingerprint_copy_hint" = "フィンガープリントをクリップボードにコピーします";
+"identity_fingerprint_copied" = "コピーしました";
+"file" = "ファイル";
+"system_session_out_of_sync" = "この相手との暗号化セッションがずれています。再確立するまで新しいメッセージは読めません。";
+"msg_status_sending" = "送信中";
+"msg_status_sent" = "送信済み";
+"msg_status_delivered" = "配信済み";
+"msg_status_queued" = "順番待ち（相手がオフライン）";
+"msg_status_failed" = "送信できませんでした";
+"invite_create_failed" = "招待を作成できませんでした。もう一度お試しください。";
+"share_copied" = "コピーしました";
+"qr_new_code" = "新しいコード";
+"invite_copy_link" = "リンクをコピー";
+"invite_copied_nth_fmt" = "コピーしました・%d";
+"invite_share_rule_fmt" = "タップするたびに新しいリンクが作られ、コードは自動で更新されます。どの招待も一度きりで、%@で期限切れになります。";
+"issued_invites" = "発行した招待";
+"issued_invites_hint_fmt" = "このデバイスから直近%@に発行したものです。他のデバイスは別のリストを持ちます。";
+"issued_invites_empty_fmt" = "このデバイスから直近%@に発行したものはありません。";
+"issued_invite_link" = "リンク";
+"issued_invite_qr_fmt" = "QRコード・%d";
+"issued_invite_expires_fmt" = "残り%@";
+"revoke" = "取り消す";
+"invite_revoked" = "取り消しました。このリンクはもう使えません。";
+"invite_already_used" = "使用済みです — このリンクは誰かが使いました。";
+"invite_revoke_unconfirmed" = "確認できませんでした。リンクはまだ有効かもしれません。もう一度お試しください。";
+"invite_revoke_confirm_title" = "このリンクを取り消しますか？";
+"invite_revoke_confirm_message" = "リンクを持っている人には、予告なく使えなくなります。新しいリンクはいつでもコピーできます。";
+"issued_invites_revoke_scope" = "リンクは取り消せます。QRコードは期限が切れると自動で使えなくなります。";
+"scroll_to_newest" = "最新のメッセージへ";
+
+"diagnostics_owned_inset_title" = "自前インセットの履歴";
+"diagnostics_owned_inset_hint" = "UIKit のスクロールコンテナ。次に開くチャットから適用されます。";

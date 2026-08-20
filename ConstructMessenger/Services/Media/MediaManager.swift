@@ -35,9 +35,18 @@ class MediaManager {
     static let defaultMaxDiskCacheBytes: Int = 1_073_741_824
 
     // MARK: - In-Memory Cache
-    
-    /// Cache for downloaded/decrypted media to avoid re-downloading
-    private var mediaCache: [String: Data] = [:]
+
+    /// Cost-limited cache of decrypted media. Prefer `NSCache` over a `Dictionary`:
+    /// it evicts under pressure and enforces `totalCostLimit`. A plain dict only refused
+    /// *new* inserts at 50 MB and never dropped old ones — build 586 still held an 11.8 MB
+    /// video in RAM while resident climbed toward ~460 MB hopping between media chats.
+    private let mediaCache = NSCache<NSString, NSData>()
+    /// Soft ceiling for a single in-memory entry. Bigger blobs stay **disk-only** (videos,
+    /// original HEIC/PNG). Display paths that need the full bytes re-read from disk.
+    nonisolated static let maxMemoryItemBytes = 2 * 1024 * 1024
+    /// Aggregate cost limit for `mediaCache` (bytes).
+    private static let maxMemoryCacheBytes = 32 * 1024 * 1024
+
     /// Deduplicates concurrent fetches for the same media ID while the first request is in flight.
     private var inFlightDownloads: [String: Task<Data, Error>] = [:]
     /// Media IDs the server reported as gone (expired past retention / never existed), with the
@@ -47,31 +56,106 @@ class MediaManager {
     private var notFoundMedia: [String: Date] = [:]
     /// How long a not-found verdict is trusted before a re-check is allowed.
     private static let notFoundTTL: TimeInterval = 30 * 60
-    private let maxCacheSize = 50 * 1024 * 1024  // 50 MB
-    private var currentCacheSize = 0
 
     // MARK: - Persistent Disk Cache
 
-    /// Library/Caches/media/ — survives app updates, can be evicted by OS under disk pressure
-    private let diskCacheDirectory: URL = {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        let dir = caches.appendingPathComponent("media", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    /// `Application Support/media/` — the user's copy of everything they have received.
+    ///
+    /// This lived in `Library/Caches/media/` until 2026-08-11, which was wrong in a way that only
+    /// shows up as a photo that is simply not there any more. iOS purges Caches whenever the disk
+    /// gets tight, without telling the app, and the server drops an uploaded object 7 days after
+    /// upload regardless of downloads. Those two facts compose: on day nine, a system purge takes
+    /// the last copy in existence.
+    ///
+    /// Application Support is not purged. See `MediaEvictionPolicy` for the other half — our own
+    /// quota sweep was deleting oldest-first, i.e. exactly the files that could never come back.
+    private let mediaDirectory: URL = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dir = base.appendingPathComponent("media", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: dir,
+            withIntermediateDirectories: true,
+            // Matches the Core Data store (PersistenceController) and MessageKeyStore: readable
+            // after the first unlock so a background push can decrypt and attach media, but not
+            // while the device has never been unlocked since boot.
+            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+        )
+        // Caches is never included in an iCloud backup, so simply moving the directory would have
+        // started shipping plaintext photos to iCloud as a side effect of a durability fix. That is
+        // a privacy change and it is not this one's to make: excluded, so the posture is unchanged.
+        // COST, stated because it is real: restoring the device to a new phone does not bring media
+        // with it. Revisit only as a deliberate decision, with the at-rest encryption question
+        // answered first.
+        var mutable = dir
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? mutable.setResourceValues(values)
         return dir
     }()
 
+    /// Where media used to live. Read-only now: drained by `migrateMediaOutOfCaches()` at launch
+    /// and opportunistically on read, exactly like ThumbnailStore.
+    private let legacyCacheDirectory: URL = {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        return caches.appendingPathComponent("media", isDirectory: true)
+    }()
+
     private func diskCacheURL(for mediaId: String) -> URL {
-        diskCacheDirectory.appendingPathComponent(mediaId)
+        mediaDirectory.appendingPathComponent(mediaId)
     }
 
     private func saveToDiskcache(_ data: Data, mediaId: String) {
         let url = diskCacheURL(for: mediaId)
-        try? data.write(to: url, options: .atomic)
+        try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 
     private func loadFromDiskCache(mediaId: String) -> Data? {
-        let url = diskCacheURL(for: mediaId)
-        return try? Data(contentsOf: url)
+        if let data = try? Data(contentsOf: diskCacheURL(for: mediaId)) { return data }
+
+        // Not migrated yet. Move it rather than copy: two copies of a video is not a rounding error.
+        let legacy = legacyCacheDirectory.appendingPathComponent(mediaId)
+        guard let data = try? Data(contentsOf: legacy) else { return nil }
+        try? FileManager.default.moveItem(at: legacy, to: diskCacheURL(for: mediaId))
+        return data
+    }
+
+    /// Moves everything still sitting in `Library/Caches/media/` into the durable store.
+    ///
+    /// Bulk *and* on-read (above), for the reason the thumbnail migration needed both: a rule that
+    /// only runs when someone asks for a specific file never reaches the files nobody opens — and
+    /// those are precisely the ones a system purge takes without anyone noticing.
+    @discardableResult
+    func migrateMediaOutOfCaches() -> (files: Int, bytes: Int64) {
+        let fm = FileManager.default
+        guard let entries = try? fm.contentsOfDirectory(
+            at: legacyCacheDirectory, includingPropertiesForKeys: [.fileSizeKey]
+        ), !entries.isEmpty else { return (0, 0) }
+
+        var moved = 0
+        var bytes: Int64 = 0
+        for source in entries {
+            let destination = mediaDirectory.appendingPathComponent(source.lastPathComponent)
+            let size = Int64((try? source.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            if fm.fileExists(atPath: destination.path) {
+                try? fm.removeItem(at: source)       // already migrated; drop the duplicate
+                continue
+            }
+            do {
+                try fm.moveItem(at: source, to: destination)
+                try? fm.setAttributes(
+                    [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                    ofItemAtPath: destination.path
+                )
+                moved += 1
+                bytes += size
+            } catch {
+                Log.error("Media migration failed for \(source.lastPathComponent.prefix(8))…: \(error)", category: "MediaManager")
+            }
+        }
+        if moved > 0 {
+            Log.info("Media migration: \(moved) file(s), \(bytes / 1024)KB moved out of Caches", category: "MediaManager")
+        }
+        return (moved, bytes)
     }
 
     // MARK: - Cache Management
@@ -79,7 +163,7 @@ class MediaManager {
     /// Total bytes used by the disk cache.
     func diskCacheSize() -> Int64 {
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: diskCacheDirectory,
+            at: mediaDirectory,
             includingPropertiesForKeys: [.fileSizeKey]
         ) else { return 0 }
         return files.reduce(Int64(0)) { total, url in
@@ -88,44 +172,76 @@ class MediaManager {
         }
     }
 
-    /// Evict oldest files (by modification date) until cache is under quota.
+    /// Free space up to the quota, deleting only media that could still be fetched again.
+    ///
+    /// This used to be plain LRU — oldest first — which on a store whose contents expire server-side
+    /// after 7 days meant it deleted the irreplaceable files and kept the replaceable ones. Exactly
+    /// backwards. `MediaEvictionPolicy` holds the reasoning; the short version is that the only
+    /// thing we know is when *we* downloaded a file, and that is enough to prove the server copy is
+    /// gone, never that it is still there.
     private func evictToQuota() {
         let maxBytes = UserDefaults.standard.object(forKey: Self.maxDiskCacheBytesKey) as? Int
             ?? Self.defaultMaxDiskCacheBytes
         guard maxBytes > 0 else { return } // 0 = unlimited
 
-        var currentSize = diskCacheSize()
-        guard currentSize > Int64(maxBytes) else { return }
+        let totalSize = diskCacheSize()
+        guard totalSize > Int64(maxBytes) else { return }
 
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: diskCacheDirectory,
+            at: mediaDirectory,
             includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey]
         ) else { return }
 
-        let sorted = files.sorted {
-            let aDate = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            let bDate = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            return aDate < bDate
+        let now = Date()
+        let candidates = files.map { url -> (id: String, bytes: Int64, secondsSinceDownload: TimeInterval) in
+            let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+            let modified = values?.contentModificationDate ?? .distantPast
+            return (
+                id: url.lastPathComponent,
+                bytes: Int64(values?.fileSize ?? 0),
+                secondsSinceDownload: now.timeIntervalSince(modified)
+            )
         }
 
-        for file in sorted {
-            guard currentSize > Int64(maxBytes) else { break }
-            let size = Int64((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
-            try? FileManager.default.removeItem(at: file)
-            mediaCache.removeValue(forKey: file.lastPathComponent)
-            currentSize -= size
-            Log.debug("Evicted \(file.lastPathComponent.prefix(8))… (\(size / 1024)KB) — quota", category: "MediaManager")
+        let doomed = MediaEvictionPolicy.filesToEvict(
+            candidates: candidates, totalBytes: totalSize, quotaBytes: Int64(maxBytes)
+        )
+        var freed: Int64 = 0
+        for id in doomed {
+            let url = mediaDirectory.appendingPathComponent(id)
+            freed += Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            try? FileManager.default.removeItem(at: url)
+            mediaCache.removeObject(forKey: id as NSString)
+        }
+
+        if totalSize - freed > Int64(maxBytes) {
+            // Over quota with nothing safe left to delete. Reported rather than resolved: the rest
+            // exists only here, and a full disk is a problem the user can see and act on where a
+            // missing photo is not. If this line ever shows up in the field it is the signal that
+            // storage management has to become a user-facing choice, not a silent sweep.
+            Log.info(
+                "Media store over quota by \(((totalSize - freed) - Int64(maxBytes)) / 1024)KB — remaining files are past server retention and are the only copies",
+                category: "MediaManager"
+            )
+        } else if !doomed.isEmpty {
+            Log.info("Evicted \(doomed.count) re-downloadable file(s), \(freed / 1024)KB — quota", category: "MediaManager")
         }
     }
 
     /// Evict files older than the configured number of days. Call on app foreground.
+    ///
+    /// Note what this deletes now that the store is durable: files old enough to be past the
+    /// server's retention, i.e. the ones that exist nowhere else. That is the opposite of
+    /// `evictToQuota`'s rule, and deliberately so — this one only runs when the user has set a
+    /// number of days in settings, which is them saying "I do not want media older than this".
+    /// It defaults to 0 (off) and must stay that way.
     func evictOldFiles() {
         let days = UserDefaults.standard.object(forKey: Self.evictAfterDaysKey) as? Int ?? 0
         guard days > 0 else { return }
         let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
 
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: diskCacheDirectory,
+            at: mediaDirectory,
             includingPropertiesForKeys: [.contentModificationDateKey]
         ) else { return }
 
@@ -134,7 +250,7 @@ class MediaManager {
             let mod = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantFuture
             if mod < cutoff {
                 try? FileManager.default.removeItem(at: file)
-                mediaCache.removeValue(forKey: file.lastPathComponent)
+                mediaCache.removeObject(forKey: file.lastPathComponent as NSString)
                 count += 1
             }
         }
@@ -142,8 +258,62 @@ class MediaManager {
             Log.info("Evicted \(count) cached file(s) older than \(days) days", category: "MediaManager")
         }
     }
-    
-    private init() {}
+
+    /// Whether a decrypted blob is small enough to keep in RAM. Pure / nonisolated so tests
+    /// and callers can decide without hopping onto the main actor.
+    nonisolated static func shouldCacheInMemory(
+        byteCount: Int,
+        maxItemBytes: Int = maxMemoryItemBytes
+    ) -> Bool {
+        byteCount > 0 && byteCount <= maxItemBytes
+    }
+
+    private func memoryCachedData(for mediaId: String) -> Data? {
+        mediaCache.object(forKey: mediaId as NSString) as Data?
+    }
+
+    private func storeInMemoryCache(_ data: Data, mediaId: String) {
+        guard Self.shouldCacheInMemory(byteCount: data.count) else {
+            Log.debug(
+                "Skip memory cache for \(mediaId.prefix(8))… (\(data.count / 1024)KB > \(Self.maxMemoryItemBytes / 1024)KB) — disk only",
+                category: "MediaManager"
+            )
+            return
+        }
+        mediaCache.setObject(data as NSData, forKey: mediaId as NSString, cost: data.count)
+    }
+
+    private func clearMemoryCache(reason: String) {
+        mediaCache.removeAllObjects()
+        Log.info("Media memory cache cleared (\(reason))", category: "MediaManager")
+    }
+
+    private init() {
+        mediaCache.totalCostLimit = Self.maxMemoryCacheBytes
+        mediaCache.countLimit = 64
+        mediaCache.name = "MediaManager.mediaCache"
+        #if canImport(UIKit)
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.clearMemoryCache(reason: "memory_warning")
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Disk cache remains; drop RAM so background jetsam is less likely after a media chat.
+            Task { @MainActor in
+                self?.clearMemoryCache(reason: "background")
+            }
+        }
+        #endif
+    }
     
     // MARK: - Upload Operations
     
@@ -171,10 +341,7 @@ class MediaManager {
         // Upload with 1 automatic retry on stream failure
         let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType, onProgress: onProgress)
         Log.info("Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
-        // Cache the full plaintext locally so the SENDER sees full quality (bubble +
-        // gallery) without re-downloading their own upload.
-        cacheSentMedia(optimized.data, mediaId: uploadResult.mediaId)
-        
+
         let width = optimized.metadata.width
         let height = optimized.metadata.height
         let blurhash = BlurHash.encode(image)
@@ -211,10 +378,12 @@ class MediaManager {
         }
         let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType, onProgress: onProgress)
         Log.info("Original image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
-        // Cache the full original locally so the SENDER sees full quality offline.
-        cacheSentMedia(data, mediaId: uploadResult.mediaId)
 
-        let thumbnail = attachment.displayImage.flatMap { try? MediaOptimizer.generateThumbnail(from: $0) }
+        // Wire budget: this thumbnail's only consumer is `MediaWireCodec.albumContent`. The local
+        // placeholder copy is generated separately in MediaUploadManager at the disk budget.
+        let thumbnail = attachment.displayImage.flatMap {
+            try? MediaOptimizer.generateThumbnail(from: $0, budget: ThumbnailBudget.wireMaxBytes)
+        }
         let (width, height) = Self.pixelDimensions(of: attachment.displayImage)
         let blurhash = attachment.displayImage.flatMap { BlurHash.encode($0) }
 
@@ -276,13 +445,15 @@ class MediaManager {
             onProgress: onProgress.map { cb in { @Sendable v in cb(0.5 + v * 0.5) } }
         )
         Log.info("Video uploaded: \(uploadResult.mediaId) (\(videoData.count) bytes)", category: "MediaManager")
-        // Cache the plaintext so the SENDER can play their own upload without re-downloading.
-        cacheSentMedia(videoData, mediaId: uploadResult.mediaId)
 
         let (width, height) = await Self.videoDisplayDimensions(AVURLAsset(url: transcodedURL))
         let loadedDuration = (try? await asset.load(.duration))?.seconds
         let duration = attachment.duration ?? loadedDuration
-        let thumbnail = attachment.displayImage.flatMap { try? MediaOptimizer.generateThumbnail(from: $0) }
+        // A video poster always goes on the wire — the recipient cannot prefetch a whole video on
+        // arrival — so it is sized to fit one chunk rather than to look best on disk.
+        let thumbnail = attachment.displayImage.flatMap {
+            try? MediaOptimizer.generateThumbnail(from: $0, budget: ThumbnailBudget.wireMaxBytes)
+        }
         let blurhash = attachment.displayImage.flatMap { BlurHash.encode($0) }
 
         return MediaMessageData(
@@ -351,12 +522,15 @@ class MediaManager {
     /// same memory + disk cache the download path reads. The sender's bubble/gallery then
     /// resolve full quality via the normal `downloadAndDecryptMedia` cache-first path —
     /// no network, no low-res-thumbnail fallback.
+    /// Seed the local caches with something we just uploaded. Called from `uploadWithRetry` for
+    /// every path — see the note there.
     func cacheSentMedia(_ plaintext: Data, mediaId: String) {
         saveToDiskcache(plaintext, mediaId: mediaId)
-        if currentCacheSize + plaintext.count < maxCacheSize {
-            mediaCache[mediaId] = plaintext
-            currentCacheSize += plaintext.count
-        }
+        storeInMemoryCache(plaintext, mediaId: mediaId)
+        // The quota used to be enforced only on the download path, so sent media grew the disk
+        // cache with nothing bounding it until the user happened to receive something. That was
+        // survivable while only images and video came through here; now every upload does.
+        evictToQuota()
     }
 
     /// Pixel dimensions of an image (nil when unavailable).
@@ -383,6 +557,7 @@ class MediaManager {
         if let cached = await MediaSendCache.shared.cachedUpload(for: data) {
             Log.info("Media send cache hit — reusing \(cached.mediaId)", category: "MediaManager")
             onProgress?(1.0)
+            MediaManager.shared.cacheSentMedia(data, mediaId: cached.mediaId)
             return cached
         }
 
@@ -404,6 +579,19 @@ class MediaManager {
                 let result = try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType, onProgress: onProgress)
                 onProgress?(1.0)
                 await MediaSendCache.shared.storeUpload(result, for: data)
+                // Keep the plaintext locally so the SENDER never re-downloads their own upload.
+                //
+                // This used to be the caller's job, and three of the six upload paths did it while
+                // three did not — so playing back your own voice note fetched it from the server,
+                // seconds after the microphone produced it. There is nothing to decide here and no
+                // reason for a caller to know about it: every successful upload passes through this
+                // function, so the cache is seeded here and the per-path calls are gone.
+                //
+                // `data` is exactly what went to the server on every path (video: the transcoded
+                // bytes; file: the possibly-ZLIB-compressed bytes), which is also exactly what
+                // `downloadAndDecryptMedia` returns — so a cache hit and a download are the same
+                // value, not merely similar ones.
+                MediaManager.shared.cacheSentMedia(data, mediaId: result.mediaId)
                 return result
             } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
                 lastError = error
@@ -589,7 +777,7 @@ class MediaManager {
     func downloadAndDecryptMedia(mediaId: String, mediaUrl: String, mediaKey: Data, onProgress: (@Sendable (Int64) -> Void)? = nil) async throws -> Data {
         // 1. In-memory cache
         let cacheKey = mediaId
-        if let cachedData = mediaCache[cacheKey] {
+        if let cachedData = memoryCachedData(for: cacheKey) {
             Log.debug("Media cache hit (memory) for: \(mediaId.prefix(8))...", category: "MediaManager")
             return cachedData
         }
@@ -597,10 +785,8 @@ class MediaManager {
         // 2. Persistent disk cache — survives app updates and restarts
         if let diskData = loadFromDiskCache(mediaId: mediaId) {
             Log.debug("Media cache hit (disk) for: \(mediaId.prefix(8))...", category: "MediaManager")
-            if currentCacheSize + diskData.count < maxCacheSize {
-                mediaCache[cacheKey] = diskData
-                currentCacheSize += diskData.count
-            }
+            // Promote only when small enough — never pull a multi‑MB video back into RAM.
+            storeInMemoryCache(diskData, mediaId: cacheKey)
             return diskData
         }
 
@@ -642,20 +828,12 @@ class MediaManager {
             Log.info("Media \(mediaId.prefix(8))… not found on server (expired/removed) — negative-caching for \(Int(Self.notFoundTTL))s", category: "MediaManager")
             throw error
         }
-        
+
         // Persist to disk cache so media survives app restarts and updates
         saveToDiskcache(decryptedData, mediaId: mediaId)
         evictToQuota()
+        storeInMemoryCache(decryptedData, mediaId: cacheKey)
 
-        // Store in memory cache if space available
-        if currentCacheSize + decryptedData.count < maxCacheSize {
-            mediaCache[cacheKey] = decryptedData
-            currentCacheSize += decryptedData.count
-            Log.debug("Cached media (\(currentCacheSize / 1024)KB / \(maxCacheSize / 1024)KB)", category: "MediaManager")
-        } else {
-            Log.debug("Cache full, not caching this media", category: "MediaManager")
-        }
-        
         return decryptedData
     }
 
@@ -684,13 +862,20 @@ class MediaManager {
         Log.info("Decompressed: \(decryptedData.count) → \(decompressed.count) bytes", category: "MediaManager")
         return decompressed
     }
+    /// `includingDisk: true` deletes the user's received media permanently — anything past the
+    /// server's 7-day retention cannot be fetched again. That is a legitimate thing for a person to
+    /// ask for (it is wired to an explicit control in Data & Storage settings) and it is not
+    /// something anything else should call.
     func clearCache(includingDisk: Bool = false) {
-        mediaCache.removeAll()
+        mediaCache.removeAllObjects()
         notFoundMedia.removeAll()
-        currentCacheSize = 0
         if includingDisk {
-            try? FileManager.default.removeItem(at: diskCacheDirectory)
-            try? FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
+            try? FileManager.default.removeItem(at: mediaDirectory)
+            try? FileManager.default.createDirectory(
+                at: mediaDirectory,
+                withIntermediateDirectories: true,
+                attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+            )
             Log.info("Media cache cleared (memory + disk)", category: "MediaManager")
         } else {
             Log.info("Media cache cleared (memory only)", category: "MediaManager")
@@ -720,8 +905,12 @@ class MediaManager {
     ///   - image: Source image
     ///   - maxSize: Maximum dimension (width or height)
     /// - Returns: Thumbnail image data (JPEG)
+    /// - Parameter maxSize: **ignored.** `MediaOptimizer` owns the thumbnail dimension and byte
+    ///   budget; this parameter has never been forwarded. It stayed in the signature for the
+    ///   existing callers, but the log used to print it — claiming "maxSize: 250.0" while the
+    ///   optimizer rendered 400px — so it is no longer reported as if it applied.
     func generateThumbnail(from image: PlatformImage, maxSize: CGFloat = 250) -> Data? {
-        Log.debug("Generating thumbnail (maxSize: \(maxSize))", category: "MediaManager")
+        Log.debug("Generating thumbnail", category: "MediaManager")
         
         do {
             let optimized = try MediaOptimizer.generateThumbnail(from: image)
@@ -798,48 +987,28 @@ class MediaManager {
         #endif
     }
     
-    // MARK: - Thumbnail Storage (UserDefaults - temporary solution)
-    
-    /// Store thumbnail locally for message
-    /// - Parameters:
-    ///   - thumbnailData: Thumbnail image data
-    ///   - messageId: Message ID to associate with
+    // MARK: - Thumbnail Storage
+
+    /// These used to live in UserDefaults — the header here said "temporary solution" and it was
+    /// still true four months later, at 37 MB across 994 keys and nine times the CFPreferences
+    /// limit. `ThumbnailStore` holds the reasoning; these three stay as the call-site API because
+    /// twelve views and two services already speak it.
+
     func storeThumbnail(_ thumbnailData: Data, for messageId: String, at index: Int = 0) {
-        UserDefaults.standard.set(thumbnailData, forKey: "message_thumbnail_\(messageId)_\(index)")
-        // Keep legacy key for index 0 — backward compat with existing thumbnails
-        if index == 0 {
-            UserDefaults.standard.set(thumbnailData, forKey: "message_thumbnail_\(messageId)")
-        }
+        ThumbnailStore.shared.store(thumbnailData, for: messageId, at: index)
         Log.debug("Stored thumbnail[\(index)] for message: \(messageId)", category: "MediaManager")
     }
-    
-    /// Retrieve stored thumbnail for message
-    /// - Parameter messageId: Message ID
-    /// - Returns: Thumbnail data if exists
+
     func retrieveThumbnail(for messageId: String, at index: Int = 0) -> Data? {
-        // Try indexed key first
-        if let data = UserDefaults.standard.data(forKey: "message_thumbnail_\(messageId)_\(index)") {
-            return data
-        }
-        // Fall back to legacy unindexed key for index 0
-        if index == 0 {
-            return UserDefaults.standard.data(forKey: "message_thumbnail_\(messageId)")
-        }
-        return nil
+        ThumbnailStore.shared.load(for: messageId, at: index)
     }
 
     func retrieveThumbnail(for messageId: String) -> Data? {
         retrieveThumbnail(for: messageId, at: 0)
     }
-    
-    /// Remove stored thumbnail for message
-    /// - Parameter messageId: Message ID
+
     func removeThumbnail(for messageId: String) {
-        // Remove indexed keys (up to 10) + legacy key
-        for i in 0..<10 {
-            UserDefaults.standard.removeObject(forKey: "message_thumbnail_\(messageId)_\(i)")
-        }
-        UserDefaults.standard.removeObject(forKey: "message_thumbnail_\(messageId)")
+        ThumbnailStore.shared.remove(for: messageId)
     }
 }
 

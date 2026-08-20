@@ -4,6 +4,15 @@
 //
 //  Created by Maxim Eliseyev on 30.12.2025.
 //  Updated for Dynamic Invites on 30.01.2026.
+//  Merged with the copy-link action and MultiInviteView on 2026-08-15.
+//
+//  One surface for inviting someone, replacing three.
+//
+//  Settings used to carry a [QR][COPY LINK] pair plus a caption linking to
+//  `MultiInviteView`, which pre-minted five capabilities on open so a group could be
+//  invited. That screen existed only because the rule making it unnecessary — every tap
+//  of "copy" mints a fresh one-time invite — was never stated anywhere the user could
+//  read it. The rule now sits under the button, and the screen is gone.
 //
 
 import SwiftUI
@@ -15,19 +24,24 @@ struct ContactQRCodeView: View {
     @Environment(\.containerWidth) private var containerWidth
     let userId: String
     let username: String
-    
+
     @State private var qrPayloadBytes: Data?
     @State private var qrImage: UIImage?
-    @State private var timeRemaining: TimeInterval = InviteConfig.ttlSeconds
     @State private var generationError: String?
     @State private var generatedAt: Date?
-    
+
+    /// Links minted from the copy button in this sitting. Drives the button's feedback:
+    /// tap two is only distinguishable from tap one because this number moved.
+    @State private var copiedCount = 0
+    @State private var lastCopyAt: Date?
+    @State private var copyError: String?
+
     private let timer = Timer.publish(every: InviteConfig.qrCountdownTickSeconds, on: .main, in: .common).autoconnect()
     private let generator = InviteGenerator()
-    
+
     /// Preview-only compact binary (or empty → live generate).
     private let previewPayload: Data?
-    
+
     init(userId: String, username: String, previewPayload: Data? = nil) {
         self.userId = userId
         self.username = username
@@ -40,7 +54,6 @@ struct ContactQRCodeView: View {
 
     var body: some View {
         VStack(spacing: ContactQRCodeLayout.contentSpacing) {
-            // Nav bar
             CTNavBar(
                 title: NSLocalizedString("invite", comment: ""),
                 showBack: true,
@@ -72,20 +85,20 @@ struct ContactQRCodeView: View {
                     // QR block
                     VStack(spacing: ContactQRCodeLayout.qrBlockSpacing) {
                         qrBlock
-                        timerBlock
+                            .accessibilityIdentifier(A11y.ContactQR.code)
+                        refreshRow
                     }
                     .padding(.vertical, ContactQRCodeLayout.qrBlockVerticalPadding)
                     .frame(maxWidth: .infinity)
 
                     Rectangle().fill(Color.CT.noise).frame(height: 1)
 
-                    // Footer hint
-                    Text("> \(NSLocalizedString("qr_scan_hint", comment: ""))")
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.textDim)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, ContactQRCodeLayout.footerHorizontalPadding)
-                        .padding(.vertical, ContactQRCodeLayout.footerVerticalPadding)
+                    copyLinkButton
+                        .accessibilityIdentifier(A11y.ContactQR.copyLink)
+
+                    Rectangle().fill(Color.CT.noise).frame(height: 1)
+
+                    footer
                 }
             }
         }
@@ -98,16 +111,16 @@ struct ContactQRCodeView: View {
             if let preview = previewPayload {
                 qrPayloadBytes = preview
                 qrImage = QRCodeGenerator.generate(from: preview)
-                timeRemaining = InviteConfig.ttlSeconds
                 generatedAt = Date()
             } else {
                 generateInitialQRCode()
             }
         }
-        .onReceive(timer) { _ in
-            updateTimeRemaining()
-            maybeRotateQR()
-        }
+        .onReceive(timer) { _ in maybeRotateQR() }
+        // Closes the journal's QR sitting. Without it the next code minted — possibly days
+        // later — would append to an act timestamped by a sheet the user no longer
+        // remembers opening.
+        .onDisappear { InviteJournal.shared.closeQRSession() }
     }
 
     // MARK: - QR block
@@ -156,46 +169,143 @@ struct ContactQRCodeView: View {
         }
     }
 
-    // MARK: - Timer block
-
+    /// Manual re-mint for the person the code did not scan for.
+    ///
+    /// The countdown that used to live here ("new in 0:23") was removed with the rest of
+    /// the multi-invite scaffolding: it counted down to something the user cannot act on,
+    /// and it invited the question "what happens at zero" whose answer — your code is
+    /// already a different one — is not what a countdown normally means. Rotation itself
+    /// stays; see `maybeRotateQR`.
     @ViewBuilder
-    private var timerBlock: some View {
-        if timeRemaining > 0 {
-            let isWarning = timeRemaining < InviteConfig.qrWarningThresholdSeconds
-            HStack(spacing: ContactQRCodeLayout.timerRowSpacing) {
-                Image(systemName: "timer")
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundStyle(isWarning ? Color.CT.danger : Color.CT.textDim)
-                Text(String(format: NSLocalizedString("expires_in", comment: ""), formatTime(timeRemaining)))
+    private var refreshRow: some View {
+        if previewPayload == nil, qrPayloadBytes != nil || generationError != nil {
+            Button { regenerateQRCode() } label: {
+                Text(NSLocalizedString("qr_new_code", comment: "").lowercased())
                     .font(CTFont.regular(13))
-                    .foregroundStyle(isWarning ? Color.CT.danger : Color.CT.text)
-                    .monospacedDigit()
-            }
-        } else {
-            VStack(spacing: ContactQRCodeLayout.expiredBlockSpacing) {
-                Text("[ \(NSLocalizedString("code_expired", comment: "").lowercased()) ]")
-                    .font(CTFont.regular(14))
-                    .foregroundStyle(Color.CT.danger)
-
-                Button { regenerateQRCode() } label: {
-                    Text("[\(NSLocalizedString("generate_new_code", comment: "").lowercased())]")
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.accent)
-                        .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
-                        .padding(.vertical, ContactQRCodeLayout.refreshButtonVerticalPadding)
-                        .background(
-                            CTShape.card()
-                                .fill(Color.CT.bgMsg)
-                                .overlay(
-                                    CTShape.card().strokeBorder(
-                                        Color.CT.accent.opacity(ContactQRCodeLayout.refreshButtonStrokeOpacity),
-                                        lineWidth: ContactQRCodeLayout.refreshButtonStrokeWidth
-                                    )
+                    .foregroundStyle(Color.CT.accent)
+                    .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
+                    .padding(.vertical, ContactQRCodeLayout.refreshButtonVerticalPadding)
+                    .background(
+                        CTShape.card()
+                            .fill(Color.CT.bgMsg)
+                            .overlay(
+                                CTShape.card().strokeBorder(
+                                    Color.CT.accent.opacity(ContactQRCodeLayout.refreshButtonStrokeOpacity),
+                                    lineWidth: ContactQRCodeLayout.refreshButtonStrokeWidth
                                 )
-                        )
-                }
-                .buttonStyle(.plain)
+                            )
+                    )
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(NSLocalizedString("qr_new_code", comment: ""))
+            .accessibilityIdentifier(A11y.ContactQR.regenerate)
+        }
+    }
+
+    // MARK: - Copy link
+
+    private var copyFeedback: InviteShareDecision.CopyFeedback {
+        InviteShareDecision.feedback(copiedCount: copiedCount)
+    }
+
+    private var copyLabel: String {
+        switch copyFeedback {
+        case .idle:
+            return NSLocalizedString("invite_copy_link", comment: "")
+        case .copied:
+            return NSLocalizedString("share_copied", comment: "")
+        case .copiedAgain(let n):
+            return String(format: NSLocalizedString("invite_copied_nth_fmt", comment: ""), n)
+        }
+    }
+
+    private var copyLinkButton: some View {
+        Button { copyLink() } label: {
+            HStack(spacing: SettingsShareLayout.actionSpacing) {
+                Image(systemName: copyFeedback == .idle ? "link" : "checkmark")
+                    .font(.system(size: SettingsShareLayout.actionIconSize, weight: .regular))
+                Text(copyLabel.uppercased())
+                    .font(CTFont.regular(11))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .contentTransition(.numericText())
+            }
+            .foregroundStyle(copyFeedback == .idle ? Color.CT.text : Color.CT.accent)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: SettingsShareLayout.actionMinHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(NSLocalizedString("invite_copy_link", comment: ""))
+        .accessibilityHint(
+            String(
+                format: NSLocalizedString("invite_share_rule_fmt", comment: ""),
+                InviteConfig.ttlDescription
+            )
+        )
+    }
+
+    // MARK: - Footer
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: ContactQRCodeLayout.identityHeaderSpacing) {
+            Text(
+                "> " + String(
+                    format: NSLocalizedString("invite_share_rule_fmt", comment: ""),
+                    InviteConfig.ttlDescription
+                )
+            )
+            .font(CTFont.regular(11))
+            .foregroundStyle(Color.CT.textDim)
+
+            if let copyError {
+                Text("> \(copyError)")
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.danger)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, ContactQRCodeLayout.footerHorizontalPadding)
+        .padding(.vertical, ContactQRCodeLayout.footerVerticalPadding)
+    }
+
+    // MARK: - Actions
+
+    /// Mint a fresh one-time invite and put it on the clipboard.
+    ///
+    /// Failure is surfaced, never swallowed: `try?` here leaves a button that reports
+    /// "copied" over a clipboard holding whatever was there before.
+    private func copyLink() {
+        guard InviteShareDecision.shouldMint(
+            now: Date(),
+            lastMintAt: lastCopyAt,
+            debounce: SettingsShareLayout.copyDebounce
+        ) else { return }
+
+        guard let deviceId = KeychainManager.shared.loadDeviceID() else {
+            copyError = NSLocalizedString("invite_create_failed", comment: "")
+            return
+        }
+        do {
+            // HTTPS share can land in third-party messenger logs/previews — never embed `un`.
+            let minted = try generator.generateDeepLink(
+                userId: userId,
+                deviceId: deviceId,
+                username: nil,
+                server: ServerConfig.inviteHost,
+                useHTTPS: true
+            )
+            PlatformClipboard.copy(minted.artifact)
+            // Recorded only once the link is actually on the clipboard: a jti journalled
+            // for a link the user never received is an entry they cannot account for, and
+            // the screen listing it has no way to tell the difference.
+            InviteJournal.shared.recordCopiedLink(jti: minted.jti, at: minted.issuedAt, ttl: minted.ttl)
+            lastCopyAt = Date()
+            copyError = nil
+            withAnimation { copiedCount += 1 }
+        } catch {
+            Log.error("ContactQRCodeView: invite generation failed: \(error)", category: "Invite")
+            copyError = NSLocalizedString("invite_create_failed", comment: "")
         }
     }
 
@@ -223,21 +333,23 @@ struct ContactQRCodeView: View {
             // byte-mode for already-printed binary QRs.
             // Metadata minimization (thread 5): do not embed plaintext username in the
             // signed invite by default — identity chrome stays in UI only (`displayName`).
-            let binary = try generator.generateQRBinary(
+            let minted = try generator.generateQRBinary(
                 userId: userId,
                 deviceId: deviceId,
                 username: nil,
                 server: serverHostname
             )
-            let textPayload = InviteBinaryCodec.base64URLEncode(binary)
-            qrPayloadBytes = binary
+            let textPayload = InviteBinaryCodec.base64URLEncode(minted.artifact)
+            qrPayloadBytes = minted.artifact
             qrImage = QRCodeGenerator.generate(from: textPayload)
             generatedAt = Date()
-            timeRemaining = InviteConfig.ttlSeconds
             generationError = nil
+            // Every rotation joins the sitting opened by the first code, so a sheet held up
+            // at a table is one entry in the journal rather than one per 30 seconds.
+            InviteJournal.shared.recordQRCode(jti: minted.jti, at: minted.issuedAt, ttl: minted.ttl)
             #if DEBUG
             Log.debug(
-                "Invite QR binary=\(binary.count)B textPayload=\(textPayload.count) chars",
+                "Invite QR binary=\(minted.artifact.count)B textPayload=\(textPayload.count) chars",
                 category: "ContactQR"
             )
             #endif
@@ -254,26 +366,19 @@ struct ContactQRCodeView: View {
         generateInitialQRCode()
     }
 
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        let m = Int(seconds) / 60
-        let s = Int(seconds) % 60
-        return String(format: "%d:%02d", m, s)
-    }
-
-    private func updateTimeRemaining() {
-        guard let generatedAt else { return }
-        timeRemaining = max(InviteConfig.ttlSeconds - Date().timeIntervalSince(generatedAt), 0)
-    }
-
-    /// Rotate jti every `qrRotateIntervalSeconds` while the code is still live.
+    /// Mint a fresh jti every `qrRotateIntervalSeconds` while the code is on screen.
+    ///
+    /// An invite is burned by its first redeemer, and the sender gets no signal that it
+    /// happened — so without this, the second person to scan the same screen is told the
+    /// invite is already used. Rotation is the only thing making "show my QR to a few
+    /// people" work at all, until [[decisions/invite-two-modes-deferred]] is revisited.
+    /// Manual "new code" is the same mint, on demand, so the next person does not wait.
     private func maybeRotateQR() {
         guard previewPayload == nil else { return }
         guard generationError == nil, qrPayloadBytes != nil else { return }
         guard let generatedAt else { return }
         let elapsed = Date().timeIntervalSince(generatedAt)
         guard elapsed >= InviteConfig.qrRotateIntervalSeconds else { return }
-        // Still within overall TTL window after rotation would reset the clock —
-        // always rotate; each code is one-time and short-lived by design.
         Log.debug("Rotating invite QR after \(Int(elapsed))s", category: "ContactQR")
         regenerateQRCode()
     }

@@ -56,6 +56,24 @@ enum IssuanceOutcome: Equatable {
     }
 }
 
+/// What a send that needs a token should do right now.
+///
+/// Extracted because the answer turns on a distinction the old single `cooldownUntil` could not
+/// make: **pacing is a politeness we chose, back-off is the server saying no.** Both were one
+/// date, so an empty wallet during a burst was held back by our own 90s pacing exactly as if the
+/// issuer had refused — and under `enforce` that is not a degraded anti-abuse property, it is a
+/// message the server rejects.
+enum ReplenishGate: Equatable {
+    /// Start a batch now (or the wallet is empty and waiting is the lesser cost).
+    case start
+    /// One is already running — wait for it instead of sending token-less past it.
+    case waitForInFlight
+    /// The issuer refused (rate limit / not configured). Waiting only adds latency.
+    case blockedByBackoff
+    /// Wallet is merely low and we are pacing successful batches. Nothing is at stake.
+    case blockedByPacing
+}
+
 @MainActor
 final class BlindTokenService {
     static let shared = BlindTokenService()
@@ -77,8 +95,24 @@ final class BlindTokenService {
     /// drains it steadily, unlike per-stream's ~1/recipient/day).
     private static let lowWaterMark = 20
 
-    /// When the next replenish attempt becomes eligible (nil = eligible now).
-    private var cooldownUntil: Date?
+    /// How long a send with an empty wallet waits for tokens before going ahead without one.
+    /// Sized against the alternative, not against comfort: under `enforce` a token-less send is
+    /// rejected and retried, which costs a round trip anyway — so a bounded wait here is cheaper
+    /// than the failure it prevents. It is paid at most once per batch (20 tokens serve the next
+    /// 20 sends), and not at all while the issuer is backing us off.
+    ///
+    /// `nonisolated` because it is a default argument of `ensureTokenAvailable`, and a default
+    /// argument expression is evaluated in the *caller's* context — which is not the main actor.
+    /// An immutable `TimeInterval` needs no isolation to be read safely; same treatment as
+    /// `batchSize` above. Without it this is a warning today and an error under Swift 6.
+    nonisolated static let tokenWaitTimeout: TimeInterval = 2.0
+    private static let tokenWaitPollMs: UInt64 = 40
+
+    /// Pacing between *successful* batches — our own politeness. Never blocks an empty wallet.
+    private var pacingUntil: Date?
+    /// Back-off after the issuer refused (rate limit, not configured, bad auth). This one does
+    /// block: it is the server's answer, and re-asking inside it cannot succeed.
+    private var backoffUntil: Date?
     private var isReplenishing = false
 
     /// Result + timestamp of the most recent issuance attempt (for DEBUG Diagnostics).
@@ -94,30 +128,70 @@ final class BlindTokenService {
 
     // MARK: - Public API
 
+    /// What to do about an empty-or-low wallet right now. Pure so the burst behaviour can be
+    /// asserted in a test instead of inferred from a six-hour device log.
+    static func gate(
+        balance: Int,
+        isReplenishing: Bool,
+        pacingUntil: Date?,
+        backoffUntil: Date?,
+        now: Date = Date()
+    ) -> ReplenishGate {
+        if isReplenishing { return .waitForInFlight }
+        if let backoffUntil, backoffUntil > now { return .blockedByBackoff }
+        // An empty wallet outranks our own pacing: the pacing exists to be polite to an issuer
+        // that answers refusals explicitly, and being polite here costs a rejected message.
+        if balance == 0 { return .start }
+        if let pacingUntil, pacingUntil > now { return .blockedByPacing }
+        return .start
+    }
+
+    private var currentGate: ReplenishGate {
+        Self.gate(
+            balance: TokenWalletService.shared.balance,
+            isReplenishing: isReplenishing,
+            pacingUntil: pacingUntil,
+            backoffUntil: backoffUntil
+        )
+    }
+
     /// Replenish the token wallet up to `count` new blind tokens.
-    /// Silently skips if already replenishing or within cooldown.
+    /// Silently skips if already replenishing or held by pacing / back-off.
     /// - Parameter count: Number of tokens to request (capped at batchSize).
     func replenish(count: Int = batchSize) async {
-        guard !isReplenishing else {
+        switch currentGate {
+        case .waitForInFlight:
             Log.debug("BlindToken: replenishment already in progress — skipping", category: "BlindToken")
             return
-        }
-        if let until = cooldownUntil, Date() < until {
-            Log.debug("BlindToken: cooldown active — skipping", category: "BlindToken")
+        case .blockedByBackoff:
+            Log.debug("BlindToken: issuer back-off active — skipping", category: "BlindToken")
             return
+        case .blockedByPacing:
+            Log.debug("BlindToken: pacing between batches — skipping", category: "BlindToken")
+            return
+        case .start:
+            break
         }
 
         let n = min(count, Self.batchSize)
         guard n > 0 else { return }
 
+        // Claimed here, with no await in between, so a send that starts waiting on the very next
+        // line cannot observe an idle service and give up before this batch exists.
         isReplenishing = true
+        await performReplenish(count: n)
+    }
+
+    /// The batch itself. Assumes `isReplenishing` is already claimed by the caller.
+    private func performReplenish(count n: Int) async {
         defer { isReplenishing = false }
 
         do {
             let tokens = try await issueTokens(count: n)
             TokenWalletService.shared.deposit(tokens)
             record(.ok(tokens.count))
-            cooldownUntil = Date().addingTimeInterval(Self.successCooldown)
+            pacingUntil = Date().addingTimeInterval(Self.successCooldown)
+            backoffUntil = nil
             Log.info("BlindToken: replenished \(tokens.count) tokens (wallet=\(TokenWalletService.shared.balance))", category: "BlindToken")
         } catch {
             // Classify so the wallet-empty cause is diagnosable, and so transient failures
@@ -125,9 +199,47 @@ final class BlindTokenService {
             let outcome = Self.classify(error)
             record(outcome)
             let backoff = outcome.backsOffFullHour ? Self.rateLimitBackoff : Self.transientRetry
-            cooldownUntil = Date().addingTimeInterval(backoff)
+            backoffUntil = Date().addingTimeInterval(backoff)
             Log.error("BlindToken: replenishment failed [\(outcome.diagnosticLabel)] — \(error)", category: "BlindToken")
         }
+    }
+
+    /// Give a send that needs a token the chance to have one, bounded by `timeout`.
+    ///
+    /// The send path used to read the wallet once and step over an empty one, so a burst that
+    /// outran issuance sent token-less past a batch that was already in flight — 93 of 271 sealed
+    /// sends in one hour of the 2026-08-04 run, alongside 99 "replenishment already in progress"
+    /// skips. Those two lines are the same event seen from both ends.
+    ///
+    /// Returns whether a token is available now. Never waits on an issuer back-off: the server
+    /// already answered, and adding two seconds to a send it will refuse anyway helps nobody.
+    @discardableResult
+    func ensureTokenAvailable(timeout: TimeInterval = tokenWaitTimeout) async -> Bool {
+        if TokenWalletService.shared.balance > 0 { return true }
+
+        switch currentGate {
+        case .blockedByBackoff:
+            PerformanceMetrics.shared.record(.tokenWalletWait, label: "backoff")
+            return false
+        case .blockedByPacing:
+            // Unreachable while the wallet is empty (`gate` returns .start), kept explicit so a
+            // future change to that rule fails here rather than silently reinstating the wait.
+            PerformanceMetrics.shared.record(.tokenWalletWait, label: "pacing")
+            return false
+        case .start:
+            isReplenishing = true                       // claim before the await, as above
+            Task { [weak self] in await self?.performReplenish(count: Self.batchSize) }
+        case .waitForInFlight:
+            break
+        }
+
+        let deadline = Date().addingTimeInterval(timeout)
+        while isReplenishing, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(Self.tokenWaitPollMs))
+        }
+        let served = TokenWalletService.shared.balance > 0
+        PerformanceMetrics.shared.record(.tokenWalletWait, label: served ? "served" : "timeout")
+        return served
     }
 
     /// Reactive top-up for per-message scope: pull a fresh batch when the wallet runs low.
@@ -141,7 +253,8 @@ final class BlindTokenService {
     /// Still serialized by `isReplenishing`; a hit hourly cap re-arms the full back-off
     /// via `.rateLimited` as usual.
     func forceReplenish() async {
-        cooldownUntil = nil
+        pacingUntil = nil
+        backoffUntil = nil
         await replenish()
     }
 
@@ -191,13 +304,13 @@ final class BlindTokenService {
             return
         }
 
-        if let until = cooldownUntil, Date() < until {
-            Log.debug("BlindToken: bootstrap cooldown active — skipping", category: "BlindToken")
+        if let until = backoffUntil, Date() < until {
+            Log.debug("BlindToken: bootstrap skipped — issuer back-off active", category: "BlindToken")
             return
         }
 
-        // Force bypass of cooldown for the absolute first batch (only if no recent attempt).
-        cooldownUntil = nil
+        // Force bypass of pacing for the absolute first batch (a refusal still holds us back).
+        pacingUntil = nil
 
         Log.info("BlindToken: starting initial bootstrap batch", category: "BlindToken")
         await replenish(count: Self.batchSize)

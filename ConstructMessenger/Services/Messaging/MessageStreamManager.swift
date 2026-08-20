@@ -80,10 +80,43 @@ final class MessageStreamManager {
     /// Writable from `MessageStreamTransport` (same type, other file).
     var activeRoutingKey: String = ""
 
-    /// True when a connection attempt is actively in progress (not sleeping in backoff).
-    /// When true, app-foreground force-reconnect should be skipped to avoid interrupting
-    /// an ongoing VEIL failover path with a new competing direct-path attempt.
-    var isActivelyConnecting: Bool { streamTask != nil && !isConnected && retryCount == 0 }
+    /// True when a connectLoop is running and the stream is not yet live — includes backoff sleep.
+    ///
+    /// Build 587 heated the phone by treating only `retryCount == 0` as "connecting": after the
+    /// first open failure the loop was still alive (sleeping or mid-open) but foreground settle
+    /// saw `isActivelyConnecting == false` and called `forceReconnect`, killing the in-flight
+    /// loop and starting another. Pure form: ``isActivelyConnecting(hasStreamTask:isConnected:)``.
+    var isActivelyConnecting: Bool {
+        Self.isActivelyConnecting(hasStreamTask: streamTask != nil, isConnected: isConnected)
+    }
+
+    /// Pure form of ``isActivelyConnecting`` — any live connectLoop owns the stream until accept.
+    nonisolated static func isActivelyConnecting(hasStreamTask: Bool, isConnected: Bool) -> Bool {
+        hasStreamTask && !isConnected
+    }
+
+    /// What to do after `openStream` throws the open-timeout sentinel (`retrying with VEIL`).
+    enum OpenTimeoutDisposition: Equatable, Sendable {
+        /// H3 on direct timed out — hop to H2 once without sleeping.
+        case immediateTransportFailover
+        /// Same path / already H2 / VEIL path — exponential backoff (no tight immediate loop).
+        case exponentialBackoff
+    }
+
+    /// Build 587 log: `open timed out — reconnecting` → `reconnecting immediately (VEIL=false)`
+    /// on every timeout, including same-path H2, while the app flapped active/background.
+    /// Immediate continue is only for the H3→H2 transport hop; everything else must backoff.
+    nonisolated static func openTimeoutDisposition(
+        lastTransportWasH3: Bool,
+        prefersVEIL: Bool,
+        routingKeyUnchanged: Bool,
+        wasDirectRouting: Bool
+    ) -> OpenTimeoutDisposition {
+        if !prefersVEIL, routingKeyUnchanged, wasDirectRouting, lastTransportWasH3 {
+            return .immediateTransportFailover
+        }
+        return .exponentialBackoff
+    }
 
     // MARK: - Callbacks
 
@@ -119,74 +152,55 @@ final class MessageStreamManager {
     /// Records whether the most recent `openStream()` call attempted H3 transport.
     /// Used by connectLoop to decide whether to try H2 direct before activating VEIL.
     var lastStreamTransportWasH3 = false
-    /// Counts consecutive H3 stream-open failures across reconnects and network changes.
-    /// Not reset by forceDisconnect() so it survives network path switches.
-    /// Cleared when H3 succeeds or the stream ends cleanly.
-    var consecutiveH3OpenFailures = 0
-    static let h3OpenFailureThreshold = 2
-    /// Session-level suppression of the fast-UDP transport (native H3 / engine-QUIC) after it
-    /// proves unhealthy on this network — e.g. QUIC connects then dies at the idle timeout every
-    /// ~30s because DPI throttles UDP. Without this, each reconnect re-tries QUIC, dies, falls to
-    /// H2, and (on a clean H2 end) resets the counter → endless QUIC thrash. While set in the
-    /// future, `openStream()` goes straight to H2. Reset by an explicit transport toggle.
+    /// Fast-UDP (native H3 / engine-QUIC) has failed to open in **this session**.
     ///
-    /// **Persisted across cold starts** (write-through, keyed by the network fingerprint): on a
-    /// censored network the old in-memory-only suppression meant every launch re-probed QUIC and
-    /// paid the "open → die at idle → fall to H2" tax before going sticky-H2. Persisting the window
-    /// (scoped to the same network) skips that on relaunch. A genuine network change clears it
-    /// (`resetDegradedModeOnNetworkChange` sets nil → write-through removes it; restore also requires
-    /// a fingerprint match).
-    private var _fastUdpUnhealthyUntil: Date?
-    var fastUdpUnhealthyUntil: Date? {
-        get { _fastUdpUnhealthyUntil }
-        set {
-            _fastUdpUnhealthyUntil = newValue
-            Self.persistQuicSuppression(until: newValue)
+    /// One bit, in memory, gone on relaunch and cleared by a network path change. It replaces five
+    /// interacting mechanisms — a consecutive-failure counter, a ladder rung, a suppression window,
+    /// a per-network persisted ledger keyed by a salted fingerprint, and the restore that read them
+    /// back — every one of which had a bug fixed between 2026-08-08 and 2026-08-11.
+    ///
+    /// See decisions/no-client-side-network-learning. The machinery existed to avoid re-paying a
+    /// ~1.5s QUIC probe on a network that had already refused it; it is not worth a persistent
+    /// model of the world that only misbehaves where nobody can reproduce it. One probe per
+    /// session, per network change, is the whole policy.
+    var fastUdpFailedThisSession = false
+
+    /// The direct path has failed in **this session** — the trigger for warming a VEIL standby.
+    ///
+    /// Set here, consumed by the standby race (not yet built; `NetworkTiming.GRPC
+    /// .streamOpenAcceptTimeoutStandby` is still a constant with no reader). Until that lands this
+    /// is recorded and logged only, which is stated here rather than left for someone to discover.
+    var directFailedThisSession = false
+
+    /// One authority for "the fast-UDP transport failed to open".
+    ///
+    /// Both failure paths in `connectLoop` used to carry their own copy of the threshold test and
+    /// the cooldown arithmetic, and had already drifted apart (only one set
+    /// `shouldFallbackToH2Direct`). What is left is the bit and the report.
+    func noteFastUdpOpenFailure(context: String) {
+        guard !fastUdpFailedThisSession else { return }
+        fastUdpFailedThisSession = true
+        PerformanceMetrics.shared.record(.quicSuppressed, label: "session")
+        Log.info("Fast-UDP (QUIC/H3) failed to open [\(context)] — H2 for the rest of this session", category: "MessageStream")
+        // Router must see suppressions (ADR transport-connection-health-and-escalation). The TTL is
+        // the session, which has no number; report the reconnect-scale value the router uses to
+        // display state rather than inventing a persistence claim we no longer make.
+        Task {
+            await TransportRouter.shared.send(.streamSuppressed(method: .quic, ttlSeconds: 0))
         }
     }
-    static let fastUdpCooldown: TimeInterval = 300
 
-    private static let quicSuppressedUntilKey = "quic_suppressed_until_v1"
-    private static let quicSuppressedNetworkKey = "quic_suppressed_network_v1"
-    /// One-shot guard so the persisted suppression is restored at most once per launch (at the first
-    /// connect, by when the network monitor has reported a fingerprint).
-    private var didRestoreQuicSuppression = false
-
-    /// Write-through the suppression window to `UserDefaults`, tagged with the current network
-    /// fingerprint. A nil / past value clears it.
-    private static func persistQuicSuppression(until: Date?) {
-        let d = UserDefaults.standard
-        if let until, until > Date() {
-            d.set(until, forKey: quicSuppressedUntilKey)
-            d.set(NetworkReachabilityManager.shared.currentPathFingerprint, forKey: quicSuppressedNetworkKey)
-        } else {
-            d.removeObject(forKey: quicSuppressedUntilKey)
-            d.removeObject(forKey: quicSuppressedNetworkKey)
-        }
+    /// QUIC carried real server data — re-enable it for the rest of the session.
+    ///
+    /// Deliberately NOT the stream *accept*: on DPI'd networks the handshake is allowed through and
+    /// the connection then goes silent, so clearing on accept would re-arm QUIC on exactly the
+    /// networks it fails on, and the device would oscillate every reconnect.
+    func noteFastUdpProvenHealthy() {
+        guard fastUdpFailedThisSession else { return }
+        Log.info("QUIC delivered data — re-enabling fast-UDP for this session", category: "MessageStream")
+        fastUdpFailedThisSession = false
     }
 
-    /// Restore a persisted QUIC suppression once per launch — but ONLY if it is still in the future
-    /// AND on the same network fingerprint. A different (or unknown) network must re-probe QUIC, so
-    /// a stale suppression from another network never wrongly forces H2.
-    private func restoreQuicSuppressionOnceIfNeeded() {
-        guard !didRestoreQuicSuppression else { return }
-        didRestoreQuicSuppression = true
-
-        let d = UserDefaults.standard
-        guard let until = d.object(forKey: Self.quicSuppressedUntilKey) as? Date, until > Date() else {
-            Self.persistQuicSuppression(until: nil)
-            return
-        }
-        let persistedNet = d.string(forKey: Self.quicSuppressedNetworkKey) ?? ""
-        let currentNet = NetworkReachabilityManager.shared.currentPathFingerprint
-        if !persistedNet.isEmpty, persistedNet == currentNet {
-            _fastUdpUnhealthyUntil = until   // set backing directly — already persisted, same value
-            Log.info("QUIC suppression restored from prior session (same network, \(Int(until.timeIntervalSinceNow))s left) — starting on H2", category: "MessageStream")
-        } else {
-            // Different / unknown network → drop the stale suppression and re-probe QUIC.
-            Self.persistQuicSuppression(until: nil)
-        }
-    }
     /// Debounce for `reconnectForTransportChange`. A transport toggle does a full teardown +
     /// reconnect; toggling rapidly (or SwiftUI firing `.onChange` twice) stacks teardowns and
     /// creates connect→immediate-invalidate races. We coalesce bursts into a single reconnect to
@@ -195,11 +209,6 @@ final class MessageStreamManager {
     static let transportToggleDebounceNs: UInt64 = 500_000_000
     private(set) var isPaused = false
     private(set) var subscriptionUserIds: [String] = []
-    private var lastPendingCursor: String = UserDefaults.standard.string(forKey: "construct.pendingCursor") ?? "" {
-        didSet {
-            UserDefaults.standard.set(lastPendingCursor, forKey: "construct.pendingCursor")
-        }
-    }
 
     /// Continuation for sending messages into the stream
     var outboundContinuation: AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.Continuation?
@@ -209,17 +218,10 @@ final class MessageStreamManager {
     var streamGeneration: UInt64 = 0
     var activeStreamGeneration: UInt64 = 0
 
-    /// Messages that failed decoding during fetchMissedMessages (before stream was open).
-    /// Flushed as `.failed` receipts once the stream is established.
-    var pendingFailedAcks: [MessagingServiceClient.FailedMessage] = []
-
-    /// Delivered receipts queued when the stream was not yet open.
-    /// Flushed as `.delivered` receipts once the stream is established.
-    struct PendingDeliveredAck {
-        let messageIds: [String]
-        let recipientUserId: String
-    }
-    var pendingDeliveredAcks: [PendingDeliveredAck] = []
+    // `pendingFailedAcks` / `pendingDeliveredAcks` were removed on 2026-08-02 together with
+    // `sendReceipt`. Both existed only to buffer plaintext stream receipts until the stream
+    // opened; receipts are now E2E and go through the normal (queued, offline-durable) message
+    // path, so there is nothing left to hold in process memory.
 
     // MARK: - Configuration
 
@@ -267,11 +269,16 @@ final class MessageStreamManager {
     func resetDegradedModeOnNetworkChange() {
         continuousFailureStreakStart = nil
         isInDegradedMode = false
-        // Re-arm fast-UDP: the new network may not block QUIC even if the old one did (and vice-versa).
-        fastUdpUnhealthyUntil = nil
-        consecutiveH3OpenFailures = 0
+        // Re-evaluate fast-UDP for the network we just arrived on: it may not block QUIC even if
+        // the old one did (and vice-versa). We re-probe when you move, not when you relaunch.
+        //
+        // This used to zero the ladder outright, which was half right. Re-probing an *unfamiliar*
+        // network deserves its own probe. That is the entire policy now: nothing is remembered
+        // about the network we left, so nothing has to be scoped, expired or restored.
+        fastUdpFailedThisSession = false
+        directFailedThisSession = false
         shouldFallbackToH2Direct = false
-        Log.debug("Network path — cleared degraded-mode window + fast-UDP suppression (QUIC re-probe on next open)", category: "MessageStream")
+        Log.debug("Network path — fast-UDP re-armed for the new network", category: "MessageStream")
     }
 
     /// Single entry for routing-driven reconnects. Bursts (network flap + VEIL port + invalidate)
@@ -328,11 +335,6 @@ final class MessageStreamManager {
 
     func connect(contactUserIds: [String] = [], trigger: String = "?", onMessageReceived: @escaping (ChatMessage) -> Void) {
         self.onMessageReceived = onMessageReceived
-
-        // Restore a prior-session QUIC suppression (same network only) before the first transport
-        // decision, so a cold start on a still-blocked network goes straight to H2 instead of
-        // re-paying the QUIC open-then-die tax.
-        restoreQuicSuppressionOnceIfNeeded()
 
         // Use Set comparison: currentConversationIds() builds from Array(Set) whose order is
         // non-deterministic across calls, so the same 3 IDs may arrive in a different order on
@@ -424,9 +426,9 @@ final class MessageStreamManager {
             Log.info("Transport toggle — no callback yet, nothing to reconnect", category: "MessageStream")
             return
         }
-        // Explicit toggle = give the chosen transport a clean slate (clear QUIC suppression).
-        fastUdpUnhealthyUntil = nil
-        consecutiveH3OpenFailures = 0
+        // Explicit toggle = give the chosen transport a clean slate.
+        fastUdpFailedThisSession = false
+        directFailedThisSession = false
         shouldFallbackToH2Direct = false
         Log.info("Transport toggle (engineQuic=\(FeatureFlags.engineQuicExperimental)) — forcing stream reconnect", category: "MessageStream")
         forceDisconnect(reason: "transportToggle")
@@ -469,11 +471,10 @@ final class MessageStreamManager {
         backgroundFetchTask = nil
         retryCount = 0
 
-        // Preserve QUIC/H3 health signals across force-reconnect.
-        // Resetting consecutiveH3OpenFailures / shouldFallbackToH2Direct here forced a fresh
-        // QUIC handshake every time polling/status scheduled forceReconnect mid-open — device
-        // logs showed openStream QUIC → forceReconnect → QUIC again → double timeout → only
-        // then H2. fastUdpUnhealthyUntil was already preserved; keep the rest of the ladder too.
+        // Preserve the fast-UDP session bit across force-reconnect. Clearing it here forced a
+        // fresh QUIC handshake every time polling/status scheduled forceReconnect mid-open —
+        // device logs showed openStream QUIC → forceReconnect → QUIC again → double timeout →
+        // only then H2. A forced reconnect is not new information about the network.
         continuousFailureStreakStart = nil
         isInDegradedMode = false
         connect(contactUserIds: contactUserIds, trigger: "forceReconnect", onMessageReceived: onMessageReceived)
@@ -513,8 +514,9 @@ final class MessageStreamManager {
         streamTask = nil
         retryCount = 0
 
-        // Do not clear consecutiveH3OpenFailures / shouldFallbackToH2Direct /
-        // fastUdpUnhealthyUntil — UDP health is network-session state, not stream-instance state.
+        // Do not clear `fastUdpFailedThisSession` / `shouldFallbackToH2Direct` — fast-UDP health
+        // is session state, not stream-instance state. A network path change clears it; the end of
+        // one stream does not.
         lastStreamTransportWasH3 = false
         continuousFailureStreakStart = nil
         isInDegradedMode = false
@@ -559,53 +561,17 @@ final class MessageStreamManager {
         }
     }
 
-    /// Send a delivery receipt for one or more messages via the live stream.
-    ///
-    /// **Receipt semantics contract** — use the wrong status and you will loop forever:
-    ///
-    /// - `.delivered`: the message reached this device. The server advances its Redis stream
-    ///   consumer-group cursor so the message is **never re-delivered**. Use this for ALL
-    ///   session-layer failures (OTPK exhausted, AEAD failure, UTF-8 decode, session not found,
-    ///   init_receiving_session failure, heal exhausted). The device handles recovery itself via
-    ///   END_SESSION; it does NOT need the server to retry.
-    ///
-    /// - `.failed`: the server should **retry delivery later** (message stays in queue).
-    ///   Reserve exclusively for genuine transport failures — e.g. the gRPC stream dropped
-    ///   before the message was processed at all. Never use for crypto/session errors.
-    ///
-    /// - Parameters:
-    ///   - messageIds: IDs of messages being acknowledged.
-    ///   - recipientUserId: The original message sender — server uses this to route the receipt back without a DB lookup.
-    ///   - status: `.delivered` to advance cursor; `.failed` for transport-only retry.
-    func sendReceipt(_ messageIds: [String], to recipientUserId: String = "", status: Shared_Proto_Signaling_V1_ReceiptStatus) {
-        guard !messageIds.isEmpty else { return }
-
-        // If the live stream isn't open yet, queue delivered receipts for flush when it opens.
-        // (outboundContinuation?.yield silently drops if nil — see sendReceipt guard below)
-        if outboundContinuation == nil, status == .delivered {
-            guard !pendingDeliveredAcks.contains(where: { $0.messageIds == messageIds && $0.recipientUserId == recipientUserId }) else {
-                return  // already queued — dedup to prevent bloat during paging cycles
-            }
-            pendingDeliveredAcks.append(PendingDeliveredAck(messageIds: messageIds, recipientUserId: recipientUserId))
-            Log.info("Receipt queued (stream not open): \(status) for \(messageIds.count) msg(s) → recipient=\(recipientUserId.prefix(8))…", category: "MessageStream")
-            return
-        }
-
-        var direct = Shared_Proto_Signaling_V1_DirectReceipt()
-        direct.messageIds = messageIds
-        direct.status = status
-        direct.timestamp = Int64(Date().timeIntervalSince1970)
-        direct.senderDeviceID = KeychainManager.shared.loadDeviceID() ?? ""
-        direct.recipientUserID = recipientUserId
-
-        var delivery = Shared_Proto_Signaling_V1_DeliveryReceipt()
-        delivery.direct = direct
-
-        var req = Shared_Proto_Services_V1_MessageStreamRequest()
-        req.receipt = delivery
-        outboundContinuation?.yield(req)
-        Log.info("Receipt sent: \(status) for \(messageIds.count) msg(s) → recipient=\(recipientUserId.prefix(8))…", category: "MessageStream")
-    }
+    // `sendReceipt` was removed on 2026-08-02. It wrote a plaintext `DirectReceipt` onto the
+    // authenticated stream carrying `recipientUserID` — the *original sender* — in the clear.
+    // On a sealed envelope the server sets `sender_id` to empty on purpose, so this receipt was
+    // the server's only source for the sender↔recipient link, and `receipts.rs` logged it
+    // unhashed on the "fast path". It bought nothing: the Redis trim runs off
+    // `Subscribe.since_cursor` alone, and `.failed` never triggered a retry (the peer's parser
+    // discards anything that is not `.delivered`).
+    //
+    // Receipts are now E2E only — `OutboundSessionService.sendDeliveryReceipt`.
+    // Receiving a relayed receipt is still supported (`MessageStreamParser`): reading one leaks
+    // nothing, and peers on older builds may still send them.
 
     // MARK: - Private: Connection Loop
 
@@ -700,16 +666,11 @@ final class MessageStreamManager {
                 await TransportRouter.shared.send(.rpcSucceeded(via: okTarget, latencyMs: 0))
                 retryCount = 0
                 shouldFallbackToH2Direct = false
-                // Only clear the fast-UDP failure counter when the stream that just ended cleanly
-                // actually ran over fast-UDP (H3/QUIC). Clearing it on a clean *H2* end (H2 was
-                // chosen because QUIC failed to open) re-arms QUIC for the next reconnect, so
-                // networks that block QUIC via DPI (e.g. RU — FR/AU connect over QUIC fine) re-probe
-                // dead QUIC on every reconnect and pay the ~3s handshake-timeout tax before falling
-                // back. That is the endless thrash this counter + fastUdpUnhealthyUntil cooldown
-                // were meant to stop; the unconditional reset here defeated them. A QUIC-good
-                // network leaves lastStreamTransportWasH3 == true, so QUIC is still cleared normally.
+                // A clean end on fast-UDP re-arms it; a clean end on H2 does not. H2 was chosen
+                // *because* QUIC failed, so treating that as evidence about QUIC would re-probe a
+                // dead transport on every reconnect and pay the handshake timeout each time.
                 if lastStreamTransportWasH3 {
-                    consecutiveH3OpenFailures = 0
+                    fastUdpFailedThisSession = false
                 }
                 lastStreamTransportWasH3 = false
                 continuousFailureStreakStart = nil
@@ -777,8 +738,8 @@ final class MessageStreamManager {
                         Log.info("MessageStream refresh failed (network error) — keeping tokens, will retry later", category: "MessageStream")
                     }
                 }
-                // Fast failover path: openStream() throws this sentinel to force an immediate
-                // reconnect without exponential backoff.
+                // Open-timeout sentinel from openStream(). Immediate retry is only for the
+                // H3→H2 transport hop; same-path timeouts use exponential backoff below.
                 if let rpcError = error as? RPCError,
                    rpcError.code == .unavailable,
                    rpcError.message.contains("retrying with VEIL") {
@@ -791,97 +752,99 @@ final class MessageStreamManager {
                     await reportStreamTransportFailureIfNeeded(
                         kind: kind,
                         via: failTarget,
-                        routingKeyAtLoopStart: routingKeyAtLoopStart
+                        routingKeyAtLoopStart: routingKeyAtLoopStart,
+                        error: rpcError
                     )
                     if lastStreamTransportWasH3 {
-                        consecutiveH3OpenFailures += 1
-                        Log.info("H3 open failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold)", category: "MessageStream")
-                        if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
-                            fastUdpUnhealthyUntil = Date().addingTimeInterval(Self.fastUdpCooldown)
-                            Log.info("Fast-UDP (QUIC/H3) suppressed \(Int(Self.fastUdpCooldown))s — using H2", category: "MessageStream")
-                        }
+                        noteFastUdpOpenFailure(context: "accept_timeout")
                     }
-                    // H3→H2 fallback: if H3 failed on the direct path and VEIL isn't active yet,
-                    // try H2 once before activating VEIL (H3 may be unsupported, not blocked).
                     let routingKeyNow = GRPCChannelManager.shared.currentRoutingKey
                     let nowUsingVEIL = await TransportRouter.shared.snapshot().state.prefersVEIL
-                    if !nowUsingVEIL, routingKeyNow == routingKeyAtLoopStart,
-                       routingKeyAtLoopStart.hasPrefix("direct:"), lastStreamTransportWasH3 {
+                    let disposition = Self.openTimeoutDisposition(
+                        lastTransportWasH3: lastStreamTransportWasH3,
+                        prefersVEIL: nowUsingVEIL,
+                        routingKeyUnchanged: routingKeyNow == routingKeyAtLoopStart,
+                        wasDirectRouting: routingKeyAtLoopStart.hasPrefix("direct:")
+                    )
+                    switch disposition {
+                    case .immediateTransportFailover:
                         shouldFallbackToH2Direct = true
-                        Log.info("H3 direct timeout — trying H2 direct next", category: "MessageStream")
-                    } else {
-                        shouldFallbackToH2Direct = false
-                        lastStreamTransportWasH3 = false
-                    }
-                    Log.info("MessageStream reconnecting immediately (VEIL=\(nowUsingVEIL))", category: "MessageStream")
-                    backgroundFetchTask?.cancel()
-                    retryCount = 0
-                    // If grpcServerChanged already scheduled a debounced reconnect, do not
-                    // open another stream in this loop — that is the dual-connect storm
-                    // (connectLoop open + forceDisconnect/connect 2s later).
-                    if routingReconnectDebounce != nil {
-                        Log.info(
-                            "MessageStream fast-failover deferred to pending routing reconnect",
-                            category: "MessageStream"
-                        )
-                        break
-                    }
-                    // VEIL probe in flight: wait for active (or timeout) so the next
-                    // openStream uses ice:port instead of racing a doomed direct open.
-                    if case .veilProbing = await TransportRouter.shared.snapshot().state {
-                        let becameActive = await waitWhileVeilProbing(timeoutSeconds: 8)
+                        Log.info("H3 direct timeout — trying H2 direct next (immediate failover)", category: "MessageStream")
+                        backgroundFetchTask?.cancel()
+                        retryCount = 0
+                        // If grpcServerChanged already scheduled a debounced reconnect, do not
+                        // open another stream in this loop — that is the dual-connect storm
+                        // (connectLoop open + forceDisconnect/connect 2s later).
                         if routingReconnectDebounce != nil {
                             Log.info(
-                                "MessageStream VEIL wait ended with pending routing reconnect — yielding",
+                                "MessageStream fast-failover deferred to pending routing reconnect",
                                 category: "MessageStream"
                             )
                             break
                         }
-                        if !becameActive {
-                            Log.info(
-                                "MessageStream VEIL probe did not become active within timeout — continuing openStream",
-                                category: "MessageStream"
-                            )
+                        // VEIL probe in flight: wait for active (or timeout) so the next
+                        // openStream uses ice:port instead of racing a doomed direct open.
+                        if case .veilProbing = await TransportRouter.shared.snapshot().state {
+                            let becameActive = await waitWhileVeilProbing(timeoutSeconds: 8)
+                            if routingReconnectDebounce != nil {
+                                Log.info(
+                                    "MessageStream VEIL wait ended with pending routing reconnect — yielding",
+                                    category: "MessageStream"
+                                )
+                                break
+                            }
+                            if !becameActive {
+                                Log.info(
+                                    "MessageStream VEIL probe did not become active within timeout — continuing openStream",
+                                    category: "MessageStream"
+                                )
+                            }
                         }
+                        continue
+                    case .exponentialBackoff:
+                        // Same path already timed out (often H2 after flaky network / app thrash).
+                        // Fall through to the shared backoff sleep — do not tight-loop openStream.
+                        shouldFallbackToH2Direct = false
+                        lastStreamTransportWasH3 = false
+                        Log.info(
+                            "MessageStream open timed out on same path (VEIL=\(nowUsingVEIL)) — applying backoff",
+                            category: "MessageStream"
+                        )
                     }
-                    continue
-                }
-                // Generic stream failure → feed to the FSM.
-                let kind = RPCFailureClassifier.classify(error)
-                let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("veil:")
-                    ? .veil(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
-                           relay: routerSnapshot.state.currentRelay ?? "")
-                    : .direct(.h2)
-                await reportStreamTransportFailureIfNeeded(
-                    kind: kind,
-                    via: failTarget,
-                    routingKeyAtLoopStart: routingKeyAtLoopStart
-                )
-                if lastStreamTransportWasH3 {
-                    consecutiveH3OpenFailures += 1
-                    // First open failure → next connectLoop iteration uses H2 immediately
-                    // (shouldFallbackToH2Direct), without waiting for a second full QUIC
-                    // handshake timeout (often 3s each) before the stream is usable.
-                    shouldFallbackToH2Direct = true
-                    Log.info("H3 failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold) — next open prefers H2", category: "MessageStream")
-                    if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
-                        fastUdpUnhealthyUntil = Date().addingTimeInterval(Self.fastUdpCooldown)
-                        Log.info("Fast-UDP (QUIC/H3) suppressed \(Int(Self.fastUdpCooldown))s — DPI/idle death on this network, using H2", category: "MessageStream")
-                    }
-                }
-                // Log full error details for diagnosis
-                if let rpcError = error as? RPCError {
-                    Log.error("""
-                        MessageStream RPC error:
-                           code    = \(rpcError.code)
-                           message = \(rpcError.message)
-                           host    = \(host):\(port)
-                           attempt = #\(retryCount + 1)
-                        """, category: "MessageStream")
                 } else {
-                    Log.error("MessageStream error (attempt #\(retryCount + 1)): \(error)", category: "MessageStream")
+                    // Generic stream failure → feed to the FSM.
+                    let kind = RPCFailureClassifier.classify(error)
+                    let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("veil:")
+                        ? .veil(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
+                               relay: routerSnapshot.state.currentRelay ?? "")
+                        : .direct(.h2)
+                    await reportStreamTransportFailureIfNeeded(
+                        kind: kind,
+                        via: failTarget,
+                        routingKeyAtLoopStart: routingKeyAtLoopStart,
+                        error: error
+                    )
+                    if lastStreamTransportWasH3 {
+                        // First open failure → next connectLoop iteration uses H2 immediately
+                        // (shouldFallbackToH2Direct), without waiting for a second full QUIC
+                        // handshake timeout (often 3s each) before the stream is usable.
+                        shouldFallbackToH2Direct = true
+                        noteFastUdpOpenFailure(context: "stream_failure")
+                    }
+                    // Log full error details for diagnosis
+                    if let rpcError = error as? RPCError {
+                        Log.error("""
+                            MessageStream RPC error:
+                               code    = \(rpcError.code)
+                               message = \(rpcError.message)
+                               host    = \(host):\(port)
+                               attempt = #\(retryCount + 1)
+                            """, category: "MessageStream")
+                    } else {
+                        Log.error("MessageStream error (attempt #\(retryCount + 1)): \(error)", category: "MessageStream")
+                    }
+                    ConnectionStatusManager.shared.setLastError(error.localizedDescription)
                 }
-                ConnectionStatusManager.shared.setLastError(error.localizedDescription)
             }
 
             guard !Task.isCancelled else { break }
@@ -919,77 +882,78 @@ final class MessageStreamManager {
         Log.info("MessageStream connectLoop finished", category: "MessageStream")
     }
 
+    /// Ask once, from the cursor we can defend, and let the stream bring the rest.
+    ///
+    /// This used to page: request 50, feed `page.nextCursor` back as the next request's
+    /// `since_cursor`, repeat. `BackgroundFetchManager` did the same and was fixed; this
+    /// copy was not, and this is the one that runs on every reconnect.
+    ///
+    /// A page cursor is not a durability watermark. `GetPendingMessagesResponse` carries one
+    /// `next_cursor` per page, not per message, so it cannot say which messages inside the
+    /// page reached a durable terminal — and page 1 was still sitting in a local array,
+    /// unrouted and unpersisted, when page 2 was requested. `backgroundFetchTask?.cancel()`
+    /// fires at the top of every `connectLoop` iteration and the one-second cap lets this run
+    /// detached, so being cancelled mid-paging was routine, and the array was dropped whole.
+    ///
+    /// The server no longer deletes from a client-supplied cursor (minimal-server-delivery
+    /// steps 1–2), which is what made this destructive rather than merely wrong. It is fixed
+    /// on both sides on purpose: the client must not depend on the server declining to act on
+    /// what it sends.
+    ///
+    /// There is no `lastPendingCursor` any more. It was a second stored position, in its own
+    /// UserDefaults key, holding page boundaries — one meaning carried by two values with
+    /// nothing enforcing their agreement. `StreamCursorStore` is the only resume position, and
+    /// only `StreamCursorTracker` advances it, over the longest contiguous run of messages that
+    /// reached a durable terminal. On upgrade, an install whose abandoned `construct.pendingCursor`
+    /// sat above the committed cursor re-reads from the lower one: redelivery, which the client
+    /// dedups by message id, and never a gap.
     private func fetchMissedMessages() async {
+        let hasToken = await MainActor.run { SessionTokenHydrator.ensureCached() }
+        guard hasToken else {
+            Log.info("fetchMissedMessages skipped — session token not yet restored", category: "MessageStream")
+            return
+        }
+
         let fetchStart = Date()
-        // Drain ALL pending pages so the user sees every missed message on the first reconnect,
-        // not just the first 50 (the previous single-fetch behaviour — bug B08).
-        //
-        // IMPORTANT: use a single gRPC channel for the entire paging loop to avoid creating
-        // dozens of short-lived channels when there are many pending pages.
         do {
-            struct FetchResult: Sendable {
-                let messages: [ChatMessage]
-                let failed: [MessagingServiceClient.FailedMessage]
-                let nextCursor: String
-            }
+            let cursor: String? = StreamCursorStore.load()
+            Log.info(
+                "fetchMissedMessages from cursor=\(cursor ?? "beginning")",
+                category: "MessageStream"
+            )
 
-            let startCursor = lastPendingCursor
-            // INVARIANT: invalidatesConnectionOnFailure must remain false (default).
-            // A fetch failure must not kill the live stream or penalise the current relay.
-            let fetchResult: FetchResult = try await GRPCChannelManager.shared.performRPC(
-                timeout: GRPCTimeouts.getPendingMessages
-            ) { grpcClient in
-                var cursor: String? = startCursor.isEmpty ? nil : startCursor
-                var cursorToPersist: String = startCursor
-                var messages: [ChatMessage] = []
-                var failed: [MessagingServiceClient.FailedMessage] = []
-                var failedIds: Set<String> = []
-                var seenMessageIds: Set<String> = []
-
-                while !Task.isCancelled {
-                    // Snapshot the cursor to avoid capturing a mutable var across a suspension point.
-                    let cursorSnapshot = cursor
-                    let page: MessagingServiceClient.PendingMessagesResult = try await MessagingServiceClient.getPendingMessagesPage(
-                        grpcClient: grpcClient,
-                        sinceCursor: cursorSnapshot,
-                        limit: 50
-                    )
-
-                    cursorToPersist = page.nextCursor
-
-                    if !page.messages.isEmpty {
-                        let pageIds = Set(page.messages.map(\.id))
-                        let newIds = pageIds.subtracting(seenMessageIds)
-                        if newIds.isEmpty {
-                            // Server is cycling the same unACKed messages — receipts haven't been
-                            // sent yet (stream not open). Stop paging; openStream() will flush ACKs.
-                            break
-                        }
-                        seenMessageIds.formUnion(pageIds)
-                        messages.append(contentsOf: page.messages)
-                    }
-
-                    if !page.failedMessages.isEmpty {
-                        for item in page.failedMessages where !failedIds.contains(item.id) {
-                            failedIds.insert(item.id)
-                            failed.append(item)
-                        }
-                    }
-
-                    cursor = page.nextCursor.isEmpty ? nil : page.nextCursor
-                    if cursor == nil { break }
-                }
-
-                return FetchResult(messages: messages, failed: failed, nextCursor: cursorToPersist)
-            }
+            // INVARIANT: invalidatesConnectionOnFailure must remain false (it is the default on
+            // `performRPC`, which this call goes through). A fetch failure must not kill the live
+            // stream or penalise the current relay.
+            let fetchResult = try await MessagingServiceClient.shared.getPendingMessages(
+                sinceCursor: cursor,
+                limit: 50
+            )
 
             ConnectionStatusManager.shared.markRequestSucceeded()
 
-            lastPendingCursor = fetchResult.nextCursor
+            if fetchResult.hasMore {
+                // Not an error and not a reason to page: the backlog drains over successive
+                // reconnects, and the stream delivers the remainder with a per-message cursor
+                // the tracker can actually commit.
+                Log.info(
+                    "Offline backlog deeper than one page — remainder follows on the stream",
+                    category: "MessageStream"
+                )
+            }
 
-            if !fetchResult.failed.isEmpty {
-                Log.info("fetchMissedMessages: \(fetchResult.failed.count) undecryptable message(s) — will ACK as failed once stream opens", category: "MessageStream")
-                pendingFailedAcks.append(contentsOf: fetchResult.failed)
+            // `fetchResult.nextCursor` is deliberately NOT persisted, for the same reason it is
+            // not sent back above: it is a page boundary, not a durability watermark.
+
+            if !fetchResult.failedMessages.isEmpty {
+                // These used to be flushed as `.failed` stream receipts, which the peer's parser
+                // discarded and the server never retried on — the ACK was inert. Count them so
+                // undecryptable backlog stays visible.
+                Log.error("fetchMissedMessages: \(fetchResult.failedMessages.count) undecryptable message(s)", category: "MessageStream")
+                PerformanceMetrics.shared.record(
+                    .undeliveredNoReceipt,
+                    label: "fetch_undecryptable"
+                )
             }
 
             if !fetchResult.messages.isEmpty {
@@ -1007,7 +971,14 @@ final class MessageStreamManager {
             return
         } catch {
             if let rpcError = error as? RPCError {
-                Log.error("fetchMissedMessages RPC error: code=\(rpcError.code) message=\"\(rpcError.message)\"", category: "MessageStream")
+                // Unavailable during connect is the channel coming up (local VEIL proxy,
+                // transient failure) — connectLoop retries. ERROR made a launch race look
+                // like an outage (2026-08-19, 127.0.0.1:50858).
+                if rpcError.code == .unavailable {
+                    Log.info("fetchMissedMessages unavailable — stream will retry: \(rpcError.message)", category: "MessageStream")
+                } else {
+                    Log.error("fetchMissedMessages RPC error: code=\(rpcError.code) message=\"\(rpcError.message)\"", category: "MessageStream")
+                }
             } else {
                 Log.debug("fetchMissedMessages failed: \(error)", category: "MessageStream")
             }
@@ -1033,20 +1004,128 @@ final class MessageStreamManager {
         forceReconnect(contactUserIds: subscriptionUserIds, onMessageReceived: cb)
     }
 
-    /// Experimental QUIC/H3 stream failures are not evidence of DPI — do not feed them
-    /// into the transport FSM or auto mode will spuriously start the VEIL proxy.
+    /// Report data-plane death to `TransportRouter` for **every** carrier (H2 and QUIC).
+    ///
+    /// Previously QUIC/H3 failures were swallowed ("experimental — not reported to router"),
+    /// so auto mode never escalated to VEIL when only the long-lived stream died on DPI
+    /// networks while short HTTPS still worked. See
+    /// `decisions/transport-connection-health-and-escalation.md`.
     private func reportStreamTransportFailureIfNeeded(
         kind: RPCFailureKind,
         via: TransportTarget,
-        routingKeyAtLoopStart: String
+        routingKeyAtLoopStart: String,
+        error: Error? = nil
     ) async {
-        if lastStreamTransportWasH3 || routingKeyAtLoopStart.hasPrefix("engine-quic:") {
-            Log.debug(
-                "Stream transport failure not reported to router — experimental H3/QUIC path (kind=\(kind))",
-                category: "MessageStream"
-            )
-            return
+        let method = streamMethod(
+            wasH3: lastStreamTransportWasH3 || routingKeyAtLoopStart.hasPrefix("engine-quic:"),
+            routingKey: routingKeyAtLoopStart,
+            via: via
+        )
+        // Prefer .direct(.h3) when the failed stream was QUIC so diagnostics match reality.
+        let reportVia: TransportTarget
+        if case .veil = via {
+            reportVia = via
+        } else if method == .quic {
+            reportVia = .direct(.h3)
+        } else {
+            reportVia = via
         }
-        await TransportRouter.shared.send(.rpcFailed(kind: kind, via: via, foreground: true))
+        let streamKind = Self.mapStreamFailureKind(rpcKind: kind, error: error, wasConnected: isConnected)
+        Log.info(
+            "Stream transport failure → router method=\(method.shortLabel) kind=\(streamKind) (rpcKind=\(kind))",
+            category: "MessageStream"
+        )
+        // The trigger for warming a VEIL standby: the direct path has failed at least once in
+        // this session. Recorded here, next to the fact, rather than inferred later from a
+        // counter. Consumer is the standby race — see the property's note for the gap.
+        if !reportVia.isVEIL, !directFailedThisSession {
+            directFailedThisSession = true
+            Log.info("Direct path failed this session — VEIL standby is warranted from here", category: "MessageStream")
+        }
+        await TransportRouter.shared.send(
+            .streamFailed(method: method, kind: streamKind, via: reportVia)
+        )
+    }
+
+    private func streamMethod(wasH3: Bool, routingKey: String, via: TransportTarget) -> StreamMethod {
+        if via.isVEIL || routingKey.hasPrefix("veil:") || routingKey.hasPrefix("ice:") {
+            return .veil
+        }
+        if wasH3 {
+            return .quic
+        }
+        return .h2
+    }
+
+    /// Map legacy RPC classification + error text into stream-specific kinds for the FSM.
+    static func mapStreamFailureKind(
+        rpcKind: RPCFailureKind,
+        error: Error?,
+        wasConnected: Bool
+    ) -> StreamFailureKind {
+        let text = (error as? RPCError)?.message
+            ?? error?.localizedDescription
+            ?? ""
+        let lower = text.lowercased()
+        if lower.contains("write failed") {
+            return .writeFailed
+        }
+        if lower.contains("timeout") || rpcKind == .streamTimeout {
+            return wasConnected ? .midSessionTimeout : .openTimeout
+        }
+        if lower.contains("closed") || lower.contains("cancel") {
+            // `wasConnected` used to be consulted only on the timeout branch above, so a stream
+            // that had been live for 25s and died with "Stream unexpectedly closed" reached the
+            // router as a plain `.closed` — indistinguishable from a stream that never opened.
+            // The fact was computed and then discarded one line before the decision that needed it
+            // (device 2026-08-11: `router method=h2 kind=closed` after a 25s-old stream).
+            return wasConnected ? .midSessionClosed : .closed
+        }
+        return wasConnected ? .midSessionUnknown : .transportUnknown
+    }
+
+    /// Notify router that MessageStream is live (call from onAccepted).
+    func reportStreamOpenedToRouter(transportLabel: String, metricsLabel: String) {
+        let method: StreamMethod
+        let via: TransportTarget
+        if metricsLabel.hasPrefix("veil:") || metricsLabel.hasPrefix("ice:")
+            || GRPCChannelManager.shared.veilProxyPort() != nil {
+            method = .veil
+            let port = GRPCChannelManager.shared.veilProxyPort() ?? 0
+            // currentRelay may be nil briefly; empty string is still tagged veil for the FSM.
+            let relay = TransportRouterMirror.shared.state.currentRelay ?? ""
+            via = .veil(port: port, relay: relay)
+        } else if transportLabel == "QUIC" || transportLabel == "H3" {
+            method = .quic
+            via = .direct(.h3)
+        } else {
+            method = .h2
+            via = .direct(.h2)
+        }
+        Task {
+            await TransportRouter.shared.send(.streamOpened(method: method, via: via))
+        }
+    }
+
+    /// Periodic proof of data-plane liveness (heartbeat ack).
+    func reportStreamHealthyToRouter() {
+        let method: StreamMethod
+        switch activeTransport {
+        case "QUIC", "H3": method = .quic
+        case "H2": method = .h2
+        default:
+            method = GRPCChannelManager.shared.veilProxyPort() != nil ? .veil : .h2
+        }
+        let ageMs: Int
+        if let last = lastHeartbeatDate {
+            ageMs = max(0, Int(Date().timeIntervalSince(last) * 1000))
+        } else {
+            ageMs = 0
+        }
+        Task {
+            await TransportRouter.shared.send(
+                .streamHealthy(method: method, heartbeatAgeMs: ageMs)
+            )
+        }
     }
 }

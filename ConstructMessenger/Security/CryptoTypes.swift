@@ -26,6 +26,11 @@ enum CryptoManagerError: Error, LocalizedError, ApplicationLayerError {
     /// DR decryption failed in the background path. Session is NOT archived — the
     /// foreground stream will handle recovery when the app becomes active.
     case decryptionFailedNoArchive(reason: String)
+    /// A freshly generated private key could not be written to the Keychain, so it exists
+    /// only in memory. Thrown instead of handing the matching public key to a caller that
+    /// would publish it: the next launch would reload a core without that key and generate a
+    /// different one, leaving the server pinned to an identity this device can no longer prove.
+    case keyStatePersistFailed
 
     var errorDescription: String? {
         switch self {
@@ -40,6 +45,7 @@ enum CryptoManagerError: Error, LocalizedError, ApplicationLayerError {
         case .pqxdhOtpkMissing(let id):             return "Kyber OTPK id=\(id) not found locally — session init failed to prevent PQ root key divergence"
         case .invalidSignature:                      return "Invalid signature data from Rust core (expected base64)"
         case .decryptionFailedNoArchive(let reason): return "BG decrypt failed (session preserved): \(reason)"
+        case .keyStatePersistFailed:                 return "Generated key could not be persisted to Keychain — not released to avoid publishing an identity this device cannot keep"
         }
     }
 }

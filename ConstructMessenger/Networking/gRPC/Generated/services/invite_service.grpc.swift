@@ -20,18 +20,6 @@ public enum Shared_Proto_Services_V1_InviteService: Sendable {
     public static let descriptor = GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.InviteService")
     /// Namespace for method metadata.
     public enum Method: Sendable {
-        /// Namespace for "GenerateInvite" metadata.
-        public enum GenerateInvite: Sendable {
-            /// Request type for "GenerateInvite".
-            public typealias Input = Shared_Proto_Services_V1_GenerateInviteRequest
-            /// Response type for "GenerateInvite".
-            public typealias Output = Shared_Proto_Services_V1_GenerateInviteResponse
-            /// Descriptor for "GenerateInvite".
-            public static let descriptor = GRPCCore.MethodDescriptor(
-                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.InviteService"),
-                method: "GenerateInvite"
-            )
-        }
         /// Namespace for "AcceptInvite" metadata.
         public enum AcceptInvite: Sendable {
             /// Request type for "AcceptInvite".
@@ -56,24 +44,10 @@ public enum Shared_Proto_Services_V1_InviteService: Sendable {
                 method: "RevokeInvite"
             )
         }
-        /// Namespace for "ListInvites" metadata.
-        public enum ListInvites: Sendable {
-            /// Request type for "ListInvites".
-            public typealias Input = Shared_Proto_Services_V1_ListInvitesRequest
-            /// Response type for "ListInvites".
-            public typealias Output = Shared_Proto_Services_V1_ListInvitesResponse
-            /// Descriptor for "ListInvites".
-            public static let descriptor = GRPCCore.MethodDescriptor(
-                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.InviteService"),
-                method: "ListInvites"
-            )
-        }
         /// Descriptors for all methods in the "shared.proto.services.v1.InviteService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
-            GenerateInvite.descriptor,
             AcceptInvite.descriptor,
-            RevokeInvite.descriptor,
-            ListInvites.descriptor
+            RevokeInvite.descriptor
         ]
     }
 }
@@ -95,37 +69,19 @@ extension Shared_Proto_Services_V1_InviteService {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > InviteService - управление пригласительными ссылками и QR-кодами
-    /// > для безопасного добавления контактов (one-time use, short TTL)
+    /// > InviteService — one-time contact invites (device-minted v4/v5).
+    /// > 
+    /// > Product path: the client mints and signs the invite. Links use the server
+    /// > max TTL (INVITE_TTL_SECONDS = 43200); QR codes use v5 with ttl=300. The
+    /// > server first learns a jti when it is redeemed (AcceptInvite → burn) or
+    /// > revoked (RevokeInvite → pre-burn). No server-side issuance ledger / ListInvites
+    /// > (INVITE_LIST_REVOKE_SERVER_SPEC, server-influence-minimization).
     public protocol ClientProtocol: Sendable {
-        /// Call the "GenerateInvite" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > Генерация одноразового invite token для QR-кода или deep link
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_GenerateInviteRequest` message.
-        ///   - serializer: A serializer for `Shared_Proto_Services_V1_GenerateInviteRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GenerateInviteResponse` messages.
-        ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
-        /// - Returns: The result of `handleResponse`.
-        func generateInvite<Result>(
-            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GenerateInviteRequest>,
-            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GenerateInviteRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GenerateInviteResponse>,
-            options: GRPCCore.CallOptions,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GenerateInviteResponse>) async throws -> Result
-        ) async throws -> Result where Result: Sendable
-
         /// Call the "AcceptInvite" method.
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Принятие и сжигание invite token (one-time use)
+        /// > Accept and burn a device-minted invite token (one-time use).
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_AcceptInviteRequest` message.
@@ -148,7 +104,16 @@ extension Shared_Proto_Services_V1_InviteService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Отзыв активного invite (до его использования)
+        /// > Pre-burn a jti so an unused invite cannot be redeemed.
+        /// > Contract (iOS depends on each line — do not change casually):
+        /// >   • unused jti → success=true
+        /// >   • already redeemed / already revoked / unknown jti → success=false + message
+        /// >     (normal outcome, not a gRPC error; UI: "already used")
+        /// >   • transport / DB failure → Status::internal (client may retry)
+        /// >   • burn retention = INVITE_BURN_RETENTION_SECONDS (derived from TTL)
+        /// > No ownership check: jti is random UUIDv4 unknown until redeem/revoke;
+        /// > holding the invite is enough to burn it (same as redeeming). Do not add
+        /// > an issuance table to "fix" that.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_RevokeInviteRequest` message.
@@ -166,29 +131,6 @@ extension Shared_Proto_Services_V1_InviteService {
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RevokeInviteResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
-
-        /// Call the "ListInvites" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > Получение списка активных invite'ов пользователя
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_ListInvitesRequest` message.
-        ///   - serializer: A serializer for `Shared_Proto_Services_V1_ListInvitesRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ListInvitesResponse` messages.
-        ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
-        /// - Returns: The result of `handleResponse`.
-        func listInvites<Result>(
-            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListInvitesRequest>,
-            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ListInvitesRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ListInvitesResponse>,
-            options: GRPCCore.CallOptions,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ListInvitesResponse>) async throws -> Result
-        ) async throws -> Result where Result: Sendable
     }
 
     /// Generated client for the "shared.proto.services.v1.InviteService" service.
@@ -199,8 +141,13 @@ extension Shared_Proto_Services_V1_InviteService {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > InviteService - управление пригласительными ссылками и QR-кодами
-    /// > для безопасного добавления контактов (one-time use, short TTL)
+    /// > InviteService — one-time contact invites (device-minted v4/v5).
+    /// > 
+    /// > Product path: the client mints and signs the invite. Links use the server
+    /// > max TTL (INVITE_TTL_SECONDS = 43200); QR codes use v5 with ttl=300. The
+    /// > server first learns a jti when it is redeemed (AcceptInvite → burn) or
+    /// > revoked (RevokeInvite → pre-burn). No server-side issuance ledger / ListInvites
+    /// > (INVITE_LIST_REVOKE_SERVER_SPEC, server-influence-minimization).
     public struct Client<Transport>: ClientProtocol where Transport: GRPCCore.ClientTransport {
         private let client: GRPCCore.GRPCClient<Transport>
 
@@ -212,45 +159,11 @@ extension Shared_Proto_Services_V1_InviteService {
             self.client = client
         }
 
-        /// Call the "GenerateInvite" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > Генерация одноразового invite token для QR-кода или deep link
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_GenerateInviteRequest` message.
-        ///   - serializer: A serializer for `Shared_Proto_Services_V1_GenerateInviteRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GenerateInviteResponse` messages.
-        ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
-        /// - Returns: The result of `handleResponse`.
-        public func generateInvite<Result>(
-            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GenerateInviteRequest>,
-            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GenerateInviteRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GenerateInviteResponse>,
-            options: GRPCCore.CallOptions = .defaults,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GenerateInviteResponse>) async throws -> Result = { response in
-                try response.message
-            }
-        ) async throws -> Result where Result: Sendable {
-            try await self.client.unary(
-                request: request,
-                descriptor: Shared_Proto_Services_V1_InviteService.Method.GenerateInvite.descriptor,
-                serializer: serializer,
-                deserializer: deserializer,
-                options: options,
-                onResponse: handleResponse
-            )
-        }
-
         /// Call the "AcceptInvite" method.
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Принятие и сжигание invite token (one-time use)
+        /// > Accept and burn a device-minted invite token (one-time use).
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_AcceptInviteRequest` message.
@@ -284,7 +197,16 @@ extension Shared_Proto_Services_V1_InviteService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Отзыв активного invite (до его использования)
+        /// > Pre-burn a jti so an unused invite cannot be redeemed.
+        /// > Contract (iOS depends on each line — do not change casually):
+        /// >   • unused jti → success=true
+        /// >   • already redeemed / already revoked / unknown jti → success=false + message
+        /// >     (normal outcome, not a gRPC error; UI: "already used")
+        /// >   • transport / DB failure → Status::internal (client may retry)
+        /// >   • burn retention = INVITE_BURN_RETENTION_SECONDS (derived from TTL)
+        /// > No ownership check: jti is random UUIDv4 unknown until redeem/revoke;
+        /// > holding the invite is enough to burn it (same as redeeming). Do not add
+        /// > an issuance table to "fix" that.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_RevokeInviteRequest` message.
@@ -313,80 +235,17 @@ extension Shared_Proto_Services_V1_InviteService {
                 onResponse: handleResponse
             )
         }
-
-        /// Call the "ListInvites" method.
-        ///
-        /// > Source IDL Documentation:
-        /// >
-        /// > Получение списка активных invite'ов пользователя
-        ///
-        /// - Parameters:
-        ///   - request: A request containing a single `Shared_Proto_Services_V1_ListInvitesRequest` message.
-        ///   - serializer: A serializer for `Shared_Proto_Services_V1_ListInvitesRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ListInvitesResponse` messages.
-        ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
-        /// - Returns: The result of `handleResponse`.
-        public func listInvites<Result>(
-            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListInvitesRequest>,
-            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ListInvitesRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ListInvitesResponse>,
-            options: GRPCCore.CallOptions = .defaults,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ListInvitesResponse>) async throws -> Result = { response in
-                try response.message
-            }
-        ) async throws -> Result where Result: Sendable {
-            try await self.client.unary(
-                request: request,
-                descriptor: Shared_Proto_Services_V1_InviteService.Method.ListInvites.descriptor,
-                serializer: serializer,
-                deserializer: deserializer,
-                options: options,
-                onResponse: handleResponse
-            )
-        }
     }
 }
 
 // Helpers providing default arguments to 'ClientProtocol' methods.
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 extension Shared_Proto_Services_V1_InviteService.ClientProtocol {
-    /// Call the "GenerateInvite" method.
-    ///
-    /// > Source IDL Documentation:
-    /// >
-    /// > Генерация одноразового invite token для QR-кода или deep link
-    ///
-    /// - Parameters:
-    ///   - request: A request containing a single `Shared_Proto_Services_V1_GenerateInviteRequest` message.
-    ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
-    /// - Returns: The result of `handleResponse`.
-    public func generateInvite<Result>(
-        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GenerateInviteRequest>,
-        options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GenerateInviteResponse>) async throws -> Result = { response in
-            try response.message
-        }
-    ) async throws -> Result where Result: Sendable {
-        try await self.generateInvite(
-            request: request,
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GenerateInviteRequest>(),
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GenerateInviteResponse>(),
-            options: options,
-            onResponse: handleResponse
-        )
-    }
-
     /// Call the "AcceptInvite" method.
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Принятие и сжигание invite token (one-time use)
+    /// > Accept and burn a device-minted invite token (one-time use).
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_AcceptInviteRequest` message.
@@ -415,7 +274,16 @@ extension Shared_Proto_Services_V1_InviteService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Отзыв активного invite (до его использования)
+    /// > Pre-burn a jti so an unused invite cannot be redeemed.
+    /// > Contract (iOS depends on each line — do not change casually):
+    /// >   • unused jti → success=true
+    /// >   • already redeemed / already revoked / unknown jti → success=false + message
+    /// >     (normal outcome, not a gRPC error; UI: "already used")
+    /// >   • transport / DB failure → Status::internal (client may retry)
+    /// >   • burn retention = INVITE_BURN_RETENTION_SECONDS (derived from TTL)
+    /// > No ownership check: jti is random UUIDv4 unknown until redeem/revoke;
+    /// > holding the invite is enough to burn it (same as redeeming). Do not add
+    /// > an issuance table to "fix" that.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_RevokeInviteRequest` message.
@@ -439,78 +307,16 @@ extension Shared_Proto_Services_V1_InviteService.ClientProtocol {
             onResponse: handleResponse
         )
     }
-
-    /// Call the "ListInvites" method.
-    ///
-    /// > Source IDL Documentation:
-    /// >
-    /// > Получение списка активных invite'ов пользователя
-    ///
-    /// - Parameters:
-    ///   - request: A request containing a single `Shared_Proto_Services_V1_ListInvitesRequest` message.
-    ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
-    /// - Returns: The result of `handleResponse`.
-    public func listInvites<Result>(
-        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListInvitesRequest>,
-        options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ListInvitesResponse>) async throws -> Result = { response in
-            try response.message
-        }
-    ) async throws -> Result where Result: Sendable {
-        try await self.listInvites(
-            request: request,
-            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ListInvitesRequest>(),
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_ListInvitesResponse>(),
-            options: options,
-            onResponse: handleResponse
-        )
-    }
 }
 
 // Helpers providing sugared APIs for 'ClientProtocol' methods.
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 extension Shared_Proto_Services_V1_InviteService.ClientProtocol {
-    /// Call the "GenerateInvite" method.
-    ///
-    /// > Source IDL Documentation:
-    /// >
-    /// > Генерация одноразового invite token для QR-кода или deep link
-    ///
-    /// - Parameters:
-    ///   - message: request message to send.
-    ///   - metadata: Additional metadata to send, defaults to empty.
-    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
-    /// - Returns: The result of `handleResponse`.
-    public func generateInvite<Result>(
-        _ message: Shared_Proto_Services_V1_GenerateInviteRequest,
-        metadata: GRPCCore.Metadata = [:],
-        options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GenerateInviteResponse>) async throws -> Result = { response in
-            try response.message
-        }
-    ) async throws -> Result where Result: Sendable {
-        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_GenerateInviteRequest>(
-            message: message,
-            metadata: metadata
-        )
-        return try await self.generateInvite(
-            request: request,
-            options: options,
-            onResponse: handleResponse
-        )
-    }
-
     /// Call the "AcceptInvite" method.
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Принятие и сжигание invite token (one-time use)
+    /// > Accept and burn a device-minted invite token (one-time use).
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -543,7 +349,16 @@ extension Shared_Proto_Services_V1_InviteService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Отзыв активного invite (до его использования)
+    /// > Pre-burn a jti so an unused invite cannot be redeemed.
+    /// > Contract (iOS depends on each line — do not change casually):
+    /// >   • unused jti → success=true
+    /// >   • already redeemed / already revoked / unknown jti → success=false + message
+    /// >     (normal outcome, not a gRPC error; UI: "already used")
+    /// >   • transport / DB failure → Status::internal (client may retry)
+    /// >   • burn retention = INVITE_BURN_RETENTION_SECONDS (derived from TTL)
+    /// > No ownership check: jti is random UUIDv4 unknown until redeem/revoke;
+    /// > holding the invite is enough to burn it (same as redeeming). Do not add
+    /// > an issuance table to "fix" that.
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -566,39 +381,6 @@ extension Shared_Proto_Services_V1_InviteService.ClientProtocol {
             metadata: metadata
         )
         return try await self.revokeInvite(
-            request: request,
-            options: options,
-            onResponse: handleResponse
-        )
-    }
-
-    /// Call the "ListInvites" method.
-    ///
-    /// > Source IDL Documentation:
-    /// >
-    /// > Получение списка активных invite'ов пользователя
-    ///
-    /// - Parameters:
-    ///   - message: request message to send.
-    ///   - metadata: Additional metadata to send, defaults to empty.
-    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
-    /// - Returns: The result of `handleResponse`.
-    public func listInvites<Result>(
-        _ message: Shared_Proto_Services_V1_ListInvitesRequest,
-        metadata: GRPCCore.Metadata = [:],
-        options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ListInvitesResponse>) async throws -> Result = { response in
-            try response.message
-        }
-    ) async throws -> Result where Result: Sendable {
-        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListInvitesRequest>(
-            message: message,
-            metadata: metadata
-        )
-        return try await self.listInvites(
             request: request,
             options: options,
             onResponse: handleResponse

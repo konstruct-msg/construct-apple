@@ -162,9 +162,7 @@ enum NetworkTiming {
             static let blockUser: TimeInterval = 15
             static let unblockUser: TimeInterval = 15
 
-            static let generateInvite: TimeInterval = 15
             static let acceptInvite: TimeInterval = 20
-            static let listInvites: TimeInterval = 15
             static let revokeInvite: TimeInterval = 15
 
             static let reportSpam: TimeInterval = 15

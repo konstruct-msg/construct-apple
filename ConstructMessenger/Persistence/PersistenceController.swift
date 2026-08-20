@@ -99,6 +99,59 @@ struct PersistenceController {
         container = c
 
         migrateExistingContactsToSynaps()
+        repairFutureTimestamps()
+    }
+
+    /// Pull any stored timestamp that lies in the future back to now, and repair the chat
+    /// previews that such a timestamp froze.
+    ///
+    /// Remote timestamps used to be stored verbatim, so a peer with a fast clock could
+    /// write a message — and therefore a `lastMessageTime` — ahead of real time. Since
+    /// `Chat.applyPreview` refuses to move a preview backwards, that row then rejected
+    /// every later message and stayed stuck on the stale text until wall-clock caught up.
+    /// Ingestion now clamps (`Date.fromRemoteTimestamp`), but rows written before that
+    /// still need pulling back.
+    ///
+    /// Deliberately NOT guarded by a one-time UserDefaults flag: the normal case is a
+    /// fetch that matches nothing, and a flag would make the repair unrepeatable for
+    /// anyone who acquired a bad row between updates.
+    private func repairFutureTimestamps() {
+        let context = container.viewContext
+        let now = Date()
+
+        let messageFetch = Message.fetchRequest()
+        messageFetch.predicate = NSPredicate(format: "timestamp > %@", now as NSDate)
+        let futureMessages = (try? context.fetch(messageFetch)) ?? []
+
+        let chatFetch = Chat.fetchRequest()
+        chatFetch.predicate = NSPredicate(format: "lastMessageTime > %@", now as NSDate)
+        let futureChats = (try? context.fetch(chatFetch)) ?? []
+
+        guard !futureMessages.isEmpty || !futureChats.isEmpty else { return }
+
+        for message in futureMessages {
+            message.timestamp = now
+        }
+        // Recompute from the (now clamped) newest surviving message rather than assigning
+        // `now` — the preview text must match whatever the transcript actually ends with.
+        for chat in futureChats {
+            let newest = (chat.messages as? Set<Message>)?.max(by: { $0.timestamp < $1.timestamp })
+            if let newest {
+                chat.applyPreview(text: newest.displayText, timestamp: newest.timestamp, force: true)
+            } else {
+                chat.lastMessageTime = now
+            }
+        }
+
+        do {
+            try context.save()
+            Log.info(
+                "Repaired future timestamps: \(futureMessages.count) message(s), \(futureChats.count) chat preview(s)",
+                category: "Persistence"
+            )
+        } catch {
+            Log.error("Failed to repair future timestamps: \(error)", category: "Persistence")
+        }
     }
 
     /// One-time migration: marks all existing Users who have chats as isContact=true.

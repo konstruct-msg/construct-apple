@@ -201,14 +201,14 @@ class MessageRetryManager {
         do {
             sealedInner = try await StealthSenderService.buildSealedInner(
                 recipientUserId: recipientId, recipientIdentityKey: recipientIK,
-                encryptedPayload: wirePayload, contentType: .e2EeSignal)
+                encryptedPayload: wirePayload, contentType: .generic)
         } catch {
             throw StealthDowngradeBlocked(reason: "retry seal failed: \(error)")
         }
         return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
             try await StealthSenderService.buildSealedInner(
                 recipientUserId: recipientId, recipientIdentityKey: recipientIK,
-                encryptedPayload: wirePayload, contentType: .e2EeSignal)
+                encryptedPayload: wirePayload, contentType: .generic)
         }, send: { inner in
             if FeatureFlags.sealedSenderUnauthenticatedTransport {
                 return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)
@@ -313,7 +313,29 @@ class MessageRetryManager {
             .map { $0.id }
 
         guard !pendingIds.isEmpty || !reencryptIds.isEmpty else {
-            Log.info("sendQueuedMessages: no queued messages with reusable wire payload or recoverable plaintext for \(recipientId.prefix(8))… — preserving local queue", category: "MessageRetryManager")
+            // Nothing here is sendable, and not for a reason that can change: `pendingIds` and
+            // `reencryptIds` between them cover every row with recoverable plaintext, so an empty
+            // pair means not one queued row still has its body. There is no ciphertext to replay
+            // and nothing to re-encrypt — the row cannot be sent by this or any later tick, and
+            // renders as an empty bubble besides.
+            //
+            // Until build 585 this branch just logged and returned, every tick, forever. The rows
+            // stayed "queued", which promises the user a send that cannot happen. `.failed` is the
+            // true statement. (Most of these arrived here by demotion from `.delivered` —
+            // see `DeliveryStatusTransition` — so the population should stop growing.)
+            var stranded = 0
+            for message in queuedMessages where message.deliveryStatus == .queued {
+                message.deliveryStatus = .failed
+                stranded += 1
+            }
+            if stranded > 0 {
+                context.saveAndLog()
+            }
+            Log.info(
+                "sendQueuedMessages: no queued messages with reusable wire payload or recoverable " +
+                "plaintext for \(recipientId.prefix(8))… — \(stranded) unsendable row(s) marked failed",
+                category: "MessageRetryManager"
+            )
             return
         }
 

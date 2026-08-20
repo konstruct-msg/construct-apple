@@ -34,7 +34,7 @@ final class MessageCryptoService {
         for userId: String,
         core: OrchestratorCore?,
         restoreSession: (String) -> Bool,
-        saveSession: (String) -> Void,
+        saveSession: (String) -> Bool,
         archiveSession: (String, ArchiveReason) -> Void
     ) throws -> EncryptedMessageComponents {
         guard let core = core else {
@@ -107,7 +107,14 @@ final class MessageCryptoService {
             Log.debug("   content (after padding): \(components.content.count) bytes", category: "CryptoManager")
             #endif
 
-            saveSession(userId)
+            // Fail-closed durability: core.encryptMessage above already advanced the sending chain.
+            // Calls share this DR session with messages, so releasing this signaling ciphertext when
+            // the advance is not durable risks a message-number-reuse desync on a crash + stale
+            // reload. Refuse; the caller treats it as a signaling failure and retries.
+            guard saveSession(userId) else {
+                Log.error("encryptMessage: session persist FAILED for \(userId.prefix(8))… — refusing to release ciphertext (prevents ratchet number reuse)", category: "CryptoManager")
+                throw CryptoManagerError.encryptionFailed
+            }
             return components
         } catch {
             throw CryptoManagerError.encryptionFailed

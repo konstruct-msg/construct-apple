@@ -84,6 +84,7 @@ struct RegistrationStageView: View {
                 .id(phaseLabel)
                 .transition(.opacity.animation(.easeInOut(duration: 0.4)))
         }
+        .accessibilityIdentifier(A11y.Registration.preparing)
     }
 
     // MARK: Complete
@@ -109,6 +110,7 @@ struct RegistrationStageView: View {
             .background(Color.CT.bgMsg)
             .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 0.5))
         }
+        .accessibilityIdentifier(A11y.Registration.complete)
     }
 
     // MARK: Error
@@ -123,6 +125,7 @@ struct RegistrationStageView: View {
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
         }
+        .accessibilityIdentifier(A11y.Registration.error)
     }
 
     // MARK: Action button
@@ -134,15 +137,18 @@ struct RegistrationStageView: View {
             CTButton(label: NSLocalizedString("reg_continue", comment: "").uppercased()) {
                 onComplete?()
             }
+            .accessibilityIdentifier(A11y.Registration.continue)
         case .error:
             CTButton(label: NSLocalizedString("reg_try_again", comment: "").uppercased(), isDestructive: true) {
                 onDismiss?()
             }
+            .accessibilityIdentifier(A11y.Registration.retry)
         default:
             Button(NSLocalizedString("reg_cancel", comment: "")) { onDismiss?() }
                 .font(CTFont.regular(13))
                 .foregroundColor(Color.CT.textDim)
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(A11y.Registration.cancel)
         }
     }
 
@@ -396,8 +402,10 @@ struct RegistrationFlowView: View {
             let savedRefreshToken = AuthSessionManager.shared.refreshToken
             
             if savedAccessToken != nil && savedRefreshToken != nil {
-                Log.info("   accessToken: \(savedAccessToken!.prefix(20))...", category: "Registration")
-                Log.info("   refreshToken: \(savedRefreshToken!.prefix(20))...", category: "Registration")
+                // Presence and length only — a token prefix is still bearer material, and this
+                // line is persisted to an exportable file in INTERNAL_TOOLS builds.
+                Log.info("   accessToken: present (\(savedAccessToken!.count) chars)", category: "Registration")
+                Log.info("   refreshToken: present (\(savedRefreshToken!.count) chars)", category: "Registration")
                 Log.info("   isSessionValid: \(AuthSessionManager.shared.isSessionValid)", category: "Registration")
             } else {
                 Log.error("   Session tokens verification FAILED!", category: "Registration")

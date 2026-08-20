@@ -180,6 +180,9 @@ actor VeilCertFetcher {
     private static let cachedDeprecatedIdsKey = "construct.ice_deprecated_relay_ids"
     /// UserDefaults key for cached server Ed25519 bundle-signing public key (raw Data, 32 bytes).
     static let cachedBundleSigningKeyKey = "construct.bundle_signing_key"
+    /// `signed_at` of the newest manifest accepted so far — the high-water mark
+    /// `RelayManifestFreshness` compares against. Stored raw, in whichever form the manifest used.
+    static let cachedSignedAtKey = "construct.manifest_signed_at"
 
     /// Returns the set of relay IDs the server has marked as deprecated.
     /// Clients whose active relay's manifest ID appears in this set should rotate immediately.
@@ -198,14 +201,24 @@ actor VeilCertFetcher {
     /// - passes Ed25519 signature verification
     /// wins and is persisted to UserDefaults.
     ///
-    /// Source: konstruct.cc primary. The `construct-relay` GitHub-raw mirror was
-    /// removed when obfs4/WebTunnel were retired in favour of veil-front
-    /// (2026-06-12); the veil-front relay is hardcoded and per-user tickets are
-    /// delivered out-of-band, so this legacy manifest no longer needs a RU mirror.
+    /// Source: konstruct.cc primary, `raw.githubusercontent.com` mirror.
+    ///
+    /// A GitHub-raw mirror existed and was dropped on 2026-06-12, when obfs4/WebTunnel gave way to
+    /// veil-front and the manifest stopped carrying anything a censored user needed urgently. That
+    /// left one fetch location for a file the client cannot start cleanly without — including
+    /// `bundle_signing_key`, which is not relay business at all. One name, one registrar, one
+    /// hosting account: a domain problem and a config problem became the same problem.
+    ///
+    /// The mirror is not a second source of truth. The manifest is Ed25519-signed and verified
+    /// against a key in the binary, so both hosts serve bytes we signed and neither is trusted for
+    /// being itself. What the mirror adds is a second failure domain — different DNS, different
+    /// registrar, different operator. What it costs is a freshness rule, because the race below
+    /// takes the first response that verifies: see `RelayManifestFreshness`.
     @discardableResult
     func fetchAndCacheRelayConfig() async -> [RelayInfo]? {
         let mirrorURLs: [String] = [
             "https://\(ServerConfig.inviteHost)/.well-known/construct-server",
+            "https://raw.githubusercontent.com/konstruct-msg/construct-server/main/.well-known/construct-server",
         ]
 
         if let relays = await fetchVerifiedRelayConfig(from: mirrorURLs) {
@@ -234,6 +247,26 @@ actor VeilCertFetcher {
                             return nil
                         }
                         let parsed = try JSONDecoder().decode(ConstructServerWellKnown.self, from: data)
+
+                        // Freshness before ANY persistence. A correct signature proves authorship,
+                        // never recency, so with two hosts racing, the slower one holding an older
+                        // manifest would otherwise install it — including the bundle-signing key
+                        // below, which is exactly what a rollback would want.
+                        let cachedSignedAt = UserDefaults.standard.string(forKey: Self.cachedSignedAtKey)
+                        switch RelayManifestFreshness.verdict(candidateSignedAt: parsed.signedAt,
+                                                              cachedSignedAt: cachedSignedAt) {
+                        case .accept:
+                            break
+                        case .rejectOlder:
+                            Log.info("Manifest via \(url.host ?? "?") is older than cached (\(parsed.signedAt ?? "nil") < \(cachedSignedAt ?? "nil")) — ignoring", category: "VEIL")
+                            return nil
+                        case .rejectUndatable:
+                            Log.error("Manifest via \(url.host ?? "?") has no usable signed_at while a dated one is cached — ignoring", category: "VEIL")
+                            return nil
+                        }
+                        if let signedAt = parsed.signedAt {
+                            UserDefaults.standard.set(signedAt, forKey: Self.cachedSignedAtKey)
+                        }
 
                         // Persist the bundle-signing key BEFORE the relay guard: stealth
                         // sender-certificate verification and prekey-bundle/KT checks depend

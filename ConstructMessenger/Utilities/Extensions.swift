@@ -15,6 +15,29 @@ extension Date {
     static func from(timestamp: Int64) -> Date {
         Date(timeIntervalSince1970: TimeInterval(timestamp))
     }
+
+    /// A timestamp supplied by a peer, clamped so it can never be in the future.
+    ///
+    /// Nothing on the wire proves the sender's clock is right — the value is skew- and
+    /// sender-controlled. A timestamp ahead of us pins the message to the top of the
+    /// transcript, and because `Chat.applyPreview` refuses to move a preview backwards it
+    /// also **freezes the chat-list row** until wall-clock time catches up: every later
+    /// message, local or remote, is rejected as "older". Before the preview ordering guard
+    /// landed (`4082ca58`) that was self-correcting — the next message simply overwrote it
+    /// — so the guard turned a transient wrong preview into a permanent one.
+    ///
+    /// A message cannot have been sent after we received it, so `now` is a sound ceiling.
+    /// The lower bound is deliberately left alone: an old timestamp is legitimate for
+    /// anything that sat in the server's offline queue.
+    static func fromRemoteTimestamp(_ seconds: UInt64, now: Date = Date()) -> Date {
+        let claimed = Date(timeIntervalSince1970: TimeInterval(seconds))
+        guard claimed > now else { return claimed }
+        Log.info(
+            "Clamped a remote timestamp \(Int(claimed.timeIntervalSince(now)))s in the future to now",
+            category: "Messaging"
+        )
+        return now
+    }
 }
 
 extension String {

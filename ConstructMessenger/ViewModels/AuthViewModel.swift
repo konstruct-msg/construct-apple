@@ -216,6 +216,16 @@ class AuthViewModel {
         // wires up CryptoCore, loads user profile, and starts SPK rotation check
         // in the background so it completes before the user can share a QR code.
         func finishAuth(userId: String) {
+            // Upgrade path, and it is load-bearing: every device installed before the ownership
+            // marker existed has unlabelled data plus a valid identity. Claiming here — while
+            // that identity is still authenticated and long before registration is reachable —
+            // is what stops `LocalStoreOwnership` from wiping the history of every user who
+            // updates. Removing this line does not fail a build; it deletes people's chats.
+            if LocalStoreOwnership.claimIfUnowned(userId) {
+                Log.info("Local store claimed by \(userId.prefix(8))… (first run after upgrade)", category: "Auth")
+            } else {
+                self.enforceLocalStoreOwnership(for: userId)
+            }
             self.currentUserId = userId
             self.isAuthenticated = true
             self.deviceDeregistered = false
@@ -311,6 +321,13 @@ class AuthViewModel {
         case .noDeviceKeys:
             Log.info("No device keys found - user needs to register")
             hasRegisteredDeviceKeys = false
+        case .keysUnreadable(let detail):
+            // The identity is probably still on this device — the Keychain just would not hand
+            // it over (locked before first unlock, protected data unavailable). Routing to
+            // onboarding here is how an account resets itself: see the 2026-08-09 incident and
+            // `DeviceKeyAvailability`. Send it to the same recovery screen the token-refresh
+            // path has always used.
+            handleLostDeviceKeys(userId: currentUserId ?? "", reason: "device auth: \(detail)")
         case .failed(let description):
             Log.info("Device authentication failed: \(description)", category: "Auth")
 
@@ -430,6 +447,12 @@ class AuthViewModel {
 
 
     func finalizeDeviceRegistration(userId: String, username: String?) {
+        // Before this identity is shown anything: the store may still hold the previous one's
+        // contacts and transcripts. On 2026-08-09 a freshly registered account came up with
+        // twelve inherited contacts. Registration is the one moment a *different* identity
+        // takes over a device, so the gate belongs here.
+        enforceLocalStoreOwnership(for: userId)
+
         currentUserId = userId
         isAuthenticated = true
         hasRegisteredDeviceKeys = true
@@ -499,6 +522,84 @@ class AuthViewModel {
             Log.debug("Profile fetch after device link failed (non-fatal): \(error)", category: "DeviceLink")
         }
     }
+
+    /// Wipe the local store unless `userId` owns it, then record ownership.
+    ///
+    /// The gate, not a wipe-on-sign-out: signing out and recovering with a seed phrase keeps the
+    /// same `userId`, and deleting history there would be a second bug. Data belongs to an
+    /// identity; nobody else may see it. See `LocalStoreOwnership`.
+    func enforceLocalStoreOwnership(for userId: String) {
+        guard !userId.isEmpty else { return }
+
+        let stored = LocalStoreOwnership.storedOwner()
+        let hasData = localStoreHasUserData()
+
+        switch LocalStoreOwnership.disposition(
+            storedOwner: stored,
+            incomingUser: userId,
+            storeHasData: hasData
+        ) {
+        case .keep:
+            LocalStoreOwnership.claim(userId)
+        case .wipe:
+            Log.error(
+                "Local store belongs to \(stored?.prefix(8).description ?? "an unknown identity") — " +
+                "wiping before \(userId.prefix(8))… is shown anything",
+                category: "Auth"
+            )
+            wipeLocalStoreContents()
+            LocalStoreOwnership.claim(userId)
+        }
+    }
+
+    /// True when the store holds anything that identifies people or conversations.
+    ///
+    /// Deliberately narrow: these three are what leaked. Counting `Message` alone would miss a
+    /// contact list with no transcript, which is the more sensitive half.
+    private func localStoreHasUserData() -> Bool {
+        guard let context = PersistenceController.shared.safeViewContext else { return false }
+        for entityName in ["User", "Chat", "Message"] {
+            let request = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
+            request.fetchLimit = 1
+            if let count = try? context.count(for: request), count > 0 { return true }
+        }
+        return false
+    }
+
+    /// Deletes every entity the previous identity could have left behind.
+    ///
+    /// Same list `deleteAccount()` uses — kept in one place on purpose, because the three wipe
+    /// paths having three different lists is how `performLocalSignOut` ended up never clearing
+    /// Core Data at all.
+    private func wipeLocalStoreContents() {
+        guard let context = PersistenceController.shared.safeViewContext else {
+            Log.error("Local store wipe skipped — no persistent store", category: "Auth")
+            return
+        }
+        for entityName in Self.userDataEntityNames {
+            let request = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
+            let batchDelete = NSBatchDeleteRequest(fetchRequest: request)
+            batchDelete.resultType = .resultTypeObjectIDs
+            do {
+                let result = try context.execute(batchDelete) as? NSBatchDeleteResult
+                if let objectIDs = result?.result as? [NSManagedObjectID], !objectIDs.isEmpty {
+                    NSManagedObjectContext.mergeChanges(
+                        fromRemoteContextSave: [NSDeletedObjectsKey: objectIDs],
+                        into: [context]
+                    )
+                }
+            } catch {
+                Log.error("Failed to wipe \(entityName): \(error)", category: "Auth")
+            }
+        }
+        Log.info("Local store wiped — previous identity's data removed", category: "Auth")
+    }
+
+    /// Every entity that carries user data. One list, used by both the ownership gate and
+    /// account deletion.
+    static let userDataEntityNames = [
+        "Message", "HealingMessage", "ProcessedMessage", "CallRecord", "Chat", "User"
+    ]
 
     /// Handles the critical case where the user is authenticated (has a session token) but
     /// device crypto keys couldn't be loaded from Keychain (partial state or iOS Keychain bug).
@@ -868,9 +969,9 @@ class AuthViewModel {
             return
         }
         
-        // Delete all entities using batch delete for efficiency
-        let entityNames = ["Message", "HealingMessage", "ProcessedMessage", "CallRecord", "Chat", "User"]
-        for entityName in entityNames {
+        // Delete all entities using batch delete for efficiency. Same list the ownership gate
+        // uses — see `userDataEntityNames`.
+        for entityName in Self.userDataEntityNames {
             let fetchRequest = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
             let batchDelete = NSBatchDeleteRequest(fetchRequest: fetchRequest)
             batchDelete.resultType = .resultTypeObjectIDs
@@ -893,6 +994,10 @@ class AuthViewModel {
         currentUserId = nil
         currentUser = nil
         hasRegisteredDeviceKeys = false
+
+        // The store is now empty and unowned. Leaving the old owner recorded would make the
+        // next identity's gate compare against a ghost.
+        UserDefaults.standard.removeObject(forKey: LocalStoreOwnership.ownerKey)
 
         Log.info("Account deletion complete - user logged out", category: "AuthViewModel")
     }

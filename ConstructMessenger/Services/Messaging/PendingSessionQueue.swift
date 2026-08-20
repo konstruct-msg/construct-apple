@@ -58,5 +58,11 @@ final class PendingSessionQueue {
         queues[userId]?.count ?? 0
     }
 
+    /// Snapshot of queued messages, without draining. Used to pick a handshake carrier
+    /// when the message that triggered the bundle fetch is a mid-session leftover.
+    func messages(for userId: String) -> [ChatMessage] {
+        queues[userId] ?? []
+    }
+
     var isEmpty: Bool { queues.isEmpty }
 }

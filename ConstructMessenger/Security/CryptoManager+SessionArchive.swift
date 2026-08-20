@@ -56,7 +56,12 @@ extension CryptoManager {
         guard let core = orchestratorCore else { return false }
         if core.hasSession(contactId: userId) { return true }
         guard let sessionData = KeychainManager.shared.loadSessionData(for: userId) else {
-            Log.error("No session data in Keychain for \(userId) — session must be re-established", category: "CryptoManager")
+            // Not an error: a chat can exist with no session on file — never messaged, or the
+            // session was legitimately archived by END_SESSION / SESSION_RESET_INIT. Every caller
+            // treats `false` as "establish one", and the bulk path reports the aggregate below.
+            // This was ERROR until 2026-08-03 and fired on every launch for such contacts, which
+            // is noise in the one signal a release run is judged by.
+            Log.info("No stored session for \(userId.prefix(8))… — will be established on demand", category: "CryptoManager")
             return false
         }
         do {
@@ -88,6 +93,37 @@ extension CryptoManager {
 
         Log.info("Archiving session for \(userId), reason: \(reason.rawValue)", category: "CryptoManager")
 
+        // A session lives in two places — the core's memory and the Keychain — and only the first
+        // is loaded eagerly. `restoreRecentSessions` imports the recent ones at launch; a contact
+        // nobody has messaged this run has its session on disk only, and `hasSession(for:)` says
+        // no for it. Callers guarded on that answer, so deleting such a contact archived nothing
+        // and deleted nothing: the Keychain entry outlived the contact.
+        //
+        // It then came back. On 2026-08-17 annie re-added a contact by QR; the redeem path called
+        // `restoreSession`, the orphan was imported as if healthy, and her first message was
+        // encrypted with a ratchet the peer had discarded when he deleted her. He could not
+        // decrypt it — `All 1 prekey(s) failed` — and it was never resent.
+        //
+        // Import it here rather than making every caller ask twice. If the entry is unusable the
+        // import throws, the branch below reports nothing to archive, and `restoreSession` deletes
+        // it the next time anything reaches for it — so an entry that cannot be imported also
+        // cannot resurrect a session.
+        if core.hasSession(contactId: userId) == false,
+           let stored = KeychainManager.shared.loadSessionData(for: userId) {
+            do {
+                _ = try core.importSession(contactId: userId, data: [UInt8](stored))
+                Log.info(
+                    "archiveSession: imported on-disk session for \(userId.prefix(8))… before archiving",
+                    category: "CryptoManager"
+                )
+            } catch {
+                Log.error(
+                    "archiveSession: stored session for \(userId.prefix(8))… could not be imported: \(error)",
+                    category: "CryptoManager"
+                )
+            }
+        }
+
         // 1. Export current session to CFE binary format and store archive.
         //    IMPORTANT: only proceed with deletion if export succeeded — otherwise the session
         //    would be permanently lost with no archive to restore from.
@@ -112,6 +148,23 @@ extension CryptoManager {
                 KeychainManager.shared.deleteSessionSuiteId(userId: userId)
                 _ = orchestratorCore?.removeSession(contactId: userId)
                 KeychainManager.shared.deleteSession(for: userId)
+                return
+            }
+            // Third case, previously folded into the failure above: there was never a session
+            // here to archive. `archiveSession` is reached from teardown paths that do not
+            // check first — a fresh invite redeem calls it one line after logging "No stored
+            // session for <peer>" — and the outcome was an error-level line claiming deletion
+            // was withheld "to prevent data loss" for something that never existed. A device
+            // log from 2026-08-17 shows that pair one second after a QR was scanned.
+            //
+            // The export attempt stays the authority on whether an archive was written, so the
+            // outcome is unchanged in every case: both branches return without deleting. Only
+            // the severity moves, and only when the core agrees nothing is there.
+            if core.hasSession(contactId: userId) == false {
+                Log.info(
+                    "archiveSession: nothing to archive for \(userId.prefix(8))… (reason: \(reason.rawValue))",
+                    category: "CryptoManager"
+                )
                 return
             }
             Log.error("Failed to export session for archiving — session NOT deleted to prevent data loss: \(error)", category: "CryptoManager")

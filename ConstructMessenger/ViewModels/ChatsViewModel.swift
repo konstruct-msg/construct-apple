@@ -116,10 +116,32 @@ class ChatsViewModel {
 
     // MARK: - Chat operations
 
-    func startChat(with user: PublicUserInfo, identityPublicKey: Data? = nil) -> Chat? {
+    func startChat(
+        with user: PublicUserInfo,
+        identityPublicKey: Data? = nil,
+        origin: SessionReducer.ChatStartOrigin = .existingContact
+    ) -> Chat? {
         let chat = chatManagementService.startChat(with: user, identityPublicKey: identityPublicKey)
         streamLifecycle.reconnectIfSubscriptionsChanged()
-        if !CryptoManager.shared.hasSession(for: user.id) {
+
+        if SessionReducer.chatStartRetiresExistingSession(origin: origin) {
+            // Redeeming an invite means the two sides are establishing a session now, so anything
+            // left from before is retired first — including a Keychain entry the core has not
+            // loaded, which `hasSession` cannot see and `archiveSession` now can.
+            //
+            // This replaces a `clearArchivedSessions` that did the opposite of what was needed:
+            // it removed the archives, which are the fallback for decrypting anything still in
+            // flight, and kept the live session, which is the one thing guaranteed to be wrong
+            // after the peer has re-paired. See `chatStartRetiresExistingSession`.
+            if CryptoManager.shared.hasStoredSessionState(for: user.id) {
+                Log.info(
+                    "Invite redeem: retiring the existing session with \(user.id.prefix(8))… before re-establishing",
+                    category: "SessionInit"
+                )
+                CryptoManager.shared.archiveSession(for: user.id, reason: .manualReset)
+            }
+            SessionLifecycleController.shared.prewarmSessions(for: [user.id])
+        } else if !CryptoManager.shared.hasSession(for: user.id) {
             CryptoManager.shared.clearArchivedSessions(for: user.id)
             SessionLifecycleController.shared.prewarmSessions(for: [user.id])
         }

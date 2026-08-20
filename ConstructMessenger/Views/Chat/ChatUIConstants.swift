@@ -93,6 +93,29 @@ enum ChatUIConstants {
         static let metaHorizontalPadding: CGFloat = 4
     }
 
+    /// Swipe-to-reply, tuned to stay out of the interactive back gesture's way.
+    ///
+    /// The two gestures point the same direction, and incoming bubbles sit against the
+    /// leading edge — exactly where the system pop lives. Without these limits a swipe
+    /// meant to leave the chat landed on whatever bubble it started over and replied to it.
+    enum ReplySwipe {
+        // There is no leading-edge exclusion any more. It existed because the reply swipe and
+        // the interactive pop both travelled right, so they had to be separated by where the
+        // drag began — a 44pt strip conceded to the pop, which both leaked (a back swipe
+        // starting inboard quoted a message) and cost the leftmost 44pt of every incoming
+        // bubble. The reply swipe now travels left; direction tells them apart on its own.
+        /// Horizontal travel must beat vertical by this factor. The old test was `h > v`,
+        /// which any lazy diagonal satisfied.
+        static let directionRatio: CGFloat = 1.5
+        static let minimumDistance: CGFloat = 20
+        /// The bubble follows the finger at half speed, capped here.
+        static let maxOffset: CGFloat = 60
+        /// Offset at which releasing commits the reply (≈80pt of travel).
+        static let commitOffset: CGFloat = 40
+        /// Indicator fades in past this offset.
+        static let indicatorThreshold: CGFloat = 10
+    }
+
     // MARK: - Voice playback bubble
 
     enum Voice {

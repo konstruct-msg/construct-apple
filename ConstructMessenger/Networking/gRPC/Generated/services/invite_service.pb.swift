@@ -20,78 +20,6 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
-/// Запрос на генерацию invite token
-public struct Shared_Proto_Services_V1_GenerateInviteRequest: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// Device ID который создаёт invite (v2)
-  public var deviceID: String {
-    get {_deviceID ?? String()}
-    set {_deviceID = newValue}
-  }
-  /// Returns true if `deviceID` has been explicitly set.
-  public var hasDeviceID: Bool {self._deviceID != nil}
-  /// Clears the value of `deviceID`. Subsequent reads from it will return its default value.
-  public mutating func clearDeviceID() {self._deviceID = nil}
-
-  /// TTL в секундах (по умолчанию 300 = 5 минут)
-  public var ttlSeconds: Int64 {
-    get {_ttlSeconds ?? 0}
-    set {_ttlSeconds = newValue}
-  }
-  /// Returns true if `ttlSeconds` has been explicitly set.
-  public var hasTtlSeconds: Bool {self._ttlSeconds != nil}
-  /// Clears the value of `ttlSeconds`. Subsequent reads from it will return its default value.
-  public mutating func clearTtlSeconds() {self._ttlSeconds = nil}
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-
-  fileprivate var _deviceID: String? = nil
-  fileprivate var _ttlSeconds: Int64? = nil
-}
-
-/// Ответ с данными для формирования invite token
-public struct Shared_Proto_Services_V1_GenerateInviteResponse: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// Уникальный jti (JWT ID) для one-time use tracking
-  public var jti: String = String()
-
-  /// Server FQDN (для federation)
-  public var server: String = String()
-
-  /// Unix timestamp истечения
-  public var expiresAt: Int64 = 0
-
-  /// User ID создателя invite
-  public var userID: String = String()
-
-  /// Device ID создателя (v2, опционально для обратной совместимости с v1)
-  public var deviceID: String {
-    get {_deviceID ?? String()}
-    set {_deviceID = newValue}
-  }
-  /// Returns true if `deviceID` has been explicitly set.
-  public var hasDeviceID: Bool {self._deviceID != nil}
-  /// Clears the value of `deviceID`. Subsequent reads from it will return its default value.
-  public mutating func clearDeviceID() {self._deviceID = nil}
-
-  /// TTL в секундах
-  public var ttlSeconds: Int64 = 0
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-
-  fileprivate var _deviceID: String? = nil
-}
-
 /// Запрос на принятие invite token
 public struct Shared_Proto_Services_V1_AcceptInviteRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -163,12 +91,26 @@ public struct Shared_Proto_Services_V1_InviteToken: Sendable {
   /// Clears the value of `un`. Subsequent reads from it will return its default value.
   public mutating func clearUn() {self._un = nil}
 
+  /// v5: client-stated maximum age in seconds (required on v=5). Covered by the
+  /// Ed25519 signature (canonical ends with |ttl). Server effective =
+  /// min(INVITE_TTL_SECONDS, ttl). Absent on v1–v4 → server max. Reject 0 and
+  /// ttl < 60. See INVITE_LIST_REVOKE_SERVER_SPEC §4.
+  public var ttl: UInt32 {
+    get {_ttl ?? 0}
+    set {_ttl = newValue}
+  }
+  /// Returns true if `ttl` has been explicitly set.
+  public var hasTtl: Bool {self._ttl != nil}
+  /// Clears the value of `ttl`. Subsequent reads from it will return its default value.
+  public mutating func clearTtl() {self._ttl = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _deviceID: String? = nil
   fileprivate var _un: String? = nil
+  fileprivate var _ttl: UInt32? = nil
 }
 
 /// Ответ после успешного принятия invite
@@ -223,10 +165,10 @@ public struct Shared_Proto_Services_V1_RevokeInviteResponse: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// true если токен был отозван
+  /// true если токен был отозван (burn row inserted)
   public var success: Bool = false
 
-  /// Сообщение (например "Invite revoked" или "Invite not found")
+  /// "Invite revoked" or "Invite not found or already used" (not a transport error)
   public var message: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -234,215 +176,9 @@ public struct Shared_Proto_Services_V1_RevokeInviteResponse: Sendable {
   public init() {}
 }
 
-/// Запрос на список активных invite'ов
-public struct Shared_Proto_Services_V1_ListInvitesRequest: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// Максимальное количество результатов
-  public var limit: Int32 {
-    get {_limit ?? 0}
-    set {_limit = newValue}
-  }
-  /// Returns true if `limit` has been explicitly set.
-  public var hasLimit: Bool {self._limit != nil}
-  /// Clears the value of `limit`. Subsequent reads from it will return its default value.
-  public mutating func clearLimit() {self._limit = nil}
-
-  /// Включать ли истёкшие invite'ы
-  public var includeExpired: Bool {
-    get {_includeExpired ?? false}
-    set {_includeExpired = newValue}
-  }
-  /// Returns true if `includeExpired` has been explicitly set.
-  public var hasIncludeExpired: Bool {self._includeExpired != nil}
-  /// Clears the value of `includeExpired`. Subsequent reads from it will return its default value.
-  public mutating func clearIncludeExpired() {self._includeExpired = nil}
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-
-  fileprivate var _limit: Int32? = nil
-  fileprivate var _includeExpired: Bool? = nil
-}
-
-/// Ответ со списком invite'ов
-public struct Shared_Proto_Services_V1_ListInvitesResponse: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// Список активных invite'ов
-  public var invites: [Shared_Proto_Services_V1_InviteInfo] = []
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
-/// Информация об invite
-public struct Shared_Proto_Services_V1_InviteInfo: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// jti токена
-  public var jti: String = String()
-
-  /// User ID создателя
-  public var userID: String = String()
-
-  /// Device ID создателя (v2 only)
-  public var deviceID: String {
-    get {_deviceID ?? String()}
-    set {_deviceID = newValue}
-  }
-  /// Returns true if `deviceID` has been explicitly set.
-  public var hasDeviceID: Bool {self._deviceID != nil}
-  /// Clears the value of `deviceID`. Subsequent reads from it will return its default value.
-  public mutating func clearDeviceID() {self._deviceID = nil}
-
-  /// Unix timestamp создания
-  public var createdAt: Int64 = 0
-
-  /// Unix timestamp истечения
-  public var expiresAt: Int64 = 0
-
-  /// Использован ли токен
-  public var used: Bool = false
-
-  /// Кем использован (если used = true)
-  public var usedBy: String {
-    get {_usedBy ?? String()}
-    set {_usedBy = newValue}
-  }
-  /// Returns true if `usedBy` has been explicitly set.
-  public var hasUsedBy: Bool {self._usedBy != nil}
-  /// Clears the value of `usedBy`. Subsequent reads from it will return its default value.
-  public mutating func clearUsedBy() {self._usedBy = nil}
-
-  /// Когда использован
-  public var usedAt: Int64 {
-    get {_usedAt ?? 0}
-    set {_usedAt = newValue}
-  }
-  /// Returns true if `usedAt` has been explicitly set.
-  public var hasUsedAt: Bool {self._usedAt != nil}
-  /// Clears the value of `usedAt`. Subsequent reads from it will return its default value.
-  public mutating func clearUsedAt() {self._usedAt = nil}
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-
-  fileprivate var _deviceID: String? = nil
-  fileprivate var _usedBy: String? = nil
-  fileprivate var _usedAt: Int64? = nil
-}
-
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "shared.proto.services.v1"
-
-extension Shared_Proto_Services_V1_GenerateInviteRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".GenerateInviteRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}ttl_seconds\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self._deviceID) }()
-      case 2: try { try decoder.decodeSingularInt64Field(value: &self._ttlSeconds) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._deviceID {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 1)
-    } }()
-    try { if let v = self._ttlSeconds {
-      try visitor.visitSingularInt64Field(value: v, fieldNumber: 2)
-    } }()
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Shared_Proto_Services_V1_GenerateInviteRequest, rhs: Shared_Proto_Services_V1_GenerateInviteRequest) -> Bool {
-    if lhs._deviceID != rhs._deviceID {return false}
-    if lhs._ttlSeconds != rhs._ttlSeconds {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension Shared_Proto_Services_V1_GenerateInviteResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".GenerateInviteResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}jti\0\u{1}server\0\u{3}expires_at\0\u{3}user_id\0\u{3}device_id\0\u{3}ttl_seconds\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.jti) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.server) }()
-      case 3: try { try decoder.decodeSingularInt64Field(value: &self.expiresAt) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.userID) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self._deviceID) }()
-      case 6: try { try decoder.decodeSingularInt64Field(value: &self.ttlSeconds) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.jti.isEmpty {
-      try visitor.visitSingularStringField(value: self.jti, fieldNumber: 1)
-    }
-    if !self.server.isEmpty {
-      try visitor.visitSingularStringField(value: self.server, fieldNumber: 2)
-    }
-    if self.expiresAt != 0 {
-      try visitor.visitSingularInt64Field(value: self.expiresAt, fieldNumber: 3)
-    }
-    if !self.userID.isEmpty {
-      try visitor.visitSingularStringField(value: self.userID, fieldNumber: 4)
-    }
-    try { if let v = self._deviceID {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 5)
-    } }()
-    if self.ttlSeconds != 0 {
-      try visitor.visitSingularInt64Field(value: self.ttlSeconds, fieldNumber: 6)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Shared_Proto_Services_V1_GenerateInviteResponse, rhs: Shared_Proto_Services_V1_GenerateInviteResponse) -> Bool {
-    if lhs.jti != rhs.jti {return false}
-    if lhs.server != rhs.server {return false}
-    if lhs.expiresAt != rhs.expiresAt {return false}
-    if lhs.userID != rhs.userID {return false}
-    if lhs._deviceID != rhs._deviceID {return false}
-    if lhs.ttlSeconds != rhs.ttlSeconds {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
 
 extension Shared_Proto_Services_V1_AcceptInviteRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AcceptInviteRequest"
@@ -480,7 +216,7 @@ extension Shared_Proto_Services_V1_AcceptInviteRequest: SwiftProtobuf.Message, S
 
 extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InviteToken"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}v\0\u{1}jti\0\u{1}uuid\0\u{3}device_id\0\u{1}server\0\u{1}ts\0\u{3}eph_pub\0\u{1}sig\0\u{1}un\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}v\0\u{1}jti\0\u{1}uuid\0\u{3}device_id\0\u{1}server\0\u{1}ts\0\u{3}eph_pub\0\u{1}sig\0\u{1}un\0\u{1}ttl\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -497,6 +233,7 @@ extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Message, SwiftProt
       case 7: try { try decoder.decodeSingularStringField(value: &self.ephPub) }()
       case 8: try { try decoder.decodeSingularStringField(value: &self.sig) }()
       case 9: try { try decoder.decodeSingularStringField(value: &self._un) }()
+      case 10: try { try decoder.decodeSingularUInt32Field(value: &self._ttl) }()
       default: break
       }
     }
@@ -534,6 +271,9 @@ extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Message, SwiftProt
     try { if let v = self._un {
       try visitor.visitSingularStringField(value: v, fieldNumber: 9)
     } }()
+    try { if let v = self._ttl {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 10)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -547,6 +287,7 @@ extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Message, SwiftProt
     if lhs.ephPub != rhs.ephPub {return false}
     if lhs.sig != rhs.sig {return false}
     if lhs._un != rhs._un {return false}
+    if lhs._ttl != rhs._ttl {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -661,144 +402,6 @@ extension Shared_Proto_Services_V1_RevokeInviteResponse: SwiftProtobuf.Message, 
   public static func ==(lhs: Shared_Proto_Services_V1_RevokeInviteResponse, rhs: Shared_Proto_Services_V1_RevokeInviteResponse) -> Bool {
     if lhs.success != rhs.success {return false}
     if lhs.message != rhs.message {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension Shared_Proto_Services_V1_ListInvitesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".ListInvitesRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}limit\0\u{3}include_expired\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularInt32Field(value: &self._limit) }()
-      case 2: try { try decoder.decodeSingularBoolField(value: &self._includeExpired) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._limit {
-      try visitor.visitSingularInt32Field(value: v, fieldNumber: 1)
-    } }()
-    try { if let v = self._includeExpired {
-      try visitor.visitSingularBoolField(value: v, fieldNumber: 2)
-    } }()
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Shared_Proto_Services_V1_ListInvitesRequest, rhs: Shared_Proto_Services_V1_ListInvitesRequest) -> Bool {
-    if lhs._limit != rhs._limit {return false}
-    if lhs._includeExpired != rhs._includeExpired {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension Shared_Proto_Services_V1_ListInvitesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".ListInvitesResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}invites\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.invites) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.invites.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.invites, fieldNumber: 1)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Shared_Proto_Services_V1_ListInvitesResponse, rhs: Shared_Proto_Services_V1_ListInvitesResponse) -> Bool {
-    if lhs.invites != rhs.invites {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension Shared_Proto_Services_V1_InviteInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".InviteInfo"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}jti\0\u{3}user_id\0\u{3}device_id\0\u{3}created_at\0\u{3}expires_at\0\u{1}used\0\u{3}used_by\0\u{3}used_at\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.jti) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.userID) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self._deviceID) }()
-      case 4: try { try decoder.decodeSingularInt64Field(value: &self.createdAt) }()
-      case 5: try { try decoder.decodeSingularInt64Field(value: &self.expiresAt) }()
-      case 6: try { try decoder.decodeSingularBoolField(value: &self.used) }()
-      case 7: try { try decoder.decodeSingularStringField(value: &self._usedBy) }()
-      case 8: try { try decoder.decodeSingularInt64Field(value: &self._usedAt) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.jti.isEmpty {
-      try visitor.visitSingularStringField(value: self.jti, fieldNumber: 1)
-    }
-    if !self.userID.isEmpty {
-      try visitor.visitSingularStringField(value: self.userID, fieldNumber: 2)
-    }
-    try { if let v = self._deviceID {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
-    } }()
-    if self.createdAt != 0 {
-      try visitor.visitSingularInt64Field(value: self.createdAt, fieldNumber: 4)
-    }
-    if self.expiresAt != 0 {
-      try visitor.visitSingularInt64Field(value: self.expiresAt, fieldNumber: 5)
-    }
-    if self.used != false {
-      try visitor.visitSingularBoolField(value: self.used, fieldNumber: 6)
-    }
-    try { if let v = self._usedBy {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 7)
-    } }()
-    try { if let v = self._usedAt {
-      try visitor.visitSingularInt64Field(value: v, fieldNumber: 8)
-    } }()
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Shared_Proto_Services_V1_InviteInfo, rhs: Shared_Proto_Services_V1_InviteInfo) -> Bool {
-    if lhs.jti != rhs.jti {return false}
-    if lhs.userID != rhs.userID {return false}
-    if lhs._deviceID != rhs._deviceID {return false}
-    if lhs.createdAt != rhs.createdAt {return false}
-    if lhs.expiresAt != rhs.expiresAt {return false}
-    if lhs.used != rhs.used {return false}
-    if lhs._usedBy != rhs._usedBy {return false}
-    if lhs._usedAt != rhs._usedAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -97,8 +97,16 @@ private struct SingleMediaCell: View {
     let onTap: () -> Void
 
     @State private var thumbnailImage: PlatformImage?
+    /// True once `thumbnailImage` holds a decode of the real media rather than the stored preview.
+    /// The two used to be indistinguishable because only our own sends ever had a preview to paint.
+    @State private var hasFullCopy = false
     @State private var isLoading = false
     @State private var loadError: String?
+    /// The media descriptor (mediaId/mediaUrl/mediaKey) is not readable yet — distinct from
+    /// `loadError`, which means a download was attempted and failed. Kept apart because the two
+    /// were one state and the "not yet" case rendered as "Failed to load" for a frame on every
+    /// outgoing photo.
+    @State private var isAwaitingDescriptor = false
     @State private var downloadProgress: Double = 0
     @State private var hasReceivedBytes = false
     @State private var blurPreview: PlatformImage?
@@ -150,7 +158,9 @@ private struct SingleMediaCell: View {
                             )
                     )
                     .onTapGesture { onTap() }
-            } else if isLoading {
+            } else if isLoading || isAwaitingDescriptor {
+                // "Waiting for the descriptor" and "downloading" look the same to the user and
+                // both end in a picture. Only a real failure gets the warning + Retry.
                 loadingPlaceholder
             } else if loadError != nil {
                 errorPlaceholder
@@ -170,12 +180,22 @@ private struct SingleMediaCell: View {
                 loadThumbnail()
             }
         }
+        // `onAppear` is the only thing that drove the load, so a bubble that appeared before its
+        // media descriptor was written had nothing to bring it back — the old code papered over
+        // that by rendering the failure state, which at least offered a Retry button. Now that the
+        // not-yet state renders as loading, it must actually resolve: re-drive the load when the
+        // descriptor lands.
+        .onChange(of: itemDict["mediaId"] as? String) { _, newMediaId in
+            guard !isVideo, isAwaitingDescriptor, newMediaId != nil else { return }
+            loadThumbnail(forceRetry: true)
+        }
     }
 
     /// Video bubble: poster (sender) or blurhash preview (receiver) + play + duration.
     /// Never downloads the full video — playback happens on tap in the gallery.
     private var videoCell: some View {
-        let poster = MediaImageCache.shared.image(for: message.id, at: itemIndex) ?? thumbnailImage ?? blurPreview
+        let poster = MediaImageCache.shared.paintable(for: message.id, at: itemIndex)
+            ?? thumbnailImage ?? blurPreview
         let isUploading = isPlaceholder && message.deliveryStatus == .sending
         return ZStack {
             if let poster {
@@ -389,22 +409,43 @@ private struct SingleMediaCell: View {
     // MARK: Load logic
 
     private func loadThumbnail(forceRetry: Bool = false) {
-        if thumbnailImage != nil || isLoading { return }
+        // `hasFullCopy`, not `thumbnailImage != nil`. Since the stored thumbnail is now painted for
+        // received media too, `thumbnailImage` is set before the download even starts — so the old
+        // guard would have made every re-appear a no-op and left the bubble at 320px permanently
+        // whenever the first download failed.
+        if hasFullCopy || isLoading { return }
         if loadError != nil && !forceRetry { return }
         loadError = nil
+        isAwaitingDescriptor = false
         hasReceivedBytes = false
         downloadProgress = 0
+
+        // A copy from an earlier appearance of this row. LazyVStack recreates the view when it
+        // scrolls back in, which resets `@State`, so without this the bubble re-decodes media it
+        // already has — and `hasFullCopy` would read false for a row that is fully loaded.
+        if let cached = MediaImageCache.shared.resolvedCopy(for: message.id, at: itemIndex) {
+            thumbnailImage = cached
+            hasFullCopy = true
+            return
+        }
 
         // Decode the transmitted BlurHash into a blurred preview shown while downloading.
         if blurPreview == nil, let bh = itemDict["blurhash"] as? String, !bh.isEmpty {
             blurPreview = decodeBlurPreview(bh)
         }
 
-        // Fast first paint from a locally-stored thumbnail (placeholder / sent), then
-        // upgrade to full quality below. The sender's full image is cached at send time
-        // (MediaManager.cacheSentMedia), so the upgrade is a cache hit — no re-download.
-        if message.isSentByMe,
-           let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
+        // Fast first paint from the locally-stored thumbnail, then upgrade to full quality below.
+        // For our own sends the upgrade is a cache hit (cacheSentMedia); for received media it is
+        // the download that is already starting a few lines down.
+        //
+        // This used to be gated on `message.isSentByMe`, which left the *received* thumbnail with
+        // no consumer at all: the sender generates it, it is chunked into the sealed message and
+        // spends a stealth token per chunk, `MediaWireCodec.storeThumbnails` persists it — and the
+        // bubble painted a 32×32 blurhash instead and waited for the full file. We were paying for
+        // a preview and then not showing it. (Video never had the gate; `loadVideoPoster` has been
+        // using the same field for both directions all along, which is what made the asymmetry
+        // visible.)
+        if let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
            let img = PlatformImage(data: data) {
             thumbnailImage = img
         }
@@ -414,9 +455,18 @@ private struct SingleMediaCell: View {
               let mediaKeyStr = itemDict["mediaKey"] as? String,
               let mediaKey = Data(base64Encoded: mediaKeyStr)
         else {
-            if thumbnailImage == nil { loadError = "Missing media info" }
+            // NOT a failure — the descriptor is not readable *yet*. On our own send this row is
+            // created moments before its thumbnail is stored and before the media JSON lands, so
+            // for one frame the bubble has neither; painting `errorPlaceholder` there is what made
+            // "Failed to load / Retry" flash on every photo we sent (reported 2026-08-04). Rule 1a
+            // applied to UI: a not-yet state must not wear the failure's clothes.
+            if thumbnailImage == nil {
+                isAwaitingDescriptor = true
+                Log.debug("Media descriptor not ready yet for \(message.id.prefix(8))…[\(itemIndex)] — showing placeholder, not an error", category: "MediaMessageView")
+            }
             return
         }
+        isAwaitingDescriptor = false
         if thumbnailImage == nil { isLoading = true }
         // Real byte-level progress: encrypted total comes from the descriptor `size`.
         let total = Double((itemDict["size"] as? Int) ?? 0)
@@ -440,7 +490,11 @@ private struct SingleMediaCell: View {
                     onProgress: onProgress
                 )
                 await MainActor.run { if isLoading { downloadProgress = 0.95 } }
-                guard let image = PlatformImage(data: imageData) else {
+                // Decode at bubble size. This used to be `PlatformImage(data:)` — a full-resolution
+                // decode (~11.8 MB for a 1440×2048 photo) whose only purposes were to make a 320px
+                // thumbnail from it and to hand the gallery a copy it can fetch itself. The bubble
+                // never needed those pixels, and holding them is what took footprint to 447 MB.
+                guard let displayImage = ImageDownsampler.image(from: imageData) else {
                     await MainActor.run {
                         isLoading = false
                         if thumbnailImage == nil { loadError = "Invalid image data" }
@@ -449,11 +503,14 @@ private struct SingleMediaCell: View {
                     }
                     return
                 }
-                // Full image → gallery cache; a 320px thumb keeps the bubble light.
-                let thumbnail = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 320)
                 await MainActor.run {
-                    MediaImageCache.shared.store(image, for: message.id, at: itemIndex)
-                    thumbnailImage = thumbnail
+                    // Display compartment only. The gallery, save and share still want the real
+                    // thing and load it on demand from MediaManager — a disk-cache hit, not a
+                    // re-download. Storing this copy under the full-resolution key would make
+                    // "save to photos" quietly write a 1024px file.
+                    MediaImageCache.shared.storeDisplay(displayImage, for: message.id, at: itemIndex)
+                    thumbnailImage = displayImage
+                    hasFullCopy = true
                     isLoading = false
                     hasReceivedBytes = true
                     downloadProgress = 1.0
@@ -646,6 +703,8 @@ private struct GridCell: View {
     let onTap: () -> Void
 
     @State private var thumbnailImage: PlatformImage?
+    /// See the single-image bubble: distinguishes "showing the stored preview" from "loaded".
+    @State private var hasFullCopy = false
     @State private var isLoading = false
     @State private var loadFailed = false
     @State private var downloadProgress: Double = 0
@@ -666,7 +725,8 @@ private struct GridCell: View {
 
     var body: some View {
         ZStack {
-            if isVideo, let poster = MediaImageCache.shared.image(for: message.id, at: itemIndex) ?? thumbnailImage ?? blurPreview {
+            if isVideo, let poster = MediaImageCache.shared.paintable(for: message.id, at: itemIndex)
+                ?? thumbnailImage ?? blurPreview {
                 Image(platformImage: poster).resizable().scaledToFill()
             } else if let img = thumbnailImage {
                 Image(platformImage: img).resizable().scaledToFill()
@@ -826,7 +886,9 @@ private struct GridCell: View {
     }
 
     private func loadThumbnail(forceRetry: Bool = false) {
-        if thumbnailImage != nil || isLoading { return }
+        // See the single-image loader: `thumbnailImage` is now set from the stored preview before
+        // the download starts, so it can no longer stand in for "loaded".
+        if hasFullCopy || isLoading { return }
         if loadFailed && !forceRetry { return }
         if forceRetry {
             loadFailed = false
@@ -838,16 +900,20 @@ private struct GridCell: View {
         isMissingMedia = false
         hasReceivedBytes = false
         downloadProgress = 0
-        if let cached = MediaImageCache.shared.image(for: message.id, at: itemIndex) {
+        // `resolvedCopy`, not `paintable`: only a real decode of the media means "nothing left to
+        // load". Returning early on a poster would leave a failed download stuck at 320px forever,
+        // with no error and no retry — the tile would look fine and never improve.
+        if let cached = MediaImageCache.shared.resolvedCopy(for: message.id, at: itemIndex) {
             thumbnailImage = cached
+            hasFullCopy = true
             return
         }
-        // Fast paint from a local thumbnail (sent), then upgrade to full via the cache.
-        if message.isSentByMe,
-           let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
+        // Fast paint from the stored thumbnail — for received media too, see loadThumbnail. Paint
+        // and keep going; the download below is what finishes the job.
+        if let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
            let img = PlatformImage(data: data) {
             thumbnailImage = img
-            MediaImageCache.shared.store(img, for: message.id, at: itemIndex)
+            MediaImageCache.shared.storePoster(img, for: message.id, at: itemIndex)
         }
         if blurPreview == nil, let bh = itemDict["blurhash"] as? String, !bh.isEmpty {
             blurPreview = BlurHash.decode(bh, size: CGSize(width: 32, height: 32))
@@ -895,8 +961,9 @@ private struct GridCell: View {
                 // Full image → gallery cache; a 200px thumb keeps the tile light.
                 let thumb = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 200)
                 await MainActor.run {
-                    MediaImageCache.shared.store(image, for: message.id, at: itemIndex)
+                    MediaImageCache.shared.storeOriginal(image, for: message.id, at: itemIndex)
                     thumbnailImage = thumb
+                    hasFullCopy = true
                     isLoading = false
                     hasReceivedBytes = true
                     downloadProgress = 1.0

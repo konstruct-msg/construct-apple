@@ -3,8 +3,11 @@
 "ok" = "OK";
 "cancel" = "Cancel";
 "done" = "Done";
+"edit" = "Edit";
+"editor_rotate" = "Rotate";
+"editor_mirror" = "Flip";
 "unknown" = "Unknown";
-"construct_titlte" = "KONSTRUCT";
+"construct_title" = "KONSTRUCT";
 "search_prompt" = "Search";
 
 // MARK: - Loading Screen
@@ -142,7 +145,7 @@
 
 // MARK: - Settings -> Appearance
 "theme" = "Theme";
-"theme_footer" = "Choose how Construct Messenger looks. Automatic adjusts based on your system settings.";
+"theme_footer" = "Choose how Konstruct looks. Automatic adjusts based on your system settings.";
 "automatic" = "Automatic";
 "light" = "Light";
 "dark" = "Dark";
@@ -191,7 +194,7 @@
 "denied" = "Denied";
 
 // MARK: - Background Fetch & Local Notifications
-"construct_app_name" = "Construct";
+"construct_app_name" = "Konstruct";
 "construct_new_message" = "New Message";
 "construct_new_messages" = "New Messages";
 "construct_new_messages_count" = "You have %d new messages";
@@ -251,7 +254,6 @@
 "delete_selected" = "Delete Selected";
 "message_selected" = "message selected";
 "messages_selected" = "messages selected";
-"load_older_messages" = "Load older messages";
 "reachable" = "Reachable";
 "unreachable" = "Unreachable";
 "delete_my_account" = "Delete identity";
@@ -352,7 +354,7 @@
 "orientation_page2_body" = "To add someone, show a QR code or share a link. Search by @alias only works if they turned it on in Security — off by default.";
 "orientation_page2_caption" = "Nobody can message you without your consent.";
 "orientation_page2_path_qr_title" = "QR / link";
-"orientation_page2_path_qr_sub" = "Show or scan. Valid for 5 minutes.";
+"orientation_page2_path_qr_sub" = "Show or scan. Each code works once.";
 "orientation_page2_path_search_title" = "Search";
 "orientation_page2_path_search_sub" = "Only if they enabled it in Security.";
 "orientation_page3_title" = "Three places";
@@ -403,14 +405,14 @@
 
 // Invite / contact links
 "invite_error_invalid_url" = "The provided URL is invalid.";
-"invite_error_unsupported_link" = "This is not a supported Construct invite link.";
+"invite_error_unsupported_link" = "This is not a supported Konstruct invite link.";
 "invite_error_expired" = "This invite has expired. Ask for a new one.";
 "invite_error_invalid_fmt" = "Invalid invite: %@";
 "invite_error_already_used" = "This invite was already used. Ask for a new one.";
 "invite_error_verification_failed_fmt" = "Could not verify invite: %@";
 "invite_error_legacy_unsupported" = "This link format is no longer supported. Ask for a fresh invite QR or link.";
 "invite_error_malformed" = "Malformed invite data";
-"invite_redeem_safety_message_fmt" = "Connected with %@. Not who you expected?";
+"invite_redeem_safety_message" = "Contact added from an invite. Their name appears once they share it.";
 "invite_redeem_safety_block" = "Block";
 "invite_accepted_inviter_message" = "Someone connected via your invite.";
 
@@ -502,7 +504,7 @@
 
 // Censorship protection (production soft control — no VEIL / relay disclosure)
 "censorship_protection" = "Censorship protection";
-"censorship_protection_footer_off" = "Off. Connection goes directly to Construct.";
+"censorship_protection_footer_off" = "Off. Connection goes directly to Konstruct.";
 "censorship_protection_footer_auto" = "Turns on automatically when blocking is detected. Setup happens in the background.";
 "censorship_protection_footer_on" = "Always routes around network blocks. Setup happens in the background.";
 
@@ -533,6 +535,11 @@
 "storage_limit_footer" = "Oldest files are automatically removed when the cache exceeds this limit.";
 "storage_no_limit" = "No Limit";
 "storage_no_limit_footer" = "Media files will be kept until you clear them manually or iOS reclaims the space.";
+"media_autodownload" = "Auto-Download Media";
+"media_autodownload_never" = "Never";
+"media_autodownload_unmetered" = "Wi-Fi Only";
+"media_autodownload_always" = "Always";
+"media_autodownload_footer" = "Attachments are fetched as messages arrive. The server keeps files for 7 days, so media in a chat you have not opened within a week cannot be downloaded later.";
 "storage_auto_clear" = "Keep Media For";
 "storage_auto_clear_footer" = "Media older than the selected period is removed each time the app launches.";
 "storage_keep_forever" = "Forever";
@@ -606,7 +613,6 @@
 
 // MARK: - QR Code
 "code_expired" = "Code expired";
-"generate_new_code" = "Generate New Code";
 "expires_in" = "Expires in %@";
 
 // MARK: - Settings & Diagnostics
@@ -620,10 +626,10 @@
 "diagnostics_apns_token" = "APNs Token";
 "diagnostics_apns_token_missing" = "missing";
 "diagnostics_apns_token_received_format" = "received (%@…)";
-"diagnostics_registered_with_server" = "Registered with Construct";
+"diagnostics_registered_with_server" = "Registered with Konstruct";
 "diagnostics_yes" = "yes";
 "diagnostics_not_registered_with_server" = "no — notifications won't arrive";
-"diagnostics_server_token_warning" = "Token is not registered on Construct. Return to chats — registration will retry automatically when the app becomes active.";
+"diagnostics_server_token_warning" = "Token is not registered on Konstruct. Return to chats — registration will retry automatically when the app becomes active.";
 "diagnostics_log_collection" = "Log collection";
 "diagnostics_status_active" = "Active";
 "diagnostics_status_off" = "Off";
@@ -633,6 +639,9 @@
 "diagnostics_stealth_override_title" = "Stealth sender (debug override)";
 "diagnostics_stealth_override_hint" = "Always on in Release. Turn off here to exercise the legacy identified-send path during development.";
 "diagnostics_force_spk_rotation" = "Force SPK Rotation";
+"diagnostics_force_silent_reinit" = "Silent Re-init (peer not told)";
+"diagnostics_replace_otpk_pool" = "Replace OTPK Pool (one-shot recovery)";
+"diagnostics_silent_reinit_footer" = "Rebuilds our session as INITIATOR without sending END_SESSION, so the peer keeps the old one. Our next message reaches them as an X3DH carrier on an existing session. Send TWO messages after — the second is what proves the PQ contribution was mixed in symmetrically.";
 "diagnostics_reset_local_data_keychain" = "Reset local data & Keychain";
 "diagnostics_dev_tools_footer" = "Clears all Keychain keys, sessions, and UserDefaults. Use to test fresh initialization without reinstalling.";
 "diagnostics_recent_logs" = "Recent Logs";
@@ -670,12 +679,12 @@
 // MARK: - Device Join Request (Desktop onboarding)
 "device_link_request_title" = "Link to Existing Identity";
 "device_link_request_instruction" = "Scan with your iPhone";
-"device_link_request_steps" = "Open Construct on your iPhone → Settings → Linked Devices → tap 'Link New Device' — or just scan this code if you have Construct open.";
+"device_link_request_steps" = "Open Konstruct on your iPhone → Settings → Linked Devices → tap 'Link New Device' — or just scan this code if you have Konstruct open.";
 "device_link_waiting_approval" = "Waiting for approval on your iPhone…";
-"device_link_scan_on_phone" = "Scan this code with Construct on your iPhone";
+"device_link_scan_on_phone" = "Scan this code with Konstruct on your iPhone";
 "device_link_request_timeout" = "Link request timed out — please try again";
 "device_link_feature_unavailable" = "This feature requires a server update. Please try again later.";
-"device_link_invalid_qr" = "Invalid QR code — make sure you are scanning a Construct link code.";
+"device_link_invalid_qr" = "Invalid QR code — make sure you are scanning a Konstruct link code.";
 "device_link_approve_title" = "Link \"%@\" to your identity?";
 "device_link_approve_title_fallback" = "Link new device to your identity?";
 "device_link_approve" = "Link Device";
@@ -780,9 +789,6 @@
 "edit_identity" = "edit identity";
 "delete_account_abort_hint" = "tap to abort · %ds";
 "share" = "Share";
-"show_qr_code" = "Show QR Code";
-"copy_contact_link" = "Copy Contact Link";
-"link_copied" = "Link Copied";
 "recovery_not_configured_title" = "Recovery Not Configured";
 "developer" = "Developer";
 "change_photo" = "change photo";
@@ -856,7 +862,7 @@
 "username_not_set" = "no username";
 "searchable_indicator" = "searchable";
 "searchable_indicator_off" = "not searchable";
-"synapses_remote_result_header" = "found on construct";
+"synapses_remote_result_header" = "found on Konstruct";
 "synapses_searching" = "searching...";
 "synapses_not_found" = "not found";
 
@@ -888,13 +894,10 @@
 
 // Stealth mode
 "stealth_section" = "stealth";
-"stealth_toggle_title" = "stealth mode";
-"stealth_toggle_active_hint" = "always on — sender identity concealed from the construct";
-"stealth_hint" = "sender identity is not disclosed to the construct. messages are routed through anonymous tokens — the construct cannot link outgoing traffic to your identity.";
+"stealth_title" = "sender anonymity";
+"stealth_always_on_hint" = "Konstruct never learns who sent a message. Always on — there is no switch, and nothing to keep topped up.";
+"stealth_off_hint" = "Off — your sends disclose who you are to Konstruct. Debug override only.";
 
-"stealth_token_wallet" = "token wallet";
-"stealth_token_count" = "%d tokens";
-"stealth_token_wallet_hint" = "every message carries an anonymous privacy pass token; the wallet refills itself as you send (first batch is minted at registration). an empty wallet never reveals you — tokens only shield the construct from spam.";
 
 // Key Transparency
 "kt_section" = "key transparency";
@@ -996,7 +999,7 @@
 "backup_restore_success_message" = "Your backup has been verified and staged. Close and reopen the app to complete the restore.";
 
 "backup_error_invalid_mnemonic" = "Invalid recovery phrase. Check all 12 words and try again.";
-"backup_error_invalid_file" = "This is not a valid Construct backup, or the recovery phrase is incorrect.";
+"backup_error_invalid_file" = "This is not a valid Konstruct backup, or the recovery phrase is incorrect.";
 
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "send to nearby device";
@@ -1110,3 +1113,40 @@
 "net_status_protected" = "Protected";
 "net_status_connecting" = "Connecting…";
 "file" = "File";
+
+/* Chat system bubble: the encrypted session broke and incoming messages cannot be read. */
+"system_session_out_of_sync" = "The encrypted session with this contact is out of sync — new messages can't be read until it is re-established.";
+
+/* Delivery status of an outgoing message. VoiceOver-only: the bubble shows a bare
+   icon, so without these the delivery state is inaudible. */
+"msg_status_sending" = "Sending";
+"msg_status_sent" = "Sent";
+"msg_status_delivered" = "Delivered";
+"msg_status_queued" = "Queued, recipient offline";
+"msg_status_failed" = "Failed to send";
+
+/* Multi-invite (one one-time link per person) */
+"invite_create_failed" = "Could not create an invite. Try again.";
+"share_copied" = "Copied";
+"qr_new_code" = "New code";
+"invite_copy_link" = "Copy link";
+"invite_copied_nth_fmt" = "Copied · %d";
+"invite_share_rule_fmt" = "Every tap makes a new link, and the code refreshes itself. Any invite works once and expires in %@.";
+"issued_invites" = "Issued invites";
+"issued_invites_hint_fmt" = "Issued from this device in the last %@. Another device keeps its own list.";
+"issued_invites_empty_fmt" = "Nothing issued from this device in the last %@.";
+"issued_invite_link" = "Link";
+"issued_invite_qr_fmt" = "QR code · %d";
+"issued_invite_expires_fmt" = "%@ left";
+"revoke" = "Revoke";
+"invite_revoked" = "Revoked. That link no longer works.";
+"invite_already_used" = "Already used — someone redeemed this link.";
+"invite_revoke_unconfirmed" = "Could not confirm. The link may still work; try again.";
+"invite_revoke_confirm_title" = "Revoke this link?";
+"invite_revoke_confirm_message" = "Anyone holding it will find it no longer works, with no notice. You can copy a new one at any time.";
+"issued_invites_revoke_scope" = "A link can be revoked. A QR code stops working on its own, once it expires.";
+
+"scroll_to_newest" = "Jump to newest";
+
+"diagnostics_owned_inset_title" = "Owned-inset transcript";
+"diagnostics_owned_inset_hint" = "UIKit scroll container. Applies to the next chat you open.";

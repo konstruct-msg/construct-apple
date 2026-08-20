@@ -57,6 +57,26 @@ class DeepLinkHandler {
                 Log.error("DeepLinkHandler: Failed to parse deep link \(url.absoluteString): \(error.localizedDescription)", category: "DeepLink")
                 await MainActor.run {
                     self.deepLink = nil
+                    // `LinkParser` produces a fully localized ContactLinkError for every
+                    // failure — expired, already used, bad signature, legacy /c/. The four
+                    // QR call sites (ChatsListView, NewChatView, SynapsView, ChatsSplitView)
+                    // all show it. This one, the ONLY path a tapped link takes, dropped it:
+                    // the app opened, nothing happened, no message. Indistinguishable from
+                    // "links are broken", which is exactly how it was reported on 2026-08-13.
+                    //
+                    // Expiry was the case that actually fired, while an invite lived five
+                    // minutes and a copied link began dying in the clipboard. The TTL is 12
+                    // hours now, so this path should go quiet — which is precisely why it has
+                    // to speak: the remaining reasons (already used, bad signature, unknown
+                    // device) are rarer and far harder to guess from silence.
+                    //
+                    // NOT COVERED BY A TEST: that this reaches the screen. The toast reads
+                    // `router.currentError` with a plain `if let`, so an error published
+                    // before ContentView mounts (cold launch straight into the link) still
+                    // renders — but nothing proves the two are wired. On device the answer
+                    // is the pair of log lines "AppDelegate: Received Universal Link" and
+                    // "ErrorRouter [deeplink]".
+                    ErrorRouter.shared.report(.unknown(error.localizedDescription), context: "deeplink")
                 }
             }
         }

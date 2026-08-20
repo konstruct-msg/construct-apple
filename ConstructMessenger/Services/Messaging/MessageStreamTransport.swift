@@ -139,26 +139,25 @@ extension MessageStreamManager {
         firstServerEventReceived = false
 
         // Consume the one-shot H2 fallback flag (set when the previous H3 attempt timed out
-        // on a direct path). Also check the persistent failure counter: after h3OpenFailureThreshold
-        // consecutive H3 failures (surviving network changes), switch to H2 until a clean stream
-        // resets the counter. This handles devices where H3 never works regardless of network.
+        // on a direct path), and the session bit set by the first fast-UDP open failure.
         //
         // Global H3 disable: `FeatureFlags.h3Enabled` short-circuits everything when H3 is
         // turned off project-wide (see flag's docs for the 2026-05-29 disable reason).
         // Experimental engine-QUIC (construct-transport Rust stack) reuses the H3 "fast UDP"
         // slot: when on, it suppresses the H2-only short-circuit so the QUIC branch in
         // GRPCStreamTransport.open() is reached. It shares the same silent-UDP failover and
-        // open-failure counter as native H3 (consecutiveH3OpenFailures / shouldFallbackToH2Direct).
+        // session bit as native H3 (fastUdpFailedThisSession / shouldFallbackToH2Direct).
         let experimentalQuic = FeatureFlags.engineQuicExperimental
-        // Session cooldown: if the fast-UDP transport was flagged unhealthy (QUIC kept dying on
-        // this network), stay on H2 until the cooldown expires rather than re-trying QUIC.
-        let fastUdpInCooldown = (fastUdpUnhealthyUntil.map { $0 > Date() }) ?? false
-        let useH2Fallback = (!FeatureFlags.h3Enabled && !experimentalQuic)
-            || shouldFallbackToH2Direct
-            || consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold
-            || fastUdpInCooldown
-        if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
-            Log.info("H3 disabled — \(consecutiveH3OpenFailures) consecutive failures, using H2 direct", category: "MessageStream")
+        // One probe per session, per network change. No ladder, no window, no persisted record —
+        // see decisions/no-client-side-network-learning.
+        let useH2Fallback = FastUdpSelection.useH2Fallback(
+            h3Enabled: FeatureFlags.h3Enabled,
+            experimentalQuic: experimentalQuic,
+            oneShotFallback: shouldFallbackToH2Direct,
+            failedThisSession: fastUdpFailedThisSession
+        )
+        if fastUdpFailedThisSession {
+            Log.info("Fast-UDP disabled for this session — using H2 direct", category: "MessageStream")
         }
         shouldFallbackToH2Direct = false
 
@@ -215,41 +214,36 @@ extension MessageStreamManager {
         var subscribe = Shared_Proto_Services_V1_SubscribeRequest()
         subscribe.conversationIds = subscriptionUserIds
         subscribe.includePresence = true
-        if let cursor = StreamCursorStore.load() {
-            subscribe.sinceCursor = cursor
-            Log.debug("MessageStream subscribe with cursor=\(cursor.prefix(16))…", category: "MessageStream")
+        let resumeCursor = StreamCursorStore.load()
+        if let resumeCursor {
+            subscribe.sinceCursor = resumeCursor
+            Log.debug("MessageStream subscribe with cursor=\(resumeCursor.prefix(16))…", category: "MessageStream")
         }
+        StreamReplayAudit.shared.streamOpened(sinceCursor: resumeCursor)
         subscribeReq.request = .subscribe(subscribe)
         outboundCont.yield(subscribeReq)
         Log.debug("MessageStream subscribe sent: \(subscriptionUserIds.count) conversation(s)", category: "MessageStream")
 
-        // Flush any ACKs for messages that failed decoding before the stream was open
-        if !pendingFailedAcks.isEmpty {
-            let toFlush = pendingFailedAcks
-            pendingFailedAcks.removeAll()
-            let bySender = Dictionary(grouping: toFlush, by: \.senderId)
-            for (senderId, entries) in bySender {
-                sendReceipt(entries.map(\.id), to: senderId, status: .failed)
-            }
-            Log.info("Flushed \(toFlush.count) failed ACK(s) for undecryptable pending message(s)", category: "MessageStream")
-        }
+        // (Receipt flushes on stream-open used to live here — removed with `sendReceipt`
+        // on 2026-08-02. E2E receipts go through the normal queued send path instead.)
 
-        // Flush delivered receipts that were queued while the stream was closed
-        if !pendingDeliveredAcks.isEmpty {
-            let toFlush = pendingDeliveredAcks
-            pendingDeliveredAcks.removeAll()
-            for ack in toFlush {
-                sendReceipt(ack.messageIds, to: ack.recipientUserId, status: .delivered)
-            }
-            Log.info("Flushed \(toFlush.count) pending delivered receipt(s)", category: "MessageStream")
-        }
-
-        // Start heartbeat sender
+        // Start heartbeat sender.
+        //
+        // The first one goes out immediately — see StreamHeartbeatSchedule. A gRPC
+        // server-streaming handler flushes no response headers until it has something to send, so
+        // a client that subscribes and then stays quiet for 25s is not accepted for 25s, and the
+        // 2.0s direct accept timeout kills a perfectly healthy stream. Speaking first turns
+        // "accepted" back into a fact about the transport rather than about whether the server
+        // happened to have mail waiting.
         let hbInterval = self.heartbeatInterval
         let hbTask = Task { [weak self] () -> Void in
+            var index = 0
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(hbInterval))
+                let delay = StreamHeartbeatSchedule.delayBeforeHeartbeat(index: index, interval: hbInterval)
+                if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+                guard !Task.isCancelled else { return }
                 await MainActor.run { self?.sendHeartbeat() }
+                index += 1
             }
         }
         self.heartbeatTask = hbTask
@@ -277,6 +271,7 @@ extension MessageStreamManager {
                 self.outboundContinuation = nil
                 self.heartbeatTask = nil
                 self.heartbeatWatchdogTask = nil
+                StreamReplayAudit.shared.streamClosed()
                 Log.info("MessageStream disconnected from \(host):\(port)", category: "MessageStream")
             } else {
                 Log.info("MessageStream disconnected (stale generation) from \(host):\(port)", category: "MessageStream")
@@ -295,10 +290,16 @@ extension MessageStreamManager {
                 guard self.activeStreamGeneration == generation else { break }
                 // Any server-pushed event proves the connection is live end-to-end
                 // (not just at TLS layer). Sets the watchdog-cancel flag below.
+                // On fast-UDP this is also the only evidence that clears the suppression ladder:
+                // an accept proves the handshake, data proves the network.
+                if !self.firstServerEventReceived, self.lastStreamTransportWasH3 {
+                    self.noteFastUdpProvenHealthy()
+                }
                 self.firstServerEventReceived = true
                 switch event {
                 case .message(let msg, let cursor):
                     Log.debug("MessageStream received message from=\(msg.from) id=\(msg.id)", category: "MessageStream")
+                    StreamReplayAudit.shared.delivery(messageId: msg.id, cursor: cursor)
                     if let handler = self.onMessageReceived {
                         // Track BEFORE handling so the cursor only advances once the pipeline
                         // reports a durable outcome (StreamCursorTracker.report inside
@@ -333,6 +334,8 @@ extension MessageStreamManager {
                     // would tell the server to delete messages the client never received.
                     // (The server already sends no cursor on heartbeats; this is defensive.)
                     self.lastHeartbeatDate = Date()
+                    // Data-plane liveness → TransportRouter (UI heartbeat SLO / health).
+                    self.reportStreamHealthyToRouter()
                 }
             }
         }
@@ -365,7 +368,10 @@ extension MessageStreamManager {
                 self.lastActiveTransport = label
                 self.activeRoutingKey = metricsLabel
                 self.lastHeartbeatDate = Date()
-                if self.lastStreamTransportWasH3 { self.consecutiveH3OpenFailures = 0 }
+                // NOT `fastUdpFailedThisSession = false` here: an accept is not delivery. On a
+                // DPI'd network the QUIC handshake is allowed through and the connection then goes
+                // silent, so re-arming on accept would re-probe every reconnect. Only
+                // `noteFastUdpProvenHealthy` (real server data) clears it.
                 // The background fetch was a best-effort catch-up for messages missed
                 // while disconnected. Now that the stream is live the server will push
                 // everything from the cursor, so the in-flight fetch is no longer needed.
@@ -381,6 +387,8 @@ extension MessageStreamManager {
                 } else {
                     Log.info("MessageStream connected — stream: \(streamMsStr)ms via \(metricsLabel)", category: "MessageStream")
                 }
+                // Data plane is up — router must see this (clears direct fail streak).
+                self.reportStreamOpenedToRouter(transportLabel: label, metricsLabel: metricsLabel)
             }
         }
 
@@ -430,27 +438,33 @@ extension MessageStreamManager {
                         try await Task.sleep(for: .seconds(NetworkTiming.GRPC.streamOpenAcceptPollInterval))
                     }
                 }
-                // 2) Timeout — three tiers:
-                //   · H3 direct → 1.5s  (QUIC fails fast when not supported; tighter window)
-                //   · H2 direct → 2.0s  (TCP+TLS needs one extra round-trip)
-                //   · H2 / VEIL  → 6.0s  (obfs4/WebTunnel + relay→server hop on a censored network
-                //                        easily eats 3-5s; tighter timeout was rotating healthy relays)
+                // 2) Timeout — see StreamAcceptBudget. The stale summary that used to live here
+                //    said "H2 / VEIL → 6.0s" while the constant it described had been 20s since
+                //    2026-05; the tiers are now stated once, next to the values.
                 let usingVEIL = GRPCChannelManager.shared.veilProxyPort() != nil
+                let directAlreadyFailed = directFailedThisSession
                 group.addTask {
-                    let timeout: TimeInterval
-                    if isH3Transport {
-                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutH3
-                    } else if usingVEIL {
-                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutVEIL
-                    } else {
-                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeout
-                    }
+                    let timeout = StreamAcceptBudget.timeout(
+                        isFastUdp: isH3Transport,
+                        usingVEIL: usingVEIL,
+                        directAlreadyFailedThisSession: directAlreadyFailed
+                    )
                     try await Task.sleep(for: .seconds(timeout))
                     throw StreamAcceptTimeout()
                 }
                 // 3) Early stream failure (before accepted)
+                //
+                // Must NOT be a bare `try await streamTask.value`. That ignores this child's
+                // cancellation, and a group waits for every child before it can return — so the
+                // accept timeouts above became advisory: they fired on time and then sat here
+                // until quinn's own connection timeout released them, 29s later (2026-08-10
+                // 07:34:13 → 07:34:44, "took 31740ms"). See UnstructuredWait.
+                //
+                // The non-cancelling variant is required: on the *success* path the body calls
+                // `group.cancelAll()`, and `cancellingValue` would reach through and tear down
+                // the stream that was just accepted.
                 group.addTask {
-                    try await streamTask.value
+                    try await UnstructuredWait.value(of: streamTask)
                 }
                 // 4) Hard H3 deadline — safety net for NWConnections that ignore the soft 1.5s
                 //    timeout.  Apple's Network.framework QUIC handshake runs on a DispatchQueue and
@@ -519,6 +533,15 @@ extension MessageStreamManager {
         //
         // Runs only for H3 — H2 has its own (slower) backpressure path and over VEIL the
         // additional relay latency makes a 5s watchdog too aggressive.
+        //
+        // NOTE: until the UnstructuredWait fix above, this watchdog could never fire. The task
+        // group held the whole stream's lifetime, so this task was created only after the stream
+        // had already ended, and its `activeStreamGeneration == generation` guard then failed
+        // against the next generation. Device logs bear that out: zero occurrences of "silent
+        // for … after accept" across every session. It is live for the first time now.
+        // Not a risk in the observed traffic — every QUIC accept in those logs was followed by a
+        // server heartbeat ack inside the same second, well under the 5s window — but if healthy
+        // QUIC streams start reporting "DPI likely dropping UDP", this is the change that armed it.
         if isH3Transport {
             let firstEventWatchdog = Task { [weak self] in
                 try? await Task.sleep(for: .seconds(NetworkTiming.Stream.firstServerEventWatchdogH3))
@@ -530,7 +553,11 @@ extension MessageStreamManager {
                     else { return false }
                     Log.info("MessageStream H3 silent for \(Int(NetworkTiming.Stream.firstServerEventWatchdogH3))s after accept — DPI likely dropping UDP, forcing H2 fallback", category: "MessageStream")
                     self.shouldFallbackToH2Direct = true
-                    self.consecutiveH3OpenFailures += 1
+                    // Accepted-then-silent is the *most* conclusive failure this transport has —
+                    // the handshake was allowed through and the data was not. It goes through the
+                    // same ladder as an open timeout rather than bumping the raw counter, which
+                    // left this path unable to ever arm a suppression on its own.
+                    self.noteFastUdpOpenFailure(context: "silent_after_accept")
                     return true
                 }
                 guard shouldFallback else { return }
@@ -542,11 +569,14 @@ extension MessageStreamManager {
                 streamTask.cancel()
             }
             defer { firstEventWatchdog.cancel() }
-            try await streamTask.value
+            // Cancelling variant here: cancellation of openStream means "tear this stream down",
+            // which is what the `defer { streamTask.cancel() }` above already intends — it just
+            // could not run while a bare `.value` await was ignoring the cancellation.
+            try await UnstructuredWait.cancellingValue(of: streamTask)
             return
         }
 
         // Wait until the stream ends (disconnect, server close, etc.)
-        try await streamTask.value
+        try await UnstructuredWait.cancellingValue(of: streamTask)
     }
 }

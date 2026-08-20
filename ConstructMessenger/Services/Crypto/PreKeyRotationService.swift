@@ -350,9 +350,13 @@ final class PreKeyRotationService {
             // device's bundle on a multi-device account (whichever it picks for the user), producing
             // a spurious identity "desync" against our local keys — and, worse, a destructive repair
             // rotation. Pin the query to our own deviceId so the comparison is apples-to-apples.
+            // Reads OUR OWN published identity/SPK/Kyber-SPK to compare with local copies.
+            // Must not consume: this ran on every consistency check and burned one of our
+            // own one-time pre-keys each time.
             let serverBundle = try await KeyServiceClient.shared.getPreKeyBundle(
                 userId: localUserId,
-                deviceId: deviceId.isEmpty ? nil : deviceId
+                deviceId: deviceId.isEmpty ? nil : deviceId,
+                consumeOneTimePrekey: false
             )
 
             let ikMatch  = localIk  == serverBundle.identityPublic

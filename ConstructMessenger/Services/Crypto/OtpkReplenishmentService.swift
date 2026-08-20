@@ -21,10 +21,15 @@ enum OtpkReplenishmentService {
     static let replenishBatchSize: UInt32 = 50
     /// Minimum seconds between replenishment calls (race condition dedup).
     private static let cooldownSeconds: TimeInterval = 60
-    /// After a replace-all upload, keep this many IDs below the new batch for first
-    /// messages already in flight (the server soft-expires replaced keys with a 48h
-    /// grace; anything older can never be referenced again). Everything below is pruned
-    /// so the persisted OTPK blob stays bounded instead of hoarding every key ever made.
+    /// After a replace-all upload, keep this many IDs below the new batch so first messages
+    /// already in flight still decrypt: a peer that fetched a bundle moments before the replace
+    /// holds that key and will use it, even though the server stopped serving it the instant
+    /// `replace_existing=true` set `is_expired`. (The server's 48 h interval is a hard-delete
+    /// sweep of already-expired rows — it is NOT a window in which they keep being handed out.)
+    /// Everything below the window is pruned so the persisted blob stays bounded.
+    ///
+    /// Applies to `replaceExisting` uploads ONLY — on an append the server retires nothing,
+    /// so an id cutoff would delete privates for keys it still serves.
     private static let pruneGraceWindow: UInt32 = 200
     private nonisolated(unsafe) static var isReplenishing = false
     private nonisolated(unsafe) static var lastReplenishDate: Date?
@@ -62,21 +67,61 @@ enum OtpkReplenishmentService {
         Log.info("OTPK upload (\(mode)): \(pairs.count) keys for device \(deviceId.prefix(8))...", category: "OTPK")
         if replaceExisting {
             CryptoManager.shared.clearNeedsFullOtpkReplacement()
-            // Convergence point: the server now holds exactly the batch we just uploaded.
-            // Prune local privates below (new batch − grace window) so the persisted blob
-            // stays bounded — devices were hoarding 800–2000 keys (60–150 KB Keychain items
-            // rewritten on every replenish), which is both dead weight and the prime suspect
-            // for the historical OTPK-blob corruption.
-            if let minNewId = pairs.map(\.keyId).min() {
-                let cutoff = minNewId > pruneGraceWindow ? minNewId - pruneGraceWindow : 0
-                let pruned = CryptoManager.shared.pruneOneTimePrekeys(below: cutoff)
-                if pruned > 0 {
-                    Log.info("OTPK pruned \(pruned) stale local keys below id \(cutoff) (\(CryptoManager.shared.oneTimePrekeyCount()) remain)", category: "OTPK")
-                    persistOtpks()
-                }
+        }
+
+        // Prune stale local privates — REPLACE-ALL ONLY.
+        //
+        // A local private may be deleted only once the server can no longer hand out its
+        // public half. The server deletes a key when it is consumed; an *unconsumed* key
+        // lives until the pool is replaced, and `key-service` soft-expires the old pool
+        // strictly under `replace_existing=true`. So the id-cutoff reasoning below holds
+        // for a replace, and for nothing else.
+        //
+        // What made the append case fire so reliably rather than occasionally: the server
+        // hands out `ORDER BY uploaded_at ASC` — oldest unconsumed key first — while an id
+        // cutoff deletes oldest-first too. The two are exactly anti-correlated, so a prune
+        // took out precisely the keys the server was about to serve next.
+        //
+        // `bcbab02f` extended this to the append path to stop the persisted blob hoarding
+        // (a device was observed holding 2294 privates while the server reported 0). That
+        // applied replace-all reasoning to the one path where the server retires nothing:
+        // every 20-key append deleted privates for keys the server was still serving. When
+        // a peer's bundle fetch then drew one, its 4-DH init could not be reproduced —
+        // `OTPK id=… not found` → END_SESSION → forced 3-DH re-init. This is the source of
+        // the "sessions break at random" reports; observed 2026-08-01 with the sender on
+        // id 1003070 and the receiver pruned below 1003210.
+        //
+        // Reverting restores the hoarding problem. That is the correct trade for now —
+        // an oversized Keychain blob is a cost, an unreproducible OTPK is lost delivery.
+        // The bounded-and-correct design is a periodic replace-all; see
+        // decisions/otpk-pool-lifecycle.
+        //
+        // `pruneGraceWindow` keys below the new batch are kept so first messages already in
+        // flight against just-replaced keys still decrypt, covered by the server's 48 h
+        // soft-expiry; anything older can never be referenced again.
+        if let cutoff = pruneCutoff(replaceExisting: replaceExisting, minNewId: pairs.map(\.keyId).min()) {
+            let pruned = CryptoManager.shared.pruneOneTimePrekeys(below: cutoff)
+            if pruned > 0 {
+                Log.info("OTPK pruned \(pruned) stale local keys below id \(cutoff) (\(CryptoManager.shared.oneTimePrekeyCount()) remain, mode=\(mode))", category: "OTPK")
+                persistOtpks()
             }
         }
         return pairs.count
+    }
+
+    /// Highest OTPK id it is safe to delete locally after an upload, or `nil` to prune nothing.
+    ///
+    /// The rule this encodes: **a local private may be dropped only once the server can no
+    /// longer hand out its public half.** The server deletes a key on consumption; an unconsumed
+    /// key lives until the pool is replaced, and only `replace_existing=true` soft-expires the
+    /// old pool. An append retires nothing, so no id cutoff is safe there — returning `nil` is
+    /// not caution, it is the only correct answer.
+    ///
+    /// Pure and `internal` so the rule is testable without a network round-trip; the defect it
+    /// replaces lived inside one.
+    static func pruneCutoff(replaceExisting: Bool, minNewId: UInt32?) -> UInt32? {
+        guard replaceExisting, let minNewId else { return nil }
+        return minNewId > pruneGraceWindow ? minNewId - pruneGraceWindow : 0
     }
 
     /// Export all OTPKs from the Rust core and save to Keychain (serialized via coreLock).

@@ -50,7 +50,8 @@ class PublicKeyBundleHandler {
         for attempt in 1...maxAttempts {
             do {
                 Log.info("SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., maxAttempts=\(maxAttempts)", category: "SessionInit")
-                let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId)
+                // Bundle for an incoming first message → X3DH init, OTPK required.
+                let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId, consumeOneTimePrekey: true)
                 Log.info("SESSION_STATE[fetch_bundle_success]: userId=\(userId.prefix(8))..., attempt=\(attempt)", category: "SessionInit")
                 return keyBundle
             } catch {
@@ -181,11 +182,13 @@ class PublicKeyBundleHandler {
                 // The X3DH OTPK is consumed by THIS init — a re-init from the same msg0
                 // can only fail with "OTPK not found" and spuriously start the heal path.
                 // Marked only after the successful save above: if persisting failed, we
-                // WANT the redelivery to retry. Three layers, same as the CFE path:
-                // Rust orchestrator cache (persists with the next state save), Swift
-                // in-memory cache, Core Data (survives restart).
-                CryptoManager.shared.markAckProcessedInOrchestrator(messageId: message.id)
-                PersistentACKStore.shared.preemptACK(message.id)
+                // WANT the redelivery to retry.
+                //
+                // One call, not three. This site used to write the orchestrator cache, a second
+                // Swift-side cache and Core Data in a row, under a comment claiming the
+                // orchestrator cache "persists with the next state save" — it does not
+                // (`export_orchestrator_state_cfe` writes an empty `processed_ids` on purpose).
+                // There is now one cache and one durable store, and `markProcessed` writes both.
                 PersistentACKStore.shared.markProcessed(message.id, senderId: data.userId, in: context)
                 return true
             } catch {
@@ -193,6 +196,14 @@ class PublicKeyBundleHandler {
                 return false
             }
             
+        } catch SessionError.notAHandshakeCarrier {
+            let initDuration = Date().timeIntervalSince(initStartTime)
+            Log.info(
+                "SESSION_STATE[init_refused_not_handshake]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s — leftover is not an X3DH carrier",
+                category: "SessionInit"
+            )
+            return false
+
         } catch CryptoError.SessionInitializationFailed(let message) {
             // Log detailed error from Rust core
             let initDuration = Date().timeIntervalSince(initStartTime)

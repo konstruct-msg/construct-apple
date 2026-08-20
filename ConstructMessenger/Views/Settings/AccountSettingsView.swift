@@ -40,6 +40,9 @@ struct AccountSettingsView: View {
     @State private var showingRecoverySetup = false
     @State private var showingSocialRecoverySetup = false
     @State private var pendingLogoutAll = false  // which logout action was requested before backup check
+    /// Short identity-key fingerprint (user-facing external identity, thread 5.3).
+    @State private var ownFingerprint: String?
+    @State private var fingerprintCopied = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -82,6 +85,7 @@ struct AccountSettingsView: View {
                 viewModel.loadUserInfo(from: authViewModel)
             }
             syncDraftProfileFields()
+            refreshOwnFingerprint()
         }
         .onChange(of: viewModel.username) { _, _ in
             if !isEditingProfile { syncDraftProfileFields() }
@@ -305,6 +309,41 @@ struct AccountSettingsView: View {
                 isEditing: isEditingProfile,
                 maxLength: MessageSizeLimits.maxDisplayNameCharacters
             )
+            flatRowDivider()
+
+            // External identity = key fingerprint (thread 5.3). Lives on Account,
+            // not next to invite actions — it is who you are, not how you add people.
+            if let ownFingerprint {
+                Button {
+                    PlatformClipboard.copy(ownFingerprint)
+                    fingerprintCopied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + AccountSettingsLayout.fingerprintCopiedFlashDuration) {
+                        fingerprintCopied = false
+                    }
+                } label: {
+                    profileRow(label: NSLocalizedString("identity_fingerprint", comment: "")) {
+                        Text(
+                            fingerprintCopied
+                                ? NSLocalizedString("identity_fingerprint_copied", comment: "")
+                                : ownFingerprint
+                        )
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(NSLocalizedString("identity_fingerprint", comment: ""))
+                .accessibilityHint(NSLocalizedString("identity_fingerprint_copy_hint", comment: ""))
+                .accessibilityIdentifier(A11y.Account.fingerprint)
+            } else {
+                profileRow(label: NSLocalizedString("identity_fingerprint", comment: "")) {
+                    Text(NSLocalizedString("identity_fingerprint_unknown", comment: ""))
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.textDim)
+                }
+            }
             flatRowDivider()
 
             // status — placeholder, not yet implemented
@@ -699,6 +738,19 @@ struct AccountSettingsView: View {
 
         if viewModel.usernameSaveError == nil && !hasUnsavedProfileChanges {
             isEditingProfile = false
+        }
+    }
+
+    private func refreshOwnFingerprint() {
+        guard CryptoManager.shared.isInitialized else {
+            ownFingerprint = nil
+            return
+        }
+        do {
+            let (ik, _) = try CryptoManager.shared.localBundlePublicKeys()
+            ownFingerprint = IdentityFingerprint.short(from: ik)
+        } catch {
+            ownFingerprint = nil
         }
     }
 

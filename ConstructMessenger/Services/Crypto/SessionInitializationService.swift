@@ -14,6 +14,10 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
     /// meaning they never uploaded a Kyber SPK. Session init must be refused to
     /// avoid silently downgrading to classical-only key agreement.
     case kyberEpochRequired
+    /// The envelope is not an X3DH / PQXDH handshake — feeding it to
+    /// `initReceivingSession` can only fail (AEAD / unknown PQ epoch) and then
+    /// clear the pending queue, including any real handshake behind it.
+    case notAHandshakeCarrier
 
     var errorDescription: String? {
         switch self {
@@ -23,6 +27,8 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
             return "Contact's encryption keys are \(String(format: "%.0f", days)) days old and need to be refreshed — ask them to open the app"
         case .kyberEpochRequired:
             return "Contact's post-quantum keys are incomplete — ask them to update the app"
+        case .notAHandshakeCarrier:
+            return "Incoming message is not a session handshake"
         }
     }
 }
@@ -38,20 +44,26 @@ class SessionInitializationService {
 
     // MARK: - Public Methods
     
-    /// Fetch public key bundle with exponential backoff retry
+    /// Fetch public key bundle with exponential backoff retry.
+    ///
+    /// - Parameter consumeOneTimePrekey: pass `true` only when this bundle will actually run
+    ///   X3DH. `false` fetches the same long-lived material (identity / verifying / signed
+    ///   pre-key) without burning one of the peer's one-time pre-keys — use it when the
+    ///   session already exists and we only need to warm the identity key.
     func fetchPublicKeyWithRetry(
         userId: String,
         deviceId: String? = nil,
         maxAttempts: Int = 3,
-        initialDelay: TimeInterval = 1.0
+        initialDelay: TimeInterval = 1.0,
+        consumeOneTimePrekey: Bool
     ) async throws -> PublicKeyBundleData {
         var lastError: Error?
         var delay = initialDelay
-        
+
         for attempt in 1...maxAttempts {
             do {
-                Log.info("SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., deviceId=\(deviceId?.prefix(8) ?? "nil")...", category: "SessionInit")
-                let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId, deviceId: deviceId)
+                Log.info("SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., deviceId=\(deviceId?.prefix(8) ?? "nil")..., consumeOtpk=\(consumeOneTimePrekey)", category: "SessionInit")
+                let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId, deviceId: deviceId, consumeOneTimePrekey: consumeOneTimePrekey)
                 Log.info("SESSION_STATE[fetch_bundle_success]: userId=\(userId.prefix(8))..., hasVerifyingKey=\(!keyBundle.verifyingKey.isEmpty)", category: "SessionInit")
                 return keyBundle
             } catch {
@@ -146,6 +158,15 @@ class SessionInitializationService {
                 allowStale: allowStale
             )
             PerformanceMetrics.shared.end(.sessionInitStart, endEvent: .sessionInitEnd, label: String(userId.prefix(8)))
+            // A session now exists — date it here, where it is created, not where it is later
+            // confirmed. `markActive` (the peer's `session_ready`) used to be the INITIATOR's only
+            // writer, which left every freshly built session undatable until the peer answered:
+            // build 585 destroyed a session built at 10:54:07 with an END_SESSION stamped 10:54:03,
+            // because the stale-check read `established=nil`. See `SessionEstablishment`.
+            //
+            // Every INITIATOR path funnels through this method, so one call covers prewarm,
+            // proactive init, re-init after END_SESSION, multi-device and profile share.
+            SessionEstablishment.record(for: userId)
             // Track at-risk state: a degraded (stale-SPK) init is authentic but should be
             // re-keyed once the peer rotates; a clean init clears any prior at-risk flag.
             if allowStale {
@@ -174,11 +195,71 @@ class SessionInitializationService {
     /// **Degrade path**: if `ageDays >= staleSPKFastFailDays` (30.25d = 6h past the Rust 30-day
     /// limit), the peer has clearly not been online recently — waiting is pointless, so we go
     /// straight to a degraded (at-risk) init instead of burning 2 × 60 s on retries.
+    /// Outcome of one proactive-init run, shared with every coalesced caller.
+    private enum ProactiveInitOutcome {
+        case success
+        case failure(Error)
+    }
+
+    /// In-flight proactive inits, keyed by peer. `@MainActor` makes lookup-then-insert
+    /// atomic, so two concurrent callers can never both start a run.
+    private var proactiveInitTasks: [String: Task<ProactiveInitOutcome, Never>] = [:]
+
+    #if DEBUG
+    /// Test seam: substitutes the init run so the coalescing wrapper can be exercised without
+    /// the network. Returns `true` for success. Nil in production.
+    var proactiveInitOverrideForTests: ((String) async -> Bool)?
+    #endif
+
+    /// Establish a session as INITIATOR, coalescing concurrent callers per peer.
+    ///
+    /// Single-flight is mandatory, not an optimisation. Two runs each fetch a bundle with
+    /// `consumeOneTimePrekey: true` (burning two of the peer's OTPKs) and each call
+    /// `initializeSession(deleteExisting: true)`, so the second silently replaces the first's
+    /// session. The X3DH carriers already dispatched for run #1 (SESSION_RESET_INIT) then
+    /// reference a ratchet we no longer hold, while our own messages continue on run #2 —
+    /// the peer establishes from one and receives on the other, and diverges on the very next
+    /// message. Observed 2026-07-31: `initiator_announce` (END_SESSION received) and
+    /// `queue_message` (user typed) started runs 1s apart and forced one guaranteed heal cycle.
+    ///
+    /// Callers are **coalesced, not skipped**: a late joiner awaits the in-flight run and then
+    /// receives the same outcome through its own callbacks. Skipping would strand its queued
+    /// messages, since `onSuccess` is what flushes them.
     func initializeSessionProactively(
         userId: String,
         onSuccess: @escaping () -> Void,
         onFailure: @escaping (Error) -> Void
     ) async {
+        let outcome: ProactiveInitOutcome
+        if let inFlight = proactiveInitTasks[userId] {
+            Log.info("SESSION_STATE[proactive_init_coalesced]: joining in-flight init for \(userId.prefix(8))…", category: "SessionInit")
+            outcome = await inFlight.value
+        } else {
+            let task = Task { [weak self] () -> ProactiveInitOutcome in
+                guard let self else { return .failure(CryptoManagerError.coreNotInitialized) }
+                #if DEBUG
+                if let override = self.proactiveInitOverrideForTests {
+                    return await override(userId) ? .success : .failure(CryptoManagerError.coreNotInitialized)
+                }
+                #endif
+                return await self.performProactiveInit(userId: userId)
+            }
+            proactiveInitTasks[userId] = task
+            outcome = await task.value
+            proactiveInitTasks[userId] = nil
+        }
+
+        switch outcome {
+        case .success:
+            onSuccess()
+        case .failure(let error):
+            onFailure(error)
+        }
+    }
+
+    /// The actual init run. Never call directly — go through `initializeSessionProactively`
+    /// so concurrent callers coalesce onto a single session.
+    private func performProactiveInit(userId: String) async -> ProactiveInitOutcome {
         Log.info("SESSION_STATE[proactive_init_start]: userId=\(userId.prefix(8))...", category: "SessionInit")
 
         let staleSPKMaxRetries = 2
@@ -198,12 +279,11 @@ class SessionInitializationService {
             }
 
             do {
-                let bundle = try await fetchPublicKeyWithRetry(userId: userId)
+                let bundle = try await fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
                 try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
 
                 Log.info("SESSION_STATE[proactive_init_success]: userId=\(userId.prefix(8))...", category: "SessionInit")
-                await MainActor.run { onSuccess() }
-                return
+                return .success
             } catch SessionError.peerSPKStale(let days) where attempt < staleSPKMaxRetries && days < staleSPKFastFailDays {
                 // SPK is barely past the staleness limit — peer may have just come online
                 // and rotated. Wait for server bundle cache to propagate.
@@ -219,11 +299,10 @@ class SessionInitializationService {
                 // See the stale-peer-reachability decision record.
                 Log.error("SESSION_STATE[stale_spk_degraded_init]: peer \(userId.prefix(8))… SPK is \(String(format: "%.1f", days))d old (≥\(staleSPKFastFailDays)d) — initiating degraded (at-risk) session", category: "SessionInit")
                 do {
-                    let bundle = try await fetchPublicKeyWithRetry(userId: userId)
+                    let bundle = try await fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
                     try initializeSession(userId: userId, bundle: bundle, deleteExisting: true, allowStale: true)
                     Log.info("SESSION_STATE[proactive_init_success_degraded]: userId=\(userId.prefix(8))…", category: "SessionInit")
-                    await MainActor.run { onSuccess() }
-                    return
+                    return .success
                 } catch {
                     Log.error("SESSION_STATE[degraded_init_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                     lastError = error
@@ -237,7 +316,7 @@ class SessionInitializationService {
 
         let finalError = lastError ?? NetworkError.connectionFailed
         Log.error("SESSION_STATE[proactive_init_failed]: userId=\(userId.prefix(8))..., error=\(finalError.localizedDescription)", category: "SessionInit")
-        await MainActor.run { onFailure(finalError) }
+        return .failure(finalError)
     }
 
     // MARK: - At-risk session auto-upgrade (Phase 2)
@@ -270,18 +349,24 @@ class SessionInitializationService {
         UserDefaults.standard.set(now, forKey: attemptKey)
 
         do {
-            let bundle = try await fetchPublicKeyWithRetry(userId: userId)
+            // Freshness PROBE — reads spk_uploaded_at only. Two of the three outcomes below
+            // return without re-initialising, so a consuming fetch here would burn one of the
+            // peer's one-time pre-keys purely to look at a timestamp. This runs per at-risk
+            // contact on every foreground sweep, so it must be non-destructive.
+            let probe = try await fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: false)
             // spk_uploaded_at == 0 means a legacy server that doesn't report freshness — we can't
             // tell if the peer rotated, so leave the degraded session in place.
-            guard bundle.spkUploadedAt > 0 else { return }
-            let ageDays = (now - Double(bundle.spkUploadedAt)) / 86400.0
+            guard probe.spkUploadedAt > 0 else { return }
+            let ageDays = (now - Double(probe.spkUploadedAt)) / 86400.0
             guard ageDays < atRiskUpgradeFreshnessDays else {
                 Log.info("SESSION_STATE[at_risk_upgrade_skip]: peer \(userId.prefix(8))… SPK still \(String(format: "%.1f", ageDays))d old — keeping degraded session", category: "SessionInit")
                 return
             }
 
-            // Peer is fresh again → clean strict re-init. On success, initializeSession clears the
-            // at-risk flag (deleteSessionAtRiskFlag in the non-degraded branch).
+            // Peer is fresh again → clean strict re-init. Re-fetch WITH an OTPK: the probe
+            // above deliberately carries none, and a re-key should get full X3DH forward
+            // secrecy. Rare and self-throttled (1 h per contact), so the extra RPC is cheap.
+            let bundle = try await fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
             try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
             Log.info("SESSION_STATE[at_risk_upgraded]: re-keyed to fresh session for \(userId.prefix(8))…", category: "SessionInit")
             await MainActor.run {

@@ -435,6 +435,22 @@ fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
+    typealias FfiType = UInt32
+    typealias SwiftType = UInt32
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt32 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
@@ -499,6 +515,16 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
  * multiplexed over the single connection.
  */
 public protocol QuicChannelProtocol: AnyObject, Sendable {
+    
+    /**
+     * Close this connection now, rather than when the last Swift reference happens to go away.
+     *
+     * Until 2026-08-09 this API had no way to close a connection at all — teardown was a side
+     * effect of drop order inside quinn and h3. That does work (verified by mutation, see
+     * `QuicClient::drop`), but it is not something this crate states or can hold a dependency
+     * to. This makes retirement explicit.
+     */
+    func close() 
     
     /**
      * Diagnostic: live quinn connection stats (tx/rx datagrams, PING frames sent, RTT,
@@ -604,6 +630,21 @@ public static func connectObfuscated(host: String, port: UInt16, serverName: Str
 }
     
 
+    
+    /**
+     * Close this connection now, rather than when the last Swift reference happens to go away.
+     *
+     * Until 2026-08-09 this API had no way to close a connection at all — teardown was a side
+     * effect of drop order inside quinn and h3. That does work (verified by mutation, see
+     * `QuicClient::drop`), but it is not something this crate states or can hold a dependency
+     * to. This makes retirement explicit.
+     */
+open func close()  {try! rustCall() {
+    uniffi_construct_transport_fn_method_quicchannel_close(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
     
     /**
      * Diagnostic: live quinn connection stats (tx/rx datagrams, PING frames sent, RTT,
@@ -1168,6 +1209,35 @@ public func transportBuildMarker() -> String  {
     )
 })
 }
+/**
+ * How many QUIC connections this process holds open right now.
+ *
+ * Belongs in every runtime health line on device. This number was unobservable while abandoned
+ * connections were accumulating, which is why "the transport burns a core" took a day to see
+ * and could not be attributed to anything.
+ */
+public func transportLiveConnections() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_transport_fn_func_transport_live_connections($0
+    )
+})
+}
+/**
+ * Health of the transport runtime itself: open connections and live tokio tasks.
+ *
+ * Both numbers exist to settle a question the 2026-08-09 device logs could not: the runtime
+ * pins one worker thread at 100% (`cpu=105.5%` to the decimal across many 30s windows) and
+ * keeps it there, while QUIC is disabled and every stream runs over H2 — so it is neither a
+ * live connection nor traffic. `alive_tasks` separates the two remaining shapes: one task that
+ * never yields, versus tasks that accumulate and are never reaped. Reading a stack is the next
+ * step either way, but this says which stack to go looking for.
+ */
+public func transportRuntimeStats() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_transport_fn_func_transport_runtime_stats($0
+    )
+})
+}
 
 private enum InitializationResult {
     case ok
@@ -1185,6 +1255,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.contractVersionMismatch
     }
     if (uniffi_construct_transport_checksum_func_transport_build_marker() != 44196) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_transport_checksum_func_transport_live_connections() != 53821) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_transport_checksum_func_transport_runtime_stats() != 24534) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_transport_checksum_method_quicchannel_close() != 34758) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_transport_checksum_method_quicchannel_connection_stats() != 26635) {

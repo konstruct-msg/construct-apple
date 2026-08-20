@@ -44,13 +44,17 @@ class InviteGenerator {
     ///   - username: Optional plaintext @alias in the signed payload. **Default nil**
     ///     (metadata minimization). Never pass for HTTPS deep links.
     ///   - serverFQDN: Server FQDN (optional, uses default if nil)
+    ///   - ttlSeconds: how long this invite should stay redeemable. Ignored below v5, which
+    ///     has no wire field for it and takes the server maximum. Pass the artifact's own
+    ///     life — a QR is scanned in seconds, a link waits in an inbox for hours.
     /// - Returns: Signed InviteObject
     /// - Throws: InviteGenerationError
     func generate(
         userId: String,
         deviceId: String,
         username: String? = nil,
-        serverFQDN: String? = nil
+        serverFQDN: String? = nil,
+        ttlSeconds: UInt32
     ) throws -> InviteObject {
         guard UUID(uuidString: userId) != nil else {
             throw InviteGenerationError.invalidUserId
@@ -63,6 +67,11 @@ class InviteGenerator {
         let server = normalizeServer(serverFQDN ?? defaultServer)
         let jti = UUID().uuidString.lowercased()
         let timestamp = Int(Date().timeIntervalSince1970)
+        let version = InviteConfig.currentVersion
+        // Below v5 the field does not exist on the wire, and validate() refuses an invite
+        // that carries one. Dropping it here is what keeps `currentVersion` the single
+        // switch for the rollout instead of something callers have to know about.
+        let statedTTL: UInt32? = InviteConfig.carriesTTL(version: version) ? ttlSeconds : nil
 
         guard let signingSecretKey = try? getSigningSecretKey() else {
             throw InviteGenerationError.missingIdentityKey
@@ -74,7 +83,7 @@ class InviteGenerator {
 
         // v4: empty ephKey — pure signed capability (F2).
         let unsignedInvite = InviteObject(
-            v: InviteConfig.currentVersion,
+            v: version,
             jti: jti,
             uuid: userId.lowercased(),
             deviceId: deviceId,
@@ -82,10 +91,11 @@ class InviteGenerator {
             ephKey: "",
             ts: timestamp,
             sig: "",
-            un: normalizedUsername
+            un: normalizedUsername,
+            ttl: statedTTL
         )
 
-        let dataToSign = unsignedInvite.canonicalString()
+        let dataToSign = try unsignedInvite.canonicalString()
         Log.debug("Canonical string for signing: \(dataToSign)", category: "InviteGenerator")
 
         let expectedVerifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: signingSecretKey)
@@ -106,7 +116,7 @@ class InviteGenerator {
 
         let signatureBase64 = Data(signature.signature).base64EncodedString()
         let signedInvite = InviteObject(
-            v: InviteConfig.currentVersion,
+            v: version,
             jti: jti,
             uuid: userId.lowercased(),
             deviceId: deviceId,
@@ -114,14 +124,15 @@ class InviteGenerator {
             ephKey: "",
             ts: timestamp,
             sig: signatureBase64,
-            un: normalizedUsername
+            un: normalizedUsername,
+            ttl: statedTTL
         )
 
         try signedInvite.validate()
 
-        let ttlMinutes = Int(InviteConfig.ttlSeconds / 60)
+        let liveFor = Int(signedInvite.effectiveTTLSeconds / 60)
         Log.info(
-            "Generated invite v\(InviteConfig.currentVersion): jti=\(jti.prefix(8))..., expires in \(ttlMinutes) minutes",
+            "Generated invite v\(version): jti=\(jti.prefix(8))..., expires in \(liveFor) min",
             category: "InviteGenerator"
         )
         return signedInvite
@@ -129,22 +140,48 @@ class InviteGenerator {
     
     // MARK: - QR Code & Link Generation
 
+    /// A minted invite together with the artifact carrying it.
+    ///
+    /// The `jti` leaves the generator alongside the artifact on purpose. These methods used
+    /// to return the URL or the payload alone, discarding the identifier of the capability
+    /// they had just signed — and a `jti` the issuing device does not keep is a capability
+    /// nobody can revoke, because the server holds no record of an invite until someone
+    /// redeems it. `InviteJournal` is the intended keeper.
+    struct MintedInvite<Artifact> {
+        let jti: String
+        let issuedAt: Date
+        /// The stated life, or nil below v5. Travels with the jti for the same reason the
+        /// jti travels at all: the journal has to know when what it recorded stops working,
+        /// and asking the global constant would be wrong the moment two artifacts differ.
+        let ttl: UInt32?
+        let artifact: Artifact
+    }
+
     /// Generate compact binary payload for QR **byte mode** (no base64).
     ///
     /// Smaller than legacy base64(JSON) deep links; pair with `QRCodeGenerator.generate(from:)`.
+    /// A QR gets `InviteConfig.qrTTLSeconds`, not the link's twelve hours: it is scanned
+    /// within seconds of appearing and never waits in an inbox.
     func generateQRBinary(
         userId: String,
         deviceId: String,
         username: String? = nil,
-        server: String? = nil
-    ) throws -> Data {
+        server: String? = nil,
+        ttlSeconds: UInt32 = InviteConfig.qrTTLSeconds
+    ) throws -> MintedInvite<Data> {
         let invite = try generate(
             userId: userId,
             deviceId: deviceId,
             username: username,
-            serverFQDN: normalizeServer(server ?? defaultServer)
+            serverFQDN: normalizeServer(server ?? defaultServer),
+            ttlSeconds: ttlSeconds
         )
-        return try invite.encodeBinary()
+        return MintedInvite(
+            jti: invite.jti,
+            issuedAt: Date(timeIntervalSince1970: TimeInterval(invite.ts)),
+            ttl: invite.ttl,
+            artifact: try invite.encodeBinary()
+        )
     }
 
     /// Generate text-safe payload for clipboard / base64-like QR fallbacks.
@@ -153,15 +190,22 @@ class InviteGenerator {
         userId: String,
         deviceId: String,
         username: String? = nil,
-        server: String? = nil
-    ) throws -> String {
+        server: String? = nil,
+        ttlSeconds: UInt32 = InviteConfig.qrTTLSeconds
+    ) throws -> MintedInvite<String> {
         let binary = try generateQRBinary(
             userId: userId,
             deviceId: deviceId,
             username: username,
-            server: server
+            server: server,
+            ttlSeconds: ttlSeconds
         )
-        return InviteBinaryCodec.base64URLEncode(binary)
+        return MintedInvite(
+            jti: binary.jti,
+            issuedAt: binary.issuedAt,
+            ttl: binary.ttl,
+            artifact: InviteBinaryCodec.base64URLEncode(binary.artifact)
+        )
     }
 
     /// Generate deep link URL for sharing
@@ -170,26 +214,31 @@ class InviteGenerator {
     /// Also supports: `https://konstruct.cc/add?invite=<base64url>`
     ///
     /// The invite query value is base64url(compact binary) — URLs are a text boundary.
+    ///
+    /// A link keeps the full `InviteConfig.ttlSeconds`. It is the artifact that travels
+    /// through another messenger and waits in an inbox, which is the reason that number is
+    /// twelve hours in the first place.
     func generateDeepLink(
         userId: String,
         deviceId: String,
         username: String? = nil,
         server: String? = nil,
-        useHTTPS: Bool = false
-    ) throws -> String {
+        useHTTPS: Bool = false,
+        ttlSeconds: UInt32 = UInt32(InviteConfig.ttlSeconds)
+    ) throws -> MintedInvite<String> {
         let normalizedServer = normalizeServer(server ?? defaultServer)
         let payload = try generateQRPayload(
             userId: userId,
             deviceId: deviceId,
             username: username,
-            server: normalizedServer
+            server: normalizedServer,
+            ttlSeconds: ttlSeconds
         )
 
-        if useHTTPS {
-            return "https://\(normalizedServer)/add?invite=\(payload)"
-        } else {
-            return "konstruct://add?invite=\(payload)"
-        }
+        let url = useHTTPS
+            ? "https://\(normalizedServer)/add?invite=\(payload.artifact)"
+            : "konstruct://add?invite=\(payload.artifact)"
+        return MintedInvite(jti: payload.jti, issuedAt: payload.issuedAt, ttl: payload.ttl, artifact: url)
     }
     
     // MARK: - Helper Methods

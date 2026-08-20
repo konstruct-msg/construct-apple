@@ -69,6 +69,10 @@ final class AudioRecorderService: ObservableObject {
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
 
+        // Bracketed so a keyboard dismissal can be attributed to the audio session rather than to
+        // the composer swap — the swap was ruled out on device and this is the next candidate.
+        // See KeyboardEventTracer.
+        KeyboardEventTracer.shared.enter(.audioSessionActivating)
         try configureAudioSession()
 
         let rec = try AVAudioRecorder(url: url, settings: settings)
@@ -79,6 +83,7 @@ final class AudioRecorderService: ObservableObject {
         startDate  = Date()
         waveformSamples = []
         state = .recording(duration: 0, waveform: [])
+        KeyboardEventTracer.shared.enter(.recording)
 
         startMeteringTimer()
     }
@@ -98,6 +103,13 @@ final class AudioRecorderService: ObservableObject {
         startDate  = nil
         state = .recorded(url: url, duration: duration, waveform: waveform)
 
+        // The phase must leave `.recording` here, or every keyboard event for the rest of the
+        // session is stamped with it. Device 2026-08-11 17:00: `will HIDE — phase=recording
+        // (+238804ms into that phase)` — four minutes after the voice note was sent, on an
+        // ordinary dismissal. Read quickly that is a recording bug firing repeatedly; it is not,
+        // and the same class of misreading is what sent the previous fix at the wrong suspect.
+        KeyboardEventTracer.shared.enter(.stoppingRecording)
+
         deactivateAudioSession()
     }
 
@@ -115,6 +127,7 @@ final class AudioRecorderService: ObservableObject {
         startDate  = nil
         waveformSamples = []
         state = .idle
+        KeyboardEventTracer.shared.enter(.idle)
         deactivateAudioSession()
     }
 
@@ -124,6 +137,7 @@ final class AudioRecorderService: ObservableObject {
         startDate  = nil
         waveformSamples = []
         state = .idle
+        KeyboardEventTracer.shared.enter(.idle)
     }
 
     // MARK: - Errors
@@ -208,10 +222,35 @@ final class AudioRecorderService: ObservableObject {
         }
     }
 
+    /// `.mixWithOthers` was here for one build and has been taken back out — recorded so nobody
+    /// adds it again for the same reason.
+    ///
+    /// The keyboard collapses the moment a voice recording starts. On 2026-08-11 the theory was
+    /// that a *non-mixing* recording session makes the system tear down the software keyboard along
+    /// with the audio it interrupts, so declaring `.mixWithOthers` would leave it standing. The
+    /// stated test was that `KEYBOARD_TRACE: will HIDE — phase=recording` must stop appearing.
+    ///
+    /// It did not. Device, 2026-08-11 11:48:50 and 11:49:00, with the option shipped:
+    ///
+    ///     KEYBOARD_TRACE: will HIDE — phase=recording (+25ms into that phase)
+    ///     KEYBOARD_TRACE: will HIDE — phase=recording (+16ms into that phase)
+    ///
+    /// So it is reverted rather than kept "just in case": it buys nothing measurable and it costs
+    /// something real — with `.mixWithOthers`, audio already playing in another app is no longer
+    /// paused when recording starts and bleeds into the voice note through the speaker.
+    ///
+    /// This does NOT clear the audio session as the cause. The tracer's phase rule (see
+    /// KeyboardEventTracer) assumed a session-driven teardown would be synchronous with
+    /// `setActive(true)`; a system teardown arriving 20ms later also lands in `phase=recording`, so
+    /// the phase never separated the two candidates. `firstResponder=` in the trace does.
     private func configureAudioSession() throws {
         #if os(iOS) || targetEnvironment(macCatalyst)
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        try session.setCategory(
+            .playAndRecord,
+            mode: .default,
+            options: [.defaultToSpeaker, .allowBluetoothHFP]
+        )
         try session.setActive(true)
         #endif
     }

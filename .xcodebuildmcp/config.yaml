@@ -1,0 +1,9 @@
+# XcodeBuildMCP — repo-scoped configuration.
+#
+# `ui-automation` is NOT enabled by default, and its absence is quiet: the server
+# still answers snapshot_ui and even suggests `tap` in its nextSteps, but the tap /
+# type / swipe tools are never exposed. Without this line the two-simulator stand
+# can only look at the screen, not drive it.
+enabledWorkflows:
+  - simulator
+  - ui-automation

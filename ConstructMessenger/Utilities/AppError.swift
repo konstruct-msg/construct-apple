@@ -195,7 +195,8 @@ extension AppError {
             case .decryptionFailedNoArchive:   return .decryptionFailed
             case .encryptionFailed,
                  .invalidKeyData,
-                 .invalidSignature:            return .keyOperationFailed(e.localizedDescription)
+                 .invalidSignature,
+                 .keyStatePersistFailed:       return .keyOperationFailed(e.localizedDescription)
             case .pqxdhOtpkMissing:            return .sessionInitFailed(contactId: "")
             }
         case let e as RPCError:

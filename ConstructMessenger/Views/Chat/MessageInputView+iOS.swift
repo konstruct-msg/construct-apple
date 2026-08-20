@@ -16,7 +16,6 @@ struct IOSMessageInputView: View {
 
     @Binding var text: String
     @Binding var droppedImages: [PlatformImage]
-    let isSending: Bool
     let replyingTo: Message?
     let quoteOverride: String?
     let editingMessage: Message?
@@ -29,6 +28,9 @@ struct IOSMessageInputView: View {
     @StateObject private var audioRecorder = AudioRecorderService.shared
     @StateObject private var attachments = MessageInputAttachmentStore()
     @State private var showMicPermissionAlert = false
+    /// Which queued attachment the review sheet opened on. Nil means closed — one piece of
+    /// state rather than a bool plus an index that can disagree about which item is showing.
+    @State private var reviewingIndex: AttachmentReviewTarget?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,6 +49,14 @@ struct IOSMessageInputView: View {
         .animation(.easeInOut(duration: 0.2), value: editingMessage != nil)
         .animation(.easeInOut(duration: 0.2), value: !attachments.selectedAttachments.isEmpty)
         .animation(.easeInOut(duration: 0.15), value: audioRecorder.state)
+        .fullScreenCover(item: $reviewingIndex) { target in
+            AttachmentReviewView(
+                attachments: attachments.selectedAttachments,
+                initialIndex: target.index,
+                onEdit: { attachments.replaceImage(at: $0, with: $1) },
+                onDelete: { attachments.removeAttachment(at: $0) }
+            )
+        }
         .alert("Microphone Access Denied", isPresented: $showMicPermissionAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Settings") {
@@ -95,7 +105,9 @@ struct IOSMessageInputView: View {
         if !attachments.selectedAttachments.isEmpty {
             MessagePhotoPreviewBar(
                 images: attachments.selectedAttachments.compactMap { $0.displayImage },
-                onRemove: removePhoto
+                onRemove: removePhoto,
+                onMove: attachments.moveAttachment,
+                onOpen: { reviewingIndex = AttachmentReviewTarget(index: $0) }
             )
         }
         if !attachments.selectedFileURLs.isEmpty {
@@ -106,30 +118,55 @@ struct IOSMessageInputView: View {
         }
     }
 
+    /// The composer never unmounts, even while a voice bar is on screen.
+    ///
+    /// It used to be a `switch` that replaced `inputRow` with the voice bar. That takes the
+    /// `TextField` out of the view tree, and a `TextField` that leaves the tree loses focus by
+    /// definition — so the keyboard collapsed the moment recording started and came back when it
+    /// ended, moving the whole chat twice per voice message. Nothing asked for the keyboard to go;
+    /// it was a side effect of how the swap was written.
+    ///
+    /// Keeping `inputRow` mounted and hidden underneath preserves focus, so the keyboard stays
+    /// exactly as the user left it. Hidden means invisible *and* inert: no hit testing (taps belong
+    /// to the voice bar above it) and hidden from accessibility, or VoiceOver would read a text
+    /// field that is not there.
+    ///
+    /// Height note: the ZStack takes the taller of the two, so the composer can still shift by the
+    /// difference between the input row and a voice bar. That is a few points against ~300 for the
+    /// keyboard, and the two are designed to the same composer height.
     @ViewBuilder
     private var voiceOrInputRow: some View {
-        switch audioRecorder.state {
-        case .recording(let duration, let waveform):
-            VoiceRecordingBar(duration: duration, waveform: waveform) {
-                audioRecorder.stopRecording()
-            } onCancel: {
-                audioRecorder.cancel()
-            }
-            .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            .padding(.vertical, CTLayout.inlinePad)
+        let isIdle = audioRecorder.state == .idle
 
-        case .recorded(let url, let duration, let waveform):
-            VoicePreviewBar(duration: duration, waveform: waveform) {
-                onSendVoice?(url, duration, waveform)
-                audioRecorder.resetAfterSend()
-            } onDiscard: {
-                audioRecorder.cancel()
-            }
-            .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            .padding(.vertical, CTLayout.inlinePad)
-
-        case .idle:
+        ZStack {
             inputRow
+                .opacity(isIdle ? 1 : 0)
+                .allowsHitTesting(isIdle)
+                .accessibilityHidden(!isIdle)
+
+            switch audioRecorder.state {
+            case .recording(let duration, let waveform):
+                VoiceRecordingBar(duration: duration, waveform: waveform) {
+                    audioRecorder.stopRecording()
+                } onCancel: {
+                    audioRecorder.cancel()
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                .padding(.vertical, CTLayout.inlinePad)
+
+            case .recorded(let url, let duration, let waveform):
+                VoicePreviewBar(duration: duration, waveform: waveform) {
+                    onSendVoice?(url, duration, waveform)
+                    audioRecorder.resetAfterSend()
+                } onDiscard: {
+                    audioRecorder.cancel()
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                .padding(.vertical, CTLayout.inlinePad)
+
+            case .idle:
+                EmptyView()
+            }
         }
     }
 
@@ -139,7 +176,6 @@ struct IOSMessageInputView: View {
             MessageInputTextBar(
                 text: $text,
                 canSend: canSend,
-                isSending: isSending,
                 onSend: sendMessage,
                 onStartVoice: startVoiceRecording
             )
@@ -236,7 +272,6 @@ struct CameraPickerView: UIViewControllerRepresentable {
         IOSMessageInputView(
             text: $text,
             droppedImages: $dropped,
-            isSending: false,
             replyingTo: nil,
             quoteOverride: nil,
             editingMessage: nil,

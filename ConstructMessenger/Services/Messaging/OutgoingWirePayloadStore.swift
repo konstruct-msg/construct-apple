@@ -47,6 +47,38 @@ final class OutgoingWirePayloadStore {
         }
     }
 
+    /// Deletes every stored payload past its TTL, across the whole keyspace.
+    ///
+    /// `purgeIfExpired` only ever ran for a key someone asked for by id, so a payload for a message
+    /// that was never retried was never even looked at — the TTL existed but had no reader. Call
+    /// this once at launch; it is the only thing that bounds this store.
+    func sweepExpired() {
+        queue.sync {
+            let now = Date().timeIntervalSince1970
+            let keys = defaults.dictionaryRepresentation().keys
+                .filter { $0.hasPrefix(OutgoingWirePayloadRetention.keyPrefix) }
+            guard !keys.isEmpty else { return }
+
+            let entries: [(key: String, createdAt: TimeInterval?)] = keys.map { key in
+                guard let data = defaults.data(forKey: key),
+                      let entry = try? JSONDecoder().decode(Entry.self, from: data) else {
+                    return (key, nil)
+                }
+                return (key, entry.createdAt)
+            }
+
+            let expired = OutgoingWirePayloadRetention.expiredKeys(
+                entries: entries, now: now, ttl: entryTtl
+            )
+            for key in expired { defaults.removeObject(forKey: key) }
+
+            Log.info(
+                "OutgoingWirePayloadStore sweep: \(expired.count) expired of \(keys.count) stored",
+                category: "Messaging"
+            )
+        }
+    }
+
     private func purgeIfExpired(baseKey: String) {
         guard let entry = loadEntry(baseKey) else { return }
         let createdAt = Date(timeIntervalSince1970: entry.createdAt)
@@ -74,7 +106,7 @@ final class OutgoingWirePayloadStore {
     }
 
     private func key(_ baseKey: String) -> String {
-        "construct.outgoingWirePayload.\(baseKey)"
+        "\(OutgoingWirePayloadRetention.keyPrefix)\(baseKey)"
     }
 
     private func normalize(_ id: String) -> String {

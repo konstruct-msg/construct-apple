@@ -5,9 +5,6 @@
 
 import Foundation
 import CoreData
-#if canImport(UIKit)
-import UIKit
-#endif
 
 @MainActor
 @Observable
@@ -16,14 +13,12 @@ class ChatViewModel {
     // MARK: - UI state
 
     var messages: [Message] = []
-    var isSending = false
     var isLoadingMore = false
     var hasMoreMessages = true
     var editingMessage: Message?
     /// Set by continuous voice playback to ask the view to scroll the now-playing
     /// message into view. The view scrolls on change, then resets it to nil.
     var voicePlaybackScrollTarget: String?
-    var blockedByRecipient = false
     var isSessionReady = false
     var isInitializingSession = false
 
@@ -201,8 +196,8 @@ class ChatViewModel {
 
     // MARK: - Messages
 
-    func loadMoreMessages() {
-        messageStore.loadMoreMessages()
+    func loadMoreMessages(trigger: LoadMoreTrigger = .user) {
+        messageStore.loadMoreMessages(trigger: trigger)
     }
 
     func deleteMessage(_ message: Message) {

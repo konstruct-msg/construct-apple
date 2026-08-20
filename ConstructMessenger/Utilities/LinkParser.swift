@@ -109,24 +109,8 @@ struct LinkParser {
         }
 
         // 3. AcceptInvite — one-time jti burn + transitional contact edge recording
-        var inviteToken = Shared_Proto_Services_V1_InviteToken()
-        inviteToken.v = Int32(invite.v)
-        inviteToken.jti = invite.jti
-        inviteToken.uuid = invite.uuid
-        inviteToken.server = invite.server
-        inviteToken.ts = Int64(invite.ts)
-        // v4+: empty; v1–v3: still sent for server dual-read of old invites
-        inviteToken.ephPub = invite.ephKey
-        inviteToken.sig = invite.sig
-        if !invite.deviceId.isEmpty {
-            inviteToken.deviceID = invite.deviceId
-        }
-        if let un = invite.un, !un.isEmpty {
-            inviteToken.un = un
-        }
-
         var acceptRequest = Shared_Proto_Services_V1_AcceptInviteRequest()
-        acceptRequest.invite = inviteToken
+        acceptRequest.invite = protoToken(from: invite)
 
         // Retry AcceptInvite with backoff — "Stream unexpectedly closed" happens when
         // VEIL is reconnecting. A few attempts let the transport stabilize.
@@ -144,7 +128,11 @@ struct LinkParser {
                 try await InviteServiceClient.shared.acceptInvite(invite: acceptRequest)
             }
         } catch {
-            throw ContactLinkError.verificationFailed(error)
+            // The server's verdict, not the bridged NSError description. `AcceptInvite` is
+            // where a revoked link is refused, and until this classification existed that
+            // refusal reached the user as "(GRPCCore.RPCError error 1.)" — a digit that is
+            // the same for every error Swift ever bridges.
+            throw mapAcceptError(InviteAcceptClassification.outcome(from: error))
         }
 
         let userId = response.userID.isEmpty ? invite.uuid : response.userID
@@ -170,6 +158,66 @@ struct LinkParser {
             isDynamic: true,
             identityPublicKey: verified.identityPublic
         )
+    }
+
+    /// The decoded invite, rebuilt as the wire message `AcceptInvite` carries.
+    ///
+    /// A named boundary rather than twelve assignments inside `parseDynamicInvite`, because
+    /// the server rebuilds the canonical string from exactly these fields and re-checks the
+    /// signature against it. A field omitted here does not read as missing data — it reads
+    /// as a bad signature, on the server, for an invite that verified perfectly on this
+    /// device a moment earlier. That was not hypothetical: `ttl` could be dropped from this
+    /// mapping and the whole suite still passed, because nothing could reach the mapping.
+    static func protoToken(from invite: InviteObject) -> Shared_Proto_Services_V1_InviteToken {
+        var token = Shared_Proto_Services_V1_InviteToken()
+        token.v = Int32(invite.v)
+        token.jti = invite.jti
+        token.uuid = invite.uuid
+        token.server = invite.server
+        token.ts = Int64(invite.ts)
+        // v4+: empty; v1–v3: still sent for server dual-read of old invites
+        token.ephPub = invite.ephKey
+        token.sig = invite.sig
+        if !invite.deviceId.isEmpty {
+            token.deviceID = invite.deviceId
+        }
+        if let un = invite.un, !un.isEmpty {
+            token.un = un
+        }
+        // v5 only, and mandatory there: the canonical string ends with it.
+        if let ttl = invite.ttl {
+            token.ttl = ttl
+        }
+        return token
+    }
+
+    /// The server's `AcceptInvite` verdict as the error the UI already knows how to say.
+    ///
+    /// `.alreadyUsed` reuses the same sentence as a locally-detected replay on purpose:
+    /// from the redeemer's side a burned `jti` is a burned `jti`, and whether this device
+    /// or the server noticed is not their business.
+    static func mapAcceptError(_ outcome: InviteAcceptOutcome) -> ContactLinkError {
+        switch outcome {
+        case .alreadyUsed:
+            return .inviteAlreadyUsed
+        case .expired:
+            return .inviteExpired
+        case .badSignature:
+            return .inviteInvalid(NSLocalizedString("invite_error_malformed", comment: ""))
+        case .refused(let detail):
+            return .inviteInvalid(detail)
+        case .unreachable(let detail):
+            // Never `.inviteInvalid` — nothing was learned about the invite, and telling
+            // someone to ask for a new link when the old one is fine wastes both sides.
+            return .verificationFailed(InviteTransportFailure(detail: detail))
+        }
+    }
+
+    /// Carries a server/transport detail through `ContactLinkError.verificationFailed`,
+    /// whose message is built from `localizedDescription`.
+    struct InviteTransportFailure: LocalizedError {
+        let detail: String
+        var errorDescription: String? { detail }
     }
 
     private static func mapVerificationError(_ error: InviteVerificationError) -> ContactLinkError {

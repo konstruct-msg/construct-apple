@@ -18,11 +18,14 @@
 
 Konstruct is an E2EE messenger with a terminal / ASCII aesthetic. The cryptographic core
 is written in Rust and shared verbatim across platforms via UniFFI, so iOS, macOS, and the
-in-progress Android client run the *same* audited crypto rather than reimplementing it.
+in-progress Android client run the *same* crypto rather than reimplementing it. No external
+security audit has been done yet — that is on the roadmap, not behind us.
 
 ### Principles
 
-- ✅ **100% E2EE** — the server never sees plaintext, contact graphs in the clear, or keys.
+- ✅ **100% E2EE** — the server never sees plaintext, contact graphs in the clear, or private keys.
+  Contact edges are stored as keyed hashes of both user ids, which keeps the graph out of a
+  database leak — not out of the operator's reach, since the operator holds the key.
 - ✅ **Forward secrecy & post-compromise security** — Double Ratchet; compromised keys don't reveal history.
 - ✅ **Crypto-agility** — pluggable cipher suites negotiated per session (`suite_id`).
 - ✅ **Post-quantum hybrid** — classical ⊕ PQ, so an attacker must break *both* to win.
@@ -54,9 +57,9 @@ in-progress Android client run the *same* audited crypto rather than reimplement
 ```
 
 Both iOS and macOS Desktop use the direct UniFFI + gRPC-Swift path
-(`CryptoManager` + `TransportRouter` + `VeilProxyManager`). The `construct-engine`
-/ `EngineAdapter` is paused (Strategy B) and not used on Desktop. See
-`construct-docs/decisions/macos-desktop-strategy.md`.
+(`CryptoManager` + `TransportRouter` + `VeilProxyManager`), built from three Rust
+crates: `construct-core` (crypto, with VEIL merged in), `construct-transport`
+(QUIC/H3), and `construct-veil` (obfuscation).
 
 ---
 
@@ -110,7 +113,7 @@ mailbox — not a permanent inbox. This is a privacy choice, not a limitation to
   (idempotent by `temp_id`), so a network failure mid-send never duplicates or loses a message.
 
 **The TTL nuance — read this:** queued messages are held in Redis **only**. They are
-**never written to a database** (no server-side history, no social-graph metadata at rest),
+**never written to a database** (no server-side history, and no record of who sent them),
 and they **expire after a TTL** (tied to the session TTL; streams are also trimmed by age).
 If a recipient stays offline **longer than the TTL**, undelivered messages are
 **auto-deleted** and will not arrive. The offline window is finite by design — Konstruct is
@@ -125,9 +128,9 @@ All three Rust crates must be cloned alongside this repo:
 ```
 ~/Code/
 ├── construct-core/        # crypto core  → ConstructCore.xcframework
-├── construct-engine/      # QUIC/H3/gRPC → ConstructEngine.xcframework
-├── construct-veil/        # obfs4/WebTunnel obfuscation (VEIL)
-└── construct-messenger/         # this repo (SwiftUI app)
+├── construct-transport/   # QUIC/H3/gRPC → ConstructTransport.xcframework
+├── construct-veil/        # obfs4/WebTunnel obfuscation (VEIL, merged into ConstructCore.xcframework)
+└── construct-messenger/   # this repo (SwiftUI app)
 ```
 
 The `*.xcframework` binaries are **not** tracked in git — build them after cloning:
@@ -137,8 +140,8 @@ The `*.xcframework` binaries are **not** tracked in git — build them after clo
 cd ~/Code/construct-messenger
 ./build_crypto_lib.sh --ios --sim        # or --all for + macOS
 
-# 2. Build the transport engine
-cd ~/Code/construct-engine && ./build_engine.sh
+# 2. Build the transport library
+./build_transport_lib.sh                 # wraps construct-transport/build_ios.sh
 
 # 3. Regenerate UniFFI Swift bindings (after any core API change)
 cd ~/Code/construct-messenger
@@ -146,9 +149,12 @@ cd ~/Code/construct-messenger
 
 # 4. Build & run
 xcodebuild -scheme ConstructMessenger \
-  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' build
+  -destination 'platform=iOS Simulator,name=iPhone 17' build
 # …or open ConstructMessenger.xcodeproj in Xcode and ⌘R
 ```
+
+> Do not pin `OS=` in a destination — simulator runtimes are replaced with every Xcode upgrade and
+> a pinned one stops resolving. Check `xcrun simctl list devices available`.
 
 **Requirements:** Rust 1.92+ · Xcode 16+ · iOS 18.5+ deployment target · UniFFI 0.30.
 
@@ -168,13 +174,18 @@ construct-messenger/
 │   ├── Utilities/              # CT design tokens (ConstructTheme.swift)
 │   ├── en.lproj / ru.lproj/    # localization (Japanese planned)
 │   └── construct_core.swift    # generated UniFFI bindings (do not edit)
+├── ConstructUI/                # standalone SwiftPM package — Xcode Previews sandbox
+├── scripts/                    # build/test/simulator tooling
+├── tests/                      # Python network + DPI probes (not the Xcode suite)
+├── docs/                       # reference for tooling in this repo
 ├── build_crypto_lib.sh         # rebuild construct-core → ConstructCore.xcframework
 ├── generate_swift_bindings.sh  # regenerate UniFFI bindings
-└── AGENTS.md                   # conventions & deep architecture notes
+└── AGENTS.md                   # hard invariants for contributors and AI agents
 ```
 
-See **`AGENTS.md`** for design-system rules, the session lifecycle, the binary-data
-pipeline, identity-space invariants, and the EngineAdapter migration plan.
+See **[`AGENTS.md`](AGENTS.md)** for design-system rules, the session lifecycle, the binary-data
+pipeline, and identity-space invariants. Longer-form docs live in the `construct-docs` vault; the
+index at the top of `AGENTS.md` says which document covers what.
 
 ---
 
@@ -187,14 +198,20 @@ cd ~/Code/construct-core && cargo test --features post-quantum
 # iOS app (unit + crypto-wire integration)
 cd ~/Code/construct-messenger
 xcodebuild test -scheme ConstructMessenger \
-  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6'
+  -destination 'platform=iOS Simulator,name=iPhone 17'
+
+# a single class, without simulator clones
+scripts/test_run.sh ConstructMessengerTests/FooTests
 ```
+
+See [`docs/TESTING.md`](docs/TESTING.md) for the tooling and
+[`docs/TWO_SIM_STAND.md`](docs/TWO_SIM_STAND.md) for the two-simulator send/receive stand.
 
 ---
 
 ## Status
 
-**App:** v0.13.x (Alpha) · **Core:** construct-core v0.9.4
+**App:** v0.18.1 (Alpha, TestFlight) · **Core:** construct-core v0.12.4
 
 ### Working
 - [x] Rust crypto core — X3DH + Double Ratchet, crypto-agile suites
@@ -203,17 +220,20 @@ xcodebuild test -scheme ConstructMessenger \
 - [x] UniFFI iOS integration; binary (CFE) session persistence
 - [x] QUIC / HTTP-3 / gRPC transport engine (H2 fallback on iOS)
 - [x] VEIL obfuscation (obfs4 + WebTunnel pluggable transports, opt-in)
-- [x] 1:1 messaging, session healing, multi-device linking, account recovery (BIP39)
+- [x] 1:1 messaging, session healing, account recovery (BIP39)
 - [x] Offline delivery — ephemeral per-device Redis-Streams mailbox (no DB persistence, TTL-bounded), drained on reconnect; Redpanda/Kafka bus with 2-phase-commit send; APNs silent-push wake-up
-- [x] Voice/video calls (WebRTC + CallKit)
+- [x] Voice calls (WebRTC + CallKit) — video is not implemented (`CallsFeature.isVideoEnabled`)
 - [x] App-lock (PIN + biometrics, duress PIN)
 
 ### In progress / planned
+- [ ] Multi-device. Linking and transcript sync (SENDER_SYNC) are implemented and unit-tested,
+      and that is not the same as working: the two-simulator stand has not yet carried a copy
+      through to a second device's transcript, so nothing here has been confirmed on hardware.
+      It stays out of the Working list until it has.
 - [ ] Activate hybrid ML-DSA-65 identity signatures on the wire (with smooth migration for existing accounts)
 - [ ] Cluster (group) messaging
-- [x] macOS Desktop uses direct core + gRPC path (Strategy B; engine paused)
+- [ ] macOS Desktop — direct core + gRPC path builds; no public build
 - [ ] Android client
-- [ ] Japanese localization (共創)
 
 ---
 

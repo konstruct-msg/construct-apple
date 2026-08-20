@@ -51,11 +51,26 @@ final class NativeVeilRuntime: VeilProxyRuntime {
         // Diagnose veil_start=-1 failures by logging what we hand to Rust.
         // Empty bundle/SPKI/SNI are the most common causes of fail-before-network
         // (Rust returns -1 without ever attempting TCP).
+        // Why the ticket fields are empty, not just that they are. Build 584 provisioned a
+        // capability successfully ("first capability stored … exp in 59d") and three minutes later
+        // handed Rust `veilFrontTicket.len=0 capabilityV2.len=0` → `all probes failed`, and the
+        // line could not say which of the two it was: the feature flag zeroes both fields, and so
+        // does a relay built without them. Same absence standing for two different facts, which is
+        // the shape this codebase keeps paying for. `relay.*` is read directly here — before the
+        // flag is applied — so the two causes are distinguishable in the log.
+        let ticketDiagnosis: String = {
+            if !veilFrontTicket.isEmpty || !capabilityV2.isEmpty { return "ok" }
+            if !VeilProxyStore.veilFrontEnabled { return "veil_front_disabled" }
+            let storedB2 = relay.veilFrontTicket?.isEmpty == false
+            let storedB1 = relay.veilCapabilityV2?.isEmpty == false
+            if storedB2 || storedB1 { return "flag_on_but_zeroed(b2=\(storedB2) b1=\(storedB1))" }
+            return "relay_carries_none"
+        }()
         Log.info(
             "VEIL FFI start → addr='\(address)' " +
             "bundle.len=\(bundle.count) sni='\(sni)' " +
             "spki.len=\(spki.count) spki.pfx=\(String(spki.prefix(12))) hostHeader='\(hostHeader)' wtPath='\(wtPath)' " +
-            "veilFrontTicket.len=\(veilFrontTicket.count) capabilityV2.len=\(capabilityV2.count) " +
+            "veilFrontTicket.len=\(veilFrontTicket.count) capabilityV2.len=\(capabilityV2.count) tickets=\(ticketDiagnosis) " +
             "fingerprint.len=\(fingerprint.count) scoresPath=\(scoresPath ?? "nil")",
             category: "VEIL"
         )

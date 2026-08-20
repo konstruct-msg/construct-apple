@@ -34,7 +34,7 @@ struct MessageBubbleRegularView: View {
     /// Tap on the in-bubble reply strip — parent jump + soft focus.
     let onJumpToReply: ((Message) -> Void)?
 
-    @State private var swipeOffset: CGFloat = 0
+    @GestureState private var swipeOffset: CGFloat = 0
     @State private var isTranscribingVoice = false
 
     var body: some View {
@@ -186,12 +186,26 @@ struct MessageBubbleRegularView: View {
                             }
                         }
                     )
+                    // Scoped to the bubble, NOT the whole row. An identifier on a container
+                    // propagates down and overwrites its descendants', so putting it on the
+                    // row stamped the delivery status too — `chat.message.<id>` where the
+                    // status token should have been, and no way to assert "delivered".
+                    .accessibilityIdentifier(A11y.Chat.message(message.id))
                 }
 
                 if isLastInGroup {
                     HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
                         if message.isSentByMe {
+                            // The label is what makes this an accessibility element at all:
+                            // the status is a bare SF Symbol, and SwiftUI drops unlabeled
+                            // decorative images from the tree — identifier and all. Without
+                            // it the delivery state is invisible to VoiceOver *and* to the
+                            // two-simulator stand.
                             deliveryStatusView
+                                .accessibilityLabel(Text(message.deliveryStatus.a11yLabel))
+                                .accessibilityIdentifier(
+                                    A11y.Chat.messageStatus(message.id, message.deliveryStatus)
+                                )
                         }
 
                         if message.isEdited {
@@ -289,9 +303,14 @@ struct MessageBubbleRegularView: View {
                     }
                 }
             }
-            .offset(x: swipeOffset)
+            .offset(x: -swipeOffset)
+            // Tracks the finger closely while dragging and springs home on release —
+            // `@GestureState` resets instantly, so the animation has to live here.
+            .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.8), value: swipeOffset)
             .gesture(swipeToReplyGesture)
-            .overlay(alignment: message.isSentByMe ? .leading : .trailing) { swipeIndicatorOverlay }
+            // The bubble slides left, so the space it vacates is on its trailing side — the same
+            // side for sent and received alike, which is why this no longer switches on the author.
+            .overlay(alignment: .trailing) { swipeIndicatorOverlay }
 
             if !message.isSentByMe {
                 Spacer(minLength: ChatUIConstants.Bubble.sideGutter)
@@ -392,38 +411,73 @@ struct MessageBubbleRegularView: View {
         }
     }
 
+    /// How far the bubble should trail the finger, or nil when this drag is not a reply
+    /// swipe at all.
+    ///
+    /// **Reply swipes go left.** They used to go right, the same way as the interactive pop,
+    /// and the two were told apart by where the drag started: anything inside a 44pt leading
+    /// strip was conceded to the pop. That is a truce, not a separation — one gesture in two
+    /// roles, resolved by a margin. A back swipe beginning further inboard still quoted a
+    /// message, and the concession cost the leftmost 44pt of every incoming bubble, exactly
+    /// where the short ones live.
+    ///
+    /// Direction separates them completely and needs no strip: the pop travels right, a reply
+    /// travels left, and no start position can make one look like the other. (RTL locales would
+    /// mirror the pop and re-open the conflict — the app ships en/ru/ja, and this is the line
+    /// to revisit if that changes.)
+    ///
+    /// Reads only `translation`, so the answer is derived fresh from the gesture rather than
+    /// latched in state — no armed/rejected flag is left behind when the scroll view takes the
+    /// drag away. Not private: the rules are the whole fix, and `DragGesture.Value` cannot be
+    /// built in a test, so the decision is taken on plain numbers a test can supply.
+    ///
+    /// - Returns: travel as a positive magnitude, in the direction of the swipe. The call site
+    ///   applies the sign — the bubble moves by `-offset`.
+    static func replySwipeOffset(translation: CGSize) -> CGFloat? {
+        let h = -translation.width          // leftward travel, as a positive number
+        let v = abs(translation.height)
+        guard h > 0, h > v * ChatUIConstants.ReplySwipe.directionRatio else { return nil }
+        return min(h * 0.5, ChatUIConstants.ReplySwipe.maxOffset)
+    }
+
+    private static func replySwipeOffset(for value: DragGesture.Value) -> CGFloat? {
+        replySwipeOffset(translation: value.translation)
+    }
+
     private var swipeToReplyGesture: some Gesture {
-        DragGesture(minimumDistance: 20, coordinateSpace: .local)
-            .onChanged { value in
-                guard !isEditMode else { return }
-                let h = value.translation.width
-                let v = abs(value.translation.height)
-                guard h > 0, h > v else { return }
-                swipeOffset = min(h * 0.5, 60)
-            }
-            .onEnded { _ in
-                guard !isEditMode else { return }
-                if swipeOffset >= 40 {
-                    onReply?(message)
-                    #if canImport(UIKit)
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    #endif
-                }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    swipeOffset = 0
-                }
-            }
+        DragGesture(
+            minimumDistance: ChatUIConstants.ReplySwipe.minimumDistance,
+            coordinateSpace: .global
+        )
+        // `@GestureState` snaps back on its own when the gesture ends *or is cancelled*,
+        // so a drag stolen mid-way can no longer leave the bubble parked off-centre.
+        .updating($swipeOffset) { value, offset, _ in
+            guard !isEditMode else { return }
+            offset = Self.replySwipeOffset(for: value) ?? 0
+        }
+        .onEnded { value in
+            guard !isEditMode,
+                  let offset = Self.replySwipeOffset(for: value),
+                  offset >= ChatUIConstants.ReplySwipe.commitOffset
+            else { return }
+            onReply?(message)
+            #if canImport(UIKit)
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            #endif
+        }
     }
 
     @ViewBuilder
     private var swipeIndicatorOverlay: some View {
-        if swipeOffset > 10 {
-            Image(systemName: "arrow.uturn.right")
+        if swipeOffset > ChatUIConstants.ReplySwipe.indicatorThreshold {
+            Image(systemName: "arrow.uturn.left")
                 .font(CTFont.regular(14))
                 .foregroundColor(Color.CT.accent)
-                .opacity(min(max(Double(swipeOffset / 40), 0), 1))
-                .offset(x: message.isSentByMe ? -swipeOffset - 8 : swipeOffset + 8)
-                .animation(.interactiveSpring(), value: swipeOffset)
+                .opacity(min(max(Double(swipeOffset / ChatUIConstants.ReplySwipe.commitOffset), 0), 1))
+                // The overlay is attached after `.offset(x: -swipeOffset)` and therefore moves
+                // with the bubble; `+swipeOffset` holds it still so the bubble slides out from
+                // under it, and the 8pt is the gap it settles into.
+                .offset(x: swipeOffset + 8)
         }
     }
 }

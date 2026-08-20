@@ -10,8 +10,19 @@
 //  and callable without touching MessageRouter's incoming-message state.
 //
 
+import CoreData
 import Foundation
 import SwiftProtobuf
+
+/// Thrown by `encryptOutgoing` when the sending-chain advance for a just-encrypted message could
+/// not be durably persisted. Fail-closed: the caller MUST treat this as a retryable send failure
+/// (queue + retry), never as a delivered message. Emitting the ciphertext anyway would let the peer
+/// observe a ratchet advance that a later crash + stale reload rolls back → message-number reuse →
+/// a mid-session desync that healing (msgNum==0 only) never recovers.
+/// See decisions/sender-state-durability-before-send.md.
+enum SessionStatePersistError: Error {
+    case sendStateNotDurable
+}
 
 @MainActor
 final class OutboundSessionService {
@@ -22,6 +33,11 @@ final class OutboundSessionService {
 
     private var rustTimers: [String: Task<Void, Never>] = [:]
     private let rustTimersLock = NSLock()
+
+    /// Timer-fired `sendEndSession` — the incoming-message path handles this action in
+    /// `MessageRouter`, but a cooldown timer fires off that path. SessionCoordinator
+    /// registers the same `needsEndSession` consumer so the owed teardown actually goes out.
+    var onTimerSendEndSession: ((String) -> Void)?
 
     /// Schedules (or reschedules) a Rust-requested timer. Fires `timerFired` after `delayMs`.
     func scheduleRustTimer(timerId: String, delayMs: UInt64) {
@@ -56,6 +72,16 @@ final class OutboundSessionService {
         // notifyError, saveSessionToSecureStore, sessionTerminated, and the rest of the
         // CfeAction surface exhaustively. See SessionActionExecutor.
         SessionActionExecutor.shared.execute(actions)
+
+        // Router-owned actions the executor deliberately no-ops: on the incoming-message
+        // path MessageRouter consumes them after `execute` returns. A timer fire never
+        // reaches that loop, so without this the cooldown-expired `sendEndSession` the
+        // core emits (`orchestrator.rs` handle_timer_fired) has no consumer.
+        for action in actions {
+            if case .sendEndSession(let contactId) = action {
+                onTimerSendEndSession?(contactId)
+            }
+        }
     }
 
     // MARK: - Outgoing Encryption
@@ -83,7 +109,19 @@ final class OutboundSessionService {
             contentType: contentType
         )
         let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "outgoing_message")
-        executeStorageActions(actions)
+
+        // Fail-closed durability: the encrypt above already advanced the in-memory sending chain.
+        // Only release the ciphertext once that advance is durably persisted. If the session-state
+        // save failed, refuse — otherwise the peer would see an advance that a crash + stale reload
+        // rolls back, and the reloaded chain reuses this message number → mid-session desync that
+        // healing does not cover. Throwing keeps the message queued; retry re-encrypts safely
+        // because nothing was sent. See decisions/sender-state-durability-before-send.md.
+        let sendStateDurable = executeStorageActions(actions)
+        guard sendStateDurable else {
+            Log.error("encryptOutgoing: session-state persist FAILED for \(recipientId.prefix(8))… (msg \(messageId.prefix(8))…) — refusing to release ciphertext (prevents ratchet number reuse)", category: "OutboundSession")
+            throw SessionStatePersistError.sendStateNotDurable
+        }
+
         for action in actions {
             if case .sendEncryptedMessage(let to, let payload, _, _) = action, to == recipientId {
                 return Data(payload)
@@ -115,13 +153,29 @@ final class OutboundSessionService {
     /// Binary variant for typed session-control payloads (serialized `SessionControl`, built by
     /// `SessionControlCodec.encodePayload`). The control payload stays `Data` end-to-end — no
     /// stringification across the crypto boundary.
+    ///
+    /// Pass `frameAs` for the ops whose type must be hidden from the server (ping 25, ready 26):
+    /// the payload is wrapped in a KNST frame carrying the type in byte 5, inside the ciphertext,
+    /// and `SealedInner.content_type` is left UNSPECIFIED by the caller.
+    ///
+    /// **END_SESSION (21) and SESSION_RESET_INIT (24) must NOT be framed.** Both have to be
+    /// recognised *before* decryption — END_SESSION carries no ciphertext at all, and an SRI is
+    /// wire-identical to an ordinary X3DH carrier, so the receiver cannot tell them apart from the
+    /// body alone. They keep their pre-decrypt hint on `SealedInner`; that residue is the whole
+    /// reason the field survives. See decisions/sealed-content-type-inside-the-plaintext-frame.md.
     func encryptSessionControl(
         payload: Data,
         messageId: String,
-        recipientId: String
+        recipientId: String,
+        frameAs contentType: UInt8? = nil
     ) throws -> Data {
-        try encryptOutgoing(
-            plaintext: payload,
+        let plaintext = contentType.map {
+            ChunkedMessageCodec.frameWhole(
+                payload, contentType: $0, messageId: UUID(uuidString: messageId) ?? UUID()
+            )
+        } ?? payload
+        return try encryptOutgoing(
+            plaintext: plaintext,
             messageId: messageId,
             recipientId: recipientId,
             contentType: 0
@@ -146,11 +200,25 @@ final class OutboundSessionService {
         do {
             // Heartbeats intentionally do **not** use sealed sender.
             // We never pass recipientIdentityKey here.
+            // The type rides in KNST byte 5, inside the ciphertext, like the call signal and the
+            // delivery receipt before it. It used to be announced on the outer envelope
+            // (`contentType: .heartbeat`), which let the server count liveness probes and tell
+            // them apart from messages — the exact distinguishability 12/14/25/26 were moved
+            // inside to remove. See decisions/sealed-content-type-inside-the-plaintext-frame.md.
+            //
+            // The body is empty. It used to be the string "__heartbeat__", which nothing ever
+            // read: the whole codebase had one occurrence of it, this send. Routing was on the
+            // content type then and is on the content type now, so the string was 13 bytes of
+            // filler in the same shape as `__session_reset_notify__` — the magic string that
+            // shipped with no reader and spent four months rendering as a visible bubble.
             let payload = try encryptOutgoing(
-                plaintext: Data("__heartbeat__".utf8),
+                plaintext: ChunkedMessageCodec.frameWhole(
+                    Data(),
+                    contentType: WireMessageKind.heartbeatContentType,
+                    messageId: UUID(uuidString: heartbeatId) ?? UUID()
+                ),
                 messageId: heartbeatId,
-                recipientId: contactId,
-                contentType: 13
+                recipientId: contactId
             )
             _ = try await MessagingServiceClient.shared.sendMessage(
                 messageId: heartbeatId,
@@ -159,11 +227,65 @@ final class OutboundSessionService {
                 conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
                 encryptedPayload: payload,
                 timestamp: UInt64(Date().timeIntervalSince1970),
-                contentType: .heartbeat
+                // Indistinguishable from an ordinary message on the outer envelope, which is the
+                // point: the real type is in byte 5, inside the ciphertext.
+                contentType: .e2EeSignal
             )
             Log.debug("Heartbeat sent to \(contactId.prefix(8))…", category: "OutboundSession")
         } catch {
             Log.error("Heartbeat failed to \(contactId.prefix(8))…: \(error.localizedDescription)", category: "OutboundSession")
+        }
+    }
+
+    /// Tell `contactId` their message reached our transcript. Fire-and-forget.
+    ///
+    /// **This is the only receipt we send.** The plaintext stream receipt (`DirectReceipt` over
+    /// `MessageStreamRequest`) was removed on 2026-08-02: it carried `recipient_user_id` — the
+    /// original sender — in the clear, handing the server exactly the sender↔recipient link that
+    /// sealed sender exists to withhold (`sender_id` is deliberately empty on a sealed envelope,
+    /// so the client's receipt was the server's *only* source for that link). It bought nothing:
+    /// the Redis trim is driven solely by `Subscribe.since_cursor`
+    /// (`messaging-service/src/stream.rs`); `relay_delivery_receipt` only forwards.
+    /// See decisions/stream-delivery-receipt-deanonymized-sealed-sender.md.
+    ///
+    /// Call this **only where the message is genuinely in the transcript.** A receipt is a claim
+    /// the sender renders as a checkmark, so an untrue one is a visible lie. Control messages
+    /// (END_SESSION, SRI, ping/ready, heartbeat, receipts, profile shares, edits) never have a
+    /// row on the sender's side, so a receipt for one could not move anything even if sent.
+    ///
+    /// Resolves the recipient identity key synchronously on the caller's context queue, then
+    /// hands the id to `DeliveryReceiptBatcher`. Fail-closed under stealth: dropped, never sent
+    /// identified.
+    ///
+    /// The send is **not** immediate. Ids owed to the same contact inside the batcher's window
+    /// leave as one receipt, which is what the `messageIds` list in the proto was always for. Under
+    /// a redelivery replay that is the difference between one encrypt+ratchet+RPC and several
+    /// hundred; a checkmark arriving half a second later is not the difference between anything.
+    static func sendDeliveryReceipt(
+        for messageIds: [String],
+        to contactId: String,
+        in context: NSManagedObjectContext
+    ) {
+        let identityKey: Data? = {
+            guard StealthPolicy.shared.shouldUseSealedSender() else { return nil }
+            let request = User.fetchRequest()
+            request.predicate = NSPredicate(format: "id == %@", contactId)
+            request.fetchLimit = 1
+            do {
+                return try context.fetch(request).first?.knownIdentityKey
+            } catch {
+                Log.error("Failed to load identity key for encrypted receipt to \(contactId.prefix(8))…: \(error)", category: "OutboundSession")
+                return nil
+            }
+        }()
+        Task { @MainActor in
+            for messageId in messageIds {
+                DeliveryReceiptBatcher.shared.enqueue(
+                    messageId: messageId,
+                    to: contactId,
+                    recipientIdentityKey: identityKey
+                )
+            }
         }
     }
 
@@ -200,11 +322,16 @@ final class OutboundSessionService {
         }
 
         do {
+            // The type rides in KNST byte 5, inside the ciphertext. Both the orchestrator and
+            // `SealedInner` are told nothing (0 / UNSPECIFIED) so the server cannot tell a receipt
+            // from a message body. See decisions/sealed-content-type-inside-the-plaintext-frame.md.
             let wirePayload = try encryptOutgoing(
-                plaintext: payloadData,
+                plaintext: ChunkedMessageCodec.frameWhole(
+                    payloadData, contentType: 14, messageId: UUID(uuidString: receiptId) ?? UUID()
+                ),
                 messageId: receiptId,
                 recipientId: contactId,
-                contentType: 14
+                contentType: 0
             )
             var sealedInner: Data? = nil
             if let identityKey = recipientIdentityKey, StealthPolicy.shared.shouldUseSealedSender() {
@@ -213,7 +340,7 @@ final class OutboundSessionService {
                         recipientUserId: contactId,
                         recipientIdentityKey: identityKey,
                         encryptedPayload: wirePayload,
-                        contentType: .deliveryReceipt
+                        contentType: .generic
                     )
                 } catch {
                     Log.error("E2E receipt: seal failed: \(error)", category: "OutboundSession")
@@ -246,7 +373,7 @@ final class OutboundSessionService {
                         recipientUserId: contactId,
                         recipientIdentityKey: identityKey,
                         encryptedPayload: wirePayload,
-                        contentType: .deliveryReceipt
+                        contentType: .generic
                     )
                 }, send: { inner in
                     if FeatureFlags.sealedSenderUnauthenticatedTransport {
@@ -260,7 +387,6 @@ final class OutboundSessionService {
                             conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
                             encryptedPayload: wirePayload,
                             timestamp: UInt64(Date().timeIntervalSince1970),
-                            contentType: .deliveryReceipt,
                             sealedInnerBytes: inner
                         )
                     }
@@ -273,7 +399,6 @@ final class OutboundSessionService {
                     conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
                     encryptedPayload: wirePayload,
                     timestamp: UInt64(Date().timeIntervalSince1970),
-                    contentType: .deliveryReceipt,
                     sealedInnerBytes: nil
                 )
             }
@@ -287,11 +412,18 @@ final class OutboundSessionService {
 
     /// Processes `saveSessionToSecureStore` and `sessionTerminated` actions from the orchestrator.
     /// Called both internally (after outgoing encryption) and from MessageRouter (after session events).
-    func executeStorageActions(_ actions: [CfeAction]) {
+    ///
+    /// Returns `true` iff every **send-critical** persist succeeded — the hot session (`session_`)
+    /// and orchestrator state, which together carry the sending-chain position. `encryptOutgoing`
+    /// gates the send on this; other callers may ignore it (`@discardableResult`).
+    @discardableResult
+    func executeStorageActions(_ actions: [CfeAction]) -> Bool {
+        var sendStateDurable = true
         for action in actions {
             switch action {
             case .saveSessionToSecureStore(let key, let data):
-                handleStorageAction(key: key, data: [UInt8](data))
+                let ok = handleStorageAction(key: key, data: [UInt8](data))
+                sendStateDurable = sendStateDurable && ok
             case .sessionTerminated(let contactId, let archiveBytes):
                 CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: archiveBytes)
                 CryptoManager.shared.saveOrchestratorStateCFE()
@@ -299,6 +431,7 @@ final class OutboundSessionService {
                 break
             }
         }
+        return sendStateDurable
     }
 
     /// Unified handler for a `SaveSessionToSecureStore` action.
@@ -309,46 +442,80 @@ final class OutboundSessionService {
     /// - `"archive_<contactId>"` + bytes          → accept pre-archived session from Rust
     /// - `"pq_deferred_<contactId>"` + bytes      → persist deferred PQ contribution
     /// - `"pq_deferred_<contactId>"` + empty      → delete stored PQ contribution
-    private func handleStorageAction(key: String, data rawBytes: [UInt8]) {
+    ///
+    /// Returns `true` iff the **send-critical** persist for this action succeeded (`session_` hot
+    /// session + orchestrator state). Non-send-critical saves (`archive_`, `pq_deferred_`) always
+    /// return `true`: their failure is logged and matters, but it cannot cause message-number reuse,
+    /// so it must not block a send.
+    private func handleStorageAction(key: String, data rawBytes: [UInt8]) -> Bool {
         if key.hasPrefix("session_") {
             let contactId = String(key.dropFirst("session_".count))
             if rawBytes.isEmpty {
                 KeychainManager.shared.deleteSession(for: contactId)
                 KeychainManager.shared.deleteSessionSuiteId(userId: contactId)
                 Log.debug("Deleted hot session for \(contactId.prefix(8))… (Rust archive_session)", category: "OutboundSession")
-                CryptoManager.shared.saveOrchestratorStateCFE()
+                return CryptoManager.shared.saveOrchestratorStateCFE()
             } else {
-                _ = KeychainManager.shared.saveSessionData(Data(rawBytes), for: contactId)
-                CryptoManager.shared.saveOrchestratorStateCFE()
+                // Desync-critical: the Rust ratchet has already advanced in memory. If this
+                // Keychain write fails (e.g. locked-device edge, storage error) and the failure
+                // is swallowed, the persisted session lags the live ratchet → silent, unhealable
+                // desync on the next launch/push. Surface the failure AND report it so
+                // `encryptOutgoing` can fail-closed instead of releasing an un-persisted advance.
+                let ok = KeychainManager.shared.saveSessionData(Data(rawBytes), for: contactId)
+                if !ok {
+                    Log.error("PERSIST-FAIL hot session \(contactId.prefix(8))… (\(rawBytes.count)B) — ratchet may desync on next launch", category: "OutboundSession")
+                }
+                let orchOk = CryptoManager.shared.saveOrchestratorStateCFE()
+                return ok && orchOk
             }
         } else if key.hasPrefix("archive_") {
             let contactId = String(key.dropFirst("archive_".count))
             CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: Data(rawBytes))
             CryptoManager.shared.saveOrchestratorStateCFE()
+            return true // archive is a terminated session — not the active sending chain
         } else if key.hasPrefix("pq_deferred_") {
             let storageKey = "construct.pq_deferred.\(String(key.dropFirst("pq_deferred_".count)))"
             if rawBytes.isEmpty {
                 KeychainManager.shared.deleteData(forKey: storageKey)
                 Log.debug("Deleted PQ deferred for key \(storageKey)", category: "OutboundSession")
             } else {
-                _ = KeychainManager.shared.saveData(Data(rawBytes), forKey: storageKey)
-                Log.debug("Persisted PQ deferred for key \(storageKey)", category: "OutboundSession")
+                // AfterFirstUnlock: this write also fires during a locked-device background
+                // decrypt. Under the WhenUnlocked default it failed there, losing the deferred
+                // PQ contribution and silently downgrading the session to classical (BS-6).
+                let ok = KeychainManager.shared.saveData(
+                    Data(rawBytes),
+                    forKey: storageKey,
+                    accessible: KeychainManager.cryptoKeyAccessible
+                )
+                if ok {
+                    Log.debug("Persisted PQ deferred for key \(storageKey)", category: "OutboundSession")
+                } else {
+                    Log.error("PERSIST-FAIL PQ deferred \(storageKey) (\(rawBytes.count)B) — session may downgrade to classical (BS-6)", category: "OutboundSession")
+                }
             }
+            return true // PQ deferred failure is BS-6 (downgrade), not number reuse — do not block send
         } else if key == "construct.orchestrator_state" {
             if rawBytes.isEmpty {
                 Log.debug("Orchestrator state save with empty data — ignoring", category: "OutboundSession")
+                return true
             } else {
                 // AfterFirstUnlock: this Rust-driven save also fires during background
                 // push decrypt while locked; WhenUnlocked would drop it → ratchet desync.
-                _ = KeychainManager.shared.saveData(
+                let ok = KeychainManager.shared.saveData(
                     Data(rawBytes),
                     forKey: "construct.orchestrator_state",
                     accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
                 )
-                Log.debug("Orchestrator state persisted (\(rawBytes.count) bytes) via Rust action", category: "OutboundSession")
+                if ok {
+                    Log.debug("Orchestrator state persisted (\(rawBytes.count) bytes) via Rust action", category: "OutboundSession")
+                } else {
+                    Log.error("PERSIST-FAIL orchestrator_state (\(rawBytes.count)B) via Rust action — ratchet coordination may desync on next launch", category: "OutboundSession")
+                }
+                return ok // send-critical: carries the ratchet coordination state
             }
         } else {
             Log.debug("Unhandled storage key: \(key)", category: "OutboundSession")
+            return true
         }
     }
 }

@@ -97,6 +97,14 @@ final class VoIPPushManager: NSObject {
             Log.info("VoIP token registration deferred — no session yet", category: "Calls")
             return
         }
+        // See PushNotificationManager.registerWithServer: an empty device_id is a
+        // different upsert key server-side, not an "unknown device" marker. voip_tokens is
+        // keyed on (user_id, device_id), so registering without one cannot address a
+        // device at all.
+        guard KeychainManager.shared.loadDeviceID()?.isEmpty == false else {
+            Log.info("VoIP token registration deferred — device id not available yet", category: "Calls")
+            return
+        }
 
         for attempt in 0..<3 {
             do {

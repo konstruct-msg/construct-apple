@@ -1352,16 +1352,21 @@ public struct Shared_Proto_Services_V1_JoinRequestPayload: Sendable {
   /// New device identifier (derived from identity key)
   public var pendingDeviceID: String = String()
 
-  /// X25519 identity key (base64)
+  /// DEPRECATED (fields 2-5): base64-in-string carriage of binary key material.
+  /// Kept for clients built before the bytes fields below existed; the server
+  /// prefers the bytes fields and falls back to these. Remove once no released
+  /// client populates them, then mark the numbers `reserved`.
+  ///
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var identityPublicB64: String = String()
 
-  /// Ed25519 verifying key (base64)
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var verifyingKeyB64: String = String()
 
-  /// Signed prekey public (base64)
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var signedPrekeyPublicB64: String = String()
 
-  /// Ed25519 signature of (prologue || spk_pub), 64 bytes (base64)
+  /// NOTE: This field was marked as deprecated in the .proto file.
   public var signedPrekeySignatureB64: String = String()
 
   /// Human-readable device name (e.g., "MacBook Pro")
@@ -1369,6 +1374,19 @@ public struct Shared_Proto_Services_V1_JoinRequestPayload: Sendable {
 
   /// Platform identifier (e.g., "macos", "linux", "windows")
   public var platform: String = String()
+
+  /// Binary key material. Preferred over the deprecated base64 strings above.
+  /// X25519 identity key, 32 bytes
+  public var identityPublic: Data = Data()
+
+  /// Ed25519 verifying key, 32 bytes
+  public var verifyingKey: Data = Data()
+
+  /// Signed prekey public, 32 bytes
+  public var signedPrekeyPublic: Data = Data()
+
+  /// Ed25519 signature of (prologue || spk_pub), 64 bytes
+  public var signedPrekeySignature: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3417,7 +3435,7 @@ extension Shared_Proto_Services_V1_ConfirmDeviceLinkRequest: SwiftProtobuf.Messa
 
 extension Shared_Proto_Services_V1_JoinRequestPayload: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".JoinRequestPayload"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}pending_device_id\0\u{3}identity_public_b64\0\u{3}verifying_key_b64\0\u{3}signed_prekey_public_b64\0\u{3}signed_prekey_signature_b64\0\u{3}device_name\0\u{1}platform\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}pending_device_id\0\u{3}identity_public_b64\0\u{3}verifying_key_b64\0\u{3}signed_prekey_public_b64\0\u{3}signed_prekey_signature_b64\0\u{3}device_name\0\u{1}platform\0\u{3}identity_public\0\u{3}verifying_key\0\u{3}signed_prekey_public\0\u{3}signed_prekey_signature\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3432,6 +3450,10 @@ extension Shared_Proto_Services_V1_JoinRequestPayload: SwiftProtobuf.Message, Sw
       case 5: try { try decoder.decodeSingularStringField(value: &self.signedPrekeySignatureB64) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.deviceName) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self.platform) }()
+      case 8: try { try decoder.decodeSingularBytesField(value: &self.identityPublic) }()
+      case 9: try { try decoder.decodeSingularBytesField(value: &self.verifyingKey) }()
+      case 10: try { try decoder.decodeSingularBytesField(value: &self.signedPrekeyPublic) }()
+      case 11: try { try decoder.decodeSingularBytesField(value: &self.signedPrekeySignature) }()
       default: break
       }
     }
@@ -3459,6 +3481,18 @@ extension Shared_Proto_Services_V1_JoinRequestPayload: SwiftProtobuf.Message, Sw
     if !self.platform.isEmpty {
       try visitor.visitSingularStringField(value: self.platform, fieldNumber: 7)
     }
+    if !self.identityPublic.isEmpty {
+      try visitor.visitSingularBytesField(value: self.identityPublic, fieldNumber: 8)
+    }
+    if !self.verifyingKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.verifyingKey, fieldNumber: 9)
+    }
+    if !self.signedPrekeyPublic.isEmpty {
+      try visitor.visitSingularBytesField(value: self.signedPrekeyPublic, fieldNumber: 10)
+    }
+    if !self.signedPrekeySignature.isEmpty {
+      try visitor.visitSingularBytesField(value: self.signedPrekeySignature, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -3470,6 +3504,10 @@ extension Shared_Proto_Services_V1_JoinRequestPayload: SwiftProtobuf.Message, Sw
     if lhs.signedPrekeySignatureB64 != rhs.signedPrekeySignatureB64 {return false}
     if lhs.deviceName != rhs.deviceName {return false}
     if lhs.platform != rhs.platform {return false}
+    if lhs.identityPublic != rhs.identityPublic {return false}
+    if lhs.verifyingKey != rhs.verifyingKey {return false}
+    if lhs.signedPrekeyPublic != rhs.signedPrekeyPublic {return false}
+    if lhs.signedPrekeySignature != rhs.signedPrekeySignature {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

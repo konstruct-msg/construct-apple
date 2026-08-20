@@ -22,6 +22,15 @@
 			</array>
 		</dict>
 	</array>
+	<!--
+	  Mirrors the `aps-environment` entitlement (both expand the same APS_ENVIRONMENT
+	  build setting) so the push environment we report to the server can never drift
+	  from the environment APNs actually issued the token for. Do NOT derive it from
+	  `#if DEBUG`: the Beta config compiles with DEBUG defined while signing for
+	  production APNs, which mis-routed every TestFlight token to the sandbox endpoint.
+	-->
+	<key>APSEnvironment</key>
+	<string>$(APS_ENVIRONMENT)</string>
 	<key>GRPC_HOST</key>
 	<string>$(GRPC_HOST)</string>
 	<key>GRPC_PORT</key>
@@ -58,12 +67,18 @@
 		<string>_construct-veil._tcp</string>
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
-	<true/>
+	<false/>
 	<!--
-	  Construct uses non-exempt encryption (custom E2EE + post-quantum ML-KEM/ML-DSA).
-	  Qualifies for the mass-market exemption under EAR 740.17(b)(1); requires an annual
-	  self-classification report to BIS + NSA (and a French declaration where applicable).
-	  See decisions/export-compliance-encryption.md. Do NOT revert to false.
+	  Construct's cryptography is PUBLICLY AVAILABLE open-source code (construct-core,
+	  construct-ios, construct-veil are all public repos). Publicly available encryption
+	  source code is decontrolled under EAR §742.15(b) / License Exception TSU §740.13(e)
+	  after a one-time notification email to BIS + NSA — so the app claims the exemption and
+	  answers "false" (same posture as Signal). This is NOT the mass-market 740.17(b)(1)
+	  route: no annual self-classification report. Obligation = the one-time BIS/NSA
+	  notification (repo URLs), re-sent if the public source location changes.
+	  See decisions/export-compliance-encryption.md.
+	  INVARIANT: this "false" is valid ONLY while the crypto source stays public — if
+	  construct-core/ios/veil ever go private, revisit (likely back to 740.17(b)(1) + true).
 	-->
 
 </dict>

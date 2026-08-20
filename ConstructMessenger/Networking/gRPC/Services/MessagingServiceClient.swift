@@ -46,7 +46,6 @@ final class MessagingServiceClient: Sendable {
         var envelope = Shared_Proto_Core_V1_Envelope()
         envelope.messageID = messageId
         envelope.recipient = recipient
-        envelope.encryptedPayload = encryptedPayload
         envelope.timestamp = Int64(timestamp)
 
         if let sealedInner = sealedInnerBytes, !sealedInner.isEmpty {
@@ -56,8 +55,20 @@ final class MessagingServiceClient: Sendable {
             // recipient after unsealing.
             var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
             sealedEnvelope.sealedInner = sealedInner
+            // Read by the federation forward (`send_sealed_message(target, id, inner, timestamp)`)
+            // and never written until 2026-08-17 — every federated sealed message carried 0. A
+            // consumer with no producer, the mirror of the defect class this envelope keeps
+            // producing.
+            sealedEnvelope.timestamp = Int64(timestamp)
             envelope.sealedSender = sealedEnvelope
         } else {
+            // Only the unsealed path puts the ciphertext here. A sealed send carries the identical
+            // bytes inside `SealedInner.encrypted_payload`, and the relay drops this copy: the
+            // sealed branch of `send_message` returns before reading it, and the envelope it
+            // delivers is rebuilt by `MessageEnvelope::from_sealed_sender` out of `sealed_inner`
+            // alone. So the padded ciphertext — 1024, 4096 or 16384 bytes, per chunk — used to go
+            // up the wire twice on every message this app sends.
+            envelope.encryptedPayload = encryptedPayload
             var sender = Shared_Proto_Core_V1_UserId()
             sender.userID = senderId
             envelope.sender = sender
@@ -65,16 +76,20 @@ final class MessagingServiceClient: Sendable {
             envelope.contentType = contentType
         }
 
-        if let senderDeviceId, !senderDeviceId.isEmpty {
-            var senderDevice = Shared_Proto_Core_V1_DeviceId()
-            senderDevice.deviceID = senderDeviceId
-            envelope.senderDevice = senderDevice
-        }
-        if let recipientDeviceId, !recipientDeviceId.isEmpty {
-            var recipientDevice = Shared_Proto_Core_V1_DeviceId()
-            recipientDevice.deviceID = recipientDeviceId
-            envelope.recipientDevice = recipientDevice
-        }
+        // `sender_device` and `recipient_device` are deliberately left unset — removed 2026-08-17.
+        //
+        // Neither has a reader. Measured across both repositories: no server code reads either
+        // field, and the server blanks both on delivery besides, so no client has ever seen one
+        // arrive. Every client-side read is guarded by `!isEmpty` and has therefore never fired.
+        //
+        // Delivery does not need them. `messaging-service/src/core.rs` fans a message out with
+        // `fetch_recipient_device_ids` — it asks the database for the recipient's devices and
+        // writes the same envelope to each per-device stream. Which device a message is *for* is
+        // settled by which one can decrypt it.
+        //
+        // What they cost is a description of your device topology, handed to a server that does
+        // not use it. Same reasoning as `conversation_id` on the multi-device path, one step
+        // milder: see architecture/WIRE_FORMAT.md.
         return envelope
     }
 
@@ -246,14 +261,11 @@ final class MessagingServiceClient: Sendable {
 
     // MARK: - Send End Session (replaces MessagingAPI.sendEndSession)
 
-    /// - Parameter resetReason: optional machine-readable recovery hint carried in the
-    ///   END_SESSION payload as a typed `SessionControl{op: .end, reason}`. When set (≠
-    ///   `.unspecified`), it tells the peer HOW to re-initialise — notably
-    ///   `.otpkUnreproducible`, which asks the initiator to re-init WITHOUT a one-time
-    ///   prekey (3-DH) instead of looping 4-DH. When `.unspecified`, the legacy 16-byte
-    ///   sentinel payload is sent so pre-`reason` peers are unaffected. The serialized
-    ///   SessionControl stays < WirePayloadCoder.headerSize so the receiver's payload-size
-    ///   END_SESSION heuristic still fires even if the server strips content_type.
+    /// - Parameter resetReason: optional machine-readable recovery hint telling the peer HOW to
+    ///   re-initialise — notably `.otpkUnreproducible`, which asks the initiator to re-init WITHOUT
+    ///   a one-time prekey (3-DH) instead of looping 4-DH. It is sealed to the peer's identity key
+    ///   and padded to a fixed size by `EndSessionPayload`; a peer that cannot read it recovers
+    ///   without a hint, which is what every peer did before hints existed.
     func sendEndSession(
         to recipientId: String,
         reason: String? = nil,
@@ -261,19 +273,6 @@ final class MessagingServiceClient: Sendable {
     ) async throws -> EndSessionResponse {
         let myUserId = await MainActor.run { AuthSessionManager.shared.currentUserId } ?? ""
         let messageId = UUID().uuidString
-
-        // Control payload: typed SessionControl when a reason is set, else the legacy 16-byte
-        // sentinel (server validates the payload is non-empty either way). No nonce: END_SESSION
-        // dedup is by message id/timestamp, and omitting it keeps the payload tiny.
-        let controlPayload: Data
-        if resetReason != .unspecified {
-            var control = Shared_Proto_Messaging_V1_SessionControl()
-            control.op = .end
-            control.reason = resetReason
-            controlPayload = (try? control.serializedData()).flatMap { $0.isEmpty ? nil : $0 } ?? Data(count: 16)
-        } else {
-            controlPayload = Data(count: 16)
-        }
 
         // Stealth: seal END_SESSION like a message body — the real content type (.sessionReset)
         // rides inside SealedInner and is recovered on receive, so the outer envelope leaks no
@@ -289,6 +288,17 @@ final class MessagingServiceClient: Sendable {
                 )
             }
         }
+
+        // Built before the stealth branch, and deliberately: `buildEnvelope` fills
+        // `encrypted_payload` *before* it decides whether the send is sealed, so this payload is on
+        // the wire under stealth exactly as it is without it. Until 2026-08-17 that meant the relay
+        // read a plaintext reset reason on a 4- or 16-byte envelope — a length no padded body has —
+        // while `SealedInner` was busy hiding the content type. See EndSessionPayload.
+        let controlPayload = EndSessionPayload.build(
+            reason: resetReason,
+            recipientIdentityKey: await resolveRecipientIK()
+        )
+
         var sealedInner: Data? = nil
         if await StealthPolicy.shared.shouldUseSealedSender() {
             guard let recipientIK = await resolveRecipientIK() else {
@@ -386,8 +396,7 @@ final class MessagingServiceClient: Sendable {
 
         var failed: [FailedMessage] = []
         let chatMessages = response.messages.compactMap { msg -> ChatMessage? in
-            // SESSION_RESET_INIT: atomic END_SESSION + new X3DH init — must be checked first
-            // (has a real payload, would be mis-classified by the END_SESSION size heuristic).
+            // SESSION_RESET_INIT: identified path — sealed deliveries use the generic path below.
             if msg.contentType == .sessionResetInit {
                 guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
                     Log.debug("Failed to decode SESSION_RESET_INIT payload \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
@@ -399,7 +408,6 @@ final class MessagingServiceClient: Sendable {
                     id: msg.messageID,
                     from: msg.senderID,
                     to: "",
-                    messageType: "SESSION_RESET_INIT",
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
@@ -414,24 +422,22 @@ final class MessagingServiceClient: Sendable {
                     rawPayload: msg.encryptedPayload
                 )
             }
-            // END_SESSION: detect by contentType OR sentinel payload size (server may strip contentType).
-            let isEndSession = msg.contentType == .sessionReset ||
-                (!msg.encryptedPayload.isEmpty && msg.encryptedPayload.count < WirePayloadCoder.headerSize)
-            if isEndSession {
-                let detected = msg.contentType == .sessionReset ? "contentType" : "sentinel payload (\(msg.encryptedPayload.count)b)"
-                Log.debug("END_SESSION pending from \(msg.senderID.prefix(8))… id=\(msg.messageID.prefix(8))… via \(detected)", category: "MessagingServiceClient")
+            // END_SESSION: contentType is the sole classifier (size heuristic removed).
+            if msg.contentType == .sessionReset {
+                Log.debug("END_SESSION pending from \(msg.senderID.prefix(8))… id=\(msg.messageID.prefix(8))…", category: "MessagingServiceClient")
                 return ChatMessage(
                     id: msg.messageID,
                     from: msg.senderID,
                     to: "",
-                    messageType: "CONTROL_MESSAGE",
                     ephemeralPublicKey: Data(),
                     messageNumber: 0,
                     content: Data(),
                     suiteId: 1,
                     timestamp: UInt64(msg.timestamp),
                     kemCiphertext: Data(),
-                    kyberOtpkId: 0
+                    contentType: 21,
+                    kyberOtpkId: 0,
+                    rawPayload: msg.encryptedPayload
                 )
             }
             // SENDER_SYNC: copy of own outgoing message — decrypt with per-device session.
@@ -448,7 +454,6 @@ final class MessagingServiceClient: Sendable {
                     id: msg.messageID,
                     from: msg.senderID,
                     to: "",
-                    messageType: "SENDER_SYNC",
                     ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
@@ -456,6 +461,7 @@ final class MessagingServiceClient: Sendable {
                     timestamp: UInt64(msg.timestamp),
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
+                    contentType: 23,
                     kyberOtpkId: decoded.kyberOtpkId,
                     pqMessageEpoch: decoded.pqMessageEpoch,
                     pqRatchetField: decoded.pqRatchetField,
@@ -468,26 +474,32 @@ final class MessagingServiceClient: Sendable {
             let sealedInner = msg.sealedInnerData
             let isSealed = !sealedInner.isEmpty
             var wirePayload = msg.encryptedPayload
-            if isSealed && wirePayload.isEmpty {
-                if let sealedProto = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInner),
-                   !sealedProto.encryptedPayload.isEmpty {
-                    wirePayload = sealedProto.encryptedPayload
+            var sealedInnerPayload = Data()
+            if isSealed {
+                if let sealedProto = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInner) {
+                    sealedInnerPayload = sealedProto.encryptedPayload
+                    if wirePayload.isEmpty && !sealedInnerPayload.isEmpty {
+                        wirePayload = sealedInnerPayload
+                    }
                 }
             }
             guard let decoded = try? WirePayloadCoder.decode(wirePayload) else {
                 if isSealed {
-                    // Fallback for sealed when outer payload not usable.
+                    // Fallback for sealed control whose inner is not a WirePayload.
+                    // Preserve rawPayload so SessionControl.reason survives unseal.
+                    let preservedPayload = !wirePayload.isEmpty ? wirePayload : sealedInnerPayload
                     return ChatMessage(
                         id: msg.messageID,
                         from: "",
                         to: "",
-                        messageType: "DIRECT_MESSAGE",
                         ephemeralPublicKey: Data(),
                         messageNumber: 0,
                         content: Data(),
                         suiteId: 1,
                         timestamp: UInt64(msg.timestamp),
                         kemCiphertext: Data(),
+                        contentType: UInt8(clamping: msg.contentType.rawValue),
+                        rawPayload: preservedPayload,
                         sealedInnerData: sealedInner
                     )
                 }
@@ -497,9 +509,8 @@ final class MessagingServiceClient: Sendable {
             }
             return ChatMessage(
                 id: msg.messageID,
-                from: msg.senderID,
+                from: isSealed ? "" : msg.senderID,
                 to: "",
-                messageType: "DIRECT_MESSAGE",
                 ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                 messageNumber: decoded.messageNumber,
                 content: decoded.content,
@@ -507,7 +518,7 @@ final class MessagingServiceClient: Sendable {
                 timestamp: UInt64(msg.timestamp),
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
-                contentType: UInt8(msg.contentType.rawValue),
+                contentType: UInt8(clamping: msg.contentType.rawValue),
                 kyberOtpkId: decoded.kyberOtpkId,
                 pqMessageEpoch: decoded.pqMessageEpoch,
                 pqRatchetField: decoded.pqRatchetField,

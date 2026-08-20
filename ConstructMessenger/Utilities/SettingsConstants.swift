@@ -67,8 +67,12 @@ enum DataStorageSettingsConfig {
 enum DiagnosticsConfig {
     static let apnsTokenPreviewPrefixLength: Int = 8
     static let recentLogLineLimit: Int = 200
+    /// Tail window for the recent-log preview. 256 KB holds ~200 lines at any realistic width;
+    /// the point is that it is a constant, so the read cost no longer scales with the log file.
+    static let recentLogTailBytes: Int = 256 * 1024
     static let recentLogContainerHeight: CGFloat = 340
-    static let clearLogsRefreshDelay: TimeInterval = 0.3
+    // clearLogsRefreshDelay removed 2026-08-04: `clearLogs` now reports completion, so there is
+    // nothing left to guess a duration for. A constant with no consumer is a defect (AGENTS.md).
 }
 
 enum DiagnosticsLayout {
@@ -139,6 +143,15 @@ enum BackgroundFetchSettingsConfig {
     static let intervalPresets: [Int] = [5, 15, 30, 60]
 }
 
+enum IssuedInvitesLayout {
+    /// Slow on purpose: the screen shows hours remaining, so a faster tick would redraw
+    /// for a number that has not changed.
+    static let refreshIntervalSeconds: TimeInterval = 30
+    static let emptyVerticalPadding: CGFloat = CTLayout.sectionGap
+    static let iconColumnWidth: CGFloat = 20
+    static let rowMetaSpacing: CGFloat = 2
+}
+
 enum SecuritySettingsLayout {
     static let rowHorizontalPadding: CGFloat = CTLayout.edgePad
     static let rowVerticalPadding: CGFloat = CTLayout.edgePad
@@ -199,6 +212,23 @@ enum SettingsRootLayout {
     static let recoveryBannerDismissIconSize: CGFloat = 11
 }
 
+/// Compact invite card on Settings root (QR | Copy + several).
+enum SettingsShareLayout {
+    static let actionMinHeight: CGFloat = CTLayout.hitTarget
+    static let actionIconSize: CGFloat = 16
+    static let actionSpacing: CGFloat = CTLayout.inlinePad
+    static let dividerWidth: CGFloat = 0.5
+    static let dividerVerticalPadding: CGFloat = CTLayout.inlinePad
+    static let captionHorizontalPadding: CGFloat = CTLayout.edgePad
+    static let captionVerticalPadding: CGFloat = CTLayout.inlinePad
+    static let captionLinkSpacing: CGFloat = 4
+    static let captionChevronSize: CGFloat = 8
+    /// Debounce only — each tap mints a new one-time link. A multi-second disable
+    /// made "copy again for the next person" feel broken.
+    static let copyDebounce: TimeInterval = 0.3
+    static let copyFlashDuration: TimeInterval = 2
+}
+
 enum ContactQRCodeLayout {
     static let contentSpacing: CGFloat = 0
     static let identityHeaderSpacing: CGFloat = 6
@@ -213,7 +243,7 @@ enum ContactQRCodeLayout {
     static let qrCodeErrorSpacing: CGFloat = CTLayout.chromeGap
     static let qrCodeErrorHorizontalPadding: CGFloat = CTLayout.sectionGap
     static let timerRowSpacing: CGFloat = 6
-    static let expiredBlockSpacing: CGFloat = 14
+    static let timerIconSize: CGFloat = 11
     static let refreshButtonHorizontalPadding: CGFloat = 20
     static let refreshButtonVerticalPadding: CGFloat = CTLayout.chromeGap
     static let refreshButtonStrokeOpacity: Double = 0.4
@@ -283,6 +313,7 @@ enum AccountSettingsLayout {
 
     static let editableFieldMaxWidth: CGFloat = 190
     static let editableSavingIndicatorScale: CGFloat = 0.8
+    static let fingerprintCopiedFlashDuration: TimeInterval = 1.5
 }
 
 enum DeleteAccountSheetLayout {

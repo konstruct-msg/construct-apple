@@ -65,27 +65,111 @@ struct ServerConfig {
 struct InviteConfig {
     /// Versions the client can DECODE and accept.
     /// v4 drops dead `ephKey` (F2); v1–v3 remain for dual-read within TTL.
-    static let supportedVersions: Set<Int> = [1, 2, 3, 4]
+    /// v5 adds a signed per-invite `ttl`.
+    ///
+    /// **Reading a version always ships before writing it.** v5 is accepted here from the
+    /// build that introduces it, while `currentVersion` stays 4 until enough of the fleet
+    /// can read v5 — a client that mints a version its peers reject has made its invites
+    /// undeliverable, and the peer's error says "unsupported version", which points at the
+    /// sender rather than at the rollout.
+    static let supportedVersions: Set<Int> = [1, 2, 3, 4, 5]
 
     /// Version used when GENERATING new invites.
     /// v4: no ephKey in canonical string / wire; server crypto-agility must accept v4.
-    static let currentVersion: Int = 4
-    static let ttlSeconds: TimeInterval = 300 // 5 minutes
+    /// Becomes 5 when `FeatureFlags.inviteV5Minting` is on.
+    static var currentVersion: Int { FeatureFlags.inviteV5Minting ? 5 : 4 }
+    /// How long a signed invite stays redeemable.
+    ///
+    /// **Must equal `INVITE_TTL_SECONDS` in construct-server**
+    /// (`crates/crypto-agility/src/invites.rs`). The server checks expiry first,
+    /// so raising this alone changes nothing except which side reports the
+    /// failure, and `used_invites.expires_at` — the row that makes an invite
+    /// one-time — is derived from the server's copy. Three carriers, one meaning,
+    /// nothing in either build that can enforce the agreement; the only guard is
+    /// `testInviteTTLMatchesServerConstant` plus this sentence.
+    ///
+    /// 2026-08-13: 300 → 43200 (12h). Five minutes worked for a QR held between
+    /// two phones and could not work for a link sent through another messenger —
+    /// it expired in the clipboard, and until this session the redeem side failed
+    /// silently, so it read as "links are broken". One-time use and the TOFU
+    /// `deviceId` pin carry what the short window was standing in for.
+    static let ttlSeconds: TimeInterval = 43_200 // 12 hours
+
+    /// Tolerance for a sender whose clock runs fast. Unrelated to `ttlSeconds`.
+    /// NOTE: the server is stricter — `InviteToken::is_future` allows 60s. A sender
+    /// 90s ahead is accepted here and rejected there; the server's answer is the
+    /// one that decides, so this number is the more forgiving of the two, not the
+    /// effective one.
     static let maxFutureSkewSeconds: TimeInterval = 300 // 5 minutes
     static let deviceIdLength = 32
     static let deviceIdRegex = "^[a-f0-9]{32}$"
     static let ephKeyLengthBytes = 32
     static let signatureLengthBytes = 64
-    static let qrWarningThresholdSeconds: TimeInterval = 60
     static let qrCodePrefixScheme = "konstruct://add"
     static let qrCountdownTickSeconds: TimeInterval = 1
-    /// While the invite QR is on-screen, rotate jti this often to defeat screenshot-of-screen.
+    /// While the invite QR is on-screen, mint a fresh jti this often.
+    ///
+    /// Removed earlier on 2026-08-13 and restored the same day. The removal reasoned that at
+    /// a 12-hour TTL each rotation mints another long-lived capability — true, and not the
+    /// point. A screenshot captures ONE code whether or not the screen rotates, and ten
+    /// capabilities naming the same identity are one exposure repeated, not ten. Rotation
+    /// was never screenshot defence; it is what lets three people at a table scan in
+    /// sequence and all three succeed, because an invite is burned by the first redeemer.
+    /// [[decisions/invite-two-modes-deferred]] lists it as load-bearing for personal mode,
+    /// which is the sentence that should have been read before deleting it.
     static let qrRotateIntervalSeconds: TimeInterval = 30
     /// How long the post-redeem safety toast stays visible (with Block action).
     static let postRedeemSafetyToastSeconds: TimeInterval = 8
 
+    /// Localized duration of `ttlSeconds` for UI copy ("12 h" / "12 ч").
+    ///
+    /// Derived, never typed. A screen that says "valid 12 hours" beside a constant
+    /// somebody later sets to 6 is the same defect as a comment describing code that
+    /// changed underneath it — and unlike a comment, users act on this one.
+    static var ttlDescription: String {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.hour, .minute]
+        formatter.unitsStyle = .abbreviated
+        return formatter.string(from: ttlSeconds) ?? ""
+    }
+
     /// Invite protocol versions that still carry a (unused) ephemeral X25519 pub.
     static func carriesEphKey(version: Int) -> Bool { version <= 3 }
+
+    /// Invite protocol versions that carry a signed per-invite `ttl`.
+    ///
+    /// Presence is decided by the version and by nothing else — no flag bit in the binary
+    /// container, no "is the field non-nil". One meaning, one carrier; a flag that could
+    /// disagree with `v` is the defect this codebase keeps paying for.
+    static func carriesTTL(version: Int) -> Bool { version >= 5 }
+
+    /// How long a QR code stays redeemable, once v5 minting is on.
+    ///
+    /// A QR is scanned within seconds of being displayed; a link waits in someone's inbox,
+    /// which is the whole reason `ttlSeconds` is twelve hours. Sharing that window gave the
+    /// QR eleven hours and fifty-five minutes it has no use for, and left a code shown at a
+    /// table redeemable all day by anyone who photographed the screen.
+    ///
+    /// 300 s is not a guess: the 2026-08-13 TTL change records that five minutes worked for
+    /// a QR held between two phones and could not work for a link sent through another
+    /// messenger. It also caps a QR sitting at `300 / 30 = 10` live codes instead of 1440,
+    /// which is what makes revoking a sitting a loop rather than a design problem.
+    static let qrTTLSeconds: UInt32 = 300
+
+    /// Server floor for a client-stated TTL (`INVITE_LIST_REVOKE_SERVER_SPEC` §4 rule 6).
+    /// Mirrored here so a bad value is caught before it is signed, not after it is rejected.
+    static let minTTLSeconds: UInt32 = 60
+
+    /// What a decoded invite is actually worth, in seconds.
+    ///
+    /// The server computes `min(INVITE_TTL_SECONDS, token.ttl)`, so the client must clamp
+    /// identically. Trusting a stated `ttl` above the server maximum would show an invite as
+    /// live for hours after the server had begun refusing it — the sender's screen and the
+    /// recipient's result disagreeing, with nothing to explain why.
+    static func effectiveTTL(stated: UInt32?) -> TimeInterval {
+        guard let stated else { return ttlSeconds }
+        return min(ttlSeconds, TimeInterval(stated))
+    }
 }
 
 
@@ -279,6 +363,18 @@ struct FeatureFlags {
     /// construct-docs/decisions/stealth-sealed-sender-v2-always-on.md Phase 2).
     static let sealedSenderUnauthenticatedTransport = false
 
+    /// Mint invites as v5, carrying a signed per-invite `ttl` (QR 300 s, links 12 h).
+    ///
+    /// **Default off, and the order matters.** This build *reads* v5 already
+    /// (`InviteConfig.supportedVersions`); it must not *write* v5 until enough of the fleet
+    /// can read it. A v5 invite handed to an older iOS or Android build is refused with
+    /// "unsupported version" — an error that names the sender's invite rather than the
+    /// rollout, on the one screen where the user has no way to act on it.
+    ///
+    /// Flip once the reading build is out. Server side is already deployed
+    /// (construct-docs backend/INVITE_LIST_REVOKE_SERVER_SPEC.md §4, 2026-08-16).
+    static let inviteV5Minting = false
+
     // (stealthPerMessageDefault removed 2026-07-15: per-message is the only token model
     // now — the per-stream scope and its SecurityView picker are gone. A token rides
     // every sealed send; the server issuance cap (`TOKEN_ISSUANCE_MAX_PER_HOUR`) is the
@@ -377,47 +473,15 @@ struct FeatureFlags {
         }
     }
 
-    /// **Default `true` (S2 dual-send enabled 2026-06-30).** Phase S2 of the typed binary
-    /// session-control migration (`decisions/binary-control-message-format.md`).
-    ///
-    /// When `true`, session-handshake signals carry a typed Envelope `content_type`
-    /// (`CONTENT_TYPE_SESSION_PING = 25`, `CONTENT_TYPE_SESSION_READY = 26`) **in addition**
-    /// to the legacy `__session_ping_<UUID>__` / `__session_ready_<UUID>__` plaintext payload
-    /// (dual-send). New consumers (S1, already shipped) dispatch on the typed `content_type`;
-    /// old peers still read the magic string, so this is backward-compatible in both directions —
-    /// enabling it never breaks anyone, which is why the default is now `true`.
-    /// `content_type` is NOT part of the AEAD associated data, so the typed byte can never
-    /// cause a decrypt failure. Server fleet (S0) is deployed and understands 25/26.
-    /// `SESSION_RESET_INIT` (24) was already sent typed unconditionally.
-    ///
-    /// This flag does NOT drop the legacy string — the payload stays the magic string so old
-    /// peers keep working. Dropping the string and sending a pure binary `SessionControl`
-    /// payload is the later S3 step, gated separately by `binarySessionControlPayload`.
-    ///
-    /// Backed by `UserDefaults`, defaulting `true` when never set (a stored value — an explicit
-    /// toggle — is respected). Read fresh at each send, so it takes effect on the next handshake.
-    static let typedSessionControlKey = "ff.typedSessionControl"
-    static var typedSessionControl: Bool {
-        get { UserDefaults.standard.object(forKey: typedSessionControlKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: typedSessionControlKey) }
-    }
+    // `typedSessionControl` and `binarySessionControlPayload` were removed on 2026-08-03 with the
+    // magic-string parser they gated (phases S2/S3, `decisions/binary-control-message-format.md`).
+    //
+    // Both had become one-way switches. ping/ready now carry their type in KNST byte 5 and go out
+    // with `content_type` UNSPECIFIED whatever `typedSessionControl` said; and with the
+    // consumer-side string parser gone, setting `binarySessionControlPayload = false` would have
+    // produced handshakes no peer could read. A flag that can only break things is not an escape
+    // hatch. There is no old population to fall back for — the app has never shipped.
 
-    /// **Default `true` (flipped 2026-07-17).** Phase S3 of the typed session-control migration.
-    ///
-    /// When `true`, handshake producers send a pure binary `SessionControl{op, nonce}` as the
-    /// encrypted payload and **drop** the legacy magic string. Safe now because the S1 typed
-    /// consumer (dispatch on `content_type` 24/25/26) is fleet-wide; the legacy string parser
-    /// (`SessionControlCodec.legacyOp`) is KEPT as a consumer fallback indefinitely, so peers
-    /// still producing strings remain fully understood. A pre-S1 peer (no `content_type`
-    /// dispatch) would not recognise our binary payload — that population is gone from the
-    /// fleet. Set to `false` (explicit UserDefaults toggle is respected) to fall back to
-    /// string-producing S2 if an ancient peer resurfaces. Independent of
-    /// `typedSessionControl`, which only controls the (backward-safe) typed `content_type`.
-    static let binarySessionControlPayloadKey = "ff.binarySessionControlPayload"
-    static var binarySessionControlPayload: Bool {
-        get { UserDefaults.standard.object(forKey: binarySessionControlPayloadKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: binarySessionControlPayloadKey) }
-    }
 }
 
 // MARK: - Traffic Protection Configuration
@@ -475,7 +539,9 @@ struct MessagePaddingConfig {
 struct ChunkedDeliveryConfig {
     static let magic: [UInt8] = [0x4B, 0x4E, 0x53, 0x54] // "KNST"
     static let version: UInt8 = 0x01
-    static let flags: UInt8 = 0x00
+    // Header byte 5 was `flags` — written 0x00 and never read. It now carries the content type
+    // (values 0–26), inside the ciphertext where the server cannot read it. The version stays
+    // 0x01: no reader ever interpreted byte 5, so nothing can be confused by it.
 
     static let headerSize = 30
     static let maxPlaintextSize = 16 * 1024

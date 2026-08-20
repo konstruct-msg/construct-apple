@@ -53,8 +53,35 @@ class LogCollector {
         
         // Log initial state
         if isEnabled {
+            preservePreviousSession()
             writeSystemInfo()
         }
+    }
+
+    /// Roll the previous session aside before starting a new one.
+    ///
+    /// `writeSystemInfo()` writes the session header with `.atomic`, which replaces the file. It
+    /// runs from `init`, so until 2026-08-18 every launch destroyed the log of the session before
+    /// it — and a crash or a force-quit is exactly when the interesting session is the previous
+    /// one. Diagnosing why offline messages went missing that day needed the window from 14:08 to
+    /// 14:20, and it had been overwritten by the relaunch that went looking for it.
+    ///
+    /// `rotateLogFile()` already existed and was wired only to the size limit. Reusing it here
+    /// keeps the last three sessions, and `getAllLogFiles()` already exports `1.log`–`3.log`, so
+    /// the previous session now travels with the report without any change to the share path.
+    private func preservePreviousSession() {
+        let size = (try? FileManager.default.attributesOfItem(atPath: currentLogFile.path))?[.size] as? Int64
+        guard Self.shouldPreserveSession(existingSize: size) else { return }
+        rotateLogFile()
+    }
+
+    /// Whether a previous session's file is worth keeping.
+    ///
+    /// Empty or absent means nothing was recorded, and rotating it would push a real session out
+    /// of the three-file window for nothing — three launches that write no logs would otherwise
+    /// erase every log we have.
+    static func shouldPreserveSession(existingSize: Int64?) -> Bool {
+        (existingSize ?? 0) > 0
     }
     
     // MARK: - Logging
@@ -174,6 +201,15 @@ class LogCollector {
         
         """
         
+        // Crash reports first: they are the reason the archive is being sent in the incident case,
+        // and a reader should not have to scroll past 5 MB of session logs to find them.
+        if let crashes = CrashDiagnosticsCollector.storedReportsURL,
+           let content = try? String(contentsOf: crashes, encoding: .utf8), !content.isEmpty {
+            combinedLogs += "=== CRASH REPORTS (MetricKit) ===\n"
+            combinedLogs += content
+            combinedLogs += "\n\n"
+        }
+
         // Combine all log files (oldest to newest)
         let logFiles = getAllLogFiles().reversed()
         for (index, logFile) in logFiles.enumerated() {
@@ -188,20 +224,35 @@ class LogCollector {
         return archiveURL
     }
     
-    /// Clear all log files
-    func clearLogs() {
+    /// Clear all log files, then call `completion` on the main queue once the deletion has
+    /// actually run.
+    ///
+    /// The completion is the point. Deletion is enqueued behind every pending `append`, so under
+    /// load — which is exactly when a user clears logs — a caller that refreshes on a fixed timer
+    /// reads the size before anything was removed and reports the old figure, looking like the
+    /// clear did nothing. Reported 2026-08-04 as "16 MB and it never resets".
+    ///
+    /// Note it can never read zero: `writeSystemInfo()` re-creates the header immediately, so a
+    /// few hundred bytes is the floor and the correct "empty" reading.
+    func clearLogs(completion: (() -> Void)? = nil) {
         queue.async { [weak self] in
-            guard let self = self else { return }
-            
+            guard let self = self else {
+                if let completion { DispatchQueue.main.async(execute: completion) }
+                return
+            }
+
             try? FileManager.default.removeItem(at: self.currentLogFile)
-            
+
             for i in 1...self.maxRotatedFiles {
                 let rotatedFile = self.logDirectory.appendingPathComponent("\(i).log")
                 try? FileManager.default.removeItem(at: rotatedFile)
             }
-            
-            Log.info("All logs cleared", category: "LogCollector")
+
             self.writeSystemInfo()
+            // After writeSystemInfo, so the line lands in the fresh file rather than in the one
+            // being deleted — it used to be logged first and was itself erased.
+            Log.info("All logs cleared", category: "LogCollector")
+            if let completion { DispatchQueue.main.async(execute: completion) }
         }
     }
     

@@ -38,7 +38,26 @@ enum MediaWireCodec {
             m.mimeType = item.mediaType
             m.mediaType = protoMediaType(for: item.mediaType)
             if let filename = item.filename { m.filename = filename }
-            if let thumbnail = item.thumbnail, !thumbnail.isEmpty { m.thumbnail = thumbnail }
+            // The thumbnail is the expensive part of a photo message — see InlinePreviewPolicy.
+            // The sender still generates and stores one locally for its own placeholder row; this
+            // only decides whether it goes on the wire.
+            //
+            // NOT COVERED BY A TEST: that `item.thumbnail` was rendered at `ThumbnailBudget
+            // .wireMaxBytes` rather than the disk budget. `ThumbnailBudgetTests` proves the two
+            // numbers and the choice between candidates; nothing proves the three producers in
+            // `MediaManager` pass the right one, and passing the wrong one is silent — a 12 KB
+            // poster still sends, just as four wire messages instead of one. The log line below is
+            // what answers it on device: `Wire thumbnail Nb` against `wireMaxBytes`, next to the
+            // `…-c1` chunk ids of the same send.
+            let hasBlurhash = !(item.blurhash ?? "").isEmpty
+            if let thumbnail = item.thumbnail, !thumbnail.isEmpty,
+               InlinePreviewPolicy.shouldSendThumbnail(
+                   isVideo: InlinePreviewPolicy.isVideo(mimeType: item.mediaType),
+                   hasBlurhash: hasBlurhash
+               ) {
+                m.thumbnail = thumbnail
+                Log.debug("Wire thumbnail \(thumbnail.count)B (budget \(ThumbnailBudget.wireMaxBytes)B) for \(item.mediaType)", category: "MediaWireCodec")
+            }
             if let w = item.width, let h = item.height, w > 0, h > 0 {
                 var dims = Shared_Proto_Messaging_V1_MediaDimensions()
                 dims.width = UInt32(w)
@@ -161,6 +180,20 @@ enum MediaWireCodec {
         }
     }
 
+    /// Everything that happens when a media album lands in the transcript.
+    ///
+    /// One function rather than two calls at each site: "an album arrived" is a single event, and
+    /// the last three defects in this area were all a rule that some call sites remembered and
+    /// others did not.
+    @MainActor
+    static func receiveAlbum(
+        _ album: Shared_Proto_Messaging_V1_MediaAlbumMessage,
+        for messageId: String
+    ) {
+        storeThumbnails(from: album, for: messageId)
+        prefetch(album)
+    }
+
     @MainActor
     static func storeThumbnails(
         from album: Shared_Proto_Messaging_V1_MediaAlbumMessage,
@@ -168,6 +201,53 @@ enum MediaWireCodec {
     ) {
         for (index, item) in album.items.enumerated() where item.hasThumbnail && !item.thumbnail.isEmpty {
             MediaManager.shared.storeThumbnail(item.thumbnail, for: messageId, at: index)
+        }
+    }
+
+    /// Fetch the attachments now, so the seven-day server retention cannot expire underneath a chat
+    /// the user has not opened yet (see MediaAutoDownloadPolicy).
+    ///
+    /// Deliberately silent and unawaited. This is speculative work on behalf of a message that has
+    /// already been delivered and displayed: a failure here must not surface as an error, must not
+    /// mark anything failed, and must not delay the receipt. If it does not land, the bubble
+    /// downloads on tap exactly as it did before — the only thing lost is the head start.
+    ///
+    /// Concurrent duplicates are harmless: `downloadAndDecryptMedia` dedupes by media id
+    /// (`inFlightDownloads`) and answers from cache when the bytes are already here, which is the
+    /// usual case for our own sends arriving on a second device.
+    @MainActor
+    private static func prefetch(_ album: Shared_Proto_Messaging_V1_MediaAlbumMessage) {
+        let setting = MediaAutoDownloadPolicy.current()
+        guard setting != .never else { return }
+
+        let reachability = NetworkReachabilityManager.shared
+        let isExpensive = reachability.isExpensive
+        let isConstrained = reachability.isConstrained
+
+        for item in album.items {
+            guard !item.mediaID.isEmpty, !item.fileURL.isEmpty, !item.encryptionKey.isEmpty else { continue }
+            guard MediaAutoDownloadPolicy.shouldFetchOnArrival(
+                setting: setting,
+                sizeBytes: Int64(item.fileSize),
+                isExpensive: isExpensive,
+                isConstrained: isConstrained
+            ) else { continue }
+
+            let mediaId = item.mediaID
+            let mediaUrl = item.fileURL
+            let mediaKey = item.encryptionKey
+            Task {
+                do {
+                    _ = try await MediaManager.shared.downloadAndDecryptMedia(
+                        mediaId: mediaId, mediaUrl: mediaUrl, mediaKey: mediaKey
+                    )
+                    Log.debug("Prefetched \(mediaId.prefix(8))… on arrival", category: "MediaManager")
+                } catch {
+                    // Expected often enough to be uninteresting: offline, VEIL not up yet, blob
+                    // already expired. The bubble will try again when it is looked at.
+                    Log.debug("Prefetch skipped for \(mediaId.prefix(8))…: \(error)", category: "MediaManager")
+                }
+            }
         }
     }
 

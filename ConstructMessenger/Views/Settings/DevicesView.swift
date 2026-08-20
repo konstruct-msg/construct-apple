@@ -95,11 +95,13 @@ struct DevicesView: View {
                             ConstructButtonRow(systemImage: "qrcode.viewfinder", title: LocalizedStringKey("link_new_device")) {
                                 showingScanner = true
                             }
+                            .accessibilityIdentifier(A11y.Devices.linkNew)
                             ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
                             // Secondary: show this device's QR (camera-broken fallback / other device scans us).
                             ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("device_link_show_qr")) {
                                 showingQRSheet = true
                             }
+                            .accessibilityIdentifier(A11y.Devices.showQR)
                             #else
                             // macOS has no camera — the only path is showing this device's QR.
                             ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("link_new_device")) {

@@ -14,12 +14,21 @@ enum InviteRedeemUX {
 
     /// Redeemer just added a contact via invite — offer a short Block window.
     /// Dismissing the toast keeps the contact (no-accept-tap model is intentional).
+    ///
+    /// The toast names nobody, on purpose. It used to read "Connected with %@. Not who you
+    /// expected?", and the `%@` was always a generated pseudonym: both mint sites pass
+    /// `username: nil` (metadata minimization), so the invite carries no name and the label
+    /// fell through to `DisplayNameGenerator`. A device log from 2026-08-17 shows the result —
+    /// a correct pairing announced as "Connected with proud gryphon. Not who you expected?",
+    /// with the real name arriving 31 seconds later in a profile message, long after the toast
+    /// had gone.
+    ///
+    /// A safety prompt asking a question the reader cannot answer is worse than no prompt: it
+    /// fires on every redeem, and the one control that does something — Block — hangs off it.
+    /// So state what happened, keep Block, and leave identity to Safety Numbers, which is the
+    /// surface built to be checked.
     static func presentPostRedeemSafety(for contactInfo: ContactInfo) {
-        let name = displayLabel(for: contactInfo)
-        let message = String(
-            format: NSLocalizedString("invite_redeem_safety_message_fmt", comment: ""),
-            name
-        )
+        let message = NSLocalizedString("invite_redeem_safety_message", comment: "")
         let blockTitle = NSLocalizedString("invite_redeem_safety_block", comment: "")
         let peerId = contactInfo.userId
 
@@ -69,11 +78,4 @@ enum InviteRedeemUX {
         }
     }
 
-    private static func displayLabel(for info: ContactInfo) -> String {
-        let trimmed = info.username.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty, trimmed != info.userId, UUID(uuidString: trimmed) == nil {
-            return "@\(trimmed)"
-        }
-        return DisplayNameGenerator.generate(from: info.userId)
-    }
 }

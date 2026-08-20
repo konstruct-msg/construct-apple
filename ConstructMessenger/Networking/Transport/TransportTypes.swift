@@ -34,6 +34,55 @@ enum DirectProtocol: Equatable, Sendable {
     case h3
 }
 
+// MARK: - Stream (data plane) method
+
+/// Long-lived MessageStream carrier. Orthogonal to short unary RPCs (`rpcSucceeded` /
+/// `rpcFailed`). See decisions/transport-connection-health-and-escalation.md.
+enum StreamMethod: Equatable, Sendable {
+    /// Quinn/H3 path (`quic.konstruct.cc` / engine-QUIC). Preferred fast path where UDP
+    /// works (AU / Asia / EU confirmed); may be suppressed per-network after failure.
+    case quic
+    /// Classic HTTP/2 gRPC stream to the direct backend.
+    case h2
+    /// Stream tunneled through the local VEIL proxy.
+    case veil
+}
+
+/// Why a long-lived stream died or failed to open. Classifier lives at the call site
+/// (MessageStream / QuicTransport); the FSM only sees this enum.
+enum StreamFailureKind: Equatable, Sendable {
+    /// open / subscribe did not become ready in time
+    case openTimeout
+    /// mid-session recv/send timeout (e.g. QUIC recv_data Timeout)
+    case midSessionTimeout
+    /// write failed on an ostensibly open stream
+    case writeFailed
+    /// peer or local clean close that still ends the data plane
+    case closed
+    /// unclassified transport error on the stream
+    case transportUnknown
+    /// the stream was established and then closed by peer/local — NOT an open failure
+    case midSessionClosed
+    /// the stream was established and then died for an unclassified reason
+    case midSessionUnknown
+
+    /// Did the stream reach the data plane before it failed?
+    ///
+    /// The distinction is the whole point: an open failure says the path could not be built, and
+    /// the next successful open refutes it. A mid-session death says the path *was* built and then
+    /// broke, and no number of successful opens refutes that — which is precisely the network
+    /// measured on 2026-08-11 (fresh TCP+TLS+unary in 50-120ms; the same connection stops being
+    /// acknowledged ~10s in, no RST, no ICMP; 12 HTTP/2 PINGs against ~7 ACKs over a 60s hold).
+    var wasMidSession: Bool {
+        switch self {
+        case .midSessionTimeout, .midSessionClosed, .midSessionUnknown, .writeFailed:
+            return true
+        case .openTimeout, .closed, .transportUnknown:
+            return false
+        }
+    }
+}
+
 // MARK: - State
 
 /// The single source of truth for the transport layer.
@@ -152,6 +201,24 @@ enum TransportEvent: Sendable, Equatable {
     /// - foreground: true for user-visible flows; false for background prefetch/maintenance.
     case rpcFailed(kind: RPCFailureKind, via: TransportTarget, foreground: Bool)
 
+    // MARK: Data-plane (MessageStream) — must not bypass the router
+    // See decisions/transport-connection-health-and-escalation.md.
+    // Posted by MessageStreamManager (open / fail / suppress / heartbeat).
+
+    /// Long-lived stream became ready (subscribe sent / first heartbeat path).
+    case streamOpened(method: StreamMethod, via: TransportTarget)
+
+    /// Periodic proof the stream is still live (optional; UI heartbeat SLO).
+    case streamHealthy(method: StreamMethod, heartbeatAgeMs: Int)
+
+    /// Stream open failed or died. Counts toward direct-path escalation like a
+    /// foreground transport `rpcFailed` when `via` is direct.
+    case streamFailed(method: StreamMethod, kind: StreamFailureKind, via: TransportTarget)
+
+    /// Method suppressed on this network for `ttlSeconds` (e.g. Fast-UDP 300s after QUIC fail).
+    /// Skeleton: logged / available for scorers; full per-network store is follow-up.
+    case streamSuppressed(method: StreamMethod, ttlSeconds: Int)
+
     /// Network path changed (interface switch, VPN on/off, reachability flip).
     /// Carries the up-to-date snapshot of inputs the FSM needs to recompute its
     /// starting state — keeps the reducer pure.
@@ -207,7 +274,23 @@ enum TransportEffect: Equatable, Sendable {
 /// reducer on every call so they're trivially overridable in tests.
 struct TransportConfig: Sendable, Equatable {
     /// Direct-path transport failures before we escalate to VEIL.
+    /// Counts both short `rpcFailed` and data-plane `streamFailed` on direct.
     var directFailThreshold: Int = 2
+
+    /// How much a mid-session stream death counts toward `directFailThreshold`.
+    ///
+    /// Full weight, i.e. one is enough. A mid-session death is not a louder open failure, it is a
+    /// different claim: the path was built and then broke. The counter it feeds is cleared by
+    /// `rpcSucceeded` and by a successful `streamOpened`, and on the network measured on
+    /// 2026-08-11 both of those keep happening — fresh connections open in 50-120ms and unary RPCs
+    /// return in 229ms while every established stream dies ~10s in. Counting a young death as one
+    /// tick therefore never reached the threshold: the device stayed on direct forever, opening
+    /// streams that could not survive, and never escalated to VEIL on its own.
+    ///
+    /// Requiring two would need the evidence to survive that clearing, which the current
+    /// `.direct(consecutiveFails:)` state cannot express. Escalation is reversible and VEIL is a
+    /// working path; a stream that establishes and dies is worth acting on the first time.
+    var midSessionDeathWeight: Int = 2
 
     /// Whether direct-path failures may escalate into VEIL probing.
     /// Disabled when the user explicitly sets VEIL mode to `.off`.
@@ -218,6 +301,10 @@ struct TransportConfig: Sendable, Equatable {
     /// the coordinator does **not** sleep its own cooldown anymore — this is the sole
     /// backoff so we don't re-fire `veil_start` back-to-back (that churn burned CPU).
     var veilCooldownDuration: TimeInterval = 30
+
+    /// Default TTL hint when callers post `streamSuppressed` without a custom policy
+    /// (matches MessageStream Fast-UDP suppress window).
+    var streamSuppressDefaultTTL: TimeInterval = 300
 
     static let `default` = TransportConfig()
 }

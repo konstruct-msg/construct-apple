@@ -16,26 +16,150 @@ import UniformTypeIdentifiers
 
 /// In-memory store for full-resolution images already downloaded by MediaMessageView bubbles.
 /// Gallery pages check here first to avoid re-downloading.
-@Observable
+///
+/// Bounded, and that is the point. This was a plain `[String: PlatformImage]` — no limit, no
+/// eviction, no memory-warning handler — so every full-resolution image ever shown stayed for the
+/// life of the process. A 1440×2048 photo decodes to ~11.8 MB regardless of the 600 KB it
+/// occupied on the wire, and the device log shows the consequence: footprint climbing 127 MB →
+/// 447 MB across nine minutes of ordinary chatting.
+///
+/// `MediaManager` already learned this — its own comment says "prefer `NSCache` over a
+/// `Dictionary`: it evicts under pressure and enforces `totalCostLimit`". The lesson was applied
+/// in one cache and not in the one holding objects twenty times larger.
 final class MediaImageCache {
     static let shared = MediaImageCache()
-    private init() {}
 
-    private(set) var images: [String: PlatformImage] = [:]
+    /// Roughly four full-screen photos. Enough that scrolling back over a recent burst still
+    /// hits, small enough that a long session cannot accumulate hundreds of megabytes.
+    private static let costLimit = 48 * 1024 * 1024
 
-    private static func key(_ messageId: String, _ index: Int) -> String { "\(messageId)_\(index)" }
+    private let cache = NSCache<NSString, PlatformImage>()
 
-    func store(_ image: PlatformImage, for messageId: String, at index: Int = 0) {
-        images[Self.key(messageId, index)] = image
+    /// Not private: the compartment separation is the invariant save-to-Photos depends on, and a
+    /// test needs its own instance to assert it (see MediaImageCacheCompartmentTests).
+    init() {
+        cache.totalCostLimit = Self.costLimit
+        cache.countLimit = 24
+        cache.name = "MediaImageCache"
+        // A 1024px display copy is ~4 MB, so this holds a screenful and some scrollback.
+        displayCache.totalCostLimit = 24 * 1024 * 1024
+        displayCache.countLimit = 48
+        displayCache.name = "MediaImageCache.display"
+        #if canImport(UIKit)
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.cache.removeAllObjects()
+            self?.displayCache.removeAllObjects()
+            self?.posterCache.removeAllObjects()
+            Log.info("Media image caches cleared (memory warning)", category: "MediaManager")
+        }
+        #endif
     }
 
-    func image(for messageId: String, at index: Int = 0) -> PlatformImage? {
-        images[Self.key(messageId, index)]
+    private static func key(_ messageId: String, _ index: Int) -> NSString {
+        "\(messageId)_\(index)" as NSString
     }
 
-    // Legacy single-image accessor kept for callers that don't need index
-    func store(_ image: PlatformImage, for messageId: String) { store(image, for: messageId, at: 0) }
-    func image(for messageId: String) -> PlatformImage? { image(for: messageId, at: 0) }
+    /// Cost is the decoded bitmap, not the file: `NSCache` can only bound what it is told, and
+    /// the file size understates a JPEG by an order of magnitude.
+    private static func decodedBytes(_ image: PlatformImage) -> Int {
+        #if canImport(UIKit)
+        let scale = image.scale
+        return Int(image.size.width * scale * image.size.height * scale * 4)
+        #else
+        return Int(image.size.width * image.size.height * 4)
+        #endif
+    }
+
+    /// Store the image at the resolution the media actually is — the decode of the real bytes.
+    ///
+    /// This compartment is what "save to Photos" and "share" write out, so anything smaller than
+    /// the source belongs in `storeDisplay` or `storePoster`. Named `original` rather than `store`
+    /// because the old neutral name is exactly how a 320px thumbnail and a 120px reply preview got
+    /// in here: at the call site `store(img, …)` reads as "cache this", not "this is what the user
+    /// will save". See the header of this file's `saveCurrentImage`.
+    func storeOriginal(_ image: PlatformImage, for messageId: String, at index: Int = 0) {
+        cache.setObject(image, forKey: Self.key(messageId, index), cost: Self.decodedBytes(image))
+    }
+
+    func original(for messageId: String, at index: Int = 0) -> PlatformImage? {
+        cache.object(forKey: Self.key(messageId, index))
+    }
+
+    // MARK: - Display copies
+
+    /// Bubble-sized decodes, kept apart from the full-resolution entries above **on purpose**.
+    ///
+    /// Save-to-photos and share (`MediaGalleryViewer`) read `original(for:at:)`. If a downsampled
+    /// copy were stored under the same key, the user would silently save a 1024px version of
+    /// their photo — a data-loss bug wearing the costume of a memory fix.
+    ///
+    /// That warning was written here and the bug happened anyway, three call sites over: what the
+    /// comment could not do was stop `store(_:for:at:)` from reading like "cache this". Hence the
+    /// rename to `storeOriginal`, and a third compartment for previews that are neither.
+    private let displayCache = NSCache<NSString, PlatformImage>()
+
+    func storeDisplay(_ image: PlatformImage, for messageId: String, at index: Int = 0) {
+        displayCache.setObject(
+            image, forKey: Self.key(messageId, index), cost: Self.decodedBytes(image)
+        )
+    }
+
+    func displayImage(for messageId: String, at index: Int = 0) -> PlatformImage? {
+        displayCache.object(forKey: Self.key(messageId, index))
+    }
+
+    // MARK: - Posters
+
+    /// Small previews that are not the media: a reply-bar thumbnail, a video's first frame, the
+    /// transmitted thumbnail painted while the real thing downloads.
+    ///
+    /// Third compartment rather than reusing `display`, because `display` is keyed the same and
+    /// holds the bubble's ~1024px decode — a 120px reply preview written there would replace it
+    /// and the bubble would paint the small one.
+    private let posterCache: NSCache<NSString, PlatformImage> = {
+        let cache = NSCache<NSString, PlatformImage>()
+        cache.totalCostLimit = 8 * 1024 * 1024
+        cache.countLimit = 120
+        cache.name = "MediaImageCache.poster"
+        return cache
+    }()
+
+    func storePoster(_ image: PlatformImage, for messageId: String, at index: Int = 0) {
+        posterCache.setObject(
+            image, forKey: Self.key(messageId, index), cost: Self.decodedBytes(image)
+        )
+    }
+
+    func poster(for messageId: String, at index: Int = 0) -> PlatformImage? {
+        posterCache.object(forKey: Self.key(messageId, index))
+    }
+
+    /// A real decode of the media — the bubble's copy, or the original.
+    ///
+    /// Separate from `paintable` because the two answer different questions. This one answers
+    /// "is the media loaded", which is what a loader may return early on. `paintable` may answer
+    /// with a poster, and a poster means "there is something to show", never "we are done": a
+    /// loader that treats a 320px preview as loaded leaves a failed download permanently stuck at
+    /// thumbnail quality, with no error and no retry.
+    func resolvedCopy(for messageId: String, at index: Int = 0) -> PlatformImage? {
+        displayImage(for: messageId, at: index) ?? original(for: messageId, at: index)
+    }
+
+    /// Anything paintable for this key, best first. For drawing only — never for save or share,
+    /// and never as evidence that loading has finished (see `resolvedCopy`).
+    func paintable(for messageId: String, at index: Int = 0) -> PlatformImage? {
+        resolvedCopy(for: messageId, at: index) ?? poster(for: messageId, at: index)
+    }
+
+    // Legacy single-image accessors kept for callers that don't need index
+    func storePoster(_ image: PlatformImage, for messageId: String) {
+        storePoster(image, for: messageId, at: 0)
+    }
+    func paintable(for messageId: String) -> PlatformImage? { paintable(for: messageId, at: 0) }
 }
 
 @Observable
@@ -281,7 +405,7 @@ struct MediaGalleryViewer: View {
     private func saveCurrentImage() {
         guard let entry = entries.first(where: { $0.id == currentEntryId }),
               !Self.isVideoEntry(entry),
-              let img = MediaImageCache.shared.image(for: entry.message.id, at: entry.itemIndex) else { return }
+              let img = MediaImageCache.shared.original(for: entry.message.id, at: entry.itemIndex) else { return }
         saveStatus = .saving
 
         #if os(iOS)
@@ -326,7 +450,7 @@ struct MediaGalleryViewer: View {
     private func shareCurrentImage() {
         guard let entry = entries.first(where: { $0.id == currentEntryId }),
               !Self.isVideoEntry(entry),
-              let img = MediaImageCache.shared.image(for: entry.message.id, at: entry.itemIndex) else { return }
+              let img = MediaImageCache.shared.original(for: entry.message.id, at: entry.itemIndex) else { return }
 
 #if canImport(UIKit)
         // iPad requires popover sourceView — see ActivityShare / Diagnostics share-logs crash.
@@ -451,25 +575,26 @@ struct MediaGalleryPage: View {
         guard !message.isDeleted, message.managedObjectContext != nil else { return }
 
         // Already cached
-        if let cached = MediaImageCache.shared.image(for: message.id, at: itemIndex) {
+        if let cached = MediaImageCache.shared.original(for: message.id, at: itemIndex) {
             image = cached
             return
         }
 
         isLoading = true
 
-        // Sent by me — full-res stored locally
-        if message.isSentByMe {
-            if let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
-               let img = PlatformImage(data: data) {
-                MediaImageCache.shared.store(img, for: message.id, at: itemIndex)
-                image = img
-            }
-            isLoading = false
-            return
-        }
+        // Own sends used to take a shortcut here: read the stored thumbnail and call it done, under
+        // a comment claiming "full-res stored locally". It is not — `ThumbnailStore` holds a 320px
+        // JPEG capped at 12 KB. So opening your own photo full-screen showed an upscaled thumbnail,
+        // and because it was written into the `original` compartment, "save to Photos" and "share"
+        // wrote out that 320px copy. Silent data loss on the user's own picture.
+        //
+        // The full plaintext is already on disk — `MediaManager.cacheSentMedia` put it there at
+        // send time (uploadImage / uploadOriginalImage / uploadVideo), keyed by mediaId, and
+        // `downloadAndDecryptMedia` checks memory then disk before the network. So the own-send
+        // case needs no special path at all: the shared path below is a local cache hit.
 
-        // Received — download using mediaItem dict (already extracted from JSON by caller)
+        // Download using mediaItem dict (already extracted from JSON by caller); for our own sends
+        // this resolves from cache without touching the network.
         let item = mediaItem.isEmpty
             ? (parseMediaContent(from: message.displayText)?.mediaItems.indices.contains(itemIndex) == true
                ? parseMediaContent(from: message.displayText)!.mediaItems[itemIndex]
@@ -490,7 +615,7 @@ struct MediaGalleryPage: View {
                     mediaId: mediaId, mediaUrl: mediaUrl, mediaKey: mediaKey)
                 if let img = PlatformImage(data: data) {
                     await MainActor.run {
-                        MediaImageCache.shared.store(img, for: message.id, at: itemIndex)
+                        MediaImageCache.shared.storeOriginal(img, for: message.id, at: itemIndex)
                         image = img
                         isLoading = false
                     }
@@ -662,14 +787,14 @@ struct GalleryVideoPage: View {
     /// No-op if a poster already exists (e.g. the sender's own upload).
     static func cacheFirstFramePoster(from url: URL, messageId: String, itemIndex: Int) async {
         let hasPoster = await MainActor.run {
-            MediaImageCache.shared.image(for: messageId, at: itemIndex) != nil
+            MediaImageCache.shared.poster(for: messageId, at: itemIndex) != nil
                 || MediaManager.shared.retrieveThumbnail(for: messageId, at: itemIndex) != nil
         }
         if hasPoster { return }
         guard let posterData = try? await MediaOptimizer.generateVideoThumbnail(from: url),
               let poster = PlatformImage(data: posterData) else { return }
         await MainActor.run {
-            MediaImageCache.shared.store(poster, for: messageId, at: itemIndex)
+            MediaImageCache.shared.storePoster(poster, for: messageId, at: itemIndex)
             MediaManager.shared.storeThumbnail(posterData, for: messageId, at: itemIndex)
         }
     }

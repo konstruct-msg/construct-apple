@@ -140,12 +140,33 @@ enum TransportReducer {
             guard foreground, !via.isVEIL, kind.isTransportFailure else {
                 return (.direct(consecutiveFails: fails), [])
             }
-            let newFails = fails + 1
-            if config.allowDirectToVeilEscalation,
-               newFails >= config.directFailThreshold {
-                return (.veilProbing, [.requestProxyStart, .invalidateGRPCClient])
+            return countDirectTransportFailure(fails: fails, config: config)
+
+        // Data plane (MessageStream). QUIC failures must reach the router — they are
+        // not "experimental noise". See transport-connection-health-and-escalation.md.
+        case .streamOpened(_, let via):
+            // Successful stream open clears the consecutive-fail streak only when the
+            // open is on the direct path (veil opens are handled under .veilActive).
+            guard !via.isVEIL else { return (.direct(consecutiveFails: fails), []) }
+            return (.direct(consecutiveFails: 0), [])
+
+        case .streamHealthy:
+            // Skeleton: no FSM transition yet; UI/heartbeat SLO is ConnectionStatus follow-up.
+            return (.direct(consecutiveFails: fails), [])
+
+        case .streamFailed(_, let kind, let via):
+            guard !via.isVEIL else {
+                return (.direct(consecutiveFails: fails), [])
             }
-            return (.direct(consecutiveFails: newFails), [])
+            // A stream that established and then died is evidence a successful open cannot
+            // refute — see TransportConfig.midSessionDeathWeight.
+            let weight = kind.wasMidSession ? config.midSessionDeathWeight : 1
+            return countDirectTransportFailure(fails: fails, config: config, weight: weight)
+
+        case .streamSuppressed:
+            // Skeleton: method suppression is recorded by callers (Fast-UDP); router
+            // acknowledges without changing path family until streamFailed/rpcFailed.
+            return (.direct(consecutiveFails: fails), [])
 
         case .proxyStarted:
             // We are deliberately on the direct path — every transition INTO .direct
@@ -162,6 +183,20 @@ enum TransportReducer {
         default:
             return (.direct(consecutiveFails: fails), [])
         }
+    }
+
+    /// Shared counter for short-RPC and long-lived stream failures on direct.
+    private static func countDirectTransportFailure(
+        fails: Int,
+        config: TransportConfig,
+        weight: Int = 1
+    ) -> Outcome {
+        let newFails = fails + max(1, weight)
+        if config.allowDirectToVeilEscalation,
+           newFails >= config.directFailThreshold {
+            return (.veilProbing, [.requestProxyStart, .invalidateGRPCClient])
+        }
+        return (.direct(consecutiveFails: newFails), [])
     }
 
     private static func reduceProbing(event: TransportEvent, config: TransportConfig, now: Date) -> Outcome {
@@ -202,6 +237,18 @@ enum TransportReducer {
             // the Rust proxy is expensive (8-13s of downtime, kills working tunnel state)
             // and pointless when there's only one usable relay anyway. Just invalidate the
             // gRPC client; the next RPC reconnects through the same proxy port.
+            return (.veilActive(relay: relay, port: port, since: since), [.invalidateGRPCClient])
+
+        case .streamOpened, .streamHealthy, .streamSuppressed:
+            return (.veilActive(relay: relay, port: port, since: since), [])
+
+        case .streamFailed(_, _, let via):
+            // Data-plane death under VEIL: soft-invalidate gRPC (same as soft rpcFailed).
+            // Hard rotate only when short-RPC hard kinds fire; stream alone does not
+            // prove the relay is DPI-burned.
+            guard via.isVEIL else {
+                return (.veilActive(relay: relay, port: port, since: since), [])
+            }
             return (.veilActive(relay: relay, port: port, since: since), [.invalidateGRPCClient])
 
         default:
@@ -253,6 +300,14 @@ extension TransportEvent {
             return "rpc-ok(via=\(via.isVEIL ? "veil" : "direct"), \(ms)ms)"
         case .rpcFailed(let kind, let via, let fg):
             return "rpc-fail(kind=\(kind), via=\(via.isVEIL ? "veil" : "direct"), fg=\(fg))"
+        case .streamOpened(let method, let via):
+            return "stream-open(method=\(method.shortLabel), via=\(via.isVEIL ? "veil" : "direct"))"
+        case .streamHealthy(let method, let age):
+            return "stream-healthy(method=\(method.shortLabel), age=\(age)ms)"
+        case .streamFailed(let method, let kind, let via):
+            return "stream-fail(method=\(method.shortLabel), kind=\(kind), via=\(via.isVEIL ? "veil" : "direct"))"
+        case .streamSuppressed(let method, let ttl):
+            return "stream-suppress(method=\(method.shortLabel), ttl=\(ttl)s)"
         case .networkPathChanged(let r, let c, let m):
             return "network-path(reachable=\(r), censored=\(c), mode=\(m.rawValue))"
         case .veilModeChanged(let m, let c):
@@ -267,6 +322,16 @@ extension TransportEvent {
             return "cooldown-elapsed"
         case .manualReset:
             return "manual-reset"
+        }
+    }
+}
+
+extension StreamMethod {
+    var shortLabel: String {
+        switch self {
+        case .quic: return "quic"
+        case .h2: return "h2"
+        case .veil: return "veil"
         }
     }
 }

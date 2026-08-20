@@ -3,8 +3,11 @@
 "ok" = "OK";
 "cancel" = "Отмена";
 "done" = "Готово";
+"edit" = "Изменить";
+"editor_rotate" = "Повернуть";
+"editor_mirror" = "Отразить";
 "unknown" = "Неизвестно";
-"construct_titlte" = "КОНСТРУКТ";
+"construct_title" = "КОНСТРУКТ";
 
 // MARK: - Loading Screen
 "app_loading_state" = "Инициализация защищённого состояния";
@@ -75,7 +78,7 @@
 "camera_access_required" = "Требуется доступ к камере";
 "open_settings" = "Открыть настройки";
 "allow_camera_access_for_qr" = "Разрешите доступ к камере в настройках, чтобы сканировать QR-коды";
-"invalid_qr_code_construct" = "Неверный QR-код. Пожалуйста, отсканируйте контактный код Konstruct.";
+"invalid_qr_code_construct" = "Неверный QR-код. Пожалуйста, отсканируйте контактный код Конструкта.";
 
 // MARK: - Settings Main
 "user" = "Пользователь";
@@ -185,7 +188,7 @@
 "denied" = "Запрещено";
 
 // MARK: - Background Fetch & Local Notifications
-"construct_app_name" = "Construct";
+"construct_app_name" = "Конструкт";
 "construct_new_message" = "Новое сообщение";
 "construct_new_messages" = "Новые сообщения";
 "construct_new_messages_count" = "У вас %d новое(ых) сообщение(ий)";
@@ -245,7 +248,6 @@
 "delete_selected" = "Удалить выбранное";
 "message_selected" = "сообщение выбрано";
 "messages_selected" = "сообщений выбрано";
-"load_older_messages" = "Загрузить более старые сообщения";
 "reachable" = "Доступно";
 "unreachable" = "Недоступно";
 "delete_my_account" = "Удалить идентичность";
@@ -289,9 +291,9 @@
 "onboarding_existing_title" = "Существующая идентичность";
 "onboarding_existing_intro" = "Выберите, как перенести её на это устройство.";
 "onboarding_restore_title" = "Восстановить по фразе";
-"onboarding_restore_subtitle" = "Нет другого устройства с Konstruct. Используйте вашу фразу из 12 слов.";
+"onboarding_restore_subtitle" = "Нет другого устройства с Конструктом. Используйте вашу фразу из 12 слов.";
 "onboarding_link_title" = "Привязать это устройство";
-"onboarding_link_subtitle" = "Konstruct ещё есть на другом телефоне или компьютере.";
+"onboarding_link_subtitle" = "Конструкт ещё есть на другом телефоне или компьютере.";
 "onboarding_restore" = "Восстановить из ключа восстановления";
 "onboarding_recovery_coming_soon" = "Восстановление скоро будет доступно";
 "onboarding_network_settings" = "Настройки сети";
@@ -312,7 +314,7 @@
 "orientation_page2_body" = "Чтобы добавить собеседника, покажите QR-код или поделитесь ссылкой. Поиск по @псевдониму работает только если он включён в настройках безопасности.";
 "orientation_page2_caption" = "Никто не напишет вам без вашего согласия.";
 "orientation_page2_path_qr_title" = "QR / ссылка";
-"orientation_page2_path_qr_sub" = "Показать или сканировать. Действует 5 минут.";
+"orientation_page2_path_qr_sub" = "Показать или сканировать. Каждый код срабатывает один раз.";
 "orientation_page2_path_search_title" = "Поиск";
 "orientation_page2_path_search_sub" = "Только если включили в настройсках безопасности.";
 "orientation_page3_title" = "Три места";
@@ -363,14 +365,14 @@
 
 // Invite / contact links
 "invite_error_invalid_url" = "Указан некорректный URL.";
-"invite_error_unsupported_link" = "Это не поддерживаемая ссылка-приглашение Construct.";
+"invite_error_unsupported_link" = "Это не поддерживаемая ссылка-приглашение Конструкта.";
 "invite_error_expired" = "Срок действия приглашения истёк. Попросите новое.";
 "invite_error_invalid_fmt" = "Недействительное приглашение: %@";
 "invite_error_already_used" = "Это приглашение уже использовано. Попросите новое.";
 "invite_error_verification_failed_fmt" = "Не удалось проверить приглашение: %@";
 "invite_error_legacy_unsupported" = "Этот формат ссылки больше не поддерживается. Попросите свежий QR или ссылку.";
 "invite_error_malformed" = "Повреждённые данные приглашения";
-"invite_redeem_safety_message_fmt" = "Вы соединились с %@. Не тот человек?";
+"invite_redeem_safety_message" = "Контакт добавлен по приглашению. Имя появится, когда собеседник им поделится.";
 "invite_redeem_safety_block" = "Блок";
 "invite_accepted_inviter_message" = "Кто-то подключился по вашему приглашению.";
 
@@ -503,7 +505,7 @@
 
 // Защита от блокировок (продуктовый soft-control — без VEIL / адресов релеев)
 "censorship_protection" = "Защита от блокировок";
-"censorship_protection_footer_off" = "Выкл. Подключение напрямую к Construct.";
+"censorship_protection_footer_off" = "Выкл. Подключение напрямую к Конструкту.";
 "censorship_protection_footer_auto" = "Включается автоматически при обнаружении блокировки. Настройка идёт в фоне.";
 "censorship_protection_footer_on" = "Всегда обходит сетевые блокировки. Настройка идёт в фоне.";
 
@@ -534,6 +536,11 @@
 "storage_limit_footer" = "Старые файлы удаляются автоматически, когда кэш превышает этот предел.";
 "storage_no_limit" = "Без лимита";
 "storage_no_limit_footer" = "Медиафайлы хранятся до ручной очистки или пока iOS не освободит место.";
+"media_autodownload" = "Автозагрузка медиа";
+"media_autodownload_never" = "Никогда";
+"media_autodownload_unmetered" = "Только Wi-Fi";
+"media_autodownload_always" = "Всегда";
+"media_autodownload_footer" = "Вложения загружаются по мере поступления сообщений. Сервер хранит файлы 7 дней, поэтому медиа в чате, который не открывали неделю, скачать уже не получится.";
 "storage_auto_clear" = "Хранить медиа";
 "storage_auto_clear_footer" = "Медиафайлы старше выбранного периода удаляются при каждом запуске приложения.";
 "storage_keep_forever" = "Всегда";
@@ -607,7 +614,6 @@
 
 // MARK: - QR Code
 "code_expired" = "Код устарел";
-"generate_new_code" = "Создать новый код";
 "expires_in" = "Истекает через %@";
 
 // MARK: - Settings & Diagnostics
@@ -621,10 +627,10 @@
 "diagnostics_apns_token" = "APNs-токен";
 "diagnostics_apns_token_missing" = "отсутствует";
 "diagnostics_apns_token_received_format" = "получен (%@…)";
-"diagnostics_registered_with_server" = "Зарегистрирован в Construct";
+"diagnostics_registered_with_server" = "Зарегистрирован в Конструкте";
 "diagnostics_yes" = "да";
 "diagnostics_not_registered_with_server" = "нет — уведомления не будут приходить";
-"diagnostics_server_token_warning" = "Токен не зарегистрирован в Construct. Вернитесь в чаты — повторная регистрация выполнится автоматически при возврате приложения на передний план.";
+"diagnostics_server_token_warning" = "Токен не зарегистрирован в Конструкте. Вернитесь в чаты — повторная регистрация выполнится автоматически при возврате приложения на передний план.";
 "diagnostics_log_collection" = "Сбор логов";
 "diagnostics_status_active" = "Активен";
 "diagnostics_status_off" = "Выкл";
@@ -634,6 +640,9 @@
 "diagnostics_stealth_override_title" = "Скрытый отправитель (debug-переопределение)";
 "diagnostics_stealth_override_hint" = "В Release всегда включён. Отключите здесь, чтобы проверить устаревший путь отправки с раскрытием отправителя во время разработки.";
 "diagnostics_force_spk_rotation" = "Принудительно обновить SPK";
+"diagnostics_force_silent_reinit" = "Тихая переинициализация (без уведомления)";
+"diagnostics_replace_otpk_pool" = "Заменить пул OTPK (разовое восстановление)";
+"diagnostics_silent_reinit_footer" = "Пересоздаёт нашу сессию как INITIATOR, не отправляя END_SESSION, — у собеседника остаётся старая. Следующее сообщение придёт к нему X3DH-носителем на живую сессию. После этого отправь ДВА сообщения: второе и доказывает, что PQ-вклад примешан симметрично.";
 "diagnostics_reset_local_data_keychain" = "Сбросить локальные данные и Keychain";
 "diagnostics_dev_tools_footer" = "Удаляет все ключи из Keychain, сессии и UserDefaults. Используйте для теста чистой инициализации без переустановки.";
 "diagnostics_recent_logs" = "Последние логи";
@@ -646,7 +655,7 @@
 "onboarding_link_device" = "Привязать существующую идентичность";
 "device_link_scan_title" = "Сканировать для привязки";
 "link_method_title" = "Привязать устройство";
-"link_method_intro" = "Добавьте это устройство к вашей существующей идентичности Konstruct. Выберите способ по тому, какой камерой удобнее навести.";
+"link_method_intro" = "Добавьте это устройство к вашей существующей идентичности в Конструкте. Выберите способ по тому, какой камерой удобнее навести.";
 "link_method_scan_title" = "Сканировать код";
 "link_method_scan_subtitle" = "Другое устройство показывает QR-код";
 "link_method_show_title" = "Показать код";
@@ -671,12 +680,12 @@
 // MARK: - Device Join Request (Desktop onboarding)
 "device_link_request_title" = "Привязать к существующей идентичности";
 "device_link_request_instruction" = "Отсканируйте с iPhone";
-"device_link_request_steps" = "Откройте Construct на iPhone → Настройки → Устройства → нажмите «Привязать новое устройство» — или просто отсканируйте этот код, если Construct уже открыт.";
+"device_link_request_steps" = "Откройте Конструкт на iPhone → Настройки → Устройства → нажмите «Привязать новое устройство» — или просто отсканируйте этот код, если Конструкт уже открыт.";
 "device_link_waiting_approval" = "Ожидание подтверждения на iPhone…";
-"device_link_scan_on_phone" = "Отсканируйте этот код через Construct на iPhone";
+"device_link_scan_on_phone" = "Отсканируйте этот код через Конструкт на iPhone";
 "device_link_request_timeout" = "Время ожидания истекло — попробуйте снова";
 "device_link_feature_unavailable" = "Функция требует обновления сервера. Попробуйте позже.";
-"device_link_invalid_qr" = "Неверный QR-код — убедитесь, что сканируете код Construct.";
+"device_link_invalid_qr" = "Неверный QR-код — убедитесь, что сканируете код Конструкта.";
 "device_link_approve_title" = "Привязать «%@» к вашей идентичности?";
 "device_link_approve_title_fallback" = "Привязать новое устройство к вашей идентичности?";
 "device_link_approve" = "Привязать устройство";
@@ -812,9 +821,6 @@
 "device_link_scan_hint" = "отсканируй с другой реплики для связи";
 
 // MARK: - Settings rows
-"show_qr_code" = "Показать QR-код";
-"copy_contact_link" = "Скопировать ссылку";
-"link_copied" = "Ссылка скопирована";
 "recovery_not_configured_title" = "Резервный ключ не настроен";
 "developer" = "Разработчик";
 "share" = "Поделиться";
@@ -866,7 +872,7 @@
 "username_not_set" = "username не задан";
 "searchable_indicator" = "в поиске";
 "searchable_indicator_off" = "не в поиске";
-"synapses_remote_result_header" = "найдено в construct";
+"synapses_remote_result_header" = "найдено в Конструкте";
 "synapses_searching" = "поиск...";
 "synapses_not_found" = "не найдено";
 
@@ -898,14 +904,11 @@
 
 // Stealth mode
 "stealth_section" = "стелс";
-"stealth_toggle_title" = "режим стелс";
-"stealth_toggle_active_hint" = "всегда активен — личность отправителя скрыта от construct";
-"stealth_hint" = "личность отправителя не раскрывается construct. сообщения проходят через анонимные токены — construct не может связать исходящий трафик с вашей личностью.";
+"stealth_title" = "анонимность отправителя";
+"stealth_always_on_hint" = "Конструкт никогда не узнаёт, кто отправил сообщение. Работает всегда — выключателя нет, и пополнять ничего не нужно.";
+"stealth_off_hint" = "Выключено — ваши отправки раскрывают Конструкту, кто вы. Только для отладки.";
 
 // Короткие метки для CTModeSelector (переключатель режимов) в настройках stealth.
-"stealth_token_wallet" = "кошелёк токенов";
-"stealth_token_count" = "%d токенов";
-"stealth_token_wallet_hint" = "каждое сообщение несёт анонимный privacy pass токен; кошелёк пополняется сам по мере отправки (первая пачка создаётся при регистрации). пустой кошелёк не раскрывает вас — токены лишь защищают construct от спама.";
 
 // Key Transparency
 "kt_section" = "прозрачность ключей";
@@ -1007,7 +1010,7 @@
 "backup_restore_success_message" = "Резервная копия проверена и подготовлена. Закройте и откройте приложение снова, чтобы завершить восстановление.";
 
 "backup_error_invalid_mnemonic" = "Неверная фраза восстановления. Проверьте все 12 слов и попробуйте снова.";
-"backup_error_invalid_file" = "Это не корректная резервная копия Construct, или фраза восстановления неверна.";
+"backup_error_invalid_file" = "Это не корректная резервная копия Конструкта, или фраза восстановления неверна.";
 
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "отправить на соседнее устройство";
@@ -1121,3 +1124,40 @@
 "net_status_protected" = "Защищено";
 "net_status_connecting" = "Подключение…";
 "file" = "Файл";
+
+/* Chat system bubble: the encrypted session broke and incoming messages cannot be read. */
+"system_session_out_of_sync" = "Зашифрованная сессия с этим собеседником рассинхронизирована — новые сообщения не читаются, пока она не будет установлена заново.";
+
+/* Delivery status of an outgoing message. VoiceOver-only: the bubble shows a bare
+   icon, so without these the delivery state is inaudible. */
+"msg_status_sending" = "Отправляется";
+"msg_status_sent" = "Отправлено";
+"msg_status_delivered" = "Доставлено";
+"msg_status_queued" = "В очереди, получатель офлайн";
+"msg_status_failed" = "Не отправлено";
+
+/* Multi-invite (one one-time link per person) */
+"invite_create_failed" = "Не удалось создать приглашение. Попробуйте ещё раз.";
+"share_copied" = "Скопировано";
+"qr_new_code" = "Новый код";
+"invite_copy_link" = "Скопировать ссылку";
+"invite_copied_nth_fmt" = "Скопировано · %d";
+"invite_share_rule_fmt" = "Каждое нажатие создаёт новую ссылку, код обновляется сам. Любое приглашение срабатывает один раз и живёт %@.";
+"issued_invites" = "Выданные приглашения";
+"issued_invites_hint_fmt" = "Выдано с этого устройства за последние %@. На другом устройстве список свой.";
+"issued_invites_empty_fmt" = "С этого устройства за последние %@ ничего не выдано.";
+"issued_invite_link" = "Ссылка";
+"issued_invite_qr_fmt" = "QR-код · %d";
+"issued_invite_expires_fmt" = "ещё %@";
+"revoke" = "Отозвать";
+"invite_revoked" = "Отозвано. Ссылка больше не работает.";
+"invite_already_used" = "Уже использовано — по этой ссылке кто-то перешёл.";
+"invite_revoke_unconfirmed" = "Не удалось подтвердить. Ссылка может быть ещё активна, попробуйте снова.";
+"invite_revoke_confirm_title" = "Отозвать эту ссылку?";
+"invite_revoke_confirm_message" = "У того, кому вы её дали, она перестанет работать без предупреждения. Новую можно скопировать в любой момент.";
+"issued_invites_revoke_scope" = "Отозвать можно ссылку. Код QR перестанет работать сам — по истечении срока.";
+
+"scroll_to_newest" = "К последнему сообщению";
+
+"diagnostics_owned_inset_title" = "Своя вставка в ленте";
+"diagnostics_owned_inset_hint" = "Контейнер прокрутки на UIKit. Применится к следующему открытому чату.";

@@ -1,7 +1,22 @@
 import XCTest
+import GRPCCore   // RPCError — the input `mapStreamFailureKind` classifies
 @testable import Construct_Messenger
 
 final class ConnectionLoopTests: XCTestCase {
+
+    /// Polls until the router settles in `.veilActive`. Needed because `requestProxyStart`
+    /// is applied as an async follow-up off the router actor, so `send` returns before the
+    /// proxy has reported back. Returns false on timeout so the caller can fail loudly
+    /// instead of asserting against a half-applied transition.
+    private func waitForVeilActive(_ router: TransportRouter, timeout: TimeInterval = 2) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if case .veilActive = await router.snapshot().state { return true }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return false
+    }
+
     override func setUp() {
         super.setUp()
         VeilProxyStore.saveMode(.auto)
@@ -179,6 +194,14 @@ final class ConnectionLoopTests: XCTestCase {
 
         await router.send(.rpcFailed(kind: .transportUnknown, via: .direct(.h2), foreground: true))
         await router.send(.rpcFailed(kind: .transportUnknown, via: .direct(.h2), foreground: true))
+
+        // Proxy start is an async follow-up off the router actor (6e86300a — the FSM must
+        // stay responsive during a probe), so `send` returns while the state is still
+        // .veilProbing. De-escalation is guarded on .veilActive, so the success has to
+        // arrive after proxyStarted lands — which is also the real ordering on device.
+        let reachedActive = await waitForVeilActive(router)
+        XCTAssertTrue(reachedActive, "Router never reached .veilActive — proxy start did not land")
+
         await router.send(.rpcSucceeded(via: .direct(.h2), latencyMs: 50))
 
         let snapshot = await router.snapshot()
@@ -207,6 +230,161 @@ final class ConnectionLoopTests: XCTestCase {
         let proxyStartCalls = await proxy.startCalls()
         XCTAssertEqual(snapshot.state, .direct(consecutiveFails: 1))
         XCTAssertEqual(proxyStartCalls, 0)
+    }
+
+    // MARK: - Stream (data plane) events — transport-connection-health-and-escalation
+
+    /// QUIC failures must count like a direct transport failure (router must not stay blind —
+    /// regression for "not reported to router — experimental H3/QUIC"). An **open** failure is one
+    /// tick, as it always was: a failed open is refuted by the next successful open.
+    ///
+    /// Amended 2026-08-11: this used to assert the same for `.midSessionTimeout`, which is now
+    /// worth the whole threshold — see `MidSessionDeathEscalationTests` and
+    /// `TransportConfig.midSessionDeathWeight`. The original point of the test (QUIC reaches the
+    /// router at all) is preserved by moving it to the open-failure kind.
+    func testTransportReducer_StreamFailedQuic_CountsTowardDirectFails() {
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 0),
+            event: .streamFailed(
+                method: .quic,
+                kind: .openTimeout,
+                via: .direct(.h3)
+            ),
+            config: .default,
+            now: Date()
+        )
+        XCTAssertEqual(outcome.state, .direct(consecutiveFails: 1))
+        XCTAssertFalse(outcome.effects.contains(.requestProxyStart))
+    }
+
+    /// A QUIC stream that established and then died escalates on its own — one is enough.
+    ///
+    /// 2026-08-11: on a network that lets connections open (50-120ms) and unary RPCs succeed
+    /// (229ms) while killing every established stream ~10s in, one tick never reached a threshold
+    /// of two — `.streamOpened` and `.rpcSucceeded` both reset the counter, and this network keeps
+    /// granting both. The device stayed on direct indefinitely and never escalated.
+    func testTransportReducer_StreamDiedMidSession_EscalatesOnTheFirstOne() {
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 0),
+            event: .streamFailed(method: .quic, kind: .midSessionTimeout, via: .direct(.h3)),
+            config: .default,
+            now: Date()
+        )
+        XCTAssertEqual(outcome.state, .veilProbing)
+        XCTAssertTrue(outcome.effects.contains(.requestProxyStart))
+    }
+
+    /// Two stream **open** failures on direct escalate to VEIL when allowed (same threshold as
+    /// rpcFailed). Amended 2026-08-11: the first event was `.midSessionTimeout`, which now
+    /// escalates on its own; the two-tick path this test exists for is the open-failure one.
+    func testTransportReducer_StreamFailedTwice_EscalatesToVeilProbing() {
+        let first = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 0),
+            event: .streamFailed(method: .quic, kind: .openTimeout, via: .direct(.h3)),
+            config: .default,
+            now: Date()
+        )
+        XCTAssertEqual(first.state, .direct(consecutiveFails: 1))
+
+        let second = TransportReducer.reduce(
+            state: first.state,
+            event: .streamFailed(method: .h2, kind: .openTimeout, via: .direct(.h2)),
+            config: .default,
+            now: Date()
+        )
+        XCTAssertEqual(second.state, .veilProbing)
+        XCTAssertTrue(second.effects.contains(.requestProxyStart))
+    }
+
+    /// mode=off must not escalate on stream failures either.
+    func testTransportReducer_StreamFailed_DoesNotEscalateWhenVEILFallbackDisabled() {
+        let config = TransportConfig(
+            directFailThreshold: 2,
+            allowDirectToVeilEscalation: false,
+            veilCooldownDuration: 30
+        )
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 1),
+            event: .streamFailed(method: .h2, kind: .openTimeout, via: .direct(.h2)),
+            config: config,
+            now: Date()
+        )
+        XCTAssertEqual(outcome.state, .direct(consecutiveFails: 2))
+        XCTAssertFalse(outcome.effects.contains(.requestProxyStart))
+    }
+
+    /// Successful stream open clears the fail streak (data plane recovered).
+    func testTransportReducer_StreamOpened_ResetsDirectFails() {
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 2),
+            event: .streamOpened(method: .quic, via: .direct(.h3)),
+            config: .default,
+            now: Date()
+        )
+        XCTAssertEqual(outcome.state, .direct(consecutiveFails: 0))
+    }
+
+    /// Auto + censored still starts direct; stream failure is what escalates (not geography).
+    func testTransportReducer_AutoCensored_StreamFailsEscalateNotGeography() {
+        let initial = TransportState.initial(mode: .auto, censored: true, reachable: true)
+        XCTAssertEqual(initial, .direct(consecutiveFails: 0))
+
+        var state = initial
+        for _ in 0..<2 {
+            let o = TransportReducer.reduce(
+                state: state,
+                event: .streamFailed(method: .quic, kind: .midSessionTimeout, via: .direct(.h3)),
+                config: .default,
+                now: Date()
+            )
+            state = o.state
+        }
+        XCTAssertEqual(state, .veilProbing)
+    }
+
+    func testTransportEvent_StreamLabels_AreStable() {
+        let fail = TransportEvent.streamFailed(
+            method: .quic,
+            kind: .midSessionTimeout,
+            via: .direct(.h3)
+        )
+        XCTAssertTrue(fail.shortLabel.contains("stream-fail"))
+        XCTAssertTrue(fail.shortLabel.contains("quic"))
+
+        let sup = TransportEvent.streamSuppressed(method: .quic, ttlSeconds: 300)
+        XCTAssertTrue(sup.shortLabel.contains("stream-suppress"))
+        XCTAssertTrue(sup.shortLabel.contains("300"))
+    }
+
+    // `mapStreamFailureKind` is a pure classifier but lives on the @MainActor
+    // `MessageStreamManager`, so the test has to be isolated to reach it synchronously.
+    @MainActor
+    func testMapStreamFailureKind_TimeoutAndWrite() {
+        XCTAssertEqual(
+            MessageStreamManager.mapStreamFailureKind(
+                rpcKind: .streamTimeout,
+                error: nil,
+                wasConnected: false
+            ),
+            .openTimeout
+        )
+        XCTAssertEqual(
+            MessageStreamManager.mapStreamFailureKind(
+                rpcKind: .streamTimeout,
+                error: nil,
+                wasConnected: true
+            ),
+            .midSessionTimeout
+        )
+        let writeErr = RPCError(code: .unavailable, message: "Write failed.")
+        XCTAssertEqual(
+            MessageStreamManager.mapStreamFailureKind(
+                rpcKind: .transportUnknown,
+                error: writeErr,
+                wasConnected: true
+            ),
+            .writeFailed
+        )
     }
 }
 

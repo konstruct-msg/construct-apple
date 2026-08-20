@@ -225,10 +225,15 @@ class CryptoManager {
 
     /// Save session to Keychain after state change.
     /// Includes verify-after-write: reads back the blob to confirm integrity.
-    func saveSessionToKeychain(for userId: String) {
+    /// Persists the DR session (sending/receiving chains) for `userId`, with verify-after-write.
+    /// Returns `true` iff the session was durably written and verified. The sender encrypt path
+    /// (`MessageCryptoService.encryptMessage`) gates the release of a ciphertext on this so an
+    /// un-persisted sending-chain advance never reaches the peer (message-number-reuse desync).
+    @discardableResult
+    func saveSessionToKeychain(for userId: String) -> Bool {
         coreLock.lock()
         defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { return }
+        guard let core = orchestratorCore else { return false }
         do {
             let sessionData = Data(try core.exportSession(contactId: userId))
             var saved = false
@@ -242,15 +247,15 @@ class CryptoManager {
                 if let readBack = KeychainManager.shared.loadSessionData(for: userId),
                    readBack.count == sessionData.count {
                     Log.debug("Session saved+verified (\(sessionData.count)B): \(userId)", category: "CryptoManager")
-                    return
+                    return true
                 }
                 Log.error("Session verify-after-write mismatch (attempt \(attempt)/3): \(userId)", category: "CryptoManager")
             }
-            if !saved {
-                Log.error("Failed to save session to Keychain after 3 attempts: \(userId)", category: "CryptoManager")
-            }
+            Log.error("Failed to save session to Keychain after 3 attempts: \(userId)", category: "CryptoManager")
+            return false
         } catch {
             Log.error("Session export failed: \(error)", category: "CryptoManager")
+            return false
         }
     }
 
@@ -332,10 +337,15 @@ class CryptoManager {
     /// Save the full orchestrator coordination state (ACK cache, healing queue,
     /// init locks, archive index) to Keychain as a CFE blob.
     /// Call after any significant state change in the orchestrator.
-    func saveOrchestratorStateCFE() {
+    /// Persists the orchestrator coordination state to the Keychain.
+    /// Returns `true` iff the state was durably written. Callers on the send path
+    /// (`OutboundSessionService.executeStorageActions` → `encryptOutgoing`) gate the release of a
+    /// ciphertext on this: a failed save must not let an un-persisted ratchet advance reach the peer.
+    @discardableResult
+    func saveOrchestratorStateCFE() -> Bool {
         coreLock.lock()
         defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { return }
+        guard let core = orchestratorCore else { return false }
         do {
             let blob = try core.exportOrchestratorState()
             // AfterFirstUnlock (not WhenUnlocked): the Double Ratchet state advances during
@@ -351,8 +361,10 @@ class CryptoManager {
             } else {
                 Log.error("Orchestrator state CFE save failed (Keychain write error)", category: "CryptoManager")
             }
+            return ok
         } catch {
             Log.error("Orchestrator state CFE export failed: \(error)", category: "CryptoManager")
+            return false
         }
     }
 
@@ -396,7 +408,36 @@ class CryptoManager {
         Log.debug("Orchestrator state CFE cleared", category: "CryptoManager")
     }
 
-    /// Mark an ACK as processed inside the Rust orchestrator cache (serialized).
+    // MARK: - ACK dedup cache
+    //
+    // There is exactly **one** in-memory ACK cache: the orchestrator's `lifecycle.ack_store`.
+    // `PersistentACKStore` used to own a second, independent `RustAckStore`, so the same
+    // question ("was this message processed?") had two answers that were written by different
+    // call sites and never reconciled — see decisions/one-ack-cache-one-durable-store.md.
+    //
+    // This cache does **not** survive a restart. `export_orchestrator_state_cfe` writes an
+    // empty `processed_ids` on purpose (snapshotting it grew the blob without bound), so the
+    // durable owner of dedup state is Core Data `ProcessedMessage`, and a cache miss after
+    // launch falls through to it via `Action::CheckAckInDb`.
+
+    /// Whether the orchestrator core exists, i.e. whether the ACK cache can be written at all.
+    var isOrchestratorCoreUp: Bool {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore != nil
+    }
+
+    /// Ask the orchestrator's ACK cache about `messageId`.
+    ///
+    /// Returns `nil` when the core is not up (pre-login, tests) — the caller must then treat
+    /// the question as unanswered and consult Core Data, which is the durable owner anyway.
+    func ackIsProcessedInOrchestrator(messageId: String) -> AckCheckResult? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.ackIsProcessed(messageId: messageId)
+    }
+
+    /// Mark an ACK as processed in the orchestrator's ACK cache (serialized).
     func markAckProcessedInOrchestrator(messageId: String) {
         coreLock.lock()
         defer { coreLock.unlock() }
@@ -486,18 +527,37 @@ class CryptoManager {
            !oldPriv.isEmpty {
             do {
                 try core.importHybridSignaturePrivateKey(privBytes: [UInt8](oldPriv))
-                _ = persistCoreState()
-                // Clean up the old separate item now that it's in core.
-                KeychainManager.shared.deleteHybridSigPrivateKey()
-                Log.info("Migrated legacy hybrid sig private key into core CFE", category: "CryptoManager")
+                // Fail-closed: until the CFE blob is durably written, the legacy item is the
+                // ONLY copy of this key. Deleting it after an unchecked persist destroyed the
+                // device's hybrid identity outright. Keep it and let the next call retry —
+                // the key stays reachable either way, so this is not fatal to the caller.
+                if persistCoreState() {
+                    KeychainManager.shared.deleteHybridSigPrivateKey()
+                    Log.info("Migrated legacy hybrid sig private key into core CFE", category: "CryptoManager")
+                } else {
+                    Log.error("Hybrid key migration: CFE persist failed — legacy Keychain item kept, will retry", category: "CryptoManager")
+                }
             } catch {
                 Log.error("Hybrid key migration import failed (will retry): \(error)", category: "CryptoManager")
             }
         }
 
+        let existedBeforeCall = core.hybridSignaturePublicKey() != nil
         let pub = try core.ensureHybridSignatureKey()
         // Capture the hybrid key (if this call just generated it) into the CFE blob.
-        _ = persistCoreState()
+        if !persistCoreState() {
+            // A key that already existed is durable regardless of this write (it came from the
+            // CFE blob, or from the legacy item still in the Keychain above) — log and continue.
+            guard existedBeforeCall else {
+                // A key generated by this very call lives only in memory. Releasing the public
+                // half would let the caller publish it and set the published flag, while the
+                // next launch reloads a core without it and generates a different key — the
+                // server would stay pinned to an identity this device can no longer prove.
+                Log.error("Hybrid identity key generated but CFE persist failed — withholding public key so it is not published", category: "CryptoManager")
+                throw CryptoManagerError.keyStatePersistFailed
+            }
+            Log.error("persistCoreState failed after ensureHybridSignatureKey (key already durable, continuing)", category: "CryptoManager")
+        }
         return Data(pub)
     }
 
@@ -896,6 +956,21 @@ class CryptoManager {
         return orchestratorCore?.hasSession(contactId: userId) ?? false
     }
 
+    /// Whether session state exists for `userId` **anywhere** — loaded in the core, or on disk.
+    ///
+    /// `hasSession(for:)` answers only the first, because that is what "can I encrypt right now"
+    /// needs. Teardown needs the other question: a contact nobody has messaged this run has its
+    /// session in the Keychain and not in the core, so a delete guarded on `hasSession` archived
+    /// nothing and left the entry behind — where the next invite redeem imported it and encrypted
+    /// with a ratchet the peer had already thrown away (2026-08-17).
+    ///
+    /// Ask this one wherever the question is "is there anything here to put away", never the
+    /// other one.
+    func hasStoredSessionState(for userId: String) -> Bool {
+        if orchestratorCore?.hasSession(contactId: userId) == true { return true }
+        return KeychainManager.shared.loadSessionData(for: userId) != nil
+    }
+
     /// True once the OrchestratorCore exists. Before this, `hasSession(for:)` returns
     /// false for *every* contact, so any "session missing → END_SESSION / re-init"
     /// decision (e.g. prewarm) MUST be gated on this. Otherwise, during the startup
@@ -920,6 +995,19 @@ class CryptoManager {
     /// Returns `nil` if no session exists or the core is not initialized.
     func getSessionHealth(for userId: String) -> SessionHealthReport? {
         return orchestratorCore?.getSessionHealth(contactId: userId)
+    }
+
+    /// The identity of the session with `userId` — see `SessionEpoch`.
+    ///
+    /// The single reader of the core's session identifier. Every "is this still the session I
+    /// decided about?" goes through here rather than through `establishedAt` timestamps: the epoch
+    /// is derived from the handshake, so it is exact where a whole-second stamp was not, and it is
+    /// identical on both sides, so it means the same thing across the wire.
+    ///
+    /// `nil` means there is no session (or the core is not ready) — never "unknown".
+    func sessionEpoch(for userId: String) -> SessionEpoch? {
+        guard let sessionId = getSessionHealth(for: userId)?.sessionId else { return nil }
+        return SessionEpoch(rawValue: sessionId)
     }
 
     /// Get all user IDs with active sessions
@@ -967,6 +1055,8 @@ class CryptoManager {
             Log.error("Failed to initialize receiving session", category: "CryptoManager")
             logLocalKeyDiagnostics()
             throw CryptoManagerError.sessionInitializationFailed
+        } catch SessionError.notAHandshakeCarrier {
+            throw SessionError.notAHandshakeCarrier
         } catch {
             Log.error("Unexpected error initializing receiving session: \(error)", category: "CryptoManager")
             logLocalKeyDiagnostics()
@@ -1015,7 +1105,7 @@ class CryptoManager {
                 return self?.restoreSession(for: userId) ?? false
             },
             saveSession: { [weak self] userId in
-                self?.saveSessionToKeychain(for: userId)
+                self?.saveSessionToKeychain(for: userId) ?? false
             },
             archiveSession: { [weak self] userId, reason in
                 Log.debug("Archiving session for \(userId) to allow reinitialization", category: "CryptoManager")
@@ -1046,11 +1136,15 @@ class CryptoManager {
         Log.debug("ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "CryptoManager")
         Log.debug("content length: \(message.content.count) bytes", category: "CryptoManager")
 
-        // Last-resort duplicate guard: if the foreground stream already processed this
-        // message (preemptACK was called in routeIncomingMessage), the DR state has
-        // already advanced past it.  Attempting to decrypt would fail and incorrectly
-        // archive a healthy session — throw duplicateMessage instead so the caller can
-        // skip silently without triggering session recovery.
+        // Last-resort duplicate guard: if this message was already processed in this launch,
+        // the DR state has already advanced past it. Attempting to decrypt would fail and
+        // incorrectly archive a healthy session — throw duplicateMessage instead so the caller
+        // can skip silently without triggering session recovery.
+        //
+        // Since the two ACK caches were merged (2026-08-02) this also sees marks made by the
+        // Rust decrypt path itself, which the old Swift-side cache never did. The previous
+        // comment here named `routeIncomingMessage` as the writer; it never called `preemptACK`
+        // — the only writer was `PublicKeyBundleHandler`, plus the warm-up after a durable ACK.
         if PersistentACKStore.shared.isProcessedInMemory(message.id) {
             Log.info("CryptoManager: \(message.id.prefix(8))… already in ACK cache — skipping duplicate decrypt", category: "CryptoManager")
             throw CryptoManagerError.duplicateMessage
@@ -1158,7 +1252,7 @@ class CryptoManager {
     /// The caller is responsible for:
     ///   - session restore (call `restoreSession(for:)` per contactId before calling this)
     ///   - storing returned `storageKey` values in `MessageKeyStore`
-    ///   - calling `PersistentACKStore.preemptACK` for successfully decrypted messages
+    ///   - calling `PersistentACKStore.markProcessedInCache` for successfully decrypted messages
     func decryptOfflineBatch(_ messages: [ChatMessage]) -> [OfflineBatchDecryptResult] {
         // Fast pre-filter: drop anything already in the in-memory ACK cache.
         let filtered = messages.filter { !PersistentACKStore.shared.isProcessedInMemory($0.id) }

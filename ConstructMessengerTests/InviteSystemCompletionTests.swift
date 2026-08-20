@@ -46,7 +46,8 @@ final class InviteSystemCompletionTests: XCTestCase {
             ephKey: "",
             ts: ts,
             sig: validSig(),
-            un: un
+            un: un,
+            ttl: nil
         )
     }
 
@@ -60,7 +61,8 @@ final class InviteSystemCompletionTests: XCTestCase {
             ephKey: validEph(),
             ts: 1_738_156_800,
             sig: validSig(),
-            un: "alice"
+            un: "alice",
+            ttl: nil
         )
     }
 
@@ -73,15 +75,91 @@ final class InviteSystemCompletionTests: XCTestCase {
         XCTAssertTrue(InviteConfig.carriesEphKey(version: 3))
     }
 
-    func testQRRotateIntervalIsPositiveAndBelowTTL() {
-        XCTAssertGreaterThan(InviteConfig.qrRotateIntervalSeconds, 0)
+    /// `ttlDescription` is interpolated straight into user-facing copy ("Одноразовая
+    /// ссылка, действует %@"). `DateComponentsFormatter.string(from:)` returns an
+    /// Optional, and the `?? ""` behind it would turn a nil into a sentence that just
+    /// stops — visible to the user, invisible to the compiler.
+    ///
+    /// NOT COVERED: MultiInviteView itself. That every tap of [ещё одна] yields a
+    /// *distinct* invite rests on `UUID()` inside `InviteGenerator.generate`, which needs
+    /// a signing key from `CryptoManager.shared.orchestratorCore` and so cannot be reached
+    /// from here. On device the answer is five different `jti=` prefixes in the
+    /// "Generated invite v4" log lines.
+    func testTTLDescriptionIsNeverEmpty() {
+        XCTAssertFalse(
+            InviteConfig.ttlDescription.isEmpty,
+            "UI copy interpolates this — an empty value ships a sentence with a hole in it."
+        )
+    }
+
+    /// Rotation is what makes "show my QR to several people" work: an invite is burned by
+    /// its first redeemer and the sender never learns it happened, so the second scanner of
+    /// a static code is told the invite is already used.
+    ///
+    /// It was deleted on 2026-08-13 alongside the TTL change, on the reasoning that at 12
+    /// hours each rotation mints another long-lived capability. That traded a working
+    /// scenario for a threat that does not scale — a screenshot captures one code either
+    /// way. [[decisions/invite-two-modes-deferred]] had already recorded rotation as
+    /// load-bearing for personal-invite mode. Restored the same day; this test exists so
+    /// the next person to find it wasteful reads the reason first.
+    func testQRRotatesFastEnoughForSequentialScanners() {
+        XCTAssertGreaterThan(InviteConfig.qrRotateIntervalSeconds, 0, "Rotation removed — the second person to scan the same screen will be told the invite is already used.")
+        XCTAssertLessThanOrEqual(
+            InviteConfig.qrRotateIntervalSeconds, 60,
+            "Rotation slower than a minute stops covering the case it exists for: people scanning one after another."
+        )
         XCTAssertLessThan(InviteConfig.qrRotateIntervalSeconds, InviteConfig.ttlSeconds)
+    }
+
+    /// The invite TTL has three carriers: this constant, `INVITE_TTL_SECONDS` in
+    /// construct-server (`crates/crypto-agility/src/invites.rs`), and the burn-row
+    /// retention derived from it. They are two languages in two repositories, so no
+    /// build can compare them.
+    ///
+    /// This is therefore a **ratchet, not a proof**. It fails when the client number
+    /// moves, and its message is the instruction to move the other two. It CANNOT tell
+    /// you the server was redeployed with the new value — the symptom of that gap is a
+    /// redeem rejected as "expired" on a link the sender's app still shows as live, and
+    /// the only place that answer exists is the identity-service log line
+    /// `Invite validation failed … error=Expired`.
+    ///
+    /// 2026-08-13: 300 → 43200. Five minutes meant a copied link expired in the
+    /// clipboard before the recipient opened it; the QR, rotated every 30s and scanned
+    /// on the spot, never hit it. That asymmetry read as "links are broken".
+    func testInviteTTLMatchesServerConstant() {
+        XCTAssertEqual(
+            InviteConfig.ttlSeconds, 43_200,
+            "Client invite TTL changed. construct-server INVITE_TTL_SECONDS (and the "
+                + "INVITE_BURN_RETENTION_SECONDS derived from it) must move with it — the "
+                + "server checks expiry first, so a client-only change is invisible."
+        )
+    }
+
+    /// Guards the arithmetic in `isExpired`, not the policy: a sign error or a
+    /// seconds/minutes mixup inside it survives the pin above, because that one only
+    /// compares the constant to itself.
+    ///
+    /// The second half is the case that must NOT fire. A rule that expires invites can
+    /// misfire, and rejecting a still-valid invite is worse than the bug it fixes: the
+    /// sender sees a live code and the recipient is told to ask for a new one.
+    func testInviteIsLiveJustInsideTTLAndDeadJustOutside() {
+        let now = Date().timeIntervalSince1970
+
+        let almostExpired = sampleV4(ts: Int(now - InviteConfig.ttlSeconds + 60))
+        XCTAssertFalse(
+            almostExpired.isExpired(),
+            "An invite one minute short of the TTL is still live — rejecting it strands a "
+                + "sender whose code is visibly counting down."
+        )
+
+        let justExpired = sampleV4(ts: Int(now - InviteConfig.ttlSeconds - 60))
+        XCTAssertTrue(justExpired.isExpired())
     }
 
     // MARK: - Canonical string (signing surface)
 
-    func testCanonicalV4HasNoEphKey() {
-        let c = sampleV4(un: "bob").canonicalString()
+    func testCanonicalV4HasNoEphKey() throws {
+        let c = try sampleV4(un: "bob").canonicalString()
         XCTAssertEqual(
             c,
             "4|550e8400-e29b-41d4-a716-446655440000|14f28d31-1234-4abc-8def-0123456789ab|4e1f9dbe209c1bedb33ee32dda5a28f0|konstruct.cc|1738156800|bob"
@@ -89,15 +167,15 @@ final class InviteSystemCompletionTests: XCTestCase {
         XCTAssertFalse(c.contains(validEph().prefix(8)))
     }
 
-    func testCanonicalV3StillHasEphKey() {
-        let c = sampleV3().canonicalString()
+    func testCanonicalV3StillHasEphKey() throws {
+        let c = try sampleV3().canonicalString()
         XCTAssertTrue(c.contains(validEph()))
         XCTAssertTrue(c.hasPrefix("3|"))
         XCTAssertTrue(c.hasSuffix("|alice"))
     }
 
-    func testCanonicalV4EmptyUn() {
-        let c = sampleV4(un: nil).canonicalString()
+    func testCanonicalV4EmptyUn() throws {
+        let c = try sampleV4(un: nil).canonicalString()
         XCTAssertTrue(c.hasSuffix("|"))
     }
 
@@ -114,7 +192,8 @@ final class InviteSystemCompletionTests: XCTestCase {
             ephKey: validEph(),
             ts: base.ts,
             sig: validSig(),
-            un: nil
+            un: nil,
+            ttl: nil
         )
         XCTAssertThrowsError(try invite.validate())
     }
@@ -129,7 +208,8 @@ final class InviteSystemCompletionTests: XCTestCase {
             ephKey: "",
             ts: 1_738_156_800,
             sig: validSig(),
-            un: nil
+            un: nil,
+            ttl: nil
         )
         XCTAssertThrowsError(try invite.validate())
     }
@@ -151,7 +231,7 @@ final class InviteSystemCompletionTests: XCTestCase {
         XCTAssertFalse(wire.contains("/"))
         XCTAssertFalse(wire.contains("="))
         let decoded = try InviteObject.fromBase64(wire)
-        XCTAssertEqual(decoded.canonicalString(), original.canonicalString())
+        XCTAssertEqual(try decoded.canonicalString(), try original.canonicalString())
     }
 
     func testLegacyJSONStillDecodable() throws {

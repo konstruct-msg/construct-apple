@@ -220,40 +220,86 @@ class BackgroundFetchManager: NSObject {
     /// Target execution time: 2-5 seconds
     private func performQuickMessageFetch(completion: @escaping (Result<Int, Error>) -> Void) {
         Log.info("Starting quick message fetch", category: "BackgroundFetch")
-        
-        // Check authentication
-        guard GRPCAuthCache.shared.snapshot.token != nil else {
-            Log.error("No session token available", category: "BackgroundFetch")
-            completion(.failure(BackgroundFetchError.notAuthenticated))
-            return
-        }
-        
-        // Get Core Data context — use a standalone background context (not a child of viewContext)
-        // to avoid triggering NSManagedObjectContextObjectsDidChange on the background thread,
-        // which would fire FRC/Observable updates off the main thread (purple Xcode warning).
-        let context = PersistenceController.shared.container.viewContext
-        let backgroundContext = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
-        backgroundContext.persistentStoreCoordinator = context.persistentStoreCoordinator
-        
-        // Fetch pending messages via gRPC (unary, cursor-paginated)
+
         Task {
+            let hasToken = await MainActor.run { SessionTokenHydrator.ensureCached() }
+            guard hasToken else {
+                // Launch race, not a broken session: the cache is empty because restore
+                // has not run yet. INFO — this used to be ERROR and looked like an outage.
+                Log.info("Background fetch skipped — session token not yet restored", category: "BackgroundFetch")
+                completion(.failure(BackgroundFetchError.notAuthenticated))
+                return
+            }
+
+            // Fetch pending messages via gRPC (unary, cursor-paginated)
             do {
                 var allMessages: [ChatMessage] = []
-                var cursor: String? = nil
+                // Start where we left off, not at the beginning of the offline stream.
+                //
+                // This was `nil` on every fetch, so each one re-downloaded the backlog from the
+                // start. The pagination below advanced `cursor` *within* a fetch and then dropped
+                // the final value on the floor, so nothing carried across. Build 584, four minutes
+                // on one device: 270 distinct messages routed 61 times each — 12 252 trips through
+                // `routeIncomingMessage`, 51/s, a saturated core and thermal nominal → fair. The
+                // live stream delivered 148 messages in the same window; the amplification was
+                // entirely ours.
+                //
+                // It is also why the server sees no ACK. Deletion from `delivery:offline:{user}` is
+                // cursor-driven, and a fetch that always asks from the beginning never tells the
+                // server anything has been handled — so the same ids come back forever.
+                let cursor: String? = StreamCursorStore.load()
+                Log.info(
+                    "Offline fetch from cursor=\(cursor ?? "beginning")",
+                    category: "BackgroundFetch"
+                )
 
-                repeat {
-                    let result = try await MessagingServiceClient.shared.getPendingMessages(
-                        sinceCursor: cursor,
-                        limit: 50
+                // ONE page per fetch — deliberately, and this is load-bearing.
+                //
+                // The server now trims `delivery:offline:{user}` on GetPendingMessages too, up to
+                // whatever `since_cursor` we send (messaging-service, 2026-08-07, metric
+                // `construct_msg_offline_trim_total{path="get_pending"}`). That makes the cursor we
+                // put on the wire an instruction to delete, on this path as much as on Subscribe.
+                //
+                // The committed cursor is safe to send: `StreamCursorTracker` only advances it over
+                // messages that reached a durable terminal. A *page* cursor is not. Paging used to
+                // send `result.nextCursor` as the next request's `since_cursor` — which now tells
+                // the server to delete page 1 while page 1 is still sitting in `allMessages`,
+                // unrouted and unpersisted. Kill the app there and those messages are gone from
+                // both sides: the 2026-06-08 offline-delivery loss, re-entered through a door that
+                // opened today.
+                //
+                // So we ask once, from a cursor we can defend, and let the remainder come back on
+                // the next round — the stream advances the watermark properly, and a backlog deeper
+                // than one page drains over successive fetches instead of in one unsafe sweep.
+                let result = try await MessagingServiceClient.shared.getPendingMessages(
+                    sinceCursor: cursor,
+                    limit: 50
+                )
+                allMessages.append(contentsOf: result.messages)
+                if result.hasMore {
+                    Log.info(
+                        "Offline backlog deeper than one page — remainder follows on the next fetch/stream",
+                        category: "BackgroundFetch"
                     )
-                    allMessages.append(contentsOf: result.messages)
-                    cursor = result.nextCursor
+                }
 
-                    if !result.hasMore { break }
-                } while true
+                // `result.nextCursor` is deliberately NOT committed to `StreamCursorStore`, for the
+                // same reason it is not sent back as a `since_cursor` above: it is a page boundary,
+                // not a durability watermark. `GetPendingMessagesResponse` carries one `next_cursor`
+                // per page, not per message (proto field 2), so this path cannot say which messages
+                // inside the page reached a durable terminal.
+                //
+                // The stream owns the advance: it receives a cursor with each entry, tracks it, and
+                // commits over the longest durable prefix. Anything fetched here is the same Redis
+                // entry and is re-delivered on the next Subscribe, where it advances properly.
+                //
+                // Committing from this path would need either a per-message cursor on the RPC or an
+                // all-durable check over the page.
 
                 await MainActor.run { [allMessages] in
-                    self.processOfflineMessages(allMessages, backgroundContext: backgroundContext, completion: completion)
+                    // No sealed pre-resolution here: MessageRouter opens the SealedInner at its
+                    // own unseal boundary, which is the single place that knows how to do it.
+                    self.processOfflineMessages(allMessages, completion: completion)
                 }
             } catch {
                 Log.error("Failed to fetch offline messages: \(error.localizedDescription)", category: "BackgroundFetch")
@@ -262,450 +308,57 @@ class BackgroundFetchManager: NSObject {
         }
     }
     
-    private func processOfflineMessages(_ messages: [ChatMessage], backgroundContext: NSManagedObjectContext, completion: @escaping (Result<Int, Error>) -> Void) {
+    /// Route the fetched backlog through the SAME pipeline the live stream uses.
+    ///
+    /// This used to be ~390 lines re-implementing everything `MessageRouter` already does —
+    /// control-message filtering, chat lookup, dedup, ACK guards, decrypt, chunk reassembly,
+    /// block enforcement, edits, profile shares, persistence, unread + preview. Keeping two
+    /// interpretations of an incoming message produced four defects of the same shape, the last
+    /// of which (reading `from` without opening the SealedInner) silently killed every push
+    /// notification. One path now, so a fix or a new content type lands in both by construction.
+    ///
+    /// Runs on the MainActor against `viewContext`: the old private-queue context existed only to
+    /// keep `NSManagedObjectContextObjectsDidChange` off the main thread, and on the MainActor
+    /// that concern is void — FRC/Observable updates fire exactly where they should. The decrypt
+    /// already hopped to main anyway, since the Rust core is MainActor-isolated.
+    @MainActor
+    private func processOfflineMessages(_ messages: [ChatMessage], completion: @escaping (Result<Int, Error>) -> Void) {
         guard !messages.isEmpty else {
             completion(.success(0))
             return
         }
-        
         Log.info("Processing \(messages.count) offline messages", category: "BackgroundFetch")
-        
-        // Get Core Data context for processing
+
+        guard GRPCAuthCache.shared.snapshot.userId != nil else {
+            completion(.failure(BackgroundFetchError.notAuthenticated))
+            return
+        }
+
         let context = PersistenceController.shared.container.viewContext
-        
-        // Process messages in background context
-        backgroundContext.perform {
-            var newMessagesCount = 0
-            var messagesByChat: [String: [ChatMessage]] = [:]
-            var chatUserIds: [String: String] = [:] // chatId -> userId
-            
-            guard let currentUserId = GRPCAuthCache.shared.snapshot.userId else {
-                DispatchQueue.main.async {
-                    completion(.failure(BackgroundFetchError.notAuthenticated))
-                }
-                return
-            }
-            
-            // Group messages by chat (skip control messages — they are not user-visible)
-            for message in messages {
-                guard message.messageType != "CONTROL_MESSAGE" && message.messageType != "SENDER_SYNC" else {
-                    Log.debug("Skipping control message \(message.id) (\(message.messageType ?? "nil")) in grouping phase", category: "BackgroundFetch")
-                    continue
-                }
-                let otherUserId = message.from == currentUserId ? message.to : message.from
+        let countRequest = Message.fetchRequest()
+        let before = (try? context.count(for: countRequest)) ?? 0
 
-                // Skip messages from contacts that have been pruned. This must be the first
-                // check after resolving otherUserId: pruneContact() already archives the
-                // session and deletes User + Chat from Core Data. BackgroundFetch must not
-                // recreate them, nor attempt decryption against a wiped session.
-                guard !DeletedContactsStore.shared.isDeleted(otherUserId) else {
-                    Log.debug("Skipping message \(message.id.prefix(8))… from pruned contact \(otherUserId.prefix(8))…", category: "BackgroundFetch")
-                    continue
-                }
-
-                // Find or create chat
-                let chatId = self.findOrCreateChat(
-                    for: otherUserId,
-                    in: backgroundContext,
-                    currentUserId: currentUserId
-                )
-                
-                if let chatId = chatId {
-                    if messagesByChat[chatId] == nil {
-                        messagesByChat[chatId] = []
-                    }
-                    messagesByChat[chatId]?.append(message)
-                    chatUserIds[chatId] = otherUserId
-                }
-            }
-            
-            // ── Pass 1: Filter eligible messages ───────────────────────────────────────
-            // Check Core Data + ACK guards per message, collect all eligible messages
-            // with their chat/contact context so the batch decrypt can operate on them.
-            var eligible: [(chatId: String, chat: Chat, otherUserId: String, messageData: ChatMessage)] = []
-
-            for (chatId, chatMessages) in messagesByChat {
-                guard let otherUserId = chatUserIds[chatId] else { continue }
-
-                let chatFetch = Chat.fetchRequest()
-                chatFetch.predicate = NSPredicate(format: "id == %@", chatId)
-                guard let chat = try? backgroundContext.fetch(chatFetch).first else {
-                    Log.error("Chat not found: \(chatId)", category: "BackgroundFetch")
-                    continue
-                }
-
-                for messageData in chatMessages {
-                    // Guard 1: Core Data dedup (survives app restart via ProcessedMessage entity).
-                    let messageFetch = Message.fetchRequest()
-                    messageFetch.predicate = NSPredicate(format: "id == %@", messageData.id)
-                    if (try? backgroundContext.fetch(messageFetch).first) != nil { continue }
-
-                    // Guard 2: RustAckStore in-memory cache — catches the race where the
-                    // foreground stream called markProcessed but the save hasn't propagated.
-                    if PersistentACKStore.shared.isProcessed(messageData.id, in: backgroundContext) {
-                        Log.debug("BackgroundFetch: \(messageData.id.prefix(8))… already ACK'd, skipping", category: "BackgroundFetch")
-                        continue
-                    }
-
-                    // Guard 3: Skip session-management control messages — the real-time
-                    // stream handles these; decrypting them here would corrupt DR state.
-                    if messageData.messageType == "CONTROL_MESSAGE" || messageData.messageType == "SENDER_SYNC" {
-                        Log.debug("Skipping control message \(messageData.id) (\(messageData.messageType ?? "nil")) in BG fetch", category: "BackgroundFetch")
-                        continue
-                    }
-
-                    eligible.append((chatId: chatId, chat: chat, otherUserId: otherUserId, messageData: messageData))
-                }
-            }
-
-            // ── Batch decrypt ───────────────────────────────────────────────────────────
-            // Restore sessions for unique contactIds (once per user, not once per message),
-            // then call decryptOfflineBatch — a single Rust mutex acquisition for all messages.
-            // No archiveSession is called on per-message failure; the foreground stream owns
-            // all session recovery (END_SESSION, re-init, healing).
-            var resultsByMessageId: [String: OfflineBatchDecryptResult] = [:]
-
-            if !eligible.isEmpty {
-                let uniqueUserIds = Set(eligible.map { $0.otherUserId })
-                for userId in uniqueUserIds {
-                    _ = DispatchQueue.main.sync { CryptoManager.shared.restoreSession(for: userId) }
-                }
-
-                let batchResults: [OfflineBatchDecryptResult] = DispatchQueue.main.sync {
-                    CryptoManager.shared.decryptOfflineBatch(eligible.map { $0.messageData })
-                }
-
-                for result in batchResults {
-                    resultsByMessageId[result.message.id] = result
-                    if result.succeeded {
-                        // Claim the message in the ACK cache before any Core Data write —
-                        // closes the race window where the stream could re-decrypt the same msg.
-                        PersistentACKStore.shared.preemptACK(result.message.id)
-                        if !result.storageKey.isEmpty {
-                            MessageKeyStore.shared.store(
-                                messageId: result.message.id,
-                                key: result.storageKey,
-                                contactId: result.message.from
-                            )
-                        }
-                    } else {
-                        Log.info("BackgroundFetch: \(result.message.id.prefix(8))… decrypt failed — foreground stream will recover", category: "BackgroundFetch")
-                    }
-                }
-            }
-
-            // ── Pass 2: Post-decrypt processing and Core Data writes ────────────────────
-            // Track per-chat last-message info (overwritten on each successful message so
-            // the final successful message per chat wins — matches original behaviour).
-            var lastDecryptedByChatId: [String: (text: String, timestamp: UInt64)] = [:]
-            // Profile-share messages found in this batch — applied on the main actor after the
-            // background save merges into viewContext (ProfileSharingManager is @MainActor and
-            // operates on the viewContext). Routing these (and edits below) mirrors the live
-            // stream's handleSpecialMessage; the batch path previously saved them as regular
-            // rows, so profile updates and edits delivered via background fetch were never applied.
-            var deferredProfileMessages: [(from: String, contentData: Data, legacyString: String?)] = []
-
-            for item in eligible {
-                // Ephemeral control/signaling messages are NOT chat content: call signals (12),
-                // heartbeat (13), delivery receipt (14), webrtc (10), presence (11). The live
-                // stream routes these via the orchestrator (callSignalDecrypted / receipt
-                // handler / discard); the background batch path has no such routing and would
-                // otherwise save them as a regular bubble whose non-text bytes render as
-                // "Message not available". Consume (ACK) and skip — they are moot in the
-                // background (e.g. an old call signal for a call that is already over), and
-                // ACKing stops the server re-delivering a stuck, never-decryptable one.
-                // Session-control types (20-24) are left to the foreground orchestrator.
-                if (10...14).contains(item.messageData.contentType) {
-                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
-                    continue
-                }
-
-                guard let batchResult = resultsByMessageId[item.messageData.id],
-                      batchResult.succeeded else {
-                    // Decrypt failed — do not create Message entity. The foreground stream
-                    // will receive this message on next app foreground and handle recovery.
-                    continue
-                }
-
-                var decryptedContent: Data? = batchResult.plaintext
-
-                // Chunk messages: feed KNST-prefixed payloads to ChunkedMessageReassembler.
-                let legacyPrefixBytes = Data(ChunkedMessageCodec.legacyPrefix.utf8)
-                let binaryMagic = Data([0x4B, 0x4E, 0x53, 0x54]) // "KNST"
-                var assembled: String? = nil
-                var assembledE2EId: String? = nil
-                var assembledStorage: Data? = nil
-                var assembledProfile: Data? = nil
-                var modernEditTarget: String? = nil
-                var modernEditText: String? = nil
-                if let dc = decryptedContent,
-                   dc.starts(with: binaryMagic) || dc.starts(with: legacyPrefixBytes) {
-                    DispatchQueue.main.sync {
-                        switch ChunkedMessageReassembler.shared.process(data: dc) {
-                        case .assembled(let text, _, let e2eId, _, let storage):
-                            assembled = text
-                            assembledE2EId = e2eId
-                            assembledStorage = storage
-                        case .legacy(let text):
-                            assembled = text
-                            assembledStorage = LocalMessagePayload.encodeText(text)
-                        case .profile(let data):       assembledProfile = data
-                        case .edit(let target, let nt, _):
-                            modernEditTarget = target
-                            modernEditText = nt.text
-                        case .incomplete, .invalid:    break
-                        }
-                    }
-                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
-                    if let storage = assembledStorage {
-                        Log.debug("Chunk assembled in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
-                        decryptedContent = storage
-                    } else if let text = assembled {
-                        Log.debug("Chunk assembled (text) in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
-                        decryptedContent = LocalMessagePayload.encodeText(text)
-                    } else if let profile = assembledProfile {
-                        Log.debug("Chunk assembled profile in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
-                        decryptedContent = profile
-                    } else if modernEditTarget != nil {
-                        // Modern edit will be applied below; already ACK'd the chunk delivery.
-                    } else {
-                        Log.debug("Chunk fragment \(item.messageData.id.prefix(8)) ACK'd; waiting for remaining chunks", category: "BackgroundFetch")
-                        continue
-                    }
-                } else if let dc = decryptedContent, !LocalMessagePayload.isEnvelope(dc) {
-                    // Single-frame MessageContent or legacy UTF-8 without KNST framing.
-                    DispatchQueue.main.sync {
-                        switch ChunkedMessageReassembler.shared.process(data: dc) {
-                        case .assembled(_, _, _, _, let storage):
-                            if let storage { decryptedContent = storage }
-                        case .legacy(let text):
-                            decryptedContent = LocalMessagePayload.encodeText(text)
-                        case .profile(let data):
-                            assembledProfile = data
-                            decryptedContent = data
-                        default:
-                            break
-                        }
-                    }
-                }
-
-                let storageBytes = decryptedContent ?? Data()
-                let decryptedString = LocalMessagePayload.decode(storageBytes).displayString
-
-                // Client-side block enforcement (decrypt-but-suppress). The ratchet already
-                // advanced during decryption above; for a blocked sender we drop the transcript,
-                // the unread bump, and the preview. Server-side block is bypassed under sealed
-                // sender, so this client drop is the load-bearing block. markProcessed keeps the
-                // server from re-delivering. See decisions/sealed-sender-authenticated-transitional.md.
-                if BlockedContacts.isBlocked(item.messageData.from, in: backgroundContext) {
-                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
-                    Log.info("SECURITY[block_drop]: suppressed push message \(item.messageData.id.prefix(8))… from blocked \(item.messageData.from.prefix(8))…", category: "BackgroundFetch")
-                    continue
-                }
-
-                // Modern edit via MessageContent.edit (stealth/sealed path, and any direct chunked edit).
-                // The target message id travels inside the encrypted content, never a wire-envelope field.
-                if let targetID = modernEditTarget, let newT = modernEditText, !newT.isEmpty {
-                    let fr = Message.fetchRequest()
-                    // Scoped to the author: a peer may only edit messages it sent us.
-                    fr.predicate = NSPredicate(format: "id ==[c] %@ AND fromUserId == %@", targetID, item.messageData.from)
-                    fr.fetchLimit = 1
-                    if let original = try? backgroundContext.fetch(fr).first {
-                        let stored = MessageDisplayCache.shared.payloadData(for: original)
-                        if let edited = MediaWireCodec.editedCaptionPayload(storedPlaintext: stored, newCaption: newT) {
-                            original.applyStoredEncryption(plaintextData: edited.storagePayload, contactId: item.messageData.from)
-                        } else {
-                            original.applyStoredEncryption(plaintext: newT, contactId: item.messageData.from)
-                        }
-                        original.isEdited = true
-                        original.editedAt = Date(timeIntervalSince1970: TimeInterval(item.messageData.timestamp))
-                        Log.info("BG fetch: applied modern edit to \(targetID.prefix(8))…", category: "BackgroundFetch")
-                    } else {
-                        Log.error("BG fetch: original message to modern-edit not found: \(targetID.prefix(8))…", category: "BackgroundFetch")
-                    }
-                    // ACK already performed for chunked deliveries; safe to re-mark (idempotent).
-                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
-                    continue
-                }
-
-                // Legacy envelope-level edits (envelope.edits_message_id) are removed: the
-                // field is reserved server-side. Edits arrive only as MessageContent.edit,
-                // handled by the modern-edit branch above.
-
-                // Profile share: defer application to the main actor (post-merge). Supports binary wire (no JSON) + legacy.
-                if let dc = decryptedContent, ProfileShareData.fromBinaryData(dc) != nil ||
-                   decryptedString.contains("\"type\":\"profile\"") {
-                    deferredProfileMessages.append((from: item.messageData.from, contentData: dc, legacyString: decryptedString.isEmpty ? nil : decryptedString))
-                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
-                    continue
-                }
-
-                // Persist ACK to Core Data (durable across restarts).
-                PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
-
-                // Canonical row id: sender's E2E id from the KNST header when present (see
-                // MessageRouter.saveMessage — the server reassigns envelope ids on the sealed
-                // path, and edits/receipts/replies reference the sender's id).
-                let canonicalId = (assembledE2EId ?? item.messageData.id).lowercased()
-                let dedupFetch = Message.fetchRequest()
-                dedupFetch.predicate = NSPredicate(format: "id ==[c] %@", canonicalId)
-                dedupFetch.fetchLimit = 1
-                if let existing = try? backgroundContext.fetch(dedupFetch).first {
-                    if existing.fromUserId == item.messageData.from, !existing.hasDecryptedContent {
-                        existing.applyStoredEncryption(plaintextData: storageBytes, contactId: item.messageData.from)
-                    }
-                    continue  // already stored (live stream or an earlier delivery of the same message)
-                }
-
-                // Create Message entity.
-                let message = Message(context: backgroundContext)
-                message.id = canonicalId
-                message.fromUserId = item.messageData.from
-                message.toUserId = item.messageData.to
-                message.contentType = .regular
-                message.timestamp = Date(timeIntervalSince1970: TimeInterval(item.messageData.timestamp))
-                message.isSentByMe = false
-                message.deliveryStatus = .delivered
-                message.retryCount = 0
-                message.chat = item.chat
-                message.applyStoredEncryption(plaintextData: storageBytes, contactId: item.messageData.from)
-
-                newMessagesCount += 1
-                item.chat.unreadCount += 1
-
-                lastDecryptedByChatId[item.chatId] = (text: LocalMessagePayload.decode(storageBytes).previewHint, timestamp: item.messageData.timestamp)
-            }
-
-            // Apply last-message preview to each chat.
-            for (chatId, last) in lastDecryptedByChatId {
-                guard let chat = eligible.first(where: { $0.chatId == chatId })?.chat else { continue }
-                chat.lastMessageText = Chat.formatPreviewText(
-                    last.text.isEmpty ? NSLocalizedString("message_unavailable", comment: "") : last.text
-                )
-                chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(last.timestamp))
-            }
-
-            // Save context — standalone context writes directly to disk.
-            // Capture the NSManagedObjectContextDidSave notification so we can merge
-            // into viewContext on the main thread (keeps FRC/Observable updates on main thread).
-            do {
-                var saveNotification: Notification?
-                let token = NotificationCenter.default.addObserver(
-                    forName: .NSManagedObjectContextDidSave,
-                    object: backgroundContext,
-                    queue: nil
-                ) { saveNotification = $0 }
-                defer { NotificationCenter.default.removeObserver(token) }
-
-                try backgroundContext.save()
-
-                Log.info("Saved \(newMessagesCount) new messages to Core Data", category: "BackgroundFetch")
-
-                let capturedNotification = saveNotification
-                DispatchQueue.main.async {
-                    // Merge changes into viewContext on main thread — FRC/Observable updates fire here safely.
-                    if let notification = capturedNotification {
-                        context.mergeChanges(fromContextDidSave: notification)
-                    }
-                    // Apply profile shares from this batch now that the contact's User row is
-                    // merged into viewContext. Mirrors the live stream's handleSpecialMessage.
-                    for profile in deferredProfileMessages {
-                        let parsed = ProfileSharingManager.shared.parseProfileMessage(from: profile.contentData) ??
-                                     (profile.legacyString.flatMap { ProfileSharingManager.shared.parseProfileMessage($0) })
-                        if let parsed = parsed {
-                            ProfileSharingManager.shared.handleProfileMessage(parsed, from: profile.from, in: context)
-                        }
-                    }
-                    context.saveAndLog()
-
-                    if newMessagesCount > 0 {
-                        self.showNotificationsForMessages(
-                            messagesByChat: messagesByChat,
-                            chatUserIds: chatUserIds,
-                            totalCount: newMessagesCount
-                        )
-                    }
-
-                    completion(.success(newMessagesCount))
-                }
-            } catch {
-                Log.error("Failed to save messages: \(error)", category: "BackgroundFetch")
-                DispatchQueue.main.async {
-                    completion(.failure(error))
-                }
-            }
+        // Routed through the shared SessionLifecycleController facade — the app's single
+        // MessageRouter instance — so in-flight dedup, the pending-session queue and the
+        // SessionCoordinator delegate wiring are the same objects the stream uses. A private
+        // router here would race the stream instead of coordinating with it.
+        for message in messages {
+            SessionLifecycleController.shared.routeIncomingMessage(message, in: context)
         }
-    }
-    
-    /// Find or create chat for a user.
-    /// Only creates a chat when the User already exists — must not bootstrap unknowns.
-    func findOrCreateChat(
-        for userId: String,
-        in context: NSManagedObjectContext,
-        currentUserId: String
-    ) -> String? {
-        do {
-            // requireExisting: BackgroundFetch must not mint ghost contacts.
-            // Foreground stream handles session init + first-ever user creation.
-            guard let result = try Chat.findOrCreate(
-                forUserId: userId,
-                in: context,
-                missingUserPolicy: .requireExisting
-            ) else {
-                Log.info(
-                    "BackgroundFetch: unknown sender \(userId.prefix(8))… — skipping (no contact record)",
-                    category: "BackgroundFetch"
-                )
-                return nil
-            }
-            return result.chat.id
-        } catch {
-            Log.error(
-                "BackgroundFetch: findOrCreateChat failed for \(userId.prefix(8))…: \(error)",
-                category: "BackgroundFetch"
-            )
-            return nil
+
+        if context.hasChanges {
+            context.saveAndLog()
         }
+
+        let after = (try? context.count(for: countRequest)) ?? before
+        let saved = max(0, after - before)
+        // Notifications are posted by whoever SAVED each message (InAppNotificationService on
+        // this path), with IncomingFloodGuard collapsing a large backlog into a single alert —
+        // the batch "N messages from M contacts" banner is gone with the duplicate pipeline.
+        Log.info("Saved \(saved) new messages to Core Data", category: "BackgroundFetch")
+        completion(.success(saved))
     }
-    
-    /// Show notifications for new messages
-    private func showNotificationsForMessages(
-        messagesByChat: [String: [ChatMessage]],
-        chatUserIds: [String: String],
-        totalCount: Int
-    ) {
-        let notificationManager = LocalNotificationManager.shared
-        
-        if messagesByChat.count == 1, let (chatId, messages) = messagesByChat.first {
-            // Single chat - show individual notification
-            let _ = chatUserIds[chatId] ?? "Unknown"
-            
-            let context = PersistenceController.shared.container.viewContext
-            
-            _ = messages.first.flatMap { msg -> String? in
-                let messageFetch = Message.fetchRequest()
-                messageFetch.predicate = NSPredicate(format: "id == %@", msg.id)
-                if let savedMessage = try? context.fetch(messageFetch).first {
-                    let text = savedMessage.displayText
-                    return text.isEmpty ? nil : text
-                }
-                return nil
-            }
-            
-            notificationManager.showNewMessageNotification()
-        } else {
-            // Multiple chats - show batch notification
-            notificationManager.showMultipleMessagesNotification(
-                messageCount: totalCount,
-                fromContacts: messagesByChat.count
-            )
-        }
-        
-        // Update badge
-        notificationManager.updateBadge(totalCount)
-    }
-    
-    /// Cleanup fetch resources
+
     private func cleanupFetch() {
         // WebSocket cleanup is handled by gRPC channel teardown
         // which creates its own temporary connection
@@ -764,6 +417,45 @@ class BackgroundFetchManager: NSObject {
         await withCheckedContinuation { continuation in
             performQuickMessageFetch { _ in continuation.resume() }
         }
+    }
+
+    // MARK: - Silent-push fetch (coalesced)
+
+    @MainActor private var fetchStartedAt: Date?
+    @MainActor private var isFetchInFlight = false
+    @MainActor private var followUpRequested = false
+
+    /// Entry point for a `new_message` silent push. Unlike pull-to-refresh — a gesture, which
+    /// always runs — a push is only a claim that the server has something, and the backlog of
+    /// pushes iOS delivers at launch makes that claim dozens of times about the same backlog.
+    /// See `OfflineFetchCoalescer` for the build-585 numbers.
+    @MainActor
+    func fetchPendingMessagesForSilentPush(pushArrivedAt: Date) async {
+        switch OfflineFetchCoalescer.admit(
+            pushArrivedAt: pushArrivedAt,
+            lastFetchStartedAt: fetchStartedAt,
+            isFetchInFlight: isFetchInFlight
+        ) {
+        case .alreadyCovered:
+            Log.info("Silent push covered by a fetch already in progress — not fetching again", category: "BackgroundFetch")
+            return
+        case .requestFollowUp:
+            followUpRequested = true
+            Log.info("Silent push folded into one follow-up fetch after the running one", category: "BackgroundFetch")
+            return
+        case .start:
+            break
+        }
+
+        // Loop rather than recurse: every push that arrived during a fetch is answered by the
+        // next iteration, and any number of them collapses into that one fetch.
+        repeat {
+            followUpRequested = false
+            fetchStartedAt = Date()
+            isFetchInFlight = true
+            await fetchPendingMessages()
+            isFetchInFlight = false
+        } while followUpRequested
     }
 
     func enableBackgroundFetch() {

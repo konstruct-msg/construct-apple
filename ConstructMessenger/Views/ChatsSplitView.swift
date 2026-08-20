@@ -102,9 +102,11 @@ struct ChatsSplitView: View {
         .onAppear {
             chatsViewModel.setContext(viewContext)
             applySelectedTabFromViewModel()
+            reconcileStalePreviews(from: nil)
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
             guard notificationContainsChatChanges(note) else { return }
+            reconcileStalePreviews(from: note)
             listRevision &+= 1
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { note in
@@ -492,6 +494,37 @@ struct ChatsSplitView: View {
             }
         }
         return false
+    }
+
+    /// Re-align denormalized list previews with each chat's newest transcript message.
+    private func reconcileStalePreviews(from note: Notification?) {
+        let targets: [Chat]
+        if let note {
+            var ids = Set<NSManagedObjectID>()
+            for key in [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey] {
+                guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
+                for obj in objects {
+                    if let msg = obj as? Message, let chat = msg.chat {
+                        ids.insert(chat.objectID)
+                    } else if obj is Chat {
+                        ids.insert(obj.objectID)
+                    }
+                }
+            }
+            targets = ids.compactMap { try? viewContext.existingObject(with: $0) as? Chat }
+            guard !targets.isEmpty else { return }
+        } else {
+            targets = Array(chats)
+        }
+        var changed = false
+        for chat in targets {
+            if chat.reconcilePreviewFromTranscript(in: viewContext) {
+                changed = true
+            }
+        }
+        if changed {
+            viewContext.saveAndLog()
+        }
     }
 
     private func handleScannedContact(_ urlString: String) {

@@ -281,7 +281,11 @@ final class PQCKeyManager {
         for keyId in keyIds {
             let kp = try mlkem768Keygen()
             let pubKeyData = Data(kp.publicKey)
-            guard KeychainManager.shared.saveData(Data(kp.secretKey), forKey: otpkKeychainKey(keyId)) else {
+            guard KeychainManager.shared.saveData(
+                Data(kp.secretKey),
+                forKey: otpkKeychainKey(keyId),
+                accessible: KeychainManager.cryptoKeyAccessible
+            ) else {
                 Log.error("PQC: failed to save Kyber OTPK secret keyId=\(keyId)", category: "PQC")
                 continue
             }
@@ -311,16 +315,25 @@ final class PQCKeyManager {
         let encapsulation = try mlkem768Encapsulate(publicKey: [UInt8](kyberSPKPublic))
         rustContributions.storeDeferred(contactId: contactId, sharedSecret: encapsulation.sharedSecret)
         // Register with OrchestratorCore's PQContributionManager (single source of truth for CFE).
-        // Falls back to per-entry Keychain backup if core is unavailable.
+        // Fall back to a per-entry Keychain backup only when the core could not hold the
+        // deferred contribution (core unavailable → registerPqDeferred returns false).
+        // BUG FIX: the previous guard `!register() == false` was inverted — it wrote the
+        // backup when the core WAS available and skipped it when the core was unavailable,
+        // i.e. it dropped the backup in exactly the case it exists for. A lost deferred PQ
+        // secret silently downgrades the session to classical (BS-6).
         if !CryptoManager.shared.registerPqDeferred(
             contactId: contactId,
             otpkId: 0,   // otpk_id not tracked at this layer; 0 = unknown
             sharedSecret: encapsulation.sharedSecret
-        ) == false {
-            _ = KeychainManager.shared.saveData(
+        ) {
+            let ok = KeychainManager.shared.saveData(
                 Data(encapsulation.sharedSecret),
-                forKey: "construct.pq_deferred.\(contactId)"
+                forKey: "construct.pq_deferred.\(contactId)",
+                accessible: KeychainManager.cryptoKeyAccessible
             )
+            if !ok {
+                Log.error("PERSIST-FAIL PQ deferred backup \(contactId.prefix(8))… — deferred PQ secret lost, session will downgrade to classical (BS-6)", category: "PQC")
+            }
         }
         Log.info("PQC: PQXDH encapsulated for \(contactId.prefix(8))..., ct=\(encapsulation.ciphertext.count)B (deferred + persisted)", category: "PQC")
         return Data(encapsulation.ciphertext)
@@ -360,10 +373,14 @@ final class PQCKeyManager {
     static func saveCFESnapshot(to core: OrchestratorCore) {
         guard let blob = try? core.exportKyberSessionState(),
               !blob.isEmpty else { return }
-        _ = KeychainManager.shared.saveData(
+        let ok = KeychainManager.shared.saveData(
             Data(blob),
-            forKey: kyberSessionStateCFEKey
+            forKey: kyberSessionStateCFEKey,
+            accessible: KeychainManager.cryptoKeyAccessible
         )
+        if !ok {
+            Log.error("PERSIST-FAIL Kyber session state CFE (\(blob.count)B) — PQ ratchet state may desync on next launch", category: "PQC")
+        }
     }
 
     /// Restore the Kyber session state from a previously saved CFE blob.
@@ -401,6 +418,39 @@ final class PQCKeyManager {
         )
         try CryptoManager.shared.applyPqContribution(contactId: contactId, kemSharedSecret: sharedSecret)
         Log.info("PQC: PQXDH decapsulated for \(contactId.prefix(8))...", category: "PQC")
+    }
+
+    /// Receiver-side PQXDH for an incoming X3DH carrier: pick the Kyber secret the sender
+    /// encapsulated to, decapsulate, and mix the shared secret into the Double Ratchet.
+    ///
+    /// Two call sites reach this — the RESPONDER session-init path, which decapsulates from
+    /// `firstMessage.kemCiphertext`, and the orchestrator's `applyPqContribution` action, which
+    /// fires when a carrier arrives on a session we already hold. Both must make the identical
+    /// OTPK-vs-SPK choice and both must burn the one-time key, so that choice lives here rather
+    /// than being spelled out twice.
+    ///
+    /// Callers persist the session afterwards: this mutates in-memory ratchet state only.
+    func applyIncomingContribution(
+        kemCiphertext: Data,
+        kyberOtpkId: UInt32,
+        contactId: String
+    ) throws {
+        guard kyberOtpkId > 0 else {
+            try decapsulateAndStrengthen(kemCiphertext: kemCiphertext, contactId: contactId)
+            Log.info("PQC: PQXDH Kyber SPK for \(contactId.prefix(8))...", category: "PQC")
+            return
+        }
+        guard let otpkSecret = PQCKeyManager.kyberOtpkSecret(forKeyId: kyberOtpkId) else {
+            Log.error("PQC: Kyber OTPK id=\(kyberOtpkId) secret MISSING for \(contactId.prefix(8))…", category: "PQC")
+            throw CryptoManagerError.pqxdhOtpkMissing(kyberOtpkId)
+        }
+        try decapsulateAndStrengthen(
+            kemCiphertext: kemCiphertext,
+            contactId: contactId,
+            secretKeyOverride: otpkSecret
+        )
+        PQCKeyManager.deleteKyberOtpk(keyId: kyberOtpkId)
+        Log.info("PQC: PQXDH Kyber OTPK id=\(kyberOtpkId) for \(contactId.prefix(8))...", category: "PQC")
     }
 }
 

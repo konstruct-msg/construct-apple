@@ -1,0 +1,40 @@
+Conversations that stay yours.
+
+No phone number. No email. No ads and no feed. You create an identity on this device and you decide who can reach you.
+
+
+WHY IT IS PRIVATE
+
+• End-to-end encrypted. Text and media are decrypted only on your device and your contact's. The server handles a sealed container, not its contents.
+
+• Keys stay on the device. They are not uploaded to an account in the cloud and they are not tied to a SIM card.
+
+• Nobody writes to you uninvited. A new person reaches you through a QR code, a link, or a search by @alias — and that search is off until you turn it on.
+
+• Access is yours. Your recovery phrase and your linked devices belong to you, not to a carrier.
+
+
+WHY IT IS QUICK
+
+• Messaging only. No mini-apps, no store, no games — the things that make a messenger heavy and drain a battery.
+
+• A light client. The cryptography is native code built for speed, not a framework built to serve ads.
+
+• Three places. Chats, people, settings. Nothing else to learn.
+
+
+HOW IT WORKS
+
+1. Create an identity on your phone. Not a registration by phone number.
+2. Show a QR code or share a link.
+3. Write.
+
+Optional: a public @alias (off by default), several devices on one identity, recovery from a 12-word phrase.
+
+
+WHO IT IS FOR
+
+People who want a place to talk, not another social network. People who would rather not hand a phone number and a chat history to a third party. People who prefer a plain tool to a heavy one.
+
+
+Your messages are yours. Identity is a construct.

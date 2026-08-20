@@ -100,4 +100,42 @@ final class PrewarmRaceRegressionTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - The orphaned session an invite redeem brought back (2026-08-17)
+
+    /// Redeeming an invite is the one chat-start that means "we are establishing a session now",
+    /// so anything left from before is evidence of the past. On 2026-08-17 the peer had deleted
+    /// the contact — no session on his side — while hers survived in the Keychain; the redeem
+    /// restored it, `shouldPrewarm` saw a session and skipped, and her first message went out on
+    /// a ratchet he had thrown away. It never arrived, and it read as delivered to her.
+    ///
+    /// Mutation: `return false` — the orphan is kept and the first message after every re-pairing
+    /// is lost again.
+    func testInviteRedeemRetiresWhateverSessionSurvived() {
+        XCTAssertTrue(
+            SessionReducer.chatStartRetiresExistingSession(origin: .inviteRedeem),
+            "a session that outlived the pairing it belonged to cannot encrypt for the new one"
+        )
+    }
+
+    /// The other direction, and the reason this is a question rather than an unconditional reset:
+    /// opening a chat with a contact you already have must not touch its session. Tearing one down
+    /// on every tap is the destructive re-init this whole suite exists to prevent.
+    ///
+    /// Mutation: `return true` — every chat opened re-handshakes, and in-flight messages break.
+    func testOpeningAnExistingContactKeepsItsSession() {
+        XCTAssertFalse(
+            SessionReducer.chatStartRetiresExistingSession(origin: .existingContact),
+            "the session of a contact you already have is the one to keep, not to retire"
+        )
+    }
+
+    /// The distinction is the origin and nothing else — pinned so a third origin cannot be added
+    /// and quietly inherit whichever answer happens to be the default.
+    func testOnlyTheOriginDecidesIt() {
+        XCTAssertNotEqual(
+            SessionReducer.chatStartRetiresExistingSession(origin: .inviteRedeem),
+            SessionReducer.chatStartRetiresExistingSession(origin: .existingContact)
+        )
+    }
 }

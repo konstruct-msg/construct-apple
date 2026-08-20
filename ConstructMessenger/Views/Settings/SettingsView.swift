@@ -16,7 +16,6 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     private var connectionStatus = ConnectionStatusManager.shared
     @State private var showingQRCode = false
-    @State private var linkCopied = false
     @State private var showingRecoverySetup = false
     @State private var showingOrientation = false
     @State private var recoveryBannerDismissed = UserDefaults.standard.bool(forKey: "recovery_banner_dismissed")
@@ -28,11 +27,6 @@ struct SettingsView: View {
     @State private var showEmergencyImport = false
     @State private var emergencyPasteText = ""
     @State private var emergencyImportMsg: String?
-    /// Short identity-key fingerprint (user-facing external identity, thread 5.3).
-    @State private var ownFingerprint: String?
-    @State private var fingerprintCopied = false
-
-    private let inviteGenerator = InviteGenerator()
 
     /// Content cap on regular width (iPad two-column); unbounded on compact iPhone.
     private var settingsContentMaxWidth: CGFloat {
@@ -109,7 +103,6 @@ struct SettingsView: View {
                 if viewModel.needsUserInfoRefresh(from: authViewModel) {
                     viewModel.loadUserInfo(from: authViewModel)
                 }
-                refreshOwnFingerprint()
             }
             .task { await recoveryVM.loadStatus() }
             .sheet(isPresented: $showingRecoverySetup) {
@@ -226,45 +219,24 @@ struct SettingsView: View {
         }
     }
 
+    /// One row, opening one sheet.
+    ///
+    /// This was a [QR][COPY LINK] pair plus a caption linking to a third screen for
+    /// inviting several people. All three did the same thing — mint a v4 one-time invite —
+    /// and the split forced the user to decide which shape they wanted before seeing
+    /// either. `ContactQRCodeView` now shows both and states the rule that made the third
+    /// screen unnecessary.
     private var shareSection: some View {
         CTSectionGroup {
             Button { showingQRCode = true } label: {
-                CTSettingsRow(label: NSLocalizedString("show_qr_code", comment: "").uppercased(), icon: "qrcode", isAction: true, disclosure: true)
-            }
-            .buttonStyle(.plain)
-            CTSep(style: .thin)
-
-            Button { copyContactLink() } label: {
                 CTSettingsRow(
-                    label: linkCopied ? NSLocalizedString("link_copied", comment: "").uppercased() : NSLocalizedString("copy_contact_link", comment: "").uppercased(),
-                    icon: linkCopied ? "checkmark" : "link",
-                    labelColor: linkCopied ? Color.CT.accentDim : Color.CT.text,
-                    disclosure: !linkCopied
+                    label: NSLocalizedString("invite", comment: "").uppercased(),
+                    icon: "qrcode",
+                    disclosure: true
                 )
             }
             .buttonStyle(.plain)
-            .disabled(linkCopied)
-
-            if let ownFingerprint {
-                CTSep(style: .thin)
-                Button {
-                    PlatformClipboard.copy(ownFingerprint)
-                    fingerprintCopied = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        fingerprintCopied = false
-                    }
-                } label: {
-                    CTSettingsRow(
-                        label: NSLocalizedString("identity_fingerprint", comment: "").uppercased(),
-                        value: fingerprintCopied
-                            ? NSLocalizedString("identity_fingerprint_copied", comment: "")
-                            : ownFingerprint,
-                        icon: "touchid",
-                        valueColor: Color.CT.accent
-                    )
-                }
-                .buttonStyle(.plain)
-            }
+            .accessibilityIdentifier(A11y.Settings.invite)
         }
     }
 
@@ -274,6 +246,10 @@ struct SettingsView: View {
                 CTSettingsRow(label: NSLocalizedString("linked_devices", comment: "").uppercased(), icon: "laptopcomputer", disclosure: true)
             }
             .buttonStyle(.plain)
+            // On the link, not on the row inside it: an identifier applied within `CTSettingsRow`
+            // is inherited by each of its children, and the tree comes back with the string
+            // tripled on the container plus a copy on the icon, the label and the chevron.
+            .accessibilityIdentifier(A11y.Settings.devices)
             CTSep(style: .thin)
             NavigationLink(destination: AppearanceSettingsView()) {
                 CTSettingsRow(label: NSLocalizedString("appearance", comment: "").uppercased(), icon: "paintbrush", disclosure: true)
@@ -444,42 +420,6 @@ struct SettingsView: View {
         return String(name.prefix(2)).uppercased()
     }
 
-    private func refreshOwnFingerprint() {
-        guard CryptoManager.shared.isInitialized else {
-            ownFingerprint = nil
-            return
-        }
-        do {
-            let (ik, _) = try CryptoManager.shared.localBundlePublicKeys()
-            ownFingerprint = IdentityFingerprint.short(from: ik)
-        } catch {
-            ownFingerprint = nil
-        }
-    }
-
-    private func copyContactLink() {
-        Task { await copyContactLinkAsync() }
-    }
-
-    @MainActor
-    private func copyContactLinkAsync() async {
-        guard authViewModel.currentUserId != nil else { return }
-        guard let deviceId = KeychainManager.shared.loadDeviceID() else { return }
-        let serverHostname = ServerConfig.inviteHost
-        // HTTPS share can land in third-party messenger logs/previews — never embed `un`.
-        guard let link = try? inviteGenerator.generateDeepLink(
-            userId: viewModel.userId,
-            deviceId: deviceId,
-            username: nil,
-            server: serverHostname,
-            useHTTPS: true
-        ) else { return }
-        PlatformClipboard.copy(link)
-        withAnimation { linkCopied = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            withAnimation { linkCopied = false }
-        }
-    }
 }
 
 #if DEBUG

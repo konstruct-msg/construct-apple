@@ -16,9 +16,20 @@ import CryptoKit
 import SwiftProtobuf
 import Observation
 
+/// Opens a ConstructSEALED envelope, recovering the real sender and content type.
+///
+/// A protocol (rather than a direct `StealthSenderService.shared` call) so the unseal boundary
+/// in `MessageRouter` is an explicit, substitutable dependency — that boundary is where
+/// `f39e03b4` silently dropped every sealed control message, undetected because no test could
+/// reach it. See client/ios/SEALED_CONTROL_CHANNEL_REMEDIATION.md.
+@MainActor
+protocol SealedSenderResolving {
+    func resolveSender(sealedInnerBytes: Data) -> ResolvedSender?
+}
+
 @Observable
 @MainActor
-final class StealthSenderService {
+final class StealthSenderService: SealedSenderResolving {
     static let shared = StealthSenderService()
 
     // Cache key in UserDefaults
@@ -91,29 +102,73 @@ final class StealthSenderService {
         UserDefaults.standard.removeObject(forKey: Self.certOwnerKey)
     }
 
-    // MARK: - Seal (send path)
+    // MARK: - Anonymous box to an identity key
 
-    /// Encrypts `certBytes` (serialized SenderCertificate proto) to the recipient's
-    /// X25519 identity key. Returns the sealed box:
-    ///   ephemeral_pub(32) || nonce(12) || ciphertext || tag(16)
-    func sealSenderCert(_ certBytes: Data, recipientIdentityKey: Data) throws -> Data {
+    /// Header of a sealed box: `ephemeral_pub(32) || nonce(12) || ciphertext || tag(16)`.
+    nonisolated static let identityBoxOverhead = 32 + 12 + 16
+
+    /// Encrypts `plaintext` to a recipient's X25519 **identity** key, with a fresh ephemeral per
+    /// call — two boxes to the same recipient share no bytes, so the relay cannot link them.
+    ///
+    /// The ratchet is not involved, which is what makes this usable on messages that must survive
+    /// a session too broken to encrypt with: the recipient's long-term identity key is enough.
+    /// `domain` separates uses — a box sealed for one purpose must not open under another.
+    nonisolated static func sealToIdentity(_ plaintext: Data, recipientIdentityKey: Data, domain: String) throws -> Data {
         let ephemeralPrivKey = Curve25519.KeyAgreement.PrivateKey()
         let recipientPubKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: recipientIdentityKey)
         let sharedSecret = try ephemeralPrivKey.sharedSecretFromKeyAgreement(with: recipientPubKey)
         let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
             using: SHA256.self,
-            salt: Data("ConstructSEALED-v1".utf8),
+            salt: Data(domain.utf8),
             sharedInfo: Data(),
             outputByteCount: 32
         )
-        let sealedBox = try ChaChaPoly.seal(certBytes, using: symmetricKey)
+        let sealedBox = try ChaChaPoly.seal(plaintext, using: symmetricKey)
         let nonce = sealedBox.nonce.withUnsafeBytes { Data($0) }
-        var box = Data(capacity: 32 + 12 + sealedBox.ciphertext.count + 16)
+        var box = Data(capacity: identityBoxOverhead + sealedBox.ciphertext.count)
         box.append(ephemeralPrivKey.publicKey.rawRepresentation)
         box.append(nonce)
         box.append(sealedBox.ciphertext)
         box.append(sealedBox.tag)
         return box
+    }
+
+    /// Opens a box produced by `sealToIdentity` with our identity private key. Throws when the box
+    /// is malformed, was sealed for another recipient, or was sealed under a different `domain`.
+    nonisolated static func openFromIdentity(_ sealedBox: Data, ourIdentityPrivKeyBytes: Data, domain: String) throws -> Data {
+        guard sealedBox.count >= identityBoxOverhead else {
+            throw StealthError.invalidBoxLength
+        }
+        let base = sealedBox.startIndex
+        let epPubBytes = sealedBox[base ..< base + 32]
+        let nonceBytes = sealedBox[base + 32 ..< base + 44]
+        let ciphertextAndTag = sealedBox[(base + 44)...]
+        let ciphertext = ciphertextAndTag.dropLast(16)
+        let tag = ciphertextAndTag.suffix(16)
+
+        let ourPrivKey = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: ourIdentityPrivKeyBytes)
+        let epPubKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: epPubBytes)
+        let sharedSecret = try ourPrivKey.sharedSecretFromKeyAgreement(with: epPubKey)
+        let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
+            using: SHA256.self,
+            salt: Data(domain.utf8),
+            sharedInfo: Data(),
+            outputByteCount: 32
+        )
+        let nonce = try ChaChaPoly.Nonce(data: nonceBytes)
+        let box = try ChaChaPoly.SealedBox(nonce: nonce, ciphertext: ciphertext, tag: tag)
+        return try ChaChaPoly.open(box, using: symmetricKey)
+    }
+
+    // MARK: - Seal (send path)
+
+    nonisolated private static let senderCertDomain = "ConstructSEALED-v1"
+
+    /// Encrypts `certBytes` (serialized SenderCertificate proto) to the recipient's
+    /// X25519 identity key.
+    func sealSenderCert(_ certBytes: Data, recipientIdentityKey: Data) throws -> Data {
+        try Self.sealToIdentity(certBytes, recipientIdentityKey: recipientIdentityKey,
+                                domain: Self.senderCertDomain)
     }
 
     // MARK: - Unseal (receive path)
@@ -124,30 +179,9 @@ final class StealthSenderService {
         _ sealedBox: Data,
         ourIdentityPrivKeyBytes: Data
     ) throws -> Shared_Proto_Core_V1_SenderCertificate {
-        guard sealedBox.count >= 32 + 12 + 16 else {
-            throw StealthError.invalidBoxLength
-        }
-        let epPubBytes = sealedBox[..<32]
-        let nonceBytes = sealedBox[32..<44]
-        let ciphertextAndTag = sealedBox[44...]
-        guard ciphertextAndTag.count >= 16 else {
-            throw StealthError.invalidBoxLength
-        }
-        let ciphertext = ciphertextAndTag.dropLast(16)
-        let tag = ciphertextAndTag.suffix(16)
-
-        let ourPrivKey = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: ourIdentityPrivKeyBytes)
-        let epPubKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: epPubBytes)
-        let sharedSecret = try ourPrivKey.sharedSecretFromKeyAgreement(with: epPubKey)
-        let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
-            using: SHA256.self,
-            salt: Data("ConstructSEALED-v1".utf8),
-            sharedInfo: Data(),
-            outputByteCount: 32
-        )
-        let nonce = try ChaChaPoly.Nonce(data: nonceBytes)
-        let box = try ChaChaPoly.SealedBox(nonce: nonce, ciphertext: ciphertext, tag: tag)
-        let certBytes = try ChaChaPoly.open(box, using: symmetricKey)
+        let certBytes = try Self.openFromIdentity(sealedBox,
+                                                  ourIdentityPrivKeyBytes: ourIdentityPrivKeyBytes,
+                                                  domain: Self.senderCertDomain)
         return try Shared_Proto_Core_V1_SenderCertificate(serializedBytes: certBytes)
     }
 
@@ -295,47 +329,142 @@ final class StealthSenderService {
         case .unvouched(let reason):
             Log.info("Stealth: resolved sender \(cert.senderUserID.prefix(8))… UNVOUCHED (\(reason)) — delivering via ratchet", category: "Stealth")
         }
+        // Expiry bounds replay of this envelope; the identity key is still theirs if the
+        // signature vouches. Pinning it here is what lets a later sealed *send* proceed
+        // for a contact whose bundle path never kept the key (IK_MISS[no_key], 2026-08-19).
+        //
+        // `attest` above has already verified the signature whenever it returned
+        // `.vouched(.signature)`, and this runs once per incoming sealed message — the
+        // 2026-08-19 replay put 4211 of them through in 65 seconds, so verifying twice is
+        // not free. Every other verdict re-verifies, because none of them is a statement
+        // about the signature: `.expired` short-circuits before `attest` looks at it, and
+        // `.kt` is a different basis entirely.
+        if case .vouched(.signature) = trust {
+            pinIdentity(cert)
+        } else {
+            rememberIdentityFromCertificate(cert)
+        }
         return ResolvedSender(senderId: cert.senderUserID, contentType: contentType, trust: trust)
+    }
+
+    /// Pin `cert.senderIdentityKey` when the signature vouches, ignoring expiry.
+    ///
+    /// `attest` returns `.unvouched(.expired)` before it ever looks at the signature, so a
+    /// contact we have been receiving sealed mail from can still have `knownIdentityKey ==
+    /// nil`. The send path then fails closed forever. Signature-vouched is the same TOFU
+    /// `rememberIdentityKeyIfUnknown` already accepts from a bundle fetch.
+    ///
+    /// Verifies the signature itself. The one caller that has already verified it takes
+    /// `pinIdentity` instead — see there for why that shortcut is not a parameter on this method.
+    func rememberIdentityFromCertificate(
+        _ cert: Shared_Proto_Core_V1_SenderCertificate,
+        context: NSManagedObjectContext = PersistenceController.shared.container.viewContext
+    ) {
+        guard case .vouched = attestSignature(cert) else { return }
+        pinIdentity(cert, context: context)
+    }
+
+    /// Pin without verifying. **Only reachable from a branch that has just verified.**
+    ///
+    /// This started as an `alreadyAttested:` parameter on `rememberIdentityFromCertificate`,
+    /// which made "the signature is good" something a caller asserts rather than something the
+    /// code establishes — in the one method whose entire job is deciding whether to trust a key.
+    /// A private function whose proof is three lines above its only call site cannot be handed a
+    /// lie by a future caller; a defaulted parameter can.
+    private func pinIdentity(
+        _ cert: Shared_Proto_Core_V1_SenderCertificate,
+        context: NSManagedObjectContext = PersistenceController.shared.container.viewContext
+    ) {
+        guard !cert.senderUserID.isEmpty, !cert.senderIdentityKey.isEmpty else { return }
+        ContactLinkService.shared.rememberIdentityKeyIfUnknown(
+            userId: cert.senderUserID,
+            identityKey: cert.senderIdentityKey,
+            source: "sealed_cert",
+            // Driven by an incoming envelope. A sender must not be able to put a row in our
+            // store by sending to us — that is how a deleted contact kept coming back while
+            // the server replayed their backlog (device logs 2026-08-19).
+            createIfMissing: false,
+            context: context
+        )
     }
 
     // MARK: - Build SealedInner for sending
 
     /// Builds SealedInner proto bytes for a sealed sender message.
-    /// `contentType` travels inside SealedInner (not the outer Envelope, which stays
-    /// generic for sealed sends) so the recipient can recover message/receipt/call-signal
-    /// kind after unsealing — stealth-sealed-sender-v2 Phase 3.
+    ///
+    /// `SealedInner` is a **plaintext** proto — the relay parses it — so `content_type` here is
+    /// server-visible. Since 2026-08-03 the real type rides in KNST byte 5 inside the ciphertext,
+    /// and this field is limited to the two types that must be recognised before decryption. The
+    /// parameter is a `SealedEnvelopeType` and not a raw proto enum so that limit is a compile
+    /// error rather than a convention: `.generic` serialises to nothing at all.
     func buildSealedInner(
         recipientUserId: String,
         certBytes: Data,
         recipientIdentityKey: Data,
         encryptedPayload: Data,
-        contentType: Shared_Proto_Core_V1_ContentType
+        contentType: SealedEnvelopeType,
+        spendUnit: TokenSpendUnit? = nil
     ) async throws -> Data {
         let sealedCert = try sealSenderCert(certBytes, recipientIdentityKey: recipientIdentityKey)
         var inner = Shared_Proto_Core_V1_SealedInner()
         inner.recipientUserID = recipientUserId
         inner.senderCertCiphertext = sealedCert
         inner.encryptedPayload = encryptedPayload
-        inner.contentType = contentType
+        // `.generic` is UNSPECIFIED = 0, which proto3 omits — the field does not reach the wire.
+        inner.contentType = contentType.proto
         inner.deliveryTag = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
+        // Present only on multi-envelope messages. A nil unit leaves the field empty, which the
+        // server reads as legacy per-envelope redemption — the path every single-envelope send
+        // still takes, unchanged.
+        if let spendUnit {
+            inner.tokenSpendID = spendUnit.spendId
+        }
 
         // A token accompanies every sealed send (per-message — the only model compatible
         // with server-side enforce; per-stream removed 2026-07-15). `wantedToken` is
         // captured before consuming so "stealth disabled" is distinguishable from
         // "wallet empty" in the else-branch logging below.
-        let wantedToken = StealthPolicy.shared.shouldConsumeToken()
+        //
+        // Within a spend unit only one envelope pays; the rest ride on its redemption. The
+        // payer is whoever *succeeds*, not whoever is first — see TokenSpendUnit for why an
+        // empty wallet on chunk 0 must not condemn chunks 1…29.
+        let unitAlreadyPaid = spendUnit.map { !$0.shouldAttemptPayment } ?? false
+        let wantedToken = TokenSpendUnit.shouldAttemptPayment(
+            policyWantsToken: StealthPolicy.shared.shouldConsumeToken(),
+            unitPaid: unitAlreadyPaid
+        )
         // Peek the server token-encryption key BEFORE consuming a wallet token. An
         // unsealable token is rejected server-side (`decrypt_failed`, fatal under enforce),
         // so if we cannot seal we must NOT spend the token — leave it in the wallet for a
         // later send once the key is cached (it arrives via GetSenderCertificateResponse).
         let canSeal = await ServerKeyManager.shared.hasTokenEncryptionKey()
-        if canSeal,
+        // An empty wallet is not a verdict — it is a race with issuance. Reading it once and
+        // stepping over it is how 93 of 271 sealed sends in one busy hour went out token-less
+        // *past a batch that was already in flight* (the 99 "replenishment already in progress"
+        // lines are the same event from the issuer's end). Under enforce those are rejected
+        // sends, so the wait is cheaper than the failure. Bounded, and skipped entirely while
+        // the issuer is backing us off — see BlindTokenService.ensureTokenAvailable.
+        if wantedToken, canSeal, TokenWalletService.shared.balance == 0 {
+            await BlindTokenService.shared.ensureTokenAvailable()
+        }
+        if unitAlreadyPaid {
+            // Covered by an earlier envelope of the same logical message. Deliberately silent
+            // about the wallet — nothing was spent. Logged so an album's cost is legible in a
+            // device log as one WITH-token line followed by N covered ones.
+            Log.debug(
+                "Stealth: sealed send covered by unit \(spendUnit?.spendId.prefix(4).map { String(format: "%02x", $0) }.joined() ?? "") — no token spent",
+                category: "Stealth"
+            )
+        } else if wantedToken, canSeal,
            let token = StealthPolicy.shared.consumeTokenIfNeeded(),
            let sealedToken = await ServerKeyManager.shared.sealTokenBytes(token.token) {
             inner.tokenNonce = token.nonce
             // token_bytes sealed to the server's X25519 key so relay operators cannot read
             // the spent token (VEIL ghost-mode) and the server can redeem it.
             inner.tokenBytes = sealedToken
+            // Only now is the unit paid for. Marking it before the seal succeeded would leave
+            // the remaining envelopes riding on a redemption that never happened.
+            spendUnit?.markPaid()
             // Positive-path visibility: confirms a token was actually attached (successful
             // consume was previously silent — the wallet could only be inferred, not seen).
             Log.info("Stealth: sealed send WITH token (wallet=\(TokenWalletService.shared.balance) left)", category: "Stealth")
@@ -369,7 +498,8 @@ final class StealthSenderService {
         recipientUserId: String,
         recipientIdentityKey: Data,
         encryptedPayload: Data,
-        contentType: Shared_Proto_Core_V1_ContentType
+        contentType: SealedEnvelopeType,
+        spendUnit: TokenSpendUnit? = nil
     ) async throws -> Data {
         // getSenderCertificate is @MainActor async — call it directly (will hop automatically)
         let certBytes = try await StealthSenderService.shared.getSenderCertificate()
@@ -378,7 +508,8 @@ final class StealthSenderService {
             certBytes: certBytes,
             recipientIdentityKey: recipientIdentityKey,
             encryptedPayload: encryptedPayload,
-            contentType: contentType
+            contentType: contentType,
+            spendUnit: spendUnit
         )
     }
 
@@ -391,7 +522,19 @@ final class StealthSenderService {
         let req = User.fetchRequest()
         req.predicate = NSPredicate(format: "id == %@", recipientId)
         req.fetchLimit = 1
-        return (try? context.fetch(req))?.first?.knownIdentityKey
+        let user = (try? context.fetch(req))?.first
+        if let key = user?.knownIdentityKey { return key }
+        // A miss here fails every sealed send to this peer closed, permanently, and the thrown
+        // `StealthDowngradeBlocked` only says the key is absent — never which absence it is. That
+        // gap is why TODO #45 could not be attributed to a branch from a device log. The two cases
+        // have different causes and different fixes, so they get different lines.
+        Log.error(
+            user == nil
+                ? "IK_MISS[no_row]: no User row for \(recipientId.prefix(8))… — sealed send cannot proceed"
+                : "IK_MISS[no_key]: User row for \(recipientId.prefix(8))… exists but knownIdentityKey is nil (isContact=\(user!.isContact) kt=\(user!.ktStatus)) — sealed send cannot proceed",
+            category: "Stealth"
+        )
+        return nil
     }
 }
 

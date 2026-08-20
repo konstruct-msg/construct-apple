@@ -27,6 +27,9 @@ struct DataStorageSettingsView: View {
     @AppStorage(MediaManager.evictAfterDaysKey)
     private var evictAfterDays: Int = 0
 
+    @AppStorage(MediaAutoDownloadSetting.defaultsKey)
+    private var autoDownloadRaw: Int = MediaAutoDownloadSetting.default.rawValue
+
     
 
     // MARK: - View state
@@ -48,6 +51,12 @@ struct DataStorageSettingsView: View {
         ("2 GB",    DataStorageSettingsConfig.twoGBInBytes),
         ("5 GB",    DataStorageSettingsConfig.fiveGBInBytes),
         (NSLocalizedString("storage_no_limit", comment: ""), 0),
+    ]
+
+    private let autoDownloadOptions: [(label: String, setting: MediaAutoDownloadSetting)] = [
+        (NSLocalizedString("media_autodownload_never", comment: ""), .never),
+        (NSLocalizedString("media_autodownload_unmetered", comment: ""), .unmetered),
+        (NSLocalizedString("media_autodownload_always", comment: ""), .always),
     ]
 
     private let evictOptions: [(label: String, days: Int)] = [
@@ -214,6 +223,34 @@ struct DataStorageSettingsView: View {
                         .padding(.vertical, SettingsLayout.rowVerticalPadding)
                     }
                     sectionFooter(maxDiskCacheBytesRaw == 0 ? "storage_no_limit_footer" : "storage_limit_footer")
+
+                    // MARK: Auto-download
+                    CTSettingsSectionHeader(title: NSLocalizedString("media_autodownload", comment: ""))
+                    CTSectionGroup {
+                        ForEach(Array(autoDownloadOptions.enumerated()), id: \.offset) { pair in
+                            if pair.offset > 0 { CTSep(style: .thin) }
+                            let isSelected = autoDownloadRaw == pair.element.setting.rawValue
+                            Button {
+                                autoDownloadRaw = pair.element.setting.rawValue
+                            } label: {
+                                HStack(spacing: DataStorageSettingsLayout.rowContentSpacing) {
+                                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                        .font(CTFont.regular(DataStorageSettingsLayout.autoEvictionCheckIconSize))
+                                        .foregroundStyle(isSelected ? Color.CT.accent : Color.CT.textDim)
+                                        .frame(width: SettingsLayout.rowIconMinWidth)
+                                    Text(pair.element.label.uppercased())
+                                        .font(CTFont.regular(13))
+                                        .foregroundStyle(Color.CT.text)
+                                        .tracking(DataStorageSettingsLayout.sectionTitleTracking)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, DataStorageSettingsLayout.rowHorizontalPadding)
+                                .padding(.vertical, DataStorageSettingsLayout.usageRowTopPadding)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    sectionFooter("media_autodownload_footer")
 
                     // MARK: Auto-eviction
                     CTSettingsSectionHeader(title: NSLocalizedString("storage_auto_clear", comment: ""))

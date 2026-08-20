@@ -15,7 +15,6 @@ struct MessageInputView: View {
     #if os(macOS)
     @Binding var droppedFileURLs: [URL]
     #endif
-    let isSending: Bool
     let replyingTo: Message?
     let quoteOverride: String?
     let editingMessage: Message?
@@ -29,7 +28,6 @@ struct MessageInputView: View {
         IOSMessageInputView(
             text: $text,
             droppedImages: $droppedImages,
-            isSending: isSending,
             replyingTo: replyingTo,
             quoteOverride: quoteOverride,
             editingMessage: editingMessage,
@@ -43,7 +41,6 @@ struct MessageInputView: View {
             text: $text,
             droppedImages: $droppedImages,
             droppedFileURLs: $droppedFileURLs,
-            isSending: isSending,
             replyingTo: replyingTo,
             quoteOverride: quoteOverride,
             editingMessage: editingMessage,
@@ -66,7 +63,6 @@ struct MessageInputView: View {
         MessageInputView(
             text: $text,
             droppedImages: $dropped,
-            isSending: false,
             replyingTo: nil,
             quoteOverride: nil,
             editingMessage: nil,

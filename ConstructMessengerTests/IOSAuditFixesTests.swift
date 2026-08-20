@@ -3,6 +3,17 @@ import CoreData
 @testable import Construct_Messenger
 
 final class IOSAuditFixesTests: XCTestCase {
+
+    /// The ACK dedup cache lives in the orchestrator core (one cache, one durable store —
+    /// decisions/one-ack-cache-one-durable-store.md), so any assertion about cache warming
+    /// needs a real core. Without this these tests passed only when an alphabetically earlier
+    /// suite happened to boot the shared `CryptoManager` first — green by test order, which is
+    /// the same rot `CryptoCoreTestBootstrap` was written to prevent.
+    @MainActor
+    override func setUpWithError() throws {
+        try CryptoCoreTestBootstrap.ensureCore(localUserId: "1a2b3c4d-0000-4000-8000-000000000001")
+    }
+
     private func makeInMemoryContext() -> NSManagedObjectContext {
         PersistenceController(inMemory: true).container.viewContext
     }
@@ -26,7 +37,6 @@ final class IOSAuditFixesTests: XCTestCase {
             id: id,
             from: from,
             to: to,
-            messageType: nil,
             ephemeralPublicKey: Data(),
             messageNumber: 1,
             content: Data(),

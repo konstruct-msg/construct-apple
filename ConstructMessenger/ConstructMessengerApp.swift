@@ -64,6 +64,9 @@ struct Construct_MessengerApp: App {
                     return
                 }
                 RuntimeDiagnostics.shared.start()
+                // DEBUG-only: records what the app was doing when the keyboard hid. Armed because
+                // the composer-swap explanation for TODO 33 was fixed and the symptom stayed.
+                KeyboardEventTracer.shared.start()
                 MediaManager.shared.evictOldFiles()
                 StorageMigrationService.shared.migrateIfNeeded(
                     context: rootContainer.viewContext
@@ -81,8 +84,6 @@ struct Construct_MessengerApp: App {
                     // Phase 1: lazily publish the hybrid PQ identity bundle (Ed25519 + ML-DSA-65).
                     await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
                 }
-                // Engine layer (construct-engine) is paused.
-                // Direct gRPC + construct-core path is used for both iOS and macOS Desktop (Strategy B).
             }
         }
     }

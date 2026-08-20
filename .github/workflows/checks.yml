@@ -1,0 +1,50 @@
+# Checks that catch a defect before a human would, and that need no build.
+#
+# There is deliberately NO build or test job. The app links ConstructCore.xcframework
+# and ConstructTransport.xcframework, which are not in git: producing them means
+# cross-compiling construct-core and construct-transport from sibling repositories
+# with a Rust iOS toolchain. A runner cannot do that without checkout access to those
+# repos, and a job that green-lights a build it never performed would be worse than
+# no job. Build and test run locally — see docs/TESTING.md.
+#
+# What is here instead are the rules that are release-blocking, textual, and were
+# until now enforced by nothing but memory. Each one exists because it failed once at
+# the far end of the process — at upload, or on a user's screen — where it is most
+# expensive to find.
+
+name: checks
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  localization:
+    # Pure grep — no Xcode, no macOS runner needed.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locale parity, duplicates, unresolved keys, format specifiers
+        run: ./scripts/check_localization.sh
+
+  appstore-metadata:
+    # Apple reports an over-length field at upload, once the copy has already been
+    # written, reviewed and translated four times. Counting characters here costs a
+    # second and moves that discovery to the commit that caused it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Store listing fields fit Apple's limits, in every locale
+        run: ./scripts/check_appstore_metadata.sh
+
+  privacy-manifest:
+    # Needs macOS: the script reads PrivacyInfo.xcprivacy with plutil.
+    #
+    # Apple validates this manifest on the binary at upload (ITMS-91053), so without
+    # this job a gap surfaces after the build, after the archive, at the worst moment.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Required-reason APIs are declared
+        run: ./scripts/check_privacy_manifest.sh
