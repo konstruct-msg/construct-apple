@@ -1535,11 +1535,36 @@ final class MessageRouter {
             return .durable
         }
 
+        // The server says this account does not exist. No session can ever be built for it, so
+        // queueing its replayed backlog buys nothing and costs the stream cursor.
+        switch SessionReducer.vanishedPeerAction(
+            isVanished: VanishedPeerStore.shared.isVanished(userId),
+            kind: initKind
+        ) {
+        case .proceed:
+            break
+        case .revive:
+            Log.info("Handshake from vanished peer \(userId.prefix(8))… — account is back, retrying the bundle", category: "MessageRouter")
+            VanishedPeerStore.shared.clear(userId)
+        case .discard:
+            Log.debug("Discarding \(initKind) from vanished peer \(userId.prefix(8))… — no session is possible", category: "MessageRouter")
+            PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+            PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "peer_vanished")
+            if isNewChat { context.delete(chat) }
+            // `.durable` on purpose: nothing will revisit this message, so the watermark must be
+            // allowed past it. This is the release the stall needed — see `VanishedPeerStore`.
+            return .durable
+        }
+
         guard pendingQueue.enqueue(message, for: userId) else {
             Log.info("Pending queue saturated for \(userId.prefix(8))… — not queueing until session init completes", category: "MessageRouter")
-            // Not enqueued, but DON'T advance: the server keeps re-delivering it; once the queue
-            // drains (init completes) a later re-delivery is enqueued and processed. Holding the
-            // cursor (rather than dropping) trades a bounded stall for no message loss.
+            // Not enqueued, so nothing owns this message — `.deferred` here is a hold with no
+            // holder, and it is only safe while "the queue drains when init completes" is true.
+            // Against a peer whose init can never complete it is a permanent head-of-FIFO block
+            // on the resume cursor, which is exactly what happened (device A, 2026-08-20: queue
+            // at 70, cursor frozen since 31 July). `VanishedPeerStore` removes the cause above;
+            // this stays `.deferred` for the genuinely transient case it was written for, and
+            // `SessionCoordinator.giveUpInit` resolves the queue whenever init gives up.
             return .deferred
         }
 

@@ -122,6 +122,24 @@ enum SessionReducer {
         case midRatchet
     }
 
+    /// What to do with an envelope from a peer the server said does not exist.
+    enum VanishedPeerAction: Equatable {
+        /// Not marked vanished — ordinary handling.
+        case proceed
+        /// Marked vanished, and this envelope is a real handshake: the account was re-registered,
+        /// or the mark was wrong. Clear it and try the bundle again — the handshake is the only
+        /// evidence that could distinguish those cases, and it costs one fetch to act on.
+        case revive
+        /// Marked vanished and this is more of their replayed backlog. Resolve it and move on:
+        /// queueing it would hold the stream cursor for a session that can never be built.
+        case discard
+    }
+
+    static func vanishedPeerAction(isVanished: Bool, kind: ReceivingInitKind) -> VanishedPeerAction {
+        guard isVanished else { return .proceed }
+        return kind == .handshake ? .revive : .discard
+    }
+
     /// Classify an incoming envelope for the RESPONDER init path.
     ///
     /// Handshake evidence, any one of which is enough: SESSION_RESET_INIT, a consumed OTPK,

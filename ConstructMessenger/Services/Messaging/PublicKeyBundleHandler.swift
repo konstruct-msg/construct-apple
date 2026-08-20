@@ -7,6 +7,9 @@
 
 import Foundation
 import CoreData
+// For `RPCError` — `notFound` from the key service is a verdict this file has to act on, not a
+// transport detail it can stay ignorant of.
+import GRPCCore
 
 /// Handles public key bundle fetching, retry logic, and session initialization
 /// Extracted from ChatsViewModel Phase 1.5
@@ -57,7 +60,20 @@ class PublicKeyBundleHandler {
             } catch {
                 lastError = error
                 Log.info("SESSION_STATE[fetch_bundle_failed]: attempt=\(attempt)/\(maxAttempts), error=\(error.localizedDescription)", category: "SessionInit")
-                
+
+                // `notFound` is an answer, not a failure to get one. Retrying asks the same
+                // question of a server that has already replied definitively, and because the
+                // caller retries per redelivered message the retries never end — which is how one
+                // deleted account held a device's stream cursor at 31 July for three weeks.
+                if let rpc = error as? RPCError, rpc.code == .notFound {
+                    Log.info(
+                        "SESSION_STATE[fetch_bundle_not_found]: userId=\(userId.prefix(8))… — server has no such user; not retrying",
+                        category: "SessionInit"
+                    )
+                    VanishedPeerStore.shared.markVanished(userId)
+                    throw SessionError.peerNotFound
+                }
+
                 if attempt < maxAttempts {
                     Log.info("⏳ Retrying public key fetch in \(delay)s...", category: "SessionInit")
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))

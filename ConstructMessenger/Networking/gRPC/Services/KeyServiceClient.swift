@@ -388,6 +388,8 @@ final class KeyServiceClient: Sendable {
         // `.failed` outcome throws inside the RPC closure above, and a hybrid downgrade throws in
         // the switch.
         await MainActor.run {
+            // A bundle came back, so whatever marked them gone is stale.
+            VanishedPeerStore.shared.clear(userId)
             ContactLinkService.shared.rememberIdentityKeyIfUnknown(
                 userId: userId,
                 identityKey: fetched.data.identityPublic,

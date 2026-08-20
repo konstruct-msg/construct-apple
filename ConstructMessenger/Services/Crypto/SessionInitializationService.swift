@@ -19,6 +19,10 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
     /// clear the pending queue, including any real handshake behind it.
     case notAHandshakeCarrier
 
+    /// The server answered `notFound` for this peer's prekey bundle. Terminal, not transient:
+    /// no amount of retrying makes a deleted account exist. See `VanishedPeerStore`.
+    case peerNotFound
+
     var errorDescription: String? {
         switch self {
         case .staleSPKBundle(let epoch, let knownEpoch):
@@ -29,6 +33,8 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
             return "Contact's post-quantum keys are incomplete — ask them to update the app"
         case .notAHandshakeCarrier:
             return "Incoming message is not a session handshake"
+        case .peerNotFound:
+            return "This account no longer exists"
         }
     }
 }

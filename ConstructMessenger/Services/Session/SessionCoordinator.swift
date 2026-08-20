@@ -950,6 +950,11 @@ final class SessionCoordinator: MessageRouterDelegate {
                 Log.info("initReceivingSession failed — clearing queue for \(userId.prefix(8))…", category: "SessionInit")
                 giveUpInit(for: userId, blamedMessageId: carrier.id, metricLabel: "init_fail")
             }
+        } catch SessionError.peerNotFound {
+            // Terminal. Retrying is what turned one deleted account into a three-week cursor
+            // stall; the give-up releases the queue and the watermark with it.
+            Log.info("SESSION_STATE[init_abandoned_peer_gone]: \(userId.prefix(8))… — server has no such user", category: "SessionInit")
+            giveUpInit(for: userId, blamedMessageId: message.id, metricLabel: "peer_not_found")
         } catch {
             Log.error("SESSION_STATE[bundle_fetch_failed]: userId=\(userId.prefix(8))..., error=\(error.localizedDescription)", category: "SessionInit")
         }
