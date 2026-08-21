@@ -64,6 +64,7 @@ final class AccountWipeKeysTests: XCTestCase {
         let classified = Set(AccountWipeKeys.wiped)
             .union(AccountWipeKeys.survives)
             .union(AccountWipeKeys.wipedPrefixes)
+            .union(AccountWipeKeys.notStorage)
 
         let unclassified = declared.filter { key in
             !classified.contains(key) &&
@@ -72,7 +73,8 @@ final class AccountWipeKeysTests: XCTestCase {
 
         XCTAssertTrue(
             unclassified.isEmpty,
-            "unclassified UserDefaults keys — add each to AccountWipeKeys.wiped or .survives with a reason:\n"
+            "unclassified construct.* literals — add each to AccountWipeKeys.wiped, .survives or "
+                + ".notStorage with a reason:\n"
                 + unclassified.sorted().joined(separator: "\n")
         )
     }

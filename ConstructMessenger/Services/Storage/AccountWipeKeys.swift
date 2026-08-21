@@ -11,12 +11,12 @@
 //  re-pulled three weeks of backlog and the app died under it. `construct.session.vanishedPeers`
 //  was missing too, added the previous day by the person writing this comment.
 //
-//  A longer list would drift again. What stops it is that **every** `construct.*` key must appear
-//  in one of the two lists below, enforced by `AccountWipeKeysTests`, which reads the source and
-//  fails on an unclassified key. Adding a store now forces a decision instead of allowing an
-//  omission, and the decision is written down next to its reason.
+//  A longer list would drift again. What stops it is that **every** `construct.*` literal in the
+//  app sources must appear in one of the lists below, enforced by `AccountWipeKeysTests`, which
+//  reads the source and fails on an unclassified one. Adding a store now forces a decision instead
+//  of allowing an omission, and the decision is written down next to its reason.
 //
-//  The lists are explicit rather than a `construct.` prefix sweep because the two groups are not
+//  The lists are explicit rather than a `construct.` prefix sweep because the groups are not
 //  separable by name: `construct.deviceId` must go and `construct.ice_relays` must not, and no
 //  naming rule distinguishes them.
 //
@@ -121,15 +121,30 @@ enum AccountWipeKeys {
         // Device-level app preferences.
         "customServerURL",
         "appTheme",
-        "tz_offset_min",
+        "tz_offset_min"
+    ]
 
-        // Store *names*, not stored values — these strings identify a container, and the wipe of
-        // their contents is the prefix sweep above or the store's own teardown.
+    /// In the `construct.` namespace but **not a `UserDefaults` key at all**, so neither list above
+    /// can honestly hold it: `survives` asserts that a stored value is about the device rather than
+    /// the signed-in identity, and these store nothing.
+    ///
+    /// The bucket exists because the enforcing test scans for `"construct.*"` string literals, not
+    /// for defaults keys — it cannot tell the difference, and that is deliberate, since a real key
+    /// is easiest to miss when it looks like something else. So the classification has to have a
+    /// place for the something-elses. Added 2026-08-21, when `construct.reaction.didChange` (a
+    /// `Notification.Name`) reddened the suite and the only alternatives were to file a broadcast
+    /// channel under "survives a wipe" or to teach the scanner a distinction it should not trust.
+    static let notStorage: [String] = [
+        // Suite / container names. These identify a store; wiping its contents is the prefix sweep
+        // above or the store's own teardown.
         "construct.app",
         "construct.OutgoingWirePayloadStore",
         "construct.PendingReassemblyStore",
         "construct.ReceiptResendThrottle",
-        "construct.reassembly_store_key"
+        "construct.reassembly_store_key",
+
+        // Notification names.
+        "construct.reaction.didChange"
     ]
 
     /// Apply the wipe to `defaults`.
