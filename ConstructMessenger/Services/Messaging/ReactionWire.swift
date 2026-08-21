@@ -25,18 +25,18 @@ enum ReactionWire {
             reaction.emoji = ""
             reaction.action = .remove
         }
-        guard var inner = try? reaction.serializedData() else { return nil }
-        if plan.timestampMs > 0 {
-            inner.append(int64Field(number: 4, value: plan.timestampMs))
-        }
-        // MessageContent.reaction = 3, wire type 2 (length-delimited). Generated
-        // Swift has no timestampMs, so wrapping via `content.reaction =` would
-        // drop field 4. UnknownStorage.append is package-only.
+        guard let inner = try? reaction.serializedData() else { return nil }
+        // Field 4 is concatenated, not written via UnknownStorage.append —
+        // that API is package-only and the app is a different module.
+        // `Data.append(Data)` also resolves to SwiftProtobuf's package
+        // overload once the module is imported, so we only use `+`.
+        let stamped = plan.timestampMs > 0
+            ? inner + int64Field(number: 4, value: plan.timestampMs)
+            : inner
         var outer = Data()
         appendVarint(&outer, (3 << 3) | 2)
-        appendVarint(&outer, UInt64(inner.count))
-        outer.append(inner)
-        return outer
+        appendVarint(&outer, UInt64(stamped.count))
+        return outer + stamped
     }
 
     static func timestampMs(from reaction: Shared_Proto_Messaging_V1_ReactionMessage) -> Int64 {
@@ -104,10 +104,10 @@ enum ReactionWire {
     private static func appendVarint(_ data: inout Data, _ value: UInt64) {
         var v = value
         while v > 0x7F {
-            data.append(UInt8((v & 0x7F) | 0x80))
+            data += [UInt8((v & 0x7F) | 0x80)]
             v >>= 7
         }
-        data.append(UInt8(v & 0x7F))
+        data += [UInt8(v & 0x7F)]
     }
 
     private static func readVarint(_ data: Data, at i: inout Data.Index) -> UInt64? {
