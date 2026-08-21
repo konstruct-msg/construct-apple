@@ -2,26 +2,38 @@
 //  CallSignalCrypto.swift
 //  Construct Messenger
 //
-//  End-to-end encryption for WebRTC signaling fields.
+//  End-to-end encryption for the WebRTC ICE candidate.
 //
-//  The gRPC/TLS transport already protects data in transit, but the
-//  signaling server can see plaintext SDP and ICE candidates, which
-//  contain DTLS fingerprints and IP addresses. This service encrypts
-//  those fields using the existing Double Ratchet session so the server
-//  sees only ciphertext.
+//  gRPC/TLS protects the hop; the signaling server terminates it. A candidate reads
+//  "candidate:1 1 UDP 2130706431 192.168.1.5 54321 typ host" — an address and a port — so it is
+//  encrypted with the peer's Double Ratchet session and the server forwards ciphertext it cannot
+//  open.
 //
-//  Format (v3): encrypted fields are prefixed with "ENC:v3:" followed by a single
-//  base64-encoded binary frame:
-//    [2B suiteId LE][4B msgNum LE][4B pqMessageEpoch LE][4B pqFieldLen LE]
-//    [pqRatchetField][32B epk][ciphertext]
-//  v3 carries the full suite-3 (PQ ratchet) component set — the v2 frame dropped
-//  suiteId/pqMessageEpoch/pqRatchetField, which made every field encrypted over a
-//  suite-3 session undecryptable on the receiver (decrypt ran as suite 1): ICE
-//  candidates failed 100% both directions → no media path → silent calls.
-//  v2 ("ENC:v2:" + base64([4B msgNum LE][32B epk][ciphertext])) and v1
-//  ("ENC:v1:" + base64(JSON)) are still decoded for backward compatibility
-//  (correct only for classic suite-1 sessions, which is all they ever worked on).
-//  Plaintext values (no prefix) are passed through unchanged.
+//  ## The frame
+//
+//      [1B version 0x03][2B suiteId LE][4B msgNum LE][4B pqEpoch LE][4B pqFieldLen LE]
+//      [pqRatchetField][32B epk][ciphertext]
+//
+//  It goes into `IceCandidate.candidate`, which is `bytes` since 2026-08-21. It was `string`, so
+//  this frame was base64'd and given an "ENC:v3:" ASCII prefix — 33 % more bytes for a field that
+//  never held text, and the exact thing `AGENTS.md` rule 1 forbids outside QR codes, deep links
+//  and `mailto:`. construct-protos states the same rule in its own words: crypto material is
+//  `bytes`, not `string`.
+//
+//  The version byte replaces that prefix. It is not decoration: `bytes` has no shape of its own,
+//  so without it a malformed value would be parsed as a frame instead of refused.
+//
+//  ## What is deliberately gone
+//
+//  **v1 and v2.** v2 dropped suiteId/pqMessageEpoch/pqRatchetField, so every field encrypted over
+//  a suite-3 session decrypted as suite 1 and failed — 100 % of candidates, both directions, no
+//  media path, silent calls. v1 was base64'd JSON. Both were kept as read paths for peers that no
+//  longer exist; alpha force-updates, and a reader for a format nothing writes is a second
+//  interpretation of the same bytes.
+//
+//  **Plaintext passthrough.** `decryptField` used to return an unprefixed value unchanged, which
+//  meant a stripped candidate looked exactly like a legacy one. On a `bytes` field there is no
+//  "unprefixed" — either it parses as our frame or it is refused.
 //
 
 import Foundation
@@ -42,49 +54,113 @@ enum CallSignalCryptoError: Error, LocalizedError {
     }
 }
 
+// MARK: - The frame
+
+/// The binary layout of an encrypted ICE candidate, separated from the crypto that fills it.
+///
+/// Pure on purpose. The v2 format failed because it **dropped fields** — no suiteId, no
+/// pqMessageEpoch, no pqRatchetField — so every candidate encrypted over a suite-3 session was
+/// decrypted as suite 1 and failed, 100 % in both directions, and a call had no media path. That
+/// is a property of the layout alone, and it was unreachable by a test while the layout only
+/// existed inside a method that needed a Keychain-backed singleton to reach.
+enum CallSignalFrame {
+
+    /// Everything the receiver's ratchet needs. A field missing here is the v2 defect.
+    struct Fields: Equatable {
+        var suiteId: UInt16
+        var messageNumber: UInt32
+        var pqMessageEpoch: UInt32
+        var pqRatchetField: Data
+        var ephemeralPublicKey: Data
+        var ciphertext: Data
+    }
+
+    /// Frame version. Bump when the layout changes; a reader that does not know a version refuses
+    /// rather than guessing. It replaces the "ENC:v3:" ASCII prefix the `string` field needed —
+    /// `bytes` has no shape of its own, so without this a malformed value would be parsed as a
+    /// frame instead of refused.
+    static let version: UInt8 = 0x03
+    /// version + suiteId + msgNum + pqEpoch + pqFieldLen.
+    static let headerLength = 1 + 2 + 4 + 4 + 4
+    static let epkLength = 32
+
+    static func encode(_ f: Fields) -> Data {
+        var frame = Data(capacity: headerLength + f.pqRatchetField.count + epkLength + f.ciphertext.count)
+        frame.append(version)
+        appendLE(&frame, f.suiteId)
+        appendLE(&frame, f.messageNumber)
+        appendLE(&frame, f.pqMessageEpoch)
+        appendLE(&frame, UInt32(f.pqRatchetField.count))
+        frame.append(f.pqRatchetField)
+        frame.append(f.ephemeralPublicKey)
+        frame.append(f.ciphertext)
+        return frame
+    }
+
+    static func decode(_ frame: Data) throws -> Fields {
+        // Anchor to startIndex: a `Data` slice carries a non-zero origin and absolute-index reads
+        // trap on it.
+        let start = frame.startIndex
+        guard frame.count >= headerLength + epkLength + 1, frame[start] == version else {
+            throw CallSignalCryptoError.invalidEnvelope
+        }
+        let pqLen = Int(loadLE(frame, at: start + 11) as UInt32)
+        let pqEnd = start + headerLength + pqLen
+        // `pqEnd` can overflow past the end on a hostile length; compare against the real end and
+        // leave at least one ciphertext byte.
+        guard pqLen >= 0, pqEnd >= start + headerLength, frame.endIndex > pqEnd + epkLength else {
+            throw CallSignalCryptoError.invalidEnvelope
+        }
+        return Fields(
+            suiteId: loadLE(frame, at: start + 1),
+            messageNumber: loadLE(frame, at: start + 3),
+            pqMessageEpoch: loadLE(frame, at: start + 7),
+            pqRatchetField: Data(frame[(start + headerLength)..<pqEnd]),
+            ephemeralPublicKey: Data(frame[pqEnd..<(pqEnd + epkLength)]),
+            ciphertext: Data(frame[(pqEnd + epkLength)...])
+        )
+    }
+
+    private static func appendLE<T: FixedWidthInteger>(_ data: inout Data, _ value: T) {
+        var le = value.littleEndian
+        withUnsafeBytes(of: &le) { data.append(contentsOf: $0) }
+    }
+
+    private static func loadLE<T: FixedWidthInteger>(_ data: Data, at index: Data.Index) -> T {
+        data.withUnsafeBytes {
+            T(littleEndian: $0.loadUnaligned(fromByteOffset: index - data.startIndex, as: T.self))
+        }
+    }
+}
+
 // MARK: - Service
 
-/// Encrypts/decrypts individual WebRTC signaling string fields (SDP, ICE candidate)
-/// using the peer's Double Ratchet session via CryptoManager.
+/// Encrypts/decrypts the WebRTC ICE candidate using the peer's Double Ratchet session.
 final class CallSignalCrypto {
     static let shared = CallSignalCrypto()
     private init() {}
 
-    private static let v3Prefix = "ENC:v3:"
-    private static let v2Prefix = "ENC:v2:"
-    private static let v1Prefix = "ENC:v1:"
-
     // MARK: Encrypt
 
-    /// Encrypt a signaling field for a peer.
-    /// Returns a prefixed ciphertext string safe to embed in any proto String field.
-    /// Throws if there is no established E2E session with the peer.
-    /// Length is hidden by the core, once. `pad_message_default` pads the *plaintext* to a
-    /// 255-byte block before encryption, so every candidate under that ceiling produces the same
-    /// 283-byte ciphertext and the same base64 length.
+    /// Encrypt a candidate for a peer. Throws if there is no established session.
     ///
-    /// Until 2026-08-21 a second scheme sat on top: `MessagePadding` re-padded the ciphertext to
-    /// a 1024-byte bucket, which base64 turned into ~1366 characters. It was the only live user of
-    /// that layer, so call signals were the one traffic class on this client with a distinct size
-    /// on the wire — the opposite of what a padding scheme is for. Two schemes for one property,
-    /// and the outer one made the property worse.
-    func encryptField(_ plaintext: String, for peerUserId: String) throws -> String {
+    /// Length is hidden by the core, once: `pad_message_default` pads the plaintext to a 255-byte
+    /// block before encryption, so every candidate under that ceiling produces the same 283-byte
+    /// ciphertext. A second scheme used to re-pad this to 1024 bytes — see the 2026-08-21 removal
+    /// of `MessagePadding`, which made call signals the one traffic class with a distinct size.
+    func encryptCandidate(_ plaintext: String, for peerUserId: String) throws -> Data {
         do {
-            let components = try CryptoManager.shared.encryptMessage(plaintext, for: peerUserId)
-            let pqField = components.pqRatchetField
-            var frame = Data(capacity: 2 + 4 + 4 + 4 + pqField.count + 32 + components.content.count)
-            var suiteLE = components.suiteId.littleEndian
-            withUnsafeBytes(of: &suiteLE) { frame.append(contentsOf: $0) }
-            var msgNumLE = components.messageNumber.littleEndian
-            withUnsafeBytes(of: &msgNumLE) { frame.append(contentsOf: $0) }
-            var pqEpochLE = components.pqMessageEpoch.littleEndian
-            withUnsafeBytes(of: &pqEpochLE) { frame.append(contentsOf: $0) }
-            var pqLenLE = UInt32(pqField.count).littleEndian
-            withUnsafeBytes(of: &pqLenLE) { frame.append(contentsOf: $0) }
-            frame.append(pqField)
-            frame.append(contentsOf: components.ephemeralPublicKey)
-            frame.append(components.content)
-            return Self.v3Prefix + frame.base64EncodedString()
+            let c = try CryptoManager.shared.encryptMessage(plaintext, for: peerUserId)
+            return CallSignalFrame.encode(
+                CallSignalFrame.Fields(
+                    suiteId: c.suiteId,
+                    messageNumber: c.messageNumber,
+                    pqMessageEpoch: c.pqMessageEpoch,
+                    pqRatchetField: c.pqRatchetField,
+                    ephemeralPublicKey: c.ephemeralPublicKey,
+                    ciphertext: c.content
+                )
+            )
         } catch CryptoManagerError.sessionNotFound {
             throw CallSignalCryptoError.missingSession(peerUserId: peerUserId)
         }
@@ -92,85 +168,44 @@ final class CallSignalCrypto {
 
     // MARK: Decrypt
 
-    /// Decrypt a signaling field from a peer.
-    /// If the value is not prefixed, returns it unchanged (plaintext passthrough).
-    func decryptField(_ value: String, from peerUserId: String) throws -> String {
-        if value.hasPrefix(Self.v3Prefix) {
-            return try decryptV3(String(value.dropFirst(Self.v3Prefix.count)), from: peerUserId)
-        } else if value.hasPrefix(Self.v2Prefix) {
-            return try decryptV2(String(value.dropFirst(Self.v2Prefix.count)), from: peerUserId)
-        } else if value.hasPrefix(Self.v1Prefix) {
-            return try decryptV1(String(value.dropFirst(Self.v1Prefix.count)), from: peerUserId)
-        } else {
-            Log.info("Received unencrypted signal field from \(peerUserId.prefix(8))… — legacy or plaintext mode", category: "Calls")
+    /// Decrypt a candidate from a peer.
+    func decryptCandidate(_ frame: Data, from peerUserId: String) throws -> String {
+        let f = try CallSignalFrame.decode(frame)
+        return try CryptoManager.shared.decryptRawComponents(
+            contactId: peerUserId,
+            ephemeralPublicKey: f.ephemeralPublicKey,
+            messageNumber: f.messageNumber,
+            content: f.ciphertext,
+            suiteId: f.suiteId,
+            pqMessageEpoch: f.pqMessageEpoch,
+            pqRatchetField: f.pqRatchetField
+        )
+    }
+
+    // MARK: SDP — the half that has not moved
+
+    /// Decrypt an SDP field.
+    ///
+    /// **SDP is sent in plaintext today** — nothing in this client encrypts it, and
+    /// `CallOffer.sdp` / `CallAnswer.sdp` are still `string`. So this is a passthrough with a
+    /// decrypt path attached for a peer that might encrypt, and it is kept honest by saying so
+    /// rather than by looking like the candidate path.
+    ///
+    /// That plaintext is the larger leak of the two: an SDP carries the DTLS fingerprint and every
+    /// gathered address, where a candidate carries one. Closing it means the same three-repo change
+    /// this file just went through for `IceCandidate.candidate`, plus deciding what to do about the
+    /// server's `applyOfferAndAnswer` path, so it is its own piece of work.
+    func decryptSdp(_ value: String, from peerUserId: String) throws -> String {
+        guard value.hasPrefix(Self.sdpV3Prefix) else {
+            Log.info("SDP from \(peerUserId.prefix(8))… is plaintext — the field is not migrated yet", category: "Calls")
             return value
         }
-    }
-
-    /// Returns true if the value was encrypted by this layer.
-    func isEncrypted(_ value: String) -> Bool {
-        value.hasPrefix(Self.v3Prefix) || value.hasPrefix(Self.v2Prefix) || value.hasPrefix(Self.v1Prefix)
-    }
-
-    // MARK: - Private
-
-    private func decryptV3(_ b64: String, from peerUserId: String) throws -> String {
-        // [2B suiteId LE][4B msgNum LE][4B pqEpoch LE][4B pqFieldLen LE][pqField][32B epk][ct]
-        guard let frame = Data(base64Encoded: b64), frame.count >= 2 + 4 + 4 + 4 + 32 + 1 else {
+        guard let frame = Data(base64Encoded: String(value.dropFirst(Self.sdpV3Prefix.count))) else {
             throw CallSignalCryptoError.invalidEnvelope
         }
-        let suiteId = frame.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 0, as: UInt16.self).littleEndian }
-        let msgNum = frame.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 2, as: UInt32.self).littleEndian }
-        let pqEpoch = frame.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 6, as: UInt32.self).littleEndian }
-        let pqLen = Int(frame.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 10, as: UInt32.self).littleEndian })
-        let pqEnd = 14 + pqLen
-        guard frame.count > pqEnd + 32 else {
-            throw CallSignalCryptoError.invalidEnvelope
-        }
-        let pqField = frame[14..<pqEnd]
-        let epk = frame[pqEnd..<(pqEnd + 32)]
-        let content = frame[(pqEnd + 32)...]
-        return try CryptoManager.shared.decryptRawComponents(
-            contactId: peerUserId,
-            ephemeralPublicKey: Data(epk),
-            messageNumber: msgNum,
-            content: Data(content),
-            suiteId: suiteId,
-            pqMessageEpoch: pqEpoch,
-            pqRatchetField: Data(pqField)
-        )
+        return try decryptCandidate(frame, from: peerUserId)
     }
 
-    private func decryptV2(_ b64: String, from peerUserId: String) throws -> String {
-        guard let frame = Data(base64Encoded: b64), frame.count > 36 else {
-            throw CallSignalCryptoError.invalidEnvelope
-        }
-        let msgNum = frame.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 0, as: UInt32.self).littleEndian }
-        let epk = frame[4..<36]
-        let content = frame[36...]
-        return try CryptoManager.shared.decryptRawComponents(
-            contactId: peerUserId,
-            ephemeralPublicKey: epk,
-            messageNumber: msgNum,
-            content: content
-        )
-    }
-
-    private func decryptV1(_ b64: String, from peerUserId: String) throws -> String {
-        guard let json = Data(base64Encoded: b64) else {
-            throw CallSignalCryptoError.invalidEnvelope
-        }
-        struct V1Envelope: Decodable { let epk: String; let n: UInt32; let c: String }
-        guard let envelope = try? JSONDecoder().decode(V1Envelope.self, from: json),
-              let epkData = Data(base64Encoded: envelope.epk),
-              let cipherData = Data(base64Encoded: envelope.c) else {
-            throw CallSignalCryptoError.invalidEnvelope
-        }
-        return try CryptoManager.shared.decryptRawComponents(
-            contactId: peerUserId,
-            ephemeralPublicKey: epkData,
-            messageNumber: envelope.n,
-            content: cipherData
-        )
-    }
+    /// The ASCII prefix the `string` SDP fields still need, and the candidate no longer does.
+    private static let sdpV3Prefix = "ENC:v3:"
 }

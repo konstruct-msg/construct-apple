@@ -1067,7 +1067,7 @@ final class CallManager: CallUIManaging {
     private func holdRemoteOffer(_ offer: Shared_Proto_Signaling_V1_CallOffer, for call: ActiveCall) {
         let sdp: String
         do {
-            sdp = try CallSignalCrypto.shared.decryptField(offer.sdp, from: call.session.peerUserId)
+            sdp = try CallSignalCrypto.shared.decryptSdp(offer.sdp, from: call.session.peerUserId)
         } catch {
             Log.error("Failed to decrypt held offer SDP: \(error)", category: "Calls")
             endActiveCall(reason: .local("Offer handling failed"))
@@ -1107,7 +1107,7 @@ final class CallManager: CallUIManaging {
     private func handleRemoteOffer(_ offer: Shared_Proto_Signaling_V1_CallOffer, for session: CallSession) async {
         guard let active, active.session == session else { return }
         do {
-            let sdp = try CallSignalCrypto.shared.decryptField(offer.sdp, from: session.peerUserId)
+            let sdp = try CallSignalCrypto.shared.decryptSdp(offer.sdp, from: session.peerUserId)
             // Renegotiation path. `setRemoteOffer("")` would fail deeper in WebRTC with an error
             // that names neither the call nor the offer, so refuse it where both are still in hand.
             guard offerSdpIsUsable(sdp) else {
@@ -1148,7 +1148,7 @@ final class CallManager: CallUIManaging {
     private func handleRemoteAnswer(_ answer: Shared_Proto_Signaling_V1_CallAnswer, for session: CallSession) async {
         guard let active, active.session == session else { return }
         do {
-            let sdp = try CallSignalCrypto.shared.decryptField(answer.sdp, from: session.peerUserId)
+            let sdp = try CallSignalCrypto.shared.decryptSdp(answer.sdp, from: session.peerUserId)
             try ensureWebRTC(role: .caller)
             try await active.webrtc?.setRemoteAnswer(sdp: sdp)
             // The call may have ended/changed during setRemoteAnswer.
@@ -1171,7 +1171,7 @@ final class CallManager: CallUIManaging {
     private func handleRemoteIceCandidate(_ c: Shared_Proto_Signaling_V1_IceCandidate, for session: CallSession) async {
         guard let active, active.session == session else { return }
         do {
-            let candidateSdp = try CallSignalCrypto.shared.decryptField(c.candidate, from: session.peerUserId)
+            let candidateSdp = try CallSignalCrypto.shared.decryptCandidate(c.candidate, from: session.peerUserId)
             try ensureWebRTC(role: active.session.direction == .outgoing ? .caller : .callee)
             let ice = WebRTCIceCandidate(sdp: candidateSdp, sdpMid: c.sdpMid, sdpMLineIndex: Int32(c.sdpMLineIndex))
             try await active.webrtc?.addRemoteIceCandidate(ice)
@@ -1454,7 +1454,7 @@ final class CallManager: CallUIManaging {
             guard let active, active.session.id == signal.callID else { return }
             // ICE candidate SDP is always CallSignalCrypto-encrypted before sending.
             // Decrypt it here (stream path decrypts in handleRemoteIceCandidate).
-            guard let candidateSdp = try? CallSignalCrypto.shared.decryptField(ice.candidate, from: senderUserId) else {
+            guard let candidateSdp = try? CallSignalCrypto.shared.decryptCandidate(ice.candidate, from: senderUserId) else {
                 Log.error("Failed to decrypt E2EE ICE candidate from \(senderUserId.prefix(8))… — dropping", category: "Calls")
                 return
             }
@@ -1471,7 +1471,7 @@ final class CallManager: CallUIManaging {
             guard let active, active.session.id == signal.callID else { return }
             var buffered = 0
             for ice in batch.candidates {
-                guard let candidateSdp = try? CallSignalCrypto.shared.decryptField(ice.candidate, from: senderUserId) else {
+                guard let candidateSdp = try? CallSignalCrypto.shared.decryptCandidate(ice.candidate, from: senderUserId) else {
                     Log.error("Failed to decrypt E2EE ICE candidate (batch) from \(senderUserId.prefix(8))… — dropping", category: "Calls")
                     continue
                 }
@@ -1511,7 +1511,7 @@ final class CallManager: CallUIManaging {
         // `pendingRemoteOfferSdp` holds plaintext SDP, from every path that writes it.
         let sdp: String
         do {
-            sdp = try CallSignalCrypto.shared.decryptField(encryptedSdp, from: callerUserId)
+            sdp = try CallSignalCrypto.shared.decryptSdp(encryptedSdp, from: callerUserId)
         } catch {
             Log.error("Failed to decrypt incoming offer SDP from \(callerUserId.prefix(8))…: \(error)", category: "Calls")
             return
@@ -1701,7 +1701,7 @@ final class CallManager: CallUIManaging {
         let peerUserId = active.session.peerUserId
         var ice = Shared_Proto_Signaling_V1_IceCandidate()
         do {
-            ice.candidate = try CallSignalCrypto.shared.encryptField(c.sdp, for: peerUserId)
+            ice.candidate = try CallSignalCrypto.shared.encryptCandidate(c.sdp, for: peerUserId)
         } catch {
             Log.error("Failed to encrypt ICE candidate: \(error) — dropping", category: "Calls")
             return
@@ -1739,7 +1739,7 @@ final class CallManager: CallUIManaging {
             var current: [Shared_Proto_Signaling_V1_IceCandidate] = []
             var currentBytes = 0
             for candidate in batch {
-                let size = candidate.candidate.utf8.count + candidate.sdpMid.utf8.count + 16
+                let size = candidate.candidate.count + candidate.sdpMid.utf8.count + 16
                 if !current.isEmpty, currentBytes + size > maxSignalBytes {
                     chunks.append(current)
                     current = []
