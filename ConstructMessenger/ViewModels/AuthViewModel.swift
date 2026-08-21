@@ -934,28 +934,11 @@ class AuthViewModel {
         KeychainManager.shared.deleteDeviceKeys()
         KeychainManager.shared.deleteOtpks()
 
-        // Clear all UserDefaults keys
-        let userDefaultsKeys: [String] = [
-            "biometricEnabled",
-            "pinLength",
-            "is_discoverable",
-            "recovery_is_setup",
-            "recovery_banner_dismissed",
-            UserDefaultsKey.veilEnabled.rawValue,
-            UserDefaultsKey.veilMode.rawValue,
-            UserDefaultsKey.trafficProtectionEnabled.rawValue,
-            UserDefaultsKey.backgroundFetchEnabled.rawValue,
-            UserDefaultsKey.backgroundFetchIntervalMinutes.rawValue,
-            UserDefaultsKey.sessionExpires.rawValue,
-            "construct.lastMessageId",
-            "construct.spk.lastRotationTimestamp",
-            "construct.spk.uploadTimestamp",
-        ]
-        userDefaultsKeys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
-        // Remove all construct.contact_request_seen.* keys
-        UserDefaults.standard.dictionaryRepresentation().keys
-            .filter { $0.hasPrefix("construct.contact_request_seen.") }
-            .forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        // Every `construct.*` key is classified as wiped-or-survives in `AccountWipeKeys`, and a
+        // test fails on an unclassified one. The inline array this replaces had never contained
+        // `construct.stream.cursor`, so a wipe left the resume cursor behind and the "clean start"
+        // resumed from the old watermark.
+        AccountWipeKeys.wipe()
         
         // Clear CoreData - delete all user's data
         let context = viewContext
