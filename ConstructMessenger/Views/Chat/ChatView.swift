@@ -73,13 +73,18 @@ struct ChatView: View {
     /// at all until 2026-08-21.
     @State private var bottomSafeAreaInset: CGFloat = 0
     @State private var transcriptContainerHeight: CGFloat = 0
-    /// Where the held row sits in content coordinates, reported by that row alone.
+    /// Where the held row sits in content coordinates, reported by that row alone, tagged with
+    /// which row reported it.
     ///
     /// Only one row carries the measurement, and only while somebody is reading history — this is
     /// the exact signal `TranscriptOffsetPolicy` needs and the reason the hold rule works for a
     /// prepend *and* for a photo finishing its decode above the reader. Comparing content heights
     /// cannot tell those from growth below the reader.
-    @State private var heldRowMinY: CGFloat?
+    ///
+    /// The tag is what makes it safe to leave lying around: nothing clears this when a history
+    /// visit ends, so without it the next visit's first sample would be differenced against the
+    /// previous visit's last one — two different rows, and a shift that measures nothing.
+    @State private var anchorSample: TranscriptAnchorSample?
     /// Last geometry sample, so the new path can hand `handleTranscriptGeometry` an `old` value
     /// the way the container's `(old, new)` callback does.
     ///
@@ -564,7 +569,9 @@ struct ChatView: View {
                 bottomInset: transcriptBottomPad,
                 mode: (viewport as? ChatViewport)?.mode ?? .following,
                 layoutPrimed: viewport.layoutPrimed,
-                anchorMinY: heldRowMinY,
+                // Nil unless the sample is of the row currently bound, so a stale one cannot be
+                // read as a measurement of the new anchor.
+                anchor: anchorSample?.messageId == viewport.heldMessageId ? anchorSample : nil,
                 landRequest: (viewport as? ChatViewport)?.landRequest ?? 0,
                 onLanded: { (viewport as? ChatViewport)?.noteTailLanded() },
                 onGeometry: { handleTranscriptGeometry(from: geometryHistory.last, to: $0) },
@@ -843,7 +850,9 @@ struct ChatView: View {
                                     Color.clear.onChange(
                                         of: proxy.frame(in: .named(Self.transcriptContentSpace)).minY,
                                         initial: true
-                                    ) { _, y in heldRowMinY = y }
+                                    ) { _, y in
+                                        anchorSample = TranscriptAnchorSample(messageId: message.id, minY: y)
+                                    }
                                 }
                             }
                         }

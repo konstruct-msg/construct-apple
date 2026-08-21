@@ -86,7 +86,17 @@ enum TranscriptOffsetPolicy {
         case .readingHistory:
             // 3. Somebody is reading. Whatever grew above them must not move them.
             guard let shift = anchorShift, shift != 0 else { return .none }
-            return .hold(offsetY: max(0, currentOffsetY + shift))
+            // Clamped at both ends, because a shift is a *correction* and a correction cannot take
+            // the viewport somewhere scrolling could not. Only the lower bound was here, and the
+            // upper one is what device 2026-08-21 landed past: the transcript sat with its last
+            // message near the top of the screen and a screenful of void beneath it, and stayed
+            // there — offset beyond the end is not a place `bottomOffset` can produce, so nothing
+            // downstream brings it back.
+            //
+            // It went unnoticed until the day `anchorShift` was first delivered at all: this branch
+            // could only return `.none` while `bindHistoryPosition` had no callers, so the missing
+            // bound had nothing to be missing from.
+            return .hold(offsetY: min(bottom, max(0, currentOffsetY + shift)))
         }
     }
 }

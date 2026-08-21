@@ -190,6 +190,35 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
         XCTAssertEqual(action, .none)
     }
 
+    /// The other end of the same clamp, and the one that was missing. A shift is a *correction*,
+    /// so it cannot take the viewport somewhere scrolling could not — past the end of the content.
+    ///
+    /// Device 2026-08-21: the transcript sat with its last message near the top of the screen and a
+    /// screenful of void beneath it, and stayed there. `bottomOffset` cannot produce an offset
+    /// beyond the end, so nothing downstream brings one back.
+    ///
+    /// The shift that got there was not a measurement: `anchorShift` was the difference between a
+    /// sample of the row bound during this history visit and a sample of the row bound during the
+    /// previous one. `TranscriptAnchorSample` carries the row's identity now, so the coordinator
+    /// produces no shift at all across a rebind — but the policy still clamps, because a rule that
+    /// can move the offset anywhere should not depend on its caller for the range.
+    ///
+    /// Mutation: drop the `min(bottom, …)`.
+    func testAShiftCannotLandPastTheEndOfTheContent() {
+        let action = Policy.action(
+            mode: .readingHistory, layoutPrimed: true,
+            contentHeight: 2000, previousContentHeight: 2000,
+            viewportHeight: viewport, bottomInset: inset,
+            currentOffsetY: 1200, anchorShift: 4000
+        )
+        // bottomOffset = 2000 + 90 − 700 = 1390, and 1200 + 4000 is far beyond it.
+        XCTAssertEqual(
+            action,
+            .hold(offsetY: 1390),
+            "the last message at the top of the screen with a void under it is not a scroll position"
+        )
+    }
+
     /// Rows removed above the reader shift them the other way; the offset must not go negative.
     func testShrinkingAboveTheReaderClampsAtZero() {
         let action = Policy.action(

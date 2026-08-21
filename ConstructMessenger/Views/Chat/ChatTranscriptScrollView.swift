@@ -41,9 +41,9 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
     var bottomInset: CGFloat
     var mode: ChatViewport.Mode
     var layoutPrimed: Bool
-    /// How far the held row moved since the last pass, measured by the row itself. Nil while
-    /// following, or before the row has reported once.
-    var anchorMinY: CGFloat?
+    /// Where the anchor row sits, tagged with which row it is. Nil while following, before the row
+    /// has reported once, or when the tag no longer matches the bound anchor.
+    var anchor: TranscriptAnchorSample?
     /// Monotonic token for "take me to the newest message".
     ///
     /// The owned path has no `ScrollViewProxy` — `ChatTranscriptContainer` creates one and calls
@@ -99,7 +99,7 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
         let coordinator = context.coordinator
         coordinator.mode = mode
         coordinator.layoutPrimed = layoutPrimed
-        coordinator.anchorMinY = anchorMinY
+        coordinator.anchor = anchor
         coordinator.landRequest = landRequest
         coordinator.onLanded = onLanded
         coordinator.onGeometry = onGeometry
@@ -133,14 +133,14 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
 
         var mode: ChatViewport.Mode = .following
         var layoutPrimed = false
-        var anchorMinY: CGFloat?
+        var anchor: TranscriptAnchorSample?
         var landRequest = 0
         var onLanded: () -> Void = {}
         var onGeometry: (ChatScrollGeometry) -> Void = { _ in }
         var onUserInteraction: () -> Void = {}
 
         private var previousContentHeight: CGFloat = 0
-        private var previousAnchorMinY: CGFloat?
+        private var previousAnchor: TranscriptAnchorSample?
         /// True while we are the ones moving the offset. Without it our own correction arrives at
         /// `scrollViewDidScroll` and is indistinguishable from a finger — which would flip the mode
         /// to `readingHistory` on the very landing that put the tail on screen.
@@ -169,14 +169,20 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
 
             let contentHeight = host.view.bounds.height
             let viewportHeight = scrollView.bounds.height
-            let shift = zip2(previousAnchorMinY, anchorMinY).map { $1 - $0 }
+            // Two samples of the same row, or nothing. Comparing across rows produced a shift
+            // that measured the distance between two unrelated messages.
+            let shift: CGFloat? = {
+                guard let anchor, let previous = previousAnchor,
+                      previous.messageId == anchor.messageId else { return nil }
+                return anchor.minY - previous.minY
+            }()
 
             // An explicit "take me to the newest" outranks the policy: the policy answers
             // "the content changed, now what", and this did not come from the content.
             if landRequest != lastLandRequest {
                 lastLandRequest = landRequest
                 previousContentHeight = contentHeight
-                previousAnchorMinY = anchorMinY
+                previousAnchor = anchor
                 guard contentHeight > 0, viewportHeight > 0 else { return }
                 // Not animated, for the same reason `.land` is not: an interpolating offset while
                 // an inset may still be moving is the window the old delay series chased. It also
@@ -204,7 +210,7 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
             )
 
             previousContentHeight = contentHeight
-            previousAnchorMinY = anchorMinY
+            previousAnchor = anchor
 
             switch action {
             case .none:
@@ -257,11 +263,5 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
             onUserInteraction()
         }
     }
-}
-
-/// `zip` over two optionals: a value only when both are present.
-private func zip2<A, B>(_ a: A?, _ b: B?) -> (A, B)? {
-    guard let a, let b else { return nil }
-    return (a, b)
 }
 #endif

@@ -46,6 +46,18 @@ struct ChatScrollGeometry: Equatable {
     var safeAreaBottom: CGFloat
 }
 
+/// Where the anchor row sits, and **which row that was**.
+///
+/// The identity is not decoration. `TranscriptOffsetPolicy` moves the offset by the difference
+/// between two samples, which only means anything if both are of the same row — and the row changes
+/// whenever a history visit ends and another begins. A bare `CGFloat?` carried no way to notice
+/// that, so a sample of row A and a sample of row B subtracted into a shift that was not a
+/// measurement of anything, and the offset went wherever it said.
+struct TranscriptAnchorSample: Equatable {
+    let messageId: String
+    let minY: CGFloat
+}
+
 /// The previous geometry sample, held outside SwiftUI's invalidation.
 ///
 /// Its only consumer is the `old` argument of `logScrollGeometryIfChanged`, which is gated by
