@@ -53,6 +53,19 @@ final class ReactionCapsulePlacementTests: XCTestCase {
         )
     }
 
+    func testBadgeHangClearsTheLastLineOfText() {
+        XCTAssertGreaterThan(
+            ChatUIConstants.Reaction.badgeOverlap,
+            ChatUIConstants.Bubble.verticalPadding,
+            "an offset no larger than the bubble's bottom pad still covers the glyphs"
+        )
+        XCTAssertGreaterThanOrEqual(
+            ChatUIConstants.Reaction.badgeOverlap,
+            ChatUIConstants.Reaction.badgeFontSize,
+            "the chip is taller than the last line; hang at least that far or it sits on the letters"
+        )
+    }
+
     func testSentLikeIsNotOnTheTimestampCorner() {
         XCTAssertEqual(
             ChatUIConstants.Reaction.badgeAlignment(isSentByMe: true),

@@ -98,8 +98,11 @@ enum ChatUIConstants {
         static let badgeFontSize: CGFloat = 14
         static let badgePadH: CGFloat = 6
         static let badgePadV: CGFloat = 4
-        /// Overlaps the bubble corner slightly. Horizontal corner is ``badgeAlignment``.
-        static let badgeOverlap: CGFloat = 8
+        /// How far the chip hangs below the bubble. Horizontal corner is
+        /// ``badgeAlignment``. Must exceed ``Bubble.verticalPadding`` (8) and
+        /// the last-line glyph height: a value of 8 left the heart sitting on
+        /// "прикольный".
+        static let badgeOverlap: CGFloat = 18
 
         static let capsuleEmojiSize: CGFloat = 22
         static let capsuleItem: CGFloat = 36
