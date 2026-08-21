@@ -26,6 +26,8 @@ struct MessageBubble: View {
     let onReplyWithQuote: ((Message, String) -> Void)?
     /// Tap on the in-bubble reply strip — jump to the parent message and soft-focus the pair.
     let onJumpToReply: ((Message) -> Void)?
+    /// Double-tap like / badge tap. Second argument is the emoji (`ReactionReducer.likeEmoji` on double-tap).
+    let onReact: ((Message, String) -> Void)?
 
     @Environment(\.containerWidth) var containerWidth
 
@@ -42,7 +44,8 @@ struct MessageBubble: View {
         onTapMedia: ((Message, Int) -> Void)? = nil,
         onEdit: ((Message) -> Void)? = nil,
         onReplyWithQuote: ((Message, String) -> Void)? = nil,
-        onJumpToReply: ((Message) -> Void)? = nil
+        onJumpToReply: ((Message) -> Void)? = nil,
+        onReact: ((Message, String) -> Void)? = nil
     ) {
         self.message = message
         self.isLastInGroup = isLastInGroup
@@ -57,5 +60,6 @@ struct MessageBubble: View {
         self.onEdit = onEdit
         self.onReplyWithQuote = onReplyWithQuote
         self.onJumpToReply = onJumpToReply
+        self.onReact = onReact
     }
 }

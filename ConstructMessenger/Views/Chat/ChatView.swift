@@ -773,6 +773,9 @@ struct ChatView: View {
                             },
                             onJumpToReply: { msg in
                                 peekReplyChain(for: msg)
+                            },
+                            onReact: { msg, emoji in
+                                viewModel.sendReaction(msg, emoji: emoji)
                             }
                         )
                         .id(message.id)

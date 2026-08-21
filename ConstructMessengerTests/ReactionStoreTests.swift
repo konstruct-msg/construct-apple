@@ -133,4 +133,31 @@ final class ReactionStoreTests: XCTestCase {
         XCTAssertEqual(ReactionStore.envelopeTimestampMs(1_700_000_000_000), 1_700_000_000_000)
         XCTAssertEqual(ReactionStore.envelopeTimestampMs(0), 0)
     }
+
+    func testRestoreLocal_IgnoresLWWAndPutsThePreviousRowBack() {
+        apply(emoji: "😂", action: 1, ts: t0)
+        apply(emoji: "❤️", action: 1, ts: t1)
+        XCTAssertEqual(stored()?.emoji, "❤️")
+        ReactionStore.restoreLocal(
+            targetMessageId: target,
+            reactorUserId: reactor,
+            previous: ReactionReducer.Row(emoji: "😂", timestampMs: t0),
+            nowMs: t1,
+            in: context
+        )
+        XCTAssertEqual(stored()?.emoji, "😂")
+        XCTAssertEqual(stored()?.timestampMs, t0, "rollback is not LWW — the wire refused the tap")
+    }
+
+    func testRestoreLocal_NilPreviousDeletesTheOptimisticRow() {
+        apply(emoji: "❤️", action: 1, ts: t1)
+        ReactionStore.restoreLocal(
+            targetMessageId: target,
+            reactorUserId: reactor,
+            previous: nil,
+            nowMs: t1,
+            in: context
+        )
+        XCTAssertNil(stored())
+    }
 }

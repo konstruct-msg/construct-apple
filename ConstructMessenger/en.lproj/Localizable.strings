@@ -554,6 +554,10 @@
 "edit_message_failed" = "Failed to edit message: %@";
 "edit_message_limit_reached" = "Edit limit reached (20 edits max)";
 
+// Message reactions
+"reaction_a11y" = "Reacted with %@";
+"reaction_failed" = "Couldn't send the reaction";
+
 // MARK: - Network Settings — Connection Route
 "endpoint" = "Endpoint";
 "mode" = "Mode";

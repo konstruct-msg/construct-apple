@@ -14,8 +14,18 @@ import Foundation
 
 enum ReactionReducer {
 
-    /// Instagram DM quick set. Display order is the array order.
+    /// Instagram DM quick set. Display order is the array order. v1 is this
+    /// popular set; later it can become the user's most frequent.
     static let quickSet = ["❤️", "😂", "😮", "😢", "😠", "🔥"]
+
+    /// Double-tap target. First of `quickSet` so the fast path and the capsule agree.
+    static let likeEmoji = "❤️"
+
+    struct SendPlan: Equatable {
+        let targetMessageId: String
+        let incoming: Incoming
+        let timestampMs: Int64
+    }
 
     static let orphanTTLSeconds: TimeInterval = 7 * 24 * 60 * 60
     static let maxEmojiUTF8ByteCount = 32
@@ -118,6 +128,23 @@ enum ReactionReducer {
         guard isValidEmoji(tapped) else { return nil }
         if currentEmoji == tapped { return .remove }
         return .add(emoji: tapped)
+    }
+
+    /// Local tap → wire payload. `nowMs` is the LWW clock the send path stamps
+    /// into `ReactionMessage.timestamp_ms` and into the optimistic row.
+    static func sendPlan(
+        targetMessageId: String,
+        currentEmoji: String?,
+        tapped: String,
+        nowMs: Int64
+    ) -> SendPlan? {
+        guard isValidTargetId(targetMessageId), nowMs > 0 else { return nil }
+        guard let incoming = localToggle(currentEmoji: currentEmoji, tapped: tapped) else { return nil }
+        return SendPlan(
+            targetMessageId: targetMessageId.lowercased(),
+            incoming: incoming,
+            timestampMs: nowMs
+        )
     }
 
     static func shouldEvictOrphan(targetExists: Bool, receivedAtMs: Int64, nowMs: Int64) -> Bool {

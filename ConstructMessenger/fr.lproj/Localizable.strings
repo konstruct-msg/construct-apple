@@ -511,6 +511,10 @@
 "edit_message_failed" = "Échec de la modification du message : %@";
 "edit_message_limit_reached" = "Limite de modifications atteinte (20 modifications max)";
 
+// Message reactions
+"reaction_a11y" = "A réagi avec %@";
+"reaction_failed" = "Impossible d'envoyer la réaction";
+
 // MARK: - Network Settings — Connection Route
 "endpoint" = "Point d'accès";
 "mode" = "Mode";

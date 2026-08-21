@@ -33,9 +33,16 @@ struct MessageBubbleRegularView: View {
     let onReplyWithQuote: ((Message, String) -> Void)?
     /// Tap on the in-bubble reply strip — parent jump + soft focus.
     let onJumpToReply: ((Message) -> Void)?
+    let onReact: ((Message, String) -> Void)?
 
     @GestureState private var swipeOffset: CGFloat = 0
     @State private var isTranscribingVoice = false
+    @State private var reactionBadges: [ReactionBadge] = []
+
+    private struct ReactionBadge: Equatable {
+        let emoji: String
+        let reactorUserId: String
+    }
 
     var body: some View {
         // Parse once per body pass to avoid repeated JSON decode attempts.
@@ -69,6 +76,7 @@ struct MessageBubbleRegularView: View {
             }
 
             VStack(alignment: message.isSentByMe ? .trailing : .leading, spacing: ChatUIConstants.Bubble.stackSpacing) {
+                Group {
                 if let profileData {
                     ProfileShareBubbleView(profileData: profileData)
                         .overlay(
@@ -192,6 +200,10 @@ struct MessageBubbleRegularView: View {
                     // status token should have been, and no way to assert "delivered".
                     .accessibilityIdentifier(A11y.Chat.message(message.id))
                 }
+                }
+                .overlay(alignment: message.isSentByMe ? .bottomTrailing : .bottomLeading) {
+                    reactionBadgeRow
+                }
 
                 if isLastInGroup {
                     HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
@@ -241,6 +253,16 @@ struct MessageBubbleRegularView: View {
                 if isEditMode {
                     onSelect?(message)
                 }
+            }
+            // Simultaneous so swipe-to-reply and long-press keep the arena.
+            // High-priority would steal the drag the way the old rightward reply did.
+            .simultaneousGesture(doubleTapLikeGesture)
+            .onAppear { reloadReactionBadges() }
+            .onReceive(NotificationCenter.default.publisher(for: ReactionStore.didChange)) { note in
+                guard let target = note.object as? String,
+                      target.caseInsensitiveCompare(message.id) == .orderedSame
+                else { return }
+                reloadReactionBadges()
             }
             .contextMenu {
                 if !isEditMode {
@@ -408,6 +430,57 @@ struct MessageBubbleRegularView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(NSLocalizedString("jump_to_replied_message", comment: "Jump to the message this reply quotes"))
+        }
+    }
+
+    private var doubleTapLikeGesture: some Gesture {
+        TapGesture(count: 2).onEnded {
+            likeIfPossible()
+        }
+    }
+
+    private func likeIfPossible() {
+        guard !isEditMode, let onReact else { return }
+        onReact(message, ReactionReducer.likeEmoji)
+        #if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
+    }
+
+    private func reloadReactionBadges() {
+        guard let context = message.managedObjectContext else {
+            reactionBadges = []
+            return
+        }
+        reactionBadges = ReactionStore.reactions(on: message.id, in: context).map {
+            ReactionBadge(emoji: $0.emoji, reactorUserId: $0.reactorUserId)
+        }
+    }
+
+    @ViewBuilder
+    private var reactionBadgeRow: some View {
+        if !reactionBadges.isEmpty {
+            HStack(spacing: 2) {
+                ForEach(reactionBadges, id: \.reactorUserId) { badge in
+                    Button {
+                        guard !isEditMode else { return }
+                        onReact?(message, badge.emoji)
+                    } label: {
+                        Text(badge.emoji)
+                            .font(CTFont.regular(ChatUIConstants.Reaction.badgeFontSize))
+                            .padding(.horizontal, ChatUIConstants.Reaction.badgePadH)
+                            .padding(.vertical, ChatUIConstants.Reaction.badgePadV)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        Text(String(format: NSLocalizedString("reaction_a11y", comment: ""), badge.emoji))
+                    )
+                }
+            }
+            .background(Color.CT.bgMsg)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(Color.CT.noise, lineWidth: ChatUIConstants.Bubble.strokeWidth))
+            .offset(y: ChatUIConstants.Reaction.badgeOverlap)
         }
     }
 

@@ -52,7 +52,8 @@ extension MessageBubble {
                     onTapMedia: onTapMedia,
                     onEdit: onEdit,
                     onReplyWithQuote: onReplyWithQuote,
-                    onJumpToReply: onJumpToReply
+                    onJumpToReply: onJumpToReply,
+                    onReact: onReact
                 )
             }
         }

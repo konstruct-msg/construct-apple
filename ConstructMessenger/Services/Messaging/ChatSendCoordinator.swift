@@ -851,6 +851,94 @@ final class ChatSendCoordinator {
         }
     }
 
+    // MARK: - Reaction
+
+    /// Optimistic apply, then the same pipeline as `editMessage`. Never a chat row.
+    /// Double-tap likes pass `ReactionReducer.likeEmoji`.
+    func sendReaction(_ message: Message, emoji: String) {
+        guard let recipientId = chat.otherUser?.id,
+              let currentUserId = AuthSessionManager.shared.currentUserId else { return }
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let existing = ReactionStore.row(
+            targetMessageId: message.id,
+            reactorUserId: currentUserId,
+            in: viewContext
+        )
+        guard let plan = ReactionReducer.sendPlan(
+            targetMessageId: message.id,
+            currentEmoji: existing?.emoji,
+            tapped: emoji,
+            nowMs: nowMs
+        ) else { return }
+        guard let payload = ReactionWire.encode(plan) else {
+            ErrorRouter.shared.report(.unknown(NSLocalizedString("reaction_failed", comment: "")))
+            return
+        }
+
+        let previous = existing.map { ReactionReducer.Row(emoji: $0.emoji, timestampMs: $0.timestampMs) }
+        _ = ReactionStore.applyIncoming(
+            targetMessageId: plan.targetMessageId,
+            reactorUserId: currentUserId,
+            actionRawValue: ReactionWire.actionRawValue(plan.incoming),
+            emoji: ReactionWire.emoji(plan.incoming),
+            payloadTimestampMs: plan.timestampMs,
+            fallbackTimestampMs: plan.timestampMs,
+            nowMs: plan.timestampMs,
+            in: viewContext
+        )
+
+        let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId)
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let actionId = UUID().uuidString.lowercased()
+                let chunkPlan = ChunkedMessageSender.shared.buildPlan(
+                    plaintext: payload,
+                    messageId: UUID(uuidString: actionId) ?? UUID()
+                )
+                let recipientIdentityKey: Data? = StealthPolicy.shared.shouldUseSealedSender()
+                    ? await fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: viewContext)
+                    : nil
+
+                _ = try await OutboundMessagePipeline.shared.sendChunks(
+                    plan: chunkPlan,
+                    baseMessageId: actionId,
+                    senderId: currentUserId,
+                    recipientId: recipientId,
+                    conversationId: conversationId,
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    recipientIdentityKey: recipientIdentityKey
+                )
+
+                if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
+                    await MultiDeviceSendCoordinator.shared.sendSenderSync(
+                        plaintext: payload,
+                        messageId: actionId,
+                        originalRecipientUserId: recipientId,
+                        senderUserId: currentUserId,
+                        senderDeviceId: myDeviceId,
+                        timestamp: UInt64(Date().timeIntervalSince1970)
+                    )
+                }
+            } catch is StealthDowngradeBlocked {
+                Log.info(
+                    "Stealth: reaction send blocked (cannot seal) — rolling back \(message.id.prefix(8))…",
+                    category: "ChatSendCoordinator"
+                )
+                ReactionStore.restoreLocal(
+                    targetMessageId: plan.targetMessageId,
+                    reactorUserId: currentUserId,
+                    previous: previous,
+                    nowMs: plan.timestampMs,
+                    in: self.viewContext
+                )
+                ErrorRouter.shared.report(.unknown(NSLocalizedString("reaction_failed", comment: "")))
+            } catch {
+                ErrorRouter.shared.report(.unknown(NSLocalizedString("reaction_failed", comment: "")))
+            }
+        }
+    }
+
     // MARK: - Edit
 
     func editMessage(_ message: Message, newText: String, editingBinding: @escaping () -> Void) {

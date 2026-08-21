@@ -555,6 +555,10 @@
 "edit_message_failed" = "Не удалось изменить сообщение: %@";
 "edit_message_limit_reached" = "Достигнут лимит правок (максимум 20)";
 
+// Message reactions
+"reaction_a11y" = "Реакция: %@";
+"reaction_failed" = "Не удалось отправить реакцию";
+
 // MARK: - Network Settings — Connection Route
 "endpoint" = "Эндпоинт";
 "mode" = "Режим";

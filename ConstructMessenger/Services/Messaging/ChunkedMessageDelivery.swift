@@ -248,7 +248,7 @@ final class ChunkedMessageReassembler {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
-            if let reaction = Self.reaction(from: content) {
+            if let reaction = Self.reaction(from: content, original: data) {
                 return reaction
             }
             if case .edit(let editMsg) = content.content {
@@ -282,7 +282,7 @@ final class ChunkedMessageReassembler {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
-            if let reaction = Self.reaction(from: content) {
+            if let reaction = Self.reaction(from: content, original: data) {
                 return reaction
             }
             if case .edit(let editMsg) = content.content {
@@ -318,15 +318,22 @@ final class ChunkedMessageReassembler {
     }
 
     /// Reaction payloads must not fall through to `.assembled` (empty text → blank bubble).
-    /// `timestampMs` is 0 until `ReactionMessage.timestamp_ms` is in generated Swift; the
-    /// apply site injects a fallback via `ReactionReducer.normalizeTimestamp`.
-    private static func reaction(from content: Shared_Proto_Messaging_V1_MessageContent) -> ChunkedMessageResult? {
+    /// `timestamp_ms` is field 4; generated Swift does not yet expose it, so
+    /// `ReactionWire` reads it from unknown fields (0 = pre-field peer).
+    private static func reaction(
+        from content: Shared_Proto_Messaging_V1_MessageContent,
+        original: Data
+    ) -> ChunkedMessageResult? {
         guard case .reaction(let msg) = content.content else { return nil }
+        let fromUnknown = ReactionWire.timestampMs(from: msg)
+        let timestampMs = fromUnknown != 0
+            ? fromUnknown
+            : ReactionWire.timestampMs(fromMessageContent: original)
         return .reaction(
             targetMessageID: msg.targetMessageID,
             emoji: msg.emoji,
             action: msg.action,
-            timestampMs: 0
+            timestampMs: timestampMs
         )
     }
 
@@ -406,7 +413,7 @@ enum ChunkedMessageResult {
     /// Modern edit inside MessageContent.
     case edit(targetMessageID: String, newText: Shared_Proto_Messaging_V1_TextMessage, newMedia: Shared_Proto_Messaging_V1_MediaMessage)
     /// Emoji reaction inside MessageContent. Never a chat row — apply to the target, ACK.
-    /// `timestampMs` is 0 until proto regen of `ReactionMessage.timestamp_ms`.
+    /// `timestampMs` is field 4 (`ReactionWire`); 0 means a pre-field peer.
     case reaction(
         targetMessageID: String,
         emoji: String,

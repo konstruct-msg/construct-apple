@@ -680,7 +680,10 @@ struct DesktopChatView: View {
                             },
                             onEdit: { msg in viewModel.editingMessage = msg },
                             onReplyWithQuote: { msg, _ in quotingMessage = msg },
-                            onJumpToReply: { msg in peekReplyChain(for: msg) }
+                            onJumpToReply: { msg in peekReplyChain(for: msg) },
+                            onReact: { msg, emoji in
+                                viewModel.sendReaction(msg, emoji: emoji)
+                            }
                         )
                         .id(message.id)
                         .onAppear {

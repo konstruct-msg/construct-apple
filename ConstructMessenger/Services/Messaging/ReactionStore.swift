@@ -11,6 +11,8 @@ import CoreData
 
 enum ReactionStore {
 
+    static let didChange = Notification.Name("construct.reaction.didChange")
+
     /// Envelope `ChatMessage.timestamp` is Unix seconds (see `Date.fromRemoteTimestamp`).
     /// Values already in milliseconds (13+ digits) pass through.
     static func envelopeTimestampMs(_ unix: UInt64) -> Int64 {
@@ -93,7 +95,35 @@ enum ReactionStore {
         }
 
         sweepOrphans(nowMs: nowMs, in: context)
+        notify(target)
         return decision
+    }
+
+    /// Undo an optimistic local write the wire refused. Not LWW — a stale
+    /// timestamp would lose to the tap we are rolling back.
+    static func restoreLocal(
+        targetMessageId: String,
+        reactorUserId: String,
+        previous: ReactionReducer.Row?,
+        nowMs: Int64,
+        in context: NSManagedObjectContext
+    ) {
+        let target = targetMessageId.lowercased()
+        let reactor = reactorUserId.lowercased()
+        let existing = row(targetMessageId: target, reactorUserId: reactor, in: context)
+        if let previous {
+            let record = existing ?? Reaction(context: context)
+            record.targetMessageId = target
+            record.reactorUserId = reactor
+            record.emoji = previous.emoji
+            record.timestampMs = previous.timestampMs
+            record.receivedAt = Date(timeIntervalSince1970: TimeInterval(nowMs) / 1000)
+            save(context)
+        } else if let existing {
+            context.delete(existing)
+            save(context)
+        }
+        notify(target)
     }
 
     static func sweepOrphans(nowMs: Int64, in context: NSManagedObjectContext) {
@@ -134,5 +164,9 @@ enum ReactionStore {
         } catch {
             context.rollback()
         }
+    }
+
+    private static func notify(_ targetMessageId: String) {
+        NotificationCenter.default.post(name: didChange, object: targetMessageId)
     }
 }

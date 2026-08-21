@@ -156,6 +156,49 @@ final class ReactionReducerTests: XCTestCase {
 
     func testQuickSet_IsTheInstagramSix() {
         XCTAssertEqual(ReactionReducer.quickSet, ["❤️", "😂", "😮", "😢", "😠", "🔥"])
+        XCTAssertEqual(ReactionReducer.likeEmoji, "❤️")
+        XCTAssertEqual(ReactionReducer.quickSet.first, ReactionReducer.likeEmoji)
+    }
+
+    func testDoubleTapLike_AddsHeart() {
+        let plan = ReactionReducer.sendPlan(
+            targetMessageId: target,
+            currentEmoji: nil,
+            tapped: ReactionReducer.likeEmoji,
+            nowMs: t0
+        )
+        XCTAssertEqual(plan, .init(targetMessageId: target, incoming: .add(emoji: "❤️"), timestampMs: t0))
+    }
+
+    func testDoubleTapLike_OnHeart_Removes() {
+        let plan = ReactionReducer.sendPlan(
+            targetMessageId: target,
+            currentEmoji: "❤️",
+            tapped: ReactionReducer.likeEmoji,
+            nowMs: t1
+        )
+        XCTAssertEqual(plan?.incoming, .remove)
+    }
+
+    func testDoubleTapLike_OnOtherEmoji_ReplacesWithHeart() {
+        let plan = ReactionReducer.sendPlan(
+            targetMessageId: target,
+            currentEmoji: "😂",
+            tapped: ReactionReducer.likeEmoji,
+            nowMs: t1
+        )
+        XCTAssertEqual(plan?.incoming, .add(emoji: "❤️"))
+    }
+
+    func testSendPlan_RejectsEmptyTarget() {
+        XCTAssertNil(
+            ReactionReducer.sendPlan(
+                targetMessageId: "",
+                currentEmoji: nil,
+                tapped: "❤️",
+                nowMs: t0
+            )
+        )
     }
 
     // MARK: - Clock + orphan
@@ -193,7 +236,7 @@ final class ReactionReducerTests: XCTestCase {
             XCTAssertEqual(decodedTarget, target)
             XCTAssertEqual(emoji, "❤️")
             XCTAssertEqual(action, .add)
-            XCTAssertEqual(timestampMs, 0, "timestamp_ms is not in generated Swift until proto regen; 0 is the dual-read")
+            XCTAssertEqual(timestampMs, 0, "no field 4 on this payload — dual-read is 0")
         case .assembled(let text, _, _, _, _):
             XCTFail("reaction became assembled text \(text.debugDescription) — that is a blank bubble")
         default:

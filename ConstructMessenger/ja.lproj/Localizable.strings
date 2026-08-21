@@ -501,6 +501,10 @@
 "edit_message_failed" = "メッセージの編集に失敗しました: %@";
 "edit_message_limit_reached" = "編集制限に達しました (最大20回)";
 
+// Message reactions
+"reaction_a11y" = "%@のリアクション";
+"reaction_failed" = "リアクションを送れませんでした";
+
 // MARK: - Network Settings — Connection Route
 "endpoint" = "エンドポイント";
 "mode" = "モード";

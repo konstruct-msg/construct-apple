@@ -93,6 +93,15 @@ enum ChatUIConstants {
         static let metaHorizontalPadding: CGFloat = 4
     }
 
+    /// Reaction badge on a bubble. The picker capsule is a later overlay slice.
+    enum Reaction {
+        static let badgeFontSize: CGFloat = 14
+        static let badgePadH: CGFloat = 6
+        static let badgePadV: CGFloat = 4
+        /// Sits on the bubble corner, overlapping slightly (above or below is a later overlay).
+        static let badgeOverlap: CGFloat = 8
+    }
+
     /// Swipe-to-reply, tuned to stay out of the interactive back gesture's way.
     ///
     /// The two gestures point the same direction, and incoming bubbles sit against the
