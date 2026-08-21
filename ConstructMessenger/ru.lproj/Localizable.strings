@@ -558,6 +558,9 @@
 // Message reactions
 "reaction_a11y" = "Реакция: %@";
 "reaction_failed" = "Не удалось отправить реакцию";
+"react" = "Реакция";
+"reaction_pick_more" = "Все реакции";
+"reaction_remove" = "Убрать реакцию";
 
 // MARK: - Network Settings — Connection Route
 "endpoint" = "Эндпоинт";

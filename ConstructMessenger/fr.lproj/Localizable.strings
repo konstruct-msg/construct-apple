@@ -514,6 +514,9 @@
 // Message reactions
 "reaction_a11y" = "A réagi avec %@";
 "reaction_failed" = "Impossible d'envoyer la réaction";
+"react" = "Réagir";
+"reaction_pick_more" = "Toutes les réactions";
+"reaction_remove" = "Retirer la réaction";
 
 // MARK: - Network Settings — Connection Route
 "endpoint" = "Point d'accès";

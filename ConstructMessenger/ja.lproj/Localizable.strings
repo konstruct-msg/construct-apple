@@ -504,6 +504,9 @@
 // Message reactions
 "reaction_a11y" = "%@のリアクション";
 "reaction_failed" = "リアクションを送れませんでした";
+"react" = "リアクション";
+"reaction_pick_more" = "すべてのリアクション";
+"reaction_remove" = "リアクションを消す";
 
 // MARK: - Network Settings — Connection Route
 "endpoint" = "エンドポイント";

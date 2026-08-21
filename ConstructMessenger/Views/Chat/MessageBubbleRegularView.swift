@@ -38,6 +38,10 @@ struct MessageBubbleRegularView: View {
     @GestureState private var swipeOffset: CGFloat = 0
     @State private var isTranscribingVoice = false
     @State private var reactionBadges: [ReactionBadge] = []
+    @State private var showReactionCapsule = false
+    @State private var showFullEmojiPicker = false
+    @State private var capsulePlacement: ReactionCapsulePlacement = .below
+    @State private var bubbleGlobalFrame: CGRect = .zero
 
     private struct ReactionBadge: Equatable {
         let emoji: String
@@ -201,8 +205,20 @@ struct MessageBubbleRegularView: View {
                     .accessibilityIdentifier(A11y.Chat.message(message.id))
                 }
                 }
-                .overlay(alignment: message.isSentByMe ? .bottomTrailing : .bottomLeading) {
+                .overlay(alignment: ChatUIConstants.Reaction.badgeAlignment(isSentByMe: message.isSentByMe)) {
                     reactionBadgeRow
+                }
+                .overlay(alignment: capsulePlacement == .above ? .top : .bottom) {
+                    reactionCapsuleOverlay
+                }
+                .background {
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear { bubbleGlobalFrame = geo.frame(in: .global) }
+                            .onChange(of: geo.frame(in: .global).minY) { _, _ in
+                                bubbleGlobalFrame = geo.frame(in: .global)
+                            }
+                    }
                 }
 
                 if isLastInGroup {
@@ -252,6 +268,8 @@ struct MessageBubbleRegularView: View {
             .onTapGesture {
                 if isEditMode {
                     onSelect?(message)
+                } else if showReactionCapsule {
+                    showReactionCapsule = false
                 }
             }
             // Simultaneous so swipe-to-reply and long-press keep the arena.
@@ -266,6 +284,14 @@ struct MessageBubbleRegularView: View {
             }
             .contextMenu {
                 if !isEditMode {
+                    if onReact != nil {
+                        Button {
+                            openReactionCapsule()
+                        } label: {
+                            Label(NSLocalizedString("react", comment: ""), systemImage: "face.smiling")
+                        }
+                    }
+
                     if let onReply {
                         Button { onReply(message) } label: {
                             Label("reply", systemImage: "arrowshape.turn.up.left")
@@ -330,6 +356,21 @@ struct MessageBubbleRegularView: View {
             // `@GestureState` resets instantly, so the animation has to live here.
             .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.8), value: swipeOffset)
             .gesture(swipeToReplyGesture)
+            .onChange(of: swipeOffset) { _, offset in
+                if offset > 0 { showReactionCapsule = false }
+            }
+            .onChange(of: isEditMode) { _, editing in
+                if editing { showReactionCapsule = false }
+            }
+            .sheet(isPresented: $showFullEmojiPicker) {
+                ReactionEmojiPickerSheet { emoji in
+                    onReact?(message, emoji)
+                }
+                #if os(iOS)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                #endif
+            }
             // The bubble slides left, so the space it vacates is on its trailing side — the same
             // side for sent and received alike, which is why this no longer switches on the author.
             .overlay(alignment: .trailing) { swipeIndicatorOverlay }
@@ -482,6 +523,55 @@ struct MessageBubbleRegularView: View {
             .overlay(Capsule().stroke(Color.CT.noise, lineWidth: ChatUIConstants.Bubble.strokeWidth))
             .offset(y: ChatUIConstants.Reaction.badgeOverlap)
         }
+    }
+
+    private var ownReactionEmoji: String? {
+        guard let me = AuthSessionManager.shared.currentUserId else { return nil }
+        return reactionBadges.first {
+            $0.reactorUserId.caseInsensitiveCompare(me) == .orderedSame
+        }?.emoji
+    }
+
+    @ViewBuilder
+    private var reactionCapsuleOverlay: some View {
+        if showReactionCapsule, !isEditMode, onReact != nil {
+            MessageReactionCapsule(
+                currentEmoji: ownReactionEmoji,
+                onPick: { emoji in
+                    onReact?(message, emoji)
+                    showReactionCapsule = false
+                },
+                onPickMore: {
+                    showReactionCapsule = false
+                    showFullEmojiPicker = true
+                }
+            )
+            .alignmentGuide(capsulePlacement == .above ? .top : .bottom) { dimensions in
+                if capsulePlacement == .above {
+                    return dimensions[VerticalAlignment.bottom]
+                        + ChatUIConstants.Reaction.capsuleGap
+                }
+                return dimensions[VerticalAlignment.top]
+                    - ChatUIConstants.Reaction.capsuleGap
+            }
+        }
+    }
+
+    private func openReactionCapsule() {
+        let reservedTop = CTLayout.navBarHeight + CTLayout.sectionGap
+        let reservedBottom = CTLayout.controlHeight + CTLayout.edgePad
+        #if canImport(UIKit)
+        let screenHeight = UIScreen.main.bounds.height
+        #else
+        let screenHeight = bubbleGlobalFrame.maxY + reservedBottom
+        #endif
+        capsulePlacement = ReactionCapsulePlacement.decide(
+            spaceAbove: bubbleGlobalFrame.minY - reservedTop,
+            spaceBelow: screenHeight - reservedBottom - bubbleGlobalFrame.maxY,
+            capsuleHeight: ChatUIConstants.Reaction.capsuleHeight
+                + ChatUIConstants.Reaction.capsuleGap
+        )
+        showReactionCapsule = true
     }
 
     /// How far the bubble should trail the finger, or nil when this drag is not a reply

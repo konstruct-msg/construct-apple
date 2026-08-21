@@ -93,13 +93,26 @@ enum ChatUIConstants {
         static let metaHorizontalPadding: CGFloat = 4
     }
 
-    /// Reaction badge on a bubble. The picker capsule is a later overlay slice.
+    /// Reaction badge on a bubble, and the quick-set capsule.
     enum Reaction {
         static let badgeFontSize: CGFloat = 14
         static let badgePadH: CGFloat = 6
         static let badgePadV: CGFloat = 4
-        /// Sits on the bubble corner, overlapping slightly (above or below is a later overlay).
+        /// Overlaps the bubble corner slightly. Horizontal corner is ``badgeAlignment``.
         static let badgeOverlap: CGFloat = 8
+
+        static let capsuleEmojiSize: CGFloat = 22
+        static let capsuleItem: CGFloat = 36
+        static let capsuleItemSpacing: CGFloat = 4
+        static let capsuleDot: CGFloat = 4
+        static let capsuleHeight: CGFloat = 44
+        static let capsuleGap: CGFloat = CTLayout.inlinePad
+
+        /// Timestamp lives on the author's side (sent = trailing). The like sits
+        /// on the other corner so the two do not stack.
+        static func badgeAlignment(isSentByMe: Bool) -> Alignment {
+            isSentByMe ? .bottomLeading : .bottomTrailing
+        }
     }
 
     /// Swipe-to-reply, tuned to stay out of the interactive back gesture's way.

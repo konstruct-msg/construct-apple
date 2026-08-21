@@ -557,6 +557,9 @@
 // Message reactions
 "reaction_a11y" = "Reacted with %@";
 "reaction_failed" = "Couldn't send the reaction";
+"react" = "React";
+"reaction_pick_more" = "More reactions";
+"reaction_remove" = "Remove reaction";
 
 // MARK: - Network Settings — Connection Route
 "endpoint" = "Endpoint";
