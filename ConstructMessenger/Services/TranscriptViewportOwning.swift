@@ -34,12 +34,16 @@ protocol TranscriptViewportOwning: AnyObject, Observable {
     /// actually being on screen.
     var layoutPrimed: Bool { get }
 
-    /// The row the reader is held to, or nil while following.
+    /// The row whose movement stands in for the reader's, or nil while following. Read by the host
+    /// to decide which single row installs the reporter that measures it.
     ///
-    /// Only the owned-inset path binds this to `.scrollPosition(id:)`; the legacy owner has no
-    /// such concept and keeps it nil. Measured limit (PR-0): the binding holds a row against a
-    /// growing inset, and does not survive content inserted above it.
+    /// Only the owned-inset path has one; the legacy owner keeps it nil and holds position with a
+    /// pin series instead.
     var heldMessageId: String? { get set }
+
+    /// Offer a measuring stick. Ignored while following, and ignored if one is already bound —
+    /// the pin has to outlive the prepends it exists to measure.
+    func bindAnchorRow(_ messageId: String?)
 
     /// One line for the geometry probe. Kept as a string so the log does not have to know which
     /// owner produced it.

@@ -36,6 +36,28 @@ struct ChatScrollGeometry: Equatable {
     /// touching the composer, and an inset latch that cannot see that reads the keyboard as a
     /// settled layout.
     var containerHeight: CGFloat
+    /// Bottom safe area under the transcript.
+    ///
+    /// The third input of that latch, and until 2026-08-21 it did not exist: `ChatView` held a
+    /// `bottomSafeAreaInset` and passed it to `noteComposerGeometry`, and nothing ever assigned it.
+    /// Taken from the scroll view rather than from a SwiftUI proxy because the composer is an
+    /// overlay *inside* the safe area on the owned path, so its own proxy reports zero — a second
+    /// constant dressed as a measurement.
+    var safeAreaBottom: CGFloat
+}
+
+/// The previous geometry sample, held outside SwiftUI's invalidation.
+///
+/// Its only consumer is the `old` argument of `logScrollGeometryIfChanged`, which is gated by
+/// `ChatScrollManager.verboseGeometryLogging` and off by default. As `@State` in `ChatView` it was
+/// rewritten on every scroll delegate callback, so a value that usually goes nowhere was
+/// re-rendering the whole transcript at frame rate.
+@MainActor
+final class TranscriptGeometryHistory {
+    var last = ChatScrollGeometry(
+        distanceFromBottom: 0, width: 0, contentFits: false,
+        contentHeight: 0, visibleMinY: 0, containerHeight: 0, safeAreaBottom: 0
+    )
 }
 
 /// The transcript scroll view: sentinel, rows, bottom clearance, bottom anchor.
@@ -120,7 +142,8 @@ struct ChatTranscriptContainer<Sentinel: View, Rows: View>: View {
                     contentFits: geo.contentSize.height <= geo.visibleRect.height + 8,
                     contentHeight: geo.contentSize.height,
                     visibleMinY: geo.visibleRect.minY,
-                    containerHeight: geo.containerSize.height
+                    containerHeight: geo.containerSize.height,
+                    safeAreaBottom: geo.contentInsets.bottom
                 )
             } action: { old, new in
                 onGeometryChange(old, new)

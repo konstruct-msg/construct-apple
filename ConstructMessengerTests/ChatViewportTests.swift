@@ -413,11 +413,101 @@ final class ChatViewportTests: XCTestCase {
     /// A guest scroll **inside** history re-binds the held row, so the bottom anchor cannot pull
     /// the reader back to the row they were on before the search jump.
     func testGuestScrollInHistoryRebindsTheHeldRow() {
-        let viewport = Viewport()
-        viewport.bindHistoryPosition("msg-40")
+        let viewport = Self.readingHistory(anchoredTo: "msg-40")
         viewport.scrollTo(messageId: "msg-12", anchor: .center, animated: false)
         XCTAssertEqual(viewport.positionId, "msg-12")
         XCTAssertEqual(viewport.mode, .readingHistory)
+    }
+
+    // MARK: - Reaching history
+
+    /// Get to `.readingHistory` the way the app does: quiet insets, a finger, and geometry far
+    /// from the tail — then bind the stick.
+    ///
+    /// Replaces `bindHistoryPosition("msg-40")`, which wrote `mode` and `positionId` directly and
+    /// had **no production caller at all**. Every test that used it therefore started from a state
+    /// the app could not produce, which is how a viewport that never left `.following` passed this
+    /// file. The two quiet inset reports at the top are the load-bearing part: without them
+    /// `insetSettling` stays latched and the geometry below cannot stop following.
+    private static func readingHistory(anchoredTo row: String) -> Viewport {
+        let viewport = Viewport()
+        viewport.noteInsetDelta(composer: 90, safeAreaBottom: 34, containerHeight: 700)
+        viewport.noteInsetDelta(composer: 90, safeAreaBottom: 34, containerHeight: 700)
+        viewport.noteUserInteraction()
+        viewport.updateScrollOffset(
+            distanceFromBottom: 2378, contentFits: false,
+            contentHeight: 3147, visibleMinY: 500, messageCount: 50
+        )
+        viewport.bindAnchorRow(row)
+        return viewport
+    }
+
+    /// The device symptom, at the level that caused it: with ticks arriving, the latch goes quiet
+    /// and the jump control becomes reachable. On 2026-08-21 `noteInsetDelta` was called only by
+    /// sites that had themselves seen a change, so the quiet tick never came, `insetSettling`
+    /// stayed true from the first container measurement, and `flags` forced the FAB off for the
+    /// life of the screen.
+    ///
+    /// Mutation: drop the `insetSettling = moved` assignment (leave it latched).
+    func testJumpButtonBecomesReachableOnceTheLatchGoesQuiet() {
+        let viewport = Viewport()
+        viewport.noteInsetDelta(composer: 90, safeAreaBottom: 34, containerHeight: 0)
+        viewport.noteInsetDelta(composer: 90, safeAreaBottom: 34, containerHeight: 700)
+        XCTAssertTrue(viewport.insetSettling, "the container height arrived — that is a move")
+
+        viewport.noteUserInteraction()
+        viewport.updateScrollOffset(
+            distanceFromBottom: 2378, contentFits: false,
+            contentHeight: 3147, visibleMinY: 500, messageCount: 50
+        )
+        XCTAssertFalse(
+            viewport.showJumpButton,
+            "still settling: geometry is not intent yet, so nothing is offered"
+        )
+
+        // The tick the wiring never delivered.
+        viewport.noteInsetDelta(composer: 90, safeAreaBottom: 34, containerHeight: 700)
+        viewport.updateScrollOffset(
+            distanceFromBottom: 2378, contentFits: false,
+            contentHeight: 3147, visibleMinY: 500, messageCount: 50
+        )
+
+        XCTAssertFalse(viewport.insetSettling)
+        XCTAssertEqual(viewport.mode, .readingHistory, "and geometry may now stop following")
+        XCTAssertTrue(viewport.showJumpButton)
+    }
+
+    /// The stick is offered every tick and taken once. Re-deriving it each pass would pick a
+    /// different row after every load-more, and the coordinator's shift is the difference between
+    /// two samples of **one** row.
+    ///
+    /// Mutation: drop the `positionId == nil` guard from `bindAnchorRow`.
+    func testAnchorRowIsPinnedAtTheTransitionAndSurvivesAPrepend() {
+        let viewport = Self.readingHistory(anchoredTo: "msg-40")
+        XCTAssertEqual(viewport.positionId, "msg-40")
+
+        // Load-more prepends thirty older messages: the oldest rendered row is now a different one.
+        viewport.bindAnchorRow("msg-10")
+        XCTAssertEqual(viewport.positionId, "msg-40", "the stick outlives what it measures")
+    }
+
+    /// Following owns the tail and needs no stick. Offering one there would give
+    /// `TranscriptOffsetPolicy` an anchor shift to hold against while it should be landing.
+    ///
+    /// Mutation: drop the `mode == .readingHistory` guard.
+    func testAnchorRowIsRefusedWhileFollowing() {
+        let viewport = Viewport()
+        viewport.bindAnchorRow("msg-40")
+        XCTAssertNil(viewport.positionId)
+    }
+
+    /// Returning to the newest message releases it — otherwise the next history visit would
+    /// measure against a row bound during the previous one.
+    func testFollowingExplicitlyReleasesTheAnchorRow() {
+        let viewport = Self.readingHistory(anchoredTo: "msg-40")
+        viewport.followExplicitly()
+        XCTAssertNil(viewport.positionId)
+        XCTAssertEqual(viewport.mode, .following)
     }
 
     // MARK: - Holding the reader
@@ -425,12 +515,9 @@ final class ChatViewportTests: XCTestCase {
     /// The reader keeps their row while the viewport changes shape under them. Measured limit
     /// (PR-0): the binding survives a growing pad, and does not survive content inserted above.
     func testReadingHistory_viewportGrow_doesNotMovePositionId() {
-        let viewport = Viewport()
-        viewport.noteUserInteraction()
-        viewport.bindHistoryPosition("msg-40")
+        let viewport = Self.readingHistory(anchoredTo: "msg-40")
 
         // Composer grows (reply bar), then the keyboard collapses the safe area.
-        viewport.noteInsetDelta(composer: 90, safeAreaBottom: 34, containerHeight: 700)
         viewport.noteInsetDelta(composer: 140, safeAreaBottom: 34, containerHeight: 700)
         viewport.updateScrollOffset(
             distanceFromBottom: 2378, contentFits: false,
@@ -463,18 +550,14 @@ final class ChatViewportTests: XCTestCase {
             .keepFollowing
         )
 
-        let viewport = Viewport()
-        viewport.noteUserInteraction()
-        viewport.bindHistoryPosition("msg-40")
+        let viewport = Self.readingHistory(anchoredTo: "msg-40")
         viewport.noteKeyboardHidden(wasVisible: true)
         XCTAssertEqual(viewport.mode, .readingHistory, "hide never writes mode")
         XCTAssertEqual(viewport.positionId, "msg-40")
     }
 
     func testKeyboardHide_duplicateDelivery_doesNotForceFollowing() {
-        let viewport = Viewport()
-        viewport.noteUserInteraction()
-        viewport.bindHistoryPosition("msg-40")
+        let viewport = Self.readingHistory(anchoredTo: "msg-40")
         viewport.noteKeyboardHidden(wasVisible: true)
         viewport.noteKeyboardHidden(wasVisible: true)   // ~20ms later, same instance
         viewport.noteKeyboardHidden(wasVisible: false)

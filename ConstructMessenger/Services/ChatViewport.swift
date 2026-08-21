@@ -123,18 +123,40 @@ final class ChatViewport {
     /// Replaces the 600 ms opening timer and the keyboard notifications with the measurement
     /// itself: set while any of composer height, bottom safe area or container height moved by at
     /// least `Threshold.padNoise`, cleared on the next tick where all three are quiet.
+    ///
+    /// **"Tick" means every geometry sample, and that is a requirement on the caller.** Until
+    /// 2026-08-21 `noteInsetDelta` was reached only from call sites that had themselves noticed a
+    /// change, so a quiet tick was never delivered and this latched `true` on the first
+    /// container-height measurement of every chat and stayed there. `flags` then forced
+    /// `showJumpButton` off for the life of the screen and refused to let geometry stop following,
+    /// which pinned `mode` at `.following` and handed `TranscriptOffsetPolicy` a `.land` on every
+    /// content-height change. One unwired latch, and both the missing jump control and the
+    /// transcript snapping back to the bottom mid-drag.
+    ///
+    /// `testInsetLatch_clearsOnTheNextQuietTick` covered the unit and passed throughout: it makes
+    /// the third call itself. Nothing tested that anyone would.
     private(set) var insetSettling = false
 
-    /// The message the reader is held to, or nil while following (the anchor owns the tail).
+    /// The row whose movement stands in for the reader's, or nil while following (the tail needs
+    /// no measuring stick).
     ///
-    /// Bound for the whole history visit, not just the load-more window: keyboard, collapsing
-    /// reply bar and growing safe area all move the viewport, and without a bound row the bottom
-    /// anchor drags the reader to the tail. Cleared only by ``followExplicitly()``.
+    /// Not "the message on screen". `TranscriptOffsetPolicy.hold` moves the offset by however far
+    /// this row moved, so what it needs is a row that moves exactly as much as the reader does —
+    /// which is any row at or below the top of the viewport, and on the owned path is bound to the
+    /// **oldest rendered message at the moment following stopped**. That choice is exact for the
+    /// two things that actually change the content: a prepend inserts entirely above it, and an
+    /// append entirely below it.
     ///
-    /// Measured limit (PR-0, 2026-08-19): the binding holds a row against a growing pad exactly,
-    /// and does **not** survive content being inserted above it — a prepend moved the bound row by
-    /// the full inserted height. Rows above the reader growing (media decoding) is the same shape
-    /// and is assumed to share the limit; neither is mitigated here.
+    /// **Pinned at the transition, never re-derived.** Re-reading "the oldest message" each pass
+    /// would pick a different row after every load-more, and the coordinator's shift is the
+    /// difference between two samples of one row — two rows make it noise.
+    ///
+    /// Cleared by ``followExplicitly()`` and by opening a transcript; re-bound by a guest scroll
+    /// inside history, which is equally valid as a stick.
+    ///
+    /// Measured limit (PR-0, 2026-08-19): a row above the reader *growing* — media finishing its
+    /// decode between this row and the viewport — moves the reader without moving the stick. Not
+    /// mitigated, and not mitigable with one reporter.
     var positionId: String?
 
     // MARK: - High-frequency state
@@ -428,10 +450,19 @@ final class ChatViewport {
         stableQuietTicks = 0
     }
 
-    /// Hold the reader to a message. Entering history, and guest scrolls while in history.
-    func bindHistoryPosition(_ messageId: String) {
+    /// Bind the measuring stick, at the moment following stops.
+    ///
+    /// Deliberately not a `mode` writer. Its predecessor (`bindHistoryPosition`) set both, and
+    /// shipped with no callers at all — so `positionId` was never anything but nil, no row ever
+    /// installed the reporter that measures it, `anchorShift` was always nil, and
+    /// `TranscriptOffsetPolicy`'s whole `.readingHistory` branch could only return `.none`. The
+    /// prepend rule this migration exists for had no input.
+    ///
+    /// A no-op when a stick is already bound: the pin has to survive the prepends it exists to
+    /// measure. `followExplicitly` and `openTranscript` are what release it.
+    func bindAnchorRow(_ messageId: String?) {
+        guard mode == .readingHistory, positionId == nil, let messageId else { return }
         positionId = messageId
-        if mode != .readingHistory { mode = .readingHistory }
     }
 
     func setIncomingFollowSuppressed(_ suppressed: Bool) {

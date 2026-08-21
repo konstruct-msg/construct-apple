@@ -66,6 +66,11 @@ struct ChatView: View {
     /// Bottom safe area, and the scroll view's own height. Held because the keyboard moves both
     /// while leaving the composer's height alone, and a latch blind to that reads a keyboard
     /// animation as a settled layout.
+    ///
+    /// Both are now written from the geometry tick, which is where they are measured. They exist as
+    /// state only because the composer's own report — which cannot see the scroll view — needs the
+    /// two numbers it does not carry. `bottomSafeAreaInset` was declared here and never assigned
+    /// at all until 2026-08-21.
     @State private var bottomSafeAreaInset: CGFloat = 0
     @State private var transcriptContainerHeight: CGFloat = 0
     /// Where the held row sits in content coordinates, reported by that row alone.
@@ -77,10 +82,15 @@ struct ChatView: View {
     @State private var heldRowMinY: CGFloat?
     /// Last geometry sample, so the new path can hand `handleTranscriptGeometry` an `old` value
     /// the way the container's `(old, new)` callback does.
-    @State private var lastGeometry = ChatScrollGeometry(
-        distanceFromBottom: 0, width: 0, contentFits: false,
-        contentHeight: 0, visibleMinY: 0, containerHeight: 0
-    )
+    ///
+    /// A reference box rather than `@State`, and that is the point. It was `@State`, written from
+    /// `scrollViewDidScroll` — every frame of every drag. Each write invalidated this body, which
+    /// reassigns `host.rootView` in `updateUIView`, which rebuilds all thirty rows of the eager
+    /// stack, which re-measures to a slightly different height, which lands the offset again and
+    /// emits another sample. That loop is idempotent in a short chat, where the height is stable;
+    /// in a long one it is the flicker. What it was buying is the `old` argument of a log that is
+    /// off by default.
+    @State private var geometryHistory = TranscriptGeometryHistory()
     // "Is the layout settled enough to read geometry as intent" lives with the owner
     // (`layoutPrimed`). It was a `@State` here and was armed from the wrong evidence.
 
@@ -556,7 +566,7 @@ struct ChatView: View {
                 layoutPrimed: viewport.layoutPrimed,
                 anchorMinY: heldRowMinY,
                 onLanded: { (viewport as? ChatViewport)?.noteTailLanded() },
-                onGeometry: { handleTranscriptGeometry(from: lastGeometry, to: $0) },
+                onGeometry: { handleTranscriptGeometry(from: geometryHistory.last, to: $0) },
                 onUserInteraction: { viewport.noteScrollPhase(.tracking) }
             ) {
                 VStack(spacing: ChatUIConstants.Shell.listSpacing) {
@@ -670,6 +680,22 @@ struct ChatView: View {
     }
 
     private func handleTranscriptGeometry(from old: ChatScrollGeometry, to metrics: ChatScrollGeometry) {
+        // The inset latch is a per-tick measurement, so it is fed per tick. Its two previous call
+        // sites both fired *because* something had moved, which meant `noteInsetDelta` never once
+        // saw a quiet pass and `insetSettling` stayed true from the first container measurement
+        // onward — see `ChatViewport.insetSettling`. The latch has its own `padNoise` threshold;
+        // pre-filtering on its behalf is what broke it.
+        //
+        // Owned path only. The legacy owner answers the same call with `pinToBottom(.composerInset)`
+        // — a scroll, not a measurement — so feeding it every tick would arm a pin per frame. Its
+        // one caller stays the composer's own change report, which is all it ever watched.
+        if usesOwnedInset {
+            viewport.noteComposerGeometry(
+                composerHeight: composerHeight,
+                safeAreaBottom: metrics.safeAreaBottom,
+                containerHeight: metrics.containerHeight
+            )
+        }
         viewport.updateGeometry(metrics, messageCount: viewModel.messages.count)
         // The blank chat is a *geometry* state and no log has ever shown it: we know where the
         // messages are and nothing about where the viewport is. One line per meaningful move
@@ -679,12 +705,29 @@ struct ChatView: View {
         if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
             containerWidth = metrics.width
         }
+        // Held for the composer's own report, which cannot see the scroll view. The latch was
+        // already fed this tick, with fresher numbers than these; the thresholds are here because
+        // these two are `@State` and every write costs a body pass.
         if metrics.containerHeight.isFinite,
            abs(metrics.containerHeight - transcriptContainerHeight) > 0.5 {
             transcriptContainerHeight = metrics.containerHeight
-            reportComposerGeometry()
         }
-        lastGeometry = metrics
+        if metrics.safeAreaBottom.isFinite,
+           abs(metrics.safeAreaBottom - bottomSafeAreaInset) > 0.5 {
+            bottomSafeAreaInset = metrics.safeAreaBottom
+        }
+        // Offer the stick on the pass where following has just stopped and none is bound. Here
+        // rather than in an `.onChange(of: isFollowing)` so the offer sits next to the geometry
+        // that decided it; `bindAnchorRow` remains the authority on whether to take it.
+        //
+        // The two cheap checks are not redundant with that authority — they keep `filteredMessages`
+        // (an O(n) filter) off the per-frame path, and it has to be that list rather than
+        // `viewModel.messages`: it is what the rows are built from, so it is the only one whose
+        // first element is guaranteed to be a row that can install the reporter.
+        if !viewport.isFollowing, viewport.heldMessageId == nil {
+            viewport.bindAnchorRow(filteredMessages.first?.id)
+        }
+        geometryHistory.last = metrics
         // Near-top geometry is the reliable trigger once the user scrolls up: sentinel `onAppear`
         // alone misses the case where the top stayed materialised from entry (no second appear)
         // and would never widen the window.

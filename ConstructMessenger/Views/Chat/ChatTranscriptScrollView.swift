@@ -181,7 +181,8 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
                     contentFits: contentHeight <= scrollView.bounds.height + 8,
                     contentHeight: contentHeight,
                     visibleMinY: visibleMinY,
-                    containerHeight: scrollView.bounds.height
+                    containerHeight: scrollView.bounds.height,
+                    safeAreaBottom: scrollView.safeAreaInsets.bottom
                 )
             )
         }
