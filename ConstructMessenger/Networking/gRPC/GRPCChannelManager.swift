@@ -127,22 +127,9 @@ final class GRPCChannelManager: Sendable {
     private nonisolated(unsafe) var _connGeneration: UInt64 = 0
     private let _connLock = NSLock()
 
-    // H3 persistent connection — stored as Any? because types guarded with #if canImport(Network)
-    // cannot be stored properties when the guard is conditional.
-    private nonisolated(unsafe) var _h3connBox: Any? = nil
-    private nonisolated(unsafe) var _h3connGeneration: UInt64 = 0
-    private let _h3connLock = NSLock()
-
-#if canImport(Network)
-    private struct PersistentConnH3: @unchecked Sendable {
-        let client: GRPCClient<HTTP3ClientTransport>
-        let task:   Task<Void, Never>
-        let key:    String   // always "direct:<host>:<port>" — H3 never used over ICE
-    }
-#endif
-
     // Experimental engine-QUIC persistent connection (construct-transport Rust stack).
-    // Stored as Any? for the same #if-guard reason as the H3 box.
+    // Stored as Any? because the transport type is guarded with #if canImport(Network) and a
+    // conditionally-guarded type cannot be a stored property.
     private nonisolated(unsafe) var _eqConnBox: Any? = nil
     private nonisolated(unsafe) var _eqConnGeneration: UInt64 = 0
     private let _eqConnLock = NSLock()
@@ -253,10 +240,9 @@ final class GRPCChannelManager: Sendable {
         Log.debug("Persistent gRPC connection invalidated (routing: \(oldKey) → \(newKey), gen=\(_connLock.withLock { _connGeneration }))", category: "GRPCChannel")
         invalidateSealedPersistentClient()
 #if canImport(Network)
-        invalidateH3Connection()
 #endif
         // Notify subscribers (MessageStreamManager etc.) that routing changed so they can
-        // force-reconnect long-lived streams. Without this, a stream bound to the old H3/H2
+        // force-reconnect long-lived streams. Without this, a stream bound to the old
         // connection sits silently until heartbeat-watchdog catches it (~60-90s).
         NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
@@ -284,9 +270,8 @@ final class GRPCChannelManager: Sendable {
         guard didInvalidate else { return }
         Log.debug("Persistent gRPC connection invalidated (gen=\(_connGeneration))", category: "GRPCChannel")
         invalidateSealedPersistentClient()
-        // H3 is only valid on the direct path. Any routing change that kills H2 also kills H3.
+        // engine-QUIC is only valid on the direct path — a routing change that kills H2 kills it too.
 #if canImport(Network)
-        invalidateH3Connection()
 #endif
     }
 
@@ -387,7 +372,7 @@ final class GRPCChannelManager: Sendable {
     // reusing the authenticated connection would let the server (or a network
     // observer) correlate the "anonymous" stream with the signed-in session via
     // the TCP/TLS connection itself, even with no auth headers on the RPC.
-    // Plain H2 only for now — no H3/engine-QUIC variant.
+    // Plain H2 only for now — no engine-QUIC variant.
 
     /// Creates a new unauthenticated `GRPCClient` for sealed-sender sends.
     /// Caller is responsible for running the client via `runConnections()` in a Task.
@@ -476,87 +461,6 @@ final class GRPCChannelManager: Sendable {
         _sealedConnGeneration &+= 1
     }
 
-#if canImport(Network)
-    /// Creates a gRPC client using the HTTP/3 (QUIC/Network.framework) transport.
-    /// Only called for direct-path connections — never over VEIL/obfs4 proxy.
-    func makeClientH3() -> GRPCClient<HTTP3ClientTransport> {
-        let host = currentHost
-        let port = currentPort
-        Log.debug("gRPC creating HTTP/3 channel → \(host):\(port)", category: "gRPC")
-        let transport = HTTP3ClientTransport(host: host, port: UInt16(clamping: port))
-        return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
-    }
-
-    /// Returns (or lazily creates) the shared persistent H3 channel.
-    /// Only valid on the direct path — callers must check `veilProxyPort() == nil` before calling.
-    /// Analogous to `acquirePersistentClient()` for the H2 path.
-    func acquireH3Channel() -> GRPCClient<HTTP3ClientTransport> {
-        _h3connLock.lock()
-        defer { _h3connLock.unlock() }
-
-        let key = "direct:\(currentHost):\(currentPort)"
-        if let conn = _h3connBox as? PersistentConnH3, conn.key == key, !conn.task.isCancelled {
-            return conn.client
-        }
-
-        // Tear down stale connection gracefully.
-        if let old = _h3connBox as? PersistentConnH3 {
-            old.client.beginGracefulShutdown()
-        }
-        _h3connBox = nil
-        _h3connGeneration &+= 1
-        let gen = _h3connGeneration
-
-        let client = makeClientH3()
-        let task = Task.detached { [weak self, gen] in
-            guard let self else { return }
-            let valid = self._h3connLock.withLock { self._h3connGeneration == gen }
-            guard valid else {
-                Log.debug("H3 client gen=\(gen) already superseded — skipping runConnections()", category: "GRPCChannel")
-                return
-            }
-            do {
-                try await client.runConnections()
-            } catch is CancellationError {
-                // Normal shutdown.
-            } catch {
-                Log.error("H3 persistent connection closed: \(error)", category: "GRPCChannel")
-                self.invalidateH3Connection()
-            }
-        }
-        let conn = PersistentConnH3(client: client, task: task, key: key)
-        _h3connBox = conn
-        Log.debug("H3 persistent connection created (key=\(key) gen=\(gen))", category: "GRPCChannel")
-        return client
-    }
-
-    /// Gracefully shuts down the H3 persistent connection.
-    /// Called automatically from `invalidatePersistentClient()` and on H3 transport errors.
-    func invalidateH3Connection() {
-        _h3connLock.lock()
-        defer { _h3connLock.unlock() }
-        guard let conn = _h3connBox as? PersistentConnH3 else { return }
-        conn.client.beginGracefulShutdown()
-        _h3connBox = nil
-        _h3connGeneration &+= 1
-        Log.debug("H3 persistent connection invalidated (gen=\(_h3connGeneration))", category: "GRPCChannel")
-    }
-
-    /// Force-cancels the H3 persistent connection by cancelling the runConnections() task.
-    /// Unlike `invalidateH3Connection()` (graceful shutdown), this immediately closes the
-    /// underlying NWConnection — necessary when a QUIC handshake is stuck and doesn't
-    /// respond to Swift task cancellation or `beginGracefulShutdown()`.
-    func forceInvalidateH3Connection() {
-        _h3connLock.lock()
-        defer { _h3connLock.unlock() }
-        guard let conn = _h3connBox as? PersistentConnH3 else { return }
-        conn.task.cancel()
-        conn.client.beginGracefulShutdown()
-        _h3connBox = nil
-        _h3connGeneration &+= 1
-        Log.debug("H3 persistent connection force-invalidated (gen=\(_h3connGeneration))", category: "GRPCChannel")
-    }
-#endif
 
 #if os(iOS)
     /// Resolves the experimental engine-QUIC gateway config, or `nil` when the
@@ -599,7 +503,7 @@ final class GRPCChannelManager: Sendable {
     }
 
     /// Returns (or lazily creates) the shared persistent engine-QUIC channel, or `nil`
-    /// when the experiment is off. Mirrors `acquireH3Channel()`; callers MUST fall back
+    /// when the experiment is off; callers MUST fall back
     /// to the H2 path (`acquirePersistentClient()`) on `nil` or on any RPC failure.
     func acquireEngineQuicChannel() -> GRPCClient<QuicClientTransport>? {
         _eqConnLock.lock()
@@ -661,7 +565,7 @@ final class GRPCChannelManager: Sendable {
     }
 
     /// Force-cancels the engine-QUIC connection: cancels the runConnections() task and
-    /// begins graceful shutdown. Mirrors forceInvalidateH3Connection() for the silent-UDP
+    /// begins graceful shutdown. For the silent-UDP
     /// fast-failover path (a QUIC handshake that passed but is being dropped at the UDP layer).
     func forceInvalidateEngineQuicConnection() {
         _eqConnLock.lock()

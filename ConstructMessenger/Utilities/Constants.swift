@@ -384,32 +384,16 @@ struct FeatureFlags {
     // Engine send path is disabled for Desktop (engine paused for this surface).
     static let useEngineForSend = false
 
-    /// HTTP/3 (QUIC) for gRPC streams on the direct path.
-    ///
-    /// **Disabled 2026-05-29** after device validation surfaced a silent failure mode:
-    /// bidi MessageStream over H3 sends `subscribe` successfully but the server's
-    /// initial response headers never reach the client — `onAccepted` never fires,
-    /// stream hangs until heartbeat-watchdog tears it down ~75s later. Unary RPCs
-    /// over H3 work fine; only bidi streaming is broken.
-    ///
-    /// Likely cause: Traefik 3.x QUIC↔h2c bridge mishandles bidi streaming response
-    /// frames OR the custom `HTTP3ClientTransport.swift` doesn't surface initial
-    /// response headers to the gRPC layer for bidi calls (it does for unary).
-    ///
-    /// Re-enable only after both ends have been verified end-to-end with a bidi
-    /// streaming test. The H3 code paths in `MessageStreamTransport.swift`,
-    /// `GRPCStreamTransport.open`, and `GRPCChannelManager.acquireH3Channel`
-    /// remain intact for that future work.
-    ///
-    /// See `wiki/decisions/h3-disabled-on-ios.md` for the full context.
-    static let h3Enabled: Bool = false
 
-    /// Experimental QUIC/HTTP-3 via the dedicated `construct-transport` Rust stack
-    /// (`QuicClientTransport`), routed through a native quinn+h3 gateway that bypasses
-    /// the Traefik QUIC↔h2c bridge that broke the old native Swift H3 path.
+    /// QUIC/HTTP-3 via the dedicated `construct-transport` Rust stack (`QuicClientTransport`),
+    /// routed through a native quinn+h3 gateway at `quic.konstruct.cc:443`.
     ///
-    /// **Default `true` (auto-on).** This is NOT the dormant Swift H3 stack (`h3Enabled`) —
-    /// it is the construct-transport QUIC path. When on, eligible RPCs use the engine QUIC
+    /// This is the only fast-UDP carrier. A hand-written Swift H3 stack behind an `h3Enabled`
+    /// flag used to sit beside it; the flag was `false` from 2026-05-29 and both were deleted on
+    /// 2026-08-21 — see `decisions/h3-disabled-on-ios.md`, which is marked superseded and explains
+    /// why its stated cause (a Traefik QUIC↔h2c bridge) does not exist in this deployment.
+    ///
+    /// **Default `true` (auto-on).** When on, eligible RPCs use the engine QUIC
     /// channel with a fast hard fallback to H2 at the router (handshake 3s / idle 10s; see
     /// fast-fallback in construct-transport `tls.rs`). Auto-on is safe now that fallback is
     /// fast: on networks where QUIC is blocked/throttled it drops to H2/VEIL in seconds, and

@@ -79,7 +79,7 @@ enum NetworkTiming {
         /// the H3 runConnections() task (closing NWConnection) so the stuck streamTask
         /// fails within ~200ms instead of 70s.  Fires only when the soft 1.5s timeout
         /// (streamOpenAcceptTimeoutH3) didn't resolve the hung channel.
-        static let streamOpenAcceptTimeoutH3Hard: TimeInterval = 5.0
+        static let streamOpenAcceptTimeoutFastUdpHard: TimeInterval = 5.0
         /// Faster timeout used when the relay is already verified (TCP/TLS/obfs4/HTTP2 are
         /// all warm). A verified relay should respond to any new RPC within one RTT (≤200ms
         /// for AMS). 0.8s is a comfortable upper bound; anything longer signals a broken tunnel.
@@ -263,7 +263,7 @@ enum NetworkTiming {
         /// often DPI silently dropping UDP after the QUIC handshake. Triggers H2 fallback.
         /// 5s chosen as the trade-off between false positives on slow networks and the 23s+
         /// silent-H3 case observed on RU networks.
-        static let firstServerEventWatchdogH3: TimeInterval = 5
+        static let firstServerEventWatchdogFastUdp: TimeInterval = 5
     }
 
     // MARK: - Media

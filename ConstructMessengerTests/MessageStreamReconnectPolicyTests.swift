@@ -26,7 +26,7 @@ final class MessageStreamReconnectPolicyTests: XCTestCase {
     func testH3DirectTimeout_IsImmediateH2Failover() {
         XCTAssertEqual(
             MessageStreamManager.openTimeoutDisposition(
-                lastTransportWasH3: true,
+                lastTransportWasFastUdp: true,
                 prefersVEIL: false,
                 routingKeyUnchanged: true,
                 wasDirectRouting: true
@@ -39,7 +39,7 @@ final class MessageStreamReconnectPolicyTests: XCTestCase {
     func testSamePathOpenTimeout_UsesBackoff() {
         XCTAssertEqual(
             MessageStreamManager.openTimeoutDisposition(
-                lastTransportWasH3: false,
+                lastTransportWasFastUdp: false,
                 prefersVEIL: false,
                 routingKeyUnchanged: true,
                 wasDirectRouting: true
@@ -52,7 +52,7 @@ final class MessageStreamReconnectPolicyTests: XCTestCase {
     func testOpenTimeoutWhileVEILPreferred_UsesBackoff() {
         XCTAssertEqual(
             MessageStreamManager.openTimeoutDisposition(
-                lastTransportWasH3: true,
+                lastTransportWasFastUdp: true,
                 prefersVEIL: true,
                 routingKeyUnchanged: true,
                 wasDirectRouting: true
@@ -64,7 +64,7 @@ final class MessageStreamReconnectPolicyTests: XCTestCase {
     func testOpenTimeoutWhenRoutingKeyChanged_UsesBackoff() {
         XCTAssertEqual(
             MessageStreamManager.openTimeoutDisposition(
-                lastTransportWasH3: true,
+                lastTransportWasFastUdp: true,
                 prefersVEIL: false,
                 routingKeyUnchanged: false,
                 wasDirectRouting: true

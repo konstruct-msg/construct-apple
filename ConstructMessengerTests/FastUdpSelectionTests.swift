@@ -16,9 +16,9 @@ import XCTest
 
 final class FastUdpSelectionTests: XCTestCase {
 
-    private func select(h3: Bool = true, quic: Bool = true, oneShot: Bool = false, failed: Bool = false) -> Bool {
+    private func select(quic: Bool = true, oneShot: Bool = false, failed: Bool = false) -> Bool {
         FastUdpSelection.useH2Fallback(
-            h3Enabled: h3, experimentalQuic: quic, oneShotFallback: oneShot, failedThisSession: failed
+            experimentalQuic: quic, oneShotFallback: oneShot, failedThisSession: failed
         )
     }
 
@@ -42,22 +42,24 @@ final class FastUdpSelectionTests: XCTestCase {
     // MARK: - What must NOT happen
 
     func testNoFastCarrierMeansH2RegardlessOfEvidence() {
-        // With both flags off there is nothing to select; the session bit must not be able to
-        // produce an H3 attempt that the flags forbid.
+        // With the flag off there is nothing to select; the session bit must not be able to
+        // produce a fast-UDP attempt the flag forbids.
         for failed in [true, false] {
             for oneShot in [true, false] {
                 XCTAssertTrue(
-                    select(h3: false, quic: false, oneShot: oneShot, failed: failed),
-                    "flags off must always mean H2"
+                    select(quic: false, oneShot: oneShot, failed: failed),
+                    "flag off must always mean H2"
                 )
             }
         }
     }
 
-    func testEitherFlagAloneKeepsTheFastPathAvailable() {
-        // engine-QUIC reuses the H3 slot; disabling native H3 alone must not disable it.
-        XCTAssertFalse(select(h3: false, quic: true))
-        XCTAssertFalse(select(h3: true, quic: false))
+    /// This used to be `testEitherFlagAloneKeepsTheFastPathAvailable`, over two carriers. The
+    /// second — a hand-written Swift H3 stack behind `h3Enabled` — was statically off from
+    /// 2026-05-29 and deleted 2026-08-21, so "either" is now "the one".
+    func testTheFlagAloneDecidesWhetherAFastPathExists() {
+        XCTAssertFalse(select(quic: true))
+        XCTAssertTrue(select(quic: false))
     }
 
     func testTheDecisionHasNoMemoryOfItsOwn() {
