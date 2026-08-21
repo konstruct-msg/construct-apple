@@ -1150,3 +1150,8 @@
 
 "diagnostics_owned_inset_title" = "Owned-inset transcript";
 "diagnostics_owned_inset_hint" = "UIKit scroll container. Applies to the next chat you open.";
+
+"diagnostics_skip_backlog_title" = "Skip held backlog";
+"diagnostics_skip_backlog_held" = "Head stuck: %@… (%@, %ds). Skipping may drop messages that were never delivered.";
+"diagnostics_skip_backlog_clear" = "Nothing held — the cursor is moving.";
+"diagnostics_skip_backlog_done" = "Cursor forced to %@";

@@ -1161,3 +1161,8 @@
 
 "diagnostics_owned_inset_title" = "Своя вставка в ленте";
 "diagnostics_owned_inset_hint" = "Контейнер прокрутки на UIKit. Применится к следующему открытому чату.";
+
+"diagnostics_skip_backlog_title" = "Пропустить накопившееся";
+"diagnostics_skip_backlog_held" = "Голова застряла: %@… (%@, %d с). Пропуск может потерять недоставленные сообщения.";
+"diagnostics_skip_backlog_clear" = "Ничего не удерживается — курсор двигается.";
+"diagnostics_skip_backlog_done" = "Курсор переставлен на %@";

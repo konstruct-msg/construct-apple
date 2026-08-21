@@ -1149,3 +1149,8 @@
 
 "diagnostics_owned_inset_title" = "自前インセットの履歴";
 "diagnostics_owned_inset_hint" = "UIKit のスクロールコンテナ。次に開くチャットから適用されます。";
+
+"diagnostics_skip_backlog_title" = "保留分をスキップ";
+"diagnostics_skip_backlog_held" = "先頭が停止: %@…（%@、%d秒）。スキップすると未配信のメッセージが失われる可能性があります。";
+"diagnostics_skip_backlog_clear" = "保留はありません — カーソルは進んでいます。";
+"diagnostics_skip_backlog_done" = "カーソルを %@ に移動しました";

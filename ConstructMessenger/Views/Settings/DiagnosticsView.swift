@@ -28,6 +28,11 @@ struct DiagnosticsView: View {
     /// not on the one behind this screen.
     @State private var ownedInsetStackEnabled = ChatViewportConfiguration.ownedInsetStackEnabled
 
+    /// What is holding the stream cursor back right now, sampled when the screen appears.
+    @State private var heldEntry: (messageId: String, state: String, age: TimeInterval)?
+    /// The cursor a skip forced, kept on screen so the action leaves a visible trace.
+    @State private var skipResult: String?
+
     @AppStorage("stealth_mode_enabled") private var stealthOverrideEnabled = true
     // Stealth Privacy Pass token diagnostics — snapshotted on refresh (BlindTokenService
     // is not @Observable). Makes an empty wallet diagnosable: shows balance, the last
@@ -131,6 +136,46 @@ struct DiagnosticsView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         CTSettingsSectionHeader(title: NSLocalizedString("DEVELOPER", comment: ""), color: .orange)
                         CTSectionGroup {
+                            // The stream cursor, and the way out when it stops moving.
+                            //
+                            // Shows the head blocker rather than only offering the button: a
+                            // destructive action whose target the user cannot see is one they can
+                            // only press on faith. If nothing is held there is nothing to skip,
+                            // and the row says so.
+                            Button {
+                                let skipped = StreamCursorTracker.shared.skipHeldBacklog()
+                                heldEntry = nil
+                                skipResult = skipped
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(LocalizedStringKey("diagnostics_skip_backlog_title"))
+                                        .font(CTFont.regular(14))
+                                        .foregroundStyle(.orange)
+                                    Text(heldEntry.map {
+                                        String(
+                                            format: NSLocalizedString("diagnostics_skip_backlog_held", comment: ""),
+                                            String($0.messageId.prefix(8)), $0.state, Int($0.age)
+                                        )
+                                    } ?? NSLocalizedString("diagnostics_skip_backlog_clear", comment: ""))
+                                        .font(CTFont.regular(11))
+                                        .foregroundStyle(Color.CT.textDim)
+                                    if let skipResult {
+                                        Text(String(
+                                            format: NSLocalizedString("diagnostics_skip_backlog_done", comment: ""),
+                                            String(skipResult.prefix(20))
+                                        ))
+                                        .font(CTFont.regular(11))
+                                        .foregroundStyle(Color.CT.danger)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(heldEntry == nil)
+                            .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, SettingsLayout.rowVerticalPadding)
+                            .onAppear { heldEntry = StreamCursorTracker.shared.headBlocker() }
+
                             Toggle(isOn: $ownedInsetStackEnabled) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("diagnostics_owned_inset_title"))
