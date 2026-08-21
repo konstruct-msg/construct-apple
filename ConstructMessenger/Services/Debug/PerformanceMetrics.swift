@@ -172,12 +172,16 @@ enum MetricEvent: String {
     /// the same inversion `chunkReassemblyExpired` corrected. `label` = `msgNum=<n>`.
     case persistAckWithoutDurableWrite = "persist_ack_without_durable_write"
 
-    /// An incoming message was held behind the tie-break confirm gate instead of being routed —
-    /// either a peer init arriving while our SESSION_RESET_INIT is unacked (`peer_init`) or a
-    /// decrypt failure in that same window (`dr_fail_pending_confirm`). Benign and expected during
-    /// a re-init; it is the volume gauge for how much traffic a confirm window costs. The two
-    /// labels replace `undeliveredNoReceipt(stale_init)`, which counted the same event back when
-    /// it was a permanent discard. `label` = reason.
+    /// An incoming message the ratchet could not read was held behind the tie-break confirm gate
+    /// instead of being answered — a decrypt failure (`dr_fail_pending_confirm`) or a heal request
+    /// (`heal_pending_confirm`) arriving while our own SESSION_RESET_INIT is unacked. Benign and
+    /// expected during a re-init; it is the volume gauge for how much traffic a confirm window
+    /// costs. The labels replace `undeliveredNoReceipt(stale_init)`, which counted the same event
+    /// back when it was a permanent discard. `label` = reason.
+    ///
+    /// A third label, `peer_init`, was retired on 2026-08-21 with the pre-decryption hold that
+    /// emitted it. It counted `messageNumber == 0`, which named a fresh sending chain rather than a
+    /// handshake, and its largest single contributor was the peer's own `session_ready`.
     case confirmHold = "confirm_hold"
 
     /// The confirm hold hit its per-peer cap (100) and a message was genuinely dropped. This is

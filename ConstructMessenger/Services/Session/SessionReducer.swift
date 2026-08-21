@@ -465,27 +465,39 @@ enum SessionReducer {
         case hold
     }
 
-    /// The gate's disposition for one incoming message — the single authority for both points at
-    /// which the question is asked: before decryption (a peer msgNum=0) and after it (the core
-    /// answered `sendEndSession`).
+    /// The gate's disposition for one incoming message the core has already failed to read —
+    /// the single authority for both points at which that question is asked (`sendEndSession`
+    /// and `sessionHealNeeded`).
     ///
     /// Both must **hold**, never discard. Inside our own confirm window we are the side that
-    /// replaced the session, so a peer init that cannot be read and a decrypt failure are both
-    /// consequences of our own re-init, not evidence about the peer. Answering either with a
-    /// discard cost a user message on 2026-08-04: the peer's live init was marked processed (so
-    /// the server never redelivered it) and the message that followed it one second later tore the
-    /// session down and went with it.
+    /// replaced the session, so a message that cannot be read is a consequence of our own re-init,
+    /// not evidence about the peer. Answering it with a discard cost a user message on 2026-08-04:
+    /// the peer's live init was marked processed (so the server never redelivered it) and the
+    /// message that followed it one second later tore the session down and went with it.
     ///
     /// Control carriers are exempt. END_SESSION and SESSION_RESET_INIT are what drives the
     /// convergence the gate is waiting for — holding them would make the gate wait on itself.
+    ///
+    /// **The gate is asked only after decryption, and that is the whole rule.** It used to be
+    /// asked before it too, on `messageNumber == 0`, and that question has no answer at the
+    /// envelope: a DH sending chain restarts at 0 on every ratchet turn, so the predicate reads
+    /// every peer's first message under a fresh chain as a handshake. `session_ready` (ct 26) is
+    /// exactly such a message — it is the RESPONDER's first send under the session *we* created,
+    /// and since 2026-08-03 its type rides inside the ciphertext, so nothing before decryption can
+    /// tell it apart. The gate therefore held its own key: device log 2026-08-21 has 16 of the
+    /// peer's 19 `session_ready` sitting in the buffer of the gate waiting for them, 27 held
+    /// messages of which **none** was ever saved, and 19 dropped as superseded once the watchdog's
+    /// re-init moved the epoch out from under them.
+    ///
+    /// Decryption is the exact test the guess was approximating: a message readable by the session
+    /// we hold is by definition not a peer init we must keep away from the ratchet. So it is fed
+    /// to the ratchet, and only the ratchet's refusal reaches this function.
     static func confirmGateAction(
         isPending: Bool,
-        isControlCarrier: Bool,
-        isPeerInit: Bool,
-        decryptFailed: Bool
+        isControlCarrier: Bool
     ) -> ConfirmGateAction {
         guard isPending, !isControlCarrier else { return .route }
-        return (isPeerInit || decryptFailed) ? .hold : .route
+        return .hold
     }
 
     /// Whether a handshake-control retry may still speak for the session it was created to
@@ -528,15 +540,22 @@ enum SessionReducer {
     ///     15:23:27  heal_triggered: becoming RESPONDER
     ///     15:23:27  Archiving session … reason: manual_reset      ← a 60-second-old good session
     ///
-    /// Only a peer *init* is dropped. A payload (`messageNumber > 0`) is replayed whatever its
-    /// age: dropping user content on a guess is the failure §1d exists to prevent, and a payload
-    /// that cannot decrypt is a question for the healing path, not for this one.
+    /// Only a peer *init* is dropped. Anything else is replayed whatever its age: dropping user
+    /// content on a guess is the failure §1d exists to prevent, and a payload that cannot decrypt
+    /// is a question for the healing path, not for this one.
+    ///
+    /// `kind` is a ``ReceivingInitKind`` and not a `Bool` on purpose. Both callers used to compute
+    /// it as `messageNumber == 0`, which is the misreading this codebase has now paid for three
+    /// times — the RESPONDER init guard, the deleted-contact guard, and here. A sending chain
+    /// restarts at 0 on every ratchet turn, so that predicate drops the peer's first message under
+    /// a fresh chain, and on 2026-08-21 it dropped 19 of them. Taking the classifier's own type
+    /// means the next call site has to obtain a verdict rather than re-invent one.
     static func heldReplayDisposition(
         heldAgainst: SessionEpoch?,
         current: SessionEpoch?,
-        isPeerInit: Bool
+        kind: ReceivingInitKind
     ) -> HeldReplayDisposition {
-        guard isPeerInit else { return .replay }
+        guard kind == .handshake else { return .replay }
         // No session now: nothing has superseded it, and it may be the very handshake that
         // establishes one.
         guard current != nil else { return .replay }

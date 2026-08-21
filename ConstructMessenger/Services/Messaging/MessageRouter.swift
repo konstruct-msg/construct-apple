@@ -184,7 +184,13 @@ final class MessageRouter {
             switch SessionReducer.heldReplayDisposition(
                 heldAgainst: heldAgainst,
                 current: current,
-                isPeerInit: message.messageNumber == 0
+                kind: SessionReducer.receivingInitKind(
+                    messageNumber: message.messageNumber,
+                    oneTimePreKeyId: message.oneTimePreKeyId,
+                    kemCiphertextBytes: message.kemCiphertext.count,
+                    pqMessageEpoch: message.pqMessageEpoch,
+                    isSessionResetInit: message.isSessionResetInit
+                )
             ) {
             case .replay:
                 replayed += 1
@@ -192,11 +198,14 @@ final class MessageRouter {
             case .superseded:
                 // Acknowledge: it will never decrypt, and leaving it unacked means the server
                 // redelivers it forever — the amplifier behind the receipt storm. Dropping it
-                // silently is what it must NOT do, hence the count in the line below.
+                // silently is what it must NOT do, hence the id on this line: this is the only
+                // branch in the confirm gate that ends a message's life, and on 2026-08-21 it ended
+                // 19 of them under a predicate that had no business naming a handshake.
                 superseded += 1
+                Log.info("SESSION_STATE[confirm_superseded]: dropping \(message.id.prefix(8))… (msgNum=\(message.messageNumber) otpk=\(message.oneTimePreKeyId) kem=\(message.kemCiphertext.count)B epoch=\(message.pqMessageEpoch)) — handshake for a session that no longer exists", category: "MessageRouter")
                 PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
                 StreamCursorTracker.shared.resolve(messageId: message.id)
-                PerformanceMetrics.shared.record(.confirmReplaySuperseded, label: "peer_init")
+                PerformanceMetrics.shared.record(.confirmReplaySuperseded, label: "handshake")
             }
         }
         Log.info(
@@ -595,35 +604,29 @@ final class MessageRouter {
             return
         }
 
-        // Guard: after a tie-break WIN we sent SESSION_RESET_INIT and are waiting for the
-        // RESPONDER (peer) to acknowledge. A msgNum=0 arriving in this window is a peer init
-        // encrypted under keys our fresh INITIATOR session cannot read, so feeding it to the
-        // ratchet produces sendEndSession → reset loop.
-        //
-        // It is HELD, not discarded. The premise the discard rested on — "any msgNum=0 in this
-        // window is the peer's OLD attempt" — was false on 2026-08-04: the peer had genuinely
-        // re-inited one second earlier, and `markProcessed` meant the server never redelivered
-        // its init. Whether a peer init is stale or live is knowable only once the gate falls;
-        // until then the message is buffered rather than guessed about.
-        let gateIsUp = SessionConfirmationTracker.shared.isPending(otherUserId)
-        // The gate can also fall inside that query, via its lazy TTL, and that path has no way to
+        // The confirm gate can fall inside this call, via its lazy TTL, and that path has no way to
         // replay what it released — it runs from whatever call site happened to ask, with no
         // managed-object context. It also beats the watchdog to the entry, so the `.giveUp` replay
         // never runs (observed in build 575: two peer inits held, zero replayed, cursor deferred
         // behind them). Settle it here, where the gate matters and a context exists.
-        if !gateIsUp, SessionConfirmationTracker.shared.consumeLapse(otherUserId) {
+        if !SessionConfirmationTracker.shared.isPending(otherUserId),
+           SessionConfirmationTracker.shared.consumeLapse(otherUserId) {
             replayHeldMessages(for: otherUserId, in: context)
         }
-        if case .hold = SessionReducer.confirmGateAction(
-            isPending: gateIsUp,
-            isControlCarrier: message.isEndSession || message.isSessionResetInit,
-            isPeerInit: message.messageNumber == 0,
-            decryptFailed: false
-        ) {
-            streamOutcome = holdUntilConfirmResolves(message, from: otherUserId, reason: "peer_init")
-            if isNewChat { context.delete(chat) }
-            return
-        }
+
+        // Removed 2026-08-21: a second `confirmGateAction` call stood here, holding any incoming
+        // `messageNumber == 0` while our own SESSION_RESET_INIT was unacked. It was asked before
+        // decryption, so `messageNumber == 0` was all it had — and that is not a handshake. A DH
+        // sending chain restarts at 0 on every ratchet turn, so the peer's `session_ready` (its
+        // first send under the session we just created) satisfied it, and since 2026-08-03 the
+        // type of a `session_ready` rides inside the ciphertext where no pre-decryption test can
+        // reach it. The gate held its own key: 16 of the peer's 19 acknowledgements went into the
+        // buffer of the gate waiting for them, and the watchdog's next re-init superseded them.
+        //
+        // Nothing replaces it here. The message goes to the ratchet, which answers the question
+        // exactly — a message it can read is not a peer init — and both refusals it can give
+        // (`sendEndSession`, `sessionHealNeeded`) ask the gate below, where the answer is evidence
+        // rather than a guess. See `SessionReducer.confirmGateAction`.
 
         // Rust orchestrator is the SINGLE decrypt path — no Swift fallback.
         // Изъян 4: If orchestratorCore is nil (e.g. Keychain locked after reboot),
@@ -760,6 +763,21 @@ final class MessageRouter {
             _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
             return
         case .sessionHealNeeded(let contactId, let role):
+            // Same window, same reasoning as `.sendEndSession` below, and until 2026-08-21 this
+            // branch did not ask: healing as RESPONDER runs `archiveSession(.manualReset)`, so
+            // while our own SESSION_RESET_INIT is unacked it destroys the session we created two
+            // seconds ago in answer to a message that is unreadable *because* we created it. The
+            // pre-decryption hold used to keep most of these away from the ratchet; it is gone
+            // (see above), so the guard it implied has to be stated where the damage is done.
+            if case .hold = SessionReducer.confirmGateAction(
+                isPending: SessionConfirmationTracker.shared.isPending(contactId),
+                isControlCarrier: message.isEndSession || message.isSessionResetInit
+            ) {
+                Log.info("SESSION_STATE[heal_deferred]: \(contactId.prefix(8))… wants heal while our SESSION_RESET_INIT is unacked — holding, not archiving", category: "SessionInit")
+                streamOutcome = holdUntilConfirmResolves(message, from: contactId, reason: "heal_pending_confirm")
+                if isNewChat { context.delete(chat) }
+                return
+            }
             handleRustHealDecision(role: role, contactId: contactId, message: message, in: context)
             if isNewChat { context.delete(chat) }
             // Queued for heal — hold the cursor until heal drains (success) or clears (give-up).
@@ -777,9 +795,7 @@ final class MessageRouter {
             // one confirm window later.
             if case .hold = SessionReducer.confirmGateAction(
                 isPending: SessionConfirmationTracker.shared.isPending(contactId),
-                isControlCarrier: message.isEndSession || message.isSessionResetInit,
-                isPeerInit: message.messageNumber == 0,
-                decryptFailed: true
+                isControlCarrier: message.isEndSession || message.isSessionResetInit
             ) {
                 Log.info("SESSION_STATE[end_session_deferred]: decrypt failed for \(contactId.prefix(8))… while our SESSION_RESET_INIT is unacked — holding, not tearing down", category: "SessionInit")
                 streamOutcome = holdUntilConfirmResolves(message, from: contactId, reason: "dr_fail_pending_confirm")
