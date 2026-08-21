@@ -1219,7 +1219,7 @@ class CryptoManager {
             throw CryptoManagerError.sessionNotFound
         }
 
-        let contentForDecrypt = MessagePadding.unpadCiphertext(message.content)
+        let contentForDecrypt = message.content
 
         do {
             let result = try core.decryptMessage(
@@ -1272,7 +1272,7 @@ class CryptoManager {
                 contactId: msg.from,
                 ephemeralPublicKey: [UInt8](msg.ephemeralPublicKey),
                 messageNumber: msg.messageNumber,
-                content: [UInt8](MessagePadding.unpadCiphertext(msg.content)),
+                content: [UInt8](msg.content),
                 suiteId: msg.suiteId,
                 pqMessageEpoch: msg.pqMessageEpoch,
                 pqRatchetField: [UInt8](msg.pqRatchetField)
@@ -1338,7 +1338,7 @@ class CryptoManager {
             throw CryptoManagerError.sessionNotFound
         }
 
-        let contentForDecrypt = MessagePadding.unpadCiphertext(content)
+        let contentForDecrypt = content
         let result = try core.decryptMessage(
             contactId: contactId,
             ephemeralPublicKey: [UInt8](ephemeralPublicKey),

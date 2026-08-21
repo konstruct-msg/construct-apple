@@ -268,7 +268,7 @@ extension CryptoManager {
                 _ = try core.importSession(contactId: message.from, data: [UInt8](archive.sessionData))
 
                 let rawContent = message.content
-                let contentBytes = [UInt8](MessagePadding.unpadCiphertext(rawContent))
+                let contentBytes = [UInt8](rawContent)
                 let result = try core.decryptMessage(
                     contactId: message.from,
                     ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),

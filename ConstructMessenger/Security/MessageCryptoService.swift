@@ -92,7 +92,7 @@ final class MessageCryptoService {
             let components = EncryptedMessageComponents(
                 ephemeralPublicKey: Data(rustComponents.ephemeralPublicKey),
                 messageNumber: rustComponents.messageNumber,
-                content: MessagePadding.padCiphertext(rawContent),
+                content: rawContent,
                 // Use the suite the core actually encrypted with (authoritative
                 // per-message value), not the separately-looked-up session suite.
                 suiteId: rustComponents.suiteId,
@@ -148,7 +148,7 @@ final class MessageCryptoService {
 
         do {
             let rawContent = message.content
-            let contentForDecrypt = MessagePadding.unpadCiphertext(rawContent)
+            let contentForDecrypt = rawContent
             let result = try core.decryptMessage(
                 contactId: contactId,
                 ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),

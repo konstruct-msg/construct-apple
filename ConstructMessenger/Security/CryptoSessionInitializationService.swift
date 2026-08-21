@@ -115,7 +115,7 @@ final class CryptoSessionInitializationService {
             throw CryptoManagerError.invalidKeyData
         }
 
-        let sealedBox = MessagePadding.unpadCiphertext(firstMessage.content)
+        let sealedBox = firstMessage.content
         guard sealedBox.count >= 12 else {
             Log.error("First message sealed box too short (\(sealedBox.count) bytes)", category: "CryptoManager")
             throw CryptoManagerError.invalidKeyData

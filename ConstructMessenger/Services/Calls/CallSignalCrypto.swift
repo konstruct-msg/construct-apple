@@ -59,6 +59,15 @@ final class CallSignalCrypto {
     /// Encrypt a signaling field for a peer.
     /// Returns a prefixed ciphertext string safe to embed in any proto String field.
     /// Throws if there is no established E2E session with the peer.
+    /// Length is hidden by the core, once. `pad_message_default` pads the *plaintext* to a
+    /// 255-byte block before encryption, so every candidate under that ceiling produces the same
+    /// 283-byte ciphertext and the same base64 length.
+    ///
+    /// Until 2026-08-21 a second scheme sat on top: `MessagePadding` re-padded the ciphertext to
+    /// a 1024-byte bucket, which base64 turned into ~1366 characters. It was the only live user of
+    /// that layer, so call signals were the one traffic class on this client with a distinct size
+    /// on the wire — the opposite of what a padding scheme is for. Two schemes for one property,
+    /// and the outer one made the property worse.
     func encryptField(_ plaintext: String, for peerUserId: String) throws -> String {
         do {
             let components = try CryptoManager.shared.encryptMessage(plaintext, for: peerUserId)

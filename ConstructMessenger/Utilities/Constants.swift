@@ -512,13 +512,6 @@ struct TrafficProtectionConfig {
     #endif
 }
 
-// MARK: - Message Padding Configuration
-struct MessagePaddingConfig {
-    // Buckets are raw ciphertext sizes (after encryption, before Base64)
-    static let buckets: [Int] = [1024, 4096, 16384]
-    static let enabled: Bool = true
-}
-
 // MARK: - Chunked Delivery Configuration
 struct ChunkedDeliveryConfig {
     static let magic: [UInt8] = [0x4B, 0x4E, 0x53, 0x54] // "KNST"

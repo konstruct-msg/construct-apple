@@ -53,7 +53,7 @@ final class BackgroundDecryptTests: XCTestCase {
             let swiftComps = MessageCryptoService.EncryptedMessageComponents(
                 ephemeralPublicKey: Data(comps.ephemeralPublicKey),
                 messageNumber: comps.messageNumber,
-                content: MessagePadding.padCiphertext(Data(comps.content)),
+                content: Data(comps.content),
                 suiteId: 1,
                 oneTimePreKeyId: comps.oneTimePrekeyId,
                 storageKey: Data(comps.storageKey),
@@ -67,7 +67,7 @@ final class BackgroundDecryptTests: XCTestCase {
         func initReceiver(from sender: Peer, wirePayload: Data) throws {
             let bundle = try sender.binaryBundle()
             let decoded = try WirePayloadCoder.decode(wirePayload)
-            let unpadded = MessagePadding.unpadCiphertext(decoded.content)
+            let unpadded = decoded.content
             let firstMsg = BinaryFirstMessage(
                 ephemeralPublicKey: decoded.ephemeralPublicKey,
                 messageNumber: decoded.messageNumber,
@@ -97,7 +97,7 @@ final class BackgroundDecryptTests: XCTestCase {
         /// Decrypt via the normal foreground path (verifies session health post-batch).
         func decryptViaWire(_ wirePayload: Data, from contactId: String) throws -> String {
             let decoded = try WirePayloadCoder.decode(wirePayload)
-            let unpadded = MessagePadding.unpadCiphertext(decoded.content)
+            let unpadded = decoded.content
             let result = try core.decryptMessage(
                 contactId: contactId,
                 ephemeralPublicKey: decoded.ephemeralPublicKey,
@@ -162,7 +162,7 @@ final class BackgroundDecryptTests: XCTestCase {
         let swiftComps3 = MessageCryptoService.EncryptedMessageComponents(
             ephemeralPublicKey: Data(enc3.ephemeralPublicKey),
             messageNumber: enc3.messageNumber,
-            content: MessagePadding.padCiphertext(Data(enc3.content)),
+            content: Data(enc3.content),
             suiteId: 1,
             oneTimePreKeyId: enc3.oneTimePrekeyId,
             storageKey: Data(enc3.storageKey),

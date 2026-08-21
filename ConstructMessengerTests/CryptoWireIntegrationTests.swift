@@ -63,7 +63,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
             return MessageCryptoService.EncryptedMessageComponents(
                 ephemeralPublicKey: Data(rustComponents.ephemeralPublicKey),
                 messageNumber: rustComponents.messageNumber,
-                content: MessagePadding.padCiphertext(rawContent),
+                content: rawContent,
                 suiteId: 1,
                 oneTimePreKeyId: rustComponents.oneTimePrekeyId,
                 storageKey: Data(rustComponents.storageKey),
@@ -80,7 +80,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
         /// Decode wire payload (same as MessageStreamManager does) and decrypt
         func decodeAndDecrypt(_ payload: Data, from contactId: String) throws -> String {
             let decoded = try WirePayloadCoder.decode(payload)
-            let unpadded = MessagePadding.unpadCiphertext(decoded.content)
+            let unpadded = decoded.content
             let plaintextData = try core.decryptMessage(
                 contactId: contactId,
                 ephemeralPublicKey: decoded.ephemeralPublicKey,
@@ -100,7 +100,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
                                   wirePayload: Data) throws -> String {
             let bundle = try bundleBytes(from: senderBundle)
             let decoded = try WirePayloadCoder.decode(wirePayload)
-            let unpadded = MessagePadding.unpadCiphertext(decoded.content)
+            let unpadded = decoded.content
             let firstMsg = BinaryFirstMessage(
                 ephemeralPublicKey: decoded.ephemeralPublicKey,
                 messageNumber: decoded.messageNumber,

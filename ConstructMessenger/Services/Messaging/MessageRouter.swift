@@ -984,7 +984,7 @@ final class MessageRouter {
     /// Legacy JSON path — only used when rawPayload is unavailable (e.g. old healing records).
     private func buildIncomingEventLegacy(message: ChatMessage, otherUserId: String) -> CfeIncomingEvent? {
         assertNotControlCarrier(message, path: "buildIncomingEventLegacy")
-        let sealedBox = MessagePadding.unpadCiphertext(message.content)
+        let sealedBox = message.content
         guard sealedBox.count >= 12 else {
             Log.error("buildIncomingEventLegacy: sealed box too short (\(sealedBox.count)b) for \(message.id.prefix(8))…", category: "MessageRouter")
             return nil

@@ -346,7 +346,7 @@ final class CallSignalE2EETests: XCTestCase {
             MessageCryptoService.EncryptedMessageComponents(
                 ephemeralPublicKey: Data(msg1.ephemeralPublicKey),
                 messageNumber: msg1.messageNumber,
-                content: MessagePadding.padCiphertext(Data(msg1.content)),
+                content: Data(msg1.content),
                 suiteId: 1,
                 oneTimePreKeyId: msg1.oneTimePrekeyId,
                 storageKey: Data(),
@@ -361,7 +361,7 @@ final class CallSignalE2EETests: XCTestCase {
             MessageCryptoService.EncryptedMessageComponents(
                 ephemeralPublicKey: Data(aliceMsg.ephemeralPublicKey),
                 messageNumber: aliceMsg.messageNumber,
-                content: MessagePadding.padCiphertext(Data(aliceMsg.content)),
+                content: Data(aliceMsg.content),
                 suiteId: 1,
                 oneTimePreKeyId: aliceMsg.oneTimePrekeyId,
                 storageKey: Data(),

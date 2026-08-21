@@ -343,7 +343,7 @@ struct ProfileShareData: Codable {
         // This parser indexes from 0, bounds-checks against `count`, and uses `subdata(in:)`,
         // which takes ABSOLUTE indices. A `Data` slice carries a non-zero `startIndex`, so it
         // would trap on the first subscript. Normalise the origin once — no copy when the
-        // input is already zero-origin. Same trap documented at MessagePadding.swift:36.
+        // input is already zero-origin.
         // The payload here is peer-controlled decrypted content, so this must not depend on
         // how the caller happened to build the `Data`.
         let data = raw.startIndex == 0 ? raw : Data(raw)
