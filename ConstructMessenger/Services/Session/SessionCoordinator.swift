@@ -492,33 +492,60 @@ final class SessionCoordinator: MessageRouterDelegate {
     func messageRouter(_ router: MessageRouter, needsEndSession userId: String) {
         Task { [weak self] in
             guard let self else { return }
-            // Cooldown gates the whole recovery sequence: if a recent END_SESSION is still in
-            // its window, skip both the send AND the reinit/fallback below (avoids storms).
-            // This callback fires because a message arrived on a session we no longer have —
-            // which is proof the peer never applied our last END_SESSION. Suppressing the
-            // re-notification on the plain cooldown is what left the two sides permanently
-            // disagreeing (device 2026-08-11 07:19:03, messageNumber 3 and 4 both skipped).
-            guard await self.sendEndSessionRateLimited(
-                to: userId,
-                reason: "session_out_of_sync",
-                peerStillOnDeadSession: true
-            ) else {
-                return
-            }
             let myId = AuthSessionManager.shared.currentUserId ?? ""
             guard !myId.isEmpty else { return }
-            do {
-                try await Task.sleep(nanoseconds: 300_000_000)
-            } catch {
-                return
-            }
-            if SessionReducer.isNaturalInitiator(myId: myId, peerId: userId) {
-                Log.info("DR diverge: auto-reinit as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
-                self.reinitAndAnnounceAsInitiator(to: userId, reason: "dr_diverge")
-            } else {
+
+            // **One teardown signal per divergence.** As the natural INITIATOR we are about to send
+            // a SESSION_RESET_INIT, and SESSION_RESET_INIT *is* the teardown — "archive the session
+            // you hold, here is the new one", atomically, which is why it replaced
+            // `sendEndSession + sendSessionPing` in the first place. Sending both meant the peer
+            // received two instructions about one event, in whatever order the network chose, and
+            // the END_SESSION applied to whatever it held when it arrived — including the session
+            // our own SRI had just built.
+            //
+            // Device 2026-08-21, one divergence turning into two full re-inits:
+            //
+            //     17:03:22  B  rust_end_session: DR diverged — sending END_SESSION
+            //     17:03:23  B  re-init + SESSION_RESET_INIT (dr_diverge)
+            //     17:03:25  B  session_ready_received — A built the session, gate confirmed
+            //     17:03:26  B  Received END_SESSION from A   ← A tore down what it had just built
+            //     17:03:28  B  re-init + SESSION_RESET_INIT (end_session_received)
+            //
+            // The RESPONDER branch keeps the END_SESSION: it announces nothing of its own, so the
+            // teardown is the only thing that tells the peer to stop using a session we cannot read.
+            guard SessionReducer.isNaturalInitiator(myId: myId, peerId: userId) else {
+                // Cooldown gates the whole recovery sequence here: if a recent END_SESSION is still
+                // in its window, skip both the send AND the fallback below (avoids storms). This
+                // callback fires because a message arrived on a session we no longer have — which
+                // is proof the peer never applied our last END_SESSION. Suppressing the
+                // re-notification on the plain cooldown is what left the two sides permanently
+                // disagreeing (device 2026-08-11 07:19:03, messageNumber 3 and 4 both skipped).
+                guard await self.sendEndSessionRateLimited(
+                    to: userId,
+                    reason: "session_out_of_sync",
+                    peerStillOnDeadSession: true
+                ) else {
+                    return
+                }
+                do {
+                    try await Task.sleep(nanoseconds: 300_000_000)
+                } catch {
+                    return
+                }
                 Log.info("DR diverge: starting RESPONDER fallback for \(userId.prefix(8))…", category: "SessionInit")
                 self.startResponderFallback(for: userId)
+                return
             }
+
+            // The same cooldown, consulted rather than spent: it exists to bound how often we
+            // re-drive a handshake with one peer, and that bound has to survive the send it used to
+            // be attached to.
+            guard self.recordEndSessionSendIfAllowed(userId, peerStillOnDeadSession: true) else {
+                Log.info("DR diverge: re-init cooldown active for \(userId.prefix(8))…, skipping", category: "SessionInit")
+                return
+            }
+            Log.info("DR diverge: auto-reinit as natural INITIATOR for \(userId.prefix(8))… (SESSION_RESET_INIT carries the teardown)", category: "SessionInit")
+            self.reinitAndAnnounceAsInitiator(to: userId, reason: "dr_diverge")
         }
     }
 
