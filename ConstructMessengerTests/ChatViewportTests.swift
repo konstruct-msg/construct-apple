@@ -510,6 +510,38 @@ final class ChatViewportTests: XCTestCase {
         XCTAssertEqual(viewport.mode, .following)
     }
 
+    /// The jump control's entire effect on this path. It used to end in `proxy?.scrollTo("bottom")`
+    /// against a proxy that is always nil here — `ChatTranscriptScrollView` has no
+    /// `ScrollViewReader`, so `registerProxy` is never reached. The control therefore cleared its
+    /// own flag and moved nothing: on device it slid out on its transition and slid straight back
+    /// when the next geometry tick recomputed the same distance.
+    ///
+    /// Mutation: drop the `landRequest &+= 1` from `followExplicitly`.
+    func testFollowingExplicitlyRequestsALanding() {
+        let viewport = Self.readingHistory(anchoredTo: "msg-40")
+        let before = viewport.landRequest
+
+        viewport.followExplicitly()
+
+        XCTAssertEqual(
+            viewport.landRequest, before + 1,
+            "clearing showJumpButton is not going anywhere — something has to move the offset"
+        )
+    }
+
+    /// Two taps are two landings. A `Bool` would need a resetter, and the resetter would live in
+    /// the layer that consumes it — a second carrier of one fact, kept in step by nothing.
+    func testEachRequestIsDistinct() {
+        let viewport = Self.readingHistory(anchoredTo: "msg-40")
+        let start = viewport.landRequest
+
+        viewport.followExplicitly()
+        viewport.bindAnchorRow("msg-40")   // reader scrolls away again
+        viewport.followExplicitly()
+
+        XCTAssertEqual(viewport.landRequest, start + 2)
+    }
+
     // MARK: - Holding the reader
 
     /// The reader keeps their row while the viewport changes shape under them. Measured limit

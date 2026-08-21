@@ -565,6 +565,7 @@ struct ChatView: View {
                 mode: (viewport as? ChatViewport)?.mode ?? .following,
                 layoutPrimed: viewport.layoutPrimed,
                 anchorMinY: heldRowMinY,
+                landRequest: (viewport as? ChatViewport)?.landRequest ?? 0,
                 onLanded: { (viewport as? ChatViewport)?.noteTailLanded() },
                 onGeometry: { handleTranscriptGeometry(from: geometryHistory.last, to: $0) },
                 onUserInteraction: { viewport.noteScrollPhase(.tracking) }
@@ -579,6 +580,10 @@ struct ChatView: View {
                 .coordinateSpace(name: Self.transcriptContentSpace)
                 .environment(\.containerWidth, containerWidth)
             }
+            // The legacy path clears the badge from `registerTranscriptProxy`, which this container
+            // never calls — it has no `ScrollViewReader`, so `onProxyReady` does not exist here.
+            // Opening a chat therefore left the badge standing for the whole owned-path build.
+            .onAppear { LocalNotificationManager.shared.clearBadge() }
         } else {
             legacyTranscript(renderedMessages)
         }

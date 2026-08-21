@@ -35,6 +35,7 @@
 //  view depends on them. `ChatView` still runs `ChatScrollManager`.
 //
 
+import Foundation
 import SwiftUI
 import Observation
 
@@ -117,6 +118,21 @@ final class ChatViewport {
     /// Reply-peek only: an incoming message must not pull the transcript while a parent is held
     /// on screen. Does **not** change `mode`.
     private(set) var incomingFollowSuppressed = false
+
+    /// Monotonic token for "take me to the newest message". Observed, so a change reaches the
+    /// scroll container through the ordinary view update.
+    ///
+    /// This exists because on this path there is no `ScrollViewProxy` to command. One is created by
+    /// `ChatTranscriptContainer`, which is the *legacy* container; `ChatTranscriptScrollView` has no
+    /// `ScrollViewReader` and never calls `onProxyReady`, so `registerProxy` was never reached and
+    /// `proxy` was nil for the life of every chat. `followExplicitly` ended in
+    /// `proxy?.scrollTo("bottom")` and therefore did nothing at all: on device the control cleared
+    /// its own flag, slid out on its transition, and slid back when the next geometry tick
+    /// recomputed the same distance — reported as "the button moves a few millimetres right and
+    /// returns".
+    ///
+    /// A counter rather than a `Bool`, so two taps are two lands and nothing has to reset it.
+    private(set) var landRequest: Int = 0
 
     /// An inset is moving, so geometry is not intent this tick.
     ///
@@ -359,6 +375,9 @@ final class ChatViewport {
 
     // MARK: - Wiring
 
+    /// Never called on this path — `ChatTranscriptScrollView` has no `ScrollViewReader` to make a
+    /// proxy from. Kept because the protocol is shared with the legacy owner until PR-4, and
+    /// because deleting it would hide the reason `scrollTo(messageId:)` below cannot work.
     func registerProxy(_ proxy: ScrollViewProxy) {
         self.proxy = proxy
     }
@@ -501,19 +520,33 @@ final class ChatViewport {
         }
     }
 
-    /// The only `scrollTo("bottom")` in the procedure: the FAB, and dismissing search.
+    /// Take the reader to the newest message: the jump control, sending, and dismissing search.
     func followExplicitly() {
         mode = .following
         positionId = nil
         showJumpButton = false
-        proxy?.scrollTo("bottom", anchor: .bottom)
+        landRequest &+= 1
     }
 
     /// Guest scrolls: search result, peek parent, voice now-playing. They never assign `mode`;
     /// a guest scroll inside history re-binds the held row so the anchor cannot pull it back.
+    ///
+    /// **Does not move the viewport on the owned path, and says so.** It needs the target row's
+    /// offset, and only the bound anchor row reports one — going to an arbitrary message needs a
+    /// mechanism this file does not have, the same gap `landRequest` fills for the one destination
+    /// that can be computed (the bottom). Jump-to-search-result, jump-to-reply-parent and
+    /// follow-the-playing-voice-message are therefore inert here. Logged rather than silent,
+    /// because a guest scroll that quietly does nothing is indistinguishable from one that worked
+    /// and landed where you already were.
     func scrollTo(messageId: String, anchor: UnitPoint = .center, animated: Bool = true) {
         if mode == .readingHistory { positionId = messageId }
-        guard let proxy else { return }
+        guard let proxy else {
+            Log.error(
+                "SCROLL_GUEST[no_proxy]: cannot reach \(messageId.prefix(8))… — the owned-inset path has no ScrollViewProxy",
+                category: "ChatView"
+            )
+            return
+        }
         if animated {
             withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(messageId, anchor: anchor) }
         } else {
