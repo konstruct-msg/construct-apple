@@ -248,7 +248,7 @@ final class ChunkedMessageReassembler {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
-            if let reaction = Self.reaction(from: content, original: data) {
+            if let reaction = Self.reaction(from: content) {
                 return reaction
             }
             if case .edit(let editMsg) = content.content {
@@ -282,7 +282,7 @@ final class ChunkedMessageReassembler {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
-            if let reaction = Self.reaction(from: content, original: data) {
+            if let reaction = Self.reaction(from: content) {
                 return reaction
             }
             if case .edit(let editMsg) = content.content {
@@ -318,22 +318,16 @@ final class ChunkedMessageReassembler {
     }
 
     /// Reaction payloads must not fall through to `.assembled` (empty text → blank bubble).
-    /// `timestamp_ms` is field 4; generated Swift does not yet expose it, so
-    /// `ReactionWire` reads it from unknown fields (0 = pre-field peer).
+    /// `timestampMs` is 0 from a peer that predates the field, which the reducer reads as such.
     private static func reaction(
-        from content: Shared_Proto_Messaging_V1_MessageContent,
-        original: Data
+        from content: Shared_Proto_Messaging_V1_MessageContent
     ) -> ChunkedMessageResult? {
         guard case .reaction(let msg) = content.content else { return nil }
-        let fromUnknown = ReactionWire.timestampMs(from: msg)
-        let timestampMs = fromUnknown != 0
-            ? fromUnknown
-            : ReactionWire.timestampMs(fromMessageContent: original)
         return .reaction(
             targetMessageID: msg.targetMessageID,
             emoji: msg.emoji,
             action: msg.action,
-            timestampMs: timestampMs
+            timestampMs: msg.timestampMs
         )
     }
 

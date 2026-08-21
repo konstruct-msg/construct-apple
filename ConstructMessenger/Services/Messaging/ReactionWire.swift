@@ -2,15 +2,19 @@
 //  ReactionWire.swift
 //  Construct Messenger
 //
-//  Encode / decode MessageContent.reaction including field 4 timestamp_ms.
-//  Generated Swift does not yet have the property (full proto regen wipes
-//  Generated/); field 4 is written as a protobuf varint and read back from
-//  ReactionMessage.unknownFields. Dual-read: missing field → 0, which the
-//  reducer treats as a pre-field peer.
+//  Encode `MessageContent.reaction`, and name the two things a send needs that the proto does not
+//  carry directly.
+//
+//  Until 2026-08-21 this file also hand-rolled protobuf varints. `ReactionMessage.timestamp_ms`
+//  (field 4) existed in construct-protos but not in the checked-in Swift bindings, so the field was
+//  concatenated onto the serialized message on the way out and dug back out of `unknownFields` on
+//  the way in. Regenerating the bindings — forced by the `IceCandidate.candidate` type change on
+//  the same day — brought the property in, and with it broke that read: the generated decoder now
+//  consumes field 4 into `timestampMs`, so it never reaches `unknownFields` and the reader returned
+//  0 for every reaction. The workaround and its defect went together.
 //
 
 import Foundation
-import SwiftProtobuf
 
 enum ReactionWire {
 
@@ -25,42 +29,12 @@ enum ReactionWire {
             reaction.emoji = ""
             reaction.action = .remove
         }
-        guard let inner = try? reaction.serializedData() else { return nil }
-        // Field 4 is concatenated, not written via UnknownStorage.append —
-        // that API is package-only and the app is a different module.
-        // `Data.append(Data)` also resolves to SwiftProtobuf's package
-        // overload once the module is imported, so we only use `+`.
-        let stamped = plan.timestampMs > 0
-            ? inner + int64Field(number: 4, value: plan.timestampMs)
-            : inner
-        var outer = Data()
-        appendVarint(&outer, (3 << 3) | 2)
-        appendVarint(&outer, UInt64(stamped.count))
-        return outer + stamped
-    }
+        // 0 stays absent on the wire, and the reducer reads absent as "pre-field peer".
+        if plan.timestampMs > 0 { reaction.timestampMs = plan.timestampMs }
 
-    static func timestampMs(from reaction: Shared_Proto_Messaging_V1_ReactionMessage) -> Int64 {
-        int64Field(number: 4, from: reaction.unknownFields.data)
-    }
-
-    /// Walk MessageContent bytes for nested ReactionMessage field 4. Used when
-    /// the generated decoder skipped the unknown field instead of storing it.
-    static func timestampMs(fromMessageContent data: Data) -> Int64 {
-        var i = data.startIndex
-        while i < data.endIndex {
-            guard let key = readVarint(data, at: &i) else { break }
-            let field = Int(key >> 3)
-            let wire = Int(key & 0x7)
-            if field == 3 && wire == 2 {
-                guard let length = readVarint(data, at: &i),
-                      data.distance(from: i, to: data.endIndex) >= Int(length)
-                else { return 0 }
-                let inner = data[i..<data.index(i, offsetBy: Int(length))]
-                return int64Field(number: 4, from: Data(inner))
-            }
-            guard skip(wireType: wire, data: data, at: &i) else { break }
-        }
-        return 0
+        var content = Shared_Proto_Messaging_V1_MessageContent()
+        content.reaction = reaction
+        return try? content.serializedData()
     }
 
     static func actionRawValue(_ incoming: ReactionReducer.Incoming) -> Int {
@@ -74,76 +48,6 @@ enum ReactionWire {
         switch incoming {
         case .add(let emoji): return emoji
         case .remove: return ""
-        }
-    }
-
-    // MARK: - protobuf varint (proto3 int64)
-
-    static func int64Field(number: Int, value: Int64) -> Data {
-        var data = Data()
-        appendVarint(&data, UInt64(number << 3))
-        appendVarint(&data, UInt64(bitPattern: value))
-        return data
-    }
-
-    static func int64Field(number: Int, from data: Data) -> Int64 {
-        var i = data.startIndex
-        while i < data.endIndex {
-            guard let key = readVarint(data, at: &i) else { break }
-            let field = Int(key >> 3)
-            let wire = Int(key & 0x7)
-            if field == number && wire == 0 {
-                guard let value = readVarint(data, at: &i) else { return 0 }
-                return Int64(bitPattern: value)
-            }
-            guard skip(wireType: wire, data: data, at: &i) else { break }
-        }
-        return 0
-    }
-
-    private static func appendVarint(_ data: inout Data, _ value: UInt64) {
-        var v = value
-        while v > 0x7F {
-            data += [UInt8((v & 0x7F) | 0x80)]
-            v >>= 7
-        }
-        data += [UInt8(v & 0x7F)]
-    }
-
-    private static func readVarint(_ data: Data, at i: inout Data.Index) -> UInt64? {
-        var result: UInt64 = 0
-        var shift: UInt64 = 0
-        while i < data.endIndex {
-            let byte = data[i]
-            i = data.index(after: i)
-            result |= UInt64(byte & 0x7F) << shift
-            if byte & 0x80 == 0 { return result }
-            shift += 7
-            if shift > 63 { return nil }
-        }
-        return nil
-    }
-
-    private static func skip(wireType: Int, data: Data, at i: inout Data.Index) -> Bool {
-        switch wireType {
-        case 0:
-            return readVarint(data, at: &i) != nil
-        case 1:
-            guard data.distance(from: i, to: data.endIndex) >= 8 else { return false }
-            i = data.index(i, offsetBy: 8)
-            return true
-        case 2:
-            guard let length = readVarint(data, at: &i),
-                  data.distance(from: i, to: data.endIndex) >= Int(length)
-            else { return false }
-            i = data.index(i, offsetBy: Int(length))
-            return true
-        case 5:
-            guard data.distance(from: i, to: data.endIndex) >= 4 else { return false }
-            i = data.index(i, offsetBy: 4)
-            return true
-        default:
-            return false
         }
     }
 }

@@ -71,9 +71,8 @@ final class ReactionWireTests: XCTestCase {
         }
     }
 
-    func testInt64Field_RoundTrips() {
-        let encoded = ReactionWire.int64Field(number: 4, value: t0)
-        XCTAssertEqual(ReactionWire.int64Field(number: 4, from: encoded), t0)
-        XCTAssertEqual(ReactionWire.int64Field(number: 3, from: encoded), 0)
-    }
+    // `testInt64Field_RoundTrips` was here, over a hand-rolled varint encoder. It is gone with the
+    // encoder: `timestamp_ms` is a generated property now, so what it tested is SwiftProtobuf's.
+    // The two tests above still cover the property that matters — a stamped reaction round-trips,
+    // and one from a peer that never wrote the field decodes as 0 rather than failing.
 }
