@@ -408,6 +408,10 @@ final class ChatViewportTests: XCTestCase {
         viewport.scrollTo(messageId: "now-playing", anchor: .center, animated: false)
         XCTAssertEqual(viewport.mode, .following, "continuous voice is a guest, not a reader")
         XCTAssertNil(viewport.positionId, "and it does not bind history while following")
+        XCTAssertEqual(
+            viewport.scrollTargetId, "now-playing",
+            "binding nothing is not the same as going nowhere — the jump still has to be requested"
+        )
     }
 
     /// A guest scroll **inside** history re-binds the held row, so the bottom anchor cannot pull
@@ -541,6 +545,60 @@ final class ChatViewportTests: XCTestCase {
 
         XCTAssertEqual(viewport.landRequest, start + 2)
     }
+
+    // MARK: - Going to a named row
+
+    /// The defect, at the level that caused it. `scrollTo` ended in `proxy?.scrollTo` and the owned
+    /// path has no proxy, so tapping a reply, a search hit or a playing voice message did nothing —
+    /// for the whole life of the flag. A request that something downstream can see is the minimum
+    /// for the jump to be able to happen at all.
+    ///
+    /// Mutation: drop the `scrollTargetId` assignment, or the `scrollRequest` bump.
+    func testAskingForARowRequestsIt() {
+        let viewport = Self.readingHistory(anchoredTo: "msg-40")
+        let before = viewport.scrollRequest
+
+        viewport.scrollTo(messageId: "msg-12", anchor: .center)
+
+        XCTAssertEqual(viewport.scrollTargetId, "msg-12")
+        XCTAssertEqual(viewport.scrollRequest, before + 1)
+        XCTAssertEqual(viewport.scrollTargetAnchor, 0.5)
+    }
+
+    /// The same row asked for twice is two jumps: a voice message replayed, a search re-run against
+    /// the same first hit. An id that has not changed is not a second request, which is why the
+    /// token exists separately from it.
+    ///
+    /// Mutation: guard the bump on `scrollTargetId != messageId`.
+    func testAskingForTheSameRowTwiceIsTwoRequests() {
+        let viewport = Self.readingHistory(anchoredTo: "msg-40")
+        let start = viewport.scrollRequest
+
+        viewport.scrollTo(messageId: "msg-12")
+        viewport.noteScrollTargetResolved()
+        viewport.scrollTo(messageId: "msg-12")
+
+        XCTAssertEqual(viewport.scrollRequest, start + 2)
+    }
+
+    /// Resolving takes the reporter back off the row. Left set, every row that was ever jumped to
+    /// would keep measuring itself for the life of the screen — the per-frame cost the single
+    /// reporter exists to avoid.
+    ///
+    /// Mutation: make `noteScrollTargetResolved` a no-op.
+    func testResolvingStopsTheMeasurement() {
+        let viewport = Self.readingHistory(anchoredTo: "msg-40")
+        viewport.scrollTo(messageId: "msg-12")
+
+        viewport.noteScrollTargetResolved()
+
+        XCTAssertNil(viewport.scrollTargetId)
+    }
+
+    // The two facts about *binding* — that a guest scroll inside history re-binds the held row, and
+    // that one while following binds nothing — are `testGuestScrollInHistoryRebindsTheHeldRow` and
+    // `testVoiceAdvance_doesNotChangeMode` above. They were written when this method did nothing,
+    // and they still hold now that it does.
 
     // MARK: - Holding the reader
 

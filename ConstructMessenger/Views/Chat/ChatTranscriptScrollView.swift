@@ -43,7 +43,13 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
     var layoutPrimed: Bool
     /// Where the anchor row sits, tagged with which row it is. Nil while following, before the row
     /// has reported once, or when the tag no longer matches the bound anchor.
-    var anchor: TranscriptAnchorSample?
+    var anchor: TranscriptRowSample?
+    /// A guest scroll waiting to be performed: search hit, reply parent, playing voice message.
+    ///
+    /// Carried as request + measurement together so the two cannot be read out of step. The
+    /// measurement arrives a pass *after* the request — naming the target is what makes the row
+    /// install a reporter — so an unmeasured request is the normal first state, not an error.
+    var scrollTarget: TranscriptScrollTarget?
     /// Monotonic token for "take me to the newest message".
     ///
     /// The owned path has no `ScrollViewProxy` — `ChatTranscriptContainer` creates one and calls
@@ -56,6 +62,8 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
 
     /// The tail landed. Closes `layoutPrimed`, which is what stops the landing rule re-firing.
     var onLanded: () -> Void
+    /// The guest scroll is over: the offset is on the row. Takes the reporter back off it.
+    var onReachedScrollTarget: () -> Void
     var onGeometry: (ChatScrollGeometry) -> Void
     /// A finger is on the list. The only signal that outranks every heuristic upstream.
     var onUserInteraction: () -> Void
@@ -101,7 +109,9 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
         coordinator.layoutPrimed = layoutPrimed
         coordinator.anchor = anchor
         coordinator.landRequest = landRequest
+        coordinator.scrollTarget = scrollTarget
         coordinator.onLanded = onLanded
+        coordinator.onReachedScrollTarget = onReachedScrollTarget
         coordinator.onGeometry = onGeometry
         coordinator.onUserInteraction = onUserInteraction
 
@@ -133,14 +143,16 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
 
         var mode: ChatViewport.Mode = .following
         var layoutPrimed = false
-        var anchor: TranscriptAnchorSample?
+        var anchor: TranscriptRowSample?
         var landRequest = 0
+        var scrollTarget: TranscriptScrollTarget?
         var onLanded: () -> Void = {}
+        var onReachedScrollTarget: () -> Void = {}
         var onGeometry: (ChatScrollGeometry) -> Void = { _ in }
         var onUserInteraction: () -> Void = {}
 
         private var previousContentHeight: CGFloat = 0
-        private var previousAnchor: TranscriptAnchorSample?
+        private var previousAnchor: TranscriptRowSample?
         /// True while we are the ones moving the offset. Without it our own correction arrives at
         /// `scrollViewDidScroll` and is indistinguishable from a finger — which would flip the mode
         /// to `readingHistory` on the very landing that put the tail on screen.
@@ -150,6 +162,7 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
         /// it costs a wasted policy evaluation and reads like a loop to anyone stepping through.
         private var isApplyingLayout = false
         private var lastLandRequest = 0
+        private var lastScrollRequest = 0
 
         init(rootView: AnyView) {
             host = UIHostingController(rootView: rootView)
@@ -194,6 +207,36 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
                     bottomInset: scrollView.contentInset.bottom
                 ))
                 if !layoutPrimed { onLanded() }
+                report(scrollView, contentHeight: contentHeight)
+                return
+            }
+
+            // A guest scroll, for the same reason and with the same precedence as the landing above:
+            // it did not come from the content, so the policy has no opinion on it.
+            //
+            // Consumed only once the row has reported. Naming the target is what installs its
+            // reporter, so the request necessarily arrives one pass before the measurement, and
+            // treating that pass as a failed jump would drop every jump. The token is left unspent
+            // until there is somewhere to jump to, and the policy runs meanwhile.
+            if let target = scrollTarget,
+               target.request != lastScrollRequest,
+               let sample = target.sample,
+               contentHeight > 0, viewportHeight > 0 {
+                lastScrollRequest = target.request
+                previousContentHeight = contentHeight
+                previousAnchor = anchor
+                setOffset(scrollView, to: TranscriptOffsetPolicy.rowOffset(
+                    rowMinY: sample.minY,
+                    rowHeight: sample.height,
+                    anchor: target.anchor,
+                    contentHeight: contentHeight,
+                    viewportHeight: viewportHeight,
+                    bottomInset: scrollView.contentInset.bottom
+                ))
+                onReachedScrollTarget()
+                // Reported like any other move: the mode and the jump control are derived from where
+                // the viewport ended up, so landing away from the tail is what tells the rest of the
+                // system a reader has left it. Nothing assigns `mode` for this.
                 report(scrollView, contentHeight: contentHeight)
                 return
             }

@@ -134,6 +134,24 @@ final class ChatViewport {
     /// A counter rather than a `Bool`, so two taps are two lands and nothing has to reset it.
     private(set) var landRequest: Int = 0
 
+    /// The row a guest scroll is trying to reach, or nil when none is pending.
+    ///
+    /// Observed, and read by `ChatView` to decide which rows measure themselves. That is the whole
+    /// mechanism: a row reports its position only while something needs it, so naming a target here
+    /// is what makes the target measurable. One extra reporter at a time, on the same reasoning that
+    /// keeps thirty of them off the transcript — a per-frame cost for a number nobody reads.
+    private(set) var scrollTargetId: String?
+
+    /// Monotonic token for the guest scroll, twin of `landRequest`.
+    ///
+    /// Separate from `scrollTargetId` because the same row may be asked for twice — a voice message
+    /// replayed, a search re-run against the same first hit — and an id that has not changed is not
+    /// a second request.
+    private(set) var scrollRequest: Int = 0
+
+    /// Vertical placement the pending guest scroll asked for: 0 top, 0.5 centre, 1 bottom.
+    @ObservationIgnored private(set) var scrollTargetAnchor: CGFloat = 0.5
+
     /// An inset is moving, so geometry is not intent this tick.
     ///
     /// Replaces the 600 ms opening timer and the keyboard notifications with the measurement
@@ -194,8 +212,6 @@ final class ChatViewport {
     @ObservationIgnored private var lastSafeAreaBottom: CGFloat = 0
     @ObservationIgnored private var lastContainerHeight: CGFloat = 0
     @ObservationIgnored private var hasInsetBaseline = false
-
-    @ObservationIgnored private var proxy: ScrollViewProxy?
 
     // MARK: - Pure decisions
     // Everything a test needs to reach lives here. Instance methods below are the wiring that
@@ -376,11 +392,10 @@ final class ChatViewport {
     // MARK: - Wiring
 
     /// Never called on this path — `ChatTranscriptScrollView` has no `ScrollViewReader` to make a
-    /// proxy from. Kept because the protocol is shared with the legacy owner until PR-4, and
-    /// because deleting it would hide the reason `scrollTo(messageId:)` below cannot work.
-    func registerProxy(_ proxy: ScrollViewProxy) {
-        self.proxy = proxy
-    }
+    /// proxy from. A required member of the protocol shared with the legacy owner until PR-4, so it
+    /// stays; it stores nothing, because since 2026-08-22 nothing here reads a proxy. `scrollTo`
+    /// was the last reader and it did not work: the proxy was nil for the life of every chat.
+    func registerProxy(_ proxy: ScrollViewProxy) {}
 
     /// One geometry tick.
     func updateScrollOffset(
@@ -528,30 +543,34 @@ final class ChatViewport {
         landRequest &+= 1
     }
 
-    /// Guest scrolls: search result, peek parent, voice now-playing. They never assign `mode`;
-    /// a guest scroll inside history re-binds the held row so the anchor cannot pull it back.
+    /// Guest scrolls: search result, peek parent, voice now-playing.
     ///
-    /// **Does not move the viewport on the owned path, and says so.** It needs the target row's
-    /// offset, and only the bound anchor row reports one — going to an arbitrary message needs a
-    /// mechanism this file does not have, the same gap `landRequest` fills for the one destination
-    /// that can be computed (the bottom). Jump-to-search-result, jump-to-reply-parent and
-    /// follow-the-playing-voice-message are therefore inert here. Logged rather than silent,
-    /// because a guest scroll that quietly does nothing is indistinguishable from one that worked
-    /// and landed where you already were.
+    /// **Never assigns `mode`, and does not need to.** Landing on a row away from the tail makes
+    /// the next geometry report say so — `flags` reads `following` straight off the distance — so
+    /// the mode and the jump control follow from where the viewport actually is rather than from an
+    /// assignment made in advance. A guest scroll inside history also re-binds the held row, so the
+    /// anchor rule cannot pull the reader back off the row they just asked for.
+    ///
+    /// The move itself is a *request*, not an action, because the destination is not known here:
+    /// only a row that installs a reporter has a position, and the target installs one because this
+    /// method names it. `ChatTranscriptScrollView` performs the move on the layout pass where that
+    /// measurement first exists. Same shape as `landRequest`, for the same reason — the offset
+    /// belongs to the pass that produced the content it lands in.
+    ///
+    /// Until 2026-08-22 this ended in `proxy?.scrollTo`, and the owned path has no
+    /// `ScrollViewProxy`. Every jump was a no-op: tapping a reply, a search hit or a playing voice
+    /// message did nothing at all.
     func scrollTo(messageId: String, anchor: UnitPoint = .center, animated: Bool = true) {
         if mode == .readingHistory { positionId = messageId }
-        guard let proxy else {
-            Log.error(
-                "SCROLL_GUEST[no_proxy]: cannot reach \(messageId.prefix(8))… — the owned-inset path has no ScrollViewProxy",
-                category: "ChatView"
-            )
-            return
-        }
-        if animated {
-            withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(messageId, anchor: anchor) }
-        } else {
-            proxy.scrollTo(messageId, anchor: anchor)
-        }
+        scrollTargetId = messageId
+        scrollTargetAnchor = anchor.y
+        scrollRequest &+= 1
+    }
+
+    /// The container moved the offset onto the target, or the row left the transcript before it
+    /// could. Either way the request is over and the reporter comes back off the row.
+    func noteScrollTargetResolved() {
+        scrollTargetId = nil
     }
 
     // MARK: - Private

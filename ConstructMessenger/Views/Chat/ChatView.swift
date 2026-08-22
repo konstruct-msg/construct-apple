@@ -84,7 +84,11 @@ struct ChatView: View {
     /// The tag is what makes it safe to leave lying around: nothing clears this when a history
     /// visit ends, so without it the next visit's first sample would be differenced against the
     /// previous visit's last one — two different rows, and a shift that measures nothing.
-    @State private var anchorSample: TranscriptAnchorSample?
+    @State private var anchorSample: TranscriptRowSample?
+    /// Where the row a guest scroll is heading for sits. Same reporter as the anchor, installed on
+    /// a different row and for a different question: the anchor's *movement* is the reading
+    /// position, this row's *position* is the destination.
+    @State private var scrollTargetSample: TranscriptRowSample?
     /// Last geometry sample, so the new path can hand `handleTranscriptGeometry` an `old` value
     /// the way the container's `(old, new)` callback does.
     ///
@@ -175,7 +179,7 @@ struct ChatView: View {
                     // Continuous voice playback advanced — bring the now-playing message
                     // into view (centered), then clear the target so a later replay re-scrolls.
                     guard let target else { return }
-                    viewport.scrollTo(messageId: target, anchor: .center, animated: true)
+                    jumpToMessage(target)
                     viewModel.voicePlaybackScrollTarget = nil
                 }
                 .onChange(of: searchText) { _, newValue in
@@ -184,7 +188,7 @@ struct ChatView: View {
                         let delay = ChatViewConstants.SearchDelay.scrollToResult
                         Task { @MainActor in
                             try? await Task.sleep(for: .seconds(delay))
-                            viewport.scrollTo(messageId: firstMatch.id, anchor: .center, animated: true)
+                            jumpToMessage(firstMatch.id)
                         }
                     } else if newValue.isEmpty {
                         // Search cleared: the one place besides the jump control that is
@@ -567,13 +571,15 @@ struct ChatView: View {
         if usesOwnedInset {
             ChatTranscriptScrollView(
                 bottomInset: transcriptBottomPad,
-                mode: (viewport as? ChatViewport)?.mode ?? .following,
+                mode: ownedViewport?.mode ?? .following,
                 layoutPrimed: viewport.layoutPrimed,
                 // Nil unless the sample is of the row currently bound, so a stale one cannot be
                 // read as a measurement of the new anchor.
                 anchor: anchorSample?.messageId == viewport.heldMessageId ? anchorSample : nil,
-                landRequest: (viewport as? ChatViewport)?.landRequest ?? 0,
-                onLanded: { (viewport as? ChatViewport)?.noteTailLanded() },
+                scrollTarget: transcriptScrollTarget,
+                landRequest: ownedViewport?.landRequest ?? 0,
+                onLanded: { ownedViewport?.noteTailLanded() },
+                onReachedScrollTarget: { ownedViewport?.noteScrollTargetResolved() },
                 onGeometry: { handleTranscriptGeometry(from: geometryHistory.last, to: $0) },
                 onUserInteraction: { viewport.noteScrollPhase(.tracking) }
             ) {
@@ -599,6 +605,25 @@ struct ChatView: View {
     /// Content-space name the held row reports its position in. One name, declared beside the only
     /// two places that use it, so the reporter and the reader cannot drift apart.
     static let transcriptContentSpace = "transcript.content"
+
+    /// The viewport when it is the owned one. `viewport` is the protocol, and three of its inputs
+    /// (mode, the two request tokens) exist only on this side of the flag.
+    private var ownedViewport: ChatViewport? { viewport as? ChatViewport }
+
+    /// The pending guest scroll, paired with its measurement.
+    ///
+    /// The sample is passed only when it is of the row actually being asked for. A stale one — the
+    /// previous jump's row, still in `scrollTargetSample` because nothing clears it — would be read
+    /// as this jump's destination and land the viewport on the wrong message. Same guard, and the
+    /// same reason, as the anchor's `messageId ==` test above.
+    private var transcriptScrollTarget: TranscriptScrollTarget? {
+        guard let owned = ownedViewport, let targetId = owned.scrollTargetId else { return nil }
+        return TranscriptScrollTarget(
+            request: owned.scrollRequest,
+            anchor: owned.scrollTargetAnchor,
+            sample: scrollTargetSample?.messageId == targetId ? scrollTargetSample : nil
+        )
+    }
 
     @ViewBuilder
     private func legacyTranscript(_ renderedMessages: [Message]) -> some View {
@@ -842,16 +867,25 @@ struct ChatView: View {
                         // viewport was left 922pt past the end. See
                         // `ChatScrollManager.shouldRecoverStrandedViewport`.
                         .background {
-                            // Only the held row measures itself. Thirty reporters would be a
+                            // At most two rows measure themselves: the held anchor, and the row a
+                            // guest scroll is trying to reach. Thirty reporters would be a
                             // per-frame cost for a number that is meaningless for every row but
-                            // this one.
-                            if usesOwnedInset, message.id == viewport.heldMessageId {
+                            // those, which is why the target is named before it is measured rather
+                            // than every row being measured in case someone asks.
+                            if usesOwnedInset,
+                               message.id == viewport.heldMessageId || message.id == ownedViewport?.scrollTargetId {
                                 GeometryReader { proxy in
                                     Color.clear.onChange(
-                                        of: proxy.frame(in: .named(Self.transcriptContentSpace)).minY,
+                                        of: proxy.frame(in: .named(Self.transcriptContentSpace)),
                                         initial: true
-                                    ) { _, y in
-                                        anchorSample = TranscriptAnchorSample(messageId: message.id, minY: y)
+                                    ) { _, frame in
+                                        let sample = TranscriptRowSample(
+                                            messageId: message.id,
+                                            minY: frame.minY,
+                                            height: frame.height
+                                        )
+                                        if message.id == viewport.heldMessageId { anchorSample = sample }
+                                        if message.id == ownedViewport?.scrollTargetId { scrollTargetSample = sample }
                                     }
                                 }
                             }
@@ -988,6 +1022,35 @@ struct ChatView: View {
         replyFocusIds = [messageId.lowercased()]
     }
 
+    /// Take the reader to one message, if the transcript is showing it.
+    ///
+    /// Every guest scroll goes through here, for two reasons the call sites cannot handle
+    /// individually.
+    ///
+    /// **The id is resolved against the rendered list, and the rendered one is what travels on.**
+    /// `peekReplyChain` lowercases both ids before it asks, `Message.id` is not lowercase, and the
+    /// row that installs the target's reporter matches on `message.id` — so an unresolved id asks
+    /// for a row that, to every comparison downstream, does not exist. One normalisation, at the
+    /// boundary, rather than a `.lowercased()` at each of the places that compare.
+    ///
+    /// **A message outside the loaded window is refused here.** The destination is measured by a
+    /// reporter installed on the target row, so a message the transcript has not rendered has
+    /// nowhere to put one, and the request would sit unfulfilled forever. Saying so is the point: a
+    /// jump that silently does nothing is the defect this whole change closes, and replacing it
+    /// with a differently-shaped silence would be no better.
+    private func jumpToMessage(_ messageId: String, anchor: UnitPoint = .center) {
+        guard let rendered = filteredMessages.first(
+            where: { $0.id.caseInsensitiveCompare(messageId) == .orderedSame }
+        ) else {
+            Log.info(
+                "SCROLL_GUEST[not_rendered]: \(messageId.prefix(8))… is not in the loaded transcript — no jump",
+                category: "ChatView"
+            )
+            return
+        }
+        viewport.scrollTo(messageId: rendered.id, anchor: anchor, animated: true)
+    }
+
     /// Tap on in-bubble reply strip: scroll to parent, keep parent + child bright briefly.
     private func peekReplyChain(for message: Message) {
         let childId = message.id.lowercased()
@@ -999,7 +1062,7 @@ struct ChatView: View {
             replyFocusIds = [parentId, childId]
         }
         // Prefer scrolling to the parent (what the user is looking for).
-        viewport.scrollTo(messageId: parentId, anchor: .center, animated: true)
+        jumpToMessage(parentId)
 
         // Hold while composing a reply to this parent; otherwise auto-clear.
         let holdParent = parentId

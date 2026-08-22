@@ -45,6 +45,45 @@ enum TranscriptOffsetPolicy {
         max(0, contentHeight + bottomInset - viewportHeight)
     }
 
+    /// The offset that brings one row to `anchor` inside the visible area.
+    ///
+    /// The fourth rule, and the one the migration shipped without: going to an arbitrary row.
+    /// `followExplicitly` could be computed from the content height alone, so it was — and every
+    /// other destination (a search hit, the parent of a reply, the voice message that just started
+    /// playing) had no arithmetic at all and did nothing. `bottomOffset` answers "where is the end";
+    /// this answers "where is that row".
+    ///
+    /// `bottomInset` is subtracted rather than ignored: it is the composer's height, so centring in
+    /// `viewportHeight` would centre the row behind the glass and leave it visually low. What the
+    /// reader sees is `viewportHeight - bottomInset`, and that is what the row is placed within.
+    ///
+    /// Clamped at both ends for the reason `.hold` is: an offset is a place scrolling could have
+    /// reached, and past the end is not one. That bound was missing from `.hold` until device
+    /// 2026-08-21 landed beyond the content and stayed there, with nothing downstream to bring it
+    /// back — a jump to the newest message in a chat would land in exactly the same place.
+    ///
+    /// - Parameters:
+    ///   - anchor: 0 puts the row's top at the top of the visible area, 0.5 centres it, 1 puts its
+    ///     bottom at the bottom. Only the vertical component is used; the transcript does not scroll
+    ///     horizontally.
+    static func rowOffset(
+        rowMinY: CGFloat,
+        rowHeight: CGFloat,
+        anchor: CGFloat,
+        contentHeight: CGFloat,
+        viewportHeight: CGFloat,
+        bottomInset: CGFloat
+    ) -> CGFloat {
+        let visibleHeight = max(0, viewportHeight - bottomInset)
+        let target = rowMinY - (visibleHeight - rowHeight) * anchor
+        let bottom = bottomOffset(
+            contentHeight: contentHeight,
+            viewportHeight: viewportHeight,
+            bottomInset: bottomInset
+        )
+        return min(bottom, max(0, target))
+    }
+
     /// - Parameters:
     ///   - anchorShift: how far the held row moved in content coordinates during this pass, or nil
     ///     when there is no held row or its frame is not known yet. This is the exact measurement

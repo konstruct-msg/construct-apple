@@ -46,16 +46,38 @@ struct ChatScrollGeometry: Equatable {
     var safeAreaBottom: CGFloat
 }
 
-/// Where the anchor row sits, and **which row that was**.
+/// Where a row sits in content coordinates, and **which row that was**.
 ///
 /// The identity is not decoration. `TranscriptOffsetPolicy` moves the offset by the difference
 /// between two samples, which only means anything if both are of the same row — and the row changes
 /// whenever a history visit ends and another begins. A bare `CGFloat?` carried no way to notice
 /// that, so a sample of row A and a sample of row B subtracted into a shift that was not a
 /// measurement of anything, and the offset went wherever it said.
-struct TranscriptAnchorSample: Equatable {
+///
+/// Two rows are measured at a time and both use this type: the bound anchor, whose *movement* is
+/// the reading position, and the row a guest scroll is trying to reach, whose *position* is where
+/// the viewport is going. `height` is read only by the second — an anchor shift is a difference and
+/// does not care how tall the row is, while landing on a row at `.center` cannot be computed
+/// without it.
+struct TranscriptRowSample: Equatable {
     let messageId: String
     let minY: CGFloat
+    let height: CGFloat
+}
+
+/// A pending guest scroll: which row, where to put it, and which request this is.
+///
+/// One value rather than three parallel arguments, because the measurement lags the request by a
+/// layout pass and the two must not be readable out of step. `sample` is nil for exactly that pass
+/// — the row installs its reporter *because* it was named here — so an unmeasured target is the
+/// normal first state and not a failure to jump.
+struct TranscriptScrollTarget: Equatable {
+    /// Monotonic, so asking for the same row twice is two jumps.
+    let request: Int
+    /// 0 top, 0.5 centre, 1 bottom, within the area the composer does not cover.
+    let anchor: CGFloat
+    /// Where the target row is, once it has said. Nil until then.
+    let sample: TranscriptRowSample?
 }
 
 /// The previous geometry sample, held outside SwiftUI's invalidation.
