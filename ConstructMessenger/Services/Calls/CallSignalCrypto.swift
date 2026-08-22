@@ -35,6 +35,14 @@
 //  meant a stripped candidate looked exactly like a legacy one. On a `bytes` field there is no
 //  "unprefixed" — either it parses as our frame or it is refused.
 //
+//  **The SDP half.** `decryptSdp` was the same passthrough for `CallOffer.sdp` / `CallAnswer.sdp`,
+//  kept for a peer that might one day encrypt them. Nothing needed it: an offer or answer reaches
+//  this client only through `handleCallSignalProto`, so it is already plaintext, having come out of
+//  the Double Ratchet with the rest of the `WebRTCSignal`. What the hop did instead was let three
+//  writers of `pendingRemoteOfferSdp` disagree about whether what they stored was ciphertext, and
+//  let `handleSignalResponse` apply an SDP handed to it by the signaling server. Both are gone as
+//  of 2026-08-21 — see `signalStreamAdmission`. There is no base64 left in this file.
+//
 
 import Foundation
 
@@ -182,30 +190,4 @@ final class CallSignalCrypto {
         )
     }
 
-    // MARK: SDP — the half that has not moved
-
-    /// Decrypt an SDP field.
-    ///
-    /// **SDP is sent in plaintext today** — nothing in this client encrypts it, and
-    /// `CallOffer.sdp` / `CallAnswer.sdp` are still `string`. So this is a passthrough with a
-    /// decrypt path attached for a peer that might encrypt, and it is kept honest by saying so
-    /// rather than by looking like the candidate path.
-    ///
-    /// That plaintext is the larger leak of the two: an SDP carries the DTLS fingerprint and every
-    /// gathered address, where a candidate carries one. Closing it means the same three-repo change
-    /// this file just went through for `IceCandidate.candidate`, plus deciding what to do about the
-    /// server's `applyOfferAndAnswer` path, so it is its own piece of work.
-    func decryptSdp(_ value: String, from peerUserId: String) throws -> String {
-        guard value.hasPrefix(Self.sdpV3Prefix) else {
-            Log.info("SDP from \(peerUserId.prefix(8))… is plaintext — the field is not migrated yet", category: "Calls")
-            return value
-        }
-        guard let frame = Data(base64Encoded: String(value.dropFirst(Self.sdpV3Prefix.count))) else {
-            throw CallSignalCryptoError.invalidEnvelope
-        }
-        return try decryptCandidate(frame, from: peerUserId)
-    }
-
-    /// The ASCII prefix the `string` SDP fields still need, and the candidate no longer does.
-    private static let sdpV3Prefix = "ENC:v3:"
 }

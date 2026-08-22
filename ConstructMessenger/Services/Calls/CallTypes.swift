@@ -129,6 +129,42 @@ func offerSdpIsUsable(_ sdp: String?) -> Bool {
     return !sdp.isEmpty
 }
 
+/// Whether a signal arriving on the signaling stream may be acted on.
+enum SignalStreamAdmission: Equatable {
+    /// The stream is the channel for this signal. Hand it to its handler.
+    case accept
+    /// The stream is not a channel for this signal. Drop it and say so.
+    case refuseSdp
+}
+
+/// What the server-terminated signaling stream is allowed to deliver.
+///
+/// The stream carries presence — ringing, connected, hangup, busy, ping — plus ICE candidates,
+/// which are encrypted end to end and refused by `CallSignalFrame.decode` if they are not our
+/// frame. Media negotiation does not travel here: an offer or answer reaches this client only
+/// through `handleCallSignalProto`, inside the Double Ratchet.
+///
+/// The `.offer` and `.answer` arms of `handleSignalResponse` accepted SDP from this stream until
+/// 2026-08-21, and `decryptSdp` returned an unprefixed value unchanged, so an SDP arriving here
+/// was applied as plaintext. No peer could reach it — signaling-service forwards no SDP in either
+/// direction (`service.rs`, the Offer arm sends `IncomingCall` without the SDP and does not store
+/// a pending offer; the Answer arm updates call state only). What could reach it is whatever can
+/// write to the stream, and gRPC/TLS ends at the server. Applying that SDP substitutes the DTLS
+/// fingerprint and the whole media path with no end-to-end check — the thing moving call
+/// signalling into the encrypted channel was for.
+///
+/// A handler with no producer, in the direction that costs something: `AGENTS.md` states the rule
+/// as "a handler no producer reaches is either wired up or deleted", and this one had been left
+/// deprecated instead, which is neither.
+func signalStreamAdmission(for signal: Shared_Proto_Signaling_V1_WebRTCSignal.OneOf_Signal?) -> SignalStreamAdmission {
+    switch signal {
+    case .offer, .answer:
+        return .refuseSdp
+    default:
+        return .accept
+    }
+}
+
 enum CallState: Equatable {
     case idle
     case incoming(CallSession)
