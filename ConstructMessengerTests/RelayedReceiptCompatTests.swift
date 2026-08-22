@@ -7,10 +7,16 @@
 //  server sets `sender_id` to empty on purpose, so our receipt was the server's only source for
 //  the sender↔recipient link sealed sender exists to withhold.
 //
-//  Receiving one still has to work. A peer on an older build keeps sending them, and the server
-//  relays through `MessageEnvelope::from_receipt`; if that inbound branch is later pruned as dead
-//  code — it is unreachable from our own sends now — those peers silently lose every checkmark.
-//  Reading a receipt leaks nothing, so the branch stays.
+//  Receiving one still parses. The stream entry carries a cursor that has to advance, and one
+//  arriving at all is worth seeing — nothing has sent these since 2026-08-02, so it means either a
+//  peer three weeks stale or something that is not a peer.
+//
+//  **What it no longer does is turn the checkmark on** (2026-08-22). The branch was originally kept
+//  on the grounds that "reading a receipt leaks nothing", which is true and is about privacy. The
+//  property that argument did not weigh is authenticity: gRPC/TLS ends at the server, so a plaintext
+//  receipt on that stream is a value the server chose to send, and `.delivered` is the one thing the
+//  UI says about the *other person*. The refusal lives in
+//  `DeliveryStatusTransition.marksDelivered`.
 //
 //  These tests also pin why `.failed` was dropped rather than kept: the parser discards it, and
 //  `relay_delivery_receipt` never re-queues, so a `.failed` receipt was inert on both ends while
@@ -45,8 +51,8 @@ final class RelayedReceiptCompatTests: XCTestCase {
         return response
     }
 
-    /// The compatibility path we deliberately kept: a peer still sending stream receipts must
-    /// still be able to turn our checkmark on.
+    /// The entry still parses, because its cursor still has to advance and because a relayed
+    /// receipt arriving is a fact worth logging. What it does *not* do is decided one layer up.
     func testRelayedDeliveredReceipt_IsStillParsed() {
         let event = MessageStreamParser.parse(
             response(status: .delivered, messageIds: ["msg-a", "msg-b"], cursor: "1776522670299-0")
@@ -70,5 +76,38 @@ final class RelayedReceiptCompatTests: XCTestCase {
     /// An empty id list confirms nothing, so it must not be mistaken for a confirmation.
     func testEmptyReceipt_IsIgnored() {
         XCTAssertNil(MessageStreamParser.parse(response(status: .delivered, messageIds: [])))
+    }
+
+    // MARK: - Which source may turn the checkmark on
+
+    /// The defect, stated as the property it breaks. Anything that can write to the message stream
+    /// could turn on a checkmark claiming end-to-end delivery for a message that was never
+    /// delivered — and the thing that can write to it is the server, which is the party sealed
+    /// sender exists to withhold from.
+    ///
+    /// Mutation: return `true` for `.relayedStream`.
+    func testARelayedReceiptCannotMarkAMessageDelivered() {
+        XCTAssertFalse(
+            DeliveryStatusTransition.marksDelivered(.relayedStream),
+            "a plaintext receipt on the stream is a value the server chose to send"
+        )
+    }
+
+    /// And the one that can. Losing this is losing every checkmark in the app, which is the failure
+    /// the refusal above must not turn into.
+    ///
+    /// Mutation: return `false` for `.peerE2E`.
+    func testThePeersOwnReceiptStillMarksItDelivered() {
+        XCTAssertTrue(DeliveryStatusTransition.marksDelivered(.peerE2E))
+    }
+
+    /// `.delivered` outranks everything and nothing demotes it — which is right, and is exactly why
+    /// the set of things allowed to produce it has to be narrow. Stated together so the two rules
+    /// are read as one: the rank makes the claim permanent, the source decides who may make it.
+    func testDeliveredIsUnDemotableWhichIsWhyTheSourceMatters() {
+        XCTAssertNil(
+            DeliveryStatusTransition.resolve(current: .delivered, proposed: .failed),
+            "once delivered, no later writer takes it back"
+        )
     }
 }

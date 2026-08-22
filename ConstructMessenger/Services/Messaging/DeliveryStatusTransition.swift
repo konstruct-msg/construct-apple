@@ -91,4 +91,45 @@ enum DeliveryStatusTransition {
         if evidenceRank(status) >= evidenceRank(.delivered) { return .keep }
         return retryCount < maxRetries ? .resend : .giveUp
     }
+
+    // MARK: - Which receipts may turn the checkmark on
+
+    /// Where a delivery receipt came from. The two arrive at the same handler and are not the same
+    /// fact.
+    enum ReceiptSource: Equatable {
+        /// The peer's own receipt: content_type 14, out of the Double Ratchet. Nobody but the peer
+        /// could have produced it.
+        case peerE2E
+        /// A plaintext `DirectReceipt` relayed on the message stream. The server hands it to us and
+        /// nothing in it is authenticated.
+        case relayedStream
+    }
+
+    /// Whether a receipt from `source` may mark a message `.delivered`.
+    ///
+    /// `.delivered` is the one thing the UI says about the *other person*: your message reached
+    /// them. `evidenceRank` already puts it above everything else and lets nothing demote it, which
+    /// is right — and is exactly why what may produce it has to be narrow.
+    ///
+    /// A relayed stream receipt may not. gRPC/TLS ends at the server, so a plaintext receipt on that
+    /// stream is a value the server chose to send: anything able to write there can turn on a
+    /// checkmark claiming end-to-end delivery, for a message that was never delivered. This client
+    /// has not *sent* one since 2026-08-02, so no current peer produces them either.
+    ///
+    /// **This reverses part of that 2026-08-02 decision, and the argument it was made on was
+    /// sound as far as it went.** The inbound branch was kept because "reading a receipt leaks
+    /// nothing" — true, and about privacy. The property it did not weigh is authenticity: the leak
+    /// was the reason to stop sending, and it is not the only reason to stop believing. A peer on an
+    /// older build loses its checkmarks, which alpha force-updates settle, and the same trade was
+    /// taken for the v1/v2 call-signal formats.
+    ///
+    /// The relayed branch is still parsed and still refused *out loud* rather than deleted: the
+    /// stream entry has a cursor that must advance, and one still arriving means either a peer older
+    /// than three weeks or something that is not a peer at all. Both are worth seeing.
+    static func marksDelivered(_ source: ReceiptSource) -> Bool {
+        switch source {
+        case .peerE2E:       return true
+        case .relayedStream: return false
+        }
+    }
 }

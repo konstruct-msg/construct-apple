@@ -497,11 +497,28 @@ final class StreamLifecycleCoordinator {
         sessionCoordinator.routeIncomingMessage(message, in: context)
     }
 
-    private func handleDeliveryReceipts(_ messageIds: [String]) {
+    /// Turn the checkmark on, if this receipt is allowed to.
+    ///
+    /// Both sources land here and only one of them is a statement by the peer — see
+    /// `DeliveryStatusTransition.marksDelivered`. A relayed stream receipt is refused here rather
+    /// than unwired at the callback, so that one arriving is visible: nothing has sent them since
+    /// 2026-08-02, and a peer three weeks stale is a different thing from a receipt no peer wrote.
+    private func handleDeliveryReceipts(
+        _ messageIds: [String],
+        from source: DeliveryStatusTransition.ReceiptSource
+    ) {
+        guard DeliveryStatusTransition.marksDelivered(source) else {
+            Log.error(
+                "SECURITY[receipt_gate]: refused \(messageIds.count) relayed plaintext receipt(s) — the checkmark comes from the peer's E2E receipt only",
+                category: "MessageStream"
+            )
+            return
+        }
         guard let context = viewContext else { return }
-        // Server receipts reference the server-assigned wire id, which differs from the
-        // local row id on the sealed-sender path — translate before the fetch.
-        // (E2E receipts from the peer already carry the canonical E2E id.)
+        // Identity for an E2E receipt: the peer names our message by the canonical id it was sent
+        // under. Kept as a normalisation rather than dropped — `localId(for:)` returns its input
+        // when unmapped, so it costs a dictionary lookup and covers the case where that stops being
+        // true, which is not a case anything would notice failing.
         let localIds = messageIds.map { ServerMessageIdMap.shared.localId(for: $0) }
         context.perform {
             for messageId in localIds {
@@ -571,13 +588,13 @@ final class StreamLifecycleCoordinator {
 
     private func wireStreamCallbacks() {
         streamManager.onDeliveryReceipt = { [weak self] messageIds in
-            self?.handleDeliveryReceipts(messageIds)
+            self?.handleDeliveryReceipts(messageIds, from: .relayedStream)
         }
         streamManager.onKeySyncReceived = { [weak self] userId in
             self?.sessionCoordinator.handleKeySyncRequest(for: userId)
         }
         sessionCoordinator.onE2EDeliveryReceiptDecrypted = { [weak self] messageIds in
-            self?.handleDeliveryReceipts(messageIds)
+            self?.handleDeliveryReceipts(messageIds, from: .peerE2E)
         }
     }
 }
