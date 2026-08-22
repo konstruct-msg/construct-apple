@@ -37,7 +37,9 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
             contentHeight: 4000,
             previousContentHeight: 4000,
             viewportHeight: viewport,
+            previousViewportHeight: viewport,
             bottomInset: inset,
+            previousBottomInset: inset,
             currentOffsetY: 0,
             anchorShift: nil
         )
@@ -50,7 +52,8 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
             Policy.action(
                 mode: .following, layoutPrimed: false,
                 contentHeight: 4000, previousContentHeight: 0,
-                viewportHeight: viewport, bottomInset: inset,
+                viewportHeight: viewport, previousViewportHeight: viewport,
+                bottomInset: inset, previousBottomInset: inset,
                 currentOffsetY: 0, anchorShift: nil
             ),
             .land(offsetY: 4000 + inset - viewport)
@@ -66,7 +69,9 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
             contentHeight: 4000,
             previousContentHeight: 0,
             viewportHeight: viewport,
+            previousViewportHeight: viewport,
             bottomInset: inset,
+            previousBottomInset: inset,
             currentOffsetY: 0,
             anchorShift: 120
         )
@@ -80,7 +85,8 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
                 Policy.action(
                     mode: .following, layoutPrimed: false,
                     contentHeight: content, previousContentHeight: 0,
-                    viewportHeight: port, bottomInset: inset,
+                    viewportHeight: port, previousViewportHeight: port,
+                    bottomInset: inset, previousBottomInset: inset,
                     currentOffsetY: 0, anchorShift: nil
                 ),
                 .none,
@@ -95,7 +101,8 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
         let action = Policy.action(
             mode: .following, layoutPrimed: false,
             contentHeight: 300, previousContentHeight: 0,
-            viewportHeight: viewport, bottomInset: 0,
+            viewportHeight: viewport, previousViewportHeight: viewport,
+            bottomInset: 0, previousBottomInset: 0,
             currentOffsetY: 0, anchorShift: nil
         )
         XCTAssertEqual(action, .land(offsetY: 0))
@@ -109,7 +116,8 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
         let action = Policy.action(
             mode: .following, layoutPrimed: true,
             contentHeight: 4200, previousContentHeight: 4000,
-            viewportHeight: viewport, bottomInset: inset,
+            viewportHeight: viewport, previousViewportHeight: viewport,
+                bottomInset: inset, previousBottomInset: inset,
             currentOffsetY: 3390, anchorShift: nil
         )
         XCTAssertEqual(action, .land(offsetY: 4200 + inset - viewport))
@@ -121,7 +129,8 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
         let action = Policy.action(
             mode: .following, layoutPrimed: true,
             contentHeight: 4000, previousContentHeight: 4000,
-            viewportHeight: viewport, bottomInset: inset,
+            viewportHeight: viewport, previousViewportHeight: viewport,
+                bottomInset: inset, previousBottomInset: inset,
             currentOffsetY: 3390, anchorShift: nil
         )
         XCTAssertEqual(action, .none)
@@ -132,10 +141,103 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
         let action = Policy.action(
             mode: .following, layoutPrimed: true,
             contentHeight: 3000, previousContentHeight: 4000,
-            viewportHeight: viewport, bottomInset: inset,
+            viewportHeight: viewport, previousViewportHeight: viewport,
+                bottomInset: inset, previousBottomInset: inset,
             currentOffsetY: 3390, anchorShift: nil
         )
         XCTAssertEqual(action, .land(offsetY: 3000 + inset - viewport))
+    }
+
+    // MARK: - Rule 2, the other two ways the bottom moves (build 630, 2026-08-22)
+
+    /// The keyboard. It shrinks the viewport and touches nothing else, so a rule watching the
+    /// content for growth had no event to act on: the follower kept an offset computed for the tall
+    /// screen and the keyboard came up over the last messages. Reported from device as "клавиатура
+    /// не отодвигает чат, а перекрывает его, приходится отматывать вручную".
+    ///
+    /// Mutation: drop the `viewportHeight != previousViewportHeight` term.
+    func testTheKeyboardMovesAFollowerToTheNewBottom() {
+        let keyboard: CGFloat = 336
+        let action = Policy.action(
+            mode: .following, layoutPrimed: true,
+            contentHeight: 4000, previousContentHeight: 4000,
+            viewportHeight: viewport - keyboard, previousViewportHeight: viewport,
+            bottomInset: inset, previousBottomInset: inset,
+            currentOffsetY: 4000 + inset - viewport,
+            anchorShift: nil
+        )
+        XCTAssertEqual(
+            action,
+            .land(offsetY: 4000 + inset - (viewport - keyboard)),
+            "the content did not change and that was the whole problem — what moved was the screen"
+        )
+    }
+
+    /// And back down when it goes away: the viewport growing is the same event in the other
+    /// direction, and leaving the offset where the small screen put it strands the follower above
+    /// the tail with empty space below it.
+    func testDismissingTheKeyboardTakesAFollowerBackToTheBottom() {
+        let keyboard: CGFloat = 336
+        let action = Policy.action(
+            mode: .following, layoutPrimed: true,
+            contentHeight: 4000, previousContentHeight: 4000,
+            viewportHeight: viewport, previousViewportHeight: viewport - keyboard,
+            bottomInset: inset, previousBottomInset: inset,
+            currentOffsetY: 4000 + inset - (viewport - keyboard),
+            anchorShift: nil
+        )
+        XCTAssertEqual(action, .land(offsetY: 4000 + inset - viewport))
+    }
+
+    /// The composer growing a line moves the bottom through the inset rather than the viewport —
+    /// the third input, and the one the owned path owns outright.
+    ///
+    /// Mutation: drop the `bottomInset != previousBottomInset` term.
+    func testAGrowingComposerMovesAFollowerToo() {
+        let action = Policy.action(
+            mode: .following, layoutPrimed: true,
+            contentHeight: 4000, previousContentHeight: 4000,
+            viewportHeight: viewport, previousViewportHeight: viewport,
+            bottomInset: inset + 24, previousBottomInset: inset,
+            currentOffsetY: 4000 + inset - viewport,
+            anchorShift: nil
+        )
+        XCTAssertEqual(action, .land(offsetY: 4000 + inset + 24 - viewport))
+    }
+
+    /// A reader in history is not dragged to the tail by any of the three. The keyboard coming up
+    /// while someone is reading older messages must not end that — rule 3 owns them, and its only
+    /// input is the anchor.
+    ///
+    /// Mutation: move the three-way `moved` test above the `switch` on mode.
+    func testTheKeyboardDoesNotDragAReaderOfHistoryToTheTail() {
+        let keyboard: CGFloat = 336
+        XCTAssertEqual(
+            Policy.action(
+                mode: .readingHistory, layoutPrimed: true,
+                contentHeight: 4000, previousContentHeight: 4000,
+                viewportHeight: viewport - keyboard, previousViewportHeight: viewport,
+                bottomInset: inset, previousBottomInset: inset,
+                currentOffsetY: 800, anchorShift: nil
+            ),
+            .none,
+            "tapping the composer is not a request to leave the message you were reading"
+        )
+    }
+
+    /// All three quiet is still a quiet pass. Without this the new terms could be satisfied by any
+    /// layout tick and rule 2 would fire on every one of them.
+    func testAQuietPassStaysQuietWithAllThreeInputs() {
+        XCTAssertEqual(
+            Policy.action(
+                mode: .following, layoutPrimed: true,
+                contentHeight: 4000, previousContentHeight: 4000,
+                viewportHeight: viewport, previousViewportHeight: viewport,
+                bottomInset: inset, previousBottomInset: inset,
+                currentOffsetY: 3390, anchorShift: nil
+            ),
+            .none
+        )
     }
 
     // MARK: - Rule 3: holding the reader
@@ -147,7 +249,8 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
         let action = Policy.action(
             mode: .readingHistory, layoutPrimed: true,
             contentHeight: 6891, previousContentHeight: 4032,
-            viewportHeight: viewport, bottomInset: inset,
+            viewportHeight: viewport, previousViewportHeight: viewport,
+                bottomInset: inset, previousBottomInset: inset,
             currentOffsetY: 2560, anchorShift: 2859
         )
         XCTAssertEqual(action, .hold(offsetY: 2560 + 2859))
@@ -160,7 +263,8 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
         let action = Policy.action(
             mode: .readingHistory, layoutPrimed: true,
             contentHeight: 4380, previousContentHeight: 4032,
-            viewportHeight: viewport, bottomInset: inset,
+            viewportHeight: viewport, previousViewportHeight: viewport,
+                bottomInset: inset, previousBottomInset: inset,
             currentOffsetY: 2560, anchorShift: 348
         )
         XCTAssertEqual(action, .hold(offsetY: 2908))
@@ -172,7 +276,8 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
         let action = Policy.action(
             mode: .readingHistory, layoutPrimed: true,
             contentHeight: 4380, previousContentHeight: 4032,
-            viewportHeight: viewport, bottomInset: inset,
+            viewportHeight: viewport, previousViewportHeight: viewport,
+                bottomInset: inset, previousBottomInset: inset,
             currentOffsetY: 2560, anchorShift: 0
         )
         XCTAssertEqual(action, .none)
@@ -184,7 +289,8 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
         let action = Policy.action(
             mode: .readingHistory, layoutPrimed: true,
             contentHeight: 6891, previousContentHeight: 4032,
-            viewportHeight: viewport, bottomInset: inset,
+            viewportHeight: viewport, previousViewportHeight: viewport,
+                bottomInset: inset, previousBottomInset: inset,
             currentOffsetY: 2560, anchorShift: nil
         )
         XCTAssertEqual(action, .none)
@@ -208,7 +314,8 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
         let action = Policy.action(
             mode: .readingHistory, layoutPrimed: true,
             contentHeight: 2000, previousContentHeight: 2000,
-            viewportHeight: viewport, bottomInset: inset,
+            viewportHeight: viewport, previousViewportHeight: viewport,
+                bottomInset: inset, previousBottomInset: inset,
             currentOffsetY: 1200, anchorShift: 4000
         )
         // bottomOffset = 2000 + 90 − 700 = 1390, and 1200 + 4000 is far beyond it.
@@ -224,7 +331,8 @@ final class TranscriptOffsetPolicyTests: XCTestCase {
         let action = Policy.action(
             mode: .readingHistory, layoutPrimed: true,
             contentHeight: 2000, previousContentHeight: 4032,
-            viewportHeight: viewport, bottomInset: inset,
+            viewportHeight: viewport, previousViewportHeight: viewport,
+                bottomInset: inset, previousBottomInset: inset,
             currentOffsetY: 100, anchorShift: -900
         )
         XCTAssertEqual(action, .hold(offsetY: 0))

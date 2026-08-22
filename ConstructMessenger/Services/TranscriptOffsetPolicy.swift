@@ -91,13 +91,24 @@ enum TranscriptOffsetPolicy {
     ///     a photo finishing its decode above the reader are the same event, and the anchor sees
     ///     both. Comparing content heights cannot — growth above and growth below produce the same
     ///     number.
+    ///   - previousViewportHeight: the scroll view's height on the previous pass, and
+    ///     `previousBottomInset` the inset it carried then. Both are here because rule 2 asked the
+    ///     wrong question until 2026-08-22: it watched the content for growth, when what it actually
+    ///     needs to know is whether *the place the tail sits* moved. The keyboard moves it without
+    ///     touching the content at all — it shrinks the viewport — and a follower therefore kept an
+    ///     offset that was correct for the taller screen, so the keyboard came up over the last
+    ///     messages and the reader had to scroll down by hand to see what they had just sent. The
+    ///     composer growing a line does the same thing through `bottomInset`. Three inputs, one
+    ///     question.
     static func action(
         mode: ChatViewport.Mode,
         layoutPrimed: Bool,
         contentHeight: CGFloat,
         previousContentHeight: CGFloat,
         viewportHeight: CGFloat,
+        previousViewportHeight: CGFloat,
         bottomInset: CGFloat,
+        previousBottomInset: CGFloat,
         currentOffsetY: CGFloat,
         anchorShift: CGFloat?
     ) -> Action {
@@ -117,9 +128,15 @@ enum TranscriptOffsetPolicy {
 
         switch mode {
         case .following:
-            // 2. Following means the newest message is visible. The content grew, so the bottom
-            //    moved, so the offset follows it. No timer, no series, no animation.
-            guard contentHeight != previousContentHeight else { return .none }
+            // 2. Following means the newest message is visible, so the offset goes wherever the
+            //    bottom went. Edge-triggered on all three things that move it — the content growing,
+            //    the viewport shrinking (the keyboard), the inset growing (the composer) — rather
+            //    than on the offset disagreeing with `bottom`, which would also fire mid-bounce and
+            //    fight the rubber band. No timer, no series, no animation.
+            let moved = contentHeight != previousContentHeight
+                || viewportHeight != previousViewportHeight
+                || bottomInset != previousBottomInset
+            guard moved else { return .none }
             return .land(offsetY: bottom)
 
         case .readingHistory:

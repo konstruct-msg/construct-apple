@@ -152,6 +152,12 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
         var onUserInteraction: () -> Void = {}
 
         private var previousContentHeight: CGFloat = 0
+        /// The other two things that move the bottom. Remembered beside the content height because
+        /// rule 2 treats all three the same way: the keyboard shrinks the viewport and the composer
+        /// grows the inset, and either leaves a follower holding an offset for a screen that is no
+        /// longer there.
+        private var previousViewportHeight: CGFloat = 0
+        private var previousBottomInset: CGFloat = 0
         private var previousAnchor: TranscriptRowSample?
         /// True while we are the ones moving the offset. Without it our own correction arrives at
         /// `scrollViewDidScroll` and is indistinguishable from a finger — which would flip the mode
@@ -194,8 +200,7 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
             // "the content changed, now what", and this did not come from the content.
             if landRequest != lastLandRequest {
                 lastLandRequest = landRequest
-                previousContentHeight = contentHeight
-                previousAnchor = anchor
+                recordLayout(contentHeight: contentHeight, viewportHeight: viewportHeight, bottomInset: scrollView.contentInset.bottom)
                 guard contentHeight > 0, viewportHeight > 0 else { return }
                 // Not animated, for the same reason `.land` is not: an interpolating offset while
                 // an inset may still be moving is the window the old delay series chased. It also
@@ -223,8 +228,7 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
                let sample = target.sample,
                contentHeight > 0, viewportHeight > 0 {
                 lastScrollRequest = target.request
-                previousContentHeight = contentHeight
-                previousAnchor = anchor
+                recordLayout(contentHeight: contentHeight, viewportHeight: viewportHeight, bottomInset: scrollView.contentInset.bottom)
                 setOffset(scrollView, to: TranscriptOffsetPolicy.rowOffset(
                     rowMinY: sample.minY,
                     rowHeight: sample.height,
@@ -247,13 +251,14 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
                 contentHeight: contentHeight,
                 previousContentHeight: previousContentHeight,
                 viewportHeight: viewportHeight,
+                previousViewportHeight: previousViewportHeight,
                 bottomInset: scrollView.contentInset.bottom,
+                previousBottomInset: previousBottomInset,
                 currentOffsetY: scrollView.contentOffset.y,
                 anchorShift: shift
             )
 
-            previousContentHeight = contentHeight
-            previousAnchor = anchor
+            recordLayout(contentHeight: contentHeight, viewportHeight: viewportHeight, bottomInset: scrollView.contentInset.bottom)
 
             switch action {
             case .none:
@@ -266,6 +271,17 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
             }
 
             report(scrollView, contentHeight: contentHeight)
+        }
+
+        /// Remember this pass's geometry. One call rather than four assignments at three sites: the
+        /// three early returns above each recorded only the content height, so a keyboard or a
+        /// composer change that happened during a landing or a jump would have been re-detected on
+        /// the next pass as a second move.
+        private func recordLayout(contentHeight: CGFloat, viewportHeight: CGFloat, bottomInset: CGFloat) {
+            previousContentHeight = contentHeight
+            previousViewportHeight = viewportHeight
+            previousBottomInset = bottomInset
+            previousAnchor = anchor
         }
 
         /// Move the offset as us, not as a finger. `isAdjusting` is what keeps
