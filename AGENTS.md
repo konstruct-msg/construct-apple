@@ -12,7 +12,7 @@ it.
 | Design system (symbols, components, migration) | `~/Code/construct-docs/client/ios/DESIGN_SYSTEM_RULES.md` |
 | Session lifecycle, keychain, crypto/transport path | `~/Code/construct-docs/client/ios/ARCHITECTURE_NOTES.md` |
 | Sealed control channel | `~/Code/construct-docs/client/ios/SEALED_CONTROL_CHANNEL_REMEDIATION.md` |
-| Binary data / CFE format | `~/Code/construct-docs/client/construct-ffi-binary-format.md` |
+| Binary data / CFE format | `~/Code/construct-docs/client/shared/construct-ffi-binary-format.md` |
 | Product wording | `~/Code/construct-docs/client/GLOSSARY_PRODUCT_LANGUAGE.md` |
 | How to test | `docs/TESTING.md` → `~/Code/construct-docs/decisions/testing-by-pure-decision.md` |
 | Two-simulator E2E stand | `docs/TWO_SIM_STAND.md` |
@@ -81,7 +81,7 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 **Xcode Previews do not run in the app target.** It links WebRTC and WhisperKit, and the preview
 process dies at launch with `_objc_fatal: Attempt to use unknown class` whenever those load — on
 any iOS runtime, independent of app code, and compile flags cannot help because the frameworks stay
-linked. The 53 `#Preview` blocks in the app are therefore decorative today.
+linked. Every `#Preview` block in the app is therefore decorative today.
 
 A standalone SwiftPM package (`ConstructUI/`) was added 2026-06-08 to work around this: no
 dependency on the app, so its preview process ran. It was **removed 2026-08-14** — it held a copy
@@ -97,12 +97,12 @@ sync problem first: one theme file, shared, not copied.
   `scripts/check_localization.sh` enforces parity, no duplicate keys, no key that resolves to
   nothing, and that a translation carries the same format specifiers as its English source by
   position and conversion type; CI runs it. A key with no entry is displayed to the user
-  verbatim — twelve of them are on real screens right now, listed in that script's `BASELINE`.
-  A wrong specifier is worse than a wrong word: it crashes, and only in the locale nobody on the
-  team runs.
+  verbatim — the ones already on real screens are listed in that script's `BASELINE`, and the
+  check exists to fail on a *new* one. A wrong specifier is worse than a wrong word: it crashes,
+  and only in the locale nobody on the team runs.
 - `ja` and `fr` were exempt from parity until 2026-08-16 as "partial translations in progress",
-  and were 922 and 472 of 966 keys by the time anyone counted. The exemption is what let them
-  fall behind — nothing reported the gap, so it grew by whatever each release added. A locale
+  and had fallen hundreds of keys behind by the time anyone counted. The exemption is what let
+  that happen — nothing reported the gap, so it grew by whatever each release added. A locale
   allowed to lag does. Both are complete now and held to the same rule.
 - **One product name per script.** `Konstruct` in Latin, `Конструкт` in Russian, `コンストラクト`
   in Japanese. The Japanese used to be **共創** — a kanji reading meaning "co-creation", changed
@@ -127,7 +127,8 @@ sync problem first: one theme file, shared, not copied.
 
 Before any architectural decision, search the vault:
 `grep -ril <topic> ~/Code/construct-docs/{architecture,backend,client,cryptocore,security,decisions}`.
-Before touching `Networking/gRPC/ICE/`, read `decisions/ice-connection-loop-complexity.md`.
+Before touching `Networking/gRPC/VEIL/` or `Services/Calls/`, read
+`decisions/ice-connection-loop-complexity.md` — it predates the rename below and covers both.
 
 - **INITIATOR and RESPONDER init paths are distinct** (`init_session` vs
   `init_receiving_session`); tie-break: higher deviceId wins as INITIATOR.

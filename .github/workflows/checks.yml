@@ -38,6 +38,19 @@ jobs:
       - name: Store listing fields fit Apple's limits, in every locale
         run: ./scripts/check_appstore_metadata.sh
 
+  agents-md:
+    # AGENTS.md is the one file every agent reads, and it was the one file nothing checked.
+    # Four of its facts had rotted by 2026-08-22, including a rule whose trigger directory had
+    # been deleted three months earlier — unreachable, and indistinguishable from live.
+    #
+    # The vault is not checked out here, so vault links go unverified on CI and are covered by
+    # the local run. Repo-local paths are the ones that break in a rename, and those are checked.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every path AGENTS.md names exists
+        run: ./scripts/check_agents_md.sh
+
   privacy-manifest:
     # Needs macOS: the script reads PrivacyInfo.xcprivacy with plutil.
     #
