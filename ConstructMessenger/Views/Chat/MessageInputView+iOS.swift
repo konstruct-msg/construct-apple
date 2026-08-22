@@ -28,9 +28,9 @@ struct IOSMessageInputView: View {
     @StateObject private var audioRecorder = AudioRecorderService.shared
     @StateObject private var attachments = MessageInputAttachmentStore()
     @State private var showMicPermissionAlert = false
-    /// Which queued attachment the review sheet opened on. Nil means closed — one piece of
+    /// Which queued attachment was tapped, and what it opened. Nil means closed — one piece of
     /// state rather than a bool plus an index that can disagree about which item is showing.
-    @State private var reviewingIndex: AttachmentReviewTarget?
+    @State private var attachmentTap: AttachmentTapTarget?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,13 +49,8 @@ struct IOSMessageInputView: View {
         .animation(.easeInOut(duration: 0.2), value: editingMessage != nil)
         .animation(.easeInOut(duration: 0.2), value: !attachments.selectedAttachments.isEmpty)
         .animation(.easeInOut(duration: 0.15), value: audioRecorder.state)
-        .fullScreenCover(item: $reviewingIndex) { target in
-            AttachmentReviewView(
-                attachments: attachments.selectedAttachments,
-                initialIndex: target.index,
-                onEdit: { attachments.replaceImage(at: $0, with: $1) },
-                onDelete: { attachments.removeAttachment(at: $0) }
-            )
+        .fullScreenCover(item: $attachmentTap) { target in
+            attachmentDestination(target)
         }
         .alert("Microphone Access Denied", isPresented: $showMicPermissionAlert) {
             Button("Cancel", role: .cancel) {}
@@ -85,6 +80,44 @@ struct IOSMessageInputView: View {
         }
     }
 
+    /// Where a tap on the queued attachment at `index` goes.
+    ///
+    /// An image is opened in the editor directly; the review pager is for video, which has no
+    /// editor. An index the strip and the store disagree about (the strip drops attachments with no
+    /// poster frame) falls back to the review rather than opening an editor on the wrong photo.
+    private func tapTarget(at index: Int) -> AttachmentTapTarget {
+        guard attachments.selectedAttachments.indices.contains(index),
+              attachments.selectedAttachments[index].kind == .image else {
+            return .review(index: index)
+        }
+        return .edit(index: index)
+    }
+
+    @ViewBuilder
+    private func attachmentDestination(_ target: AttachmentTapTarget) -> some View {
+        switch target {
+        case .edit(let index):
+            if attachments.selectedAttachments.indices.contains(index),
+               let image = attachments.selectedAttachments[index].displayImage {
+                MediaEditorView(
+                    image: image,
+                    onConfirm: { edited in
+                        attachments.replaceImage(at: index, with: edited)
+                        attachmentTap = nil
+                    },
+                    onCancel: { attachmentTap = nil }
+                )
+            }
+        case .review(let index):
+            AttachmentReviewView(
+                attachments: attachments.selectedAttachments,
+                initialIndex: index,
+                onEdit: { attachments.replaceImage(at: $0, with: $1) },
+                onDelete: { attachments.removeAttachment(at: $0) }
+            )
+        }
+    }
+
     @ViewBuilder
     private var replyOrEditBars: some View {
         if let msg = replyingTo {
@@ -107,7 +140,7 @@ struct IOSMessageInputView: View {
                 images: attachments.selectedAttachments.compactMap { $0.displayImage },
                 onRemove: removePhoto,
                 onMove: attachments.moveAttachment,
-                onOpen: { reviewingIndex = AttachmentReviewTarget(index: $0) }
+                onOpen: { attachmentTap = tapTarget(at: $0) }
             )
         }
         if !attachments.selectedFileURLs.isEmpty {

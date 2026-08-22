@@ -155,12 +155,35 @@ private struct ZoomableImage: View {
 }
 #endif
 
-/// `fullScreenCover(item:)` needs an `Identifiable`, and a bare `Int` is not one.
+/// What tapping a queued attachment opens.
 ///
-/// Wrapping it keeps the presentation driven by a single optional: a `Bool` plus a separate
-/// index can disagree about which attachment is on screen, and the index is exactly what the
-/// sheet is for.
-struct AttachmentReviewTarget: Identifiable, Equatable {
-    let index: Int
-    var id: Int { index }
+/// `fullScreenCover(item:)` needs an `Identifiable`, and a bare `Int` is not one. Wrapping it also
+/// keeps the presentation driven by a single optional: a `Bool` plus a separate index can disagree
+/// about which attachment is on screen, and the index is exactly what the sheet is for.
+///
+/// Two cases since 2026-08-22. Every tap used to open `AttachmentReviewView` first, so editing a
+/// photo cost a screen whose Delete duplicated the strip's own remove and whose pager duplicated the
+/// strip — one more tap for the one thing the screen offered that the strip did not. An image now
+/// goes straight to the editor. A video still opens the review, because there is no video editor
+/// here and that screen is the only way to look at one before it is sent.
+enum AttachmentTapTarget: Identifiable, Equatable {
+    /// Open the image editor on this attachment.
+    case edit(index: Int)
+    /// Open the review pager on this attachment — video, which has no editor.
+    case review(index: Int)
+
+    var index: Int {
+        switch self {
+        case .edit(let index), .review(let index): return index
+        }
+    }
+
+    /// Distinguishes the destination as well as the item, so tapping a video and then an image at
+    /// the same index re-presents rather than keeping the first sheet.
+    var id: String {
+        switch self {
+        case .edit(let index):   return "edit-\(index)"
+        case .review(let index): return "review-\(index)"
+        }
+    }
 }
