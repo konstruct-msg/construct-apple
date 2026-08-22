@@ -49,7 +49,15 @@ import UIKit
 
 enum KeyboardTracePhase: String {
     case idle
-    /// Between `configureAudioSession()` starting and the recorder state flipping to `.recording`.
+    /// `setCategory(.playAndRecord …)` is in flight. Split from the activation below on 2026-08-22,
+    /// because by then the question had narrowed to one step and the phase could not name it: the
+    /// device answered the responder test three times (09:38:32, 09:41:29, 11:38:41 — all
+    /// `firstResponder=VerticalTextView`), so nothing in the app resigns focus and the keyboard is
+    /// being taken by the system. The audio session is the only thing we ask the system for there,
+    /// and it is two calls. Which of the two the hide follows decides whether pre-arming the
+    /// category at composer focus can help at all, or whether only the activation can be moved.
+    case audioSessionCategory
+    /// `setActive(true)` is in flight, up to the recorder state flipping to `.recording`.
     case audioSessionActivating
     case recording
     case stoppingRecording
