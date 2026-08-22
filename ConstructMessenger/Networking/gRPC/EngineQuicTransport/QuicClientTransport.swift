@@ -293,28 +293,61 @@ private final class StateMachine: @unchecked Sendable {
 
     /// Connect failed: fail any pending stream waiters and release the shutdown latch.
     func fail(_ error: any Error) {
-        let (waiters, shutdown): ([CheckedContinuation<QuicChannel, any Error>], CheckedContinuation<Void, Never>?) = lock.withLock {
+        let (waiters, shutdown, retired): ([CheckedContinuation<QuicChannel, any Error>], CheckedContinuation<Void, Never>?, QuicChannel?) = lock.withLock {
             if phase != .done { phase = .failed; failureError = error }
+            let ch = _channel
             _channel = nil
             let w = channelWaiters; channelWaiters = []
             let s = shutdownContinuation; shutdownContinuation = nil
-            return (w, s)
+            return (w, s, ch)
         }
+        retire(retired, why: "connect failed")
         for w in waiters { w.resume(throwing: error) }
         shutdown?.resume()
     }
 
     func shutdown() {
-        let (waiters, cont): ([CheckedContinuation<QuicChannel, any Error>], CheckedContinuation<Void, Never>?) = lock.withLock {
+        let (waiters, cont, retired): ([CheckedContinuation<QuicChannel, any Error>], CheckedContinuation<Void, Never>?, QuicChannel?) = lock.withLock {
             phase = .done
+            let ch = _channel
             _channel = nil
             let w = channelWaiters; channelWaiters = []
             let c = shutdownContinuation; shutdownContinuation = nil
-            return (w, c)
+            return (w, c, ch)
         }
+        retire(retired, why: "graceful shutdown")
         let err = RPCError(code: .unavailable, message: "QUIC transport shut down.")
         for w in waiters { w.resume(throwing: err) }
         cont?.resume()
+    }
+
+    /// Close the Rust connection, rather than dropping our reference to it and hoping.
+    ///
+    /// THE HEAT. Releasing `_channel` retires the transport on the Swift side only; the quinn
+    /// endpoint behind it lives until the last `Arc` in Rust goes, and the stats task in
+    /// `startReceivePump` holds one for as long as it is polling. So an abandoned QUIC connection
+    /// kept its endpoint driver running, and on a network that answers UDP with ICMP unreachables
+    /// that driver burns a core — `spin_free_socket` absorbs the errors without spinning *per
+    /// error*, but nothing was asking why the socket was still being polled at all. Build 630,
+    /// 2026-08-22, nine minutes after the client had given up on QUIC entirely:
+    ///
+    ///     11:34:41  Fast-UDP (QUIC/H3) failed to open [accept_timeout] — H2 for the rest of this session
+    ///     11:34:41  engine-QUIC persistent connection force-invalidated (gen=4)
+    ///     11:34:48  QUIC stats tx_pkts=17 rx_pkts=2 ping_tx=1 close=None     ← still pinging
+    ///     11:36:19  thermal=fair     cpu=115.0%  transport=conns=1 udperr=277065498
+    ///     11:37:54  thermal=serious  cpu=106.3%  transport=conns=1 udperr=529574692
+    ///     11:43:30  thermal=serious  cpu=116.3%  transport=conns=1 udperr=1255362137
+    ///
+    /// `udperr` grew by 2.3 million per second for as long as the app was foregrounded, on a
+    /// connection nothing intended to use again. `conns=1` is the same fact, and it never fell.
+    ///
+    /// `QuicChannel.close()` was added on 2026-08-09 to make retirement explicit instead of a
+    /// consequence of drop order — and shipped with no caller, which is the producer-without-a-
+    /// consumer defect in its other direction. This is the caller.
+    private func retire(_ channel: QuicChannel?, why: String) {
+        guard let channel else { return }
+        channel.close()
+        Log.info("engine-QUIC connection closed (\(why))", category: "QuicTransport")
     }
 
     /// Await the established channel: returns immediately when running, throws if the
