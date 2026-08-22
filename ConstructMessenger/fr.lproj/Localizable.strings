@@ -516,6 +516,14 @@
 "reaction_failed" = "Impossible d'envoyer la réaction";
 "react" = "Réagir";
 "reaction_pick_more" = "Toutes les réactions";
+"emoji_group_smileys" = "Émoticônes";
+"emoji_group_people" = "Personnes";
+"emoji_group_nature" = "Nature";
+"emoji_group_food" = "Nourriture";
+"emoji_group_activity" = "Activités";
+"emoji_group_travel" = "Voyages";
+"emoji_group_objects" = "Objets";
+"emoji_group_symbols" = "Symboles";
 "reaction_remove" = "Retirer la réaction";
 
 // MARK: - Network Settings — Connection Route

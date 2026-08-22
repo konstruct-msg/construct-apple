@@ -54,6 +54,13 @@ struct MessageBubbleRegularView: View {
         let mediaContent = profileData == nil ? MessageBubbleContentParsing.parseMediaMessage(message.displayText) : nil
         let fileContent = (profileData == nil && mediaContent == nil) ? MessageBubbleContentParsing.parseFileMessage(message.displayText) : nil
         let voiceContent = (profileData == nil && mediaContent == nil && fileContent == nil) ? MessageBubbleContentParsing.parseVoiceMessage(message.displayText) : nil
+        let hasActionableText = MessageBubbleContentParsing.carriesActionableText(
+            isProfile: profileData != nil,
+            isMedia: mediaContent != nil,
+            isFile: fileContent != nil,
+            isVoice: voiceContent != nil,
+            text: message.displayText
+        )
 
         HStack(spacing: ChatUIConstants.Bubble.rowSpacing) {
             // Selection checkbox in edit mode - positioned based on message direction
@@ -80,6 +87,19 @@ struct MessageBubbleRegularView: View {
             }
 
             VStack(alignment: message.isSentByMe ? .trailing : .leading, spacing: ChatUIConstants.Bubble.stackSpacing) {
+                // The capsule is a row of this stack, not an overlay on the bubble.
+                //
+                // As an overlay it drew outside the bubble's bounds and covered whatever was there —
+                // which, for any message that is not the last one, is the next message. Reported
+                // from device 2026-08-22 with the capsule sitting across the message below it. The
+                // placement decision could not have prevented that: it asks which side has room *on
+                // screen*, and screen room is not room free of other messages.
+                //
+                // Taking space is what makes covering impossible. The transcript grows by the
+                // capsule's height while it is open, and the viewport holds the reader through it —
+                // opening below the anchor row leaves the anchor still, opening above shifts it and
+                // the hold rule moves the offset by exactly that. This is the case that rule is for.
+                if capsulePlacement == .above { reactionCapsuleRow }
                 Group {
                 if let profileData {
                     ProfileShareBubbleView(profileData: profileData)
@@ -208,9 +228,6 @@ struct MessageBubbleRegularView: View {
                 .overlay(alignment: ChatUIConstants.Reaction.badgeAlignment(isSentByMe: message.isSentByMe)) {
                     reactionBadgeRow
                 }
-                .overlay(alignment: capsulePlacement == .above ? .top : .bottom) {
-                    reactionCapsuleOverlay
-                }
                 .background {
                     GeometryReader { geo in
                         Color.clear
@@ -248,6 +265,9 @@ struct MessageBubbleRegularView: View {
                     }
                     .padding(.horizontal, ChatUIConstants.Bubble.metaHorizontalPadding)
                 }
+
+                // After the timestamp, so the bubble keeps its own meta line adjacent to it.
+                if capsulePlacement == .below { reactionCapsuleRow }
             }
             // Guard non-finite / tiny container widths from mid-layout geometry passes
             // (they produce "Invalid frame dimension" in the layout engine).
@@ -298,11 +318,7 @@ struct MessageBubbleRegularView: View {
                         }
                     }
 
-                    if let onReplyWithQuote,
-                       !message.displayText.isEmpty,
-                       mediaContent == nil,
-                       fileContent == nil
-                    {
+                    if let onReplyWithQuote, hasActionableText {
                         Button { onReplyWithQuote(message, message.displayText) } label: {
                             Label(NSLocalizedString("quote_reply", comment: ""), systemImage: "text.quote")
                         }
@@ -311,7 +327,9 @@ struct MessageBubbleRegularView: View {
                     // Editable: plain text (edit the text) and media/photo/video (edit the
                     // caption — the edit pipeline rebuilds the album, see ChatSendCoordinator).
                     // NOT editable: voice, files, profile shares — their payload has no text the
-                    // user should edit, and a text edit would destroy/garble it.
+                    // user should edit, and a text edit would destroy/garble it. Media is the one
+                    // difference from `hasActionableText`, which is why this list stays spelled out:
+                    // a caption is text to edit but is not text to copy or quote.
                     if message.isSentByMe,
                        message.hasDecryptedContent,
                        fileContent == nil,
@@ -324,8 +342,10 @@ struct MessageBubbleRegularView: View {
                         }
                     }
 
-                    Button { PlatformClipboard.copy(message.displayText) } label: {
-                        Label("copy", systemImage: "doc.on.doc")
+                    if hasActionableText {
+                        Button { PlatformClipboard.copy(message.displayText) } label: {
+                            Label("copy", systemImage: "doc.on.doc")
+                        }
                     }
 
                     if let onEnterSelectMode {
@@ -533,7 +553,7 @@ struct MessageBubbleRegularView: View {
     }
 
     @ViewBuilder
-    private var reactionCapsuleOverlay: some View {
+    private var reactionCapsuleRow: some View {
         if showReactionCapsule, !isEditMode, onReact != nil {
             MessageReactionCapsule(
                 currentEmoji: ownReactionEmoji,
@@ -546,14 +566,10 @@ struct MessageBubbleRegularView: View {
                     showFullEmojiPicker = true
                 }
             )
-            .alignmentGuide(capsulePlacement == .above ? .top : .bottom) { dimensions in
-                if capsulePlacement == .above {
-                    return dimensions[VerticalAlignment.bottom]
-                        + ChatUIConstants.Reaction.capsuleGap
-                }
-                return dimensions[VerticalAlignment.top]
-                    - ChatUIConstants.Reaction.capsuleGap
-            }
+            // The gap the alignment guide used to open by hand. A row in a stack only needs
+            // padding on the side facing the bubble.
+            .padding(capsulePlacement == .above ? .bottom : .top, ChatUIConstants.Reaction.capsuleGap)
+            .transition(.opacity)
         }
     }
 

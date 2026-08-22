@@ -111,6 +111,12 @@ enum ChatUIConstants {
         static let capsuleHeight: CGFloat = 44
         static let capsuleGap: CGFloat = CTLayout.inlinePad
 
+        /// Full-picker grid cell. At or above `CTLayout.hitTarget` so a cell is tappable — the
+        /// grid is the whole screen's content, and a cell you have to aim at is worse than the
+        /// keyboard it replaced.
+        static let pickerCell: CGFloat = CTLayout.hitTarget
+        static let pickerEmojiSize: CGFloat = 28
+
         /// Timestamp lives on the author's side (sent = trailing). The like sits
         /// on the other corner so the two do not stack.
         static func badgeAlignment(isSentByMe: Bool) -> Alignment {

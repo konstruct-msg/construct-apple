@@ -560,6 +560,14 @@
 "reaction_failed" = "Не удалось отправить реакцию";
 "react" = "Реакция";
 "reaction_pick_more" = "Все реакции";
+"emoji_group_smileys" = "Смайлы";
+"emoji_group_people" = "Люди";
+"emoji_group_nature" = "Природа";
+"emoji_group_food" = "Еда";
+"emoji_group_activity" = "Занятия";
+"emoji_group_travel" = "Путешествия";
+"emoji_group_objects" = "Предметы";
+"emoji_group_symbols" = "Символы";
 "reaction_remove" = "Убрать реакцию";
 
 // MARK: - Network Settings — Connection Route

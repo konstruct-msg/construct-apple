@@ -63,12 +63,34 @@ enum ReactionReducer {
         return !trimmed.isEmpty && trimmed.count <= maxTargetIdLength
     }
 
+    /// Whether this string is an emoji we may set as a reaction.
+    ///
+    /// **It has to actually check that.** Until 2026-08-22 the name was the only part of this that
+    /// mentioned emoji: it tested non-empty, ≤32 bytes, no newline or NUL, and returned true for
+    /// everything else. Both boundaries use it, so both leaked.
+    ///
+    /// On the way out, the "more reactions" screen offers a text field and calls this on each typed
+    /// character. The emoji keyboard is a preference iOS does not have to honour, so on device it is
+    /// the ordinary letter keyboard — and every letter passed. Device log 2026-08-21 14:39:42:
+    ///
+    ///     Reaction on 46c9c015… from ffeeddc6… set(emoji: "H", timestampMs: 1787323181388)
+    ///
+    /// On the way in, this is what `incoming(actionRawValue:emoji:)` validates a peer's reaction
+    /// with. So a peer could put 32 bytes of arbitrary text on any message of ours and it would
+    /// render as a badge — a small amount of attacker-chosen text drawn into the transcript.
+    ///
+    /// One grapheme, and it must be one Unicode considers emoji. `isEmoji` alone is not that test:
+    /// it is true for `0`–`9`, `#` and `*`, which carry the emoji property because of the keycap
+    /// sequences they start. A bare "3" is not a reaction, so a single scalar has to *present* as
+    /// emoji; a multi-scalar cluster (skin tone, ZWJ family, keycap, flag) is one if its first
+    /// scalar is emoji, which is what makes 3️⃣ acceptable while 3 is not.
     static func isValidEmoji(_ emoji: String) -> Bool {
-        guard !emoji.isEmpty,
-              emoji.utf8.count <= maxEmojiUTF8ByteCount,
-              !emoji.contains(where: { $0.isNewline || $0 == "\0" })
-        else { return false }
-        return true
+        guard emoji.utf8.count <= maxEmojiUTF8ByteCount else { return false }
+        // One extended grapheme cluster: a reaction is a single glyph, and `count` is exactly that.
+        guard emoji.count == 1, let character = emoji.first else { return false }
+        let scalars = character.unicodeScalars
+        guard let first = scalars.first, first.properties.isEmoji else { return false }
+        return scalars.count > 1 || first.properties.isEmojiPresentation
     }
 
     /// Map proto `ReactionAction` raw value + emoji without importing the generated type

@@ -140,6 +140,68 @@ final class ReactionReducerTests: XCTestCase {
         XCTAssertNil(ReactionReducer.incoming(actionRawValue: 99, emoji: "❤️"))
     }
 
+    // MARK: - What counts as an emoji
+
+    /// The defect, from the device log of 2026-08-21 14:39:42:
+    ///
+    ///     Reaction on 46c9c015… from ffeeddc6… set(emoji: "H", timestampMs: 1787323181388)
+    ///
+    /// `isValidEmoji` tested length and newlines and nothing else, so a letter typed on the ordinary
+    /// keyboard — which is what the "more reactions" screen actually shows — went out as a reaction
+    /// and was applied on the far side.
+    ///
+    /// Mutation: `return true` after the length check.
+    func testALetterIsNotAReaction() {
+        XCTAssertFalse(ReactionReducer.isValidEmoji("H"))
+        XCTAssertNil(
+            ReactionReducer.incoming(actionRawValue: 1, emoji: "H"),
+            "the same predicate guards the receive path — a peer must not be able to badge our messages with text"
+        )
+    }
+
+    /// The receive side stated as the property that matters: 32 bytes of attacker-chosen text drawn
+    /// onto a message of ours is the thing the length limit alone permitted.
+    ///
+    /// Mutation: drop the `emoji.count == 1` test.
+    func testAPeerCannotBadgeAMessageWithAWord() {
+        XCTAssertFalse(ReactionReducer.isValidEmoji("pwned"))
+        XCTAssertFalse(ReactionReducer.isValidEmoji("❤️❤️"), "one glyph, not a string of them")
+        XCTAssertFalse(ReactionReducer.isValidEmoji("❤️ "), "nor one with anything attached")
+    }
+
+    /// A digit carries the emoji property — it is the first scalar of a keycap sequence — so
+    /// `isEmoji` on its own accepts "3", "#" and "*" as reactions. The keycap itself is a real
+    /// emoji and must stay.
+    ///
+    /// Mutation: return `first.properties.isEmoji` and drop the presentation test.
+    func testADigitIsNotAReactionButItsKeycapIs() {
+        XCTAssertFalse(ReactionReducer.isValidEmoji("3"))
+        XCTAssertFalse(ReactionReducer.isValidEmoji("#"))
+        XCTAssertTrue(ReactionReducer.isValidEmoji("3️⃣"))
+    }
+
+    /// Everything the quick set and the picker can produce has to survive — a validator that
+    /// rejects ❤️ would take reactions away entirely, which is the failure the fix must not be.
+    /// ❤️ is the load-bearing case: U+2764 is text-presentation by default and is only an emoji
+    /// because of the variation selector after it.
+    ///
+    /// Mutation: require `isEmojiPresentation` unconditionally.
+    func testEveryShapeOfRealEmojiIsAccepted() {
+        for emoji in ReactionReducer.quickSet {
+            XCTAssertTrue(ReactionReducer.isValidEmoji(emoji), "\(emoji) is in the quick set")
+        }
+        XCTAssertTrue(ReactionReducer.isValidEmoji("👍🏽"), "skin tone modifier")
+        XCTAssertTrue(ReactionReducer.isValidEmoji("👨‍👩‍👧"), "ZWJ sequence")
+        XCTAssertTrue(ReactionReducer.isValidEmoji("🇷🇺"), "regional indicator pair")
+    }
+
+    /// Empty and whitespace were already refused by the length check; they stay refused.
+    func testEmptyAndWhitespaceAreStillRefused() {
+        XCTAssertFalse(ReactionReducer.isValidEmoji(""))
+        XCTAssertFalse(ReactionReducer.isValidEmoji(" "))
+        XCTAssertFalse(ReactionReducer.isValidEmoji("\n"))
+    }
+
     // MARK: - Local toggle
 
     func testRepeatTap_Removes() {

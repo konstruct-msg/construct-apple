@@ -559,6 +559,14 @@
 "reaction_failed" = "Couldn't send the reaction";
 "react" = "React";
 "reaction_pick_more" = "More reactions";
+"emoji_group_smileys" = "Smileys";
+"emoji_group_people" = "People";
+"emoji_group_nature" = "Nature";
+"emoji_group_food" = "Food";
+"emoji_group_activity" = "Activity";
+"emoji_group_travel" = "Travel";
+"emoji_group_objects" = "Objects";
+"emoji_group_symbols" = "Symbols";
 "reaction_remove" = "Remove reaction";
 
 // MARK: - Network Settings — Connection Route

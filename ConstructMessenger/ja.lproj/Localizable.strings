@@ -506,6 +506,14 @@
 "reaction_failed" = "リアクションを送れませんでした";
 "react" = "リアクション";
 "reaction_pick_more" = "すべてのリアクション";
+"emoji_group_smileys" = "スマイリー";
+"emoji_group_people" = "人";
+"emoji_group_nature" = "自然";
+"emoji_group_food" = "食べ物";
+"emoji_group_activity" = "アクティビティ";
+"emoji_group_travel" = "旅行";
+"emoji_group_objects" = "もの";
+"emoji_group_symbols" = "記号";
 "reaction_remove" = "リアクションを消す";
 
 // MARK: - Network Settings — Connection Route

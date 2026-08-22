@@ -63,9 +63,23 @@ struct MessageReactionCapsule: View {
     }
 }
 
+/// The full picker behind the capsule's plus.
+///
+/// A grid of every emoji this OS can draw, grouped, from `EmojiCatalogue`. It replaces a
+/// `UITextField` that asked iOS for the emoji keyboard by overriding `textInputMode` — a preference
+/// the system does not have to honour, and on device did not: the screen showed the letter keyboard
+/// over an empty box, and every letter typed into it was forwarded as a reaction. One arrived on the
+/// far side as `set(emoji: "H")`.
+///
+/// One implementation for both platforms. The two field variants it replaces differed only in which
+/// keyboard they hoped for.
 struct ReactionEmojiPickerSheet: View {
     let onPick: (String) -> Void
     @Environment(\.dismiss) private var dismiss
+
+    private let columns = [
+        GridItem(.adaptive(minimum: ChatUIConstants.Reaction.pickerCell), spacing: CTLayout.inlinePad)
+    ]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -75,110 +89,40 @@ struct ReactionEmojiPickerSheet: View {
                 isModal: true,
                 backAction: { dismiss() }
             )
-            Text(NSLocalizedString("reaction_pick_more", comment: ""))
-                .font(CTFont.regular(ChatUIConstants.Typography.captionSize))
-                .foregroundColor(Color.CT.textDim)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            ScrollView {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: CTLayout.inlinePad, pinnedViews: [.sectionHeaders]) {
+                    ForEach(EmojiCatalogue.groups) { group in
+                        Section {
+                            ForEach(group.emoji, id: \.self) { emoji in
+                                Button {
+                                    onPick(emoji)
+                                    dismiss()
+                                } label: {
+                                    Text(emoji)
+                                        .font(.system(size: ChatUIConstants.Reaction.pickerEmojiSize))
+                                        .frame(
+                                            width: ChatUIConstants.Reaction.pickerCell,
+                                            height: ChatUIConstants.Reaction.pickerCell
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(emoji)
+                            }
+                        } header: {
+                            Text("> " + NSLocalizedString(group.id, comment: "").uppercased())
+                                .font(CTFont.medium(ChatUIConstants.Typography.captionSize))
+                                .tracking(2)
+                                .foregroundColor(Color.CT.textDim)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
+                                .background(Color.CT.bg)
+                        }
+                    }
+                }
                 .padding(.horizontal, CTLayout.edgePad)
                 .padding(.top, CTLayout.inlinePad)
-            #if os(iOS)
-            ReactionEmojiKeyboardHost { emoji in
-                onPick(emoji)
-                dismiss()
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: CTLayout.controlHeight)
-            .padding(.horizontal, CTLayout.edgePad)
-            .padding(.top, CTLayout.inlinePad)
-            #else
-            ReactionMacEmojiField { emoji in
-                onPick(emoji)
-                dismiss()
-            }
-            .padding(.horizontal, CTLayout.edgePad)
-            .padding(.top, CTLayout.inlinePad)
-            #endif
-            Spacer()
         }
         .ctBackground()
     }
 }
-
-#if os(iOS)
-/// Prefers the emoji keyboard. Inserted grapheme is the pick.
-private struct ReactionEmojiKeyboardHost: UIViewRepresentable {
-    var onPick: (String) -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onPick: onPick)
-    }
-
-    func makeUIView(context: Context) -> UITextField {
-        let field = EmojiPreferringTextField()
-        field.delegate = context.coordinator
-        field.keyboardAppearance = .dark
-        field.textAlignment = .center
-        field.tintColor = UIColor(Color.CT.accent)
-        field.textColor = UIColor(Color.CT.text)
-        field.backgroundColor = UIColor(Color.CT.bgMsg)
-        field.layer.cornerRadius = CTRadius.card
-        field.autocorrectionType = .no
-        field.spellCheckingType = .no
-        DispatchQueue.main.async { field.becomeFirstResponder() }
-        return field
-    }
-
-    func updateUIView(_ uiView: UITextField, context: Context) {
-        context.coordinator.onPick = onPick
-    }
-
-    final class Coordinator: NSObject, UITextFieldDelegate {
-        var onPick: (String) -> Void
-        init(onPick: @escaping (String) -> Void) { self.onPick = onPick }
-
-        func textField(
-            _ textField: UITextField,
-            shouldChangeCharactersIn range: NSRange,
-            replacementString string: String
-        ) -> Bool {
-            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-            if ReactionReducer.isValidEmoji(trimmed) {
-                onPick(trimmed)
-            }
-            return false
-        }
-    }
-}
-
-private final class EmojiPreferringTextField: UITextField {
-    override var textInputContextIdentifier: String? { "" }
-
-    override var textInputMode: UITextInputMode? {
-        UITextInputMode.activeInputModes.first { $0.primaryLanguage == "emoji" }
-            ?? super.textInputMode
-    }
-}
-#endif
-
-#if os(macOS)
-private struct ReactionMacEmojiField: View {
-    let onPick: (String) -> Void
-    @State private var text = ""
-
-    var body: some View {
-        TextField(NSLocalizedString("react", comment: ""), text: $text)
-            .textFieldStyle(.plain)
-            .font(CTFont.regular(ChatUIConstants.Typography.messageTextSize))
-            .foregroundColor(Color.CT.text)
-            .padding(CTLayout.inlinePad)
-            .background(Color.CT.bgMsg)
-            .clipShape(CTShape.card())
-            .onChange(of: text) { _, new in
-                let trimmed = new.trimmingCharacters(in: .whitespacesAndNewlines)
-                if ReactionReducer.isValidEmoji(trimmed) {
-                    onPick(trimmed)
-                }
-            }
-    }
-}
-#endif

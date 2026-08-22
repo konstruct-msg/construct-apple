@@ -45,5 +45,30 @@ enum MessageBubbleContentParsing {
     static func parseVoiceMessage(_ content: String?) -> VoiceMessageContent? {
         parseVoiceContent(from: content)
     }
+
+    /// Whether the context menu may offer actions that operate on the message's *text*.
+    ///
+    /// Copy, Quote & Reply and Edit all ask one question — is there text here a person can act on —
+    /// and until 2026-08-22 the menu answered it three different ways. Edit was correct and said why
+    /// in a comment. Quote & Reply tested media and file and forgot voice and profile. Copy tested
+    /// nothing at all.
+    ///
+    /// So on a voice message the menu offered both Copy and Quote & Reply, and `displayText` there
+    /// is not a transcript — it is the serialised voice payload the bubble parses to find the audio.
+    /// Copy put that on the clipboard; quoting would have pasted it into a reply. Reported from
+    /// device 2026-08-22 as "невыполнимые действия на голосовом сообщении".
+    ///
+    /// Takes the parses rather than the payload on purpose. The bubble already runs all four, once
+    /// per body pass and in a deliberate order, and re-running them here would be both a cost on
+    /// every row and a second cascade to keep in step with the first.
+    static func carriesActionableText(
+        isProfile: Bool,
+        isMedia: Bool,
+        isFile: Bool,
+        isVoice: Bool,
+        text: String
+    ) -> Bool {
+        !isProfile && !isMedia && !isFile && !isVoice && !text.isEmpty
+    }
 }
 
