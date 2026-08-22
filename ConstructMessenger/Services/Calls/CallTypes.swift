@@ -61,6 +61,49 @@ func callOfferDisposition(
     return awaitingOfferAfterAnswer ? .resumeAnswer : .storeForAnswer
 }
 
+/// What an arriving VoIP push means for the call state we already hold.
+enum IncomingPushDisposition: Equatable {
+    /// Another call is up. Refuse this one and tell CallKit it ended.
+    case declineBusy
+    /// We are already tracking this exact call — the offer got here first. The push carries nothing
+    /// the call does not already have, so leave the call alone.
+    case alreadyTracking
+    /// Nothing is tracking this call id. Create it.
+    case beginNewCall
+}
+
+/// Decide what to do with a VoIP push.
+///
+/// The push and the E2EE offer are two carriers of "there is an incoming call with this id", and the
+/// offer carries strictly more: the SDP, and by then the ICE candidates buffered behind it. The push
+/// carries identity only. Until 2026-08-22 whichever arrived second won unconditionally —
+/// `handleIncomingPush` called `begin()`, which replaces `active` with a fresh `ActiveCall`, and
+/// `pendingRemoteOfferSdp` and `pendingIceCandidates` went with the old one. Build 630, 2026-08-22:
+///
+///     11:37:56  Incoming offer SDP from ffeeddc6… sdp=1155b   ← stored
+///     11:37:57  Buffered 32/32 E2EE ICE candidates (pending SDP)
+///     11:37:58  Incoming VoIP push — CallKit notified sync    ← begin(): both discarded
+///     11:37:58  CallKit reportNewIncomingCall failed: Code=2  ← callUUIDAlreadyExists
+///     11:37:59  "Answered before the offer arrived — waiting up to 45s for SDP"
+///     11:38:14  Call end   state=connecting answered=false mediaConnected=false
+///
+/// CallKit had already rejected the duplicate report — `callUUIDAlreadyExists`, because
+/// `reportIncomingCall` derives the UUID from the call id and both paths therefore produce the same
+/// one. That error was the same fact the app needed and logged it instead of acting on it.
+///
+/// The busy guard did not catch this: it fires on `.active`/`.connecting`/`.dialing`/`.ringing`, and
+/// a call that is ringing *unanswered* from an offer sits in `.incoming`. Being busy and already
+/// tracking this call are different questions, which is why they are two cases here.
+func incomingPushDisposition(
+    hasActiveCall: Bool,
+    isBusyState: Bool,
+    matchesTrackedCallId: Bool
+) -> IncomingPushDisposition {
+    guard hasActiveCall else { return .beginNewCall }
+    if matchesTrackedCallId { return .alreadyTracking }
+    return isBusyState ? .declineBusy : .beginNewCall
+}
+
 /// What an SDP offer means for a call we are already tracking.
 enum RemoteOfferDisposition: Equatable {
     /// The call is under way — this is the peer renegotiating (ICE restart, re-offer). Apply it;

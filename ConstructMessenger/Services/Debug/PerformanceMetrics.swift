@@ -258,6 +258,12 @@ enum MetricEvent: String {
     /// incoming call from a peer who was not calling. `label` = signal kind.
     case callSignalAfterEnd = "call_signal_after_end"
 
+    /// A VoIP push arrived for a call the E2EE offer had already created. Normal — the two race, and
+    /// either can win. Counted because acting on it used to mean `begin()`, which replaced the
+    /// `ActiveCall` and took the stored offer SDP and every buffered ICE candidate with it; the
+    /// callee then answered into nothing and waited 45 s for an SDP it had held all along.
+    case incomingPushDuplicate = "incoming_push_duplicate"
+
     /// A session handshake control (SRI / ping / ready) was abandoned mid-retry because the
     /// session it announces was replaced or destroyed between attempts. Sending it anyway told the
     /// peer to reset a session that had already been superseded — see the 2026-08-04 cascade in

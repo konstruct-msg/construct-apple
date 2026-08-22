@@ -337,22 +337,6 @@ final class CallManager: CallUIManaging {
             return
         }
 
-        // Busy guard: decline new incoming calls when already in a call.
-        // `begin()` would silently close the active call via active?.close() — don't let that happen.
-        if active != nil {
-            switch state {
-            case .active, .connecting, .dialing, .ringing:
-                Log.info("Busy — declining second incoming push (uuid=\(reportedUUID.uuidString.prefix(8))…)", category: "Calls")
-                #if os(iOS)
-                // PushKit already reported this to CallKit synchronously; tell it the call ended.
-                CallKitProvider.shared.reportCallEnded(uuid: reportedUUID)
-                #endif
-                return
-            default:
-                break
-            }
-        }
-
         // Call metadata is nested under "construct_call" by the server
         // (ApnsPayload::voip_incoming_call) — read it from there, not the flat payload,
         // or call_id/caller_id are missing and we fall back to the random reportedUUID /
@@ -377,6 +361,40 @@ final class CallManager: CallUIManaging {
             CallKitProvider.shared.reportCallEnded(uuid: reportedUUID)
             #endif
             return
+        }
+
+        let isBusyState: Bool = {
+            switch state {
+            case .active, .connecting, .dialing, .ringing: return true
+            default: return false
+            }
+        }()
+        switch incomingPushDisposition(
+            hasActiveCall: active != nil,
+            isBusyState: isBusyState,
+            matchesTrackedCallId: active?.session.id == callId
+        ) {
+        case .declineBusy:
+            // `begin()` would silently close the active call via active?.close() — don't let that happen.
+            Log.info("Busy — declining second incoming push (uuid=\(reportedUUID.uuidString.prefix(8))…)", category: "Calls")
+            #if os(iOS)
+            // PushKit already reported this to CallKit synchronously; tell it the call ended.
+            CallKitProvider.shared.reportCallEnded(uuid: reportedUUID)
+            #endif
+            return
+
+        case .alreadyTracking:
+            // The E2EE offer beat the push and this call already holds its SDP and whatever ICE
+            // buffered behind it. `begin()` here would replace the ActiveCall and drop both.
+            Log.info(
+                "Push for a call we already track (callId=\(callId.prefix(8))…) — keeping the offer and its buffered ICE",
+                category: "Calls"
+            )
+            PerformanceMetrics.shared.record(.incomingPushDuplicate, label: "offer_first")
+            return
+
+        case .beginNewCall:
+            break
         }
 
         // Privacy: do NOT use caller_name from push payload (exposed to APNs infrastructure).
