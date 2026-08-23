@@ -137,7 +137,7 @@ struct IOSMessageInputView: View {
         // Quality lives in the media picker (HD / video menu). Composer only shows thumbs.
         if !attachments.selectedAttachments.isEmpty {
             MessagePhotoPreviewBar(
-                images: attachments.selectedAttachments.compactMap { $0.displayImage },
+                attachments: attachments.selectedAttachments,
                 onRemove: removePhoto,
                 onMove: attachments.moveAttachment,
                 onOpen: { attachmentTap = tapTarget(at: $0) }

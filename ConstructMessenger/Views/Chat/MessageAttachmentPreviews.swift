@@ -11,8 +11,20 @@ import Combine
 
 // MARK: - Photo Preview Strip
 
+/// The strip takes attachments, not images.
+///
+/// It used to take `[PlatformImage]` built as `selectedAttachments.compactMap { $0.displayImage }`,
+/// and every index it handed back — remove, reorder, open — was an index into that compacted
+/// array, while every handler read `selectedAttachments`. One attachment without a poster and the
+/// two disagree from that point on: Delete removes a neighbour, the editor opens the wrong photo.
+/// Nothing reported it, because both arrays are the same length in the case anyone tests.
+///
+/// The old defence was upstream — `loadVideoAttachment` synthesised a placeholder poster so the
+/// arrays could not diverge. That is one producer promising something on behalf of a consumer it
+/// cannot see, and `videoPlaceholderPoster()` is itself optional. Here the cell that has no image
+/// draws a placeholder and keeps its slot, so the indices are the same indices by construction.
 struct MessagePhotoPreviewBar: View {
-    let images: [PlatformImage]
+    let attachments: [MediaAttachment]
     let onRemove: (Int) -> Void
     /// Long-press then drag to reorder. Album order is the order they arrive in, so this is
     /// the only place the sender can choose it — after confirming the picker and before
@@ -30,11 +42,9 @@ struct MessagePhotoPreviewBar: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: CTLayout.inlinePad) {
-                ForEach(Array(images.enumerated()), id: \.offset) { index, image in
+                ForEach(Array(attachments.enumerated()), id: \.element.id) { index, attachment in
                     ZStack(alignment: .topTrailing) {
-                        Image(platformImage: image)
-                            .resizable()
-                            .scaledToFill()
+                        thumb(for: attachment)
                             .frame(width: thumbSize, height: thumbSize)
                             .clipShape(CTShape.card())
                             .overlay(CTShape.card().stroke(
@@ -55,7 +65,7 @@ struct MessagePhotoPreviewBar: View {
                     .animation(.easeInOut(duration: 0.18), value: draggingIndex)
                     .modifier(ReorderableThumb(
                         index: index,
-                        enabled: onMove != nil && images.count > 1,
+                        enabled: onMove != nil && attachments.count > 1,
                         draggingIndex: $draggingIndex,
                         onMove: onMove
                     ))
@@ -69,6 +79,23 @@ struct MessagePhotoPreviewBar: View {
         .overlay(CTShape.control().stroke(Color.CT.noise.opacity(0.5), lineWidth: 0.5))
         .padding(.horizontal, 4)
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    /// A cell with no image is still a cell. Losing it is what put the indices out of step.
+    @ViewBuilder
+    private func thumb(for attachment: MediaAttachment) -> some View {
+        if let image = attachment.displayImage {
+            Image(platformImage: image)
+                .resizable()
+                .scaledToFill()
+        } else {
+            ZStack {
+                Color.CT.bgMsg
+                Image(systemName: attachment.kind == .video ? "film" : "photo")
+                    .font(.system(size: CTLayout.navIconSize, weight: .regular))
+                    .foregroundColor(Color.CT.textDim)
+            }
+        }
     }
 }
 
@@ -222,7 +249,11 @@ private func removeButton(action: @escaping () -> Void) -> some View {
 #Preview("Photo Preview") {
     #if canImport(UIKit)
     MessagePhotoPreviewBar(
-        images: [UIImage(systemName: "photo")!, UIImage(systemName: "photo.fill")!],
+        attachments: [
+            MediaAttachment(image: UIImage(systemName: "photo")!),
+            // No poster — the cell keeps its slot rather than vanishing from the strip.
+            MediaAttachment(videoURL: URL(fileURLWithPath: "/tmp/clip.mp4"), poster: nil, duration: 3)
+        ],
         onRemove: { _ in }
     )
     .padding()

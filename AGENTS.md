@@ -39,12 +39,17 @@ Sibling repos: `~/Code/construct-core` (crypto), `~/Code/construct-transport` (Q
 
 ```bash
 ./build_crypto_lib.sh --all      # first build: ConstructCore.xcframework (iOS+sim+mac)
-./build_transport_lib.sh         # first build: ConstructTransport.xcframework
+./build_transport_lib.sh --all   # first build: ConstructTransport.xcframework (iOS+sim+mac)
 ./build_crypto_lib.sh --ios      # quick rebuild after Rust changes (~45s)
 ```
 
+- **`--all` on both, always, unless you are rebuilding for one platform on purpose.** Without it
+  `build_transport_lib.sh` omits the `macos-arm64` slice, and this file said to run it bare until
+  2026-08-23. Nothing on the iOS side notices; `Construct Desktop/` then fails to link against an
+  xcframework that looks perfectly well-formed.
 - The `*.xcframework` binaries are **not** in git — a fresh clone must build them before Xcode can
-  compile anything.
+  compile anything. `Info.plist` **is** tracked, which is the only reason a narrowed rebuild shows
+  up as a diff at all.
 - **Never pin `OS=` in a `-destination`.** Simulator runtimes are replaced with every Xcode
   upgrade; a pinned one stops resolving and the failure reads like a project problem. This file
   said `iPhone 16,OS=18.6` for months after that runtime was gone. Check
