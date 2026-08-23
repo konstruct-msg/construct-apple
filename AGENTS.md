@@ -83,12 +83,9 @@ process dies at launch with `_objc_fatal: Attempt to use unknown class` whenever
 any iOS runtime, independent of app code, and compile flags cannot help because the frameworks stay
 linked. Every `#Preview` block in the app is therefore decorative today.
 
-A standalone SwiftPM package (`ConstructUI/`) was added 2026-06-08 to work around this: no
-dependency on the app, so its preview process ran. It was **removed 2026-08-14** — it held a copy
-of `ConstructTheme.swift` that nothing kept in sync, and by deletion it had drifted ~900 lines from
-the app's. A preview surface showing a design the app no longer has is worse than no preview
-surface. Recover it from history (`git show 95e73323`) if you rebuild the idea, but solve the
-sync problem first: one theme file, shared, not copied.
+A separate previewable package is a recurring idea and was tried once. If you rebuild it, the
+theme file is **shared, never copied** — the copy is what killed the last attempt. Read
+`decisions/one-theme-file-shared-not-copied.md` first.
 
 ## Localization
 
@@ -105,18 +102,13 @@ sync problem first: one theme file, shared, not copied.
   that happen — nothing reported the gap, so it grew by whatever each release added. A locale
   allowed to lag does. Both are complete now and held to the same rule.
 - **One product name per script.** `Konstruct` in Latin, `Конструкт` in Russian, `コンストラクト`
-  in Japanese. The Japanese used to be **共創** — a kanji reading meaning "co-creation", changed
-  2026-08-16: a reader had no way to connect it to the Konstruct in the App Store, and spoken
-  aloud "kyōsō" is an exact homophone of 競争, "competition". The one deliberate exception is
-  `onboarding_tagline`, where "identity is a construct" is the common noun and the pun.
+  in Japanese — a localized name is a transliteration, never a translation. The one deliberate
+  exception is `onboarding_tagline`, where "identity is a construct" is the common noun and the
+  pun. Why the Japanese changed: `client/GLOSSARY_PRODUCT_LANGUAGE.md` in the vault.
 - **App Store listing copy lives in `fastlane/metadata/<locale>/`**, not only in App Store
-  Connect, so a change to it has a diff and a reviewer. Four store locales: `en-US`, `ru`, `ja`,
-  `fr-FR`. `scripts/check_appstore_metadata.sh` enforces Apple's field limits **in characters,
-  not bytes** — a Japanese subtitle is 28 characters and 84 bytes — plus locale parity and the
-  keyword formatting that wastes budget. Fastlane itself is not a dependency; the layout is
-  borrowed so `deliver` can consume it later. `fastlane/metadata/README.md` states what must
-  never go in the copy: a claim we cannot show today, protocol jargon, or any number that also
-  lives in code.
+  Connect, so a change to it has a diff and a reviewer. Read `fastlane/metadata/README.md` before
+  touching it — field limits, the four store locales, and what must never go in the copy.
+  `scripts/check_appstore_metadata.sh` enforces the mechanical part and CI runs it.
 - Nav titles: `CTNavBar` applies `.uppercased()` + `.tracking(4)` — pass the raw localized string.
 - UI copy is plain language ("people / chats / device", never "node / stream / replica"). Code
   identifiers keep domain names — no renames.
