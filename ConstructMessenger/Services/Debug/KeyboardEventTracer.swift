@@ -49,13 +49,22 @@ import UIKit
 
 enum KeyboardTracePhase: String {
     case idle
-    /// `setCategory(.playAndRecord …)` is in flight. Split from the activation below on 2026-08-22,
-    /// because by then the question had narrowed to one step and the phase could not name it: the
-    /// device answered the responder test three times (09:38:32, 09:41:29, 11:38:41 — all
-    /// `firstResponder=VerticalTextView`), so nothing in the app resigns focus and the keyboard is
-    /// being taken by the system. The audio session is the only thing we ask the system for there,
-    /// and it is two calls. Which of the two the hide follows decides whether pre-arming the
-    /// category at composer focus can help at all, or whether only the activation can be moved.
+    /// `setCategory(.playAndRecord …)` is in flight. Split from the activation below on 2026-08-22
+    /// to find out which of the two the hide follows.
+    ///
+    /// **Answered 2026-08-23 (build 634), and the answer was neither.** Two recordings, 20:49:04
+    /// and 20:49:33, both identical: category → activating → recording, and only then
+    /// `will HIDE — phase=recording (+41ms / +46ms)`. The keyboard survives every call we make to
+    /// the audio session.
+    ///
+    /// The premise that split these phases was itself wrong, and it is worth naming because it
+    /// cost two device runs: `firstResponder=VerticalTextView` at hide time was read as "nothing in
+    /// the app resigns focus". It is not evidence of that. `keyboardWillHideNotification` is posted
+    /// when dismissal *begins*; the responder chain has not been updated at that instant. The app
+    /// was never ruled out — the observation could not rule anything out.
+    ///
+    /// What 41ms does identify is one SwiftUI render after `state = .recording` publishes. See
+    /// `MessageInputView+iOS.voiceOrInputRow`.
     case audioSessionCategory
     /// `setActive(true)` is in flight, up to the recorder state flipping to `.recording`.
     case audioSessionActivating
@@ -88,6 +97,22 @@ final class KeyboardEventTracer {
         #if DEBUG
         Log.info(
             "KEYBOARD_TRACE: composer focus → \(isFocused) (phase=\(phase.rawValue))",
+            category: "KeyboardTrace"
+        )
+        #endif
+    }
+
+    /// A render that changes something about the composer's own view tree.
+    ///
+    /// The one thing the phases could not see: they mark what `AudioRecorderService` does, and the
+    /// hide turned out to arrive between them and nothing — 41ms after the last one, which is a
+    /// SwiftUI render, not an audio event. This puts the render on the same timeline so the next
+    /// log answers it in one line instead of by arithmetic.
+    func noteComposerRender(_ what: String) {
+        #if DEBUG
+        Log.info(
+            "KEYBOARD_TRACE: composer render — \(what) (phase=\(phase.rawValue), "
+            + "+\(Int(Date().timeIntervalSince(phaseEnteredAt) * 1000))ms)",
             category: "KeyboardTrace"
         )
         #endif

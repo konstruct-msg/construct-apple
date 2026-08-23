@@ -159,10 +159,26 @@ struct IOSMessageInputView: View {
     /// ended, moving the whole chat twice per voice message. Nothing asked for the keyboard to go;
     /// it was a side effect of how the swap was written.
     ///
-    /// Keeping `inputRow` mounted and hidden underneath preserves focus, so the keyboard stays
-    /// exactly as the user left it. Hidden means invisible *and* inert: no hit testing (taps belong
-    /// to the voice bar above it) and hidden from accessibility, or VoiceOver would read a text
-    /// field that is not there.
+    /// Keeping `inputRow` mounted preserves focus. Mounting it was not enough, and the second half
+    /// took three device runs.
+    ///
+    /// It used to be mounted *and made inert*: `.opacity(isIdle ? 1 : 0)` and
+    /// `.allowsHitTesting(isIdle)`, so taps would belong to the voice bar above it. Hit testing is
+    /// the problem. SwiftUI applies it as `isUserInteractionEnabled = false` on the ancestor of the
+    /// first responder, and UIKit does not let a view that cannot be interacted with stay first
+    /// responder — so the composer resigned, and the keyboard went with it. Build 634 timed it:
+    /// `will HIDE — phase=recording (+41ms)` and `(+46ms)` on two recordings, one render after
+    /// `state = .recording` publishes, with every audio-session call already finished.
+    ///
+    /// (`opacity` is the other candidate and was likely innocent here: the composer animates
+    /// `audioRecorder.state` over 150ms, so at +41ms opacity was still around 0.3, nowhere near the
+    /// 0 that would let SwiftUI collapse it to `isHidden`. Both are avoided anyway — the row's own
+    /// properties no longer depend on recording state at all.)
+    ///
+    /// So nothing about `inputRow` changes when recording starts. It is covered instead: an opaque
+    /// layer above it hides it and absorbs taps, which is what "inert" was trying to buy, without
+    /// touching the view that holds the keyboard. `accessibilityHidden` stays — it does not affect
+    /// the responder chain, and without it VoiceOver reads a text field that is not on screen.
     ///
     /// Height note: the ZStack takes the taller of the two, so the composer can still shift by the
     /// difference between the input row and a voice bar. That is a few points against ~300 for the
@@ -170,12 +186,28 @@ struct IOSMessageInputView: View {
     @ViewBuilder
     private var voiceOrInputRow: some View {
         let isIdle = audioRecorder.state == .idle
+        #if DEBUG
+        // Puts the render on the keyboard timeline. If a hide still follows recording, the next
+        // log says whether it lands after this line or somewhere else entirely.
+        // `let _ =` because a bare call is a statement, and a ViewBuilder body takes declarations
+        // and views — not `()`.
+        let _ = KeyboardEventTracer.shared.noteComposerRender("isIdle=\(isIdle)")
+        #endif
 
         ZStack {
             inputRow
-                .opacity(isIdle ? 1 : 0)
-                .allowsHitTesting(isIdle)
                 .accessibilityHidden(!isIdle)
+
+            if !isIdle {
+                // Opaque and tap-absorbing, sized to the ZStack, which is sized to the row beneath.
+                // `contentShape` because a Color's hit area would otherwise follow its (empty)
+                // content, and an unhandled tap would fall through to the text field and refocus it
+                // mid-recording — the exact thing `allowsHitTesting(false)` was there to prevent.
+                Color.CT.bg
+                    .contentShape(Rectangle())
+                    .onTapGesture {}
+                    .accessibilityHidden(true)
+            }
 
             switch audioRecorder.state {
             case .recording(let duration, let waveform):
