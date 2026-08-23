@@ -209,6 +209,21 @@ Any routing decision on a sealed delivery must read the post-unseal `contentType
 `ContentTypeRouting.kind(for:)`, `ChatMessage.isEndSession`, …). Never branch on the outer
 `messageType` string after `resolveSender`.
 
+**Content-type meaning is cross-client, and this app is not its author.** There is now a second
+implementation (`construct-tui`), so "the protocol" and "what iOS does" are different things, and
+the first comparison found them already diverged on 13 and 23 — silently, because the symptom is a
+payload that is a bubble on one client and nothing on the other.
+
+- Numeric values come from the generated `Shared_Proto_Core_V1_ContentType`. Do not write `21` or
+  `= 25` as a fresh literal; the existing switches keep theirs only because they predate this rule.
+- What a client must *do* with a type — transcript or control, which handler, whether a sealed
+  envelope may name it — is `~/Code/construct-protos/conformance/knst_content_types.json`, vendored
+  into `ConstructMessenger/Networking/gRPC/Generated/conformance/` by `./generate_grpc_swift.sh`
+  and read by `ConstructMessengerTests/ContentTypeConformanceTests.swift`.
+- **Adding a content type means adding its row there in the same change.** A type this app has not
+  learned then reddens a named test instead of arriving as a payload nobody classifies.
+- Read `decisions/wire-format-one-authority.md` before changing any of the five mappings it lists.
+
 ## Testing
 
 Method and tooling: `docs/TESTING.md`. The one rule that belongs here:

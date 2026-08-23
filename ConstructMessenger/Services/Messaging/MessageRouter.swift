@@ -1148,9 +1148,13 @@ final class MessageRouter {
                     continue
                 }
                 if let control = ChunkedMessageCodec.controlFrame(plaintext),
-                   control.contentType != 0, control.contentType != 1 {
+                   ContentTypeRouting.disposition(forFrameContentType: control.contentType) == .notCarried {
                     // A peer speaking a dialect we do not have. Fall through to the body pipeline
                     // rather than dropping it silently.
+                    //
+                    // Was `!= 0, != 1` — "known" spelled as two literals, which quietly counted
+                    // SENDER_SYNC and every type handled above as unknown. The vectors name the
+                    // set no producer frames, so this now logs exactly that.
                     Log.info("Unknown framed content type \(control.contentType) from \(otherUserId.prefix(8))… — treating as a message body", category: "MessageRouter")
                 }
 
@@ -2087,8 +2091,8 @@ final class MessageRouter {
     ) -> Bool {
         guard let control = ChunkedMessageCodec.controlFrame(plaintext) else { return false }
 
-        switch control.contentType {
-        case 12:
+        switch ContentTypeRouting.framedSideChannel(for: control.contentType) {
+        case .callSignal:
             if let signal = CallManager.decodeSignalProto(from: control.payload) {
                 CallManager.shared.handleCallSignalProto(from: resolvedSender, signal: signal)
             } else {
@@ -2096,10 +2100,10 @@ final class MessageRouter {
             }
             PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
             return true
-        case 14:
+        case .deliveryReceipt:
             handleIncomingE2EDeliveryReceipt(control.payload, messageId: messageId, from: otherUserId, in: context)
             return true
-        default:
+        case nil:
             return false
         }
     }

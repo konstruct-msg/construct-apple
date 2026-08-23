@@ -65,6 +65,11 @@ resolve() {
     for cand in "$p" "ConstructMessenger/$p" "$VAULT/$p"; do
         [ -e "$cand" ] && { echo "$cand"; return 0; }
     done
+    # A sibling repository named by its own name. `construct-protos/conformance/…` is how you
+    # would say it out loud, and it is a real path — just not from here.
+    case "$p" in
+        construct-*/*) [ -e "$HOME/Code/$p" ] && { echo "$HOME/Code/$p"; return 0; } ;;
+    esac
     # A bare filename (`ConstructTheme.swift`) is named without its directory on purpose — it is
     # the file, wherever it sits. Accept it if exactly that name exists somewhere tracked.
     case "$p" in
