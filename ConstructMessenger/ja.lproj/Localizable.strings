@@ -937,6 +937,7 @@
 "call_error_not_contacts" = "つながっている相手にだけ発信できます。";
 "call_error_peer_offline" = "相手はオフラインです。後でもう一度お試しください。";
 "call_error_busy" = "すでに通話中です。";
+"call_error_setup_failed" = "通話を開始できませんでした。もう一度試してください。";
 "call_audio_route" = "音声";
 "call_e2ee_badge" = "エンドツーエンド暗号化";
 "call_minibar_connecting" = "接続中";

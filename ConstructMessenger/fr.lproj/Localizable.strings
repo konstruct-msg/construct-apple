@@ -995,6 +995,7 @@
 "call_error_not_contacts" = "Vous ne pouvez appeler que des personnes avec qui vous êtes connecté.";
 "call_error_busy" = "Vous êtes déjà en appel.";
 "call_error_peer_offline" = "La personne est hors ligne. Réessayez plus tard.";
+"call_error_setup_failed" = "Impossible de démarrer l'appel. Réessayez.";
 "notification.new_message.title" = "Nouveau message";
 "notification.new_message.body" = "Vous avez un nouveau message chiffré.";
 "remove_avatar" = "retirer l’avatar";

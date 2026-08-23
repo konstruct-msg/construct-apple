@@ -291,6 +291,12 @@ enum NetworkTiming {
         static let iceRestartGraceDelay: TimeInterval = 2.0
         static let maxIceRestartAttempts: Int = 3
         static let endedAutoClearDelay: TimeInterval = 3
+        /// How long an outgoing call waits for a Double Ratchet session before failing.
+        /// Covers a SESSION_RESET_INIT already in flight as RESPONDER (D858E6FE: SRI
+        /// archived the session 1 s after CallKit start). Shorter than the 45 s offer
+        /// wait — the user is staring at a dial tone, not an answered call.
+        static let sessionReadyWait: TimeInterval = 12
+        static let sessionReadyPoll: TimeInterval = 0.2
         static let audioPreferredSampleRateHz: Double = 48_000
         static let audioPreferredIOBufferDuration: TimeInterval = 0.01
     }

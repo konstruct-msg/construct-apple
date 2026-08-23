@@ -1065,6 +1065,7 @@
 "call_error_not_contacts" = "Звонить можно только тем, с кем вы уже связаны.";
 "call_error_busy" = "Вы уже в звонке.";
 "call_error_peer_offline" = "Собеседник не в сети. Попробуйте позже.";
+"call_error_setup_failed" = "Не удалось начать звонок. Попробуйте ещё раз.";
 
 /* Engine background push notifications */
 "notification.new_message.title" = "Новое сообщение";

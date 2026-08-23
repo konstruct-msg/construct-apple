@@ -40,6 +40,14 @@ final class CallManager: CallUIManaging {
 
     func clearLastError() { lastError = nil }
 
+    /// True while an incoming call is up and we do not yet hold a negotiable SDP.
+    /// Silent-push handling consults this so a zombie "connected" MessageStream cannot
+    /// hide the offer that CallKit is already ringing for (7CDE9769).
+    var needsOfferPull: Bool {
+        guard let active, case .incoming = active.session.direction else { return false }
+        return incomingCallFetchDisposition(hasUsableRemoteOffer: active.usableRemoteOfferSdp != nil) == .pullMissed
+    }
+
     private var active: ActiveCall?
 
     /// Serializes outgoing E2EE call-signal RPC sends so they reach the server in the
@@ -71,6 +79,49 @@ final class CallManager: CallUIManaging {
     private func hasRecentlyEnded(callId: String) -> Bool {
         guard let endedAt = endedCallIds[callId] else { return false }
         return Date().timeIntervalSince(endedAt) < Self.endedCallMemory
+    }
+
+    /// Pull the message backlog so an SDP that is already on the server can land
+    /// without waiting for a zombie MessageStream to time out (7CDE9769: 15 s).
+    /// Coalesced with silent-push fetches; a no-op if the offer is already in hand.
+    private func pullMissedCallSignalsIfNeeded() {
+        guard incomingCallFetchDisposition(hasUsableRemoteOffer: active?.usableRemoteOfferSdp != nil) == .pullMissed else {
+            return
+        }
+        let arrivedAt = Date()
+        Log.info("Pulling missed messages for incoming call without SDP", category: "Calls")
+        Task { await BackgroundFetchManager.shared.fetchPendingMessagesForSilentPush(pushArrivedAt: arrivedAt) }
+    }
+
+    /// Wait for a live Double Ratchet session before encrypting an outgoing offer.
+    /// Does not start INITIATOR init immediately — a SESSION_RESET_INIT may already
+    /// be running as RESPONDER (D858E6FE). `reestablishSessionForQueuedOutbound`
+    /// no-ops when an init is in flight or a session already exists.
+    private func ensureSessionForOutgoingSignal(to userId: String) async throws {
+        switch outgoingCallSessionDisposition(hasSession: CryptoManager.shared.hasSession(for: userId)) {
+        case .encryptNow:
+            return
+        case .waitThenInit:
+            break
+        }
+        Log.info(
+            "No DR session with \(userId.prefix(8))… — waiting up to \(Int(NetworkTiming.Calls.sessionReadyWait))s before sending call signal",
+            category: "Calls"
+        )
+        SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: userId)
+        let deadline = Date().addingTimeInterval(NetworkTiming.Calls.sessionReadyWait)
+        while Date() < deadline {
+            if CryptoManager.shared.hasSession(for: userId) {
+                Log.info("DR session ready for call signal to \(userId.prefix(8))…", category: "Calls")
+                return
+            }
+            try? await Task.sleep(for: .seconds(NetworkTiming.Calls.sessionReadyPoll))
+            if Task.isCancelled { throw CancellationError() }
+            guard active != nil else {
+                throw RPCError(code: .cancelled, message: "Call ended while waiting for session")
+            }
+        }
+        throw RPCError(code: .failedPrecondition, message: "No session with contact")
     }
 
     private final class ActiveCall {
@@ -290,9 +341,21 @@ final class CallManager: CallUIManaging {
             try await sendOffer(toUserId: userId)
         } catch {
             Log.error("Outgoing call setup failed: \(error)", category: "Calls")
-            if let rpcError = error as? RPCError, rpcError.code == .permissionDenied {
-                lastError = NSLocalizedString("call_error_not_contacts", comment: "")
+            if let rpcError = error as? RPCError {
+                switch rpcError.code {
+                case .permissionDenied:
+                    lastError = NSLocalizedString("call_error_not_contacts", comment: "")
+                case .failedPrecondition where rpcError.message.contains("No session"):
+                    lastError = NSLocalizedString("call_error_setup_failed", comment: "")
+                default:
+                    break
+                }
             }
+            // InitiateCall may already have occupied the callee. Tear down on the
+            // signaling stream so they are not left ringing / we are not left "busy".
+            guard self.active === call else { return }
+            try? openStreamIfNeeded()
+            sendHangup(reason: .normal, origin: .local)
             endActiveCall(reason: .local("Call setup failed"))
         }
     }
@@ -391,6 +454,7 @@ final class CallManager: CallUIManaging {
                 category: "Calls"
             )
             PerformanceMetrics.shared.record(.incomingPushDuplicate, label: "offer_first")
+            pullMissedCallSignalsIfNeeded()
             return
 
         case .beginNewCall:
@@ -413,6 +477,7 @@ final class CallManager: CallUIManaging {
             direction: .incoming
         )
         begin(session: session, initialState: .incoming(session))
+        pullMissedCallSignalsIfNeeded()
 
         #if os(iOS)
         // Update CallKit with the resolved caller name from local CoreData
@@ -476,6 +541,10 @@ final class CallManager: CallUIManaging {
                 sendRinging()
                 Log.info("Answered before the offer arrived — waiting up to \(Int(Self.offerAfterAnswerTimeout))s for SDP (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
                 PerformanceMetrics.shared.record(.answerBeforeOffer, label: "wait")
+                // The offer is already on the server more often than not (7CDE9769: sent
+                // the same second as the VoIP push). Don't wait for a zombie stream to
+                // die — pull the backlog now.
+                self.pullMissedCallSignalsIfNeeded()
                 self.startOfferWaitTimeout(for: active)
             } catch {
                 Log.error("Failed to accept call: \(error)", category: "Calls")
@@ -614,7 +683,7 @@ final class CallManager: CallUIManaging {
             // also sent via E2EE (sendHangup uses both), and skipping it leaves the peer
             // ringing until the server-side TTL.
             try? openStreamIfNeeded()
-            sendHangup(reason: reason)
+            sendHangup(reason: reason, origin: .local)
             endActiveCall(reason: .hangup(reason), reportToCallKit: false)
             #if os(iOS)
             // When the user ends the call from within the app, CallKit still thinks the
@@ -974,7 +1043,7 @@ final class CallManager: CallUIManaging {
                 throw WebRTCSessionError.invalidState("restartIce returned empty SDP")
             }
             guard self.active === active else { return }
-            sendOffer(sdp: sdp, toUserId: active.session.peerUserId, isIceRestart: true)
+            try sendOffer(sdp: sdp, toUserId: active.session.peerUserId, isIceRestart: true)
             Log.info(
                 "ICE restart offer sent (attempt \(active.iceRestartAttempts)/\(NetworkTiming.Calls.maxIceRestartAttempts)) call_id=\(active.session.id.prefix(8))…",
                 category: "Calls"
@@ -984,24 +1053,45 @@ final class CallManager: CallUIManaging {
         }
     }
 
-    private func sendHangup(reason: Shared_Proto_Signaling_V1_HangupReason) {
+    private func sendHangup(
+        reason: Shared_Proto_Signaling_V1_HangupReason,
+        origin: CallHangupOrigin
+    ) {
         guard let active else { return }
-        var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
-        sig.callID = active.session.id
-        sig.senderDeviceID = Self.currentDeviceId()
-        sig.timestamp = Self.nowMs()
-        sig.signal = .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs(), reason: reason))
-        // Send over BOTH channels. After media connects either side may have closed its idle
-        // signaling stream (the call survives on the E2EE media path), so a stream-only hangup
-        // is silently dropped and the peer stays "in call" — the user then has to hang up on
-        // both ends. The E2EE messaging path is always connected (offers/answers ride it too);
-        // the signaling stream is a best-effort fast path. The peer's hangup handler is
-        // idempotent, so receiving it twice is a no-op.
-        sendCallSignalProto(sig, to: active.session.peerUserId)
-        if let stream = active.stream {
-            stream.send(Self.makeRoutedSignal(callId: active.session.id, deviceId: Self.currentDeviceId(), signal: .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs(), reason: reason))))
+        let channels = callHangupChannels(origin: origin)
+        var e2eeSent = false
+        var streamSent = false
+        if channels.contains(.e2ee) {
+            var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+            sig.callID = active.session.id
+            sig.senderDeviceID = Self.currentDeviceId()
+            sig.timestamp = Self.nowMs()
+            sig.signal = .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs(), reason: reason))
+            switch sendCallSignalProto(sig, to: active.session.peerUserId) {
+            case .encrypted:
+                e2eeSent = true
+            case .sessionMissing, .failed:
+                // Stream hangup still goes out below. Encrypting into a void is what
+                // logged CALL_SIGNAL_ENCRYPT_FAILED on D858E6FE and then claimed
+                // "Hangup sent (E2EE+stream)" anyway.
+                Log.info(
+                    "E2EE hangup not sent (\(origin)) — no session or encrypt failed (call_id=\(active.session.id.prefix(8))…)",
+                    category: "Calls"
+                )
+            }
         }
-        Log.info("Hangup sent (E2EE\(active.stream != nil ? "+stream" : "")) to \(active.session.peerUserId.prefix(8))… reason=\(reason)", category: "Calls")
+        if channels.contains(.signalingStream), let stream = active.stream {
+            stream.send(Self.makeRoutedSignal(
+                callId: active.session.id,
+                deviceId: Self.currentDeviceId(),
+                signal: .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs(), reason: reason))
+            ))
+            streamSent = true
+        }
+        Log.info(
+            "Hangup sent (e2ee=\(e2eeSent) stream=\(streamSent) origin=\(origin)) to \(active.session.peerUserId.prefix(8))… reason=\(reason)",
+            category: "Calls"
+        )
     }
 
     // MARK: - WebRTC (Phase 3)
@@ -1169,6 +1259,12 @@ final class CallManager: CallUIManaging {
 
     // MARK: - E2EE Call Signal via MessagingService
 
+    private enum CallSignalEncryptResult {
+        case encrypted
+        case sessionMissing
+        case failed
+    }
+
     /// Send a `WebRTCSignal` proto to `peerUserId` via MessagingService (Double Ratchet E2EE).
     /// Feeds raw proto bytes into the Rust orchestrator via `OutgoingCallSignal` event.
     /// Rust encrypts + packs WirePayload and returns `SendEncryptedMessage` action,
@@ -1176,14 +1272,19 @@ final class CallManager: CallUIManaging {
     ///
     /// Stealth/sealed sender (hiding caller from server) is applied **after** Rust encryption,
     /// by wrapping the encrypted payload in SealedInner when StealthPolicy allows it.
-    private func sendCallSignalProto(_ signal: Shared_Proto_Signaling_V1_WebRTCSignal, to peerUserId: String) {
+    ///
+    /// The RPC send is still fire-and-forget (chained). Encrypt is synchronous — the
+    /// result tells the caller whether Rust produced a send, or whether there is no
+    /// session to encrypt under (D858E6FE logged success after CALL_SIGNAL_ENCRYPT_FAILED).
+    @discardableResult
+    private func sendCallSignalProto(_ signal: Shared_Proto_Signaling_V1_WebRTCSignal, to peerUserId: String) -> CallSignalEncryptResult {
         guard let protoData = try? signal.serializedData() else {
             Log.error("Failed to serialize WebRTCSignal proto", category: "Calls")
-            return
+            return .failed
         }
         guard CryptoManager.shared.orchestratorCore != nil else {
             Log.error("No orchestratorCore — cannot send call signal", category: "Calls")
-            return
+            return .failed
         }
         let messageId = UUID().uuidString
 
@@ -1207,9 +1308,11 @@ final class CallManager: CallUIManaging {
             let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "outgoing_call_signal")
             // sendEncryptedMessage action is handled by MessageRouter.executeRustActions;
             // here we execute it directly since we're outside the normal message routing path.
+            var encryptResult: CallSignalEncryptResult = .failed
             for action in actions {
                 switch action {
                 case .sendEncryptedMessage(let to, let payload, let msgId, _):
+                    encryptResult = .encrypted
                     let currentUserId = AuthSessionManager.shared.currentUserId ?? ""
                     let callId = signal.callID
 
@@ -1289,12 +1392,17 @@ final class CallManager: CallUIManaging {
                     }
                 case .notifyError(let code, let msg):
                     Log.error("Rust call signal error [\(code)]: \(msg)", category: "Calls")
+                    if case .retryAfterSession = callSignalEncryptDisposition(code: code, message: msg) {
+                        encryptResult = .sessionMissing
+                    }
                 default:
                     break
                 }
             }
+            return encryptResult
         } catch {
             Log.error("Rust handleEvent(outgoingCallSignal) failed: \(error)", category: "Calls")
+            return .failed
         }
     }
 
@@ -1470,9 +1578,14 @@ final class CallManager: CallUIManaging {
             }
         case .hangup(let hangup):
             guard active?.session.id == signal.callID else { return }
+            // Occupancy lives on signaling-service. The peer already knows (they sent
+            // this); tell the server so a callback in the next few seconds is not
+            // "Callee is busy" (AC92380B).
+            sendHangup(reason: hangup.reason, origin: .remote)
             endActiveCall(reason: .hangup(hangup.reason), reportToCallKit: true)
         case .busy:
             guard active?.session.id == signal.callID else { return }
+            sendHangup(reason: .busy, origin: .remote)
             endActiveCall(reason: .hangup(.busy), reportToCallKit: true)
         case .ringing:
             guard let active, active.session.id == signal.callID else { return }
@@ -1611,6 +1724,10 @@ final class CallManager: CallUIManaging {
 
     private func sendOffer(toUserId: String) async throws {
         guard let active else { throw RPCError(code: .failedPrecondition, message: "No active call") }
+        try await ensureSessionForOutgoingSignal(to: toUserId)
+        guard self.active === active else {
+            throw RPCError(code: .failedPrecondition, message: "Call replaced while waiting for session")
+        }
         try ensureWebRTC(role: .caller)
         // Was `?? ""`, which turned "there is no WebRTC session" into "an offer carrying no SDP"
         // and sent it. The callee has no way to tell that apart from a real offer: it files the
@@ -1621,10 +1738,10 @@ final class CallManager: CallUIManaging {
             throw WebRTCSessionError.invalidState("WebRTC not ready after ensureWebRTC")
         }
         let plainSdp = try await webrtc.createOffer()
-        sendOffer(sdp: plainSdp, toUserId: toUserId, isIceRestart: false)
+        try sendOffer(sdp: plainSdp, toUserId: toUserId, isIceRestart: false)
     }
 
-    private func sendOffer(sdp plainSdp: String, toUserId: String, isIceRestart: Bool) {
+    private func sendOffer(sdp plainSdp: String, toUserId: String, isIceRestart: Bool) throws {
         guard let active else { return }
         // The one place every offer leaves through, so the refusal belongs here rather than at
         // each producer. An offer with no SDP cannot be negotiated by anybody; sending it only
@@ -1641,7 +1758,7 @@ final class CallManager: CallUIManaging {
                 category: "Calls"
             )
             if !isIceRestart {
-                endActiveCall(reason: .local("Offer build failed"))
+                throw WebRTCSessionError.invalidState("Offer carries no SDP")
             }
             return
         }
@@ -1656,15 +1773,31 @@ final class CallManager: CallUIManaging {
         sig.senderDeviceID = Self.currentDeviceId()
         sig.timestamp = Self.nowMs()
         sig.signal = .offer(offer)
-        sendCallSignalProto(sig, to: toUserId)
+        let encrypt = sendCallSignalProto(sig, to: toUserId)
         let kind = isIceRestart ? "ICE restart offer" : "Offer"
-        // sdp=<bytes> because nothing on either side measured it. The 2026-08-17 call had to be
-        // reconstructed from which of two disagreeing checks fired; one number on each boundary
-        // would have named it outright.
-        Log.info(
-            "\(kind) (proto) sent via E2EE to \(toUserId.prefix(8))… call_id=\(active.session.id.prefix(8))… sdp=\(plainSdp.utf8.count)b",
-            category: "Calls"
-        )
+        switch encrypt {
+        case .encrypted:
+            Log.info(
+                "\(kind) (proto) sent via E2EE to \(toUserId.prefix(8))… call_id=\(active.session.id.prefix(8))… sdp=\(plainSdp.utf8.count)b",
+                category: "Calls"
+            )
+        case .sessionMissing:
+            Log.error(
+                "\(kind) not encrypted — no session with \(toUserId.prefix(8))… (call_id=\(active.session.id.prefix(8))…)",
+                category: "Calls"
+            )
+            if !isIceRestart {
+                throw RPCError(code: .failedPrecondition, message: "No session with contact")
+            }
+        case .failed:
+            Log.error(
+                "\(kind) encrypt failed to \(toUserId.prefix(8))… (call_id=\(active.session.id.prefix(8))…)",
+                category: "Calls"
+            )
+            if !isIceRestart {
+                throw RPCError(code: .internalError, message: "Call offer encrypt failed")
+            }
+        }
     }
 
     /// ICE candidates are batched with a 200ms debounce before sending to stay under the

@@ -208,6 +208,102 @@ func signalStreamAdmission(for signal: Shared_Proto_Signaling_V1_WebRTCSignal.On
     }
 }
 
+/// Whether a silent `new_message` push may be dropped because MessageStream looks live.
+///
+/// The skip exists to stop a reconnect storm: every incoming message used to produce a push,
+/// and the push tore the stream down and back up. That skip is wrong the moment a call is
+/// waiting on an SDP that travels the same stream. Build 631, 2026-08-22:
+///
+///     13:20:00  Incoming VoIP push — CallKit notified (7CDE9769)
+///     13:20:00  Offer (proto) sent via E2EE                    ← already on the server
+///     13:20:02  Answered before the offer arrived — waiting
+///     13:20:15  QUIC recv Timeout (stream had looked "connected" for 30s)
+///     13:20:15  Silent push — reconnecting stream
+///     13:20:15  Ignoring offer for already-ended call          ← 15 s late, after hangup
+///
+/// The offer sat behind a zombie QUIC stream. Foreground `isConnected` was true, so every
+/// silent push that could have pulled it was ignored. `callNeedsOffer` is the fact the skip
+/// cannot see on its own.
+func shouldIgnoreSilentPush(foregroundLiveStream: Bool, callNeedsOffer: Bool) -> Bool {
+    foregroundLiveStream && !callNeedsOffer
+}
+
+/// Whether an incoming call should pull missed messages to recover an SDP that has not arrived.
+enum IncomingCallFetchDisposition: Equatable {
+    /// The offer is already in hand. A fetch would only replay it.
+    case skip
+    /// VoIP/CallKit knows about the call; the SDP has not. Pull the backlog.
+    case pullMissed
+}
+
+func incomingCallFetchDisposition(hasUsableRemoteOffer: Bool) -> IncomingCallFetchDisposition {
+    hasUsableRemoteOffer ? .skip : .pullMissed
+}
+
+/// Whether the next outgoing call signal can be encrypted under the Double Ratchet.
+enum OutgoingCallSessionDisposition: Equatable {
+    /// A live session exists. Encrypt now.
+    case encryptNow
+    /// No session. Wait — and only then try to establish one. Starting INITIATOR init
+    /// immediately races a SESSION_RESET_INIT that is already running as RESPONDER.
+    case waitThenInit
+}
+
+func outgoingCallSessionDisposition(hasSession: Bool) -> OutgoingCallSessionDisposition {
+    hasSession ? .encryptNow : .waitThenInit
+}
+
+/// What an orchestrator `notifyError` on an outgoing call signal means.
+enum CallSignalEncryptDisposition: Equatable {
+    /// The contact has no session. Wait/establish and send again — dropping the signal
+    /// leaves the peer ringing (or the server marking us busy) with nothing to negotiate.
+    case retryAfterSession
+    /// Any other encrypt failure is not recovered here.
+    case drop
+}
+
+func callSignalEncryptDisposition(code: String, message: String) -> CallSignalEncryptDisposition {
+    guard code == "CALL_SIGNAL_ENCRYPT_FAILED" else { return .drop }
+    // Same code also covers an oversized ICE batch (134KB → encrypt failed). That is
+    // not a missing session and retrying it would loop the same payload.
+    if message.localizedCaseInsensitiveContains("No session") { return .retryAfterSession }
+    return .drop
+}
+
+/// Who decided the call is over.
+enum CallHangupOrigin: Equatable {
+    /// We hung up (in-app button, CallKit, local failure).
+    case local
+    /// The peer told us, over E2EE. The signaling server has not heard.
+    case remote
+}
+
+enum CallHangupChannel: Equatable {
+    /// Double Ratchet `WebRTCSignal.hangup` — the peer.
+    case e2ee
+    /// Signaling stream presence hangup — the server occupancy table.
+    case signalingStream
+}
+
+/// Which hangup channels must be written for this origin.
+///
+/// Build 631, 2026-08-22, AC92380B:
+///
+///     11:38:14  callee Hangup sent (E2EE+stream)
+///     11:38:14  caller handleCallSignalProto hangup → endActiveCall, no stream hangup
+///     11:38:18  callee InitiateCall → failedPrecondition: "Callee is busy"
+///
+/// The E2EE hangup ended the media path. Occupancy lives on signaling-service, which only
+/// sees the stream. A received hangup that skips the stream leaves the receiver "in a call"
+/// until TTL, so the peer cannot call back. The peer already knows — do not encrypt another
+/// E2EE hangup (that is what failed with `No session with contact` on D858E6FE).
+func callHangupChannels(origin: CallHangupOrigin) -> [CallHangupChannel] {
+    switch origin {
+    case .local: return [.e2ee, .signalingStream]
+    case .remote: return [.signalingStream]
+    }
+}
+
 enum CallState: Equatable {
     case idle
     case incoming(CallSession)

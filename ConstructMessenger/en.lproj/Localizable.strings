@@ -1054,6 +1054,7 @@
 "call_error_not_contacts" = "You can only call people you are connected with.";
 "call_error_busy" = "You're already in a call.";
 "call_error_peer_offline" = "They are offline. Try again later.";
+"call_error_setup_failed" = "Couldn't start the call. Try again.";
 
 /* Engine background push notifications */
 "notification.new_message.title" = "New message";

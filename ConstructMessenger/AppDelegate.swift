@@ -294,10 +294,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // device logs showed the push immediately preceding "Starting MessageStream connection"
         // on every cycle). Silent pushes exist to wake a BACKGROUNDED app (or one whose stream is
         // down) to fetch; in the foreground the stream handles it. Skip the fetch in that case.
-        let foregroundLiveStream = MainActor.assumeIsolated {
-            UIApplication.shared.applicationState == .active && MessageStreamManager.shared.isConnected
+        //
+        // Exception: an incoming call waiting on its SDP. The offer rides this stream, and a
+        // zombie "connected" QUIC session hid it for 15 s on 2026-08-22 (7CDE9769) while
+        // this skip ate every push that could have pulled it.
+        let ignoreSilentPush = MainActor.assumeIsolated {
+            shouldIgnoreSilentPush(
+                foregroundLiveStream: UIApplication.shared.applicationState == .active
+                    && MessageStreamManager.shared.isConnected,
+                callNeedsOffer: CallManager.shared.needsOfferPull
+            )
         }
-        if foregroundLiveStream {
+        if ignoreSilentPush {
             Log.info("Silent push (\(activityType ?? "?")) ignored — foreground MessageStream is live", category: "Push")
             completionHandler(.noData)
             return
