@@ -347,6 +347,35 @@ final class PerformanceMetrics: @unchecked Sendable {
     private var events: [MetricRecord] = []
     private let maxEvents = 200
 
+    /// Monotonic per-event totals, kept beside the ring buffer because the two answer different
+    /// questions and only one of them was ever asked.
+    ///
+    /// The buffer answers "what happened recently"; it holds 200 records shared by every event, so
+    /// it cannot answer "how many times did this happen" — which is what every signal in
+    /// `decisions/ios-semantic-divergence-signals.md` was added to answer. The 2026-08-04 run
+    /// recorded `duplicate_after_ack_check` 6296 times, turning the buffer over thirty times, and
+    /// the rare loud events the epic exists for are the first thing that eviction takes.
+    private var totals: [MetricEvent: Int] = [:]
+
+    /// Totals as of the last `changedSignalsSummary()`, so a quiet interval logs nothing.
+    private var reportedTotals: [MetricEvent: Int] = [:]
+
+    /// Per-label totals for the events whose label is a small closed set, and the events that have
+    /// proven it is not.
+    ///
+    /// The split matters because for several gauges the event total answers nothing on its own:
+    /// `token_wallet_wait` is the Privacy Pass enforce-readiness measurement (TODO 47) and the
+    /// decision turns entirely on `served` vs `timeout` vs `backoff`. Other events label with an
+    /// identifier — `msgNum=`, a message id, an action list — where a per-label map would grow
+    /// without bound over a run and say nothing at the end of it.
+    ///
+    /// Which is which is discovered, not declared: an event that exceeds `maxLabelsPerEvent`
+    /// distinct labels collapses to its plain total and its map is dropped. A declared list would
+    /// be a second place to keep the enum's shape, and those disagree.
+    private var labelTotals: [MetricEvent: [String: Int]] = [:]
+    private var collapsedLabels: Set<MetricEvent> = []
+    private let maxLabelsPerEvent = 8
+
     // Computed latency samples (message receive end-to-end)
     private var latencySamples: [LatencySample] = []
     private let maxSamples = 100
@@ -365,6 +394,17 @@ final class PerformanceMetrics: @unchecked Sendable {
         lock.lock()
         if events.count >= maxEvents { events.removeFirst() }
         events.append(record)
+        totals[event, default: 0] += 1
+        if !label.isEmpty, !collapsedLabels.contains(event) {
+            var byLabel = labelTotals[event] ?? [:]
+            byLabel[label, default: 0] += 1
+            if byLabel.count > maxLabelsPerEvent {
+                collapsedLabels.insert(event)
+                labelTotals[event] = nil
+            } else {
+                labelTotals[event] = byLabel
+            }
+        }
         lock.unlock()
     }
 
@@ -469,12 +509,57 @@ final class PerformanceMetrics: @unchecked Sendable {
         return relevant.map(\.durationMs).reduce(0, +) / Double(relevant.count)
     }
 
-    func count(event: MetricEvent, last n: Int? = nil) -> Int {
+    /// How many times `event` has been recorded since launch, or since the last `clearAll()`.
+    ///
+    /// Reads the monotonic total, never the ring buffer. The previous implementation counted
+    /// matches among the last 200 records of *all* events, so no answer above 200 was reachable
+    /// and every answer below it was a function of whatever else happened to be busy. Its one
+    /// production caller is the "Token-less sends" row in `DiagnosticsView`, which is the evidence
+    /// the Privacy Pass enforce decision turns on (TODO 47).
+    ///
+    /// The `last n` window it used to take had no caller and is gone rather than renamed: a
+    /// parameter that silently truncates is the same defect as the buffer it read from.
+    func count(event: MetricEvent) -> Int {
         lock.lock()
-        let slice = n == nil ? events[...] : events.suffix(n!)
-        let count = slice.filter { $0.event == event }.count
-        lock.unlock()
-        return count
+        defer { lock.unlock() }
+        return totals[event] ?? 0
+    }
+
+    /// One line of cumulative per-event totals, or `nil` if nothing has been recorded since the
+    /// last call.
+    ///
+    /// Cumulative rather than per-interval so the *last* such line in a log is the whole run — one
+    /// `grep | tail -1` instead of adding up a time series by hand — while the earlier lines still
+    /// show when a burst happened. Silent when nothing moved, so a quiet device costs no lines.
+    ///
+    /// Every event is included, the high-volume pipeline ones too: they are the denominators. A
+    /// count of failures with no count of traffic beside it is exactly how
+    /// `chunk_reassembly_incomplete` read as eleven losses for a photo that arrived intact
+    /// (`ios-semantic-divergence-signals` rule 1a).
+    ///
+    /// Events whose label is a closed set carry it: `token_wallet_wait=104(served=71,timeout=28,
+    /// backoff=5)`. That breakdown *is* the gauge — the bare total answers nothing the enforce
+    /// decision asks. Events labelled with an identifier collapse to the total; see `labelTotals`.
+    func changedSignalsSummary() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard totals != reportedTotals else { return nil }
+        reportedTotals = totals
+        return totals
+            .sorted { lhs, rhs in
+                lhs.value == rhs.value ? lhs.key.rawValue < rhs.key.rawValue : lhs.value > rhs.value
+            }
+            .map { event, total in
+                guard let byLabel = labelTotals[event], !byLabel.isEmpty else {
+                    return "\(event.rawValue)=\(total)"
+                }
+                let breakdown = byLabel
+                    .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
+                    .map { "\($0.key)=\($0.value)" }
+                    .joined(separator: ",")
+                return "\(event.rawValue)=\(total)(\(breakdown))"
+            }
+            .joined(separator: " ")
     }
 
     func p95Latency(for eventPair: String, last n: Int = 20) -> Double? {
@@ -492,6 +577,10 @@ final class PerformanceMetrics: @unchecked Sendable {
         events.removeAll()
         latencySamples.removeAll()
         pendingStarts.removeAll()
+        totals.removeAll()
+        reportedTotals.removeAll()
+        labelTotals.removeAll()
+        collapsedLabels.removeAll()
         lock.unlock()
     }
 }
@@ -535,7 +624,8 @@ final class PerformanceMetrics: @unchecked Sendable {
     @inline(__always) func coreDataSaveEnd(label: String) {}
     @inline(__always) func coreDataSaveFailed(label: String) {}
     @inline(__always) func clearAll() {}
-    @inline(__always) func count(event: MetricEvent, last n: Int? = nil) -> Int { 0 }
+    @inline(__always) func count(event: MetricEvent) -> Int { 0 }
+    @inline(__always) func changedSignalsSummary() -> String? { nil }
 }
 
 #endif
