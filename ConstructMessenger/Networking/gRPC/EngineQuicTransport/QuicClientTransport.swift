@@ -43,6 +43,12 @@ final class QuicClientTransport: ClientTransport, @unchecked Sendable {
         let obfLabel = config.obfPsk == nil ? "plain" : "salamander"
         Log.info("engine-QUIC transport build=\(transportBuildMarker()) [\(obfLabel)] → \(config.host):\(config.port)", category: "QuicTransport")
         state.markConnecting()
+        // Timed because three device runs were spent inferring this interval from the gap between
+        // two log lines, and the inference was wrong each time. The "engine-QUIC persistent
+        // connection closed" ERROR is written when the *channel* tears down, which is not when the
+        // handshake gave up: on 2026-08-24 those were 07:35:25 and 07:35:35, and the 3s handshake
+        // budget could not account for the difference. One number here ends the arithmetic.
+        let startedAt = Date()
         do {
             let channel: QuicChannel
             if let psk = config.obfPsk {
@@ -61,14 +67,30 @@ final class QuicClientTransport: ClientTransport, @unchecked Sendable {
                     trustCert: config.trustCert
                 )
             }
+            Log.info(
+                "engine-QUIC connected in \(Self.elapsedMs(since: startedAt))ms → \(config.host):\(config.port)",
+                category: "QuicTransport"
+            )
             state.setRunning(channel)
         } catch {
+            // The elapsed time is the whole point of this line: it separates "nothing answered on
+            // UDP/443" (≈3000ms, the Rust HANDSHAKE_TIMEOUT) from name resolution (its own 2000ms
+            // budget, its own message) from anything slower, which is neither and needs looking at.
+            Log.error(
+                "engine-QUIC connect failed after \(Self.elapsedMs(since: startedAt))ms "
+                + "→ \(config.host):\(config.port): \(error)",
+                category: "QuicTransport"
+            )
             let rpcError = RPCError(code: .unavailable, message: "QUIC connect failed: \(error)")
             state.fail(rpcError)
             throw rpcError
         }
         // Hold the connection open until graceful shutdown, mirroring the H2/H3 transports.
         await state.waitForShutdown()
+    }
+
+    private static func elapsedMs(since start: Date) -> Int {
+        Int(Date().timeIntervalSince(start) * 1000)
     }
 
     func beginGracefulShutdown() {
