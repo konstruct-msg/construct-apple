@@ -31,6 +31,21 @@ class NetworkReachabilityManager {
         case other
         case unavailable
         case unknown
+
+        /// The one spelling of these names. `NetworkFingerprint` hashes it into the VEIL relay
+        /// scoring key and the QUIC transport writes it into its connect line, so the two must
+        /// agree — a second copy of the switch would let a relay's score and the log that
+        /// explains it end up filed under different networks.
+        var label: String {
+            switch self {
+            case .wifi:        return "wifi"
+            case .cellular:    return "cellular"
+            case .ethernet:    return "wired"
+            case .other:       return "other"
+            case .unavailable: return "unavailable"
+            case .unknown:     return "unknown"
+            }
+        }
     }
 
     /// Describes the nature of a network path change so consumers can choose

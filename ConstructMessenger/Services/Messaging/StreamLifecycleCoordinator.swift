@@ -422,7 +422,9 @@ final class StreamLifecycleCoordinator {
                     await VeilProxyManager.shared.verifyAliveOrRestart()
                     await VeilProxyManager.shared.startIfNeeded()
                 }
-                self.streamManager.scheduleReconnectAfterRoutingChange(reason: "networkPathChanged")
+                self.streamManager.scheduleReconnectAfterRoutingChange(
+                    reason: MessageStreamManager.networkPathChangeReason
+                )
             }
         }
         observationTasks.append(pathTask)

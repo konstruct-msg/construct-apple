@@ -118,6 +118,34 @@ final class MessageStreamManager {
         return .exponentialBackoff
     }
 
+    /// The reason string for an interface/topology switch. One spelling, two readers
+    /// (`StreamLifecycleCoordinator` writes it, `mustReconnectDespiteLiveStream` matches it).
+    static let networkPathChangeReason = "networkPathChanged"
+
+    /// Whether a routing reconnect must run even though the stream is live on an unchanged key.
+    ///
+    /// `performRoutingReconnect` skips a reconnect when the live stream is already on the current
+    /// routing key — that skip exists for the VEIL probe, which posts a routing change for a
+    /// stream that has already moved, and tearing that down is the dual-accept receipt storm.
+    ///
+    /// A network path change is not that case when the live stream is fast-UDP. The routing key
+    /// names the host (`direct:ams.konstruct.cc:443`), not the interface, so it survives a
+    /// WiFi↔cellular handoff unchanged — while the QUIC connection underneath it does not: its
+    /// socket now answers at an address the peer cannot reach, and quinn is not asked to migrate.
+    /// The 2026-08-24 log is the whole shape in four lines — 09:43:19 `connected in 85ms`,
+    /// 09:43:26 path change → `already live, skipping`, 09:43:40 `tx_pkts=42 rx_pkts=16` climbing
+    /// on tx alone, 09:44:01 idle `Timeout` → `stream_failure` → QUIC off for the rest of the
+    /// session. Thirty-five seconds of a stream that reported itself healthy and carried nothing.
+    ///
+    /// H2 keeps the skip: TCP either survives the handoff or fails loudly, and that case belongs
+    /// to the heartbeat watchdog.
+    nonisolated static func mustReconnectDespiteLiveStream(
+        reason: String,
+        liveStreamIsFastUdp: Bool
+    ) -> Bool {
+        reason == networkPathChangeReason && liveStreamIsFastUdp
+    }
+
     // MARK: - Callbacks
 
     var onMessageReceived: ((ChatMessage) -> Void)?
@@ -312,11 +340,21 @@ final class MessageStreamManager {
         // second connect is the dual-accept / receipt storm seen in device logs.
         let currentKey = GRPCChannelManager.shared.currentRoutingKey
         if isConnected, !activeRoutingKey.isEmpty, activeRoutingKey == currentKey {
-            Log.info(
-                "Routing reconnect skipped — already live on \(currentKey) (reason=\(reason))",
-                category: "MessageStream"
-            )
-            return
+            if Self.mustReconnectDespiteLiveStream(
+                reason: reason,
+                liveStreamIsFastUdp: lastStreamTransportWasFastUdp
+            ) {
+                Log.info(
+                    "Routing reconnect forced — fast-UDP cannot survive a path change on \(currentKey)",
+                    category: "MessageStream"
+                )
+            } else {
+                Log.info(
+                    "Routing reconnect skipped — already live on \(currentKey) (reason=\(reason))",
+                    category: "MessageStream"
+                )
+                return
+            }
         }
         let ids = subscriptionUserIds
         guard !ids.isEmpty || subscriptionUserIds.isEmpty else {

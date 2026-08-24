@@ -46,9 +46,16 @@ final class QuicClientTransport: ClientTransport, @unchecked Sendable {
         // Timed because three device runs were spent inferring this interval from the gap between
         // two log lines, and the inference was wrong each time. The "engine-QUIC persistent
         // connection closed" ERROR is written when the *channel* tears down, which is not when the
-        // handshake gave up: on 2026-08-24 those were 07:35:25 and 07:35:35, and the 3s handshake
-        // budget could not account for the difference. One number here ends the arithmetic.
+        // handshake gave up: on 2026-08-24 those were 07:35:25 and 07:35:35, and the then-3s
+        // handshake budget could not account for the difference. One number here ends the
+        // arithmetic.
         let startedAt = Date()
+        // Read once, at the attempt, not at the report: the interface is exactly what churns
+        // during these seconds. "QUIC works on cellular but not WiFi" was a reading taken by
+        // pairing this line with the nearest `Network reachability changed` in a different
+        // category, and on the 2026-08-24 log those were up to four seconds and two switches
+        // apart — enough to attribute the outcome to the wrong network.
+        let via = NetworkReachabilityManager.shared.connectionType.label
         do {
             let channel: QuicChannel
             if let psk = config.obfPsk {
@@ -68,17 +75,18 @@ final class QuicClientTransport: ClientTransport, @unchecked Sendable {
                 )
             }
             Log.info(
-                "engine-QUIC connected in \(Self.elapsedMs(since: startedAt))ms → \(config.host):\(config.port)",
+                "engine-QUIC connected in \(Self.elapsedMs(since: startedAt))ms "
+                + "via \(via) → \(config.host):\(config.port)",
                 category: "QuicTransport"
             )
             state.setRunning(channel)
         } catch {
             // The elapsed time is the whole point of this line: it separates "nothing answered on
-            // UDP/443" (≈3000ms, the Rust HANDSHAKE_TIMEOUT) from name resolution (its own 2000ms
+            // UDP/443" (≈1000ms, the Rust HANDSHAKE_TIMEOUT) from name resolution (its own 500ms
             // budget, its own message) from anything slower, which is neither and needs looking at.
             Log.error(
                 "engine-QUIC connect failed after \(Self.elapsedMs(since: startedAt))ms "
-                + "→ \(config.host):\(config.port): \(error)",
+                + "via \(via) → \(config.host):\(config.port): \(error)",
                 category: "QuicTransport"
             )
             let rpcError = RPCError(code: .unavailable, message: "QUIC connect failed: \(error)")

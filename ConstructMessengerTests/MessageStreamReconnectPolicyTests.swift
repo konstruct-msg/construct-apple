@@ -73,6 +73,44 @@ final class MessageStreamReconnectPolicyTests: XCTestCase {
         )
     }
 
+    // MARK: - Live-stream skip on a path change
+
+    /// Device log 2026-08-24: QUIC connected in 85ms at 09:43:19, the interface flipped at
+    /// 09:43:26, the reconnect was skipped as "already live", and the stream then spent 35s
+    /// sending into a path the peer could not answer (`tx_pkts=42 rx_pkts=16`) before the idle
+    /// timeout disabled QUIC for the rest of the session.
+    func testFastUdpStream_IsReconnectedOnPathChange() {
+        XCTAssertTrue(
+            MessageStreamManager.mustReconnectDespiteLiveStream(
+                reason: MessageStreamManager.networkPathChangeReason,
+                liveStreamIsFastUdp: true
+            ),
+            "the routing key survives a WiFi↔cellular handoff; the QUIC connection does not"
+        )
+    }
+
+    /// The skip's original purpose: VEIL probe → `setVeilPort` posts a routing change for a
+    /// stream that already moved. Tearing that down is the dual-accept receipt storm.
+    func testFastUdpStream_KeepsSkipForNonPathReasons() {
+        XCTAssertFalse(
+            MessageStreamManager.mustReconnectDespiteLiveStream(
+                reason: "veilPortChanged",
+                liveStreamIsFastUdp: true
+            )
+        )
+    }
+
+    /// H2 is unaffected: TCP either survives the handoff or fails loudly, and that case belongs
+    /// to the heartbeat watchdog rather than to an unconditional teardown on every flap.
+    func testH2Stream_KeepsSkipOnPathChange() {
+        XCTAssertFalse(
+            MessageStreamManager.mustReconnectDespiteLiveStream(
+                reason: MessageStreamManager.networkPathChangeReason,
+                liveStreamIsFastUdp: false
+            )
+        )
+    }
+
     // MARK: - isActivelyConnecting
 
     /// A connectLoop mid-backoff still owns the stream — foreground must not forceReconnect.
