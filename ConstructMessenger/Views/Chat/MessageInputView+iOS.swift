@@ -196,18 +196,24 @@ struct IOSMessageInputView: View {
 
         ZStack {
             inputRow
+                // `overlay`, not a sibling in the ZStack. A `Color` is infinitely flexible, so as a
+                // sibling it took the whole proposed height, the ZStack reported that as the
+                // composer's size, and the recording capsule ended up floating in the middle of an
+                // empty screen (build 635). An overlay is sized to its host and does not
+                // participate in layout at all.
+                .overlay {
+                    if !isIdle {
+                        // `contentShape` because a Color's hit area otherwise follows its (empty)
+                        // content, and an unhandled tap would fall through to the text field and
+                        // refocus it mid-recording — the thing `allowsHitTesting(false)` prevented
+                        // at the cost of the keyboard.
+                        Color.CT.bg
+                            .contentShape(Rectangle())
+                            .onTapGesture {}
+                            .accessibilityHidden(true)
+                    }
+                }
                 .accessibilityHidden(!isIdle)
-
-            if !isIdle {
-                // Opaque and tap-absorbing, sized to the ZStack, which is sized to the row beneath.
-                // `contentShape` because a Color's hit area would otherwise follow its (empty)
-                // content, and an unhandled tap would fall through to the text field and refocus it
-                // mid-recording — the exact thing `allowsHitTesting(false)` was there to prevent.
-                Color.CT.bg
-                    .contentShape(Rectangle())
-                    .onTapGesture {}
-                    .accessibilityHidden(true)
-            }
 
             switch audioRecorder.state {
             case .recording(let duration, let waveform):
