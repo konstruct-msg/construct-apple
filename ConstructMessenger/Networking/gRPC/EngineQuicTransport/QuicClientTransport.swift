@@ -39,6 +39,33 @@ final class QuicClientTransport: ClientTransport, @unchecked Sendable {
         self.config = config
     }
 
+    /// Carry the live connection across a network handover instead of throwing it away.
+    ///
+    /// Returns `true` only when the gateway has answered on the new socket. `false` means either
+    /// there was nothing to migrate or the migration was not confirmed inside one connect budget —
+    /// in both cases the caller should reconnect, which is what it did unconditionally before.
+    ///
+    /// Both outcomes are ordinary. A handover to a network that cannot reach the gateway at all is
+    /// a failed migration and a failed reconnect alike; this only decides which of the two costs
+    /// the user a stream.
+    func migrateToCurrentPath() async -> Bool {
+        guard let channel = state.liveChannel() else {
+            Log.debug("engine-QUIC migration skipped — no live channel", category: "QuicTransport")
+            return false
+        }
+        let via = NetworkReachabilityManager.shared.connectionType.label
+        do {
+            let local = try await channel.rebind()
+            Log.info("engine-QUIC migrated to \(local) via \(via)", category: "QuicTransport")
+            return true
+        } catch {
+            // INFO, not ERROR: the fallback is a reconnect that works. Loud here would put a
+            // routine handover into the "0 unexplained ERROR" acceptance count.
+            Log.info("engine-QUIC migration declined via \(via): \(error)", category: "QuicTransport")
+            return false
+        }
+    }
+
     func connect() async throws {
         let obfLabel = config.obfPsk == nil ? "plain" : "salamander"
         Log.info("engine-QUIC transport build=\(transportBuildMarker()) [\(obfLabel)] → \(config.host):\(config.port)", category: "QuicTransport")
@@ -400,6 +427,13 @@ private final class StateMachine: @unchecked Sendable {
             }
             resume?()
         }
+    }
+
+    /// The live channel, or `nil` if there isn't one yet. Deliberately non-waiting: the only
+    /// caller is the path-change migration, and a channel that has not finished connecting has
+    /// nothing to migrate — its handshake will simply run on the new path.
+    func liveChannel() -> QuicChannel? {
+        lock.withLock { phase == .running ? _channel : nil }
     }
 
     func waitForShutdown() async {

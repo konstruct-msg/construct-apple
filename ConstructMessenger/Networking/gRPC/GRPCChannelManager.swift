@@ -137,6 +137,10 @@ final class GRPCChannelManager: Sendable {
 #if os(iOS)
     private struct PersistentConnEngineQuic: @unchecked Sendable {
         let client: GRPCClient<QuicClientTransport>
+        /// Held beside the client because `GRPCClient` does not hand its transport back, and the
+        /// path-change migration has to reach the QUIC connection itself. Same object the client
+        /// runs on — not a second one.
+        let transport: QuicClientTransport
         let task:   Task<Void, Never>
         let key:    String   // "engine-quic:<host>:<port>" — direct path only, never over VEIL
     }
@@ -495,11 +499,11 @@ final class GRPCChannelManager: Sendable {
 
     /// Creates a gRPC client over the experimental engine-QUIC transport, or `nil`
     /// when the experiment/cert is unavailable. Direct path only — never over VEIL.
-    func makeClientEngineQuic() -> GRPCClient<QuicClientTransport>? {
+    func makeClientEngineQuic() -> (client: GRPCClient<QuicClientTransport>, transport: QuicClientTransport)? {
         guard let config = engineQuicConfig() else { return nil }
         Log.debug("gRPC creating engine-QUIC channel → \(config.host):\(config.port)", category: "gRPC")
         let transport = QuicClientTransport(config: config)
-        return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
+        return (GRPCClient(transport: transport, interceptors: [AuthInterceptor()]), transport)
     }
 
     /// Returns (or lazily creates) the shared persistent engine-QUIC channel, or `nil`
@@ -531,7 +535,7 @@ final class GRPCChannelManager: Sendable {
         _eqConnGeneration &+= 1
         let gen = _eqConnGeneration
 
-        guard let client = makeClientEngineQuic() else { return nil }
+        guard let (client, transport) = makeClientEngineQuic() else { return nil }
         let task = Task.detached { [weak self, gen] in
             guard let self else { return }
             let valid = self._eqConnLock.withLock { self._eqConnGeneration == gen }
@@ -548,7 +552,7 @@ final class GRPCChannelManager: Sendable {
                 self.invalidateEngineQuicConnection()
             }
         }
-        _eqConnBox = PersistentConnEngineQuic(client: client, task: task, key: key)
+        _eqConnBox = PersistentConnEngineQuic(client: client, transport: transport, task: task, key: key)
         Log.debug("engine-QUIC persistent connection created (key=\(key) gen=\(gen))", category: "GRPCChannel")
         return client
     }
@@ -562,6 +566,22 @@ final class GRPCChannelManager: Sendable {
         _eqConnBox = nil
         _eqConnGeneration &+= 1
         Log.debug("engine-QUIC persistent connection invalidated (gen=\(_eqConnGeneration))", category: "GRPCChannel")
+    }
+
+    /// Ask the live engine-QUIC connection to migrate onto the current network path.
+    ///
+    /// `true` means the gateway answered on the new socket and every stream on that connection is
+    /// still usable. `false` means there was nothing live to migrate, or the migration was not
+    /// confirmed — the caller reconnects, exactly as it did before this existed.
+    ///
+    /// Deliberately does **not** invalidate the connection on failure: the caller's reconnect path
+    /// already replaces it, and invalidating here as well would make two owners of one teardown.
+    func migrateEngineQuicConnection() async -> Bool {
+        let transport: QuicClientTransport? = _eqConnLock.withLock {
+            (_eqConnBox as? PersistentConnEngineQuic)?.transport
+        }
+        guard let transport else { return false }
+        return await transport.migrateToCurrentPath()
     }
 
     /// Force-cancels the engine-QUIC connection: cancels the runConnections() task and

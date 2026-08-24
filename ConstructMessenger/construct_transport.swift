@@ -539,6 +539,22 @@ public protocol QuicChannelProtocol: AnyObject, Sendable {
      */
     func openStream(path: String, metadata: [GrpcHeader]) async throws  -> QuicStream
     
+    /**
+     * Carry this connection across a network handover, and return the new local address once the
+     * gateway has answered on it.
+     *
+     * Call it when the OS reports the path changed. QUIC identifies a connection by connection ID,
+     * so the handover need not cost anything — but quinn cannot see the handover, and without this
+     * it keeps sending from a source address that no longer routes until the 30s idle timeout
+     * kills a connection that was never unreachable.
+     *
+     * **An error here is normal and means "reconnect".** It says the migration was not confirmed
+     * within one connect budget, which is precisely when opening a fresh connection is the better
+     * move. The caller must not treat it as a transport fault: the point of returning a verdict
+     * rather than swapping the socket silently is that the caller keeps its fallback.
+     */
+    func rebind() async throws  -> String
+    
 }
 /**
  * One QUIC/HTTP-3 connection to a gateway. Open streams from it; they are
@@ -685,6 +701,37 @@ open func openStream(path: String, metadata: [GrpcHeader])async throws  -> QuicS
             completeFunc: ffi_construct_transport_rust_future_complete_u64,
             freeFunc: ffi_construct_transport_rust_future_free_u64,
             liftFunc: FfiConverterTypeQuicStream_lift,
+            errorHandler: FfiConverterTypeTransportError_lift
+        )
+}
+    
+    /**
+     * Carry this connection across a network handover, and return the new local address once the
+     * gateway has answered on it.
+     *
+     * Call it when the OS reports the path changed. QUIC identifies a connection by connection ID,
+     * so the handover need not cost anything — but quinn cannot see the handover, and without this
+     * it keeps sending from a source address that no longer routes until the 30s idle timeout
+     * kills a connection that was never unreachable.
+     *
+     * **An error here is normal and means "reconnect".** It says the migration was not confirmed
+     * within one connect budget, which is precisely when opening a fresh connection is the better
+     * move. The caller must not treat it as a transport fault: the point of returning a verdict
+     * rather than swapping the socket silently is that the caller keeps its fallback.
+     */
+open func rebind()async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_construct_transport_fn_method_quicchannel_rebind(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_construct_transport_rust_future_poll_rust_buffer,
+            completeFunc: ffi_construct_transport_rust_future_complete_rust_buffer,
+            freeFunc: ffi_construct_transport_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeTransportError_lift
         )
 }
@@ -1270,6 +1317,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_transport_checksum_method_quicchannel_open_stream() != 8948) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_transport_checksum_method_quicchannel_rebind() != 52417) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_transport_checksum_method_quicstream_finish() != 54911) {

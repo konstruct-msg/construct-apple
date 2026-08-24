@@ -218,6 +218,14 @@ enum MetricEvent: String {
     /// device whose evidence is being erased between attempts, which is the defect this replaced.
     case quicSuppressed = "quic_suppressed"
 
+    /// A network path change reached a live fast-UDP stream. `migrated` = the QUIC connection was
+    /// carried across and the stream kept running · `reconnected` = the migration was not confirmed
+    /// and the stream was reopened, which is what always happened before 2026-08-24.
+    ///
+    /// The ratio is the gauge for whether QUIC's mobility is real on the networks users are on —
+    /// it is one of the two reasons this transport exists, and until now nothing measured it.
+    case quicPathMigration = "quic_path_migration"
+
     /// A sealed send found the wallet empty and waited for issuance. `served` = a token arrived in
     /// time · `timeout` = it did not · `backoff` = the issuer was refusing, so we did not wait.
     ///

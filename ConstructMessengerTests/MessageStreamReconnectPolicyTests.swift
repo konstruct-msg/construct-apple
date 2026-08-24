@@ -73,41 +73,63 @@ final class MessageStreamReconnectPolicyTests: XCTestCase {
         )
     }
 
-    // MARK: - Live-stream skip on a path change
+    // MARK: - Live-stream action on a path change
 
     /// Device log 2026-08-24: QUIC connected in 85ms at 09:43:19, the interface flipped at
     /// 09:43:26, the reconnect was skipped as "already live", and the stream then spent 35s
     /// sending into a path the peer could not answer (`tx_pkts=42 rx_pkts=16`) before the idle
     /// timeout disabled QUIC for the rest of the session.
-    func testFastUdpStream_IsReconnectedOnPathChange() {
-        XCTAssertTrue(
-            MessageStreamManager.mustReconnectDespiteLiveStream(
+    ///
+    /// `.migrate` rather than `.reconnect` since the socket swap landed: QUIC addresses a
+    /// connection by connection ID, so the handover need not cost it anything. The reconnect is
+    /// still there — it is what a declined migration falls back to.
+    func testFastUdpStream_MigratesOnPathChange() {
+        XCTAssertEqual(
+            MessageStreamManager.livePathChangeAction(
                 reason: MessageStreamManager.networkPathChangeReason,
                 liveStreamIsFastUdp: true
             ),
-            "the routing key survives a WiFi↔cellular handoff; the QUIC connection does not"
+            .migrate,
+            "the routing key survives a WiFi↔cellular handoff; the QUIC connection has to be told"
+        )
+    }
+
+    /// The loop this avoids: the fallback reconnect re-enters the same method, and if it read as
+    /// another path change on a still-live stream it would answer `.migrate` again — or, once the
+    /// stream is live on an unchanged key, `.skip`, which would make the fallback do nothing at
+    /// all. The reason has to carry that this attempt already happened.
+    func testDeclinedMigration_FallsBackToAReconnectNotAnotherAttempt() {
+        XCTAssertEqual(
+            MessageStreamManager.livePathChangeAction(
+                reason: MessageStreamManager.migrationDeclinedReason,
+                liveStreamIsFastUdp: true
+            ),
+            .reconnect
         )
     }
 
     /// The skip's original purpose: VEIL probe → `setVeilPort` posts a routing change for a
     /// stream that already moved. Tearing that down is the dual-accept receipt storm.
     func testFastUdpStream_KeepsSkipForNonPathReasons() {
-        XCTAssertFalse(
-            MessageStreamManager.mustReconnectDespiteLiveStream(
+        XCTAssertEqual(
+            MessageStreamManager.livePathChangeAction(
                 reason: "veilPortChanged",
                 liveStreamIsFastUdp: true
-            )
+            ),
+            .skip
         )
     }
 
     /// H2 is unaffected: TCP either survives the handoff or fails loudly, and that case belongs
-    /// to the heartbeat watchdog rather than to an unconditional teardown on every flap.
+    /// to the heartbeat watchdog rather than to an unconditional teardown on every flap. It has
+    /// nothing to migrate either — `rebind` is a QUIC verb.
     func testH2Stream_KeepsSkipOnPathChange() {
-        XCTAssertFalse(
-            MessageStreamManager.mustReconnectDespiteLiveStream(
+        XCTAssertEqual(
+            MessageStreamManager.livePathChangeAction(
                 reason: MessageStreamManager.networkPathChangeReason,
                 liveStreamIsFastUdp: false
-            )
+            ),
+            .skip
         )
     }
 

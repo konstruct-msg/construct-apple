@@ -119,7 +119,7 @@ final class MessageStreamManager {
     }
 
     /// The reason string for an interface/topology switch. One spelling, two readers
-    /// (`StreamLifecycleCoordinator` writes it, `mustReconnectDespiteLiveStream` matches it).
+    /// (`StreamLifecycleCoordinator` writes it, `livePathChangeAction` matches it).
     static let networkPathChangeReason = "networkPathChanged"
 
     /// Whether a routing reconnect must run even though the stream is live on an unchanged key.
@@ -139,11 +139,35 @@ final class MessageStreamManager {
     ///
     /// H2 keeps the skip: TCP either survives the handoff or fails loudly, and that case belongs
     /// to the heartbeat watchdog.
-    nonisolated static func mustReconnectDespiteLiveStream(
+    ///
+    /// Since 2026-08-24 the fast-UDP case is `.migrate` rather than `.reconnect`. QUIC addresses a
+    /// connection by connection ID, so the handover need not cost it anything — quinn just has to
+    /// be told, which `QuicChannel.rebind()` now does. Reconnecting stays the fallback and runs
+    /// whenever the migration is not confirmed, so the worst case is the old behaviour plus one
+    /// connect budget.
+    enum LivePathChangeAction: Equatable {
+        /// Leave the live stream alone. The routing key moved for a reason that does not
+        /// invalidate it (the VEIL probe), and tearing it down is the dual-accept receipt storm.
+        case skip
+        /// Try to carry the QUIC connection onto the new path; reconnect only if that fails.
+        case migrate
+        /// Tear down and reopen.
+        case reconnect
+    }
+
+    /// The reason a reconnect carries when it is the fallback of a migration that was not
+    /// confirmed. It exists so the retry cannot be answered with another migration attempt: the
+    /// same call re-enters this method, and without a distinct reason a live stream on an unchanged
+    /// key would read as `.skip` and the fallback would silently do nothing.
+    static let migrationDeclinedReason = "networkPathChanged:migrationDeclined"
+
+    nonisolated static func livePathChangeAction(
         reason: String,
         liveStreamIsFastUdp: Bool
-    ) -> Bool {
-        reason == networkPathChangeReason && liveStreamIsFastUdp
+    ) -> LivePathChangeAction {
+        if reason == migrationDeclinedReason { return .reconnect }
+        guard reason == networkPathChangeReason else { return .skip }
+        return liveStreamIsFastUdp ? .migrate : .skip
     }
 
     // MARK: - Callbacks
@@ -340,20 +364,46 @@ final class MessageStreamManager {
         // second connect is the dual-accept / receipt storm seen in device logs.
         let currentKey = GRPCChannelManager.shared.currentRoutingKey
         if isConnected, !activeRoutingKey.isEmpty, activeRoutingKey == currentKey {
-            if Self.mustReconnectDespiteLiveStream(
+            switch Self.livePathChangeAction(
                 reason: reason,
                 liveStreamIsFastUdp: lastStreamTransportWasFastUdp
             ) {
-                Log.info(
-                    "Routing reconnect forced — fast-UDP cannot survive a path change on \(currentKey)",
-                    category: "MessageStream"
-                )
-            } else {
+            case .skip:
                 Log.info(
                     "Routing reconnect skipped — already live on \(currentKey) (reason=\(reason))",
                     category: "MessageStream"
                 )
                 return
+
+            case .migrate:
+                // The stream is untouched while this runs. On success it keeps running and nothing
+                // else happens; on failure we land back here with the reconnect we would have done
+                // immediately, one connect budget later.
+                Log.info(
+                    "Path changed on \(currentKey) — asking QUIC to migrate before reconnecting",
+                    category: "MessageStream"
+                )
+                #if os(iOS)
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if await GRPCChannelManager.shared.migrateEngineQuicConnection() {
+                        PerformanceMetrics.shared.record(.quicPathMigration, label: "migrated")
+                        Log.info(
+                            "QUIC migrated across the path change — stream kept on \(currentKey)",
+                            category: "MessageStream"
+                        )
+                        return
+                    }
+                    PerformanceMetrics.shared.record(.quicPathMigration, label: "reconnected")
+                    self.performRoutingReconnect(reason: Self.migrationDeclinedReason)
+                }
+                return
+                #else
+                break
+                #endif
+
+            case .reconnect:
+                break
             }
         }
         let ids = subscriptionUserIds
