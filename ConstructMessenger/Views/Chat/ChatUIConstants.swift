@@ -204,7 +204,14 @@ enum ChatUIConstants {
         /// One-line bar looks stadium-like; multi-line stays the same family (no
         /// pill↔control jump). Does not clamp to height/2 so tall text is not oval-clipped.
         static let cornerRadius: CGFloat = CTLayout.controlHeight / 2
-        /// Target single-line control height (attach / send / scroll FAB).
+        /// Target single-line control height (attach / send / scroll FAB) — **and** the voice
+        /// recording / preview bars, which replace this row in place.
+        ///
+        /// The voice bars had their own `voiceChromeHeight = 52` against this row's 42, plus 8pt
+        /// of vertical padding above and below. So starting a recording grew the composer band by
+        /// 26pt and the capsule sat 13pt above where the input capsule had been — it looked like
+        /// the bar jumped, because it did. One height for one band; the bar swaps the row's
+        /// contents, not its geometry.
         static let height: CGFloat = CTLayout.controlHeight
         static let horizontalPadding: CGFloat = CTLayout.edgePad
         /// Leading inset inside the text field capsule.
@@ -217,8 +224,8 @@ enum ChatUIConstants {
         static let rowOuterPad: CGFloat = 4
         /// Gap between reply/edit aux bar and the attach+field row.
         static let auxBarGap: CGFloat = CTLayout.inlinePad
-        /// Voice recording / preview bar height.
-        static let voiceChromeHeight: CGFloat = 52
+        /// Voice bar height is `height` — see the note there. No separate constant: the two are
+        /// the same measurement, and while they were two values one of them was free to drift.
         static let voiceChromeIconSize: CGFloat = 22
     }
 }

@@ -180,9 +180,13 @@ struct IOSMessageInputView: View {
     /// touching the view that holds the keyboard. `accessibilityHidden` stays — it does not affect
     /// the responder chain, and without it VoiceOver reads a text field that is not on screen.
     ///
-    /// Height note: the ZStack takes the taller of the two, so the composer can still shift by the
-    /// difference between the input row and a voice bar. That is a few points against ~300 for the
-    /// keyboard, and the two are designed to the same composer height.
+    /// Height note: the ZStack takes the taller of the two, so any difference between the input
+    /// row and a voice bar moves the composer. This comment used to say the two were "designed to
+    /// the same composer height" — they were not: 52pt against 42, plus 8pt of vertical padding
+    /// on the bar and none on the row, so the band grew 26pt and the capsule sat 13pt high. Both
+    /// are `ChatUIConstants.InputBar.height` now, in the row's own `rowOuterPad`, and the bar
+    /// carries no padding of its own. The difference is zero, which is the only value that does
+    /// not need a note.
     @ViewBuilder
     private var voiceOrInputRow: some View {
         let isIdle = audioRecorder.state == .idle
@@ -223,7 +227,6 @@ struct IOSMessageInputView: View {
                     audioRecorder.cancel()
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                .padding(.vertical, CTLayout.inlinePad)
 
             case .recorded(let url, let duration, let waveform):
                 VoicePreviewBar(duration: duration, waveform: waveform) {
@@ -233,7 +236,6 @@ struct IOSMessageInputView: View {
                     audioRecorder.cancel()
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                .padding(.vertical, CTLayout.inlinePad)
 
             case .idle:
                 EmptyView()
