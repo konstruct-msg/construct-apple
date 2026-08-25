@@ -173,17 +173,38 @@ final class MultiDeviceSendCoordinator {
             let bundles = try await KeyServiceClient.shared.getPreKeyBundles(userId: recipientUserId, consumeOneTimePrekey: true)
             guard !bundles.isEmpty else { return }
 
-            for device in bundles {
-                let contactId = Self.sessionKey(userId: recipientUserId, deviceId: device.deviceId)
+            let ourIdentityKey = KeychainManager.shared.loadDeviceIdentityKey()
+            let targets = DeviceDeliveryPlan.targets(
+                recipientDevices: bundles,
+                ownDevices: [],
+                ourDeviceId: senderDeviceId,
+                recipientIsSelf: false
+            )
+
+            for target in targets {
+                // The tag replaces `-fd-<deviceId.prefix(8)>`, which named the target device in
+                // plain hex to the relay on every copy it routed — the leak closed for the
+                // own-replica path on 2026-08-17 and left standing here, on the neighbouring path
+                // carrying the same fact. Nothing ever read that suffix back, so nothing depended
+                // on it either.
+                let tag = Self.senderSyncTag(
+                    baseMessageId: messageId,
+                    targetDeviceId: target.deviceId,
+                    targetIdentityPublic: target.identityPublic,
+                    ourIdentityPrivateKey: ourIdentityKey
+                )
                 await sendToDevice(
                     plaintext: plaintext,
-                    messageId: "\(messageId)-fd-\(device.deviceId.prefix(8))",
+                    messageId: DeviceDeliveryPlan.wireId(
+                        baseMessageId: messageId, tag: tag,
+                        audience: target.audience, chunkIndex: 0, chunkCount: 1
+                    ),
                     networkRecipientUserId: recipientUserId,
-                    contactId: contactId,
-                    bundle: device.bundle,
+                    contactId: Self.sessionKey(userId: recipientUserId, deviceId: target.deviceId),
+                    bundle: target.bundle,
                     senderUserId: senderUserId,
                     senderDeviceId: senderDeviceId,
-                    recipientDeviceId: device.deviceId,
+                    recipientDeviceId: target.deviceId,
                     timestamp: timestamp,
                     contentType: .e2EeSignal
                 )
@@ -274,30 +295,41 @@ final class MultiDeviceSendCoordinator {
             // no own devices to sync to either.
             let ourIdentityKey = KeychainManager.shared.loadDeviceIdentityKey()
 
-            for device in otherDevices {
-                let contactId = Self.sessionKey(userId: senderUserId, deviceId: device.deviceId)
+            // Targets from the same place the recipient fan-out gets them, so "which devices, and
+            // is this one of them" is answered once. `otherDevices` has already dropped this
+            // device; the plan drops it again, which is deliberate — the filter belongs to the
+            // decision, not to whichever caller remembered it.
+            let targets = DeviceDeliveryPlan.targets(
+                recipientDevices: [],
+                ownDevices: otherDevices,
+                ourDeviceId: senderDeviceId,
+                recipientIsSelf: true
+            )
+
+            for target in targets {
                 // The tag names the device this copy is for, to that device only. It used to be
-                // `device.deviceId.prefix(8)` — the id in plain hex, which the relay reads on every
-                // copy it routes. See SenderSyncDeviceTag.
+                // `deviceId.prefix(8)` — the id in plain hex, which the relay reads on every copy
+                // it routes. See SenderSyncDeviceTag.
                 let deviceTag = Self.senderSyncTag(
                     baseMessageId: messageId,
-                    targetDeviceId: device.deviceId,
-                    targetIdentityPublic: device.bundle.identityPublic,
+                    targetDeviceId: target.deviceId,
+                    targetIdentityPublic: target.identityPublic,
                     ourIdentityPrivateKey: ourIdentityKey
                 )
                 for (index, payload) in plan.payloads.enumerated() {
-                    let chunkWireId: String = plan.payloads.count == 1
-                        ? "\(messageId)-ss-\(deviceTag)"
-                        : "\(messageId)-ss-\(deviceTag)-c\(index)"
                     await sendToDevice(
                         plaintext: payload,
-                        messageId: chunkWireId,
+                        messageId: DeviceDeliveryPlan.wireId(
+                            baseMessageId: messageId, tag: deviceTag,
+                            audience: target.audience,
+                            chunkIndex: index, chunkCount: plan.payloads.count
+                        ),
                         networkRecipientUserId: senderUserId,
-                        contactId: contactId,
-                        bundle: device.bundle,
+                        contactId: Self.sessionKey(userId: senderUserId, deviceId: target.deviceId),
+                        bundle: target.bundle,
                         senderUserId: senderUserId,
                         senderDeviceId: senderDeviceId,
-                        recipientDeviceId: device.deviceId,
+                        recipientDeviceId: target.deviceId,
                         timestamp: timestamp,
                         contentType: .senderSync
                     )
