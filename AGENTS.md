@@ -187,6 +187,13 @@ FFI, proto `bytes`, zero base64 in the path? If not, fix the design before mergi
 This codebase's recurring defect class is **one meaning carried by two values with nothing
 enforcing their agreement**. Both instances below are permanent invariants, not migrations.
 
+**Read `~/Code/construct-docs/decisions/one-meaning-two-carriers.md` before adding any field,
+counter, constant or timeout.** It catalogues the six forms this takes — two of which do not look
+like duplication at all — the three mechanical detectors that find them, and the order of
+preference for fixing one. The short version: hand-synchronising two carriers is not a fix, and a
+comment promising that something "must match" another implementation is a comment saying it should
+have been a call to it.
+
 **User identity spaces** (`Utilities/UserIdentity.swift`):
 
 | Type | Format | Correct use |
