@@ -2326,12 +2326,12 @@ final class MessageRouter {
         //
         // The tag is a MAC under a secret only the two devices share, not the device id it used to
         // be; see SenderSyncDeviceTag for what the readable form gave the relay.
-        if SenderSyncWireId.isForAnotherDevice(
+        if DeviceCopyWireId.verdict(
             wireId: message.id,
             ourDeviceId: AuthSessionManager.shared.currentDeviceId,
             ourIdentityPrivateKey: MultiDeviceSendCoordinator.shared.ourIdentityPrivateKey(),
             peerIdentityKeys: MultiDeviceSendCoordinator.shared.senderSyncPeerIdentityKeys(myUserId: currentUserId)
-        ) {
+        ) == .foreign {
             Log.debug(
                 "SENDER_SYNC: \(message.id) is addressed to another of our devices — skipping",
                 category: "MessageRouter"

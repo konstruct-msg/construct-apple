@@ -155,7 +155,7 @@ final class DeviceDeliveryPlanTests: XCTestCase {
         XCTAssertTrue(id.hasSuffix(tag))
     }
 
-    /// `SenderSyncWireId` reads the tag back out of the id the plan writes. The two are separate
+    /// `DeviceCopyWireId` reads the tag back out of the id the plan writes. The two are separate
     /// files and one is the only reader of the other, so a change to either shape must break here
     /// rather than in a stand run.
     func testTheWireIdRoundTripsThroughTheReader() {
@@ -163,8 +163,8 @@ final class DeviceDeliveryPlanTests: XCTestCase {
         for chunk in 0..<3 {
             let id = DeviceDeliveryPlan.wireId(baseMessageId: base, tag: tag,
                                                audience: .ownReplica, chunkIndex: chunk, chunkCount: 3)
-            XCTAssertEqual(SenderSyncWireId.targetDeviceTag(of: id), tag)
-            XCTAssertEqual(SenderSyncWireId.baseId(of: id), base)
+            XCTAssertEqual(DeviceCopyWireId.targetDeviceTag(of: id), tag)
+            XCTAssertEqual(DeviceCopyWireId.baseId(of: id), base)
         }
     }
 }
