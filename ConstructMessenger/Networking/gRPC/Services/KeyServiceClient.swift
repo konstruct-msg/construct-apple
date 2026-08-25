@@ -95,7 +95,7 @@ final class KeyServiceClient: Sendable {
         // server/gateway does not learn who is fetching whose bundle. Bundles are public keys, and
         // key-service's GetPreKeyBundles reads no caller identity (IP-only rate limiting), so the
         // unauthenticated fetch is safe end-to-end. Off → authenticated (current behaviour).
-        try await GRPCChannelManager.shared.performRPC(sealed: FeatureFlags.sealedSenderUnauthenticatedTransport, timeout: GRPCTimeouts.getPreKeyBundles) { grpcClient in
+        let bundles = try await GRPCChannelManager.shared.performRPC(sealed: FeatureFlags.sealedSenderUnauthenticatedTransport, timeout: GRPCTimeouts.getPreKeyBundles) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetPreKeyBundlesRequest()
@@ -176,6 +176,13 @@ final class KeyServiceClient: Sendable {
                 return DeviceBundleData(deviceId: deviceBundle.deviceID, bundle: bundle, platform: deviceBundle.platform)
             }
         }
+        // Recorded here rather than at each call site: a registry every caller has to remember to
+        // update is stale for whichever path was added last, and the staleness is invisible —
+        // consumers read "we do not know this account's devices", which is a legal answer.
+        await MainActor.run {
+            PeerDeviceRegistry.shared.record(userId: userId, devices: bundles)
+        }
+        return bundles
     }
 
     // MARK: - Get Pre-Key Bundle (replaces CryptoAPI.getPublicKey)

@@ -2330,7 +2330,10 @@ final class MessageRouter {
             wireId: message.id,
             ourDeviceId: AuthSessionManager.shared.currentDeviceId,
             ourIdentityPrivateKey: MultiDeviceSendCoordinator.shared.ourIdentityPrivateKey(),
-            peerIdentityKeys: MultiDeviceSendCoordinator.shared.senderSyncPeerIdentityKeys(myUserId: currentUserId)
+            peerIdentityKeys: MultiDeviceSendCoordinator.shared.senderSyncPeerIdentityKeys(myUserId: currentUserId),
+            // Own replicas: the cache holds every sibling we know of, and the verdict does not
+            // consult this flag for that audience — passed for the shape, not for the decision.
+            peerDeviceSetIsComplete: true
         ) == .foreign {
             Log.debug(
                 "SENDER_SYNC: \(message.id) is addressed to another of our devices — skipping",

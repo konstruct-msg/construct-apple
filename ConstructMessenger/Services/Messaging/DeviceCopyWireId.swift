@@ -94,21 +94,21 @@ enum DeviceCopyWireId {
     /// own-device cache), so a tag that reproduces for none of them is definitively for a sibling.
     /// Both conclusions are available.
     ///
-    /// For a copy from **a peer** we hold at most one of that peer's identity keys —
-    /// `User.knownIdentityKey`, pinned at invite — and no list of their devices exists locally.
-    /// So a non-match means either "addressed to another of my devices" or "sent from a device of
-    /// theirs I have never pinned", and those are not distinguishable here. Concluding `foreign`
-    /// would discard our own message every time a multi-device peer wrote from an unpinned device.
-    /// Only the positive conclusion is sound, and this returns `.undecidable` for the rest.
-    ///
-    /// That asymmetry disappears once sessions are addressed per device: the peer devices we hold
-    /// sessions with are then exactly the set to check against, and it is a local fact. Until then
-    /// the honest answer is that we cannot tell.
+    /// For a copy from **a peer** the same holds only when the caller actually knows that peer's
+    /// devices — `peerDeviceSetIsComplete`. It passed `false` until 2026-08-25, because nothing
+    /// cached a peer's device list and the only key on hand was `User.knownIdentityKey`, pinned at
+    /// invite. A non-match then meant either "addressed to another of my devices" or "sent from a
+    /// device of theirs I never pinned", and concluding `foreign` would have discarded our own
+    /// message every time a multi-device peer wrote from an unpinned device. `PeerDeviceRegistry`
+    /// now answers that question, and the flag is what carries the answer here rather than this
+    /// function guessing from the size of the array it was handed — an empty list and a list we
+    /// have no reason to trust look identical from in here.
     static func verdict(
         wireId: String,
         ourDeviceId: String?,
         ourIdentityPrivateKey: Data?,
-        peerIdentityKeys: [Data]
+        peerIdentityKeys: [Data],
+        peerDeviceSetIsComplete: Bool
     ) -> DeviceCopyVerdict {
         guard let tag = targetDeviceTag(of: wireId),
               let base = baseId(of: wireId),
@@ -133,7 +133,10 @@ enum DeviceCopyWireId {
                 )
             }
             if isOurs { return .ours }
-            return audience == .ownReplica ? .foreign : .undecidable
+            // Own replicas: we hold every sibling's key, so a tag matching none of them is a
+            // sibling's. Peer copies: only when the caller vouches that it knows their devices.
+            let canConcludeForeign = audience == .ownReplica || peerDeviceSetIsComplete
+            return canConcludeForeign ? .foreign : .undecidable
 
         case SenderSyncDeviceTag.legacyHexLength:
             // Sender at or below 0.18.0 wrote `deviceId.prefix(8)`. Prefix, not equality —

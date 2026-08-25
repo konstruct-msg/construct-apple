@@ -137,13 +137,13 @@ final class DeviceCopyWireIdTests: XCTestCase {
 
         XCTAssertEqual(
             DeviceCopyWireId.verdict(wireId: wireId, ourDeviceId: b.id,
-                                     ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub]),
+                                     ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true),
             .ours,
             "the addressed device must open it"
         )
         XCTAssertEqual(
             DeviceCopyWireId.verdict(wireId: wireId, ourDeviceId: a.id,
-                                     ourIdentityPrivateKey: a.priv, peerIdentityKeys: [b.pub]),
+                                     ourIdentityPrivateKey: a.priv, peerIdentityKeys: [b.pub], peerDeviceSetIsComplete: true),
             .foreign,
             "the sender's own echo must not be taken for a copy addressed to it"
         )
@@ -160,7 +160,7 @@ final class DeviceCopyWireIdTests: XCTestCase {
             wireId: "\(base)-ss-\(tag)",
             ourDeviceId: c.id,
             ourIdentityPrivateKey: c.priv,
-            peerIdentityKeys: [a.pub, b.pub]
+            peerIdentityKeys: [a.pub, b.pub], peerDeviceSetIsComplete: true
         ), .foreign)
     }
 
@@ -176,13 +176,13 @@ final class DeviceCopyWireIdTests: XCTestCase {
         let tag = tag(from: a, to: b)
 
         XCTAssertEqual(DeviceCopyWireId.verdict(
-            wireId: base, ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub]), .undecidable, "not a sender-sync id")
+            wireId: base, ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true), .undecidable, "not a sender-sync id")
         XCTAssertEqual(DeviceCopyWireId.verdict(
-            wireId: "\(base)-ss-\(tag)", ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: []), .undecidable, "no secrets known yet")
+            wireId: "\(base)-ss-\(tag)", ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [], peerDeviceSetIsComplete: true), .undecidable, "no secrets known yet")
         XCTAssertEqual(DeviceCopyWireId.verdict(
-            wireId: "\(base)-ss-\(tag)", ourDeviceId: nil, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub]), .undecidable, "no device id")
+            wireId: "\(base)-ss-\(tag)", ourDeviceId: nil, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true), .undecidable, "no device id")
         XCTAssertEqual(DeviceCopyWireId.verdict(
-            wireId: "\(base)-ss-zzz", ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub]), .undecidable, "unknown tag shape")
+            wireId: "\(base)-ss-zzz", ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true), .undecidable, "unknown tag shape")
     }
 
     // MARK: - A copy from a peer, where we know less
@@ -211,10 +211,39 @@ final class DeviceCopyWireIdTests: XCTestCase {
                 wireId: "\(base)\(DeviceDeliveryPlan.Marker.recipient)\(tag)",
                 ourDeviceId: me.id,
                 ourIdentityPrivateKey: me.priv,
-                peerIdentityKeys: [peerKnown.pub]
+                peerIdentityKeys: [peerKnown.pub],
+                peerDeviceSetIsComplete: false
             ),
             .undecidable,
             "a copy we cannot place must be attempted, never discarded"
+        )
+    }
+
+    /// Once the peer's device set is known, the same copy IS decidable — which is the whole point
+    /// of `PeerDeviceRegistry`. Before it existed this path could only ever say "attempt it", so
+    /// the tag bought nothing on copies from a peer: no skipped candidate walk, no avoided bundle
+    /// fetch on a `messageNumber == 0` copy.
+    ///
+    /// Mutation: ignore `peerDeviceSetIsComplete` and always return `.undecidable` for peer
+    /// copies — this reddens while the loss-of-message test above stays green, which is why both
+    /// exist.
+    func testAKnownPeerDeviceSetMakesTheSameCopyDecidable() {
+        let me = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
+        let peer = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let mySibling = Device(id: "0a1b2c3d4e5f60718293a4b5c6d7e8f9")
+
+        // The peer addressed our sibling, not us.
+        let tag = tag(from: peer, to: mySibling)
+
+        XCTAssertEqual(
+            DeviceCopyWireId.verdict(
+                wireId: "\(base)\(DeviceDeliveryPlan.Marker.recipient)\(tag)",
+                ourDeviceId: me.id,
+                ourIdentityPrivateKey: me.priv,
+                peerIdentityKeys: [peer.pub],
+                peerDeviceSetIsComplete: true
+            ),
+            .foreign
         )
     }
 
@@ -229,7 +258,7 @@ final class DeviceCopyWireIdTests: XCTestCase {
                 wireId: "\(base)\(DeviceDeliveryPlan.Marker.ownReplica)\(tag)",
                 ourDeviceId: me.id,
                 ourIdentityPrivateKey: me.priv,
-                peerIdentityKeys: [sibling.pub]
+                peerIdentityKeys: [sibling.pub], peerDeviceSetIsComplete: true
             ),
             .foreign
         )
@@ -261,13 +290,13 @@ final class DeviceCopyWireIdTests: XCTestCase {
 
         XCTAssertEqual(DeviceCopyWireId.verdict(
             wireId: "\(base)-ss-bfbcef09", ourDeviceId: mine,
-            ourIdentityPrivateKey: nil, peerIdentityKeys: []), .ours)
+            ourIdentityPrivateKey: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true), .ours)
         XCTAssertEqual(DeviceCopyWireId.verdict(
             wireId: "\(base)-ss-b3ed60ab", ourDeviceId: mine,
-            ourIdentityPrivateKey: nil, peerIdentityKeys: []), .foreign)
+            ourIdentityPrivateKey: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true), .foreign)
         XCTAssertEqual(DeviceCopyWireId.verdict(
             wireId: "\(base)-ss-b3ed60ab", ourDeviceId: theirs,
-            ourIdentityPrivateKey: nil, peerIdentityKeys: []), .ours)
+            ourIdentityPrivateKey: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true), .ours)
     }
 
     // MARK: - The secret itself
