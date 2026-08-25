@@ -1,32 +1,44 @@
 #!/usr/bin/env bash
 #
-# two_sims.sh — стенд из двух iOS-симуляторов для E2E-проверок мессенджера.
+# two_sims.sh — стенд из iOS-симуляторов для E2E-проверок мессенджера.
 #
 # Зачем: сценарии вида «A отправил → B получил» нельзя проверить на одном
-# устройстве. Два симулятора — это два независимых контейнера (свой Keychain,
-# свой Core Data, свой аккаунт), то есть два полноценных участника разговора.
+# устройстве. Каждый симулятор — независимый контейнер (свой Keychain, свой
+# Core Data, свой аккаунт), то есть полноценный участник разговора.
 #
-# Симуляторы создаются отдельные, с фиксированными именами (Construct-A/-B),
+# Ролей три: a, b, c. Двух хватает на разговор двух аккаунтов, и это умолчание
+# (SIMS=ab) — отсюда имя скрипта. Третья нужна ровно одному сценарию:
+# многоустройственному. `link a b` делает из A и B ОДИН аккаунт, после чего
+# собеседника у него не остаётся, а SENDER_SYNC отправляется только вслед за
+# успешно ушедшим сообщением — то есть без третьего участника этот код просто
+# не выполняется. Поэтому `SIMS=abc` и C в роли собеседника.
+#
+# Симуляторы создаются отдельные, с фиксированными именами (Construct-A/-B/-C),
 # чтобы не мешать обычному дев-симулятору и чтобы `reset` можно было делать
 # без страха стереть рабочее состояние.
 #
 # Использование:
-#   ./scripts/two_sims.sh up        # создать + загрузить оба симулятора
-#   ./scripts/two_sims.sh build     # собрать .app один раз
-#   ./scripts/two_sims.sh install   # поставить свежий .app на оба
-#   ./scripts/two_sims.sh launch    # запустить на обоих
-#   ./scripts/two_sims.sh run       # up + build + install + launch
-#   ./scripts/two_sims.sh pair a    # два аккаунта: ссылка из буфера A → openurl на B
-#   ./scripts/two_sims.sh link a    # один аккаунт на двух устройствах: токен A → буфер B
-#   ./scripts/two_sims.sh status    # UDID, состояние, установлен ли app
-#   ./scripts/two_sims.sh env       # export-строки для MCP/других скриптов
-#   ./scripts/two_sims.sh shot      # скриншоты обоих
-#   ./scripts/two_sims.sh logs a    # стрим лога приложения (a|b)
-#   ./scripts/two_sims.sh reset     # стереть оба (чистый онбординг)
-#   ./scripts/two_sims.sh down      # выключить оба
+#   ./scripts/two_sims.sh up         # создать + загрузить активные симуляторы
+#   ./scripts/two_sims.sh build      # собрать .app один раз
+#   ./scripts/two_sims.sh install    # поставить свежий .app на активные
+#   ./scripts/two_sims.sh launch     # запустить на активных
+#   ./scripts/two_sims.sh run        # up + build + install + launch
+#   ./scripts/two_sims.sh pair a c   # два аккаунта: ссылка из буфера A → openurl на C
+#   ./scripts/two_sims.sh link a b   # один аккаунт на двух устройствах: токен A → буфер B
+#   ./scripts/two_sims.sh status     # UDID, состояние, установлен ли app
+#   ./scripts/two_sims.sh env        # export-строки для MCP/других скриптов
+#   ./scripts/two_sims.sh shot       # скриншоты активных
+#   ./scripts/two_sims.sh logs a     # стрим лога приложения (a|b|c)
+#   ./scripts/two_sims.sh reset      # стереть активные (чистый онбординг)
+#   ./scripts/two_sims.sh down       # выключить активные
 #
-# Переопределяется через окружение: SCHEME, CONFIGURATION, BUNDLE_ID,
-# SIM_A_NAME, SIM_B_NAME, DEVICE_TYPE_A, DEVICE_TYPE_B.
+# Многоустройственный прогон целиком:
+#   SIMS=abc ./scripts/two_sims.sh run
+#   SIMS=abc ./scripts/two_sims.sh pair a c   # у аккаунта появляется собеседник
+#   SIMS=abc ./scripts/two_sims.sh link a b   # A и B становятся одним аккаунтом
+#
+# Переопределяется через окружение: SIMS, SCHEME, CONFIGURATION, BUNDLE_ID,
+# SIM_A_NAME, SIM_B_NAME, SIM_C_NAME, DEVICE_TYPE_A, DEVICE_TYPE_B, DEVICE_TYPE_C.
 
 set -euo pipefail
 
@@ -38,11 +50,18 @@ SCHEME="${SCHEME:-ConstructMessenger}"
 CONFIGURATION="${CONFIGURATION:-Debug}"
 BUNDLE_ID="${BUNDLE_ID:-maximeliseyev.constructmessenger}"
 
-# Разные модели специально: на скриншотах сразу видно, кто A, а кто B.
+# Разные модели специально: на скриншотах сразу видно, кто A, кто B, кто C.
 SIM_A_NAME="${SIM_A_NAME:-Construct-A}"
 SIM_B_NAME="${SIM_B_NAME:-Construct-B}"
+SIM_C_NAME="${SIM_C_NAME:-Construct-C}"
 DEVICE_TYPE_A="${DEVICE_TYPE_A:-com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro}"
 DEVICE_TYPE_B="${DEVICE_TYPE_B:-com.apple.CoreSimulator.SimDeviceType.iPhone-17}"
+DEVICE_TYPE_C="${DEVICE_TYPE_C:-com.apple.CoreSimulator.SimDeviceType.iPhone-17e}"
+
+# Роли, которыми управляет этот вызов. Третий симулятор не поднимается по
+# умолчанию: он нужен одному сценарию, а стоит загрузки и памяти на всех
+# остальных.
+SIMS="${SIMS:-ab}"
 
 SHOT_DIR="${SHOT_DIR:-$REPO_ROOT/logs/two_sims}"
 
@@ -133,18 +152,97 @@ boot_sim() {
   ok "$name готов ($udid)"
 }
 
-resolve_sims() {
-  UDID_A="$(ensure_sim "$SIM_A_NAME" "$DEVICE_TYPE_A")"
-  UDID_B="$(ensure_sim "$SIM_B_NAME" "$DEVICE_TYPE_B")"
+# Роли этого вызова, по одной букве в строке, в порядке a→b→c и без повторов.
+active_roles() {
+  local raw; raw="$(printf '%s' "$SIMS" | tr '[:upper:]' '[:lower:]' | tr -cd 'abc')"
+  [[ -n "$raw" ]] || die "SIMS не называет ни одной роли (ожидается подмножество abc): '$SIMS'"
+  local r
+  for r in a b c; do
+    if [[ "$raw" == *"$r"* ]]; then printf '%s\n' "$r"; fi
+  done
+  # Явный успех: под `set -o pipefail` ненулевой код этой функции стал бы кодом
+  # любого конвейера с ней, и `active_roles | grep -qx a` отвечал бы «нет» при
+  # совпавшем grep — просто потому, что последняя проверка в цикле была про `c`.
+  return 0
 }
 
-sim_by_letter() {
-  case "$(echo "${1:-}" | tr '[:upper:]' '[:lower:]')" in
-    a) printf '%s' "$UDID_A" ;;
-    b) printf '%s' "$UDID_B" ;;
-    *) die "укажи симулятор: a или b" ;;
+# Без конвейера намеренно. `active_roles | grep -qx b` отвечает «нет» при
+# совпавшем grep: -q завершает grep на найденной строке, продюсер получает
+# SIGPIPE (141), и `pipefail` делает этот код ответом всего конвейера. Ошибалась
+# при этом ровно средняя роль — на первой и последней продюсер успевал
+# закончить, — то есть проверка выглядела работающей на двух буквах из трёх.
+role_active() {
+  local r
+  for r in $(active_roles); do
+    [[ "$r" == "$1" ]] && return 0
+  done
+  return 1
+}
+
+role_name() {
+  case "$1" in
+    a) printf '%s' "$SIM_A_NAME" ;;
+    b) printf '%s' "$SIM_B_NAME" ;;
+    c) printf '%s' "$SIM_C_NAME" ;;
+    *) die "неизвестная роль: $1" ;;
   esac
 }
+
+role_udid() {
+  case "$1" in
+    a) printf '%s' "$UDID_A" ;;
+    b) printf '%s' "$UDID_B" ;;
+    c) printf '%s' "$UDID_C" ;;
+    *) die "неизвестная роль: $1" ;;
+  esac
+}
+
+UDID_A="" ; UDID_B="" ; UDID_C=""
+
+resolve_sims() {
+  local r
+  for r in $(active_roles); do
+    case "$r" in
+      a) UDID_A="$(ensure_sim "$SIM_A_NAME" "$DEVICE_TYPE_A")" ;;
+      b) UDID_B="$(ensure_sim "$SIM_B_NAME" "$DEVICE_TYPE_B")" ;;
+      c) UDID_C="$(ensure_sim "$SIM_C_NAME" "$DEVICE_TYPE_C")" ;;
+    esac
+  done
+}
+
+# Проверяет букву роли и кладёт её в ROLE. Опечатка иначе прочиталась бы как
+# пустой UDID, а пустой UDID для simctl — это «текущее загруженное устройство»,
+# то есть команда ушла бы не туда и отчиталась успехом.
+#
+# Через глобальную, а не через stdout: `die` внутри `$( )` завершает только
+# подоболочку, вызывающий продолжает с пустой строкой и падает вторым, менее
+# внятным сообщением.
+ROLE=""
+require_role() {
+  ROLE="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+  case "$ROLE" in
+    a|b|c) ;;
+    *) die "укажи симулятор буквой: a, b или c (получено: '${1:-}')" ;;
+  esac
+  role_active "$ROLE" \
+    || die "роль $ROLE не поднята в этом прогоне (SIMS=$SIMS) — запусти с SIMS=abc"
+}
+
+# Единственная другая активная роль — умолчание для `pair`/`link`, когда ролей
+# ровно две. При трёх ролях умолчания нет: угадывать, кого с кем связывать,
+# значит связать не тех и узнать об этом через полчаса прогона.
+other_role() {
+  local self="$1" r out=""
+  for r in $(active_roles); do
+    [[ "$r" == "$self" ]] && continue
+    [[ -z "$out" ]] || return 1
+    out="$r"
+  done
+  [[ -n "$out" ]] || return 1
+  printf '%s' "$out"
+}
+
+sim_by_letter() { require_role "${1:-}"; role_udid "$ROLE"; }
 
 # ── сборка ───────────────────────────────────────────────────────────────────
 
@@ -193,8 +291,10 @@ cmd_build() {
 
 cmd_up() {
   resolve_sims
-  boot_sim "$UDID_A" "$SIM_A_NAME"
-  boot_sim "$UDID_B" "$SIM_B_NAME"
+  local r
+  for r in $(active_roles); do
+    boot_sim "$(role_udid "$r")" "$(role_name "$r")"
+  done
   open -a Simulator
   warn "окна симуляторов Simulator.app раскладывает сам — разведи их один раз руками"
 }
@@ -204,8 +304,10 @@ cmd_install() {
   local app
   app="$(app_path)"
   [[ -d "$app" ]] || die "нет собранного .app ($app) — сначала ./scripts/two_sims.sh build"
-  for pair in "$UDID_A:$SIM_A_NAME" "$UDID_B:$SIM_B_NAME"; do
-    local udid="${pair%%:*}" name="${pair##*:}"
+  local r
+  for r in $(active_roles); do
+    local udid name
+    udid="$(role_udid "$r")" ; name="$(role_name "$r")"
     [[ "$(state_for "$udid")" == "Booted" ]] || die "$name не загружен — сначала ./scripts/two_sims.sh up"
     xcrun simctl install "$udid" "$app"
     # Микрофон/камера — чтобы звонковые сценарии не упирались в системный алерт,
@@ -218,8 +320,10 @@ cmd_install() {
 
 cmd_launch() {
   resolve_sims
-  for pair in "$UDID_A:$SIM_A_NAME" "$UDID_B:$SIM_B_NAME"; do
-    local udid="${pair%%:*}" name="${pair##*:}"
+  local r
+  for r in $(active_roles); do
+    local udid name
+    udid="$(role_udid "$r")" ; name="$(role_name "$r")"
     xcrun simctl terminate "$udid" "$BUNDLE_ID" 2>/dev/null || true
     xcrun simctl launch "$udid" "$BUNDLE_ID" >/dev/null
     ok "$name: запущен"
@@ -237,8 +341,10 @@ cmd_run() {
 cmd_status() {
   resolve_sims
   printf '%-14s %-38s %-10s %s\n' "SIM" "UDID" "STATE" "APP"
-  for pair in "$UDID_A:$SIM_A_NAME" "$UDID_B:$SIM_B_NAME"; do
-    local udid="${pair%%:*}" name="${pair##*:}" installed="—"
+  local r
+  for r in $(active_roles); do
+    local udid name installed="—"
+    udid="$(role_udid "$r")" ; name="$(role_name "$r")"
     if xcrun simctl get_app_container "$udid" "$BUNDLE_ID" >/dev/null 2>&1; then
       installed="установлен"
     fi
@@ -249,8 +355,10 @@ cmd_status() {
 cmd_env() {
   resolve_sims
   echo
-  echo "export UDID_A=$UDID_A   # $SIM_A_NAME"
-  echo "export UDID_B=$UDID_B   # $SIM_B_NAME"
+  local r
+  for r in $(active_roles); do
+    echo "export UDID_$(printf '%s' "$r" | tr '[:lower:]' '[:upper:]')=$(role_udid "$r")   # $(role_name "$r")"
+  done
   echo "export BUNDLE_ID=$BUNDLE_ID"
 }
 
@@ -265,12 +373,17 @@ cmd_env() {
 # so rewrite the prefix rather than trusting universal links here.
 cmd_pair() {
   resolve_sims
-  local from="${1:-a}" to link payload
-  case "$(echo "$from" | tr '[:upper:]' '[:lower:]')" in
-    a) from="$UDID_A"; to="$UDID_B" ;;
-    b) from="$UDID_B"; to="$UDID_A" ;;
-    *) die "укажи источник ссылки: a или b" ;;
-  esac
+  local from to link payload
+  require_role "${1:-a}" ; from="$ROLE"
+  if [[ -n "${2:-}" ]]; then
+    require_role "$2" ; to="$ROLE"
+  else
+    to="$(other_role "$from")" \
+      || die "ролей больше двух — назови приёмника явно: pair $from <a|b|c>"
+  fi
+  [[ "$from" != "$to" ]] || die "источник и приёмник — одна и та же роль ($from)"
+  info "приглашение: $(role_name "$from") → $(role_name "$to")"
+  from="$(role_udid "$from")" ; to="$(role_udid "$to")"
 
   link="$(xcrun simctl pbpaste "$from" 2>/dev/null | tr -d '\n')"
   payload="${link#*invite=}"
@@ -301,13 +414,30 @@ cmd_pair() {
 # Токен берётся из лога DEBUG-сборки: на экране он есть только внутри QR-картинки.
 cmd_link() {
   resolve_sims
-  local from="${1:-a}" from_udid to_udid token
+  local from to from_udid to_udid token
 
-  case "$(echo "$from" | tr '[:upper:]' '[:lower:]')" in
-    a) from_udid="$UDID_A"; to_udid="$UDID_B" ;;
-    b) from_udid="$UDID_B"; to_udid="$UDID_A" ;;
-    *) die "укажи, кто показывает код: a или b" ;;
-  esac
+  require_role "${1:-a}" ; from="$ROLE"
+  if [[ -n "${2:-}" ]]; then
+    require_role "$2" ; to="$ROLE"
+  else
+    to="$(other_role "$from")" \
+      || die "ролей больше двух — назови привязываемого явно: link $from <a|b|c>"
+  fi
+  [[ "$from" != "$to" ]] || die "источник и приёмник — одна и та же роль ($from)"
+
+  # Связав два симулятора в один аккаунт, стенд остаётся без собеседника, а
+  # SENDER_SYNC уходит только вслед за успешно отправленным сообщением
+  # (ChatSendCoordinator зовёт его после sendChunks). То есть на стенде из двух
+  # ролей многоустройственный код не выполняется ни разу, и прогон выглядит как
+  # «копия не пришла», хотя её никто и не отправлял.
+  if [[ "$(active_roles | wc -l | tr -d ' ')" -lt 3 ]]; then
+    warn "активны только роли: $(active_roles | tr '\n' ' ')"
+    warn "после link у аккаунта не останется собеседника, и SENDER_SYNC не с чего будет отправить"
+    warn "для многоустройственного прогона: SIMS=abc ./scripts/two_sims.sh run && SIMS=abc $0 pair $from c"
+  fi
+
+  info "связывание: $(role_name "$from") показывает код → $(role_name "$to") вставляет"
+  from_udid="$(role_udid "$from")" ; to_udid="$(role_udid "$to")"
 
   local container log
   container="$(xcrun simctl get_app_container "$from_udid" "$BUNDLE_ID" data 2>/dev/null || true)"
@@ -332,10 +462,12 @@ cmd_shot() {
   resolve_sims
   mkdir -p "$SHOT_DIR"
   local stamp; stamp="$(date +%Y%m%d-%H%M%S)"
-  for pair in "$UDID_A:A" "$UDID_B:B"; do
-    local udid="${pair%%:*}" letter="${pair##*:}"
-    local out="$SHOT_DIR/$stamp-$letter.png"
-    xcrun simctl io "$udid" screenshot "$out" >/dev/null 2>&1
+  local r
+  for r in $(active_roles); do
+    local letter out
+    letter="$(printf '%s' "$r" | tr '[:lower:]' '[:upper:]')"
+    out="$SHOT_DIR/$stamp-$letter.png"
+    xcrun simctl io "$(role_udid "$r")" screenshot "$out" >/dev/null 2>&1
     ok "$out"
   done
 }
@@ -351,20 +483,24 @@ cmd_logs() {
 
 cmd_reset() {
   resolve_sims
-  warn "стираю $SIM_A_NAME и $SIM_B_NAME — аккаунты, ключи и переписка пропадут"
-  for udid in "$UDID_A" "$UDID_B"; do
+  local r names=""
+  for r in $(active_roles); do names="$names $(role_name "$r")"; done
+  warn "стираю$names — аккаунты, ключи и переписка пропадут"
+  for r in $(active_roles); do
+    local udid; udid="$(role_udid "$r")"
     xcrun simctl shutdown "$udid" 2>/dev/null || true
     xcrun simctl erase "$udid"
   done
-  ok "оба симулятора чистые — следующий запуск начнётся с онбординга"
+  ok "симуляторы чистые — следующий запуск начнётся с онбординга"
 }
 
 cmd_down() {
   resolve_sims
-  for udid in "$UDID_A" "$UDID_B"; do
-    xcrun simctl shutdown "$udid" 2>/dev/null || true
+  local r
+  for r in $(active_roles); do
+    xcrun simctl shutdown "$(role_udid "$r")" 2>/dev/null || true
   done
-  ok "оба симулятора выключены"
+  ok "симуляторы выключены"
 }
 
 usage() {
@@ -377,8 +513,8 @@ case "${1:-}" in
   install) cmd_install ;;
   launch)  cmd_launch ;;
   run)     cmd_run ;;
-  pair)    cmd_pair "${2:-a}" ;;
-  link)    cmd_link "${2:-a}" ;;
+  pair)    cmd_pair "${2:-a}" "${3:-}" ;;
+  link)    cmd_link "${2:-a}" "${3:-}" ;;
   status)  cmd_status ;;
   env)     cmd_env ;;
   shot)    cmd_shot ;;
