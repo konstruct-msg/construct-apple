@@ -104,22 +104,24 @@ final class MultiDeviceSendCoordinator {
         }
     }
 
-    /// Shared secrets with our other devices, for reading the `-ss-<tag>` on an incoming copy.
+    /// Identity keys of our other devices, for reading the `-ss-<tag>` on an incoming copy.
     ///
-    /// One X25519 per known device per message. Not cached: an account has units of devices, and a
-    /// cache of derived key material is state that has to be invalidated when a device is revoked —
-    /// a correctness risk out of proportion to ~50µs.
-    func senderSyncPairSecrets(myUserId: String) -> [SymmetricKey] {
-        guard let ourKey = KeychainManager.shared.loadDeviceIdentityKey() else { return [] }
+    /// Public halves, not derived secrets: the pair secret is computed inside the core, one X25519
+    /// per known device per message. Not cached there either — an account has units of devices, and
+    /// a cache of derived key material is state that has to be invalidated when a device is
+    /// revoked, a correctness risk out of proportion to ~50µs.
+    func senderSyncPeerIdentityKeys(myUserId: String) -> [Data] {
         let myDeviceId = AuthSessionManager.shared.currentDeviceId
         return knownOwnDevices(myUserId: myUserId)
             .filter { $0.deviceId != myDeviceId }
-            .compactMap {
-                SenderSyncDeviceTag.pairSecret(
-                    ourIdentityPrivateKey: ourKey,
-                    peerIdentityPublicKey: $0.bundle.identityPublic
-                )
-            }
+            .map(\.bundle.identityPublic)
+    }
+
+    /// Our own identity private key — the other half of every pair secret above.
+    ///
+    /// Absent only before registration completes, and then there are no own devices to sync to.
+    func ourIdentityPrivateKey() -> Data? {
+        KeychainManager.shared.loadDeviceIdentityKey()
     }
 
     /// The tag for a copy addressed to `targetDeviceId`, or the legacy plain-hex prefix when the
@@ -134,7 +136,9 @@ final class MultiDeviceSendCoordinator {
         ourIdentityPrivateKey: Data?
     ) -> String {
         guard let ourIdentityPrivateKey,
-              let secret = SenderSyncDeviceTag.pairSecret(
+              let tag = SenderSyncDeviceTag.tag(
+                  baseMessageId: baseMessageId,
+                  targetDeviceId: targetDeviceId,
                   ourIdentityPrivateKey: ourIdentityPrivateKey,
                   peerIdentityPublicKey: targetIdentityPublic
               ) else {
@@ -144,11 +148,7 @@ final class MultiDeviceSendCoordinator {
             )
             return String(targetDeviceId.prefix(SenderSyncDeviceTag.legacyHexLength))
         }
-        return SenderSyncDeviceTag.tag(
-            baseMessageId: baseMessageId,
-            targetDeviceId: targetDeviceId,
-            pairSecret: secret
-        )
+        return tag
     }
 
     /// Fan-out: send `plaintext` to ALL of the recipient's devices.

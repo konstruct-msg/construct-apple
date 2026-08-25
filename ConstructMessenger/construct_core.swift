@@ -6682,6 +6682,39 @@ public func deriveVerifyingKeyFromSecret(identitySecretKey: [UInt8])throws  -> [
     )
 })
 }
+/**
+ * The tag a copy addressed to target_device_id travels under.
+ * base_message_id carries no per-device or per-chunk suffix, so every chunk
+ * of one message shares a tag.
+ */
+public func deviceCopyTag(baseMessageId: String, targetDeviceId: String, ourIdentityPrivate: [UInt8], peerIdentityPublic: [UInt8])throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_device_copy_tag(
+        FfiConverterString.lower(baseMessageId),
+        FfiConverterString.lower(targetDeviceId),
+        FfiConverterSequenceUInt8.lower(ourIdentityPrivate),
+        FfiConverterSequenceUInt8.lower(peerIdentityPublic),$0
+    )
+})
+}
+/**
+ * Whether tag was written for our_device_id by the device behind
+ * peer_identity_public. False for any unusable input: callers ask "is this
+ * copy foreign?", and an undecidable answer there must be "not foreign" —
+ * wrongly opening a copy costs failed decrypts, wrongly discarding one
+ * loses a message from the transcript, silently.
+ */
+public func deviceCopyTagMatches(tag: String, baseMessageId: String, ourDeviceId: String, ourIdentityPrivate: [UInt8], peerIdentityPublic: [UInt8]) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_device_copy_tag_matches(
+        FfiConverterString.lower(tag),
+        FfiConverterString.lower(baseMessageId),
+        FfiConverterString.lower(ourDeviceId),
+        FfiConverterSequenceUInt8.lower(ourIdentityPrivate),
+        FfiConverterSequenceUInt8.lower(peerIdentityPublic),$0
+    )
+})
+}
 public func formatFederatedId(deviceId: String, serverHostname: String) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_construct_core_fn_func_format_federated_id(
@@ -7182,6 +7215,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_derive_verifying_key_from_secret() != 31516) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_device_copy_tag() != 42913) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_device_copy_tag_matches() != 64839) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_format_federated_id() != 19004) {

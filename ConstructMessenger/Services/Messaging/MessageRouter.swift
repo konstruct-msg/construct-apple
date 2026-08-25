@@ -2329,7 +2329,8 @@ final class MessageRouter {
         if SenderSyncWireId.isForAnotherDevice(
             wireId: message.id,
             ourDeviceId: AuthSessionManager.shared.currentDeviceId,
-            pairSecrets: MultiDeviceSendCoordinator.shared.senderSyncPairSecrets(myUserId: currentUserId)
+            ourIdentityPrivateKey: MultiDeviceSendCoordinator.shared.ourIdentityPrivateKey(),
+            peerIdentityKeys: MultiDeviceSendCoordinator.shared.senderSyncPeerIdentityKeys(myUserId: currentUserId)
         ) {
             Log.debug(
                 "SENDER_SYNC: \(message.id) is addressed to another of our devices — skipping",

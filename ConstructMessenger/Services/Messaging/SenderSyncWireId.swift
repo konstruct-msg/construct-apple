@@ -54,17 +54,19 @@ enum SenderSyncWireId {
     /// Whether `wireId` addresses one of our *other* devices — i.e. whether this copy is not ours
     /// to open. Also true of the sending device's own echo, which delivery hands back to it.
     ///
-    /// `pairSecrets` are the shared secrets with our other devices, one per device; `ourDeviceId`
-    /// is what the sender would have bound into the tag had it been addressing us.
+    /// `peerIdentityKeys` are the identity public keys of our other devices, one per device;
+    /// `ourIdentityPrivateKey` is our half of every pair secret; `ourDeviceId` is what the sender
+    /// would have bound into the tag had it been addressing us.
     ///
-    /// Fails **open** everywhere it cannot decide: an unrecognised tag shape, no secrets to hand,
-    /// no device id. Wrongly opening a copy costs failed decrypts; wrongly discarding one loses a
+    /// Fails **open** everywhere it cannot decide: an unrecognised tag shape, no keys to hand, no
+    /// device id. Wrongly opening a copy costs failed decrypts; wrongly discarding one loses a
     /// message from the transcript, and silently, which is the failure mode this feature already
     /// spent months in.
     static func isForAnotherDevice(
         wireId: String,
         ourDeviceId: String?,
-        pairSecrets: [SymmetricKey]
+        ourIdentityPrivateKey: Data?,
+        peerIdentityKeys: [Data]
     ) -> Bool {
         guard let tag = targetDeviceTag(of: wireId), let base = baseId(of: wireId) else {
             return false  // not a SENDER_SYNC wire id — not ours to judge
@@ -75,9 +77,16 @@ enum SenderSyncWireId {
             // Sender on this build or newer. Ours when one of our pair secrets reproduces the tag
             // *for our own device id* — the target is bound into the MAC, so a copy we sent to
             // another device does not match here even though we share its secret.
-            guard let ourDeviceId, !ourDeviceId.isEmpty, !pairSecrets.isEmpty else { return false }
-            return !pairSecrets.contains {
-                SenderSyncDeviceTag.matches(tag, baseMessageId: base, ourDeviceId: ourDeviceId, pairSecret: $0)
+            guard let ourDeviceId, !ourDeviceId.isEmpty,
+                  let ourIdentityPrivateKey, !peerIdentityKeys.isEmpty else { return false }
+            return !peerIdentityKeys.contains {
+                SenderSyncDeviceTag.matches(
+                    tag,
+                    baseMessageId: base,
+                    ourDeviceId: ourDeviceId,
+                    ourIdentityPrivateKey: ourIdentityPrivateKey,
+                    peerIdentityPublicKey: $0
+                )
             }
 
         case SenderSyncDeviceTag.legacyHexLength:

@@ -53,14 +53,17 @@ protoc \
 # the machine. `ContentTypeConformanceTests` reads this copy, and regenerating is what updates
 # it — so a content type added to envelope.proto without teaching this client reddens a test
 # instead of arriving as a payload nobody classifies.
-VECTORS_SRC="$PROTOS_DIR/conformance/knst_content_types.json"
-if [ -f "$VECTORS_SRC" ]; then
-    mkdir -p "$OUTPUT_DIR/conformance"
-    cp "$VECTORS_SRC" "$OUTPUT_DIR/conformance/"
-    success "Vendored conformance vectors (knst_content_types.json)"
-else
-    error "Conformance vectors not found: $VECTORS_SRC"
-fi
+# Every file in that directory, not a named one: the list grows with each mechanism that moves
+# into the core, and a vendoring step that names its fixtures silently stops covering the next.
+mkdir -p "$OUTPUT_DIR/conformance"
+VECTORS_FOUND=0
+for vectors in "$PROTOS_DIR"/conformance/*.json; do
+    [ -f "$vectors" ] || continue
+    cp "$vectors" "$OUTPUT_DIR/conformance/"
+    success "Vendored conformance vectors ($(basename "$vectors"))"
+    VECTORS_FOUND=$((VECTORS_FOUND + 1))
+done
+[ "$VECTORS_FOUND" -gt 0 ] || error "No conformance vectors found in $PROTOS_DIR/conformance"
 
 # Count generated files
 PB_COUNT=$(find "$OUTPUT_DIR" -name "*.pb.swift" | wc -l | tr -d ' ')

@@ -100,8 +100,24 @@ build_target() {
     aarch64-apple-ios-sim|x86_64-apple-ios) deploy_env="IPHONEOS_DEPLOYMENT_TARGET=18.0" ;;
     aarch64-apple-darwin)       deploy_env="MACOSX_DEPLOYMENT_TARGET=15.0" ;;
   esac
-  env $deploy_env cargo build --lib --target "$arch" --features "$FEATURES" $CARGO_FLAGS 2>&1 \
-    | grep -E "^error|^warning\[|Compiling|Finished" || true
+  # Вывод в файл, а не в конвейер с grep. Раньше здесь стояло
+  #   cargo build … | grep -E "^error|…" || true
+  # и `|| true` был нужен настоящему делу: grep возвращает 1, когда не нашёл ни
+  # строки, то есть на чистой сборке. Заодно он проглатывал и провал cargo —
+  # `set -o pipefail` выше становился бесполезен, а следующей строкой шло
+  # безусловное «✅ Собрано». Ошибка компиляции печаталась и объявлялась успехом;
+  # падало потом на «libconstruct_core.a не найден», то есть в другом месте и с
+  # другим смыслом.
+  local log
+  log="$(mktemp)"
+  if ! env $deploy_env cargo build --lib --target "$arch" --features "$FEATURES" $CARGO_FLAGS \
+        > "$log" 2>&1; then
+    grep -E "^error|^error\[" -A 12 "$log" | head -40
+    rm -f "$log"
+    fail "cargo build провалился для $arch — см. вывод выше"
+  fi
+  grep -E "^warning\[|Compiling construct|Finished" "$log" || true
+  rm -f "$log"
   ok "Собрано: $arch"
 }
 

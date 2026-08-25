@@ -36,8 +36,19 @@ final class SenderSyncWireIdTests: XCTestCase {
         }
     }
 
-    private func secret(_ a: Device, _ b: Device) -> SymmetricKey {
-        SenderSyncDeviceTag.pairSecret(ourIdentityPrivateKey: a.priv, peerIdentityPublicKey: b.pub)!
+    /// The tag `from` writes for a copy addressed to `to`.
+    ///
+    /// The pair secret is no longer a value this test can hold: it is derived inside the core from
+    /// the two identity keys (2026-08-25, `crypto::device_copy_tag`). Force-unwrapped because a
+    /// `nil` here means the fixture keys are malformed, not that the code under test decided
+    /// anything — and a test that silently skipped on bad fixtures would pass forever.
+    private func tag(from: Device, to: Device, messageId: String? = nil) -> String {
+        SenderSyncDeviceTag.tag(
+            baseMessageId: messageId ?? base,
+            targetDeviceId: to.id,
+            ourIdentityPrivateKey: from.priv,
+            peerIdentityPublicKey: to.pub
+        )!
     }
 
     // MARK: - Reading the tag
@@ -75,7 +86,7 @@ final class SenderSyncWireIdTests: XCTestCase {
     func testTagRevealsNothingAboutTheDeviceId() {
         let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
         let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
-        let tag = SenderSyncDeviceTag.tag(baseMessageId: base, targetDeviceId: b.id, pairSecret: secret(a, b))
+        let tag = tag(from: a, to: b)
 
         XCTAssertEqual(tag.count, SenderSyncDeviceTag.hexLength)
         XCTAssertFalse(b.id.hasPrefix(tag))
@@ -90,11 +101,8 @@ final class SenderSyncWireIdTests: XCTestCase {
     func testTagDiffersPerMessage() {
         let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
         let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
-        let s = secret(a, b)
-        let first = SenderSyncDeviceTag.tag(baseMessageId: base, targetDeviceId: b.id, pairSecret: s)
-        let second = SenderSyncDeviceTag.tag(
-            baseMessageId: "7574fdec-ca31-44ac-9d43-0e6e870fe4d5", targetDeviceId: b.id, pairSecret: s
-        )
+        let first = tag(from: a, to: b)
+        let second = tag(from: a, to: b, messageId: "7574fdec-ca31-44ac-9d43-0e6e870fe4d5")
         XCTAssertNotEqual(first, second)
     }
 
@@ -103,8 +111,7 @@ final class SenderSyncWireIdTests: XCTestCase {
     func testAllChunksOfOneMessageShareTheTag() {
         let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
         let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
-        let s = secret(a, b)
-        let tag = SenderSyncDeviceTag.tag(baseMessageId: base, targetDeviceId: b.id, pairSecret: s)
+        let tag = tag(from: a, to: b)
         for chunk in 0..<4 {
             let wireId = chunk == 0 ? "\(base)-ss-\(tag)" : "\(base)-ss-\(tag)-c\(chunk)"
             XCTAssertEqual(SenderSyncWireId.targetDeviceTag(of: wireId), tag)
@@ -125,15 +132,15 @@ final class SenderSyncWireIdTests: XCTestCase {
     func testCopyForBIsForeignOnAAndOursOnB() {
         let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
         let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
-        let tag = SenderSyncDeviceTag.tag(baseMessageId: base, targetDeviceId: b.id, pairSecret: secret(a, b))
+        let tag = tag(from: a, to: b)
         let wireId = "\(base)-ss-\(tag)"
 
         XCTAssertFalse(
-            SenderSyncWireId.isForAnotherDevice(wireId: wireId, ourDeviceId: b.id, pairSecrets: [secret(b, a)]),
+            SenderSyncWireId.isForAnotherDevice(wireId: wireId, ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub]),
             "the addressed device must open it"
         )
         XCTAssertTrue(
-            SenderSyncWireId.isForAnotherDevice(wireId: wireId, ourDeviceId: a.id, pairSecrets: [secret(a, b)]),
+            SenderSyncWireId.isForAnotherDevice(wireId: wireId, ourDeviceId: a.id, ourIdentityPrivateKey: a.priv, peerIdentityKeys: [b.pub]),
             "the sender's own echo must not be taken for a copy addressed to it"
         )
     }
@@ -143,12 +150,13 @@ final class SenderSyncWireIdTests: XCTestCase {
         let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
         let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
         let c = Device(id: "0a1b2c3d4e5f60718293a4b5c6d7e8f9")
-        let tag = SenderSyncDeviceTag.tag(baseMessageId: base, targetDeviceId: b.id, pairSecret: secret(a, b))
+        let tag = tag(from: a, to: b)
 
         XCTAssertTrue(SenderSyncWireId.isForAnotherDevice(
             wireId: "\(base)-ss-\(tag)",
             ourDeviceId: c.id,
-            pairSecrets: [secret(c, a), secret(c, b)]
+            ourIdentityPrivateKey: c.priv,
+            peerIdentityKeys: [a.pub, b.pub]
         ))
     }
 
@@ -161,16 +169,16 @@ final class SenderSyncWireIdTests: XCTestCase {
     func testUndecidableCasesAreTreatedAsOurs() {
         let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
         let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
-        let tag = SenderSyncDeviceTag.tag(baseMessageId: base, targetDeviceId: b.id, pairSecret: secret(a, b))
+        let tag = tag(from: a, to: b)
 
         XCTAssertFalse(SenderSyncWireId.isForAnotherDevice(
-            wireId: base, ourDeviceId: b.id, pairSecrets: [secret(b, a)]), "not a sender-sync id")
+            wireId: base, ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub]), "not a sender-sync id")
         XCTAssertFalse(SenderSyncWireId.isForAnotherDevice(
-            wireId: "\(base)-ss-\(tag)", ourDeviceId: b.id, pairSecrets: []), "no secrets known yet")
+            wireId: "\(base)-ss-\(tag)", ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: []), "no secrets known yet")
         XCTAssertFalse(SenderSyncWireId.isForAnotherDevice(
-            wireId: "\(base)-ss-\(tag)", ourDeviceId: nil, pairSecrets: [secret(b, a)]), "no device id")
+            wireId: "\(base)-ss-\(tag)", ourDeviceId: nil, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub]), "no device id")
         XCTAssertFalse(SenderSyncWireId.isForAnotherDevice(
-            wireId: "\(base)-ss-zzz", ourDeviceId: b.id, pairSecrets: [secret(b, a)]), "unknown tag shape")
+            wireId: "\(base)-ss-zzz", ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub]), "unknown tag shape")
     }
 
     // MARK: - Senders at or below 0.18.0
@@ -185,11 +193,11 @@ final class SenderSyncWireIdTests: XCTestCase {
         let theirs = "b3ed60ab5d0ef2c01f292a40bcdc3465"
 
         XCTAssertFalse(SenderSyncWireId.isForAnotherDevice(
-            wireId: "\(base)-ss-bfbcef09", ourDeviceId: mine, pairSecrets: []))
+            wireId: "\(base)-ss-bfbcef09", ourDeviceId: mine, ourIdentityPrivateKey: nil, peerIdentityKeys: []))
         XCTAssertTrue(SenderSyncWireId.isForAnotherDevice(
-            wireId: "\(base)-ss-b3ed60ab", ourDeviceId: mine, pairSecrets: []))
+            wireId: "\(base)-ss-b3ed60ab", ourDeviceId: mine, ourIdentityPrivateKey: nil, peerIdentityKeys: []))
         XCTAssertFalse(SenderSyncWireId.isForAnotherDevice(
-            wireId: "\(base)-ss-b3ed60ab", ourDeviceId: theirs, pairSecrets: []))
+            wireId: "\(base)-ss-b3ed60ab", ourDeviceId: theirs, ourIdentityPrivateKey: nil, peerIdentityKeys: []))
     }
 
     // MARK: - The secret itself
@@ -197,10 +205,19 @@ final class SenderSyncWireIdTests: XCTestCase {
     /// X25519 is symmetric in the pair: the sender derives against the target's bundle key, the
     /// receiver against each of its own devices' bundle keys, and they must agree — otherwise no
     /// tag ever matches and sender sync silently stops, exactly as it did before 0.18.0.
-    func testPairSecretIsSymmetric() {
+    ///
+    /// Asserted through the tag rather than the secret: the secret stopped being a value this
+    /// process holds when the derivation moved into the core. Same target device, opposite halves
+    /// of the pair, same tag — which is the property the receive path actually depends on.
+    func testTheTwoHalvesOfThePairProduceTheSameTag() {
         let a = Device(id: "a")
         let b = Device(id: "b")
-        XCTAssertEqual(secret(a, b), secret(b, a))
+        XCTAssertEqual(
+            SenderSyncDeviceTag.tag(baseMessageId: base, targetDeviceId: b.id,
+                                    ourIdentityPrivateKey: a.priv, peerIdentityPublicKey: b.pub),
+            SenderSyncDeviceTag.tag(baseMessageId: base, targetDeviceId: b.id,
+                                    ourIdentityPrivateKey: b.priv, peerIdentityPublicKey: a.pub)
+        )
     }
 
     // MARK: - Recovering on a device that has never sent anything
@@ -230,9 +247,15 @@ final class SenderSyncWireIdTests: XCTestCase {
         ]))
     }
 
-    func testPairSecretRejectsMalformedKeyMaterial() {
+    /// Malformed key material yields no tag rather than a guess. A best-effort tag would be
+    /// indistinguishable on the wire from a correct one and would address nobody.
+    func testMalformedKeyMaterialYieldsNoTag() {
         let a = Device(id: "a")
-        XCTAssertNil(SenderSyncDeviceTag.pairSecret(ourIdentityPrivateKey: Data([0x01]), peerIdentityPublicKey: a.pub))
-        XCTAssertNil(SenderSyncDeviceTag.pairSecret(ourIdentityPrivateKey: a.priv, peerIdentityPublicKey: Data()))
+        XCTAssertNil(SenderSyncDeviceTag.tag(
+            baseMessageId: base, targetDeviceId: a.id,
+            ourIdentityPrivateKey: Data([0x01]), peerIdentityPublicKey: a.pub))
+        XCTAssertNil(SenderSyncDeviceTag.tag(
+            baseMessageId: base, targetDeviceId: a.id,
+            ourIdentityPrivateKey: a.priv, peerIdentityPublicKey: Data()))
     }
 }
