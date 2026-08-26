@@ -86,4 +86,57 @@ final class KeychainSessionAccountsTests: XCTestCase {
         XCTAssertFalse(KeychainSessionAccounts.isSessionState("session_" + String(repeating: "z", count: 32)),
                        "32 non-hex chars is not a CryptoDeviceId")
     }
+
+    // MARK: - The per-device shape (2026-08-26)
+
+    private let perDeviceUser = "2096553c-1c91-47fb-ba5f-3586d14d358e"
+    private let perDeviceDevice = "44f843866b3bfa57055e4037b25a3ce6"
+
+    /// The shape that survived every wipe until 2026-08-26.
+    ///
+    /// `MultiDeviceSendCoordinator.sessionKey` has produced `<uuid>:<hex>` since multi-device
+    /// shipped, and this predicate accepted neither a colon nor either half in that position — so
+    /// `deleteAllE2EESessions()` left per-device ratchet state behind at exactly the two moments
+    /// it exists for, `prepareForDeviceLink()` and `resetOrchestratorStateForDeviceLink()`. The
+    /// file's own comment ruled the case out ("No such id should exist"), which is why nobody
+    /// looked. Same defect as 2026-08-08, one shape further along.
+    ///
+    /// Mutation: drop the colon branch from `isIdentityShaped` — this reddens.
+    func testPerDeviceSessionIsSessionState() {
+        XCTAssertTrue(KeychainSessionAccounts.isSessionState("session_\(perDeviceUser):\(perDeviceDevice)"))
+        XCTAssertTrue(KeychainSessionAccounts.isSessionState("session_archives_\(perDeviceUser):\(perDeviceDevice)"))
+    }
+
+    /// Both halves are checked, so a colon alone does not make an account deletable. A looser
+    /// match would start deleting whichever tenant of this namespace is added next.
+    func testMalformedPairIsNotSessionState() {
+        XCTAssertFalse(KeychainSessionAccounts.isSessionState("session_\(perDeviceUser):"))
+        XCTAssertFalse(KeychainSessionAccounts.isSessionState("session_:\(perDeviceDevice)"))
+        XCTAssertFalse(KeychainSessionAccounts.isSessionState("session_token:\(perDeviceDevice)"))
+        XCTAssertFalse(KeychainSessionAccounts.isSessionState("session_\(perDeviceUser):not-a-device"))
+    }
+
+    /// The account name and the contact id it carries round-trip through one definition. Both
+    /// incidents this file records came from a second spelling of the same shape.
+    func testAccountAndContactIdRoundTrip() {
+        for contactId in [perDeviceUser, perDeviceDevice, "\(perDeviceUser):\(perDeviceDevice)"] {
+            let account = KeychainSessionAccounts.account(for: contactId)
+            XCTAssertEqual(KeychainSessionAccounts.contactId(ofAccount: account), contactId)
+        }
+    }
+
+    /// The session store is its own device index: a per-device account names both halves, so the
+    /// set of a peer's devices we hold sessions with needs no second list kept in agreement.
+    func testPerDeviceContactIsReadBack() {
+        let parsed = KeychainSessionAccounts.perDeviceContact(
+            ofAccount: "session_\(perDeviceUser):\(perDeviceDevice)")
+        XCTAssertEqual(parsed?.userId, perDeviceUser)
+        XCTAssertEqual(parsed?.deviceId, perDeviceDevice)
+    }
+
+    /// A plain session names no device, and must not be read as if it did.
+    func testPlainSessionHasNoDeviceHalf() {
+        XCTAssertNil(KeychainSessionAccounts.perDeviceContact(ofAccount: "session_\(perDeviceUser)"))
+        XCTAssertNil(KeychainSessionAccounts.perDeviceContact(ofAccount: "session_token"))
+    }
 }

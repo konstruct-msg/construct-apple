@@ -446,8 +446,7 @@ class KeychainManager {
     /// the re-add migration described in
     /// `construct-docs/decisions/share-extension-shared-container.md`.
     private func deleteAllSessions() {
-        let deleted = accounts(withPrefix: KeychainSessionAccounts.prefix)
-            .filter(KeychainSessionAccounts.isSessionState)
+        let deleted = sessionAccounts()
         for account in deleted {
             delete(forKey: account)
         }
@@ -727,6 +726,15 @@ class KeychainManager {
     /// accessibility migration discovers them here. A locked device returns whatever the
     /// current class allows; the migration only sets its completion flag when every item it
     /// found was re-added, and it runs in the foreground, so a partial listing just retries.
+    /// Every Keychain account holding session state, live or archived.
+    ///
+    /// Exposed so the peer-device index can be derived from the sessions already on disk instead
+    /// of being kept as a second list — see `KeychainSessionAccounts.perDeviceContact`.
+    func sessionAccounts() -> [String] {
+        accounts(withPrefix: KeychainSessionAccounts.prefix)
+            .filter(KeychainSessionAccounts.isSessionState)
+    }
+
     private func accounts(withPrefix prefix: String) -> [String] {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

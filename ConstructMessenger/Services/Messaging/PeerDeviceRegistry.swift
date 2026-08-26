@@ -31,12 +31,17 @@ import Foundation
 /// it must not be mistaken for evidence. Closing that needs cross-signed device sets; see
 /// `decisions/identity-is-a-set-of-keys.md`.
 ///
-/// **Not durable.** In memory, with the same hour-long TTL the own-device cache uses. A miss is
-/// safe by construction: every consumer treats "we do not know this account's devices" as "cannot
-/// decide", which is the answer that attempts the message rather than discarding it. Persistence
-/// becomes necessary only when sessions are addressed per device and the registry has to survive
-/// a relaunch to route an incoming message — at which point the session store itself carries the
-/// same fact and should be the source, rather than this becoming a second one.
+/// **Durable answers come from the session store, not from here.** The in-memory map is an hour-long
+/// cache of what the key server last said. Behind it sits the set of devices we actually hold
+/// sessions with, read from the Keychain session namespace — which is the same fact, already on
+/// disk, already surviving relaunch. Keeping a second list in agreement with it is the antipattern
+/// this project keeps paying for, so there is no second list: `KeychainSessionAccounts` owns the
+/// shape and both readers go through it.
+///
+/// The two answer slightly different questions and that is deliberate. The cache says "these are
+/// the devices the account has"; the session store says "these are the devices we have talked to".
+/// The second is a subset, it is what survives a restart, and it is the honest basis for deciding
+/// that a copy belongs to a sibling — we can only conclude that about devices we know.
 @MainActor
 final class PeerDeviceRegistry {
 
@@ -78,6 +83,32 @@ final class PeerDeviceRegistry {
     /// Identity public keys of `userId`'s devices — the other half of a copy tag's pair secret.
     func identityKeys(of userId: String) -> [Data] {
         knownDevices(of: userId).map(\.bundle.identityPublic)
+    }
+
+    /// Device ids of `userId` we hold a session with, read from the session store.
+    ///
+    /// Survives relaunch, because the sessions do. This is the set the receive path can reason
+    /// about after a cold start, when the in-memory cache is empty and the message being routed
+    /// cannot wait for a network fetch.
+    ///
+    /// Sorted so the answer is stable: the Keychain returns items in no defined order, and a
+    /// caller that walks candidates would otherwise try them differently on every launch, making
+    /// a failure reproduce only sometimes.
+    func sessionDeviceIds(of userId: String) -> [String] {
+        KeychainManager.shared.sessionAccounts()
+            .compactMap(KeychainSessionAccounts.perDeviceContact(ofAccount:))
+            .filter { $0.userId == userId }
+            .map(\.deviceId)
+            .sorted()
+    }
+
+    /// Whether we can claim to know this account's devices.
+    ///
+    /// True when either source has something to say. The consumer that concludes "this copy is for
+    /// another device" needs this to be honest: claiming completeness we do not have turns a copy
+    /// addressed to us into one we discard, silently.
+    func deviceSetIsKnown(for userId: String) -> Bool {
+        !knownDevices(of: userId).isEmpty || !sessionDeviceIds(of: userId).isEmpty
     }
 
     /// Forget everything. Used when the account changes under us (link, recovery, sign-out), where

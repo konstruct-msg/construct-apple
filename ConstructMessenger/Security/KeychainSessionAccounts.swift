@@ -15,9 +15,20 @@
 //
 //  The `session_` namespace has three tenants and only two of them are session state:
 //
-//      session_<ServerUserId>           live ratchet blob     → delete
-//      session_archives_<ServerUserId>  archived sessions     → delete
-//      session_token                    the auth token        → KEEP
+//      session_<ServerUserId>              live ratchet blob      → delete
+//      session_<ServerUserId>:<DeviceId>   per-device ratchet     → delete
+//      session_archives_<ServerUserId>     archived sessions      → delete
+//      session_token                       the auth token         → KEEP
+//
+//  SECOND INCIDENT (found 2026-08-26): the per-device row above was missing, and the file said
+//  in as many words that it could not exist — "No such id should exist (see UserIdentity.swift
+//  — session addressing is ServerUserId)". It has existed since multi-device shipped:
+//  `MultiDeviceSendCoordinator.sessionKey(userId:deviceId:)` produces `<uuid>:<hex>`, which is
+//  neither shape below, so every per-device ratchet blob survived `deleteAllE2EESessions()` —
+//  called from `prepareForDeviceLink()` and `resetOrchestratorStateForDeviceLink()`, i.e. at
+//  exactly the moment whose whole purpose is that the next identity cannot inherit the previous
+//  one's ratchet state. The same defect as 2026-08-08, one shape further along, and the comment
+//  ruling it out is why nobody looked.
 //
 //  That last one is why the fix is not `hasPrefix("session_")`. `deleteAllE2EESessions()` is
 //  called from `prepareForDeviceLink()`, which runs while the user is still signed in — a
@@ -51,9 +62,50 @@ enum KeychainSessionAccounts {
         return isIdentityShaped(String(suffix))
     }
 
-    /// A `ServerUserId` (36-char dashed UUID) or a `CryptoDeviceId` (32 hex chars).
+    /// A `ServerUserId` (36-char dashed UUID), a `CryptoDeviceId` (32 hex chars), or the
+    /// per-device pair `<ServerUserId>:<CryptoDeviceId>` the multi-device session layer writes.
+    ///
+    /// The pair is split on the colon and both halves checked, rather than matched by a looser
+    /// pattern: a shape that accepts anything containing a colon would start deleting whatever
+    /// tenant of this namespace is added next, and the point of this predicate is to fail in the
+    /// safe direction.
     private static func isIdentityShaped(_ id: String) -> Bool {
+        if let colon = id.firstIndex(of: ":") {
+            let user = String(id[id.startIndex..<colon])
+            let device = String(id[id.index(after: colon)...])
+            return isSingleIdentityShaped(user) && isSingleIdentityShaped(device)
+        }
+        return isSingleIdentityShaped(id)
+    }
+
+    private static func isSingleIdentityShaped(_ id: String) -> Bool {
         if UUID(uuidString: id) != nil { return true }
         return id.count == 32 && id.allSatisfy(\.isHexDigit)
+    }
+
+    /// The account name for a session, and the only place it is spelled.
+    ///
+    /// Both the wipe and the peer-device index read this namespace, and a second definition of
+    /// "what a session account looks like" is how the two incidents above happened.
+    static func account(for contactId: String) -> String { prefix + contactId }
+
+    /// The contact id a session account names, or `nil` when the account is not session state.
+    static func contactId(ofAccount account: String) -> String? {
+        guard isSessionState(account) else { return nil }
+        var suffix = account.dropFirst(prefix.count)
+        if suffix.hasPrefix(archiveInfix) { suffix = suffix.dropFirst(archiveInfix.count) }
+        return String(suffix)
+    }
+
+    /// The `(userId, deviceId)` a per-device session account names, or `nil` for the plain form.
+    ///
+    /// This is what makes the session store its own device index: the set of a peer's devices we
+    /// hold sessions with is derivable from the accounts already on disk, so nothing has to keep
+    /// a second list in agreement with it.
+    static func perDeviceContact(ofAccount account: String) -> (userId: String, deviceId: String)? {
+        guard let contactId = contactId(ofAccount: account),
+              let colon = contactId.firstIndex(of: ":") else { return nil }
+        return (String(contactId[contactId.startIndex..<colon]),
+                String(contactId[contactId.index(after: colon)...]))
     }
 }
