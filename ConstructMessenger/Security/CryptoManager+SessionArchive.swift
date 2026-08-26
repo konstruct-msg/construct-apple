@@ -69,10 +69,18 @@ extension CryptoManager {
             Log.debug("Restored session (CFE): \(userId)", category: "CryptoManager")
             return true
         } catch {
-            // Delete the corrupt/incompatible entry cleanly instead of writing empty bytes
-            // (writing Data() followed by a failed SecItemAdd would silently delete the key).
+            // Three causes reach here, and the error text distinguishes them: a corrupt blob, a
+            // format the core no longer reads, and — since 2026-08-26 — an identity mismatch,
+            // where the record names a contact or an author other than the one we are loading it
+            // as. The entry is deleted in every case: an unusable blob left on disk is what let a
+            // stale session resurrect on the next invite redeem (2026-08-17). A mismatch in
+            // particular is a defect in whoever chose the storage key, not damaged data, so the
+            // full error is logged rather than summarised.
+            //
+            // Delete cleanly rather than writing empty bytes (writing Data() followed by a failed
+            // SecItemAdd would silently delete the key).
             KeychainManager.shared.deleteSession(for: userId)
-            Log.error("Session import FAILED for \(userId) (corrupt/incompatible — deleted): \(error)", category: "CryptoManager")
+            Log.error("Session import FAILED for \(userId) (unusable — deleted): \(error)", category: "CryptoManager")
             return false
         }
     }
