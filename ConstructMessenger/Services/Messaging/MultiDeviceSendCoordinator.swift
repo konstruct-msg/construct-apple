@@ -153,15 +153,22 @@ final class MultiDeviceSendCoordinator {
     /// E2EE session keyed by `recipientUserId:deviceId`.
     ///
     /// Errors per-device are logged and skipped; the function never throws.
+    ///
+    /// `chunks` are the **same KNST payloads the primary send used**, not the raw plaintext. The
+    /// copies differ from the primary send only in which session encrypts them, so rebuilding a
+    /// plan here would be a second framing of one message — and it used to be worse than that:
+    /// this path sent the plaintext in a single shot with `chunkCount: 1`, so any message that
+    /// needed chunking arrived at the peer's other devices as one oversized frame nothing could
+    /// reassemble. It had no caller, so nobody saw it.
     func fanOutToRecipientDevices(
-        plaintext: Data,
+        chunks: [Data],
         messageId: String,
         recipientUserId: String,
         senderUserId: String,
         senderDeviceId: String,
         timestamp: UInt64
     ) async {
-        guard !senderDeviceId.isEmpty else { return }
+        guard !senderDeviceId.isEmpty, !chunks.isEmpty else { return }
         do {
             // Per-device fan-out to a recipient: a device we have no session with yet needs
             // X3DH, so this fetch legitimately consumes a one-time pre-key.
@@ -173,8 +180,13 @@ final class MultiDeviceSendCoordinator {
                 recipientDevices: bundles,
                 ownDevices: [],
                 ourDeviceId: senderDeviceId,
-                recipientIsSelf: false
+                recipientIsSelf: false,
+                // The primary send already reached the device the recipient's pinned key names —
+                // it is the session `SessionAddressing` resolves to. Planning a copy for it would
+                // put two ciphertexts of one message through one ratchet.
+                primarySendCovered: SessionAddressing.contactId(forPeer: recipientUserId)
             )
+            guard !targets.isEmpty else { return }
 
             for target in targets {
                 // The tag replaces `-fd-<deviceId.prefix(8)>`, which named the target device in
@@ -188,21 +200,24 @@ final class MultiDeviceSendCoordinator {
                     targetIdentityPublic: target.identityPublic,
                     ourIdentityPrivateKey: ourIdentityKey
                 )
-                await sendToDevice(
-                    plaintext: plaintext,
-                    messageId: DeviceDeliveryPlan.wireId(
-                        baseMessageId: messageId, tag: tag,
-                        audience: target.audience, chunkIndex: 0, chunkCount: 1
-                    ),
-                    networkRecipientUserId: recipientUserId,
-                    contactId: target.deviceId,
-                    bundle: target.bundle,
-                    senderUserId: senderUserId,
-                    senderDeviceId: senderDeviceId,
-                    recipientDeviceId: target.deviceId,
-                    timestamp: timestamp,
-                    contentType: .e2EeSignal
-                )
+                for (index, payload) in chunks.enumerated() {
+                    await sendToDevice(
+                        plaintext: payload,
+                        messageId: DeviceDeliveryPlan.wireId(
+                            baseMessageId: messageId, tag: tag,
+                            audience: target.audience,
+                            chunkIndex: index, chunkCount: chunks.count
+                        ),
+                        networkRecipientUserId: recipientUserId,
+                        contactId: target.deviceId,
+                        bundle: target.bundle,
+                        senderUserId: senderUserId,
+                        senderDeviceId: senderDeviceId,
+                        recipientDeviceId: target.deviceId,
+                        timestamp: timestamp,
+                        contentType: .e2EeSignal
+                    )
+                }
             }
         } catch {
             Log.info(

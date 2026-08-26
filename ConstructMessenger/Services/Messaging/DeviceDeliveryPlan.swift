@@ -96,11 +96,18 @@ enum DeviceDeliveryPlan {
     ///     addressed to this device.
     ///   - recipientIsSelf: a note to self. Then the recipient's devices *are* our devices, and
     ///     planning both audiences would send every replica two copies of one message.
+    ///   - primarySendCovered: the recipient device the ordinary send already reached, which is
+    ///     the one their pinned identity key names. Before the addressing flip the primary send
+    ///     went to a session keyed by the account and the per-device copies to sessions keyed by
+    ///     `<userId>:<deviceId>`, so the two could not collide. They are the same session now:
+    ///     planning a copy for that device would put two ciphertexts of one message through one
+    ///     ratchet, and the peer would render it twice.
     static func targets(
         recipientDevices: [DeviceBundleData],
         ownDevices: [DeviceBundleData],
         ourDeviceId: String?,
-        recipientIsSelf: Bool
+        recipientIsSelf: Bool,
+        primarySendCovered: String? = nil
     ) -> [DeviceDeliveryTarget] {
         let replicas: [DeviceDeliveryTarget] = {
             guard let ourDeviceId, !ourDeviceId.isEmpty else { return [] }
@@ -117,13 +124,18 @@ enum DeviceDeliveryPlan {
 
         guard !recipientIsSelf else { return replicas }
 
-        let theirs = recipientDevices.map {
-            DeviceDeliveryTarget(
-                deviceId: $0.deviceId,
-                bundle: $0.bundle,
-                audience: .recipient
-            )
-        }
+        let theirs = recipientDevices
+            .filter { device in
+                guard let primarySendCovered, !primarySendCovered.isEmpty else { return true }
+                return device.deviceId != primarySendCovered
+            }
+            .map {
+                DeviceDeliveryTarget(
+                    deviceId: $0.deviceId,
+                    bundle: $0.bundle,
+                    audience: .recipient
+                )
+            }
         return theirs + replicas
     }
 

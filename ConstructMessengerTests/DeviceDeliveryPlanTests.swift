@@ -123,6 +123,40 @@ final class DeviceDeliveryPlanTests: XCTestCase {
         XCTAssertEqual(targets.last?.audience, .ownReplica)
     }
 
+    /// The primary send already reached the device the recipient's pinned key names, and after
+    /// the addressing flip that is the *same session* a per-device copy would use. Planning one
+    /// would put two ciphertexts of one message through one ratchet, and the peer would render it
+    /// twice.
+    ///
+    /// Mutation: drop the `primarySendCovered` filter — this reddens.
+    func testTheDeviceThePrimarySendReachedIsNotPlannedAgain() {
+        let targets = DeviceDeliveryPlan.targets(
+            recipientDevices: [bundle("r1"), bundle("r2"), bundle("r3")],
+            ownDevices: [bundle("me")],
+            ourDeviceId: "me",
+            recipientIsSelf: false,
+            primarySendCovered: "r2"
+        )
+        XCTAssertEqual(targets.map(\.deviceId), ["r1", "r3"])
+    }
+
+    /// Not knowing which device the primary send reached must not silently drop a target: the
+    /// cost of one extra copy is a failed decrypt, the cost of a missing one is a device that
+    /// never sees the message.
+    func testAnUnknownPrimaryTargetPlansEveryDevice() {
+        for covered in [nil, ""] {
+            let targets = DeviceDeliveryPlan.targets(
+                recipientDevices: [bundle("r1"), bundle("r2")],
+                ownDevices: [],
+                ourDeviceId: "me",
+                recipientIsSelf: false,
+                primarySendCovered: covered
+            )
+            XCTAssertEqual(targets.map(\.deviceId), ["r1", "r2"],
+                           "primarySendCovered = \(String(describing: covered))")
+        }
+    }
+
     // MARK: - What the copy says out loud
 
     /// A single-chunk copy carries no chunk suffix; a multi-chunk one carries it after the tag, so

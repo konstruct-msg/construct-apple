@@ -552,12 +552,31 @@ final class ChatSendCoordinator {
                         // C1c: sync the same wire bytes as the primary send (MessageContent / pre-KNST),
                         // not display JSON. Coordinator re-applies KNST framing per own device.
                         let wireForSync = plaintextData
+                        let chunksForFanOut = plan.payloads
                         Task { [weak self] in
                             _ = self
                             await MultiDeviceSendCoordinator.shared.sendSenderSync(
                                 plaintext: wireForSync,
                                 messageId: messageId,
                                 originalRecipientUserId: recipientId,
+                                senderUserId: currentUserId,
+                                senderDeviceId: myDeviceId,
+                                timestamp: message.timestamp
+                            )
+                            // The recipient's *other* devices. The primary send above reached one
+                            // of them — the device their pinned key names — and the server copies
+                            // that envelope to all their streams, but only that device holds the
+                            // session that opens it. Written since multi-device shipped and never
+                            // called: with per-device sessions unopenable it could not have
+                            // worked, and calling it would have burned a one-time prekey per send
+                            // for a copy nobody could read.
+                            //
+                            // Same chunks as the primary send, so the peer's reassembler sees one
+                            // framing of one message.
+                            await MultiDeviceSendCoordinator.shared.fanOutToRecipientDevices(
+                                chunks: chunksForFanOut,
+                                messageId: messageId,
+                                recipientUserId: recipientId,
                                 senderUserId: currentUserId,
                                 senderDeviceId: myDeviceId,
                                 timestamp: message.timestamp
@@ -911,13 +930,24 @@ final class ChatSendCoordinator {
                 )
 
                 if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
+                    let now = UInt64(Date().timeIntervalSince1970)
                     await MultiDeviceSendCoordinator.shared.sendSenderSync(
                         plaintext: payload,
                         messageId: actionId,
                         originalRecipientUserId: recipientId,
                         senderUserId: currentUserId,
                         senderDeviceId: myDeviceId,
-                        timestamp: UInt64(Date().timeIntervalSince1970)
+                        timestamp: now
+                    )
+                    // A reaction or edit is as much a per-device fact as a message: a device that
+                    // never sees it renders the transcript differently from its siblings.
+                    await MultiDeviceSendCoordinator.shared.fanOutToRecipientDevices(
+                        chunks: chunkPlan.payloads,
+                        messageId: actionId,
+                        recipientUserId: recipientId,
+                        senderUserId: currentUserId,
+                        senderDeviceId: myDeviceId,
+                        timestamp: now
                     )
                 }
             } catch is StealthDowngradeBlocked {

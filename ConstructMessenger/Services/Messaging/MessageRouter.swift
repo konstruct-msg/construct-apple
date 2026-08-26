@@ -287,6 +287,39 @@ final class MessageRouter {
             return
         }
 
+        // A per-device copy from a peer, addressed to one of our *siblings*.
+        //
+        // Delivery is per account, not per device: `messaging-service/src/core.rs` writes each
+        // envelope to every one of the recipient's per-device streams. So once a sender fans out,
+        // an account with three devices receives, on each of them, the two copies meant for the
+        // other two — and only one session can open each.
+        //
+        // Without this the foreign copies take the ordinary decrypt path, fail, and on
+        // `messageNumber == 0` reach for a key bundle and can drive session healing — which
+        // archives a healthy session. That is the churn the device tag exists to prevent, and it
+        // only became reachable now that anything calls `fanOutToRecipientDevices`.
+        //
+        // `.undecidable` means we cannot tell — a peer device we never pinned looks the same as a
+        // sibling's copy — and it is treated as ours: attempting a copy costs a failed decrypt,
+        // discarding one loses a message from the transcript.
+        if DeviceCopyWireId.audience(of: message.id) == .recipient {
+            let verdict = DeviceCopyWireId.verdict(
+                wireId: message.id,
+                ourDeviceId: AuthSessionManager.shared.currentDeviceId,
+                ourIdentityPrivateKey: MultiDeviceSendCoordinator.shared.ourIdentityPrivateKey(),
+                peerIdentityKeys: PeerDeviceRegistry.shared.identityKeys(of: message.from),
+                peerDeviceSetIsComplete: PeerDeviceRegistry.shared.deviceSetIsKnown(for: message.from)
+            )
+            if verdict == .foreign {
+                Log.debug(
+                    "FAN-OUT: \(message.id.prefix(8))… is addressed to another of our devices — skipping",
+                    category: "MessageRouter"
+                )
+                PersistentACKStore.shared.markProcessed(message.id, senderId: message.from, in: context)
+                return
+            }
+        }
+
         // Redelivery fast path — **before** the unseal, which is the whole point.
         //
         // The server ignores `since_cursor` and replays below the watermark, so the stream is
@@ -2190,7 +2223,13 @@ final class MessageRouter {
         }()
         let previewSource = LocalMessagePayload.decode(storagePayload).previewHint
 
-        var canonicalId = (e2eMessageId ?? messageData.id).lowercased()
+        // A per-device copy travels under `<baseId>-fd-<tag>`, so the envelope id differs from
+        // device to device while the message is one message. The KNST frame carries the sender's
+        // own id and is preferred anyway; the fallback strips the suffix so a transcript row has
+        // the same id on every device of the account. Without it a reaction sent from one device
+        // would reference an id its siblings never stored.
+        let envelopeId = DeviceCopyWireId.baseId(of: messageData.id) ?? messageData.id
+        var canonicalId = (e2eMessageId ?? envelopeId).lowercased()
         let fetchRequest = Message.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", canonicalId)
         fetchRequest.fetchLimit = 1
