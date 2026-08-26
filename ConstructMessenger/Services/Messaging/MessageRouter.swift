@@ -1671,13 +1671,22 @@ final class MessageRouter {
         message: ChatMessage,
         in context: NSManagedObjectContext
     ) {
-        let myUserId = AuthSessionManager.shared.currentUserId ?? ""
         let suiteId = Int(KeychainManager.shared.loadSessionSuiteId(userId: contactId) ?? 0)
+
+        // The pair the core actually ranked. These lines used to print the signed-in account id
+        // against `contactId`, with a `>` or `<` between them — a restatement of the rule in the
+        // account space that no code here computed. For two devices of one account it reads
+        // `d184760b… > d184760b…` while the decision is Initiator: a log that contradicts the
+        // decision, in the log someone reads precisely when they are chasing a deadlock.
+        // Stand run 2026-08-26 printed it that way on a pair where both spaces happened to agree.
+        let mine = SessionAddressing.localIdentity()
+        let theirs = SessionAddressing.contactId(forPeer: contactId) ?? "unnameable"
+        let ranked = "\(mine.prefix(8))… vs \(theirs.prefix(8))…"
 
         if role == "Initiator" {
             // We are INITIATOR (higher device id — see SessionAddressing.role) — WE WIN the tie-break.
             // The Rust session is already intact thanks to the DR snapshot/rollback.
-            Log.info("SESSION_STATE[tie_break_win]: kept INITIATOR (my=\(myUserId.prefix(8))… > peer=\(contactId.prefix(8))…), suiteId=\(suiteId)", category: "SessionInit")
+            Log.info("SESSION_STATE[tie_break_win]: kept INITIATOR (core ranked \(ranked)), suiteId=\(suiteId)", category: "SessionInit")
             PersistentACKStore.shared.markProcessed(message.id, senderId: contactId, in: context)
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "tie_break_win")
             delegate?.messageRouter(self, didWinTieBreak: contactId)
@@ -1689,7 +1698,7 @@ final class MessageRouter {
                 delegate?.messageRouter(self, needsEndSession: contactId)
                 return
             }
-            Log.info("SESSION_STATE[heal_triggered]: becoming RESPONDER (my=\(myUserId.prefix(8))… < peer=\(contactId.prefix(8))…), suiteId=\(suiteId)", category: "SessionInit")
+            Log.info("SESSION_STATE[heal_triggered]: becoming RESPONDER (core ranked \(ranked)), suiteId=\(suiteId)", category: "SessionInit")
             CryptoManager.shared.archiveSession(for: contactId, reason: .manualReset)
             SessionHealingService.shared.enqueue(message, in: context)
             pendingQueue.enqueue(message, for: contactId)
