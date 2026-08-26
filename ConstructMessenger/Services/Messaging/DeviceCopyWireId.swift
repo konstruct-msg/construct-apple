@@ -159,9 +159,10 @@ enum SenderSyncRecovery {
 
     /// Whether the candidate list names no device at all, and so cannot recover on its own.
     ///
-    /// A candidate is a session key: `userId` for the primary session, `userId:deviceId` for a
-    /// per-device one. Establishing a session needs the device id — that is what a bundle is
-    /// fetched for — so a list holding only the plain `userId` form can do nothing.
+    /// A candidate is a contact id. Since 2026-08-26 a per-device one is the bare `deviceId`;
+    /// before that it was `userId:deviceId`, and this asked whether any candidate contained a
+    /// colon. Establishing a session needs the device id — that is what a bundle is fetched for —
+    /// so a list holding only an account id can do nothing.
     ///
     /// That was the state of every freshly linked device until 2026-08-18: own devices were known
     /// only from a cache the **send** path filled, so a device that had linked and not yet sent
@@ -169,6 +170,6 @@ enum SenderSyncRecovery {
     /// having no `:`, and returned — no session, no fetch, no log line. Seen on the two-simulator
     /// stand 2026-08-17: a linked device received both copies and neither reached the transcript.
     static func needsOwnDeviceRefresh(candidates: [String]) -> Bool {
-        !candidates.contains { $0.contains(":") }
+        !candidates.contains(where: SessionAddressing.isCryptoIdentity)
     }
 }

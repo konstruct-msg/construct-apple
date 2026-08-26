@@ -85,20 +85,35 @@ final class PeerDeviceRegistry {
         knownDevices(of: userId).map(\.bundle.identityPublic)
     }
 
-    /// Device ids of `userId` we hold a session with, read from the session store.
+    /// Device ids of `userId` we hold a session with.
     ///
-    /// Survives relaunch, because the sessions do. This is the set the receive path can reason
-    /// about after a cold start, when the in-memory cache is empty and the message being routed
-    /// cannot wait for a network fetch.
+    /// ## What changed, and what it costs
+    ///
+    /// Until the addressing flip a session account was `session_<userId>:<deviceId>`, so this
+    /// could be answered from the Keychain alone — durably, after a cold start, without a
+    /// network fetch. A contact id is now the bare device id: the account no longer records
+    /// whose device it is, and the store cannot attribute a session to an account by itself.
+    ///
+    /// So this intersects what the key server last told us with what we actually hold sessions
+    /// for. Warm cache: the same answer as before. Cold cache: empty, which
+    /// `deviceSetIsKnown(for:)` reports honestly as "we do not know" — the receive path then
+    /// returns `.undecidable` and attempts the copy, which is the safe direction.
+    ///
+    /// Closing that gap is the remaining half of the flip: the account this device belongs to
+    /// becomes a field of the session record, not part of its name. See
+    /// `decisions/session-record-is-self-describing.md`.
     ///
     /// Sorted so the answer is stable: the Keychain returns items in no defined order, and a
     /// caller that walks candidates would otherwise try them differently on every launch, making
     /// a failure reproduce only sometimes.
     func sessionDeviceIds(of userId: String) -> [String] {
-        KeychainManager.shared.sessionAccounts()
-            .compactMap(KeychainSessionAccounts.perDeviceContact(ofAccount:))
-            .filter { $0.userId == userId }
+        let held = Set(
+            KeychainManager.shared.sessionAccounts()
+                .compactMap(KeychainSessionAccounts.contactId(ofAccount:))
+        )
+        return knownDevices(of: userId)
             .map(\.deviceId)
+            .filter(held.contains)
             .sorted()
     }
 

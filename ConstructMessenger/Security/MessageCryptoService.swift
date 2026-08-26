@@ -41,20 +41,20 @@ final class MessageCryptoService {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        if !core.hasSession(contactId: userId) {
+        if !core.hasSession(contactId: SessionAddressing.contactId(forPeer: userId)) {
             if !restoreSession(userId) {
                 throw CryptoManagerError.sessionNotFound
             }
         }
 
-        guard core.hasSession(contactId: userId) else {
+        guard core.hasSession(contactId: SessionAddressing.contactId(forPeer: userId)) else {
             throw CryptoManagerError.sessionNotFound
         }
 
         // Read suiteId from the Rust core (authoritative) — NOT UserDefaults.
         // UserDefaults can be cleared by app data reset / iCloud restore while the
         // Keychain session survives, producing suiteId=0 and a protocol mismatch.
-        var suiteId = core.getSessionSuiteId(contactId: userId)
+        var suiteId = core.getSessionSuiteId(contactId: SessionAddressing.contactId(forPeer: userId))
         if suiteId == 0 {
             // Rust core doesn't know the suiteId yet (session not fully loaded?) —
             // fall back to UserDefaults and log so we can investigate.
@@ -64,7 +64,7 @@ final class MessageCryptoService {
             }
         } else {
             // Keep Keychain in sync so the fallback path stays correct.
-            KeychainManager.shared.saveSessionSuiteId(userId: userId, suiteId: suiteId)
+            KeychainManager.shared.saveSessionSuiteId(userId: SessionAddressing.contactId(forPeer: userId), suiteId: suiteId)
         }
 
         #if DEBUG
@@ -76,7 +76,7 @@ final class MessageCryptoService {
         #endif
 
         do {
-            let rustComponents = try core.encryptMessage(contactId: userId, plaintext: Data(message.utf8))
+            let rustComponents = try core.encryptMessage(contactId: SessionAddressing.contactId(forPeer: userId), plaintext: Data(message.utf8))
 
             #if DEBUG
             Log.debug("ENCRYPT: Rust core returned components", category: "CryptoManager")
@@ -136,13 +136,13 @@ final class MessageCryptoService {
 
         let contactId = contactIdOverride ?? message.from
 
-        if !core.hasSession(contactId: contactId) {
+        if !core.hasSession(contactId: SessionAddressing.contactId(forPeer: contactId)) {
             if !restoreSession(contactId) {
                 throw CryptoManagerError.sessionNotFound
             }
         }
 
-        guard core.hasSession(contactId: contactId) else {
+        guard core.hasSession(contactId: SessionAddressing.contactId(forPeer: contactId)) else {
             throw CryptoManagerError.sessionNotFound
         }
 
@@ -150,7 +150,7 @@ final class MessageCryptoService {
             let rawContent = message.content
             let contentForDecrypt = rawContent
             let result = try core.decryptMessage(
-                contactId: contactId,
+                contactId: SessionAddressing.contactId(forPeer: contactId),
                 ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                 messageNumber: message.messageNumber,
                 content: [UInt8](contentForDecrypt),

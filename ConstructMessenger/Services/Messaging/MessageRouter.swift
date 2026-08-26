@@ -2454,10 +2454,10 @@ final class MessageRouter {
         if !message.senderDeviceId.isEmpty {
             // Only ever populated by a local/federated path that does not go through the blanking
             // server. Free to try, and it short-circuits the loop when present.
-            keys.insert(MultiDeviceSendCoordinator.sessionKey(userId: message.from, deviceId: message.senderDeviceId), at: 0)
+            keys.insert(message.senderDeviceId, at: 0)
         }
         for deviceId in MultiDeviceSendCoordinator.shared.knownOwnDeviceIds(myUserId: myUserId) {
-            let key = MultiDeviceSendCoordinator.sessionKey(userId: myUserId, deviceId: deviceId)
+            let key = deviceId
             if !keys.contains(key) { keys.append(key) }
         }
         return keys
@@ -2670,7 +2670,7 @@ final class MessageRouter {
 
         if !original.senderDeviceId.isEmpty {
             CryptoManager.shared.saveSessionToKeychain(
-                for: MultiDeviceSendCoordinator.sessionKey(userId: original.from, deviceId: original.senderDeviceId)
+                for: original.senderDeviceId
             )
         }
         Log.info("SENDER_SYNC: saved outgoing message in conversation with \(partnerUserId.prefix(8))…", category: "MessageRouter")

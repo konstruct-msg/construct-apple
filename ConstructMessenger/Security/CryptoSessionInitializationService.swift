@@ -31,7 +31,7 @@ final class CryptoSessionInitializationService {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        if core.hasSession(contactId: userId) {
+        if core.hasSession(contactId: SessionAddressing.contactId(forPeer: userId)) {
             archiveSession(userId, .manualReset)
         }
 
@@ -65,12 +65,12 @@ final class CryptoSessionInitializationService {
 
         do {
             let sessionId = allowStale
-                ? try core.initSessionAllowingStale(contactId: userId, recipientBundle: bundle)
-                : try core.initSession(contactId: userId, recipientBundle: bundle)
+                ? try core.initSessionAllowingStale(contactId: SessionAddressing.contactId(forPeer: userId), recipientBundle: bundle)
+                : try core.initSession(contactId: SessionAddressing.contactId(forPeer: userId), recipientBundle: bundle)
             // Persist the NEGOTIATED suite (suite 3 when both sides support the PQ
             // ratchet), not the bundle's crypto suite — the bundle only ever says 1/2.
-            let negotiatedSuite = core.getSessionSuiteId(contactId: userId)
-            KeychainManager.shared.saveSessionSuiteId(userId: userId, suiteId: negotiatedSuite > 0 ? negotiatedSuite : suiteID)
+            let negotiatedSuite = core.getSessionSuiteId(contactId: SessionAddressing.contactId(forPeer: userId))
+            KeychainManager.shared.saveSessionSuiteId(userId: SessionAddressing.contactId(forPeer: userId), suiteId: negotiatedSuite > 0 ? negotiatedSuite : suiteID)
             saveSession(userId)
             Log.info("SESSION_STATE[suite_negotiated]: peer=\(userId.prefix(8))…, bundleSuite=\(suiteID), supportsPqRatchet=\(supportsPqRatchet), negotiated=\(negotiatedSuite)", category: "SessionInit")
             Log.info("INITIATOR session created\(allowStale ? " (degraded/at-risk)" : ""): \(sessionId.prefix(16))...", category: "CryptoManager")
@@ -106,7 +106,7 @@ final class CryptoSessionInitializationService {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        if core.hasSession(contactId: userId) {
+        if core.hasSession(contactId: SessionAddressing.contactId(forPeer: userId)) {
             archiveSession(userId, .manualReset)
         }
 
@@ -189,7 +189,7 @@ final class CryptoSessionInitializationService {
 
         do {
             let result = try core.initReceivingSession(
-                contactId: userId,
+                contactId: SessionAddressing.contactId(forPeer: userId),
                 recipientBundle: bundle,
                 firstMessage: firstMsg
             )
@@ -201,7 +201,7 @@ final class CryptoSessionInitializationService {
             // plaintext must not be in it. Length alone is enough to diagnose an init.
             Log.info("Session initialized successfully, decrypted \(plaintext.count)B", category: "CryptoManager")
 
-            KeychainManager.shared.saveSessionSuiteId(userId: userId, suiteId: suiteID)
+            KeychainManager.shared.saveSessionSuiteId(userId: SessionAddressing.contactId(forPeer: userId), suiteId: suiteID)
             // NOTE: saveSession deferred until after PQXDH strengthening completes.
 
             if !firstMessage.kemCiphertext.isEmpty {

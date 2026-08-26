@@ -49,11 +49,6 @@ final class MultiDeviceSendCoordinator {
 
     // MARK: - Public API
 
-    /// Derive the session contactId for a specific device (non-primary sessions).
-    static func sessionKey(userId: String, deviceId: String) -> String {
-        "\(userId):\(deviceId)"
-    }
-
     /// Our own other devices, as far as this process currently knows — cache only, never a fetch.
     ///
     /// Used by the SENDER_SYNC receive path to decide which sessions to try and to derive the
@@ -200,7 +195,7 @@ final class MultiDeviceSendCoordinator {
                         audience: target.audience, chunkIndex: 0, chunkCount: 1
                     ),
                     networkRecipientUserId: recipientUserId,
-                    contactId: Self.sessionKey(userId: recipientUserId, deviceId: target.deviceId),
+                    contactId: target.deviceId,
                     bundle: target.bundle,
                     senderUserId: senderUserId,
                     senderDeviceId: senderDeviceId,
@@ -325,7 +320,7 @@ final class MultiDeviceSendCoordinator {
                             chunkIndex: index, chunkCount: plan.payloads.count
                         ),
                         networkRecipientUserId: senderUserId,
-                        contactId: Self.sessionKey(userId: senderUserId, deviceId: target.deviceId),
+                        contactId: target.deviceId,
                         bundle: target.bundle,
                         senderUserId: senderUserId,
                         senderDeviceId: senderDeviceId,

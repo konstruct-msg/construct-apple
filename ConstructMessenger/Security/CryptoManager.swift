@@ -35,17 +35,23 @@ class CryptoManager {
     private var _bootstrapCore: ClassicCryptoCore?
     private var _cachedUserId: String?
 
-    /// Returns the local user identity for Double Ratchet AEAD associated data.
+    /// Returns the local identity for Double Ratchet AEAD associated data: **this device's id**.
     ///
-    /// MUST be the server-assigned UUID so both parties bind the session to the same
-    /// identifier: the INITIATOR stores `local_user_id = serverUUID` and the RESPONDER
-    /// stores `contact_id = serverUUID` for the same party — making the swapped AD
-    /// (`local_user_id || contact_id` on encrypt ↔ `contact_id || local_user_id` on
-    /// decrypt) deterministically symmetric.  Using the device-hash here (32 hex chars)
-    /// while `contact_id` is a 36-char UUID causes permanent AEAD failure.
+    /// The AD is mirrored — the INITIATOR's `local_user_id` must equal the RESPONDER's
+    /// `contact_id` for the same party, and vice versa — so both sides have to name the same
+    /// thing. Until 2026-08-26 that thing was the server UUID, which works only while an account
+    /// has one device: the moment a second appeared, the send path addressed it as
+    /// `<userId>:<deviceId>` while this stayed a bare UUID, and the mirror broke permanently on
+    /// every per-device message.
+    ///
+    /// A device id names a device, which is what a ratchet is actually between. See
+    /// `SessionAddressing` for why it is safe to address by, and
+    /// `decisions/identity-is-a-set-of-keys.md` for why the account space does not belong here
+    /// at all.
     private var cryptoLocalUserId: String {
-        _cachedUserId ?? ""
+        SessionAddressing.localIdentity()
     }
+
     private let coreProvider = CryptoCoreProvider()
     
     // Serializes all access to orchestratorCore and _bootstrapCore so that
@@ -235,16 +241,16 @@ class CryptoManager {
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { return false }
         do {
-            let sessionData = Data(try core.exportSession(contactId: userId))
+            let sessionData = Data(try core.exportSession(contactId: SessionAddressing.contactId(forPeer: userId)))
             var saved = false
             for attempt in 1...3 {
-                saved = KeychainManager.shared.saveSessionData(sessionData, for: userId)
+                saved = KeychainManager.shared.saveSessionData(sessionData, for: SessionAddressing.contactId(forPeer: userId))
                 guard saved else {
                     Log.error("Keychain write failed (attempt \(attempt)/3): \(userId)", category: "CryptoManager")
                     continue
                 }
                 // Verify round-trip: read back and compare byte count.
-                if let readBack = KeychainManager.shared.loadSessionData(for: userId),
+                if let readBack = KeychainManager.shared.loadSessionData(for: SessionAddressing.contactId(forPeer: userId)),
                    readBack.count == sessionData.count {
                     Log.debug("Session saved+verified (\(sessionData.count)B): \(userId)", category: "CryptoManager")
                     return true
@@ -656,7 +662,7 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        try core.applyPqContribution(contactId: contactId, kemSharedSecret: kemSharedSecret)
+        try core.applyPqContribution(contactId: SessionAddressing.contactId(forPeer: contactId), kemSharedSecret: kemSharedSecret)
     }
 
     /// Register a Kyber KEM shared secret for deferred application and persist CFE snapshot.
@@ -665,7 +671,7 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { return false }
-        core.registerPqDeferred(contactId: contactId, otpkId: otpkId, sharedSecret: sharedSecret)
+        core.registerPqDeferred(contactId: SessionAddressing.contactId(forPeer: contactId), otpkId: otpkId, sharedSecret: sharedSecret)
         PQCKeyManager.saveCFESnapshot(to: core)
         return true
     }
@@ -757,7 +763,7 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        return try core.exportSession(contactId: contactId)
+        return try core.exportSession(contactId: SessionAddressing.contactId(forPeer: contactId))
     }
 
     // MARK: - Key Management
@@ -867,18 +873,28 @@ class CryptoManager {
         }
     }
 
-    /// Set the local user ID in the crypto core so AAD correctly binds sender identity.
-    /// `userId` is the server-assigned account UUID; this same UUID is stored as
-    /// `local_user_id` in the Rust Double Ratchet session and must match the `contact_id`
-    /// the remote party uses for the local device — see `cryptoLocalUserId`.
+    /// Record the signed-in account and give the crypto core our identity.
+    ///
+    /// `userId` is the server-assigned account UUID and is kept for routing and storage; what
+    /// reaches the core is this **device's** id, because that is what the peer will name us by.
+    /// See `cryptoLocalUserId`.
     func setLocalUserId(_ userId: String) {
         _cachedUserId = userId
         let cryptoId = cryptoLocalUserId
 
+        // An empty identity would go straight into the AD of every session this device opens, and
+        // the failure is invisible until the peer cannot decrypt. The device id is written to the
+        // Keychain before the registration RPC is even attempted, so an empty one here means the
+        // Keychain is unreadable — a state in which no session should be established at all.
+        guard !cryptoId.isEmpty else {
+            Log.fault("setLocalUserId: no device id — refusing to give the core an empty identity", category: "CryptoManager")
+            return
+        }
+
         if let existing = orchestratorCore {
             existing.setLocalUserId(userId: cryptoId)
             migrateSessionsIfNeeded(core: existing)
-            Log.debug("CryptoManager: updated local user ID to \(cryptoId.prefix(8))… (server UUID)", category: "CryptoManager")
+            Log.debug("CryptoManager: local identity = device \(cryptoId.prefix(8))…", category: "CryptoManager")
             return
         }
 
@@ -943,8 +959,8 @@ class CryptoManager {
         guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
         let contactIds = core.getAllSessionContactIds()
         for contactId in contactIds {
-            _ = core.removeSession(contactId: contactId)
-            KeychainManager.shared.deleteSession(for: contactId)
+            _ = core.removeSession(contactId: SessionAddressing.contactId(forPeer: contactId))
+            KeychainManager.shared.deleteSession(for: SessionAddressing.contactId(forPeer: contactId))
         }
         if !contactIds.isEmpty {
             Log.info("AD migration: cleared \(contactIds.count) stale session(s) with wrong local_user_id — fresh handshakes will use server UUID", category: "CryptoManager")
@@ -968,7 +984,7 @@ class CryptoManager {
     /// other one.
     func hasStoredSessionState(for userId: String) -> Bool {
         if orchestratorCore?.hasSession(contactId: userId) == true { return true }
-        return KeychainManager.shared.loadSessionData(for: userId) != nil
+        return KeychainManager.shared.loadSessionData(for: SessionAddressing.contactId(forPeer: userId)) != nil
     }
 
     /// True once the OrchestratorCore exists. Before this, `hasSession(for:)` returns
@@ -1215,7 +1231,7 @@ class CryptoManager {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        guard core.hasSession(contactId: message.from) else {
+        guard core.hasSession(contactId: SessionAddressing.contactId(forPeer: message.from)) else {
             throw CryptoManagerError.sessionNotFound
         }
 
@@ -1223,7 +1239,7 @@ class CryptoManager {
 
         do {
             let result = try core.decryptMessage(
-                contactId: message.from,
+                contactId: SessionAddressing.contactId(forPeer: message.from),
                 ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                 messageNumber: message.messageNumber,
                 content: [UInt8](contentForDecrypt),
@@ -1328,19 +1344,19 @@ class CryptoManager {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        if !core.hasSession(contactId: contactId) {
+        if !core.hasSession(contactId: SessionAddressing.contactId(forPeer: contactId)) {
             if !restoreSession(for: contactId) {
                 throw CryptoManagerError.sessionNotFound
             }
         }
 
-        guard core.hasSession(contactId: contactId) else {
+        guard core.hasSession(contactId: SessionAddressing.contactId(forPeer: contactId)) else {
             throw CryptoManagerError.sessionNotFound
         }
 
         let contentForDecrypt = content
         let result = try core.decryptMessage(
-            contactId: contactId,
+            contactId: SessionAddressing.contactId(forPeer: contactId),
             ephemeralPublicKey: [UInt8](ephemeralPublicKey),
             messageNumber: messageNumber,
             content: [UInt8](contentForDecrypt),

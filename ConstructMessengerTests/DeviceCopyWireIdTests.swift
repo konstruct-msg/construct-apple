@@ -340,9 +340,11 @@ final class DeviceCopyWireIdTests: XCTestCase {
     ///
     /// Mutation: `return true` — every SENDER_SYNC copy triggers a bundle fetch.
     func testCandidateListNamingADeviceDoesNot() {
+        // A per-device candidate is the bare device id since the addressing flip; it used to be
+        // `<userId>:<deviceId>`, and this asked whether any candidate contained a colon.
         XCTAssertFalse(SenderSyncRecovery.needsOwnDeviceRefresh(candidates: [
             "289b95ca-8260-4b99-a79a-acaba5681b71",
-            "289b95ca-8260-4b99-a79a-acaba5681b71:37617f2c0617c888fa4750e0799c49ff",
+            "37617f2c0617c888fa4750e0799c49ff",
         ]))
     }
 
