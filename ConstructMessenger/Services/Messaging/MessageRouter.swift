@@ -2031,11 +2031,17 @@ final class MessageRouter {
             let msgId = msg.id
             guard !msgId.isEmpty else { continue }
 
-            switch DeliveryStatusTransition.afterSessionArchive(
+            let outcome = DeliveryStatusTransition.afterSessionArchive(
                 status: msg.deliveryStatus,
                 retryCount: Int(msg.retryCount),
                 maxRetries: maxRetries
-            ) {
+            )
+            // Through `applyArchiveOutcome`, not the guarded setter: both statuses below rank
+            // below `.sent`, which is what every ordinary message holds by the time a session is
+            // archived, so a plain assignment is refused and the counters below then report a
+            // re-queue that did not happen. See that method for the run this cost.
+            let changed = msg.applyArchiveOutcome(outcome)
+            switch outcome {
             case .keep:
                 continue
             case .resend:
@@ -2044,14 +2050,12 @@ final class MessageRouter {
                     // (dozens of lines per control message). Counts are logged once below.
                     reencryptCount += 1
                 }
-                msg.deliveryStatus = .queued
-                requeuedCount += 1
+                if changed { requeuedCount += 1 }
             case .giveUp:
                 // Survived maxRetries session resets with no delivery receipt. Failing it breaks
                 // the re-queue amplification cycle, and — unlike the old skip — says so to the user
                 // rather than leaving a checkmark that stands for nothing.
-                msg.deliveryStatus = .failed
-                droppedCount += 1
+                if changed { droppedCount += 1 }
                 Log.error("END_SESSION: dropping re-queue for \(msg.id.prefix(8))… after \(msg.retryCount) attempts — marking failed", category: "MessageRouter")
             }
         }

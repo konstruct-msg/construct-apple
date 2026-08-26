@@ -1727,6 +1727,10 @@ final class SessionCoordinator: MessageRouterDelegate {
             for msg in candidates {
                 let plaintext = msg.displayText
                 guard !plaintext.isEmpty else { continue }
+                // This fetch selects `.sent` rows on purpose, and `.sending` ranks below `.sent`,
+                // so the guarded setter refuses the mark. The archive that brought us here is what
+                // voided the evidence, so it goes through the writer that says so.
+                msg.applyArchiveOutcome(.resend)
                 msg.deliveryStatus = .sending
                 msg.retryCount += 1
                 resendQueue.append((msg, plaintext))
@@ -1741,7 +1745,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     let plan = ChunkedMessageSender.shared.buildPlan(plaintext: Data(plaintext.utf8), messageId: messageUUID)
                     guard !plan.payloads.isEmpty else {
                         Log.error("Auto-resend: message too large to build chunk plan: \(msg.id.prefix(8))…", category: "SessionInit")
-                        msg.deliveryStatus = .failed
+                        msg.applyArchiveOutcome(.giveUp)
                         context.saveAndLog()
                         continue
                     }
@@ -1773,7 +1777,11 @@ final class SessionCoordinator: MessageRouterDelegate {
                     Log.info("Auto-resend: sealed send blocked (cannot seal) for \(msg.id.prefix(8))… — queued, nudging fetch", category: "SessionInit")
                     SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: userId)
                 } catch {
-                    msg.deliveryStatus = .failed
+                    // `.failed` ranks below `.sent`, so this too must go through the archive
+                    // writer — otherwise a resend that threw leaves the row on the checkmark it
+                    // had, and `retryCount` has already moved past this fetch's `== 0`, so nothing
+                    // comes back for it.
+                    msg.applyArchiveOutcome(.giveUp)
                     context.saveAndLog()
                     Log.error("Auto-resend failed for \(msg.id.prefix(8))…: \(error.localizedDescription)", category: "SessionInit")
                 }

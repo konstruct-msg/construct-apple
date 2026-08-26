@@ -188,6 +188,44 @@ extension Message {
         }
     }
 
+    /// Apply what a session archive means for this message — the **one** write allowed to lower
+    /// the evidence rank, and the reason it is allowed.
+    ///
+    /// `deliveryStatus`'s guard refuses `.sent → .queued`, and it is right to: around thirty
+    /// writers propose a status and almost none of them know more than the one already stored.
+    /// This writer does. The session the ciphertext was encrypted under is gone, so `.sent` — "the
+    /// server took it" — has stopped meaning the peer can read it, and the message is in the
+    /// position of one that never left this device. Where that is decided, and why, is
+    /// `DeliveryStatusTransition.afterSessionArchive`.
+    ///
+    /// Until 2026-08-26 the archive path assigned `.queued` and `.failed` through the guarded
+    /// setter, which refused both for `.sent` — the status every ordinary message holds by then.
+    /// So the re-queue never re-queued and the give-up never failed anything, while the counters
+    /// logged that they had. `DeliveryStatusAuthorityTests` did not see it: it asserted the
+    /// decision, and the decision was correct all along. What was missing was a test that the
+    /// write lands.
+    ///
+    /// Three-simulator run 2026-08-26, a message composed into a concurrent-init race: A could not
+    /// decrypt `29faa550…` and logged "awaits the peer's re-send", while the peer had already had
+    /// its own re-queue refused. The sender's row kept a checkmark; the recipient never saw the
+    /// message; nothing retried.
+    ///
+    /// - Returns: whether the stored status changed.
+    @discardableResult
+    func applyArchiveOutcome(_ outcome: DeliveryStatusTransition.ArchiveOutcome) -> Bool {
+        let target: DeliveryStatus
+        switch outcome {
+        case .keep:   return false
+        case .resend: target = .queued
+        case .giveUp: target = .failed
+        }
+        guard deliveryStatus != target else { return false }
+        // Deliberately past the guarded setter — see above. `.keep` is the branch that protects
+        // `.delivered`, so nothing here can retract a peer's receipt.
+        deliveryStatusRaw = target.rawValue
+        return true
+    }
+
     var contentType: MessageContentType {
         get { MessageContentType(rawValue: contentTypeRaw) ?? .regular }
         set { contentTypeRaw = newValue.rawValue }
