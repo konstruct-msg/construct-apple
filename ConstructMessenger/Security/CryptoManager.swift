@@ -241,16 +241,17 @@ class CryptoManager {
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { return false }
         do {
-            let sessionData = Data(try core.exportSession(contactId: SessionAddressing.contactId(forPeer: userId)))
+            guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return false }
+            let sessionData = Data(try core.exportSession(contactId: contactId))
             var saved = false
             for attempt in 1...3 {
-                saved = KeychainManager.shared.saveSessionData(sessionData, for: SessionAddressing.contactId(forPeer: userId))
+                saved = KeychainManager.shared.saveSessionData(sessionData, for: contactId)
                 guard saved else {
                     Log.error("Keychain write failed (attempt \(attempt)/3): \(userId)", category: "CryptoManager")
                     continue
                 }
                 // Verify round-trip: read back and compare byte count.
-                if let readBack = KeychainManager.shared.loadSessionData(for: SessionAddressing.contactId(forPeer: userId)),
+                if let readBack = KeychainManager.shared.loadSessionData(for: contactId),
                    readBack.count == sessionData.count {
                     Log.debug("Session saved+verified (\(sessionData.count)B): \(userId)", category: "CryptoManager")
                     return true
@@ -456,7 +457,8 @@ class CryptoManager {
     /// Returns 0 when no session is known at all.
     func sessionSuiteId(for userId: String) -> UInt16 {
         coreLock.lock()
-        let coreSuite = orchestratorCore?.getSessionSuiteId(contactId: SessionAddressing.contactId(forPeer: userId)) ?? 0
+        let coreSuite = SessionAddressing.contactId(forPeer: userId)
+            .map { orchestratorCore?.getSessionSuiteId(contactId: $0) ?? 0 } ?? 0
         coreLock.unlock()
         if coreSuite > 0 { return coreSuite }
         return KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0
@@ -662,7 +664,10 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        try core.applyPqContribution(contactId: SessionAddressing.contactId(forPeer: contactId), kemSharedSecret: kemSharedSecret)
+        guard let resolved = SessionAddressing.contactId(forPeer: contactId) else {
+            throw CryptoManagerError.sessionNotFound
+        }
+        try core.applyPqContribution(contactId: resolved, kemSharedSecret: kemSharedSecret)
     }
 
     /// Register a Kyber KEM shared secret for deferred application and persist CFE snapshot.
@@ -671,7 +676,8 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { return false }
-        core.registerPqDeferred(contactId: SessionAddressing.contactId(forPeer: contactId), otpkId: otpkId, sharedSecret: sharedSecret)
+        guard let resolved = SessionAddressing.contactId(forPeer: contactId) else { return false }
+        core.registerPqDeferred(contactId: resolved, otpkId: otpkId, sharedSecret: sharedSecret)
         PQCKeyManager.saveCFESnapshot(to: core)
         return true
     }
@@ -763,7 +769,10 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        return try core.exportSession(contactId: SessionAddressing.contactId(forPeer: contactId))
+        guard let resolved = SessionAddressing.contactId(forPeer: contactId) else {
+            throw CryptoManagerError.sessionNotFound
+        }
+        return try core.exportSession(contactId: resolved)
     }
 
     // MARK: - Key Management
@@ -959,8 +968,9 @@ class CryptoManager {
         guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
         let contactIds = core.getAllSessionContactIds()
         for contactId in contactIds {
-            _ = core.removeSession(contactId: SessionAddressing.contactId(forPeer: contactId))
-            KeychainManager.shared.deleteSession(for: SessionAddressing.contactId(forPeer: contactId))
+            // These come from `getAllSessionContactIds()`, so they already name devices.
+            _ = core.removeSession(contactId: contactId)
+            KeychainManager.shared.deleteSession(for: contactId)
         }
         if !contactIds.isEmpty {
             Log.info("AD migration: cleared \(contactIds.count) stale session(s) with wrong local_user_id — fresh handshakes will use server UUID", category: "CryptoManager")
@@ -969,7 +979,8 @@ class CryptoManager {
     }
 
     func hasSession(for userId: String) -> Bool {
-        return orchestratorCore?.hasSession(contactId: SessionAddressing.contactId(forPeer: userId)) ?? false
+        guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return false }
+        return orchestratorCore?.hasSession(contactId: contactId) ?? false
     }
 
     /// Whether session state exists for `userId` **anywhere** — loaded in the core, or on disk.
@@ -983,8 +994,9 @@ class CryptoManager {
     /// Ask this one wherever the question is "is there anything here to put away", never the
     /// other one.
     func hasStoredSessionState(for userId: String) -> Bool {
-        if orchestratorCore?.hasSession(contactId: SessionAddressing.contactId(forPeer: userId)) == true { return true }
-        return KeychainManager.shared.loadSessionData(for: SessionAddressing.contactId(forPeer: userId)) != nil
+        guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return false }
+        if orchestratorCore?.hasSession(contactId: contactId) == true { return true }
+        return KeychainManager.shared.loadSessionData(for: contactId) != nil
     }
 
     /// True once the OrchestratorCore exists. Before this, `hasSession(for:)` returns
@@ -1010,7 +1022,8 @@ class CryptoManager {
     /// Return a read-only health snapshot for the session with `userId`.
     /// Returns `nil` if no session exists or the core is not initialized.
     func getSessionHealth(for userId: String) -> SessionHealthReport? {
-        return orchestratorCore?.getSessionHealth(contactId: SessionAddressing.contactId(forPeer: userId))
+        guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return nil }
+        return orchestratorCore?.getSessionHealth(contactId: contactId)
     }
 
     /// The identity of the session with `userId` — see `SessionEpoch`.
@@ -1231,7 +1244,8 @@ class CryptoManager {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        guard core.hasSession(contactId: SessionAddressing.contactId(forPeer: message.from)) else {
+        guard let contactId = SessionAddressing.contactId(forPeer: message.from),
+              core.hasSession(contactId: contactId) else {
             throw CryptoManagerError.sessionNotFound
         }
 
@@ -1239,7 +1253,7 @@ class CryptoManager {
 
         do {
             let result = try core.decryptMessage(
-                contactId: SessionAddressing.contactId(forPeer: message.from),
+                contactId: contactId,
                 ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                 messageNumber: message.messageNumber,
                 content: [UInt8](contentForDecrypt),
@@ -1344,19 +1358,22 @@ class CryptoManager {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        if !core.hasSession(contactId: SessionAddressing.contactId(forPeer: contactId)) {
+        guard let resolved = SessionAddressing.contactId(forPeer: contactId) else {
+            throw CryptoManagerError.sessionNotFound
+        }
+        if !core.hasSession(contactId: resolved) {
             if !restoreSession(for: contactId) {
                 throw CryptoManagerError.sessionNotFound
             }
         }
 
-        guard core.hasSession(contactId: SessionAddressing.contactId(forPeer: contactId)) else {
+        guard core.hasSession(contactId: resolved) else {
             throw CryptoManagerError.sessionNotFound
         }
 
         let contentForDecrypt = content
         let result = try core.decryptMessage(
-            contactId: SessionAddressing.contactId(forPeer: contactId),
+            contactId: resolved,
             ephemeralPublicKey: [UInt8](ephemeralPublicKey),
             messageNumber: messageNumber,
             content: [UInt8](contentForDecrypt),

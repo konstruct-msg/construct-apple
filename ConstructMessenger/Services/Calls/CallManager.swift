@@ -1298,8 +1298,12 @@ final class CallManager: CallUIManaging {
         // (VoIP push is unaffected — it comes from signaling-service's own RPC, not from this
         // envelope's type.) See decisions/sealed-content-type-inside-the-plaintext-frame.md.
         // Seam: the orchestrator keeps sessions under a device id like the rest of the core.
+        guard let peerContactId = SessionAddressing.contactId(forPeer: peerUserId) else {
+            Log.error("Call signal: cannot name a device for \(peerUserId.prefix(8))… — no pinned identity key", category: "Calls")
+            return .failed
+        }
         let event = CfeIncomingEvent.outgoingCallSignal(
-            contactId: SessionAddressing.contactId(forPeer: peerUserId),
+            contactId: peerContactId,
             messageId: messageId,
             protoBytes: ChunkedMessageCodec.frameWhole(
                 protoData, contentType: 12, messageId: UUID(uuidString: messageId) ?? UUID()

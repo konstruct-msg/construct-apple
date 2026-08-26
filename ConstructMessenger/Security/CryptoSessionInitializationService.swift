@@ -33,8 +33,13 @@ final class CryptoSessionInitializationService {
 
         // The peer's device is named by the key in this bundle, not by what the contact list
         // knows: at first contact there is no pinned key yet, and first contact is when X3DH runs.
-        let contactId = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientBundle.identityPublic)
-            ?? SessionAddressing.contactId(forPeer: userId)
+        // A bundle with no usable identity key names nobody, and a session cannot be opened with
+        // nobody — better to fail here than to open one under an account id.
+        guard let contactId = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientBundle.identityPublic)
+            ?? SessionAddressing.contactId(forPeer: userId) else {
+            Log.error("Session init: cannot name a device for \(userId.prefix(8))… — bundle carries no usable identity key", category: "CryptoManager")
+            throw CryptoManagerError.invalidKeyData
+        }
 
         if core.hasSession(contactId: contactId) {
             archiveSession(userId, .manualReset)
@@ -113,8 +118,13 @@ final class CryptoSessionInitializationService {
 
         // The peer's device is named by the key in this bundle, not by what the contact list
         // knows: at first contact there is no pinned key yet, and first contact is when X3DH runs.
-        let contactId = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientBundle.identityPublic)
-            ?? SessionAddressing.contactId(forPeer: userId)
+        // A bundle with no usable identity key names nobody, and a session cannot be opened with
+        // nobody — better to fail here than to open one under an account id.
+        guard let contactId = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientBundle.identityPublic)
+            ?? SessionAddressing.contactId(forPeer: userId) else {
+            Log.error("Session init: cannot name a device for \(userId.prefix(8))… — bundle carries no usable identity key", category: "CryptoManager")
+            throw CryptoManagerError.invalidKeyData
+        }
 
         if core.hasSession(contactId: contactId) {
             archiveSession(userId, .manualReset)

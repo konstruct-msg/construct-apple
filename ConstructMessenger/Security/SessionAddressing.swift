@@ -70,21 +70,30 @@ enum SessionAddressing {
     ///
     /// An id that is already a device id passes through unchanged. This branch is an
     /// **optimisation, not a correctness rule**: removing it is behaviour-preserving, because a
-    /// device id has no `User` row and the resolution below then returns it unchanged anyway. It
-    /// is here so the per-device paths — sender-sync, fan-out, candidate walking, all of which
+    /// device id has no `User` row and the resolution below returns nil for it either way. It is
+    /// here so the per-device paths — sender-sync, fan-out, candidate walking, all of which
     /// already hold a device id — do not take a Core Data fetch per call on the receive path.
-    /// Mutating it away reddens nothing, and a test that pretended otherwise would be a test that
-    /// cannot fail.
     ///
-    /// Returns the input unchanged when the peer's identity key has never been pinned. That is
-    /// the state in which no session exists either, so the call that follows fails as
-    /// "no session" rather than being told a different, wrong thing — and it keeps a contact
-    /// whose key we have not verified from being addressed as if we had.
-    static func contactId(forPeer id: String) -> String {
+    /// ## Why this returns nil rather than the id it was given
+    ///
+    /// It used to hand back the input when the peer's key had never been pinned, on the reasoning
+    /// that the call which followed would fail as "no session" anyway. That made this function
+    /// answer two different questions with the same type — here is the device, and here is what
+    /// you gave me — which is the defect class the whole flip was undertaken to remove, left
+    /// standing in the one function whose job is to remove it.
+    ///
+    /// It also cost the guard. With an account id able to leave here legitimately, nothing could
+    /// assert that what reaches the core is a device id, and two of the four defects the
+    /// three-simulator stand caught on 2026-08-26 were exactly an account id reaching the core.
+    ///
+    /// `nil` means "this peer cannot be named", which is the same state in which no session can
+    /// exist. Callers treat it as "no session" — never as an error, and never by substituting the
+    /// account id.
+    static func contactId(forPeer id: String) -> String? {
         if SessionAddressing.isCryptoIdentity(id) { return id }
         guard let deviceId = SessionAddressing.cryptoIdentity(ofUser: id) else {
             Log.debug("No pinned identity key for \(id.prefix(8))… — cannot name a device", category: "Crypto")
-            return id
+            return nil
         }
         return deviceId
     }

@@ -107,7 +107,10 @@ final class OutboundSessionService {
         // translated here rather than inside `handleOrchestratorEvent`, because the actions
         // coming back name the same peer and the caller matches them against what it asked for —
         // so the two sides of the exchange have to agree on which space they are speaking.
-        let contactId = SessionAddressing.contactId(forPeer: recipientId)
+        guard let contactId = SessionAddressing.contactId(forPeer: recipientId) else {
+            Log.error("encryptOutgoing: cannot name a device for \(recipientId.prefix(8))… — no pinned identity key", category: "OutboundSession")
+            throw CryptoManagerError.sessionNotFound
+        }
         let event = CfeIncomingEvent.outgoingMessage(
             contactId: contactId,
             messageId: messageId,

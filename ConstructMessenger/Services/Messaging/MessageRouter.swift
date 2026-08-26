@@ -975,9 +975,13 @@ final class MessageRouter {
         // Seam: the orchestrator keeps the session under the sender's device id. `otherUserId` is
         // an account id everywhere above this line — the transcript, the conversation, the
         // contact row — and stays one; only what crosses into the core is translated.
+        guard let contactId = SessionAddressing.contactId(forPeer: otherUserId) else {
+            Log.error("buildIncomingEvent: cannot name a device for \(otherUserId.prefix(8))… — no pinned identity key", category: "MessageRouter")
+            return nil
+        }
         return .messageReceived(
             messageId: message.id,
-            from: SessionAddressing.contactId(forPeer: otherUserId),
+            from: contactId,
             data: message.rawPayload,
             msgNum: message.messageNumber,
             kemCt: message.kemCiphertext,
@@ -1017,9 +1021,13 @@ final class MessageRouter {
             return nil
         }
 
+        guard let contactId = SessionAddressing.contactId(forPeer: otherUserId) else {
+            Log.error("buildIncomingEventLegacy: cannot name a device for \(otherUserId.prefix(8))…", category: "MessageRouter")
+            return nil
+        }
         return .messageReceived(
             messageId: message.id,
-            from: SessionAddressing.contactId(forPeer: otherUserId),
+            from: contactId,
             data: wireJsonData,
             msgNum: message.messageNumber,
             kemCt: message.kemCiphertext,
@@ -1805,11 +1813,12 @@ final class MessageRouter {
     ) {
         // 1. Archive old session via Rust orchestrator (canonical path); Swift fallback otherwise.
         var rustHandled = false
-        if CryptoManager.shared.orchestratorCore != nil {
+        if CryptoManager.shared.orchestratorCore != nil,
+           let archiveContactId = SessionAddressing.contactId(forPeer: userId) {
             let endSessionData = Data("__END_SESSION__".utf8)
             let event = CfeIncomingEvent.messageReceived(
                 messageId: "sri_archive_\(userId)_\(Int(Date().timeIntervalSince1970))",
-                from: SessionAddressing.contactId(forPeer: userId),
+                from: archiveContactId,
                 data: endSessionData,
                 msgNum: 0,
                 kemCt: Data(),
@@ -1871,11 +1880,12 @@ final class MessageRouter {
 
         // 1. Archive the session — prefer Rust-owned archiving.
         var rustHandled = false
-        if CryptoManager.shared.orchestratorCore != nil {
+        if CryptoManager.shared.orchestratorCore != nil,
+           let archiveContactId = SessionAddressing.contactId(forPeer: userId) {
             let endSessionData = Data("__END_SESSION__".utf8)
             let event = CfeIncomingEvent.messageReceived(
                 messageId: "end_session_\(userId)_\(Int(Date().timeIntervalSince1970))",
-                from: SessionAddressing.contactId(forPeer: userId),
+                from: archiveContactId,
                 data: endSessionData,
                 msgNum: 0,
                 kemCt: Data(),

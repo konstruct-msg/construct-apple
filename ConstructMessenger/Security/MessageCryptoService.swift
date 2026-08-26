@@ -41,20 +41,27 @@ final class MessageCryptoService {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        if !core.hasSession(contactId: SessionAddressing.contactId(forPeer: userId)) {
+        // Resolved once, at the top: a peer we cannot name has no session to encrypt with, and
+        // the alternative — carrying the account id onwards — is what put an account id in the AD.
+        guard let contactId = SessionAddressing.contactId(forPeer: userId) else {
+            Log.info("encryptMessage: \(userId.prefix(8))… has no pinned key — no session to use", category: "CryptoManager")
+            throw CryptoManagerError.sessionNotFound
+        }
+
+        if !core.hasSession(contactId: contactId) {
             if !restoreSession(userId) {
                 throw CryptoManagerError.sessionNotFound
             }
         }
 
-        guard core.hasSession(contactId: SessionAddressing.contactId(forPeer: userId)) else {
+        guard core.hasSession(contactId: contactId) else {
             throw CryptoManagerError.sessionNotFound
         }
 
         // Read suiteId from the Rust core (authoritative) — NOT UserDefaults.
         // UserDefaults can be cleared by app data reset / iCloud restore while the
         // Keychain session survives, producing suiteId=0 and a protocol mismatch.
-        var suiteId = core.getSessionSuiteId(contactId: SessionAddressing.contactId(forPeer: userId))
+        var suiteId = core.getSessionSuiteId(contactId: contactId)
         if suiteId == 0 {
             // Rust core doesn't know the suiteId yet (session not fully loaded?) —
             // fall back to UserDefaults and log so we can investigate.
@@ -64,7 +71,7 @@ final class MessageCryptoService {
             }
         } else {
             // Keep Keychain in sync so the fallback path stays correct.
-            KeychainManager.shared.saveSessionSuiteId(userId: SessionAddressing.contactId(forPeer: userId), suiteId: suiteId)
+            KeychainManager.shared.saveSessionSuiteId(userId: contactId, suiteId: suiteId)
         }
 
         #if DEBUG
@@ -76,7 +83,7 @@ final class MessageCryptoService {
         #endif
 
         do {
-            let rustComponents = try core.encryptMessage(contactId: SessionAddressing.contactId(forPeer: userId), plaintext: Data(message.utf8))
+            let rustComponents = try core.encryptMessage(contactId: contactId, plaintext: Data(message.utf8))
 
             #if DEBUG
             Log.debug("ENCRYPT: Rust core returned components", category: "CryptoManager")
@@ -134,15 +141,19 @@ final class MessageCryptoService {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        let contactId = contactIdOverride ?? message.from
+        let peerId = contactIdOverride ?? message.from
+        guard let contactId = SessionAddressing.contactId(forPeer: peerId) else {
+            Log.info("decryptMessage: \(peerId.prefix(8))… has no pinned key — no session to try", category: "CryptoManager")
+            throw CryptoManagerError.sessionNotFound
+        }
 
-        if !core.hasSession(contactId: SessionAddressing.contactId(forPeer: contactId)) {
-            if !restoreSession(contactId) {
+        if !core.hasSession(contactId: contactId) {
+            if !restoreSession(peerId) {
                 throw CryptoManagerError.sessionNotFound
             }
         }
 
-        guard core.hasSession(contactId: SessionAddressing.contactId(forPeer: contactId)) else {
+        guard core.hasSession(contactId: contactId) else {
             throw CryptoManagerError.sessionNotFound
         }
 
@@ -150,7 +161,7 @@ final class MessageCryptoService {
             let rawContent = message.content
             let contentForDecrypt = rawContent
             let result = try core.decryptMessage(
-                contactId: SessionAddressing.contactId(forPeer: contactId),
+                contactId: contactId,
                 ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                 messageNumber: message.messageNumber,
                 content: [UInt8](contentForDecrypt),

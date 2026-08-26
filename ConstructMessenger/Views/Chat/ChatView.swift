@@ -1145,8 +1145,11 @@ struct ChatView: View {
     private func setActiveChatState(isActive: Bool) {
         guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else { return }
         KeyChangeUX.setActiveChatContact(isActive ? contactId : nil)
+        // A contact whose key is not pinned has no session for the core to schedule heartbeats
+        // against; telling it a chat opened would name a peer it has never heard of.
+        guard let peerContactId = SessionAddressing.contactId(forPeer: contactId) else { return }
         _ = try? CryptoManager.shared.handleOrchestratorEvent(
-            .activeChatChanged(contactId: SessionAddressing.contactId(forPeer: contactId), isActive: isActive),
+            .activeChatChanged(contactId: peerContactId, isActive: isActive),
             tag: isActive ? "chat_active_true" : "chat_active_false"
         )
     }

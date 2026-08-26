@@ -71,31 +71,40 @@ final class SessionAddressingTests: XCTestCase {
     }
 
     /// No pinned key means we have never verified this contact — the same state in which no
-    /// session exists. The seam returns the input so the call that follows fails as "no session"
-    /// rather than being handed a different, wrong identity.
+    /// session exists. The seam answers `nil`, and the caller treats that as "no session".
     ///
-    /// Mutation: return "" for an unknown peer — the caller would then address the empty session,
-    /// which every contact shares. This reddens.
-    func testAnUnpinnedPeerIsNotGivenSomeoneElsesIdentity() {
+    /// It used to hand back the input instead, on the reasoning that the next call would fail as
+    /// "no session" anyway. That made one function answer two questions with one type, and it cost
+    /// the guard: with an account id able to leave the seam legitimately, nothing could assert
+    /// that what reaches the core is a device id.
+    ///
+    /// Mutation: return the input for an unknown peer — this reddens.
+    func testAnUnpinnedPeerIsNamedByNothingAtAll() {
         let stranger = "8c1f0b2e-0000-4000-8000-000000000001"
-        XCTAssertEqual(SessionAddressing.contactId(forPeer: stranger), stranger)
+        XCTAssertNil(SessionAddressing.contactId(forPeer: stranger))
         XCTAssertNil(SessionAddressing.cryptoIdentity(ofUser: stranger))
     }
 
     /// Translation is idempotent, which is what lets the seam sit at several layers at once —
     /// `restoreSession` translates, and so does the `encryptMessage` that called it.
     func testTranslatingTwiceIsTranslatingOnce() {
-        let once = SessionAddressing.contactId(forPeer: userId)
-        XCTAssertEqual(SessionAddressing.contactId(forPeer: once), once)
+        let once = try? XCTUnwrap(SessionAddressing.contactId(forPeer: userId))
+        let unwrapped = try? XCTUnwrap(once)
+        XCTAssertEqual(SessionAddressing.contactId(forPeer: unwrapped ?? ""), unwrapped)
     }
 
+    /// Whatever the seam produces is a crypto identity — never a composite, never an account id.
     /// The composite form is what broke the AD: the sender addressed `<userId>:<deviceId>` while
-    /// the receiver's own identity stayed a bare UUID. The seam must never produce one.
+    /// the receiver's own identity stayed a bare UUID.
     ///
-    /// Mutation: have the seam join the two ids — this reddens.
-    func testNothingTheSeamProducesCarriesAnAccountId() {
+    /// Mutation: have the seam join the two ids, or return its input — this reddens.
+    func testEverythingTheSeamProducesIsACryptoIdentity() {
         for input in [userId, expectedDeviceId] {
-            let out = SessionAddressing.contactId(forPeer: input)
+            guard let out = SessionAddressing.contactId(forPeer: input) else {
+                XCTFail("\(input) should resolve")
+                continue
+            }
+            XCTAssertTrue(SessionAddressing.isCryptoIdentity(out), "not a device id: \(out)")
             XCTAssertFalse(out.contains(":"), "a contact id must name one device: \(out)")
         }
     }
