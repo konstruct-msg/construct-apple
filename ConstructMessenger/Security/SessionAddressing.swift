@@ -89,6 +89,22 @@ enum SessionAddressing {
         return deviceId
     }
 
+    /// The crypto identity carried by an identity key we are holding right now.
+    ///
+    /// The authoritative source, and the only one that answers at **first contact**: a peer whose
+    /// key we have not pinned yet has no `User` row to resolve through, and that is exactly the
+    /// moment X3DH runs. Both init paths hold the peer's bundle when they are called, so they name
+    /// the device from the key in hand rather than from what the contact list happens to know.
+    ///
+    /// Using the pinned row there instead is not a smaller version of this — it is wrong: the
+    /// resolution fails, the seam hands back the account id, and the responder binds an account id
+    /// into an AD whose initiator bound a device id. The symptom is `initReceivingSession` failing
+    /// with "AEAD decryption failed" on a bundle that is entirely valid.
+    static func cryptoIdentity(ofIdentityKey identityPublic: Data) -> String? {
+        guard !identityPublic.isEmpty else { return nil }
+        return deriveDeviceId(identityPublicKey: [UInt8](identityPublic))
+    }
+
     /// True when `id` is already a crypto identity rather than an account id.
     ///
     /// Used only at the seam, to keep a caller that already holds a device id from being resolved
@@ -104,14 +120,27 @@ enum SessionAddressing {
     nonisolated(unsafe) static var pinnedIdentityKeyOverrideForTesting: ((String) -> Data?)?
     #endif
 
+    /// The identity key pinned for `userId`, read from whichever thread is asking.
+    ///
+    /// **Not `viewContext`.** The crypto path runs on background queues — the send queue, the
+    /// stream's delivery queue, a push wake — and `viewContext` is main-queue confined. Reading it
+    /// from another thread is undefined, and its most common outcome here is an empty result,
+    /// which this function would report as "no pinned key" and the seam would then decline to name
+    /// the peer's device. Nothing would look broken: the call that follows just says "no session".
+    ///
+    /// A private context with `performAndWait` is safe from any thread and reads the same store.
     private static func pinnedIdentityKey(ofUser userId: String) -> Data? {
         #if DEBUG
         if let override = pinnedIdentityKeyOverrideForTesting { return override(userId) }
         #endif
-        let ctx = PersistenceController.shared.container.viewContext
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", userId)
-        req.fetchLimit = 1
-        return (try? ctx.fetch(req).first)?.knownIdentityKey
+        let ctx = PersistenceController.shared.container.newBackgroundContext()
+        var key: Data?
+        ctx.performAndWait {
+            let req = User.fetchRequest()
+            req.predicate = NSPredicate(format: "id == %@", userId)
+            req.fetchLimit = 1
+            key = (try? ctx.fetch(req).first)?.knownIdentityKey
+        }
+        return key
     }
 }

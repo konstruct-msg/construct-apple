@@ -928,7 +928,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 do {
                     let sessionBytes = try CryptoManager.shared.exportSession(contactId: userId)
                     let event = CfeIncomingEvent.sessionInitCompleted(
-                        contactId: userId,
+                        contactId: SessionAddressing.contactId(forPeer: userId),
                         sessionData: Data(sessionBytes)
                     )
                     _ = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "session_init_completed_responder")

@@ -31,7 +31,12 @@ final class CryptoSessionInitializationService {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        if core.hasSession(contactId: SessionAddressing.contactId(forPeer: userId)) {
+        // The peer's device is named by the key in this bundle, not by what the contact list
+        // knows: at first contact there is no pinned key yet, and first contact is when X3DH runs.
+        let contactId = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientBundle.identityPublic)
+            ?? SessionAddressing.contactId(forPeer: userId)
+
+        if core.hasSession(contactId: contactId) {
             archiveSession(userId, .manualReset)
         }
 
@@ -65,12 +70,12 @@ final class CryptoSessionInitializationService {
 
         do {
             let sessionId = allowStale
-                ? try core.initSessionAllowingStale(contactId: SessionAddressing.contactId(forPeer: userId), recipientBundle: bundle)
-                : try core.initSession(contactId: SessionAddressing.contactId(forPeer: userId), recipientBundle: bundle)
+                ? try core.initSessionAllowingStale(contactId: contactId, recipientBundle: bundle)
+                : try core.initSession(contactId: contactId, recipientBundle: bundle)
             // Persist the NEGOTIATED suite (suite 3 when both sides support the PQ
             // ratchet), not the bundle's crypto suite — the bundle only ever says 1/2.
-            let negotiatedSuite = core.getSessionSuiteId(contactId: SessionAddressing.contactId(forPeer: userId))
-            KeychainManager.shared.saveSessionSuiteId(userId: SessionAddressing.contactId(forPeer: userId), suiteId: negotiatedSuite > 0 ? negotiatedSuite : suiteID)
+            let negotiatedSuite = core.getSessionSuiteId(contactId: contactId)
+            KeychainManager.shared.saveSessionSuiteId(userId: contactId, suiteId: negotiatedSuite > 0 ? negotiatedSuite : suiteID)
             saveSession(userId)
             Log.info("SESSION_STATE[suite_negotiated]: peer=\(userId.prefix(8))…, bundleSuite=\(suiteID), supportsPqRatchet=\(supportsPqRatchet), negotiated=\(negotiatedSuite)", category: "SessionInit")
             Log.info("INITIATOR session created\(allowStale ? " (degraded/at-risk)" : ""): \(sessionId.prefix(16))...", category: "CryptoManager")
@@ -106,7 +111,12 @@ final class CryptoSessionInitializationService {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        if core.hasSession(contactId: SessionAddressing.contactId(forPeer: userId)) {
+        // The peer's device is named by the key in this bundle, not by what the contact list
+        // knows: at first contact there is no pinned key yet, and first contact is when X3DH runs.
+        let contactId = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientBundle.identityPublic)
+            ?? SessionAddressing.contactId(forPeer: userId)
+
+        if core.hasSession(contactId: contactId) {
             archiveSession(userId, .manualReset)
         }
 
@@ -189,7 +199,7 @@ final class CryptoSessionInitializationService {
 
         do {
             let result = try core.initReceivingSession(
-                contactId: SessionAddressing.contactId(forPeer: userId),
+                contactId: contactId,
                 recipientBundle: bundle,
                 firstMessage: firstMsg
             )
@@ -201,7 +211,7 @@ final class CryptoSessionInitializationService {
             // plaintext must not be in it. Length alone is enough to diagnose an init.
             Log.info("Session initialized successfully, decrypted \(plaintext.count)B", category: "CryptoManager")
 
-            KeychainManager.shared.saveSessionSuiteId(userId: SessionAddressing.contactId(forPeer: userId), suiteId: suiteID)
+            KeychainManager.shared.saveSessionSuiteId(userId: contactId, suiteId: suiteID)
             // NOTE: saveSession deferred until after PQXDH strengthening completes.
 
             if !firstMessage.kemCiphertext.isEmpty {
@@ -209,7 +219,7 @@ final class CryptoSessionInitializationService {
                     try PQCKeyManager.shared.applyIncomingContribution(
                         kemCiphertext: firstMessage.kemCiphertext,
                         kyberOtpkId: firstMessage.kyberOtpkId,
-                        contactId: userId
+                        contactId: contactId
                     )
                 } catch {
                     Log.error("PQC: PQXDH decapsulation FAILED for \(userId.prefix(8))...: \(error)", category: "CryptoManager")

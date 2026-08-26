@@ -86,7 +86,7 @@ extension CryptoManager {
     }
 
     func getSessionId(for userId: String) -> String? {
-        return (orchestratorCore?.hasSession(contactId: userId) == true) ? userId : nil
+        return (orchestratorCore?.hasSession(contactId: SessionAddressing.contactId(forPeer: userId)) == true) ? userId : nil
     }
 
     // MARK: - Archive Write
@@ -154,7 +154,7 @@ extension CryptoManager {
             if existingCount > 0 {
                 Log.info("archiveSession: session already archived via Rust for \(userId.prefix(8))… (reason: \(reason.rawValue)), cleaning up", category: "CryptoManager")
                 KeychainManager.shared.deleteSessionSuiteId(userId: SessionAddressing.contactId(forPeer: userId))
-                _ = orchestratorCore?.removeSession(contactId: userId)
+                _ = orchestratorCore?.removeSession(contactId: SessionAddressing.contactId(forPeer: userId))
                 KeychainManager.shared.deleteSession(for: SessionAddressing.contactId(forPeer: userId))
                 return
             }
@@ -185,7 +185,7 @@ extension CryptoManager {
         KeychainManager.shared.deleteSessionSuiteId(userId: SessionAddressing.contactId(forPeer: userId))
         Log.info("Removed session suite ID from Keychain: \(userId)", category: "CryptoManager")
 
-        let removed = (orchestratorCore?.removeSession(contactId: userId)) ?? false
+        let removed = (orchestratorCore?.removeSession(contactId: SessionAddressing.contactId(forPeer: userId))) ?? false
         if removed {
             Log.info("Removed session from Rust core: \(userId)", category: "CryptoManager")
         } else {

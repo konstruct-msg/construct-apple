@@ -1297,8 +1297,9 @@ final class CallManager: CallUIManaging {
         // offer can exceed `chunkPayloadSize` and this producer sends exactly one message.
         // (VoIP push is unaffected — it comes from signaling-service's own RPC, not from this
         // envelope's type.) See decisions/sealed-content-type-inside-the-plaintext-frame.md.
+        // Seam: the orchestrator keeps sessions under a device id like the rest of the core.
         let event = CfeIncomingEvent.outgoingCallSignal(
-            contactId: peerUserId,
+            contactId: SessionAddressing.contactId(forPeer: peerUserId),
             messageId: messageId,
             protoBytes: ChunkedMessageCodec.frameWhole(
                 protoData, contentType: 12, messageId: UUID(uuidString: messageId) ?? UUID()
@@ -1311,7 +1312,12 @@ final class CallManager: CallUIManaging {
             var encryptResult: CallSignalEncryptResult = .failed
             for action in actions {
                 switch action {
-                case .sendEncryptedMessage(let to, let payload, let msgId, _):
+                case .sendEncryptedMessage(_, let payload, let msgId, _):
+                    // The orchestrator names the peer by device, because that is what it keeps the
+                    // session under. The server addresses accounts, so everything below sends to
+                    // `peerUserId` — the id this function was called with. Taking the action's
+                    // `to` here would hand the transport a device id it has no route for.
+                    let to = peerUserId
                     encryptResult = .encrypted
                     let currentUserId = AuthSessionManager.shared.currentUserId ?? ""
                     let callId = signal.callID

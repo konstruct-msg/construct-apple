@@ -456,7 +456,7 @@ class CryptoManager {
     /// Returns 0 when no session is known at all.
     func sessionSuiteId(for userId: String) -> UInt16 {
         coreLock.lock()
-        let coreSuite = orchestratorCore?.getSessionSuiteId(contactId: userId) ?? 0
+        let coreSuite = orchestratorCore?.getSessionSuiteId(contactId: SessionAddressing.contactId(forPeer: userId)) ?? 0
         coreLock.unlock()
         if coreSuite > 0 { return coreSuite }
         return KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0
@@ -969,7 +969,7 @@ class CryptoManager {
     }
 
     func hasSession(for userId: String) -> Bool {
-        return orchestratorCore?.hasSession(contactId: userId) ?? false
+        return orchestratorCore?.hasSession(contactId: SessionAddressing.contactId(forPeer: userId)) ?? false
     }
 
     /// Whether session state exists for `userId` **anywhere** — loaded in the core, or on disk.
@@ -983,7 +983,7 @@ class CryptoManager {
     /// Ask this one wherever the question is "is there anything here to put away", never the
     /// other one.
     func hasStoredSessionState(for userId: String) -> Bool {
-        if orchestratorCore?.hasSession(contactId: userId) == true { return true }
+        if orchestratorCore?.hasSession(contactId: SessionAddressing.contactId(forPeer: userId)) == true { return true }
         return KeychainManager.shared.loadSessionData(for: SessionAddressing.contactId(forPeer: userId)) != nil
     }
 
@@ -1010,7 +1010,7 @@ class CryptoManager {
     /// Return a read-only health snapshot for the session with `userId`.
     /// Returns `nil` if no session exists or the core is not initialized.
     func getSessionHealth(for userId: String) -> SessionHealthReport? {
-        return orchestratorCore?.getSessionHealth(contactId: userId)
+        return orchestratorCore?.getSessionHealth(contactId: SessionAddressing.contactId(forPeer: userId))
     }
 
     /// The identity of the session with `userId` — see `SessionEpoch`.

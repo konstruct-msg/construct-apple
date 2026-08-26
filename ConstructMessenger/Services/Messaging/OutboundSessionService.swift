@@ -102,8 +102,14 @@ final class OutboundSessionService {
         recipientId: String,
         contentType: UInt8 = 0
     ) throws -> Data {
+        // The orchestrator is a second door into the same core, and what it stores a session
+        // under is a device id like everything else below the seam. The account id has to be
+        // translated here rather than inside `handleOrchestratorEvent`, because the actions
+        // coming back name the same peer and the caller matches them against what it asked for —
+        // so the two sides of the exchange have to agree on which space they are speaking.
+        let contactId = SessionAddressing.contactId(forPeer: recipientId)
         let event = CfeIncomingEvent.outgoingMessage(
-            contactId: recipientId,
+            contactId: contactId,
             messageId: messageId,
             plaintext: plaintext,
             contentType: contentType
@@ -123,7 +129,7 @@ final class OutboundSessionService {
         }
 
         for action in actions {
-            if case .sendEncryptedMessage(let to, let payload, _, _) = action, to == recipientId {
+            if case .sendEncryptedMessage(let to, let payload, _, _) = action, to == contactId {
                 return Data(payload)
             }
         }

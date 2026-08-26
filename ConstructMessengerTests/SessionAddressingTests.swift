@@ -117,6 +117,27 @@ final class SessionAddressingTests: XCTestCase {
         XCTAssertNil(SessionAddressing.cryptoIdentity(ofUser: ""))
     }
 
+    /// The identity key in hand outranks the contact list, and is the only source that answers at
+    /// first contact — which is when X3DH runs.
+    ///
+    /// Mutation: have the init paths resolve through the pinned row instead — the responder then
+    /// binds an account id into an AD whose initiator bound a device id, and
+    /// `initReceivingSession` fails with "AEAD decryption failed" on a valid bundle. Seen on the
+    /// three-simulator stand 2026-08-26.
+    func testAKeyInHandNamesTheDeviceWithoutAPinnedRow() {
+        let stranger = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
+        let expected = deriveDeviceId(identityPublicKey: [UInt8](stranger))
+        XCTAssertEqual(SessionAddressing.cryptoIdentity(ofIdentityKey: stranger), expected)
+        XCTAssertTrue(SessionAddressing.isCryptoIdentity(expected))
+        // The same key resolves the same way whether or not the contact list knows the peer.
+        XCTAssertEqual(SessionAddressing.cryptoIdentity(ofIdentityKey: identityKey), expectedDeviceId)
+    }
+
+    /// An absent key names nobody rather than a shared empty identity.
+    func testNoKeyNamesNoDevice() {
+        XCTAssertNil(SessionAddressing.cryptoIdentity(ofIdentityKey: Data()))
+    }
+
     // MARK: - Our own side of the mirror
 
     /// The AD is mirrored, so our local identity must live in the same space as the contact id the

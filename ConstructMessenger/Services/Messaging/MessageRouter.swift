@@ -762,7 +762,10 @@ final class MessageRouter {
             // case must be handled here before the loop falls through to "no routing decision".
             _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
             return
-        case .sessionHealNeeded(let contactId, let role):
+        case .sessionHealNeeded(_, let role):
+            // Named by device by the core; healing, the confirmation tracker and everything else
+            // below are keyed by account, which is what this function was called with.
+            let contactId = otherUserId
             // Same window, same reasoning as `.sendEndSession` below, and until 2026-08-21 this
             // branch did not ask: healing as RESPONDER runs `archiveSession(.manualReset)`, so
             // while our own SESSION_RESET_INIT is unacked it destroys the session we created two
@@ -969,9 +972,12 @@ final class MessageRouter {
             return buildIncomingEventLegacy(message: message, otherUserId: otherUserId)
         }
 
+        // Seam: the orchestrator keeps the session under the sender's device id. `otherUserId` is
+        // an account id everywhere above this line — the transcript, the conversation, the
+        // contact row — and stays one; only what crosses into the core is translated.
         return .messageReceived(
             messageId: message.id,
-            from: otherUserId,
+            from: SessionAddressing.contactId(forPeer: otherUserId),
             data: message.rawPayload,
             msgNum: message.messageNumber,
             kemCt: message.kemCiphertext,
@@ -1013,7 +1019,7 @@ final class MessageRouter {
 
         return .messageReceived(
             messageId: message.id,
-            from: otherUserId,
+            from: SessionAddressing.contactId(forPeer: otherUserId),
             data: wireJsonData,
             msgNum: message.messageNumber,
             kemCt: message.kemCiphertext,
@@ -1090,8 +1096,13 @@ final class MessageRouter {
         // Router-state-bound actions: only .messageDecrypted needs chunkReassembler,
         // chat, message, context, and delegate. Handled inline.
         for action in actions {
-            if case .messageDecrypted(let contactId, _, let plaintext) = action {
-                let resolvedSender = contactId.isEmpty ? otherUserId : contactId
+            if case .messageDecrypted(_, _, let plaintext) = action {
+                // The action names the peer by device, because that is what the core keeps the
+                // session under. Everything downstream of here — the transcript, the chat row,
+                // the receipt — is keyed by account, and this function was called with that
+                // account id. Taking the action's contact id would file the message under a
+                // device nothing else in the app knows about.
+                let resolvedSender = otherUserId
                 checkUsernameUpdate(for: otherUserId, chat: chat, in: context)
 
                 // Client-side block enforcement (decrypt-but-suppress). The ratchet has
@@ -1798,7 +1809,7 @@ final class MessageRouter {
             let endSessionData = Data("__END_SESSION__".utf8)
             let event = CfeIncomingEvent.messageReceived(
                 messageId: "sri_archive_\(userId)_\(Int(Date().timeIntervalSince1970))",
-                from: userId,
+                from: SessionAddressing.contactId(forPeer: userId),
                 data: endSessionData,
                 msgNum: 0,
                 kemCt: Data(),
@@ -1864,7 +1875,7 @@ final class MessageRouter {
             let endSessionData = Data("__END_SESSION__".utf8)
             let event = CfeIncomingEvent.messageReceived(
                 messageId: "end_session_\(userId)_\(Int(Date().timeIntervalSince1970))",
-                from: userId,
+                from: SessionAddressing.contactId(forPeer: userId),
                 data: endSessionData,
                 msgNum: 0,
                 kemCt: Data(),
@@ -2517,14 +2528,20 @@ final class MessageRouter {
             }
 
             for contactId in candidates where !CryptoManager.shared.hasSession(for: contactId) {
-                // The device id is the suffix of the session key; the plain `message.from`
-                // candidate has none and is skipped, since a bundle fetch needs one.
-                let parts = contactId.split(separator: ":", maxSplits: 1)
-                guard parts.count == 2 else { continue }
+                // A candidate that names a device is one a bundle can be fetched for; the plain
+                // `message.from` candidate is an account id and is skipped.
+                //
+                // This used to split the candidate on a colon and require two halves, because a
+                // per-device session key was `<userId>:<deviceId>`. After the addressing flip
+                // there is no colon in any candidate, so that guard skipped every one of them and
+                // the loop established nothing at all — the copy was dropped with the same log
+                // line as a genuinely unrecoverable one. Seen on the three-simulator stand
+                // 2026-08-26, on the first run after the flip.
+                guard SessionAddressing.isCryptoIdentity(contactId) else { continue }
                 await self.initAndDecryptSenderSync(
                     message: message,
                     contactId: contactId,
-                    senderDeviceId: String(parts[1]),
+                    senderDeviceId: contactId,
                     myUserId: myUserId,
                     in: context
                 )

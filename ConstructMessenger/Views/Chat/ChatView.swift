@@ -1146,7 +1146,7 @@ struct ChatView: View {
         guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else { return }
         KeyChangeUX.setActiveChatContact(isActive ? contactId : nil)
         _ = try? CryptoManager.shared.handleOrchestratorEvent(
-            .activeChatChanged(contactId: contactId, isActive: isActive),
+            .activeChatChanged(contactId: SessionAddressing.contactId(forPeer: contactId), isActive: isActive),
             tag: isActive ? "chat_active_true" : "chat_active_false"
         )
     }
