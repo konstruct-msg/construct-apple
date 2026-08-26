@@ -64,7 +64,7 @@ final class OrchestratorActionPlanTests: XCTestCase {
         let plan = OrchestratorActionPlan(actions: [
             .applyPqContribution(contactId: peer, kemSs: kem),
             .messageDecrypted(contactId: peer, messageId: messageId, plaintext: Data("hi".utf8)),
-            .saveSessionToSecureStore(key: peer, data: Data(repeating: 1, count: 430)),
+            .saveToSecureStore(slot: .session(contactId: peer), data: Data(repeating: 1, count: 430)),
             .persistAck(messageId: messageId, timestamp: 1_785_615_000)
         ])
 

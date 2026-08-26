@@ -69,7 +69,7 @@ final class OutboundSessionService {
 
     private func executeRustTimerActions(_ actions: [CfeAction]) {
         // Delegate to the centralised executor — it handles scheduleTimer/cancelTimer,
-        // notifyError, saveSessionToSecureStore, sessionTerminated, and the rest of the
+        // notifyError, saveToSecureStore, sessionTerminated, and the rest of the
         // CfeAction surface exhaustively. See SessionActionExecutor.
         SessionActionExecutor.shared.execute(actions)
 
@@ -410,7 +410,7 @@ final class OutboundSessionService {
 
     // MARK: - Storage Action Execution
 
-    /// Processes `saveSessionToSecureStore` and `sessionTerminated` actions from the orchestrator.
+    /// Processes `saveToSecureStore` and `sessionTerminated` actions from the orchestrator.
     /// Called both internally (after outgoing encryption) and from MessageRouter (after session events).
     ///
     /// Returns `true` iff every **send-critical** persist succeeded — the hot session (`session_`)
@@ -421,8 +421,8 @@ final class OutboundSessionService {
         var sendStateDurable = true
         for action in actions {
             switch action {
-            case .saveSessionToSecureStore(let key, let data):
-                let ok = handleStorageAction(key: key, data: [UInt8](data))
+            case .saveToSecureStore(let slot, let data):
+                let ok = handleStorageAction(slot: slot, data: [UInt8](data))
                 sendStateDurable = sendStateDurable && ok
             case .sessionTerminated(let contactId, let archiveBytes):
                 CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: archiveBytes)
@@ -434,88 +434,106 @@ final class OutboundSessionService {
         return sendStateDurable
     }
 
-    /// Unified handler for a `SaveSessionToSecureStore` action.
+    /// Unified handler for a `SaveToSecureStore` action.
     ///
-    /// Key conventions (established by `session_lifecycle.rs`):
-    /// - `"session_<contactId>"` + non-empty bytes → save hot session to Keychain
-    /// - `"session_<contactId>"` + empty bytes    → delete sentinel: clear Keychain
-    /// - `"archive_<contactId>"` + bytes          → accept pre-archived session from Rust
-    /// - `"pq_deferred_<contactId>"` + bytes      → persist deferred PQ contribution
-    /// - `"pq_deferred_<contactId>"` + empty      → delete stored PQ contribution
+    /// The core names the slot; this function is the only place that decides where the bytes go.
+    /// It used to receive a formatted string and branch on `hasPrefix`, with an `else` that logged
+    /// "unhandled storage key" at debug level and returned success — which is where
+    /// `kyber_session_state` and `kyber_spk_<id>` had been landing, unnoticed. A `switch` over the
+    /// slot cannot have that branch: a new slot stops this file compiling until it is answered.
     ///
-    /// Returns `true` iff the **send-critical** persist for this action succeeded (`session_` hot
-    /// session + orchestrator state). Non-send-critical saves (`archive_`, `pq_deferred_`) always
-    /// return `true`: their failure is logged and matters, but it cannot cause message-number reuse,
-    /// so it must not block a send.
-    private func handleStorageAction(key: String, data rawBytes: [UInt8]) -> Bool {
-        if key.hasPrefix("session_") {
-            let contactId = String(key.dropFirst("session_".count))
-            if rawBytes.isEmpty {
+    /// Returns `true` iff the **send-critical** persist for this action succeeded (hot session +
+    /// orchestrator state). Non-send-critical saves always return `true`: their failure is logged
+    /// and matters, but it cannot cause message-number reuse, so it must not block a send.
+    private func handleStorageAction(slot: CfeSecureStoreSlot, data rawBytes: [UInt8]) -> Bool {
+        switch slot {
+
+        case .session(let contactId):
+            guard !rawBytes.isEmpty else {
                 KeychainManager.shared.deleteSession(for: contactId)
                 KeychainManager.shared.deleteSessionSuiteId(userId: contactId)
                 Log.debug("Deleted hot session for \(contactId.prefix(8))… (Rust archive_session)", category: "OutboundSession")
                 return CryptoManager.shared.saveOrchestratorStateCFE()
-            } else {
-                // Desync-critical: the Rust ratchet has already advanced in memory. If this
-                // Keychain write fails (e.g. locked-device edge, storage error) and the failure
-                // is swallowed, the persisted session lags the live ratchet → silent, unhealable
-                // desync on the next launch/push. Surface the failure AND report it so
-                // `encryptOutgoing` can fail-closed instead of releasing an un-persisted advance.
-                let ok = KeychainManager.shared.saveSessionData(Data(rawBytes), for: contactId)
-                if !ok {
-                    Log.error("PERSIST-FAIL hot session \(contactId.prefix(8))… (\(rawBytes.count)B) — ratchet may desync on next launch", category: "OutboundSession")
-                }
-                let orchOk = CryptoManager.shared.saveOrchestratorStateCFE()
-                return ok && orchOk
             }
-        } else if key.hasPrefix("archive_") {
-            let contactId = String(key.dropFirst("archive_".count))
+            // Desync-critical: the Rust ratchet has already advanced in memory. If this
+            // Keychain write fails (e.g. locked-device edge, storage error) and the failure
+            // is swallowed, the persisted session lags the live ratchet → silent, unhealable
+            // desync on the next launch/push. Surface the failure AND report it so
+            // `encryptOutgoing` can fail-closed instead of releasing an un-persisted advance.
+            let ok = KeychainManager.shared.saveSessionData(Data(rawBytes), for: contactId)
+            if !ok {
+                Log.error("PERSIST-FAIL hot session \(contactId.prefix(8))… (\(rawBytes.count)B) — ratchet may desync on next launch", category: "OutboundSession")
+            }
+            let orchOk = CryptoManager.shared.saveOrchestratorStateCFE()
+            return ok && orchOk
+
+        case .sessionArchive(let contactId):
             CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: Data(rawBytes))
             CryptoManager.shared.saveOrchestratorStateCFE()
-            return true // archive is a terminated session — not the active sending chain
-        } else if key.hasPrefix("pq_deferred_") {
-            let storageKey = "construct.pq_deferred.\(String(key.dropFirst("pq_deferred_".count)))"
+            return true // a terminated session — not the active sending chain
+
+        case .pqDeferred(let contactId):
+            let account = KeychainSessionAccounts.account(for: slot)
             if rawBytes.isEmpty {
-                KeychainManager.shared.deleteData(forKey: storageKey)
-                Log.debug("Deleted PQ deferred for key \(storageKey)", category: "OutboundSession")
+                KeychainManager.shared.deleteData(forKey: account)
+                Log.debug("Deleted PQ deferred for \(contactId.prefix(8))…", category: "OutboundSession")
             } else {
                 // AfterFirstUnlock: this write also fires during a locked-device background
                 // decrypt. Under the WhenUnlocked default it failed there, losing the deferred
                 // PQ contribution and silently downgrading the session to classical (BS-6).
                 let ok = KeychainManager.shared.saveData(
                     Data(rawBytes),
-                    forKey: storageKey,
+                    forKey: account,
                     accessible: KeychainManager.cryptoKeyAccessible
                 )
-                if ok {
-                    Log.debug("Persisted PQ deferred for key \(storageKey)", category: "OutboundSession")
-                } else {
-                    Log.error("PERSIST-FAIL PQ deferred \(storageKey) (\(rawBytes.count)B) — session may downgrade to classical (BS-6)", category: "OutboundSession")
+                if !ok {
+                    Log.error("PERSIST-FAIL PQ deferred \(contactId.prefix(8))… (\(rawBytes.count)B) — session may downgrade to classical (BS-6)", category: "OutboundSession")
                 }
             }
-            return true // PQ deferred failure is BS-6 (downgrade), not number reuse — do not block send
-        } else if key == "construct.orchestrator_state" {
-            if rawBytes.isEmpty {
+            return true // BS-6 (downgrade), not number reuse — must not block a send
+
+        case .kyberSessionState:
+            // `PQCKeyManager.saveCFESnapshot` writes the identical bytes to the identical account
+            // by pulling `exportKyberSessionState()`. This push was ignored until 2026-08-26 —
+            // the string form fell into the "unhandled storage key" branch — so the pull was the
+            // only thing keeping PQ state alive. Both now write the same value to the same place;
+            // the push is the one that fires at the exact moment the state changes.
+            guard !rawBytes.isEmpty else { return true }
+            let ok = KeychainManager.shared.saveData(
+                Data(rawBytes),
+                forKey: KeychainSessionAccounts.kyberSessionState,
+                accessible: KeychainManager.cryptoKeyAccessible
+            )
+            if !ok {
+                Log.error("PERSIST-FAIL Kyber session state (\(rawBytes.count)B) — PQ ratchet state may desync on next launch", category: "OutboundSession")
+            }
+            return true
+
+        case .kyberSignedPrekey(let keyId):
+            // No reachable emitter: `commit_spk_rotation` is called only from its own tests, and
+            // the Kyber SPK is rotated through `PreKeyRotationService`. Loud rather than silent —
+            // if this ever fires, the rotation has two implementations and one of them is unread.
+            Log.error("Unexpected KyberSignedPrekey slot (id \(keyId), \(rawBytes.count)B) — nothing reads this; see SecureStoreSlot", category: "OutboundSession")
+            return true
+
+        case .orchestratorState:
+            guard !rawBytes.isEmpty else {
                 Log.debug("Orchestrator state save with empty data — ignoring", category: "OutboundSession")
                 return true
-            } else {
-                // AfterFirstUnlock: this Rust-driven save also fires during background
-                // push decrypt while locked; WhenUnlocked would drop it → ratchet desync.
-                let ok = KeychainManager.shared.saveData(
-                    Data(rawBytes),
-                    forKey: "construct.orchestrator_state",
-                    accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-                )
-                if ok {
-                    Log.debug("Orchestrator state persisted (\(rawBytes.count) bytes) via Rust action", category: "OutboundSession")
-                } else {
-                    Log.error("PERSIST-FAIL orchestrator_state (\(rawBytes.count)B) via Rust action — ratchet coordination may desync on next launch", category: "OutboundSession")
-                }
-                return ok // send-critical: carries the ratchet coordination state
             }
-        } else {
-            Log.debug("Unhandled storage key: \(key)", category: "OutboundSession")
-            return true
+            // AfterFirstUnlock: this Rust-driven save also fires during background
+            // push decrypt while locked; WhenUnlocked would drop it → ratchet desync.
+            let ok = KeychainManager.shared.saveData(
+                Data(rawBytes),
+                forKey: KeychainSessionAccounts.orchestratorState,
+                accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            )
+            if ok {
+                Log.debug("Orchestrator state persisted (\(rawBytes.count) bytes) via Rust action", category: "OutboundSession")
+            } else {
+                Log.error("PERSIST-FAIL orchestrator_state (\(rawBytes.count)B) via Rust action — ratchet coordination may desync on next launch", category: "OutboundSession")
+            }
+            return ok // send-critical: carries the ratchet coordination state
         }
     }
 }

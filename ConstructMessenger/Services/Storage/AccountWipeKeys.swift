@@ -97,7 +97,11 @@ enum AccountWipeKeys {
         "construct.contact_request_seen.",
         "construct.outgoingWirePayload.",
         "construct.kyber.otpk.sk.",
-        "construct.pq_deferred."
+        "construct.pq_deferred.",
+        // Where `SecureStoreSlot.KyberSignedPrekey` would land. No reachable emitter today
+        // (`commit_spk_rotation` is called only from its own tests), but a secret key that
+        // appears must leave with the account, and classifying it now costs nothing.
+        "construct.kyber.spk.sk."
     ]
 
     /// Survives a wipe, each for a stated reason. Being on this list is a claim that the value is

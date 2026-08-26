@@ -139,4 +139,72 @@ final class KeychainSessionAccountsTests: XCTestCase {
         XCTAssertNil(KeychainSessionAccounts.perDeviceContact(ofAccount: "session_\(perDeviceUser)"))
         XCTAssertNil(KeychainSessionAccounts.perDeviceContact(ofAccount: "session_token"))
     }
+
+    // MARK: - Where the core's durable slots land
+    //
+    // The core names *what* the bytes are (`SecureStoreSlot`); this file decides *where* they go.
+    // Until 2026-08-26 the core sent a formatted key and iOS parsed it apart and rebuilt it —
+    // six copies of one naming rule, one of which (`CallManager`) silently did nothing for every
+    // slot that was not a session.
+
+    /// Every slot the core can emit lands somewhere distinct. A collision would have two kinds of
+    /// state overwriting each other under one account, which no test downstream would notice
+    /// because each writer would read back exactly what it wrote.
+    ///
+    /// Mutation: give any two slots the same account — this reddens.
+    func testEverySlotLandsInItsOwnAccount() {
+        let slots: [CfeSecureStoreSlot] = [
+            .session(contactId: contactId),
+            .sessionArchive(contactId: contactId),
+            .pqDeferred(contactId: contactId),
+            .kyberSessionState,
+            .kyberSignedPrekey(keyId: 7),
+            .orchestratorState
+        ]
+        let accounts = slots.map(KeychainSessionAccounts.account(for:))
+        XCTAssertEqual(Set(accounts).count, slots.count, "slots collide: \(accounts)")
+        XCTAssertFalse(accounts.contains(""), "a slot with no account would silently drop its bytes")
+    }
+
+    /// The two session-shaped slots must be reachable by the wipe. This is the join the 2026-08-26
+    /// incident was missing: the namespace was defined in one place and swept by another.
+    ///
+    /// Mutation: name the archive account anything outside the `session_` namespace — this reddens.
+    func testSessionSlotsAreRecognisedByTheWipe() {
+        for slot in [CfeSecureStoreSlot.session(contactId: contactId),
+                     .sessionArchive(contactId: contactId),
+                     .session(contactId: "\(perDeviceUser):\(perDeviceDevice)")] {
+            let account = KeychainSessionAccounts.account(for: slot)
+            XCTAssertTrue(
+                KeychainSessionAccounts.isSessionState(account),
+                "\(account) holds ratchet state but the wipe would leave it behind"
+            )
+        }
+    }
+
+    /// The slots that are not session state must NOT be swept by the session wipe — it runs while
+    /// the user is still signed in (`prepareForDeviceLink`), and it is not the account teardown.
+    ///
+    /// Mutation: move any of them into the `session_` namespace — this reddens.
+    func testNonSessionSlotsAreNotSweptBySessionWipe() {
+        for slot in [CfeSecureStoreSlot.pqDeferred(contactId: contactId),
+                     .kyberSessionState,
+                     .kyberSignedPrekey(keyId: 7),
+                     .orchestratorState] {
+            let account = KeychainSessionAccounts.account(for: slot)
+            XCTAssertFalse(
+                KeychainSessionAccounts.isSessionState(account),
+                "\(account) is not a ratchet blob and must survive a session wipe"
+            )
+        }
+    }
+
+    /// `SessionArchiveManager` builds its Keychain key from the same function, so the archive a
+    /// `SessionTerminated` action produces and the archive the manager reads are one account.
+    func testTheArchiveAccountIsTheOneTheManagerUses() {
+        XCTAssertEqual(
+            KeychainSessionAccounts.account(for: .sessionArchive(contactId: contactId)),
+            "session_archives_\(contactId)"
+        )
+    }
 }

@@ -45,8 +45,6 @@ extension CryptoManager {
             return "sessionInitCompleted contactId=\(contactId.prefix(8))… session=\(sessionData.count)B"
         case .ackReceived(let messageId):
             return "ackReceived msgId=\(messageId.prefix(8))…"
-        case .sessionLoaded(let key, let data):
-            return "sessionLoaded key=\(key.prefix(24))… data=\(data?.count ?? 0)B"
         case .keyBundleFetched(let userId, _):
             return "keyBundleFetched userId=\(userId.prefix(8))…"
         case .networkReconnected:
@@ -72,7 +70,7 @@ extension CryptoManager {
             case .messageDecrypted:         labels.insert("decrypted")
             case .callSignalDecrypted:      labels.insert("call_signal")
             case .sendEncryptedMessage:     labels.insert("send")
-            case .saveSessionToSecureStore: labels.insert("save")
+            case .saveToSecureStore: labels.insert("save")
             case .sessionHealNeeded:        labels.insert("heal")
             case .sendEndSession:           labels.insert("end_session")
             case .fetchPublicKeyBundle:     labels.insert("fetch_bundle")

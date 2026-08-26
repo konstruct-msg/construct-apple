@@ -41,6 +41,44 @@ enum KeychainSessionAccounts {
     static let prefix = "session_"
     private static let archiveInfix = "archives_"
 
+    // MARK: - Where the core's durable slots land
+
+    /// Accounts that are not session state but are named here anyway, because this file is the
+    /// one place the Keychain namespace is spelled.
+    static let orchestratorState = "construct.orchestrator_state"
+    static let kyberSessionState = "construct.kyber_session_state"
+    static let pqDeferredPrefix = "construct.pq_deferred."
+    static let kyberSignedPrekeyPrefix = "construct.kyber.spk.sk."
+
+    /// The account a core `SecureStoreSlot` is stored under on this platform.
+    ///
+    /// The core used to send a formatted key (`"session_<id>"`, `"archive_<id>"`, …) and this
+    /// side parsed it back apart, then rebuilt an identical string two layers down in
+    /// `KeychainManager`. Six copies of one naming rule across two repositories, and the one in
+    /// `CallManager` silently did nothing for every slot that was not a session. The core now
+    /// says only *what* the bytes are; where they live is decided here and nowhere else.
+    ///
+    /// Android maps the same slots onto Keystore without inheriting any of these names.
+    static func account(for slot: CfeSecureStoreSlot) -> String {
+        switch slot {
+        case .session(let contactId):
+            return account(for: contactId)
+        case .sessionArchive(let contactId):
+            // The account the archive *list* lives under. Archives are a JSON list of
+            // `SessionArchive`, not a single blob, so the write goes through
+            // `SessionArchiveManager` — which builds its key from this same function.
+            return prefix + archiveInfix + contactId
+        case .pqDeferred(let contactId):
+            return pqDeferredPrefix + contactId
+        case .kyberSessionState:
+            return kyberSessionState
+        case .kyberSignedPrekey(let keyId):
+            return "\(kyberSignedPrekeyPrefix)\(keyId)"
+        case .orchestratorState:
+            return orchestratorState
+        }
+    }
+
     /// True for accounts holding Double Ratchet state for one contact, live or archived.
     ///
     /// Identified by the shape of the suffix rather than by a denylist of the neighbours:

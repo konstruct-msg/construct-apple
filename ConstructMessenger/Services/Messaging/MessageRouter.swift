@@ -883,7 +883,7 @@ final class MessageRouter {
             case .sessionHealNeeded:             return "sessionHealNeeded"
             case .sendEndSession:                return "sendEndSession"
             case .fetchPublicKeyBundle:          return "fetchPublicKeyBundle"
-            case .saveSessionToSecureStore:      return "saveSessionToSecureStore"
+            case .saveToSecureStore:             return "saveToSecureStore"
             case .notifyNewMessage:              return "notifyNewMessage"
             case .persistMessage:                return "persistMessage"
             case .persistAck:                    return "persistAck"
@@ -1033,7 +1033,7 @@ final class MessageRouter {
     ///   same moment" (construct-core `RustPqContributions`). Applying before we decrypt the
     ///   carrier, or on a message the core chose to drop, would drive the root keys apart
     ///   instead of together, which surfaces as a DR divergence on the peer's *next* message.
-    /// * **After `executeRustActions`.** That is where `saveSessionToSecureStore` lands, carrying
+    /// * **After `executeRustActions`.** That is where `saveToSecureStore` lands, carrying
     ///   session bytes the core exported at decrypt time — i.e. before this mix. Persisting here
     ///   first would simply be overwritten by those staler bytes.
     ///

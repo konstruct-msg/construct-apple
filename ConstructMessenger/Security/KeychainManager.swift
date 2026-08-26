@@ -461,20 +461,20 @@ class KeychainManager {
     /// works while the screen is locked.
     @discardableResult
     func saveSessionData(_ data: Data, for contactId: String) -> Bool {
-        let key = "session_\(contactId)"
+        let key = KeychainSessionAccounts.account(for: contactId)
         return save(data, forKey: key, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
     }
 
     /// Load the CFE session bytes previously written by `saveSessionData`.
     func loadSessionData(for contactId: String) -> Data? {
-        let key = "session_\(contactId)"
+        let key = KeychainSessionAccounts.account(for: contactId)
         return load(forKey: key)
     }
 
     /// Delete a session for a specific contact
     /// - Parameter contactId: The contact/user ID
     func deleteSession(for contactId: String) {
-        let key = "session_\(contactId)"
+        let key = KeychainSessionAccounts.account(for: contactId)
         delete(forKey: key)
     }
 

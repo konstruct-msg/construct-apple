@@ -1383,10 +1383,11 @@ final class CallManager: CallUIManaging {
                             Log.error("Failed to send WebRTCSignal: \(error)", category: "Calls")
                         }
                     }
-                case .saveSessionToSecureStore(let key, _):
-                    // Persist updated session state after Rust encrypt.
-                    if key.hasPrefix("session_") {
-                        let contactId = String(key.dropFirst("session_".count))
+                case .saveToSecureStore(let slot, _):
+                    // Persist updated session state after Rust encrypt. This branch held a fourth
+                    // copy of the `session_` prefix rule and did nothing at all for every other
+                    // slot — silently, because a string key has no case the compiler can miss.
+                    if case .session(let contactId) = slot {
                         CryptoManager.shared.saveSessionToKeychain(for: contactId)
                         CryptoManager.shared.saveOrchestratorStateCFE()
                     }
