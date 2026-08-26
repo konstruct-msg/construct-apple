@@ -1404,7 +1404,7 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     /**
      * Export the PQContributionManager state as a CFE binary blob.
-     * Persist under key "kyber_session_state" in the secure store.
+     * Persist under CfeSecureStoreSlot::KyberSessionState.
      */
     func exportKyberSessionState() throws  -> [UInt8]
     
@@ -1413,7 +1413,7 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     /**
      * Export the full orchestrator coordination state (ACK cache, healing queue,
      * init locks, archive index, prekey tracker) as a CFE binary blob.
-     * Persist under key "orchestrator_state" in the secure store.
+     * Persist under CfeSecureStoreSlot::OrchestratorState.
      */
     func exportOrchestratorState() throws  -> [UInt8]
     
@@ -1670,7 +1670,7 @@ open func ensureHybridSignatureKey()throws  -> [UInt8]  {
     
     /**
      * Export the PQContributionManager state as a CFE binary blob.
-     * Persist under key "kyber_session_state" in the secure store.
+     * Persist under CfeSecureStoreSlot::KyberSessionState.
      */
 open func exportKyberSessionState()throws  -> [UInt8]  {
     return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
@@ -1691,7 +1691,7 @@ open func exportOneTimePrekeys()throws  -> [UInt8]  {
     /**
      * Export the full orchestrator coordination state (ACK cache, healing queue,
      * init locks, archive index, prekey tracker) as a CFE binary blob.
-     * Persist under key "orchestrator_state" in the secure store.
+     * Persist under CfeSecureStoreSlot::OrchestratorState.
      */
 open func exportOrchestratorState()throws  -> [UInt8]  {
     return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
@@ -5603,7 +5603,7 @@ public enum CfeSecureStoreSlot: Equatable, Hashable {
     case session(contactId: String
     )
     /**
-     * A terminated session, kept for late-arriving messages.
+     * A terminated session, kept for late-arriving messages. Empty payload means delete.
      */
     case sessionArchive(contactId: String
     )
@@ -7235,6 +7235,22 @@ public func testPlatformBridgeRoundtrip(bridge: PlatformBridge, key: String, dat
     )
 })
 }
+/**
+ * Which side opens the session when both try at once: "Initiator" or "Responder".
+ *
+ * Higher id wins, by plain byte comparison — no normalisation, no parsing. Both peers
+ * compute it over the same pair, so a disagreement is a permanent deadlock rather than a
+ * retryable error. Pass the ids the session is addressed by; anything else ranks a
+ * different pair.
+ */
+public func tieBreakRole(myId: String, peerId: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_tie_break_role(
+        FfiConverterString.lower(myId),
+        FfiConverterString.lower(peerId),$0
+    )
+})
+}
 public func validateMnemonic(mnemonic: String) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_construct_core_fn_func_validate_mnemonic(
@@ -7447,6 +7463,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_test_platform_bridge_roundtrip() != 58358) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_tie_break_role() != 31131) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_validate_mnemonic() != 51524) {

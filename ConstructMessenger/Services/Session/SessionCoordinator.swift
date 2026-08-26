@@ -373,12 +373,13 @@ final class SessionCoordinator: MessageRouterDelegate {
     }
 
     /// Broadcast END_SESSION to all peers that have an active session (e.g., on logout).
-    /// Pre-warm sessions for contacts where we are the natural INITIATOR (higher userId — see
-    /// `SessionReducer.tieBreakRole`, which matches the Rust core rule).
+    /// Pre-warm sessions for contacts where we are the natural INITIATOR (see
+    /// `SessionAddressing.isNaturalInitiator(againstPeer:)`, which asks the core).
     /// Called once per app launch after stream connects. Ensures first messages are instant.
     func prewarmSessions(for contactIds: [String], skipEndSessionNotification: Bool = false) {
-        let myId = AuthSessionManager.shared.currentUserId ?? ""
-        guard !myId.isEmpty else { return }
+        // Our own half of every tie-break below. Empty means the Keychain is unreadable, in
+        // which case no session decision can be made at all.
+        guard !SessionAddressing.localIdentity().isEmpty else { return }
 
         // Do not make any session-missing decisions before the crypto core is built and
         // sessions have had a chance to restore from Keychain. While the core is nil,
@@ -396,9 +397,16 @@ final class SessionCoordinator: MessageRouterDelegate {
         hydrateEstablishedTimestampsForRestoredSessions()
 
         let toPrewarm = contactIds.filter { peer in
-            SessionReducer.shouldPrewarm(
+            // A peer with no pinned identity key has no name in the crypto space, so the pair
+            // cannot be ranked — and prewarming on a role we guessed is the concurrent init this
+            // predicate exists to prevent. Skip them: the session still establishes on the first
+            // send, whose bundle fetch pins the key that makes the peer nameable.
+            guard let weInitiate = SessionAddressing.isNaturalInitiator(againstPeer: peer) else {
+                return false
+            }
+            return SessionReducer.shouldPrewarm(
                 coreReady: coreReady,
-                isNaturalInitiator: SessionReducer.isNaturalInitiator(myId: myId, peerId: peer),
+                isNaturalInitiator: weInitiate,
                 sessionExistsOrRestorable: CryptoManager.shared.hasOrRestoreSession(for: peer)
             )
         }
@@ -492,8 +500,9 @@ final class SessionCoordinator: MessageRouterDelegate {
     func messageRouter(_ router: MessageRouter, needsEndSession userId: String) {
         Task { [weak self] in
             guard let self else { return }
-            let myId = AuthSessionManager.shared.currentUserId ?? ""
-            guard !myId.isEmpty else { return }
+            // Our own half of every tie-break below. Empty means the Keychain is unreadable, in
+            // which case no session decision can be made at all.
+            guard !SessionAddressing.localIdentity().isEmpty else { return }
 
             // **One teardown signal per divergence.** As the natural INITIATOR we are about to send
             // a SESSION_RESET_INIT, and SESSION_RESET_INIT *is* the teardown — "archive the session
@@ -513,7 +522,11 @@ final class SessionCoordinator: MessageRouterDelegate {
             //
             // The RESPONDER branch keeps the END_SESSION: it announces nothing of its own, so the
             // teardown is the only thing that tells the peer to stop using a session we cannot read.
-            guard SessionReducer.isNaturalInitiator(myId: myId, peerId: userId) else {
+            // An unnameable peer takes the RESPONDER branch below. Reaching this callback at all
+            // means we once held a session with them, so `nil` is not expected here — and it is no
+            // reason to send an init whose role we guessed. The RESPONDER branch announces nothing
+            // of its own; it only tells the peer to stop using a session we cannot read.
+            guard SessionAddressing.isNaturalInitiator(againstPeer: userId) ?? false else {
                 // Cooldown gates the whole recovery sequence here: if a recent END_SESSION is still
                 // in its window, skip both the send AND the fallback below (avoids storms). This
                 // callback fires because a message arrived on a session we no longer have — which
@@ -613,11 +626,14 @@ final class SessionCoordinator: MessageRouterDelegate {
 
     func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64) {
         lastInboundEndSessionAt[userId] = Date()
-        let myId = AuthSessionManager.shared.currentUserId ?? ""
-        guard !myId.isEmpty else { return }
+        // Our own half of every tie-break below. Empty means the Keychain is unreadable, in
+        // which case no session decision can be made at all.
+        guard !SessionAddressing.localIdentity().isEmpty else { return }
 
+        // `nil` — the peer cannot be named — falls to `.waitAsResponder`: wait for the peer's
+        // init rather than raise one whose role we guessed.
         switch SessionReducer.endSessionReceiptAction(
-            isNaturalInitiator: SessionReducer.isNaturalInitiator(myId: myId, peerId: userId),
+            isNaturalInitiator: SessionAddressing.isNaturalInitiator(againstPeer: userId) ?? false,
             hasPendingReinit: endSessionReinitTasks[userId] != nil
         ) {
         case .waitAsResponder:

@@ -42,7 +42,10 @@ enum SessionAddressing {
     /// exists: the stored value is a cache of `deriveDeviceId(our identity public)`, and a cache
     /// that disagrees with its source is repaired there, loudly.
     static func localIdentity() -> String {
-        KeychainManager.shared.loadDeviceID() ?? ""
+        #if DEBUG
+        if let override = localIdentityOverrideForTesting { return override }
+        #endif
+        return KeychainManager.shared.loadDeviceID() ?? ""
     }
 
     /// The crypto identity of the peer behind `userId`, or `nil` when we have no way to name them.
@@ -122,11 +125,55 @@ enum SessionAddressing {
         id.count == 32 && id.allSatisfy(\.isHexDigit)
     }
 
+    // MARK: - Who goes first
+
+    /// Role in a concurrent-init tie-break.
+    enum Role: Equatable { case initiator, responder }
+
+    /// The tie-break rule, **asked of the core** rather than restated here.
+    ///
+    /// Both peers compute this independently, so any disagreement is not a retryable error: it is
+    /// both-initiator or both-responder, permanently. Until 2026-08-26 the app carried its own copy
+    /// of the comparison under a comment promising it matched the core byte-for-byte — and the flip
+    /// to device addressing broke that promise without touching either line, because the core began
+    /// ranking a pair of device ids while this side went on ranking a pair of account ids. Two
+    /// correct implementations over two different pairs agree about half the time.
+    ///
+    /// A rule two sides must agree on has one implementation and the other side calls it.
+    static func role(mine: String, theirs: String) -> Role {
+        // The core answers with the same spelling it stamps on `SessionHealNeeded`, so the wire
+        // name and the local decision cannot drift apart either.
+        tieBreakRole(myId: mine, peerId: theirs) == "Initiator" ? .initiator : .responder
+    }
+
+    /// Whether we are the natural INITIATOR against `peerId`, or `nil` when the pair cannot be
+    /// ranked because the peer has no name in the crypto space.
+    ///
+    /// This resolves **both** halves through the seam. That is the whole point: the core ranks
+    /// (our device, their device), and a caller that ranks (our account, their account) has
+    /// answered a different question with the same type.
+    ///
+    /// `nil` is not an error. It is the same state as "we have never pinned this contact's key",
+    /// in which no session with them can exist and none can be built until a bundle fetch pins it.
+    /// Callers decide what to do with it explicitly; none of them may substitute an account id.
+    static func isNaturalInitiator(againstPeer peerId: String) -> Bool? {
+        let mine = localIdentity()
+        guard !mine.isEmpty, let theirs = contactId(forPeer: peerId) else { return nil }
+        // Equal ids — self, or an echo of our own copy — need no special case here: the core
+        // answers `Responder` for them and pins that in `test_an_id_does_not_win_against_itself`.
+        // A guard restating it would be the same duplicate this function exists to remove; it was
+        // written, found to have no observable effect, and dropped.
+        return role(mine: mine, theirs: theirs) == .initiator
+    }
+
     // MARK: - Internals
 
     #if DEBUG
     /// Test seam: lets a unit test answer without a Core Data stack.
     nonisolated(unsafe) static var pinnedIdentityKeyOverrideForTesting: ((String) -> Data?)?
+
+    /// Test seam: lets a unit test answer without a Keychain entry.
+    nonisolated(unsafe) static var localIdentityOverrideForTesting: String?
     #endif
 
     /// The identity key pinned for `userId`, read from whichever thread is asking.

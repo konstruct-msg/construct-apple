@@ -405,31 +405,12 @@ enum SessionReducer {
         return now.timeIntervalSince(lastHandledAt) >= cooldown
     }
 
-    // MARK: - Tie-break role (the single Swift authority)
+    // MARK: - Tie-break role
 
-    /// Role in a concurrent-init tie-break.
-    enum Role: Equatable { case initiator, responder }
-
-    /// Deterministic tie-break role, **matching the Rust core byte-for-byte**
-    /// (`construct-core` `message_router.rs::tie_break_role`): plain string comparison of the two
-    /// `ServerUserId`s, **higher id = INITIATOR**. Both peers compute this independently over the
-    /// same pair, so any disagreement means both-initiator / both-responder → permanent deadlock.
-    /// This is why it must be one authority and must not normalise (lowercasing here would diverge
-    /// from Rust). For canonical lowercase dashed UUIDs, string order == UUID-byte order, so this
-    /// supersedes the old `DeviceIdOrdering` UUID-byte compare (which diverged from Rust only on
-    /// non-canonical / mixed-case ids — a latent fragility, now removed).
-    ///
-    /// - Note: operands are `ServerUserId`s (36-char UUID), **not** `CryptoDeviceId`s — the old
-    ///   "deviceId" naming was a misnomer; the AD and the Rust rule both key on userId.
-    static func tieBreakRole(myId: String, peerId: String) -> Role {
-        myId > peerId ? .initiator : .responder
-    }
-
-    /// Whether we are the natural INITIATOR (higher userId) for this peer — the proactive-prewarm
-    /// and responder-fallback predicate. Equal ids (self / echo) are not an initiator.
-    static func isNaturalInitiator(myId: String, peerId: String) -> Bool {
-        myId != peerId && tieBreakRole(myId: myId, peerId: peerId) == .initiator
-    }
+    // The rule lives in the core and is reached through `SessionAddressing.role(mine:theirs:)`.
+    // It used to be reimplemented here, under a comment promising it matched the core byte-for-byte
+    // — see that function for what the promise cost. The reducer stays pure: it takes
+    // `isNaturalInitiator` as an input and never computes it.
 
     // MARK: - Confirmation gate (INITIATOR awaiting RESPONDER session_ready)
 

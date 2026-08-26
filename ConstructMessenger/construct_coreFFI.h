@@ -1197,6 +1197,11 @@ int8_t uniffi_construct_core_fn_func_supports_pq_ratchet(RustCallStatus *_Nonnul
 int8_t uniffi_construct_core_fn_func_test_platform_bridge_roundtrip(uint64_t bridge, RustBuffer key, RustBuffer data, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_TIE_BREAK_ROLE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_TIE_BREAK_ROLE
+RustBuffer uniffi_construct_core_fn_func_tie_break_role(RustBuffer my_id, RustBuffer peer_id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VALIDATE_MNEMONIC
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VALIDATE_MNEMONIC
 int8_t uniffi_construct_core_fn_func_validate_mnemonic(RustBuffer mnemonic, RustCallStatus *_Nonnull out_status
@@ -1784,6 +1789,12 @@ uint16_t uniffi_construct_core_checksum_func_supports_pq_ratchet(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_TEST_PLATFORM_BRIDGE_ROUNDTRIP
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_TEST_PLATFORM_BRIDGE_ROUNDTRIP
 uint16_t uniffi_construct_core_checksum_func_test_platform_bridge_roundtrip(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_TIE_BREAK_ROLE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_TIE_BREAK_ROLE
+uint16_t uniffi_construct_core_checksum_func_tie_break_role(void
     
 );
 #endif

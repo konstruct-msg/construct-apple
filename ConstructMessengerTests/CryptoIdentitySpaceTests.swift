@@ -70,6 +70,35 @@ final class CryptoIdentitySpaceTests: XCTestCase {
         return sites
     }
 
+    /// The core's tie-break has exactly one caller, and it is the seam.
+    ///
+    /// The rule is only worth exporting if both sides rank the same pair, and the pair is resolved
+    /// in `SessionAddressing`. A second caller elsewhere would be one that resolved the ids itself
+    /// — which is how the app came to rank two account ids against the core's two device ids, and
+    /// neither implementation was wrong on its own.
+    func testOnlyTheSeamAsksTheCoreForARole() throws {
+        let fm = FileManager.default
+        guard let walker = fm.enumerator(at: sourceRoot, includingPropertiesForKeys: nil) else {
+            throw XCTSkip("app sources not reachable from \(sourceRoot.path)")
+        }
+        var callers: [String] = []
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            if url.lastPathComponent == "construct_core.swift" { continue }
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            for (index, line) in text.components(separatedBy: "\n").enumerated() {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix("//") { continue }
+                guard line.contains("tieBreakRole(myId:") || line.contains("tieBreakRole(myId: ") else { continue }
+                callers.append("\(url.lastPathComponent):\(index + 1)")
+            }
+        }
+        XCTAssertFalse(callers.isEmpty, "the scan found no caller at all — the seam should be one")
+        for caller in callers {
+            XCTAssertTrue(caller.hasPrefix("SessionAddressing.swift:"),
+                          "\(caller) asks the core for a role without resolving the pair at the seam")
+        }
+    }
+
     /// The scan must find the calls we know exist. Without this the rule below passes whenever the
     /// regex stops matching — the shape of vacuous pass this repo has already paid for twice.
     func testTheScanFindsTheCallsWeKnowExist() throws {

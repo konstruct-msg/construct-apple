@@ -207,10 +207,11 @@ private final class Peer {
         self.confirmWindow = confirmWindow
     }
 
-    // Tie-break via the production authority (folded from glue — SessionReducer.tieBreakRole,
-    // which matches the Rust core). The harness now exercises the real role rule, not a copy.
+    // Tie-break via the production authority — `SessionAddressing.role`, which asks the core.
+    // The harness exercises the real rule, not a copy. Its node ids stand in for device ids: the
+    // harness models two peers ranking one pair, which is exactly what the rule decides.
     private func isInitiator(over peerId: String) -> Bool {
-        SessionReducer.tieBreakRole(myId: id, peerId: peerId) == .initiator
+        SessionAddressing.role(mine: id, theirs: peerId) == .initiator
     }
 
     var isActive: Bool { if case .active = phase { return true }; return false }
