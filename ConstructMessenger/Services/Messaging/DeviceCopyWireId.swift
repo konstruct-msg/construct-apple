@@ -27,6 +27,16 @@ enum DeviceCopyVerdict: Equatable {
     /// opening a copy costs failed decrypts, wrongly discarding one loses a message from the
     /// transcript, silently, which is the failure mode this feature already spent months in.
     case undecidable
+
+    /// The metric label for this verdict, kept next to the cases so a new one cannot be counted
+    /// under an old name.
+    var metricLabel: String {
+        switch self {
+        case .ours:        return "ours"
+        case .foreign:     return "foreign"
+        case .undecidable: return "undecidable"
+        }
+    }
 }
 
 /// Reading of the device-tag suffix `DeviceDeliveryPlan` puts on a per-device copy.

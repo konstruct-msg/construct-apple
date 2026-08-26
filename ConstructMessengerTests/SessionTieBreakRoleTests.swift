@@ -117,6 +117,44 @@ final class SessionTieBreakRoleTests: XCTestCase {
                        SessionAddressing.isNaturalInitiator(againstPeer: peerDeviceId))
     }
 
+    /// Two devices of **one account** — the pair the account space cannot rank at all.
+    ///
+    /// A cross-account pair exposes the old defect only half the time, by coincidence of which
+    /// ids sort where. This pair exposes it always: siblings share an account id, so the account
+    /// comparison sees `myId == peerId` and elects nobody, while the device comparison elects
+    /// exactly one. Multi-device is what made this pair real, and it is the case that deadlocks
+    /// rather than merely disagreeing.
+    ///
+    /// The three-simulator stand could not run it: the silent-re-init picker lists contacts, and
+    /// a sibling device is not a contact. So it is pinned here instead.
+    ///
+    /// Mutation: rank `AuthSessionManager.currentUserId` against the peer's account id — both
+    /// sides then answer `false` and this reddens on whichever side should have initiated.
+    func testTwoDevicesOfOneAccountStillElectExactlyOneInitiator() {
+        // One account, two devices. The seam is handed the sibling's device id directly, which is
+        // what the per-device paths hold.
+        let sibling = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
+        let siblingDeviceId = deriveDeviceId(identityPublicKey: [UInt8](sibling))
+        XCTAssertNotEqual(siblingDeviceId, peerDeviceId)
+
+        let mine = deviceId(relativeToPeer: true)
+
+        // Both halves go through the production seam — this is the same question asked on two
+        // devices, which is the only way the answer's symmetry can be asserted at all. Reading one
+        // side through `role` directly would leave the mutation "always answer false" surviving
+        // half the time, on whichever way the other half happened to fall.
+        SessionAddressing.localIdentityOverrideForTesting = mine
+        let weInitiate = SessionAddressing.isNaturalInitiator(againstPeer: siblingDeviceId)
+
+        SessionAddressing.localIdentityOverrideForTesting = siblingDeviceId
+        let theyInitiate = SessionAddressing.isNaturalInitiator(againstPeer: mine)
+
+        XCTAssertNotNil(weInitiate)
+        XCTAssertNotNil(theyInitiate)
+        XCTAssertNotEqual(weInitiate, theyInitiate,
+                          "both devices of one account claimed the same role: \(mine) / \(siblingDeviceId)")
+    }
+
     // MARK: - When the pair cannot be ranked
 
     /// A peer whose key we never pinned has no name in the crypto space, so there is no pair. The

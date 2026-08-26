@@ -310,6 +310,7 @@ final class MessageRouter {
                 peerIdentityKeys: PeerDeviceRegistry.shared.identityKeys(of: message.from),
                 peerDeviceSetIsComplete: PeerDeviceRegistry.shared.deviceSetIsKnown(for: message.from)
             )
+            PerformanceMetrics.shared.record(.deviceCopyVerdict, label: verdict.metricLabel)
             if verdict == .foreign {
                 Log.debug(
                     "FAN-OUT: \(message.id.prefix(8))… is addressed to another of our devices — skipping",

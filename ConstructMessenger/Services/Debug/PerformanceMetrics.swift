@@ -307,6 +307,20 @@ enum MetricEvent: String {
     /// Should be zero in a normal run: `markProcessed` is only reached after a decrypt, which
     /// already requires the core. A non-zero count means that assumption is wrong somewhere.
     case ackCacheWarmSkippedNoCore = "ack_cache_warm_skipped_no_core"
+
+    /// How a per-device copy addressed to the recipient's account was judged on arrival.
+    /// `label` = `ours` · `foreign` · `undecidable`.
+    ///
+    /// The one that matters is `undecidable`: we cannot tell a sibling's copy from a copy sent by
+    /// a peer device we never pinned, so it is opened, and opening a copy that was not ours costs
+    /// a failed decrypt. That is the safe direction — discarding one loses a message from the
+    /// transcript silently — but its *frequency* has never been measured, and the frequency is the
+    /// whole case for putting the account id inside the session record so a cold start can decide
+    /// without `PeerDeviceRegistry`.
+    ///
+    /// This counter exists so that decision is taken on a number. Until a run produces one,
+    /// "add the field" and "leave it" are both guesses.
+    case deviceCopyVerdict = "device_copy_verdict"
 }
 
 #if DEBUG
