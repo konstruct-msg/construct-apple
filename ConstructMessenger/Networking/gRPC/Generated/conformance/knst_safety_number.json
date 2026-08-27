@@ -1,0 +1,104 @@
+{
+  "$schema_version": 1,
+  "$authority": "construct-core :: crypto::recovery::compute_safety_number",
+  "$spec": "construct-docs/decisions/core-repatriation-execution-plan.md",
+  "$purpose": [
+    "The safety number is the value two people read aloud to each other to confirm that no key was",
+    "substituted between them. Its only job is to differ when the identity keys differ, so any two",
+    "implementations that disagree turn a verification into theatre: the numbers on the two screens",
+    "do not match, both users conclude they are under attack, and nothing is wrong. The reverse is",
+    "worse and is what these vectors exist to prevent — two inputs that should differ producing one",
+    "number, which is a verification that confirms nothing while looking exactly like one that did.",
+    "iOS carried a second implementation of this until 2026-08-27 (582-line neighbourhood in",
+    "SafetyNumberView, under a comment promising it matched the core). It now calls the core, and",
+    "these vectors are what a third client is checked against instead of a comment."
+  ],
+  "$construction": [
+    "1. Both ids must be non-empty and decodable as hex. Otherwise there is NO number — see $refusal.",
+    "2. Sort the two ids as STRINGS (not as bytes, and with no case normalisation), so both sides",
+    "   agree on the order. A client that lowercases before sorting will disagree with one that",
+    "   does not, on any pair whose ids differ in case.",
+    "3. input = decode(first) || decode(second)",
+    "5. Take the first 24 bytes as 12 big-endian u16 pairs; each is rendered as 5 decimal digits, zero-padded, and joined with single spaces: 71 characters.",
+    "   The range that occurs is 00000-65535, not 00000-99999: a group is a u16. The core applies a `% 100000` that can never fire; it is a width guard for a future wider chunk, not a reduction. A client that omits it produces identical output today. The number carries 192 bits, and the five-digit groups overstate that — say 192 when reasoning about collisions.",
+    "5. Take the first 24 bytes as 12 big-endian u16 pairs; each becomes (pair % 100000) rendered",
+    "   as 5 decimal digits, zero-padded. Join the 12 groups with single spaces: 71 characters.",
+    "The 1024 rounds are deliberate cost against brute-forcing a key whose device id collides in",
+    "the displayed digits; a client that runs a different number of rounds produces a different",
+    "number for every input, which is the loudest possible failure and therefore the safe one."
+  ],
+  "$refusal": [
+    "An id the implementation cannot read must yield no number at all — not an empty string that a",
+    "UI might render, and above all not a number computed from substituted bytes.",
+    "Until 2026-08-27 the core decoded with `unwrap_or_default()`, so an unreadable id silently",
+    "became an empty one, and an empty id is valid input that produces a real-looking 60-digit",
+    "value. Every broken id therefore collapsed onto the SAME number: 'abc', 'zzzz' and '' all",
+    "matched each other against a given peer. Two people whose ids failed to decode would have",
+    "been shown matching numbers and would have concluded the session was verified.",
+    "Empty is refused by name rather than allowed to decode cleanly, because it is the value the",
+    "old collapse produced and the one two broken clients would most easily both supply."
+  ],
+  "vectors": [
+    {
+      "a": "00000000000000000000000000000000",
+      "b": "00000000000000000000000000000001",
+      "safety_number": "38036 18648 47536 08302 13349 50786 13976 29390 20126 35956 56200 32617",
+      "note": "adjacent ids: one bit apart in the input, unrelated in the output"
+    },
+    {
+      "a": "deadbeefcafe1234deadbeefcafe1234",
+      "b": "1234cafe5678abcd1234cafe5678abcd",
+      "safety_number": "29923 11327 33797 39770 55644 15437 29152 58888 63756 22781 21915 47107",
+      "note": "the pair the core's own unit tests use, so a change there and a change here cannot pass separately"
+    },
+    {
+      "a": "ffffffffffffffffffffffffffffffff",
+      "b": "0f0e0d0c0b0a09080706050403020100",
+      "safety_number": "64486 46034 27606 61533 65387 50416 61186 59737 40043 64512 57578 59097",
+      "note": "a is the string-greater id, so the sort swaps the concatenation order"
+    },
+    {
+      "a": "c6bfaaefcdd4e6cac587d22c69129d6e",
+      "b": "607dafec816027ae0f1c2d3e4f5a6b7c",
+      "safety_number": "25250 18588 39274 63203 10437 29450 07837 11640 61675 64232 45695 55060",
+      "note": "real device ids from the three-simulator stand; the leading group 25250 has a zero that a naive formatter drops"
+    }
+  ],
+  "symmetry": [
+    "compute(a, b) == compute(b, a) for every vector above. A client that produces different",
+    "numbers depending on which side asks has not implemented the sort, and its users will see",
+    "mismatched numbers on every single verification."
+  ],
+  "refused": [
+    {
+      "a": "abc",
+      "b": "00000000000000000000000000000000",
+      "safety_number": null,
+      "note": "odd length"
+    },
+    {
+      "a": "zzzz",
+      "b": "00000000000000000000000000000000",
+      "safety_number": null,
+      "note": "not hex"
+    },
+    {
+      "a": "",
+      "b": "00000000000000000000000000000000",
+      "safety_number": null,
+      "note": "empty decodes cleanly — refused by name"
+    },
+    {
+      "a": "0x1234",
+      "b": "00000000000000000000000000000000",
+      "safety_number": null,
+      "note": "a prefix some callers add"
+    },
+    {
+      "a": "00000000000000000000000000000000",
+      "b": "abc",
+      "safety_number": null,
+      "note": "either side, not just the first"
+    }
+  ]
+}

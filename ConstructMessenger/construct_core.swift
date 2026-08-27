@@ -6740,8 +6740,8 @@ public func computePowWithProgress(challenge: String, difficulty: UInt32, progre
     )
 })
 }
-public func computeSafetyNumber(myDeviceId: String, theirDeviceId: String) -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
+public func computeSafetyNumber(myDeviceId: String, theirDeviceId: String) -> String?  {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
     uniffi_construct_core_fn_func_compute_safety_number(
         FfiConverterString.lower(myDeviceId),
         FfiConverterString.lower(theirDeviceId),$0
@@ -7324,7 +7324,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_compute_pow_with_progress() != 63236) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_compute_safety_number() != 13109) {
+    if (uniffi_construct_core_checksum_func_compute_safety_number() != 8965) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_create_crypto_core() != 59945) {

@@ -283,15 +283,18 @@ final class InviteSystemCompletionTests: XCTestCase {
 
     // MARK: - Safety number (two-party)
 
+    /// The view's own implementation was deleted on 2026-08-27; this now exercises the core's,
+    /// which is the only one. Shape and symmetry stay here; the values live in
+    /// `SafetyNumberConformanceTests` against the cross-client vectors.
     func testSafetyNumberSymmetric() {
         let a = "4e1f9dbe209c1bedb33ee32dda5a28f0"
         let b = "abcdef0123456789abcdef0123456789"
-        let ab = SafetyNumberView.compute(myDeviceId: a, theirDeviceId: b)
-        let ba = SafetyNumberView.compute(myDeviceId: b, theirDeviceId: a)
+        let ab = computeSafetyNumber(myDeviceId: a, theirDeviceId: b)
+        let ba = computeSafetyNumber(myDeviceId: b, theirDeviceId: a)
         XCTAssertEqual(ab, ba)
-        XCTAssertFalse(ab.isEmpty)
+        XCTAssertNotNil(ab)
         // 12 groups of 5 digits
-        let groups = ab.split(separator: " ")
+        let groups = (ab ?? "").split(separator: " ")
         XCTAssertEqual(groups.count, 12)
     }
 
