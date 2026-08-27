@@ -2546,7 +2546,13 @@ final class MessageRouter {
         candidates: [String]
     ) -> (plaintext: Data, contactId: String)? {
         for contactId in candidates where CryptoManager.shared.hasSession(for: contactId) {
-            if let result = try? CryptoManager.shared.decryptMessage(message, contactIdOverride: contactId) {
+            // `claimedByThisHandler`: `routeIncomingMessage` marked this id processed before
+            // calling us, so the duplicate guard inside `decryptMessage` would refuse every
+            // candidate on the strength of our own claim — which is what dropped every
+            // SENDER_SYNC after the first on a multi-device account until 2026-08-27.
+            if let result = try? CryptoManager.shared.decryptMessage(
+                message, contactIdOverride: contactId, claimedByThisHandler: true
+            ) {
                 return (result.plaintext, contactId)
             }
         }

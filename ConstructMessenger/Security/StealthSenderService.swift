@@ -524,13 +524,25 @@ final class StealthSenderService: SealedSenderResolving {
         req.fetchLimit = 1
         let user = (try? context.fetch(req))?.first
         if let key = user?.knownIdentityKey { return key }
+
+        // `recipientId` may be a **device id**: the core names contacts that way, and the paths
+        // that reach here from a core action — END_SESSION above all — pass what the core gave
+        // them. `User.id` is an account id, so that lookup finds nothing and the sealed send fails
+        // closed. Resolve it the other way round before giving up.
+        //
+        // This is not a fallback for a missing pin; it is the same pin, reached from the other
+        // space. If it also finds nothing, the two misses below are the real diagnosis.
+        if SessionAddressing.isCryptoIdentity(recipientId),
+           let key = SessionAddressing.identityKey(ofDevice: recipientId, in: context) {
+            return key
+        }
         // A miss here fails every sealed send to this peer closed, permanently, and the thrown
         // `StealthDowngradeBlocked` only says the key is absent — never which absence it is. That
         // gap is why TODO #45 could not be attributed to a branch from a device log. The two cases
         // have different causes and different fixes, so they get different lines.
         Log.error(
             user == nil
-                ? "IK_MISS[no_row]: no User row for \(recipientId.prefix(8))… — sealed send cannot proceed"
+                ? "IK_MISS[no_row]: no User row for \(recipientId.prefix(8))… (\(SessionAddressing.isCryptoIdentity(recipientId) ? "a device id, and no pinned key derives to it" : "an account id")) — sealed send cannot proceed"
                 : "IK_MISS[no_key]: User row for \(recipientId.prefix(8))… exists but knownIdentityKey is nil (isContact=\(user!.isContact) kt=\(user!.ktStatus)) — sealed send cannot proceed",
             category: "Stealth"
         )

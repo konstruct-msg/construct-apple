@@ -1158,7 +1158,19 @@ class CryptoManager {
         try decryptMessage(message, contactIdOverride: nil)
     }
 
-    func decryptMessage(_ message: ChatMessage, contactIdOverride: String?) throws -> MessageDecryptResult {
+    /// - Parameter claimedByThisHandler: the caller has already marked this id processed **as part
+    ///   of handling it right now**, and is asking which session opens it. The duplicate guard
+    ///   below then has to be skipped: it would otherwise refuse a decrypt on the strength of the
+    ///   caller's own claim, made moments earlier.
+    ///
+    ///   Only `openSenderSync` passes true, and it is the only caller that decrypts one message id
+    ///   more than once — walking its own-device sessions to find which sibling sent it. See the
+    ///   guard for what this cost.
+    func decryptMessage(
+        _ message: ChatMessage,
+        contactIdOverride: String?,
+        claimedByThisHandler: Bool = false
+    ) throws -> MessageDecryptResult {
         let logContactId = contactIdOverride ?? message.from
         Log.debug("Decrypting message \(message.id.prefix(8))... contactId=\(logContactId.prefix(16))...", category: "CryptoManager")
         Log.debug("messageNumber: \(message.messageNumber)", category: "CryptoManager")
@@ -1174,7 +1186,16 @@ class CryptoManager {
         // Rust decrypt path itself, which the old Swift-side cache never did. The previous
         // comment here named `routeIncomingMessage` as the writer; it never called `preemptACK`
         // — the only writer was `PublicKeyBundleHandler`, plus the warm-up after a durable ACK.
-        if PersistentACKStore.shared.isProcessedInMemory(message.id) {
+        //
+        // **The guard cannot see a claim the caller made about the delivery it is still handling.**
+        // `routeIncomingMessage` marks a SENDER_SYNC processed *before* calling its handler, to
+        // close the redelivery window — and that handler then asks this function, once per
+        // candidate session, which one opens the message. Every candidate was refused on the
+        // strength of that claim, so `openSenderSync` concluded "no own-device session" and dropped
+        // the message. Devices 0b4577bc…/b26a2cf8…, 2026-08-27: the first sync of a conversation
+        // survived (messageNumber 0 takes the init path, which does not consult this guard) and
+        // **every subsequent one was lost** — silently, on every multi-device account.
+        if !claimedByThisHandler, PersistentACKStore.shared.isProcessedInMemory(message.id) {
             Log.info("CryptoManager: \(message.id.prefix(8))… already in ACK cache — skipping duplicate decrypt", category: "CryptoManager")
             throw CryptoManagerError.duplicateMessage
         }

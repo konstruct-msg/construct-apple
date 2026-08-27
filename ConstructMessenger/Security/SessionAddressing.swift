@@ -117,6 +117,37 @@ enum SessionAddressing {
         return deriveDeviceId(identityPublicKey: [UInt8](identityPublic))
     }
 
+    /// The identity key whose device id is `deviceId` — the seam read **backwards**.
+    ///
+    /// Everything else here translates downward: account id → device id, because that is the
+    /// direction the crypto layer needs. But some paths run the other way: they are handed a
+    /// `contactId` by the core — a device id — and need something that lives in the account space.
+    /// `StealthSenderService.recipientIdentityKey` is the one that mattered: it looks a peer up by
+    /// `User.id`, which is an account id, so a device id found no row and the sealed send failed
+    /// closed with `StealthDowngradeBlocked`.
+    ///
+    /// Devices 2026-08-27: the peer could not deliver END_SESSION to `b26a2cf8…` for that reason —
+    /// `IK_MISS[no_row]` — while its Double Ratchet diverged once per incoming message. It had no
+    /// way to say so, and nothing retried.
+    ///
+    /// A scan, not a cache. `deviceId == SHA256(identity_public)[0..16]`, so the pinned key *is*
+    /// the answer and deriving it is exact; a stored reverse map would be a second carrier of a
+    /// value the first one already determines. The list is the contact list, and this runs on a
+    /// control path, not per message.
+    ///
+    /// Runs on `context`'s queue, like its caller.
+    static func identityKey(ofDevice deviceId: String, in context: NSManagedObjectContext) -> Data? {
+        guard isCryptoIdentity(deviceId) else { return nil }
+        let req = User.fetchRequest()
+        req.predicate = NSPredicate(format: "knownIdentityKey != nil")
+        guard let users = try? context.fetch(req) else { return nil }
+        for user in users {
+            guard let key = user.knownIdentityKey, !key.isEmpty else { continue }
+            if deriveDeviceId(identityPublicKey: [UInt8](key)) == deviceId { return key }
+        }
+        return nil
+    }
+
     /// True when `id` is already a crypto identity rather than an account id.
     ///
     /// Used only at the seam, to keep a caller that already holds a device id from being resolved
