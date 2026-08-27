@@ -2,16 +2,8 @@
 //  Construct_DesktopTests.swift
 //  Construct DesktopTests
 //
-//  Created by Maxim Eliseyev on 12.03.2026.
+//  The template's empty `example()` lived here until 2026-08-27. A test that asserts nothing is
+//  worse than no test: it occupies the place where someone would otherwise have looked, and it
+//  reports green forever. Real coverage for this target is in `DesktopKeychainTests` and grows
+//  with whatever the desktop is actually used to check.
 //
-
-import Testing
-@testable import Construct_Desktop
-
-struct Construct_DesktopTests {
-
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
-    }
-
-}
