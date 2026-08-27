@@ -4,6 +4,9 @@
 //
 //  Created by Maxim Eliseyev on 13.12.2025.
 //
+// The iOS entry point. `Construct Desktop` compiles this whole group, so without this guard
+// the target has two `@main` structs and no amount of linker luck resolves that.
+#if os(iOS)
 
 import SwiftUI
 import CoreData
@@ -139,3 +142,4 @@ struct Construct_MessengerApp: App {
         ).textColor = UIColor(Color.CT.text)
     }
 }
+#endif

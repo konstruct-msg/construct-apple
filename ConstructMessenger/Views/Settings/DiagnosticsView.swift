@@ -356,7 +356,7 @@ struct DiagnosticsView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
         #if os(iOS)
-        .toolbar(.hidden, for: .navigationBar)
+        .hideSystemNavBar()
         #endif
         .onAppear {
             // Pull MetricKit's retained window now. Its own delivery fires at most once every

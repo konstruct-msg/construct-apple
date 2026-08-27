@@ -357,7 +357,7 @@ struct NetworkSettingsView: View {
             }
             .padding(.vertical, NetworkSettingsLayout.sectionVerticalPadding)
             #if os(iOS)
-            .toolbar(.hidden, for: .navigationBar)
+            .hideSystemNavBar()
             #endif
             }
         .alert("server_applied_title", isPresented: $showingAppliedAlert) {

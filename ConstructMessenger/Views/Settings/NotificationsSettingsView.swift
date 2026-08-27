@@ -228,7 +228,7 @@ struct NotificationsSettingsView: View {
             }
             .padding(.vertical, NotificationsSettingsLayout.sectionVerticalPadding)
             #if os(iOS)
-            .toolbar(.hidden, for: .navigationBar)
+            .hideSystemNavBar()
             #endif
         }
             .onAppear {

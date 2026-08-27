@@ -97,8 +97,11 @@ struct DesktopMessageInputView: View {
     @ViewBuilder
     private var attachmentPreviews: some View {
         if !attachments.selectedAttachments.isEmpty {
+            // The bar takes the attachments themselves and renders its own thumbnails; it took a
+            // pre-mapped `[PlatformImage]` until the iOS side gained reordering and full-size
+            // preview, both of which need the attachment, not a picture of it.
             MessagePhotoPreviewBar(
-                images: attachments.selectedAttachments.compactMap { $0.displayImage },
+                attachments: attachments.selectedAttachments,
                 onRemove: attachments.removeAttachment
             )
         }

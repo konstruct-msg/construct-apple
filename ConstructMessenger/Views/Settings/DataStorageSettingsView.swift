@@ -294,7 +294,7 @@ struct DataStorageSettingsView: View {
         .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .navigationBar)
+        .hideSystemNavBar()
         #endif
         .task {
             guard !hasLoadedInitialCacheState else { return }

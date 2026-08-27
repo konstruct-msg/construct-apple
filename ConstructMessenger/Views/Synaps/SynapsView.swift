@@ -228,7 +228,7 @@ struct SynapsView: View {
                 Task { await refreshContactRequests(vm: vm, reason: "push_received") }
             }
             #if os(iOS)
-            .toolbar(.hidden, for: .navigationBar)
+            .hideSystemNavBar()
             #endif
             .sheet(isPresented: $showingQRScanner) {
                 QRScannerView { contactURL in handleScannedQR(contactURL) }

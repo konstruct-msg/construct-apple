@@ -373,7 +373,7 @@ struct SecurityView: View {
         .task { await recoveryVM.loadStatus() }
         .onAppear { securityViewModel.refreshPinState() }
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .hideSystemNavBar()
         .background(Color.CT.bg.ignoresSafeArea())
     }
 

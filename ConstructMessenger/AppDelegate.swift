@@ -3,6 +3,9 @@
 //  Construct Messenger
 //
 //
+// `UIApplicationDelegate`, `BackgroundTasks` and the push registration are iOS-shaped; the
+// desktop app has its own lifecycle in `Construct_DesktopApp`.
+#if os(iOS)
 
 import UIKit
 import BackgroundTasks
@@ -433,3 +436,4 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
 // MARK: - Notification Names (system notifications only)
 // Custom app notifications replaced with @Published properties
+#endif

@@ -72,7 +72,7 @@ struct ChatsListView: View {
                 .frame(maxHeight: .infinity, alignment: .top)
             }
             .ctBackground()
-            .toolbar(.hidden, for: .navigationBar)
+            .hideSystemNavBar()
             .navigationDestination(for: String.self) { chatId in
                     if let chat = chats.first(where: { $0.id == chatId }) {
                         ChatView(chat: chat, context: viewContext)

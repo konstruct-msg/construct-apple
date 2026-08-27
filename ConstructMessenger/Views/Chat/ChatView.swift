@@ -270,7 +270,7 @@ struct ChatView: View {
 
         }
         #if os(iOS)
-        .toolbar(.hidden, for: .navigationBar)
+        .hideSystemNavBar()
         .toolbar(.hidden, for: .tabBar)
         #endif
         .modifier(ComposerPlacement(usesOverlay: usesOwnedInset) { composer })

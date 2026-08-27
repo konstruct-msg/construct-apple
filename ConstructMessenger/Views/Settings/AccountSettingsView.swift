@@ -78,7 +78,7 @@ struct AccountSettingsView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        .hideSystemNavBar()
         .onAppear {
             viewModel.setContext(viewContext)
             if viewModel.needsUserInfoRefresh(from: authViewModel) {
@@ -599,7 +599,10 @@ struct AccountSettingsView: View {
                             .font(CTFont.regular(15))
                             .foregroundStyle(Color.CT.text)
                             .autocorrectionDisabled()
+                            #if os(iOS)
+                            // No software keyboard on macOS, so no capitalisation policy to set.
                             .textInputAutocapitalization(lowercased ? .never : .words)
+                            #endif
                             .onChange(of: value.wrappedValue) { _, newValue in
                                 var updated = newValue
                                 if lowercased {
@@ -977,7 +980,7 @@ struct AvatarViewerSheet: View {
                         .ignoresSafeArea(edges: .bottom)
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("close") { dismiss() }
@@ -988,9 +991,7 @@ struct AvatarViewerSheet: View {
                         .foregroundColor(.white)
                 }
             }
-            .toolbarBackground(.black, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .navBarChrome(.black)
         }
     }
 }

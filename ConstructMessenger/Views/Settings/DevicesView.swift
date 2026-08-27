@@ -147,7 +147,7 @@ struct DevicesView: View {
         } // VStack
         .background(Color.CT.bg.ignoresSafeArea())
         #if os(iOS)
-        .toolbar(.hidden, for: .navigationBar)
+        .hideSystemNavBar()
         #endif
         .refreshable { await loadDevices() }
         .task { await loadDevices() }

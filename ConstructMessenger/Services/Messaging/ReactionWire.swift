@@ -15,6 +15,8 @@
 //
 
 import Foundation
+// Explicit, not transitive — see EndSessionPayload.swift.
+import SwiftProtobuf
 
 enum ReactionWire {
 

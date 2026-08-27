@@ -234,7 +234,7 @@ struct RegistrationFlowView: View {
         )
         .ctBackground()
         #if os(iOS)
-        .toolbar(.hidden, for: .navigationBar)
+        .hideSystemNavBar()
         .navigationBarBackButtonHidden(true)
         #endif
         .onAppear { authViewModel.isRegistrationInProgress = true }
