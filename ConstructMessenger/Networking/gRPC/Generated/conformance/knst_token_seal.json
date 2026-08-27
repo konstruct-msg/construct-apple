@@ -1,0 +1,59 @@
+{
+  "$schema_version": 1,
+  "$authority": "construct-core :: crypto::privacy_pass::pp_seal_token_bytes",
+  "$opener": "construct-server :: construct-crypto::privacy_pass::open_sealed_token_bytes",
+  "$spec": "construct-docs/decisions/core-repatriation-execution-plan.md",
+  "$purpose": [
+    "A finalized privacy-pass token is sealed to the server's X25519 token-encryption key so relay",
+    "operators cannot read spent tokens in transit. The client only ever seals; the server only",
+    "ever opens. That asymmetry is why this format went unchecked: no single repository held both",
+    "halves, and each side's tests proved it agreed with itself.",
+    "Three implementations existed until 2026-08-27 — iOS ServerKeyManager.sealBox, the core's",
+    "pp_seal_token_bytes, and the server's opener — under one doc comment in the core claiming it",
+    "'matches iOS ... and construct-server's ...'. iOS now calls the core. These vectors are the",
+    "check the comment was standing in for.",
+    "A seal the server cannot open is `decrypt_failed`: fatal under enforce, and under permissive",
+    "indistinguishable from ordinary anti-abuse degradation, which is why it could ship broken."
+  ],
+  "$construction": [
+    "1. eph = fresh X25519 keypair, per seal. shared = X25519(eph_priv, server_pub).",
+    "2. key = HKDF-SHA256(ikm = shared, salt = EMPTY, info = 'construct-token-seal-v1', len = 32).",
+    "   The salt is absent, not zero-length-and-meaningful: RFC 5869 substitutes HashLen zero bytes,",
+    "   and HMAC pads any key shorter than its 64-byte block with zeros, so an implementation that",
+    "   passes an empty salt and one that passes 32 zero bytes derive the same key. Both spellings",
+    "   are in the field (CryptoKit takes Data(), the hkdf crate takes None) and they agree.",
+    "3. nonce = 12 fresh random bytes. ct_and_tag = ChaCha20-Poly1305(key, nonce, token), IETF",
+    "   construction, no associated data.",
+    "4. output = eph_pub(32) || nonce(12) || ciphertext || tag(16).",
+    "Overhead is exactly 60 bytes; a sealed token is len(token) + 60."
+  ],
+  "$why_vectors_pin_the_opener": [
+    "Sealing is randomised — a fresh ephemeral key and a fresh nonce per call — so no fixed byte",
+    "string can test a sealer, and two correct sealers never produce equal output. What a vector",
+    "can pin is an OPENER: given this server secret and these bytes, this plaintext must come out.",
+    "A client that only seals still uses these: it writes an opener in its own primitives, checks",
+    "it against these vectors, and then checks its own sealer against that opener. That is the",
+    "chain TokenSealDifferentialTests runs on iOS, and it is what caught nothing on 2026-08-27 —",
+    "the two sealers did agree, which is a result worth having recorded rather than assumed."
+  ],
+  "server_secret": "0707070707070707070707070707070707070707070707070707070707070707",
+  "server_public": "13be4feaeaf204c7fd3358fc9c00721881d174278128227ec674f37f7fe97b6d",
+  "vectors": [
+    {
+      "name": "32-byte token",
+      "plaintext": "4242424242424242424242424242424242424242424242424242424242424242",
+      "sealed": "f24ea24504c00de4f7b1c9d17250d0167f844de11ccedd0ccf15e667070a06356a095fb6840ef4e2df0de454f4a6eb8d11edfd749b0a1a5a7b6459ac11a37fce98a3acb0e4dc54a340615428294f7dfb2daa185cfc112f16872425ff",
+      "note": "the shape a real token has; sealed is 92 bytes = 32 + 12 + 32 + 16"
+    },
+    {
+      "name": "64-byte token",
+      "plaintext": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "sealed": "c7e8d60dc810b1858eca69b7bb7c481d5ce089060142dc0ce026cf2d0cafa25363c2523c7afe768a15a7282b8ca47ae8532d4a0dded0c070adbb065fa5d5084c2502dfe52c7fef290286c4da1b1a58f6b1f05e30723bdd0aa795872708084e79208df68ea83f257b1a03f9070981e9ab4dd3437ba45feb9285f815ee",
+      "note": "every plaintext byte distinct, so a reversed or misaligned ciphertext slice cannot open by luck"
+    }
+  ],
+  "rejects": [
+    { "name": "server key not 32 bytes", "server_public_len": 31, "expect": "error" },
+    { "name": "empty server key", "server_public_len": 0, "expect": "error" }
+  ]
+}
