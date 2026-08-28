@@ -14,9 +14,17 @@
 //
 //  Session key convention
 //  ──────────────────────
-//  Primary (legacy, single-device) sessions use plain `userId` as the contactId in the
-//  Rust OrchestratorCore. Per-device sessions use `userId:deviceId` (colon-separated).
-//  UserIds are hex/UUID strings that cannot contain a colon, so there is no collision risk.
+//  A session's contactId is a `CryptoDeviceId` — the 32-hex id derived from the peer device's
+//  identity key. Every send below already holds one (`target.deviceId`) and passes it straight
+//  down; nothing here composes a key out of two parts, and the account id travels separately as
+//  `networkRecipientUserId` because it addresses the mailbox, not the ratchet.
+//
+//  It used to be a bare `userId` for the primary session and `userId:deviceId` for per-device
+//  ones — two spellings of one thing, the first of which named an account to a layer that only
+//  understands devices. `SessionAddressing` is the single seam now and everything below it is a
+//  device id (`decisions/identity-is-a-set-of-keys.md`). The colon shape survives only as a
+//  legacy Keychain account name the wipe must still recognise, in
+//  `KeychainSessionAccounts.isIdentityShaped` — no code writes one.
 //
 //  Threading
 //  ─────────

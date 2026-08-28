@@ -7,15 +7,26 @@
 //  Architecture:
 //  - Raw SQLite3 (libsqlite3) — no Core Data overhead, no WAL-file exposure
 //  - journal_mode=DELETE keeps exactly one file on disk (no -wal / -shm)
-//  - NSFileProtectionComplete set on the database file after first open
 //  - Thread-safe via a serial DispatchQueue (coreLock pattern)
 //
-//  This store is the foundation for decrypt-on-display (Phase 3).
-//  Currently callers store the key here and read it back when displaying
-//  a message. Once Core Data is migrated off decryptedContent, display will
-//  call fetch(messageId:) → decrypt-on-the-fly.
+//  Protection class is `completeUntilFirstUserAuthentication`, not the `complete` the spec
+//  asks for. Keys are written from `Message.applyStoredEncryption` on the message-persistence
+//  path, which runs during a background push decrypt on a locked device; `complete` would fail
+//  the write there and leave a row whose ciphertext has no key. Same trade as the Keychain
+//  invariant on `cryptoKeyAccessible`, and the cost is the same: an unlocked-once device.
 //
-//  See: MESSAGE_STORAGE_PRIVACY_SPEC.md
+//  Decrypt-on-display is live, not pending: `MessageDisplayCache.plaintext(of:)` reads
+//  `contentKeyRef` → `fetch(messageId:)` → `MessageStorageCrypto.decrypt`, and
+//  `applyStoredEncryption` clears `decryptedContent`. That column survives for two reasons
+//  only — rows written before `StorageMigrationService` ran, and the fallback taken when
+//  encryption itself fails.
+//
+//  The key is 32 random bytes per message (`SecRandomCopyBytes`), not HKDF over the Double
+//  Ratchet message key as MESSAGE_STORAGE_PRIVACY_SPEC.md §Layer-1 describes. Nothing needs the
+//  derivation: the key never leaves this device, so it has no counterpart to agree with. That
+//  spec's Rust/FFI phase is therefore moot, not outstanding.
+//
+//  See: MESSAGE_STORAGE_PRIVACY_SPEC.md (§Status 2026-08-28 records the divergences above)
 
 import Foundation
 import SQLite3

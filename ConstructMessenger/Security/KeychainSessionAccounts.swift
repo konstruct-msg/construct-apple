@@ -13,18 +13,22 @@
 //  A wipe that silently wipes nothing is the same defect shape as a test that asserts
 //  nothing — it occupies the place where someone would otherwise have looked.
 //
-//  The `session_` namespace has three tenants and only two of them are session state:
+//  The `session_` namespace has three tenants and only two of them are session state. The first
+//  two rows are the shapes still written today; the next two are shapes that exist on devices
+//  that have been through an earlier version and must still be recognised, because a wipe that
+//  does not name them leaves ratchet state behind:
 //
-//      session_<ServerUserId>              live ratchet blob      → delete
-//      session_<ServerUserId>:<DeviceId>   per-device ratchet     → delete
-//      session_archives_<ServerUserId>     archived sessions      → delete
+//      session_<CryptoDeviceId>            live ratchet blob      → delete    (written today)
+//      session_archives_<CryptoDeviceId>   archived sessions      → delete    (written today)
+//      session_<ServerUserId>              pre-flip ratchet       → delete    (legacy on disk)
+//      session_<ServerUserId>:<DeviceId>   pre-flip per-device    → delete    (legacy on disk)
 //      session_token                       the auth token         → KEEP
 //
 //  SECOND INCIDENT (found 2026-08-26): the per-device row above was missing, and the file said
 //  in as many words that it could not exist — "No such id should exist (see UserIdentity.swift
 //  — session addressing is ServerUserId)". It has existed since multi-device shipped:
-//  `MultiDeviceSendCoordinator.sessionKey(userId:deviceId:)` produces `<uuid>:<hex>`, which is
-//  neither shape below, so every per-device ratchet blob survived `deleteAllE2EESessions()` —
+//  `MultiDeviceSendCoordinator.sessionKey(userId:deviceId:)` produced `<uuid>:<hex>`, which was
+//  neither shape then listed, so every per-device ratchet blob survived `deleteAllE2EESessions()` —
 //  called from `prepareForDeviceLink()` and `resetOrchestratorStateForDeviceLink()`, i.e. at
 //  exactly the moment whose whole purpose is that the next identity cannot inherit the previous
 //  one's ratchet state. The same defect as 2026-08-08, one shape further along, and the comment
@@ -33,6 +37,10 @@
 //  That last one is why the fix is not `hasPrefix("session_")`. `deleteAllE2EESessions()` is
 //  called from `prepareForDeviceLink()`, which runs while the user is still signed in — a
 //  prefix match would sign them out in the middle of linking a device.
+//
+//  `sessionKey(userId:deviceId:)` no longer exists: since `SessionAddressing` a contactId is a
+//  bare `CryptoDeviceId` and nothing composes one. The colon branch below is kept for the blobs
+//  that composition already wrote, and is the only reason it is still parsed.
 //
 
 import Foundation

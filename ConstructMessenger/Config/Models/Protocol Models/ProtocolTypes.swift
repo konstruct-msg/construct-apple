@@ -57,8 +57,13 @@ struct ChatMessage: Codable, Identifiable {
     /// Suite-3 sparse PQ-ratchet field from the wire header, serialized (empty = none).
     var pqRatchetField: Data = Data()
 
-    /// Device ID of the sending device (populated from envelope.senderDevice.deviceID).
-    /// Used for per-device session key derivation (contactId = userId:deviceId).
+    /// Device ID of the sending device (populated from `envelope.sender_device`).
+    ///
+    /// Empty on every delivered message: the server blanks `sender_device` on purpose, so that
+    /// relay metadata carries no E2E meaning. It is populated only where an envelope is read
+    /// before it has been through delivery. When it does hold a value it names the session
+    /// outright — a contactId is a `CryptoDeviceId` and nothing is derived from it — and
+    /// `MessageRouter` puts it first in the candidate list.
     var senderDeviceId: String = ""
 
     /// Canonical conversation ID from the envelope (e.g. "direct:{a}:{b}").

@@ -729,7 +729,8 @@ class KeychainManager {
     /// Every Keychain account holding session state, live or archived.
     ///
     /// Exposed so the peer-device index can be derived from the sessions already on disk instead
-    /// of being kept as a second list — see `KeychainSessionAccounts.perDeviceContact`.
+    /// of being kept as a second list — see `PeerDeviceRegistry.sessionDeviceIds(of:)`, which
+    /// reads these accounts through `KeychainSessionAccounts.contactId(ofAccount:)`.
     func sessionAccounts() -> [String] {
         accounts(withPrefix: KeychainSessionAccounts.prefix)
             .filter(KeychainSessionAccounts.isSessionState)
