@@ -110,6 +110,22 @@ final class DeliveryReceiptBatcher {
         #endif
     }
 
+    #if DEBUG
+    /// Test seam: how many ids are waiting to be sent.
+    ///
+    /// `sendDeliveryReceipt`'s own-account suppression is otherwise unobservable — the whole
+    /// difference between "dropped" and "enqueued" is inside this buffer, and a test that cannot
+    /// see it can only assert the source text.
+    var pendingCountForTesting: Int { buffer.pending.values.reduce(0) { $0 + $1.count } }
+
+    /// Test seam: drop whatever is buffered without sending it.
+    func discardForTesting() {
+        flushTask?.cancel()
+        flushTask = nil
+        _ = drain()
+    }
+    #endif
+
     /// `messageId` is due to `contactId`. Callers have already asked `ReceiptResendThrottle`.
     func enqueue(messageId: String, to contactId: String, recipientIdentityKey: Data?) {
         buffer.add(messageId: messageId, to: contactId)

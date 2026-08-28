@@ -275,6 +275,23 @@ final class OutboundSessionService {
         to contactId: String,
         in context: NSManagedObjectContext
     ) {
+        // Never to our own account. A SENDER_SYNC is a copy of a message *we* sent, arriving on
+        // another of our own devices: `from` and `to` are both us, so `otherUserId` on the receive
+        // path is us, and the receipt was addressed back to the account that produced it. There is
+        // no sender waiting for a checkmark.
+        //
+        // It did not merely go nowhere. The server fans every envelope out to all of an account's
+        // devices, so the receipt came straight back as a self-addressed delivery whose real type
+        // (14) is inside the KNST frame — indistinguishable, on the outer envelope, from a message
+        // by a contact. See the self-addressed guard in `MessageRouter.routeIncomingMessage` for
+        // what the receive side then did with it.
+        guard !SessionAddressing.isOurOwnAccount(contactId) else {
+            Log.debug(
+                "Delivery receipt to our own account suppressed (\(messageIds.count) id(s)) — own-device traffic has no recipient to acknowledge",
+                category: "OutboundSession"
+            )
+            return
+        }
         let identityKey: Data? = {
             guard StealthPolicy.shared.shouldUseSealedSender() else { return nil }
             let request = User.fetchRequest()

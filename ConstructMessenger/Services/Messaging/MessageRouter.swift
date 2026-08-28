@@ -490,6 +490,35 @@ final class MessageRouter {
             return
         }
 
+        // 2a. Own-account traffic that is *not* a SENDER_SYNC.
+        //
+        // Every own-device copy is addressed `from == to == us`, and step 2 is the only thing that
+        // legitimately arrives in that shape. Anything else self-addressed is one of our own sends
+        // handed straight back by the server's per-device fan-out — most often a delivery receipt,
+        // whose real content type rides inside the KNST frame, so the outer envelope reads
+        // DIRECT_MESSAGE and nothing above this point can tell it from a message by a contact.
+        //
+        // Without this guard `otherUserId` — `from == me ? to : from` — answers **me**, and the
+        // whole path below treats us as the person on the other side. On the three-device stand
+        // 2026-08-27 that minted a chat with ourselves, ran the concurrent-init tie-break against
+        // our own device, fetched our own pre-key bundle, and sent a SESSION_RESET_INIT to
+        // ourselves — which archived a healthy session and re-initialised it. The chat in the list
+        // was the cheap half.
+        //
+        // The receipt that seeded it is suppressed at source in `sendDeliveryReceipt`; this stays
+        // because it also covers copies already on the server and sends by an older build.
+        if SessionAddressing.isOwnReflection(
+            from: message.from, to: message.to, ourAccountId: currentUserId
+        ) {
+            Log.info(
+                "Self-addressed \(message.id.prefix(8))… (ct=\(message.contentType)) — our own traffic reflected back by the fan-out, not a peer message",
+                category: "MessageRouter"
+            )
+            PerformanceMetrics.shared.record(.selfAddressedDropped, label: "ct_\(message.contentType)")
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            return
+        }
+
         // 3a. SESSION_RESET_INIT: atomic archive of old session + RESPONDER init in one step.
         //     Must be checked BEFORE the END_SESSION path (it carries a real X3DH payload).
         if message.isSessionResetInit {

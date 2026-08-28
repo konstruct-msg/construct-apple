@@ -81,6 +81,11 @@ enum AccountWipeKeys {
         "construct.openChatForKeyChange",
         "construct.inviteAcceptedContactCreated",
         "construct.adMigration.serverUUID.v1.done",
+        // One-shot cleanups, wiped with the account for the same reason as the migration above:
+        // a wipe removes the data they were about, so carrying "already done" across it asserts
+        // something about rows that no longer exist. Being wrong here costs one no-op pass; being
+        // wrong the other way means the cleanup never runs again.
+        "construct.selfAddressedResidue.cleared.v1",
         "construct.media_send_cache_v1",
         "construct.manifest_signed_at",
 

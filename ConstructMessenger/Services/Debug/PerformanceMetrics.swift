@@ -209,6 +209,16 @@ enum MetricEvent: String {
     /// `label` = which fields were missing.
     case senderSyncUnroutable = "sender_sync_unroutable"
 
+    /// A delivery addressed to our own account arrived on the peer path — `from == to == us` with
+    /// a content type that is not SENDER_SYNC. That shape is one of our own sends handed back by
+    /// the server's per-device fan-out, and until 2026-08-28 the receive path read it as a message
+    /// from a contact called "us": a chat with ourselves, a tie-break against our own device, and
+    /// a SESSION_RESET_INIT to ourselves that tore down a healthy session.
+    ///
+    /// `label` = the outer content type, which is the only thing that distinguishes the carriers.
+    /// A non-zero count after the receipt suppression means something else still addresses us.
+    case selfAddressedDropped = "self_addressed_dropped"
+
     /// The fast-UDP transport (engine-QUIC / native H3) was suppressed on this network because it
     /// failed to carry data. `label` = the ladder rung just armed (`rung1` 5min · `rung2` 1h ·
     /// `rung3` 24h), which is the gauge for "how permanently is QUIC blocked where this user is".

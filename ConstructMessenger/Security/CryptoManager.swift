@@ -952,6 +952,14 @@ class CryptoManager {
                 hasRestoredSessions = true
                 DispatchQueue.main.async { [weak self] in
                     self?.restoreRecentSessions(limit: 10)
+                    // Same tick, same reason: the account is known and the store is loaded, which
+                    // is everything the one-shot residue cleanup needs. See SelfAddressedResidue.
+                    MainActor.assumeIsolated {
+                        SelfAddressedResidue.clearIfNeeded(
+                            ourAccountId: userId,
+                            in: PersistenceController.shared.container.viewContext
+                        )
+                    }
                 }
             }
         } catch {

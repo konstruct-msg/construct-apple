@@ -156,6 +156,44 @@ enum SessionAddressing {
         id.count == 32 && id.allSatisfy(\.isHexDigit)
     }
 
+    // MARK: - Our own account
+
+    /// Whether `userId` names the account this app is signed in as.
+    ///
+    /// Our own account is not a peer. It has no chat, no ratchet session and no delivery receipt —
+    /// and it reaches all three anyway, because own-account traffic is addressed `from == to == us`
+    /// (`MultiDeviceSendCoordinator` sends every SENDER_SYNC that way) while the receive path
+    /// derives the peer as `from == me ? to : from`, which answers **me** when both halves are me.
+    ///
+    /// Asked of `AuthSessionManager`, which is where "who am I" is already resolved between the
+    /// in-memory value and the Keychain fallback. Re-deriving it here would be a second carrier of
+    /// the same fact, and this file exists because of what the last one cost.
+    @MainActor
+    static func isOurOwnAccount(_ userId: String) -> Bool {
+        guard !userId.isEmpty else { return false }
+        #if DEBUG
+        if let override = ownAccountOverrideForTesting { return userId == override }
+        #endif
+        return userId == AuthSessionManager.shared.currentUserId
+    }
+
+    /// Whether an incoming delivery is one of our own sends handed back by the server's per-device
+    /// fan-out, rather than a message from a contact.
+    ///
+    /// Own-account traffic is addressed `from == to == us`, and the server delivers every envelope
+    /// to *all* of an account's device streams, so our own sends come back to us. SENDER_SYNC is
+    /// the one carrier that legitimately looks like this, and the receive path branches on it
+    /// first; anything still in this shape afterwards has no peer.
+    ///
+    /// This is deliberately a question about the **envelope**, not about the derived peer. The
+    /// receive path computes `from == me ? to : from`, which quietly answers *me* when both halves
+    /// are me — an expression that is correct for every pair except the one that matters. Asking
+    /// the shape directly is what a test can pin.
+    static func isOwnReflection(from: String, to: String, ourAccountId: String) -> Bool {
+        guard !ourAccountId.isEmpty else { return false }
+        return from == ourAccountId && to == ourAccountId
+    }
+
     // MARK: - Who goes first
 
     /// Role in a concurrent-init tie-break.
@@ -205,6 +243,9 @@ enum SessionAddressing {
 
     /// Test seam: lets a unit test answer without a Keychain entry.
     nonisolated(unsafe) static var localIdentityOverrideForTesting: String?
+
+    /// Test seam: lets a unit test answer "which account is this" without an auth session.
+    nonisolated(unsafe) static var ownAccountOverrideForTesting: String?
     #endif
 
     /// The identity key pinned for `userId`, read from whichever thread is asking.

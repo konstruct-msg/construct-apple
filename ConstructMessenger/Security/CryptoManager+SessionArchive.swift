@@ -26,6 +26,30 @@ extension CryptoManager {
         }
     }
 
+    /// Remove a session by the **raw** id it is stored under, without translating through the seam.
+    ///
+    /// Every other removal resolves the peer first, because every legitimate session is keyed by a
+    /// device id. This exists for the opposite case: an entry whose key is *not* a device id and
+    /// which the seam can therefore never name — a session with our own account, built before the
+    /// self-addressed guard existed. Only `SelfAddressedResidue` calls it.
+    ///
+    /// Returns whether anything was actually there, so a cleanup can say what it did rather than
+    /// claiming a removal that removed nothing.
+    @discardableResult
+    func removeSessionByStoredId(_ contactId: String) -> Bool {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard !contactId.isEmpty else { return false }
+        let removedFromCore = orchestratorCore?.removeSession(contactId: contactId) ?? false
+        let hadKeychainEntry = KeychainManager.shared.loadSessionData(for: contactId) != nil
+        KeychainManager.shared.deleteSession(for: contactId)
+        // The three per-session side entries hang off the same id and are residue with it.
+        KeychainManager.shared.deleteSessionSuiteId(userId: contactId)
+        KeychainManager.shared.deleteSessionAtRiskFlag(for: contactId)
+        KeychainManager.shared.deleteSessionEstablishedAt(for: contactId)
+        return removedFromCore || hadKeychainEntry
+    }
+
     func restoreRecentSessions(limit: Int = 10) {
         guard orchestratorCore != nil else {
             Log.error("Cannot restore sessions - core not initialized", category: "CryptoManager")
