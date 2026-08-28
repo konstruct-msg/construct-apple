@@ -911,14 +911,34 @@ final class SessionCoordinator: MessageRouterDelegate {
             }
 
             let fetchStart = Date()
-            let bundle = try await publicKeyBundleHandler.fetchPublicKeyWithRetry(userId: userId)
-            Log.info("SESSION_STATE[bundle_fetched]: userId=\(userId.prefix(8))..., duration=\(String(format: "%.2f", Date().timeIntervalSince(fetchStart)))s", category: "SessionInit")
+            // Which of the sender's devices produced this handshake is not on the wire: the server
+            // blanks `sender_device` by design. So ask the account for all of them and let the
+            // decryption say which one — a cryptographic answer rather than a claim, and the same
+            // shape `openSenderSync` uses over our own devices.
+            //
+            // A single-device peer yields one candidate and this is the previous behaviour exactly,
+            // minus the one-time pre-key that fetch used to burn on every attempt.
+            let candidates = try await publicKeyBundleHandler.responderBundleCandidates(userId: userId)
+            Log.info("SESSION_STATE[bundle_fetched]: userId=\(userId.prefix(8))..., devices=\(candidates.count), duration=\(String(format: "%.2f", Date().timeIntervalSince(fetchStart)))s", category: "SessionInit")
 
-            let success = publicKeyBundleHandler.handlePublicKeyBundleForIncomingMessage(
-                bundle,
-                message: carrier
-            ) { [weak self] chat, msg, decryptedBytes in
-                self?.saveMessage(for: chat, with: msg, decryptedBytes: decryptedBytes)
+            var success = false
+            for (index, bundle) in candidates.enumerated() {
+                success = publicKeyBundleHandler.handlePublicKeyBundleForIncomingMessage(
+                    bundle,
+                    message: carrier,
+                    isLastCandidate: index == candidates.count - 1
+                ) { [weak self] chat, msg, decryptedBytes in
+                    self?.saveMessage(for: chat, with: msg, decryptedBytes: decryptedBytes)
+                }
+                if success {
+                    if index > 0 {
+                        Log.info(
+                            "SESSION_STATE[responder_device_found]: \(userId.prefix(8))… opened by candidate \(index + 1)/\(candidates.count) — the account's default device was not the sender",
+                            category: "SessionInit"
+                        )
+                    }
+                    break
+                }
             }
 
             if success {
@@ -1031,13 +1051,21 @@ final class SessionCoordinator: MessageRouterDelegate {
         )
 
         do {
-            let bundle = try await publicKeyBundleHandler.fetchPublicKeyWithRetry(userId: userId)
+            // Same walk as the first-message path: a heal that asks for one bundle asks about one
+            // device, and the device that sent the message it is trying to open may be another of
+            // the account's. Healing against the wrong keys fails exactly as the original init did.
+            let candidates = try await publicKeyBundleHandler.responderBundleCandidates(userId: userId)
 
-            let healed = publicKeyBundleHandler.handlePublicKeyBundleForIncomingMessage(
-                bundle,
-                message: failedMessage
-            ) { [weak self] chat, msg, decryptedBytes in
-                self?.saveMessage(for: chat, with: msg, decryptedBytes: decryptedBytes)
+            var healed = false
+            for (index, bundle) in candidates.enumerated() {
+                healed = publicKeyBundleHandler.handlePublicKeyBundleForIncomingMessage(
+                    bundle,
+                    message: failedMessage,
+                    isLastCandidate: index == candidates.count - 1
+                ) { [weak self] chat, msg, decryptedBytes in
+                    self?.saveMessage(for: chat, with: msg, decryptedBytes: decryptedBytes)
+                }
+                if healed { break }
             }
 
             if healed {
