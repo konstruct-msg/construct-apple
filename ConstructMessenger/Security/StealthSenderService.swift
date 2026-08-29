@@ -408,6 +408,19 @@ final class StealthSenderService: SealedSenderResolving {
         let sealedCert = try sealSenderCert(certBytes, recipientIdentityKey: recipientIdentityKey)
         var inner = Shared_Proto_Core_V1_SealedInner()
         inner.recipientUserID = recipientUserId
+        // The one device this envelope is for. Derived from the very key the certificate was
+        // just sealed to, and not passed in or looked up, because those are the two ways it
+        // could disagree with the ciphertext: a parameter can be handed the wrong device by a
+        // future caller, and a store lookup answers about the account rather than about these
+        // bytes. Deriving makes "who this is sealed to" and "who this is routed to" one value.
+        //
+        // Empty is this field's own "every active device of the recipient" — what every sealed
+        // envelope meant before it existed, and why a peer's other devices each received a
+        // ciphertext they could not decrypt. `sealSenderCert` on the line above has already
+        // accepted this key, so it is a valid 32-byte X25519 public key and the derivation
+        // cannot return nil here; `?? ""` rather than a force-unwrap so that the impossible case
+        // degrades to that old delivery instead of trapping a send that is otherwise fine.
+        inner.recipientDevice = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientIdentityKey) ?? ""
         inner.senderCertCiphertext = sealedCert
         inner.encryptedPayload = encryptedPayload
         // `.generic` is UNSPECIFIED = 0, which proto3 omits — the field does not reach the wire.

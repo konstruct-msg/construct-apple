@@ -675,8 +675,10 @@ public struct Shared_Proto_Core_V1_SealedInner: Sendable {
   ///   • token_spend_id — optional 32-byte random id, identical on every
   ///     wire envelope of that logical message. After the first envelope
   ///     redeems a token, further envelopes that carry the same spend_id
-  ///     (token optional) are accepted without a new spend, up to the
-  ///     server chunk cap (256). Empty = legacy per-envelope redemption.
+  ///     and same recipient_user_id (token optional) are accepted without
+  ///     a new spend, up to the server chunk cap (256). The unit is bound
+  ///     to the recipient so a client-chosen id cannot cover other users.
+  ///     Empty = legacy per-envelope redemption.
   public var tokenNonce: Data = Data()
 
   public var tokenBytes: Data = Data()
@@ -684,6 +686,29 @@ public struct Shared_Proto_Core_V1_SealedInner: Sendable {
   /// Shared across all wire envelopes of one logical message (see above).
   /// Server-visible anti-abuse metadata only; not identity.
   public var tokenSpendID: Data = Data()
+
+  /// The recipient DEVICE this envelope is encrypted for (32-char hex
+  /// CryptoDeviceId), or empty for "every active device of recipient_user_id".
+  ///
+  /// Routing only, in the same server-allowed set as recipient_user_id. The
+  /// destination server must already read the recipient to deliver at all; this
+  /// narrows that recipient from an account to one of its devices, and tells the
+  /// server nothing it does not already hold: it stores the account's device
+  /// list, it already sees which device reads which mailbox (the mailbox is
+  /// selected by the device_id in the caller's token), and the sender's view of
+  /// the device set came from this server's own GetPreKeyBundles answer.
+  ///
+  /// WHY THIS FIELD EXISTS: a sealed message is encrypted in a Double Ratchet
+  /// session with ONE device, but without this field it is written to every
+  /// mailbox of the account, so the recipient's other devices each receive a
+  /// ciphertext they cannot decrypt and a certificate they cannot unseal. The
+  /// outer Envelope.recipient_device (field 4) cannot serve here — the sealed
+  /// path never builds an outer envelope, it builds this message.
+  ///
+  /// THERE IS NO SENDER-SIDE COUNTERPART AND THERE MUST NOT BE. A sealed
+  /// envelope naming the sending device would undo sealing entirely. The server
+  /// blanks Envelope.sender_device on delivery for the same reason.
+  public var recipientDevice: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1232,7 +1257,7 @@ extension Shared_Proto_Core_V1_SealedSenderEnvelope: SwiftProtobuf.Message, Swif
 
 extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SealedInner"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{4}\u{9}token_nonce\0\u{3}token_bytes\0\u{3}token_spend_id\0\u{c}\u{8}\u{8}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{4}\u{9}token_nonce\0\u{3}token_bytes\0\u{3}token_spend_id\0\u{3}recipient_device\0\u{c}\u{8}\u{8}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1250,6 +1275,7 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
       case 16: try { try decoder.decodeSingularBytesField(value: &self.tokenNonce) }()
       case 17: try { try decoder.decodeSingularBytesField(value: &self.tokenBytes) }()
       case 18: try { try decoder.decodeSingularBytesField(value: &self.tokenSpendID) }()
+      case 19: try { try decoder.decodeSingularStringField(value: &self.recipientDevice) }()
       default: break
       }
     }
@@ -1286,6 +1312,9 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
     if !self.tokenSpendID.isEmpty {
       try visitor.visitSingularBytesField(value: self.tokenSpendID, fieldNumber: 18)
     }
+    if !self.recipientDevice.isEmpty {
+      try visitor.visitSingularStringField(value: self.recipientDevice, fieldNumber: 19)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1300,6 +1329,7 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.tokenNonce != rhs.tokenNonce {return false}
     if lhs.tokenBytes != rhs.tokenBytes {return false}
     if lhs.tokenSpendID != rhs.tokenSpendID {return false}
+    if lhs.recipientDevice != rhs.recipientDevice {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
