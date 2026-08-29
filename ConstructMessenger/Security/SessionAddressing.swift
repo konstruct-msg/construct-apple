@@ -148,6 +148,41 @@ enum SessionAddressing {
         return nil
     }
 
+    /// The account a device belongs to, and the identity key that names it — the seam read
+    /// backwards, both halves at once.
+    ///
+    /// Returned together because they come from the same row and the same scan. A caller that
+    /// asked for them separately would walk the contact list twice and, worse, could be handed a
+    /// key and an account id that do not belong to each other if the two lookups were ever
+    /// written against different predicates.
+    ///
+    /// Needed by paths the core hands a `contactId` — a device id — that must then address the
+    /// **network**, which speaks account ids. `sendSessionHeartbeat` was doing that translation by
+    /// not doing it: it put the device id straight into `Envelope.recipient`, where the server
+    /// parses a UUID, gets nothing, and writes the envelope to a stream keyed by 32 hex characters
+    /// that no reader subscribes to. Accepted, acknowledged, delivered nowhere.
+    ///
+    /// Runs on `context`'s queue, like its caller.
+    static func peer(
+        ofDevice deviceId: String, in context: NSManagedObjectContext
+    ) -> (accountId: String, identityKey: Data)? {
+        // An early exit, not the correctness rule: an account id fails the key comparison below
+        // anyway, and a mutation replacing this guard with an emptiness check left every test
+        // green. It is here so an obviously-wrong id does not walk the contact list, and that is
+        // all it is worth claiming for it.
+        guard isCryptoIdentity(deviceId) else { return nil }
+        let req = User.fetchRequest()
+        req.predicate = NSPredicate(format: "knownIdentityKey != nil")
+        guard let users = try? context.fetch(req) else { return nil }
+        for user in users {
+            guard let key = user.knownIdentityKey, !key.isEmpty, !user.id.isEmpty else { continue }
+            if deriveDeviceId(identityPublicKey: [UInt8](key)) == deviceId {
+                return (user.id, key)
+            }
+        }
+        return nil
+    }
+
     /// True when `id` is already a crypto identity rather than an account id.
     ///
     /// Used only at the seam, to keep a caller that already holds a device id from being resolved

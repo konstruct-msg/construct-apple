@@ -205,10 +205,25 @@ final class OutboundSessionService {
             Log.debug("Heartbeat skip for \(contactId.prefix(8))… — no active session", category: "OutboundSession")
             return
         }
+        // `contactId` is a `CryptoDeviceId` — this method is reached from
+        // `getAllSessionContactIds()` and from the core's `.sendHeartbeat` action, and both name
+        // devices. The network speaks account ids, so the translation happens here or it does not
+        // happen. Until 2026-08-30 it did not: the device id went into `Envelope.recipient`, the
+        // server parsed no UUID out of it, and the envelope was written to a stream keyed by 32
+        // hex characters that nothing subscribes to. Accepted, acknowledged, delivered nowhere —
+        // and invisible, because a liveness probe that never arrives looks exactly like a peer
+        // that is quiet.
+        let context = PersistenceController.shared.container.viewContext
+        guard let peer = SessionAddressing.peer(ofDevice: contactId, in: context) else {
+            Log.debug(
+                "Heartbeat skip for \(contactId.prefix(8))… — no contact holds this device's pinned key",
+                category: "OutboundSession"
+            )
+            return
+        }
+
         let heartbeatId = UUID().uuidString.lowercased()
         do {
-            // Heartbeats intentionally do **not** use sealed sender.
-            // We never pass recipientIdentityKey here.
             // The type rides in KNST byte 5, inside the ciphertext, like the call signal and the
             // delivery receipt before it. It used to be announced on the outer envelope
             // (`contentType: .heartbeat`), which let the server count liveness probes and tell
@@ -229,16 +244,42 @@ final class OutboundSessionService {
                 messageId: heartbeatId,
                 recipientId: contactId
             )
+            // Sealed, like every other envelope directed at a peer. The exclusion this send
+            // used to carry was decided 2026-06-19 on the cost of Privacy Pass tokens under the
+            // per-stream model; that model was removed 2026-07-15 and the exclusion outlived its
+            // reason. Being rare does not make it cheap to leave open: an unsealed envelope
+            // naming (sender, recipient) that goes out only when a session has been silent for
+            // hours is a periodic statement that these two still have a live session, which is a
+            // cleaner correlation signal than ordinary traffic, not a weaker one.
+            var sealedInner: Data? = nil
+            if StealthPolicy.shared.shouldUseSealedSender() {
+                sealedInner = try await StealthSenderService.buildSealedInner(
+                    recipientUserId: peer.accountId,
+                    recipientIdentityKey: peer.identityKey,
+                    encryptedPayload: payload,
+                    // Not a structural exception: 13 is read after decryption, from byte 5.
+                    contentType: .generic
+                )
+            }
+
             _ = try await MessagingServiceClient.shared.sendMessage(
                 messageId: heartbeatId,
-                recipientId: contactId,
+                recipientId: peer.accountId,
                 senderId: myId,
-                conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
+                // Empty on purpose. `direct:<a>:<b>` names the person on the other side in the
+                // clear, which is the pair sealing exists to hide — the same field was emptied in
+                // `MultiDeviceSendCoordinator` for that reason. It has no reader on the server and
+                // is blanked on delivery besides.
+                conversationId: "",
                 encryptedPayload: payload,
                 timestamp: UInt64(Date().timeIntervalSince1970),
+                // The device the ciphertext is actually for (§A.0). This is the last of §A.2:
+                // every other unsealed peer-directed path already filled it.
+                recipientDeviceId: contactId,
                 // Indistinguishable from an ordinary message on the outer envelope, which is the
                 // point: the real type is in byte 5, inside the ciphertext.
-                contentType: .e2EeSignal
+                contentType: .e2EeSignal,
+                sealedInnerBytes: sealedInner
             )
             Log.debug("Heartbeat sent to \(contactId.prefix(8))…", category: "OutboundSession")
         } catch {
