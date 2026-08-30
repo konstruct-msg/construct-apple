@@ -201,7 +201,6 @@ enum OtpkReplenishmentService {
             // inside uploadPreKeys. When a build flips the capability (suite-3 rollout),
             // a device with a healthy server count would otherwise never re-upload —
             // peers keep fetching the stale flag and negotiate classic forever.
-            #if os(iOS)
             let advertised = supportsPqRatchet()
             if KeyServiceClient.lastAdvertisedPqRatchet != advertised {
                 let was = KeyServiceClient.lastAdvertisedPqRatchet.map(String.init) ?? "unknown"
@@ -209,7 +208,6 @@ enum OtpkReplenishmentService {
                 try await generateAndUpload(count: lowWaterMark, deviceId: deviceId)
                 return
             }
-            #endif
 
             guard serverCount < effective else { return }
 

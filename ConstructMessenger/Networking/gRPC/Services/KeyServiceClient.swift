@@ -511,9 +511,16 @@ final class KeyServiceClient: Sendable {
             // Advertise this build's sparse-PQ-ratchet capability (SuiteID 3).
             // The server persists it (migration 063) and returns it in
             // PreKeyBundle so peers can negotiate suite-3 sessions.
-            #if os(iOS)
+            //
+            // Unguarded since 2026-08-30. This sat under `#if os(iOS)` from 2026-07-02, when
+            // macOS reached the core through `EngineAdapter` and could not call this function.
+            // That indirection was retired 2026-07-28; the guard was not, so every macOS device
+            // left the field at proto3's default and told the server it cannot do suite 3.
+            // Nothing reported it: the capability is consumed from the *peer's* bundle, which is
+            // platform-independent, so the desktop negotiated suite 3 as initiator and was
+            // negotiated down as responder — asymmetric, silent, and exactly the divergence that
+            // makes a second device useless as a test instrument.
             request.supportsPqRatchet = supportsPqRatchet()
-            #endif
 
             let response = try await keyClient.uploadPreKeys(
                 request: .init(message: request)
@@ -521,9 +528,7 @@ final class KeyServiceClient: Sendable {
             // Remember what capability the server now holds — the replenishment
             // service compares against this to force a re-upload when a build
             // flips supportsPqRatchet() while the server OTPK count is healthy.
-            #if os(iOS)
             UserDefaults.standard.set(request.supportsPqRatchet, forKey: Self.advertisedPqRatchetKey)
-            #endif
             return (classicCount: response.preKeyCount, kyberCount: response.kyberPreKeyCount)
         }
     }
