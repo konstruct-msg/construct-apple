@@ -28,6 +28,10 @@ final class MessagingServiceClient: Sendable {
     /// metadata sealed sender hides (the real content_type travels inside `SealedInner`). The
     /// identified fields are set ONLY on the non-sealed path. Empty sealed bytes are treated as
     /// identified (never silently drop the sender).
+    ///
+    /// `recipientDeviceId` is likewise unsealed-only, for the same reason read from the other end:
+    /// the outer field is visible to the relay, so on a sealed send the device travels inside
+    /// `SealedInner.recipient_device` instead (field 19) and this one stays unset.
     static func buildEnvelope(
         messageId: String,
         recipientId: String,
@@ -35,7 +39,6 @@ final class MessagingServiceClient: Sendable {
         conversationId: String,
         encryptedPayload: Data,
         timestamp: UInt64,
-        senderDeviceId: String?,
         recipientDeviceId: String?,
         contentType: Shared_Proto_Core_V1_ContentType,
         sealedInnerBytes: Data?
@@ -74,22 +77,25 @@ final class MessagingServiceClient: Sendable {
             envelope.sender = sender
             envelope.conversationID = conversationId
             envelope.contentType = contentType
+
+            // Restored 2026-08-30. Both device fields were dropped here on 2026-08-17 because
+            // nothing read them — measured, and true at the time. `recipient_device` acquired a
+            // reader on 2026-08-29 (`construct-server@619bad8` routes on it), and the removal
+            // outlived its reason: three fan-out call sites went on passing a device id that this
+            // function discarded, so every unsealed copy addressed to one device was still written
+            // to every device of the account. N copies × N devices.
+            //
+            // `sender_device` stays unset and its parameter is gone. The server blanks it on
+            // delivery on purpose — server metadata must not carry E2E meaning — so it has no
+            // reader by design, not by omission. Telling the recipient which device sent is §D's
+            // job, and §D does it with a MAC under a shared secret (`SenderSyncDeviceTag`).
+            if let device = recipientDeviceId, !device.isEmpty {
+                var recipientDevice = Shared_Proto_Core_V1_DeviceId()
+                recipientDevice.deviceID = device
+                envelope.recipientDevice = recipientDevice
+            }
         }
 
-        // `sender_device` and `recipient_device` are deliberately left unset — removed 2026-08-17.
-        //
-        // Neither has a reader. Measured across both repositories: no server code reads either
-        // field, and the server blanks both on delivery besides, so no client has ever seen one
-        // arrive. Every client-side read is guarded by `!isEmpty` and has therefore never fired.
-        //
-        // Delivery does not need them. `messaging-service/src/core.rs` fans a message out with
-        // `fetch_recipient_device_ids` — it asks the database for the recipient's devices and
-        // writes the same envelope to each per-device stream. Which device a message is *for* is
-        // settled by which one can decrypt it.
-        //
-        // What they cost is a description of your device topology, handed to a server that does
-        // not use it. Same reasoning as `conversation_id` on the multi-device path, one step
-        // milder: see architecture/WIRE_FORMAT.md.
         return envelope
     }
 
@@ -102,7 +108,6 @@ final class MessagingServiceClient: Sendable {
         conversationId: String,
         encryptedPayload: Data,
         timestamp: UInt64,
-        senderDeviceId: String? = nil,
         recipientDeviceId: String? = nil,
         contentType: Shared_Proto_Core_V1_ContentType = .e2EeSignal,
         sealedInnerBytes: Data? = nil
@@ -125,7 +130,6 @@ final class MessagingServiceClient: Sendable {
                 conversationId: conversationId,
                 encryptedPayload: encryptedPayload,
                 timestamp: timestamp,
-                senderDeviceId: senderDeviceId,
                 recipientDeviceId: recipientDeviceId,
                 contentType: contentType,
                 sealedInnerBytes: sealedInnerBytes
@@ -323,7 +327,6 @@ final class MessagingServiceClient: Sendable {
                     conversationId: ConversationId.direct(myUserId: myUserId, theirUserId: recipientId),
                     encryptedPayload: controlPayload,
                     timestamp: UInt64(Date().timeIntervalSince1970),
-                    senderDeviceId: nil,
                     recipientDeviceId: nil,
                     contentType: .sessionReset,
                     sealedInnerBytes: inner

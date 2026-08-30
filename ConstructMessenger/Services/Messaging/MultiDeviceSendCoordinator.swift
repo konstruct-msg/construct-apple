@@ -220,7 +220,6 @@ final class MultiDeviceSendCoordinator {
                         contactId: target.deviceId,
                         bundle: target.bundle,
                         senderUserId: senderUserId,
-                        senderDeviceId: senderDeviceId,
                         recipientDeviceId: target.deviceId,
                         timestamp: timestamp,
                         contentType: .e2EeSignal
@@ -346,7 +345,6 @@ final class MultiDeviceSendCoordinator {
                         contactId: target.deviceId,
                         bundle: target.bundle,
                         senderUserId: senderUserId,
-                        senderDeviceId: senderDeviceId,
                         recipientDeviceId: target.deviceId,
                         timestamp: timestamp,
                         contentType: .senderSync
@@ -392,7 +390,6 @@ final class MultiDeviceSendCoordinator {
         contactId: String,
         bundle: PublicKeyBundleData,
         senderUserId: String,
-        senderDeviceId: String,
         recipientDeviceId: String,
         timestamp: UInt64,
         contentType: Shared_Proto_Core_V1_ContentType
@@ -444,7 +441,6 @@ final class MultiDeviceSendCoordinator {
                 conversationId: "",
                 encryptedPayload: encPayload,
                 timestamp: timestamp,
-                senderDeviceId: senderDeviceId,
                 recipientDeviceId: recipientDeviceId,
                 contentType: contentType
             )

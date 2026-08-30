@@ -1368,7 +1368,6 @@ final class CallManager: CallUIManaging {
                                             conversationId: "",
                                             encryptedPayload: payload,
                                             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                                            senderDeviceId: Self.currentDeviceId(),
                                             contentType: .unspecified,
                                             sealedInnerBytes: inner
                                         )
@@ -1382,7 +1381,6 @@ final class CallManager: CallUIManaging {
                                     conversationId: "",
                                     encryptedPayload: payload,
                                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                                    senderDeviceId: Self.currentDeviceId(),
                                     contentType: .unspecified,
                                     sealedInnerBytes: nil
                                 )

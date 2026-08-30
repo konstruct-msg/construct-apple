@@ -228,7 +228,6 @@ final class SealedSenderEnvelopeTests: XCTestCase {
             conversationId: "conv-xyz",
             encryptedPayload: Data([0x01, 0x02, 0x03]),
             timestamp: 42,
-            senderDeviceId: "sdev",
             recipientDeviceId: "rdev",
             contentType: .e2EeSignal,
             sealedInnerBytes: Data([0x09, 0x09, 0x09])
@@ -259,7 +258,6 @@ final class SealedSenderEnvelopeTests: XCTestCase {
             conversationId: "conv",
             encryptedPayload: payload,
             timestamp: 42,
-            senderDeviceId: nil,
             recipientDeviceId: nil,
             contentType: .e2EeSignal,
             sealedInnerBytes: Data([0x09, 0x09, 0x09])
@@ -276,7 +274,7 @@ final class SealedSenderEnvelopeTests: XCTestCase {
         let env = MessagingServiceClient.buildEnvelope(
             messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
             encryptedPayload: payload, timestamp: 42,
-            senderDeviceId: nil, recipientDeviceId: nil,
+            recipientDeviceId: nil,
             contentType: .e2EeSignal, sealedInnerBytes: nil
         )
         XCTAssertEqual(env.encryptedPayload, payload)
@@ -290,10 +288,58 @@ final class SealedSenderEnvelopeTests: XCTestCase {
         let env = MessagingServiceClient.buildEnvelope(
             messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
             encryptedPayload: Data([0x01]), timestamp: 1786992000,
-            senderDeviceId: nil, recipientDeviceId: nil,
+            recipientDeviceId: nil,
             contentType: .e2EeSignal, sealedInnerBytes: Data([0x09])
         )
         XCTAssertEqual(env.sealedSender.timestamp, 1786992000)
+    }
+
+    /// `Envelope.recipient_device` had no writer between 2026-08-17 and 2026-08-30. The removal
+    /// was correct when made — nothing read the field — and became wrong on 2026-08-29, when the
+    /// server began routing on it (`construct-server@619bad8`). Three fan-out call sites went on
+    /// passing `target.deviceId` into a function that dropped it, so a copy addressed to one
+    /// device was written to every device of the account: N copies × N devices.
+    ///
+    /// Mutation: drop the assignment again — this reddens.
+    func testIdentifiedSend_NamesTheRecipientDevice() {
+        let env = MessagingServiceClient.buildEnvelope(
+            messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
+            encryptedPayload: Data([0x01]), timestamp: 1,
+            recipientDeviceId: "6f5e37ac1b2c3d4e5f60718293a4b5c6",
+            contentType: .e2EeSignal, sealedInnerBytes: nil
+        )
+        XCTAssertTrue(env.hasRecipientDevice, "the unsealed path is the only one that can name a device")
+        XCTAssertEqual(env.recipientDevice.deviceID, "6f5e37ac1b2c3d4e5f60718293a4b5c6")
+    }
+
+    /// The outer field is visible to the relay, so a sealed send must not use it — that is the
+    /// whole reason `SealedInner.recipient_device` (field 19) exists. Naming the device outside
+    /// the seal would hand the relay a device-granular topology of exactly the traffic sealed
+    /// sender exists to hide.
+    ///
+    /// Mutation: move the assignment above the `if`/`else` — this reddens.
+    func testSealedSend_DoesNotNameTheDeviceOnTheOuterEnvelope() {
+        let env = MessagingServiceClient.buildEnvelope(
+            messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
+            encryptedPayload: Data([0x01]), timestamp: 1,
+            recipientDeviceId: "6f5e37ac1b2c3d4e5f60718293a4b5c6",
+            contentType: .e2EeSignal, sealedInnerBytes: Data([0x09])
+        )
+        XCTAssertFalse(env.hasRecipientDevice,
+                       "a sealed send names its device inside SealedInner, never on the envelope")
+    }
+
+    /// An empty device id must leave the field unset rather than set it to "". The server reads
+    /// the presence of the field: an empty named device would be a device it cannot find, which
+    /// routes as `unknown_device` and logs a warning on every ordinary send.
+    func testAnEmptyDeviceIdIsNotADevice() {
+        let env = MessagingServiceClient.buildEnvelope(
+            messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
+            encryptedPayload: Data([0x01]), timestamp: 1,
+            recipientDeviceId: "",
+            contentType: .e2EeSignal, sealedInnerBytes: nil
+        )
+        XCTAssertFalse(env.hasRecipientDevice)
     }
 
     func testIdentifiedSend_populatesSender() {
@@ -304,7 +350,6 @@ final class SealedSenderEnvelopeTests: XCTestCase {
             conversationId: "conv-xyz",
             encryptedPayload: Data([0x01]),
             timestamp: 42,
-            senderDeviceId: nil,
             recipientDeviceId: nil,
             contentType: .e2EeSignal,
             sealedInnerBytes: nil
@@ -325,7 +370,6 @@ final class SealedSenderEnvelopeTests: XCTestCase {
             conversationId: "c",
             encryptedPayload: Data(),
             timestamp: 1,
-            senderDeviceId: nil,
             recipientDeviceId: nil,
             contentType: .e2EeSignal,
             sealedInnerBytes: Data()
