@@ -135,6 +135,15 @@ enum KeychainSessionAccounts {
     /// "what a session account looks like" is how the two incidents above happened.
     static func account(for contactId: String) -> String { prefix + contactId }
 
+    /// True for a **live** session account — not an archive.
+    ///
+    /// `isSessionState` deliberately accepts both, because the wipe must reach both. A reader that
+    /// wants sessions to restore wants only the live ones: an archive has no current ratchet, and
+    /// restoring from one would count a failure for every peer that ever had a session reset.
+    static func isLiveSession(_ account: String) -> Bool {
+        isSessionState(account) && !account.hasPrefix(prefix + archiveInfix)
+    }
+
     /// The contact id a session account names, or `nil` when the account is not session state.
     static func contactId(ofAccount account: String) -> String? {
         guard isSessionState(account) else { return nil }

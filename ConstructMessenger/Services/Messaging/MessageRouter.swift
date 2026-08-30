@@ -2600,6 +2600,12 @@ final class MessageRouter {
                 "SENDER_SYNC: no own-device session opened \(message.id) and messageNumber=\(message.messageNumber) > 0 — dropping",
                 category: "MessageRouter"
             )
+            // Counted, like the branch below. This is the *more common* way to be unroutable —
+            // it is what a device does with every sync after losing the session, and until
+            // 2026-08-30 losing it was routine, because the restore read the chat list and an
+            // own-device session has no chat. The release gate is `sender_sync_unroutable` at
+            // zero on a three-device run, and the commonest path to non-zero was not counted.
+            PerformanceMetrics.shared.record(.senderSyncUnroutable, label: "no_session_and_not_first")
             return
         }
         guard let myUserId = AuthSessionManager.shared.currentUserId else { return }
