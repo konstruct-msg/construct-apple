@@ -192,7 +192,8 @@ class MessageRetryManager {
         guard StealthPolicy.shared.shouldUseSealedSender() else {
             return try await MessagingServiceClient.shared.sendMessage(
                 messageId: chunkId, recipientId: recipientId, senderId: senderId,
-                conversationId: conversationId, encryptedPayload: wirePayload, timestamp: timestamp)
+                conversationId: conversationId, encryptedPayload: wirePayload, timestamp: timestamp,
+                sealing: .identified(.stealthDisabled))
         }
         guard let recipientIK = recipientIdentityKey else {
             throw StealthDowngradeBlocked(reason: "retry: no recipient identity key for \(recipientId.prefix(8))…")
@@ -216,7 +217,7 @@ class MessageRetryManager {
                 return try await MessagingServiceClient.shared.sendMessage(
                     messageId: chunkId, recipientId: recipientId, senderId: senderId,
                     conversationId: conversationId, encryptedPayload: wirePayload,
-                    timestamp: timestamp, sealedInnerBytes: inner)
+                    timestamp: timestamp, sealing: .sealed(inner))
             }
         })
     }

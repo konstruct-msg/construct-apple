@@ -1369,7 +1369,7 @@ final class CallManager: CallUIManaging {
                                             encryptedPayload: payload,
                                             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                                             contentType: .unspecified,
-                                            sealedInnerBytes: inner
+                                            sealing: .sealed(inner)
                                         )
                                     }
                                 })
@@ -1382,7 +1382,7 @@ final class CallManager: CallUIManaging {
                                     encryptedPayload: payload,
                                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                                     contentType: .unspecified,
-                                    sealedInnerBytes: nil
+                                    sealing: .identified(.stealthDisabled)
                                 )
                             }
                             let sealedNote = sealedInnerBytes != nil ? " [STEALTH]" : ""

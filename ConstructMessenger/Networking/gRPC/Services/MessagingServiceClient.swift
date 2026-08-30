@@ -110,8 +110,16 @@ final class MessagingServiceClient: Sendable {
         timestamp: UInt64,
         recipientDeviceId: String? = nil,
         contentType: Shared_Proto_Core_V1_ContentType = .e2EeSignal,
-        sealedInnerBytes: Data? = nil
+        sealing: SendSealing
     ) async throws -> SendMessageResponse {
+        // The chokepoint. Sealing is the default here and an exemption is a named value, so a
+        // send path that does not answer does not compile, and one that answers wrongly fails
+        // closed. Before 2026-08-30 each caller decided alone and the exclusions lived in a doc
+        // comment on StealthPolicy; two accumulated there unnoticed.
+        if let reason = sealing.violation(stealthEnabled: await StealthPolicy.shared.isEnabled) {
+            throw StealthDowngradeBlocked(reason: "\(reason) → \(recipientId.prefix(8))…")
+        }
+        let sealedInnerBytes = sealing.sealedInnerBytes
         // Acquire a UIBackgroundTask so iOS cannot tear down the network connection
         // while the RPC is in flight (send_message typically takes ~150ms).
         // Without this, backgrounding immediately after Send kills the connection
@@ -208,6 +216,12 @@ final class MessagingServiceClient: Sendable {
     /// content_type on the wire. Gated by `FeatureFlags.sealedSenderUnauthenticatedTransport`;
     /// callers should fall back to `sendMessage(sealedInnerBytes:)` when the flag is off.
     func sendSealedMessage(sealedInner: Data) async throws -> SendMessageResponse {
+        // Sealed by construction, with one way to be wrong: empty bytes. This RPC has no outer
+        // envelope at all, so an empty inner is not a downgrade to identified — it is an
+        // undeliverable envelope the relay accepts and no one can route.
+        if let reason = SendSealing.sealed(sealedInner).violation(stealthEnabled: true) {
+            throw StealthDowngradeBlocked(reason: reason)
+        }
         #if canImport(UIKit)
         let bgTaskId = await MainActor.run { UIApplication.shared.beginBackgroundTask(withName: "send-sealed-msg-rpc") { } }
         defer { Task { @MainActor in UIApplication.shared.endBackgroundTask(bgTaskId) } }
@@ -303,18 +317,28 @@ final class MessagingServiceClient: Sendable {
             recipientIdentityKey: await resolveRecipientIK()
         )
 
-        var sealedInner: Data? = nil
+        // Named `endSessionSealing`, not `sealing`: `SealingExemptionSiteTests` reads this file
+        // as text to prove the chokepoint's parameter has no default, and a local of the same
+        // type and name reads as one.
+        var endSessionSealing: SendSealing = .identified(.stealthDisabled)
         if await StealthPolicy.shared.shouldUseSealedSender() {
             guard let recipientIK = await resolveRecipientIK() else {
                 throw StealthDowngradeBlocked(reason: "no recipient identity key for END_SESSION → \(recipientId.prefix(8))…")
             }
-            sealedInner = try await StealthSenderService.buildSealedInner(
+            endSessionSealing = .sealed(try await StealthSenderService.buildSealedInner(
                 recipientUserId: recipientId,
                 recipientIdentityKey: recipientIK,
                 encryptedPayload: controlPayload,
                 contentType: .sessionReset
-            )
+            ))
         }
+        // END_SESSION does not go through `sendMessage` — it has its own RPC — so it asks the
+        // same question here rather than inheriting the chokepoint's answer. Two send functions,
+        // one policy.
+        if let reason = endSessionSealing.violation(stealthEnabled: await StealthPolicy.shared.isEnabled) {
+            throw StealthDowngradeBlocked(reason: "\(reason) → \(recipientId.prefix(8))…")
+        }
+        let sealedInner: Data? = endSessionSealing.sealedInnerBytes
 
         let sendOnce: (Data?) async throws -> EndSessionResponse = { inner in
             try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession) { grpcClient in

@@ -251,15 +251,15 @@ final class OutboundSessionService {
             // naming (sender, recipient) that goes out only when a session has been silent for
             // hours is a periodic statement that these two still have a live session, which is a
             // cleaner correlation signal than ordinary traffic, not a weaker one.
-            var sealedInner: Data? = nil
+            var sealing: SendSealing = .identified(.stealthDisabled)
             if StealthPolicy.shared.shouldUseSealedSender() {
-                sealedInner = try await StealthSenderService.buildSealedInner(
+                sealing = .sealed(try await StealthSenderService.buildSealedInner(
                     recipientUserId: peer.accountId,
                     recipientIdentityKey: peer.identityKey,
                     encryptedPayload: payload,
                     // Not a structural exception: 13 is read after decryption, from byte 5.
                     contentType: .generic
-                )
+                ))
             }
 
             _ = try await MessagingServiceClient.shared.sendMessage(
@@ -273,13 +273,14 @@ final class OutboundSessionService {
                 conversationId: "",
                 encryptedPayload: payload,
                 timestamp: UInt64(Date().timeIntervalSince1970),
-                // The device the ciphertext is actually for (§A.0). This is the last of §A.2:
-                // every other unsealed peer-directed path already filled it.
+                // The device the ciphertext is actually for. Sealed, so this argument is not
+                // what reaches the wire — `buildEnvelope` writes the outer field only on the
+                // unsealed branch, and the device travels inside `SealedInner.recipient_device`.
                 recipientDeviceId: contactId,
                 // Indistinguishable from an ordinary message on the outer envelope, which is the
                 // point: the real type is in byte 5, inside the ciphertext.
                 contentType: .e2EeSignal,
-                sealedInnerBytes: sealedInner
+                sealing: sealing
             )
             Log.debug("Heartbeat sent to \(contactId.prefix(8))…", category: "OutboundSession")
         } catch {
@@ -454,7 +455,7 @@ final class OutboundSessionService {
                             conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
                             encryptedPayload: wirePayload,
                             timestamp: UInt64(Date().timeIntervalSince1970),
-                            sealedInnerBytes: inner
+                            sealing: .sealed(inner)
                         )
                     }
                 })
@@ -466,7 +467,7 @@ final class OutboundSessionService {
                     conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
                     encryptedPayload: wirePayload,
                     timestamp: UInt64(Date().timeIntervalSince1970),
-                    sealedInnerBytes: nil
+                    sealing: .identified(.stealthDisabled)
                 )
             }
             Log.info("E2E receipt sent: \(messageIds.count) msg(s) → \(contactId.prefix(8))…", category: "OutboundSession")

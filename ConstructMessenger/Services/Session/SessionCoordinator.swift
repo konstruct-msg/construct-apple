@@ -1345,7 +1345,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                             conversationId: convId,
                             encryptedPayload: encryptedPayload,
                             timestamp: ts,
-                            sealedInnerBytes: inner
+                            sealing: .sealed(inner)
                         )
                     })
                 } else {
@@ -1356,7 +1356,8 @@ final class SessionCoordinator: MessageRouterDelegate {
                         conversationId: convId,
                         encryptedPayload: encryptedPayload,
                         timestamp: ts,
-                        contentType: wireContentType
+                        contentType: wireContentType,
+                        sealing: .identified(.stealthDisabled)
                     )
                 }
                 Log.info("SESSION_STATE[\(logTag)_sent]: to \(userId.prefix(8))… (attempt \(attempt))", category: "SessionInit")

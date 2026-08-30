@@ -106,7 +106,7 @@ final class ChunkedMessageSender {
                             conversationId: conversationId,
                             encryptedPayload: encryptedPayload,
                             timestamp: timestamp,
-                            sealedInnerBytes: inner
+                            sealing: .sealed(inner)
                         )
                     }
                 })
@@ -121,7 +121,7 @@ final class ChunkedMessageSender {
                     conversationId: conversationId,
                     encryptedPayload: encryptedPayload,
                     timestamp: timestamp,
-                    sealedInnerBytes: nil
+                    sealing: .identified(.stealthDisabled)
                 )
             }
             responses.append(response)

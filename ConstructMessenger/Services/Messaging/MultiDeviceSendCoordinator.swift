@@ -442,7 +442,13 @@ final class MultiDeviceSendCoordinator {
                 encryptedPayload: encPayload,
                 timestamp: timestamp,
                 recipientDeviceId: recipientDeviceId,
-                contentType: contentType
+                contentType: contentType,
+                // The one standing exemption. The pair is (me, me) — which the relay knows from
+                // the authenticated channel before it opens the envelope — and conversation_id is
+                // empty, so the person on the other side is not named. §B replaces this with a
+                // seal to the target device's identity key for the peer's devices; for our own it
+                // stays, because a seal would hide nothing from a relay that authenticated us.
+                sealing: .identified(.ownDevices)
             )
 
             CryptoManager.shared.saveSessionToKeychain(for: contactId)

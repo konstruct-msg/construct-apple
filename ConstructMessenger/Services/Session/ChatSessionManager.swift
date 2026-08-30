@@ -241,7 +241,7 @@ final class ChatSessionManager {
                         conversationId: conversationId,
                         encryptedPayload: payload,
                         timestamp: timestamp,
-                        sealedInnerBytes: inner
+                        sealing: .sealed(inner)
                     )
                 })
             } else {
@@ -252,7 +252,8 @@ final class ChatSessionManager {
                     conversationId: conversationId,
                     encryptedPayload: payload,
                     timestamp: timestamp,
-                    contentType: contentType
+                    contentType: contentType,
+                    sealing: .identified(.stealthDisabled)
                 )
             }
             Log.info("SESSION_STATE[init_ping_sent]: msgNum=0 ping sent to \(userId.prefix(8))… — user messages follow as msgNum=1+", category: "SessionInit")
