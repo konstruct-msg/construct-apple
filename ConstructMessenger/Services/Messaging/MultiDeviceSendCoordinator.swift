@@ -157,6 +157,51 @@ final class MultiDeviceSendCoordinator {
     /// Fan-out: send `plaintext` to ALL of the recipient's devices.
     ///
     /// Intended for use after the primary send (which already covers the recipient's
+    /// Everyone besides the recipient's primary device who must learn of this message:
+    /// the sender's own other devices, and the recipient's other devices.
+    ///
+    /// **The single answer to that question.** It had two callers and two answers until
+    /// 2026-08-30: `ChatSendCoordinator` ran both halves after a successful first attempt, and
+    /// `MessageRetryManager` ran neither. A message that failed its first send and succeeded on
+    /// retry therefore reached exactly one device, permanently, while the sender's UI said sent.
+    /// Measured on a three-device run that day: fifteen sends, two mirrored.
+    ///
+    /// Nothing reported it. The mirror is best-effort by design, so its absence and its failure
+    /// look identical from the outside, and the devices that never learn of the message have
+    /// nothing to notice.
+    ///
+    /// - Parameters:
+    ///   - wirePlaintext: pre-KNST `MessageContent` bytes — what SenderSync re-frames per own
+    ///     device. Not display JSON (see local-message-payload-binary.md C1c).
+    ///   - chunks: the **same** KNST payloads the primary send used, so the recipient's other
+    ///     devices see one framing of one message.
+    func mirrorOutgoing(
+        wirePlaintext: Data,
+        chunks: [Data],
+        messageId: String,
+        recipientUserId: String,
+        senderUserId: String,
+        senderDeviceId: String,
+        timestamp: UInt64
+    ) async {
+        await sendSenderSync(
+            plaintext: wirePlaintext,
+            messageId: messageId,
+            originalRecipientUserId: recipientUserId,
+            senderUserId: senderUserId,
+            senderDeviceId: senderDeviceId,
+            timestamp: timestamp
+        )
+        await fanOutToRecipientDevices(
+            chunks: chunks,
+            messageId: messageId,
+            recipientUserId: recipientUserId,
+            senderUserId: senderUserId,
+            senderDeviceId: senderDeviceId,
+            timestamp: timestamp
+        )
+    }
+
     /// default device via the plain `userId` session). Each device gets its own
     /// E2EE session keyed by `recipientUserId:deviceId`.
     ///
@@ -176,12 +221,30 @@ final class MultiDeviceSendCoordinator {
         senderDeviceId: String,
         timestamp: UInt64
     ) async {
-        guard !senderDeviceId.isEmpty, !chunks.isEmpty else { return }
+        // Four ways out of this function, three of them silent until 2026-08-30. A skipped
+        // device is not visible anywhere else: the message is delivered, the sender sees "sent",
+        // and only a device that never heard of it could tell — which it cannot. So each exit
+        // says which one it was. This is the reporting half of §C; the retry queue that makes a
+        // skip recoverable is the other half and is not here yet.
+        guard !senderDeviceId.isEmpty, !chunks.isEmpty else {
+            Log.info(
+                "MultiDevice fan-out skipped for \(recipientUserId.prefix(8))… — " +
+                "reason=\(senderDeviceId.isEmpty ? "no sender device id" : "no chunks")",
+                category: "MultiDevice"
+            )
+            return
+        }
         do {
             // Per-device fan-out to a recipient: a device we have no session with yet needs
             // X3DH, so this fetch legitimately consumes a one-time pre-key.
             let bundles = try await KeyServiceClient.shared.getPreKeyBundles(userId: recipientUserId, consumeOneTimePrekey: true)
-            guard !bundles.isEmpty else { return }
+            guard !bundles.isEmpty else {
+                Log.info(
+                    "MultiDevice fan-out skipped for \(recipientUserId.prefix(8))… — reason=no bundles returned",
+                    category: "MultiDevice"
+                )
+                return
+            }
 
             let ourIdentityKey = KeychainManager.shared.loadDeviceIdentityKey()
             let targets = DeviceDeliveryPlan.targets(
@@ -194,7 +257,17 @@ final class MultiDeviceSendCoordinator {
                 // put two ciphertexts of one message through one ratchet.
                 primarySendCovered: SessionAddressing.contactId(forPeer: recipientUserId)
             )
-            guard !targets.isEmpty else { return }
+            guard !targets.isEmpty else {
+                // The ordinary case for a single-device recipient: the only device there is, is
+                // the one the primary send already covered. Logged at debug so it does not drown
+                // the ones that matter, and counted so "no targets" and "never ran" stay apart.
+                Log.debug(
+                    "MultiDevice fan-out: no targets for \(recipientUserId.prefix(8))… — " +
+                    "\(bundles.count) device(s) known, primary send covered the rest",
+                    category: "MultiDevice"
+                )
+                return
+            }
 
             for target in targets {
                 // The tag replaces `-fd-<deviceId.prefix(8)>`, which named the target device in

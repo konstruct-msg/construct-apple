@@ -555,25 +555,15 @@ final class ChatSendCoordinator {
                         let chunksForFanOut = plan.payloads
                         Task { [weak self] in
                             _ = self
-                            await MultiDeviceSendCoordinator.shared.sendSenderSync(
-                                plaintext: wireForSync,
-                                messageId: messageId,
-                                originalRecipientUserId: recipientId,
-                                senderUserId: currentUserId,
-                                senderDeviceId: myDeviceId,
-                                timestamp: message.timestamp
-                            )
-                            // The recipient's *other* devices. The primary send above reached one
-                            // of them — the device their pinned key names — and the server copies
-                            // that envelope to all their streams, but only that device holds the
-                            // session that opens it. Written since multi-device shipped and never
-                            // called: with per-device sessions unopenable it could not have
-                            // worked, and calling it would have burned a one-time prekey per send
-                            // for a copy nobody could read.
+                            // Our own other devices, then the recipient's. The primary send above
+                            // reached one of theirs — the device their pinned key names — and the
+                            // server copies that envelope to all their streams, but only that
+                            // device holds the session that opens it.
                             //
-                            // Same chunks as the primary send, so the peer's reassembler sees one
-                            // framing of one message.
-                            await MultiDeviceSendCoordinator.shared.fanOutToRecipientDevices(
+                            // One call, because the retry path must make the same one: see
+                            // `mirrorOutgoing`.
+                            await MultiDeviceSendCoordinator.shared.mirrorOutgoing(
+                                wirePlaintext: wireForSync,
                                 chunks: chunksForFanOut,
                                 messageId: messageId,
                                 recipientUserId: recipientId,
@@ -931,17 +921,10 @@ final class ChatSendCoordinator {
 
                 if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
                     let now = UInt64(Date().timeIntervalSince1970)
-                    await MultiDeviceSendCoordinator.shared.sendSenderSync(
-                        plaintext: payload,
-                        messageId: actionId,
-                        originalRecipientUserId: recipientId,
-                        senderUserId: currentUserId,
-                        senderDeviceId: myDeviceId,
-                        timestamp: now
-                    )
-                    // A reaction or edit is as much a per-device fact as a message: a device that
-                    // never sees it renders the transcript differently from its siblings.
-                    await MultiDeviceSendCoordinator.shared.fanOutToRecipientDevices(
+                    // A reaction or edit is as much a per-device fact as a message: a device
+                    // that never sees it renders the transcript differently from its siblings.
+                    await MultiDeviceSendCoordinator.shared.mirrorOutgoing(
+                        wirePlaintext: payload,
                         chunks: chunkPlan.payloads,
                         messageId: actionId,
                         recipientUserId: recipientId,
