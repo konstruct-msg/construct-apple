@@ -182,6 +182,19 @@ final class KeyServiceClient: Sendable {
         await MainActor.run {
             PeerDeviceRegistry.shared.record(userId: userId, devices: bundles)
         }
+        // The durable half of the same answer. The registry above expires in an hour and lives in
+        // memory; this survives relaunch and answers during a locked-device background decrypt,
+        // which is what a seal or a teardown addressed to a specific device needs. Two stores, two
+        // questions — "which devices does this account have right now" and "which devices have we
+        // pinned a key for" — and the second is the one an envelope may be built against.
+        let pins = bundles.map { (deviceId: $0.deviceId, identityKey: $0.bundle.identityPublic) }
+        let context = PersistenceController.shared.container.newBackgroundContext()
+        // Awaited, not fired off: the caller's next move is usually to act on these devices, and a
+        // write that lands after that would leave the first use of a newly-linked device reading an
+        // incomplete set. It is one small write against a background context.
+        await context.perform {
+            SessionAddressing.recordDevices(pins, ofPeer: userId, in: context)
+        }
         return bundles
     }
 

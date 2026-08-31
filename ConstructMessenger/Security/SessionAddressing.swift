@@ -138,6 +138,11 @@ enum SessionAddressing {
     /// Runs on `context`'s queue, like its caller.
     static func identityKey(ofDevice deviceId: String, in context: NSManagedObjectContext) -> Data? {
         guard isCryptoIdentity(deviceId) else { return nil }
+        if let row = peerDeviceRow(deviceId, in: context) { return row.identityKey }
+        // The pre-`PeerDevice` answer, kept as the fallback rather than deleted: `knownIdentityKey`
+        // is still written by the bundle-verify path and is the only pin a device carries before
+        // its first `recordDevices`. It answers for exactly one device per account — which is the
+        // limitation `PeerDevice` exists to remove, so the set is asked first.
         let req = User.fetchRequest()
         req.predicate = NSPredicate(format: "knownIdentityKey != nil")
         guard let users = try? context.fetch(req) else { return nil }
@@ -146,6 +151,156 @@ enum SessionAddressing {
             if deriveDeviceId(identityPublicKey: [UInt8](key)) == deviceId { return key }
         }
         return nil
+    }
+
+    // MARK: - The peer's device set
+
+    /// Every device of `accountId` this app has been told about, oldest first.
+    ///
+    /// **This is the replacement for `contactId(forPeer:)`.** That function answered "which device
+    /// is this peer", and for an account with two devices there is no such answer — it returned the
+    /// one derived from the single `User.knownIdentityKey` slot, and every caller below it then
+    /// addressed that device as though it were the account. A Desktop linked 2026-08-30 failed to
+    /// unseal 155 of 155 envelopes for exactly that reason. See
+    /// `decisions/a-peer-is-a-set-of-devices.md`.
+    ///
+    /// Empty means "we have never recorded a bundle answer for this account", never "this account
+    /// has no devices" — the same distinction `PeerDeviceRegistry.knownDevices` draws, and for the
+    /// same reason: a transient fetch failure and an empty account are indistinguishable at the
+    /// call site, and storing one as the other is an hour of confident wrong answers.
+    ///
+    /// Ordered by `firstSeenAt` so the walk order is stable across runs, and so the device a
+    /// single-device peer has always had stays first — which is the order the pinned key produced
+    /// before this entity existed.
+    ///
+    /// Runs on `context`'s queue, like its caller.
+    static func devices(ofPeer accountId: String, in context: NSManagedObjectContext)
+        -> [(deviceId: String, identityKey: Data)] {
+        guard !accountId.isEmpty else { return [] }
+        let req = PeerDevice.fetchRequest()
+        req.predicate = NSPredicate(format: "accountId == %@", accountId)
+        // `deviceId` breaks ties, and the tie is the ordinary case: devices first recorded from one
+        // bundle answer are written microseconds apart, so `firstSeenAt` alone leaves the order of
+        // a first fetch to whatever the store hands back. A walk whose order differs between runs
+        // makes a failure reproduce on one launch and not the next.
+        req.sortDescriptors = [
+            NSSortDescriptor(key: "firstSeenAt", ascending: true),
+            NSSortDescriptor(key: "deviceId", ascending: true)
+        ]
+        guard let rows = try? context.fetch(req) else { return [] }
+        return rows.map { (deviceId: $0.deviceId, identityKey: $0.identityKey) }
+    }
+
+    /// Persist what the key server said about `accountId`'s devices.
+    ///
+    /// Called from the one place bundles are fetched, for the same reason
+    /// `PeerDeviceRegistry.record` is: a store each caller has to remember to update is stale for
+    /// whichever path was added last, and the staleness reads as a legal answer ("we do not know
+    /// this account's devices") rather than as a fault.
+    ///
+    /// **Each pair is checked for self-consistency before it is stored.** `deviceId` is
+    /// `SHA256(identityKey)[0..16]`, so the two halves of a row are one value and a row where they
+    /// disagree is a row that would make the derivation and the store two carriers of it. A server
+    /// answer that fails this is refused loudly rather than pinned — it is the same check
+    /// `InviteVerifier` runs on an invite.
+    ///
+    /// **Nothing is removed here.** A device absent from one answer may be deleted, or the answer
+    /// may be partial; the two are not separable from a single fetch, and deleting a row would
+    /// discard the only durable pin we hold for a device we may still owe a teardown. Device
+    /// removal needs the server's device-set divergence answer (§A.3 of the multi-device plan).
+    ///
+    /// An empty `devices` is not recorded, for the reason stated on `devices(ofPeer:in:)`.
+    ///
+    /// Runs on `context`'s queue, like its caller.
+    static func recordDevices(
+        _ devices: [(deviceId: String, identityKey: Data)],
+        ofPeer accountId: String,
+        in context: NSManagedObjectContext
+    ) {
+        guard !accountId.isEmpty, !devices.isEmpty else { return }
+        var touched = 0
+        for device in devices {
+            guard isCryptoIdentity(device.deviceId), !device.identityKey.isEmpty else { continue }
+            guard deriveDeviceId(identityPublicKey: [UInt8](device.identityKey)) == device.deviceId else {
+                Log.error(
+                    "PEER_DEVICE_REJECTED: server named \(device.deviceId.prefix(8))… for \(accountId.prefix(8))… "
+                    + "but its identity key derives to a different device — not pinning",
+                    category: "Crypto"
+                )
+                continue
+            }
+            if let existing = peerDeviceRow(device.deviceId, in: context) {
+                // `identityKey` cannot have changed: the id is a function of it, and a row is
+                // found by that id. Only the account can move, and it moving is the server
+                // reassigning a device — worth a line, not a silent overwrite.
+                if existing.accountId != accountId {
+                    Log.error(
+                        "PEER_DEVICE_REHOMED: \(device.deviceId.prefix(8))… was \(existing.accountId.prefix(8))…, "
+                        + "server now says \(accountId.prefix(8))… — keeping the first",
+                        category: "Crypto"
+                    )
+                }
+                continue
+            }
+            let row = PeerDevice(context: context)
+            row.deviceId = device.deviceId
+            row.accountId = accountId
+            row.identityKey = device.identityKey
+            row.firstSeenAt = Date()
+            touched += 1
+        }
+        guard touched > 0 else { return }
+        do {
+            try context.saveOrThrow(category: "Crypto")
+            Log.info(
+                "PEER_DEVICE_PINNED: \(touched) new device(s) for \(accountId.prefix(8))… "
+                + "(set is now \(Self.devices(ofPeer: accountId, in: context).count))",
+                category: "Crypto"
+            )
+        } catch {
+            Log.error("PEER_DEVICE_PERSIST_FAIL for \(accountId.prefix(8))…: \(error)", category: "Crypto")
+        }
+    }
+
+    /// Every device of `peerId`, in the crypto space — the **translation only**.
+    ///
+    /// This is the half the core cannot do: it speaks `CryptoDeviceId` and has no notion of
+    /// `ServerUserId`, so turning an account into a set of devices is this app's job and stays
+    /// here. What must *not* stay here is the decision over that set — which of these devices an
+    /// operation touches is a plan, and a plan is protocol
+    /// (`AGENTS.md`, "The core decides, this app executes"). Callers hand the set to
+    /// `OrchestratorCore.planTeardown` and act on what comes back.
+    ///
+    /// Renamed from `teardownTargets` when the decision moved into the core: the old name promised
+    /// an answer this function is no longer entitled to give.
+    ///
+    /// A device id is its own set of one, unchanged. An account id expands to the devices we have
+    /// pinned for it.
+    ///
+    /// The fallback is deliberate and narrow: an account we have never fetched a bundle for has no
+    /// pinned set, and `contactId(forPeer:)` is then the only name we hold. That is the
+    /// single-device case the pin was always right for, and it is the last place in this file
+    /// allowed to call that function — everything else takes the set.
+    ///
+    /// Empty means we cannot name anyone, which is the same state in which no session exists.
+    /// Callers skip; they must never fall back to addressing the account — that is what put a
+    /// teardown in every device's queue and tore down siblings' healthy sessions.
+    ///
+    /// Runs on `context`'s queue, like its caller.
+    static func deviceIds(ofPeer peerId: String, in context: NSManagedObjectContext) -> [String] {
+        guard !peerId.isEmpty else { return [] }
+        if isCryptoIdentity(peerId) { return [peerId] }
+        let set = devices(ofPeer: peerId, in: context).map(\.deviceId)
+        if !set.isEmpty { return set }
+        return contactId(forPeer: peerId).map { [$0] } ?? []
+    }
+
+    /// One row by device id. Runs on `context`'s queue.
+    private static func peerDeviceRow(_ deviceId: String, in context: NSManagedObjectContext) -> PeerDevice? {
+        let req = PeerDevice.fetchRequest()
+        req.predicate = NSPredicate(format: "deviceId == %@", deviceId)
+        req.fetchLimit = 1
+        return (try? context.fetch(req))?.first
     }
 
     /// The account a device belongs to, and the identity key that names it — the seam read
@@ -171,6 +326,15 @@ enum SessionAddressing {
         // green. It is here so an obviously-wrong id does not walk the contact list, and that is
         // all it is worth claiming for it.
         guard isCryptoIdentity(deviceId) else { return nil }
+        // The device set answers first, and it is the only source that can answer for a peer's
+        // *second* device: the scan below reads `User.knownIdentityKey`, one slot per account, so
+        // before `PeerDevice` this function returned nil for every device but the pinned one. A
+        // caller that needed an account id for such a device — `sendEndSession` above all — had no
+        // way to name it and sent to the account instead, which the server fans out to every
+        // device of it. See `decisions/a-peer-is-a-set-of-devices.md`.
+        if let row = peerDeviceRow(deviceId, in: context), !row.accountId.isEmpty {
+            return (row.accountId, row.identityKey)
+        }
         let req = User.fetchRequest()
         req.predicate = NSPredicate(format: "knownIdentityKey != nil")
         guard let users = try? context.fetch(req) else { return nil }
