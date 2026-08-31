@@ -269,6 +269,14 @@ final class MultiDeviceSendCoordinator {
                 return
             }
 
+            // One Privacy Pass spend for the whole logical message, across every device and every
+            // chunk. The unit of spend is a message to a **person**, and `token_spend_id` is bound
+            // to `recipient_user_id`, so N copies to one recipient are covered once. Sealing the
+            // fan-out is what makes this matter: an unsealed copy paid nothing, and paying per
+            // envelope instead would multiply a three-photo album by the recipient's device count
+            // and empty a young account's hourly allowance on one tap.
+            let spendUnit = await TokenSpendUnit.forEnvelopeCount(targets.count * chunks.count)
+
             for target in targets {
                 // The tag replaces `-fd-<deviceId.prefix(8)>`, which named the target device in
                 // plain hex to the relay on every copy it routed — the leak closed for the
@@ -295,7 +303,9 @@ final class MultiDeviceSendCoordinator {
                         senderUserId: senderUserId,
                         recipientDeviceId: target.deviceId,
                         timestamp: timestamp,
-                        contentType: .e2EeSignal
+                        contentType: .e2EeSignal,
+                        audience: .peerDevice(identityKey: target.identityPublic),
+                        spendUnit: spendUnit
                     )
                 }
             }
@@ -420,7 +430,8 @@ final class MultiDeviceSendCoordinator {
                         senderUserId: senderUserId,
                         recipientDeviceId: target.deviceId,
                         timestamp: timestamp,
-                        contentType: .senderSync
+                        contentType: .senderSync,
+                        audience: .ownDevice
                     )
                 }
             }
@@ -455,6 +466,26 @@ final class MultiDeviceSendCoordinator {
         return all.filter { $0.deviceId != myDeviceId }
     }
 
+    /// Whose device this copy is going to — which is the only thing that decides whether it may
+    /// travel unsealed.
+    ///
+    /// The caller answers because the caller is the only one that knows. `sendToDevice` used to
+    /// hardcode `.identified(.ownDevices)` for both of its callers, and for one of them the claim
+    /// was false: a copy to a **peer's** device has `senderUserId` = us and
+    /// `networkRecipientUserId` = them, so the relay got exactly the pair sealed sender exists to
+    /// hide — once per extra device of theirs, per message.
+    enum DeviceCopyAudience {
+        /// A peer's device. Sealed to the identity key from the bundle we just fetched for it —
+        /// the value is in the caller's hand, which is the point: `recipientIdentityKey` would go
+        /// looking for it in a store that holds one key per account and does not know this device.
+        case peerDevice(identityKey: Data)
+
+        /// One of our own devices. The pair is (me, me), which the relay knows from the
+        /// authenticated channel before it opens the envelope, and `conversation_id` is empty — so
+        /// a seal would hide nothing. See `SealingExemption.ownDevices`.
+        case ownDevice
+    }
+
     /// Core per-device send: ensures session exists, encrypts, sends. Swallows errors.
     private func sendToDevice(
         plaintext: Data,
@@ -465,7 +496,9 @@ final class MultiDeviceSendCoordinator {
         senderUserId: String,
         recipientDeviceId: String,
         timestamp: UInt64,
-        contentType: Shared_Proto_Core_V1_ContentType
+        contentType: Shared_Proto_Core_V1_ContentType,
+        audience: DeviceCopyAudience,
+        spendUnit: TokenSpendUnit? = nil
     ) async {
         do {
             // Ensure a session exists for this contactId; never clobber an existing one.
@@ -488,19 +521,43 @@ final class MultiDeviceSendCoordinator {
                 }
             }
 
-            // Explicitly never use stealth for multi-device traffic (see comment above).
             let encPayload = try OutboundSessionService.shared.encryptOutgoing(
                 plaintext: plaintext,
                 messageId: messageId,
                 recipientId: contactId
             )
 
-            // conversation_id stays empty on purpose. Multi-device traffic is deliberately not
-            // sealed — the reasoning being that the server already knows this is one account,
-            // which is true of the sender and the recipient, both of them us. It is not true of
-            // `direct:<me>:<partner>`: that names the person on the other side, in the clear, on
-            // an unsealed envelope, once per own device per message sent. For a multi-device
-            // account it handed the server exactly the pairing that sealed sender exists to hide.
+            // §B: the copy answers the sealing question by audience, not by being multi-device
+            // traffic. A peer's device is sealed to its own identity key — the same key its ratchet
+            // already runs on, so this is not a stronger claim about that key than the session
+            // already makes, and the receiving device opens it with its own private key.
+            let sealing: SendSealing
+            switch audience {
+            case .ownDevice:
+                sealing = .identified(.ownDevices)
+            case .peerDevice(let identityKey):
+                if StealthPolicy.shared.shouldUseSealedSender() {
+                    sealing = .sealed(try await StealthSenderService.buildSealedInner(
+                        recipientUserId: networkRecipientUserId,
+                        recipientIdentityKey: identityKey,
+                        encryptedPayload: encPayload,
+                        // Generic on purpose. The outer type used to be `.e2EeSignal`, which let the
+                        // server tell a body copy from a control copy; under a seal the baseline is
+                        // the field's absence, and the real type rides in KNST byte 5 inside the
+                        // ciphertext like every other sealed body.
+                        contentType: .generic,
+                        spendUnit: spendUnit
+                    ))
+                } else {
+                    // DEBUG only: `StealthPolicy.isEnabled` is a compile-time `true` in Release, and
+                    // the chokepoint refuses this branch whenever stealth is on.
+                    sealing = .identified(.stealthDisabled)
+                }
+            }
+
+            // conversation_id stays empty on purpose. `direct:<me>:<partner>` names the person on
+            // the other side, in the clear, once per extra device per message — for a multi-device
+            // account it handed the server exactly the pairing sealed sender exists to hide.
             //
             // Nothing wanted it. `Envelope.conversation_id` has no reader anywhere on the server —
             // the only consumers of a field by that name are APNs payloads fed from group and
@@ -514,14 +571,13 @@ final class MultiDeviceSendCoordinator {
                 conversationId: "",
                 encryptedPayload: encPayload,
                 timestamp: timestamp,
+                // Written only on the unsealed branch by `buildEnvelope`, because the outer field is
+                // visible to the relay. On the sealed branch the device is derived from the key the
+                // seal was built against, so "who can open this" and "where does it go" stay one
+                // value rather than two that must be kept in agreement.
                 recipientDeviceId: recipientDeviceId,
                 contentType: contentType,
-                // The one standing exemption. The pair is (me, me) — which the relay knows from
-                // the authenticated channel before it opens the envelope — and conversation_id is
-                // empty, so the person on the other side is not named. §B replaces this with a
-                // seal to the target device's identity key for the peer's devices; for our own it
-                // stays, because a seal would hide nothing from a relay that authenticated us.
-                sealing: .identified(.ownDevices)
+                sealing: sealing
             )
 
             CryptoManager.shared.saveSessionToKeychain(for: contactId)

@@ -153,8 +153,9 @@ final class SealingExemptionSiteTests: XCTestCase {
     /// need an unsealed branch.
     private static let allowed: [SealingExemption: Set<String>] = [
 
-        // Fan-out and SENDER_SYNC to our own devices. One file, and §B shrinks it further: the
-        // peer's devices move to a seal on the target device's identity key, leaving only ours.
+        // SENDER_SYNC to our own devices. One file, and §B shrank it as this comment predicted:
+        // the peer's devices now seal to the target device's identity key, so what remains under
+        // this exemption is only traffic where both ends are us.
         .ownDevices: ["MultiDeviceSendCoordinator.swift"],
 
         // The stealth-off branches. These exist only because DEBUG can turn stealth off; in
@@ -169,6 +170,7 @@ final class SealingExemptionSiteTests: XCTestCase {
             "OutboundSessionService.swift",     // heartbeat and delivery receipt
             "SessionCoordinator.swift",         // session control
             "ChatSessionManager.swift",         // init ping
+            "MultiDeviceSendCoordinator.swift", // fan-out to a peer's devices, once §B sealed it
         ],
     ]
 
