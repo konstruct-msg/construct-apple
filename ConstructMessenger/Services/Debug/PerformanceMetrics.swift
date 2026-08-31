@@ -219,6 +219,48 @@ enum MetricEvent: String {
     /// A non-zero count after the receipt suppression means something else still addresses us.
     case selfAddressedDropped = "self_addressed_dropped"
 
+    /// A device of the recipient did not get its copy of a message the sender considers sent.
+    ///
+    /// The release gate for §C asks this to be zero, and until 2026-08-31 nothing could answer it:
+    /// every way out of the fan-out logged at `info` and returned, so a device that never heard of
+    /// a message was indistinguishable from an account that has only one. Observed 2026-08-28 — a
+    /// second device linked at 11:14, the single bundle fetch after it timed out at 11:18, there
+    /// was no retry, and the copy simply never existed.
+    ///
+    /// `label` = why, a closed set of five:
+    /// `bundle_fetch_failed` (the fetch threw — the 2026-08-28 shape) · `no_bundles` (it returned
+    /// an empty list) · `send_failed` (one device's send threw, the others still went) ·
+    /// `no_sender_device` · `no_chunks`.
+    ///
+    /// **Counts occurrences, not devices**, and the distinction is the point rather than a
+    /// shortcut: on `send_failed` the loop knows exactly which device it lost, but on the three
+    /// fetch-side reasons the call that would have named the devices is the one that failed, so a
+    /// device count there could only be a guess dressed as a measurement. The log line beside each
+    /// one carries how many devices we believe the account has, from `PeerDevice`, which is a
+    /// belief and is written as one.
+    ///
+    /// Not recorded when the plan is legitimately empty — a single-device recipient the primary
+    /// send already covered is the overwhelmingly common case and is not a skip. Keeping those
+    /// apart is why "no targets" logs at `debug` and does not come here.
+    case fanoutDeviceSkipped = "fanout_device_skipped"
+
+    /// A copy owed to a recipient's device will never be sent, and the queue has stopped trying.
+    ///
+    /// Separate from `fanoutDeviceSkipped` rather than another label on it, for two reasons. A
+    /// skip is recoverable and a give-up is not, so folding them would make the §C gate — which
+    /// asks for zero skips — unable to distinguish "retried and delivered" from "retried and lost".
+    /// And `record` collapses an event's whole label breakdown once it exceeds eight distinct
+    /// values, silently; the skip reasons already stand at six, so adding terminal outcomes there
+    /// would put the breakdown one label away from disappearing without saying so.
+    ///
+    /// `label` = `exhausted` (five attempts, all failed) · `not_reconstructable` (the row is a
+    /// media message, whose wire plaintext the persisted model cannot rebuild — a pre-existing
+    /// limit of every retry path here, not one this queue introduces) · `no_row` (the message was
+    /// deleted while the copy was owed, which is the one benign member of the set) ·
+    /// `not_retryable` (the retry hit a missing device id or an empty chunk plan — not a transport
+    /// failure, so trying again would meet the same wall).
+    case fanoutRetryGaveUp = "fanout_retry_gave_up"
+
     /// The fast-UDP transport (engine-QUIC / native H3) was suppressed on this network because it
     /// failed to carry data. `label` = the ladder rung just armed (`rung1` 5min · `rung2` 1h ·
     /// `rung3` 24h), which is the gauge for "how permanently is QUIC blocked where this user is".

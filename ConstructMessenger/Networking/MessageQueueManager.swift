@@ -176,6 +176,14 @@ class MessageQueueManager {
             currentUserId: currentUserId,
             context: PersistenceController.shared.container.viewContext
         )
+        // The second queue, and a different question. The one above asks whether a message reached
+        // the recipient; this one asks whether it reached all of their devices, which a message
+        // marked `sent` can still fail. Before 2026-08-31 nothing asked it: a device skipped by a
+        // failed fan-out stayed skipped, because the send that would have covered it had already
+        // reported success. See §C of the multi-device plan.
+        Task { @MainActor in
+            await MultiDeviceSendCoordinator.shared.drainRetryQueue(currentUserId: currentUserId)
+        }
     }
 
     /// Get count of queued messages — uses async fetch on background context to avoid

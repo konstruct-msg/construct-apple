@@ -53,6 +53,11 @@ enum AccountWipeKeys {
         "construct.orchestrator_state.afu_migrated.v1",
         "construct.cryptoKeys.afu_migrated.v2",
         "construct.healing_queue_state",
+        // Copies this account's messages still owe to a recipient's devices (§C). Leaves with the
+        // account for the same reason the wire-payload entries do: they name messages and peers of
+        // the person signing out, and a drain after a re-registration would try to send them as
+        // whoever signed in next.
+        "construct.fanoutRetryQueue.v1",
         "construct.kyber_session_state",
         "construct.kyber.otpk.nextKeyId",
         "construct.kyber.spk.id",
@@ -148,6 +153,11 @@ enum AccountWipeKeys {
         // above or the store's own teardown.
         "construct.app",
         "construct.OutgoingWirePayloadStore",
+        // A serial dispatch queue's label, not a defaults key. Its store is
+        // `construct.fanoutRetryQueue.v1`, which is in `wiped` — the two live a few lines apart in
+        // one file and mean opposite things here, which is why the scan reads literals rather than
+        // trusting a name to say what it is.
+        "construct.FanoutRetryQueue",
         "construct.PendingReassemblyStore",
         "construct.ReceiptResendThrottle",
         "construct.reassembly_store_key",
