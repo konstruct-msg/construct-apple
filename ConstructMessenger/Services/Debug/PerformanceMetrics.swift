@@ -261,6 +261,23 @@ enum MetricEvent: String {
     /// failure, so trying again would meet the same wall).
     case fanoutRetryGaveUp = "fanout_retry_gave_up"
 
+    /// An incoming message was tried against more than one of the sender's device sessions.
+    ///
+    /// A peer's account has several devices and each has its own ratchet, so "which session
+    /// decrypts this" has as many answers as they have devices. Until 2026-08-31 it had exactly
+    /// one, and a message from the second device failed AEAD against the first device's session —
+    /// indistinguishable from a broken session, and treated as one.
+    ///
+    /// `label` = `attemptN` when the Nth device opened it · `exhausted` when none did. Recorded
+    /// only when the walk actually went past the first candidate, so a single-device account —
+    /// the overwhelming majority — contributes nothing and the count reads as "how often does
+    /// multi-device cost us an extra attempt".
+    ///
+    /// This is the number that prices §D. Naming the sending device on the wire removes the walk;
+    /// until then this says what the walk is worth. A rising `exhausted` means something other
+    /// than device choice is wrong, because every session we hold was tried.
+    case decryptDeviceWalk = "decrypt_device_walk"
+
     /// The fast-UDP transport (engine-QUIC / native H3) was suppressed on this network because it
     /// failed to carry data. `label` = the ladder rung just armed (`rung1` 5min · `rung2` 1h ·
     /// `rung3` 24h), which is the gauge for "how permanently is QUIC blocked where this user is".

@@ -7616,6 +7616,14 @@ public func mnemonicToSeed(mnemonic: String)throws  -> [UInt8]  {
     )
 })
 }
+public func planReceivingDecrypt(sessionDeviceIds: [String], preferredDeviceId: String) -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_plan_receiving_decrypt(
+        FfiConverterSequenceString.lower(sessionDeviceIds),
+        FfiConverterString.lower(preferredDeviceId),$0
+    )
+})
+}
 /**
  * Every device that must receive its own ciphertext of an outgoing message.
  * The caller owns the account-space facts — whose devices these are, and whether the
@@ -8045,6 +8053,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_mnemonic_to_seed() != 53142) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_plan_receiving_decrypt() != 26416) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_plan_send() != 10892) {
