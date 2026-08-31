@@ -208,16 +208,33 @@ enum SessionReducer {
         }
     }
 
-    /// The envelope to feed `initReceivingSession`: the triggering message if it is a
-    /// handshake, otherwise the first handshake in the pending queue. `nil` means we
-    /// must not init — calling it on a leftover fails and clears the queue.
-    static func pickHandshakeCarrier<T>(
-        preferred: T,
-        queued: [T],
-        kind: (T) -> ReceivingInitKind
-    ) -> T? {
-        if kind(preferred) == .handshake { return preferred }
-        return queued.first { kind($0) == .handshake }
+    /// How a drained pending queue splits after a session opens: the entry whose watermark to
+    /// release, and the messages still to route.
+    ///
+    /// **The opener is named, not positional.** Both drain sites used to say "skip the first",
+    /// which was the right message only by coincidence. The heal path opens on the message
+    /// `SessionHealingService` chose, unrelated to queue order; and since the responder walk began
+    /// trying every eligible carrier the first-message path opens on whichever carrier the peer's
+    /// device actually sent — for a multi-device peer, routinely not the first queued. A wrong
+    /// answer here is two failures at once: the real opener is re-routed into a ratchet that has
+    /// already consumed it, and an unrelated queued handshake is dropped with its watermark
+    /// released, never tried.
+    ///
+    /// `resolve` is nil when the opener is not in the queue at all, which is normal rather than a
+    /// loss: the first-message path opens on the message that triggered the fetch, and that one
+    /// reaches init before it is ever enqueued. Distinguishing the two is the point — a missing id
+    /// that *should* have been queued means the queue lost it, and that must not read the same as
+    /// a message which was never in it.
+    static func drainSplit(
+        queuedIds: [String],
+        openedOn: String?
+    ) -> (resolve: String?, toRoute: [String]) {
+        guard let openedOn, let index = queuedIds.firstIndex(of: openedOn) else {
+            return (nil, queuedIds)
+        }
+        var rest = queuedIds
+        rest.remove(at: index)
+        return (openedOn, rest)
     }
 
     /// Pure disposition for an incoming message, fed by the authoritative facts MessageRouter

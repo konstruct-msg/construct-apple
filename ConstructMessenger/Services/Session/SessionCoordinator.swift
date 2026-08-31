@@ -138,12 +138,16 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// existing drain (skipping the already-decrypted init carrier) / clear semantics.
     /// `startInit`/`queueMessage`/`processMessage` are the incoming-message disposition and
     /// are performed in MessageRouter, not here.
-    private func perform(_ effects: [SessionReducer.Effect], for userId: String, skippingFirst: Bool = false) {
+    private func perform(
+        _ effects: [SessionReducer.Effect],
+        for userId: String,
+        alreadyHandled: String? = nil
+    ) {
         assertMainThread()
         for effect in effects {
             switch effect {
             case .drainQueuedMessages:
-                drainPendingQueue(for: userId, skippingFirst: skippingFirst)
+                drainPendingQueue(for: userId, alreadyHandled: alreadyHandled)
             case .clearQueuedMessages:
                 messageRouter.removePendingMessages(for: userId)
             case .startInit, .queueMessage, .processMessage:
@@ -1126,7 +1130,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // filtering) and drain the pending queue — both via the reducer: .initSucceeded
                 // yields .active + a .drainQueuedMessages effect performed below.
                 perform(apply(.initSucceeded(at: UInt64(Date().timeIntervalSince1970)), for: userId),
-                        for: userId, skippingFirst: true)
+                        for: userId, alreadyHandled: opened?.id)
                 // Re-send messages that were re-queued on prior END_SESSION receipt.
                 sendSessionQueuedMessages(for: userId)
                 // Phase 2 of two-phase handshake: notify INITIATOR that RESPONDER
@@ -1212,7 +1216,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
 
                 // Heal does not reset establishment time (no markActive) — drain only.
-                perform([.drainQueuedMessages], for: userId, skippingFirst: true)
+                perform([.drainQueuedMessages], for: userId, alreadyHandled: failedMessage.id)
             } else {
                 Log.error("SESSION_STATE[heal_failed]: initReceivingSession still failing for \(userId.prefix(8))…", category: "SessionInit")
                 if !canContinue {
@@ -1257,15 +1261,40 @@ final class SessionCoordinator: MessageRouterDelegate {
     // MARK: - Helpers
 
     /// Drain the pending queue for a peer after session init / heal succeeds.
-    private func drainPendingQueue(for userId: String, skippingFirst: Bool) {
+    ///
+    /// `alreadyHandled` is the id of the message the session actually opened on. It was decrypted
+    /// and persisted during init, so it must not be re-routed — but its queue entry is still
+    /// holding a stream-cursor watermark, which is released here.
+    ///
+    /// **It is an id and not a position.** Both callers used to pass `skippingFirst: true` and this
+    /// skipped `queued.first`, which was only ever the right message by coincidence. The heal path
+    /// opens on `failedMessage`, chosen by `SessionHealingService` and unrelated to queue order;
+    /// and since the responder walk began trying every eligible carrier (2026-08-31) the first-
+    /// message path opens on whichever carrier the peer's device actually sent, which for a
+    /// multi-device peer is routinely not the first one queued. Getting it wrong is two failures at
+    /// once: the real opener is re-routed into a ratchet that has already consumed it, and an
+    /// unrelated queued handshake has its watermark released and is dropped without ever being
+    /// tried.
+    private func drainPendingQueue(for userId: String, alreadyHandled: String?) {
         let queued = messageRouter.drainPendingMessages(for: userId)
-        // The init carrier (first queued message) was already decrypted during session init and
-        // is not re-routed below — resolve it explicitly so its deferred entry releases the
-        // stream-cursor watermark. Re-routed messages resolve themselves via routeIncomingMessage.
-        if skippingFirst, let first = queued.first {
-            StreamCursorTracker.shared.resolve(messageId: first.id)
+        let split = SessionReducer.drainSplit(
+            queuedIds: queued.map(\.id),
+            openedOn: alreadyHandled
+        )
+        if let resolve = split.resolve {
+            // Decrypted and persisted during init, so it must not be re-routed — but its queue
+            // entry still holds a stream-cursor watermark, released here.
+            StreamCursorTracker.shared.resolve(messageId: resolve)
+        } else if let alreadyHandled {
+            // Normal: the first-message path opens on the message that triggered the fetch, and
+            // that one reaches init before it is ever enqueued.
+            Log.debug(
+                "Drain for \(userId.prefix(8))…: opener \(alreadyHandled.prefix(8))… was not queued",
+                category: "SessionInit"
+            )
         }
-        let toProcess = skippingFirst ? queued.dropFirst() : queued[...]
+        let byId = Dictionary(queued.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let toProcess = split.toRoute.compactMap { byId[$0] }
         guard !toProcess.isEmpty, let context = viewContext else { return }
         Log.info("Decrypting \(toProcess.count) queued message(s) for \(userId.prefix(8))...", category: "SessionInit")
         for queuedMsg in toProcess {
