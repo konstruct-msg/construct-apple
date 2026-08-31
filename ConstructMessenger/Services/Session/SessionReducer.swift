@@ -26,6 +26,19 @@
 
 import Foundation
 
+/// The core's classification rule, reachable from inside `SessionReducer`.
+///
+/// Needed only because of name resolution: `SessionReducer.receivingInitKind` shadows the core's
+/// free function of the same base name, and Swift refuses the call rather than falling through to
+/// module scope. Qualifying by module is not the fix either — the module is `Construct_Messenger`
+/// on iOS and `Construct_Desktop` on macOS, and this file is compiled into both, so a hardcoded
+/// module name builds on one target and breaks the other.
+///
+/// At file scope there is no member to shadow, so the name resolves to the core.
+private func coreReceivingInitKind(_ carrier: ReceivingInitCarrier) -> ReceivingInitKind {
+    receivingInitKind(carrier: carrier)
+}
+
 enum SessionReducer {
 
     /// Lifecycle phase of the session with a single peer. Absence of an entry (`nil`)
@@ -163,6 +176,15 @@ enum SessionReducer {
     /// — the epoch is what a live PQ ratchet stamps, and a fresh session starts at 0.
     /// 3-DH classic (no OTPK, no KEM, epoch 0) stays a handshake: that is the reproducible
     /// fallback after `otpkUnreproducible`.
+    /// **The rule itself lives in the core** (`orchestration::receiving_init_plan`). This is a
+    /// forwarder plus a type adapter, not a second implementation: two clients that classify a
+    /// carrier differently do not produce an error, they produce a copy dropped as foreign and a
+    /// message that never appears, and there are two clients now. See AGENTS.md, "The core decides,
+    /// this app executes".
+    ///
+    /// The local enum survives only because six call sites read it and converting them is not this
+    /// change. When they are touched, they should take `ReceivingInitKind` from the core directly
+    /// and this adapter should go with them.
     static func receivingInitKind(
         messageNumber: UInt32,
         oneTimePreKeyId: UInt32,
@@ -170,12 +192,20 @@ enum SessionReducer {
         pqMessageEpoch: UInt32,
         isSessionResetInit: Bool
     ) -> ReceivingInitKind {
-        if messageNumber != 0 { return .midRatchet }
-        if isSessionResetInit { return .handshake }
-        if oneTimePreKeyId != 0 { return .handshake }
-        if kemCiphertextBytes > 0 { return .handshake }
-        if pqMessageEpoch > 0 { return .midSessionLeftover }
-        return .handshake
+        let carrier = ReceivingInitCarrier(
+            messageNumber: messageNumber,
+            oneTimePrekeyId: oneTimePreKeyId,
+            // The core takes a byte count, not the bytes: classifying a carrier must never require
+            // holding its body, so a caller can plan before it commits to anything.
+            kemCiphertextBytes: UInt32(max(0, kemCiphertextBytes)),
+            pqMessageEpoch: pqMessageEpoch,
+            isSessionResetInit: isSessionResetInit
+        )
+        switch coreReceivingInitKind(carrier) {
+        case .handshake:          return .handshake
+        case .midRatchet:         return .midRatchet
+        case .midSessionLeftover: return .midSessionLeftover
+        }
     }
 
     /// The envelope to feed `initReceivingSession`: the triggering message if it is a

@@ -1489,6 +1489,20 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func oneTimePrekeyCount()  -> UInt32
     
+    /**
+     * Every (carrier, bundle) pair worth attempting when opening a receiving session, in order.
+     * Both dimensions vary: fixing the carrier and rotating only the bundle finds the session
+     * only if the right carrier was guessed, and a wrong guess looks exactly like a broken bundle.
+     */
+    func planReceivingInit(carriers: [ReceivingInitCarrier], bundleCount: UInt32)  -> [ReceivingInitAttempt]
+    
+    /**
+     * Which of `candidate_device_ids` a teardown goes to, and what to do with each.
+     * The caller passes the device set (it owns the account→devices translation, which this
+     * crate deliberately cannot do); the decision over the set is made here.
+     */
+    func planTeardown(candidateDeviceIds: [String], peerOnDeadSession: Bool)  -> [TeardownDecision]
+    
     func prekeysAvailableCount()  -> UInt32
     
     func pruneOneTimePrekeysBelow(minKeepId: UInt32)  -> UInt32
@@ -1923,6 +1937,36 @@ open func oneTimePrekeyCount() -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_one_time_prekey_count(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Every (carrier, bundle) pair worth attempting when opening a receiving session, in order.
+     * Both dimensions vary: fixing the carrier and rotating only the bundle finds the session
+     * only if the right carrier was guessed, and a wrong guess looks exactly like a broken bundle.
+     */
+open func planReceivingInit(carriers: [ReceivingInitCarrier], bundleCount: UInt32) -> [ReceivingInitAttempt]  {
+    return try!  FfiConverterSequenceTypeReceivingInitAttempt.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_plan_receiving_init(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceTypeReceivingInitCarrier.lower(carriers),
+        FfiConverterUInt32.lower(bundleCount),$0
+    )
+})
+}
+    
+    /**
+     * Which of `candidate_device_ids` a teardown goes to, and what to do with each.
+     * The caller passes the device set (it owns the account→devices translation, which this
+     * crate deliberately cannot do); the decision over the set is made here.
+     */
+open func planTeardown(candidateDeviceIds: [String], peerOnDeadSession: Bool) -> [TeardownDecision]  {
+    return try!  FfiConverterSequenceTypeTeardownDecision.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_plan_teardown(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceString.lower(candidateDeviceIds),
+        FfiConverterBool.lower(peerOnDeadSession),$0
     )
 })
 }
@@ -3281,6 +3325,58 @@ public func FfiConverterTypeDecryptedMessageResult_lower(_ value: DecryptedMessa
 }
 
 
+public struct DeliveryTarget: Equatable, Hashable {
+    public var deviceId: String
+    public var audience: DeliveryAudience
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(deviceId: String, audience: DeliveryAudience) {
+        self.deviceId = deviceId
+        self.audience = audience
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension DeliveryTarget: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeliveryTarget: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeliveryTarget {
+        return
+            try DeliveryTarget(
+                deviceId: FfiConverterString.read(from: &buf), 
+                audience: FfiConverterTypeDeliveryAudience.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeliveryTarget, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.deviceId, into: &buf)
+        FfiConverterTypeDeliveryAudience.write(value.audience, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeliveryTarget_lift(_ buf: RustBuffer) throws -> DeliveryTarget {
+    return try FfiConverterTypeDeliveryTarget.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeliveryTarget_lower(_ value: DeliveryTarget) -> RustBuffer {
+    return FfiConverterTypeDeliveryTarget.lower(value)
+}
+
+
 public struct EncryptedMessageComponents: Equatable, Hashable {
     public var ephemeralPublicKey: [UInt8]
     public var messageNumber: UInt32
@@ -4396,6 +4492,130 @@ public func FfiConverterTypePrivateKeysJson_lower(_ value: PrivateKeysJson) -> R
 }
 
 
+/**
+ * One attempt: open carrier `carrier_index` against bundle `bundle_index`.
+ * Indices into the caller's own arrays.
+ */
+public struct ReceivingInitAttempt: Equatable, Hashable {
+    public var carrierIndex: UInt32
+    public var bundleIndex: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(carrierIndex: UInt32, bundleIndex: UInt32) {
+        self.carrierIndex = carrierIndex
+        self.bundleIndex = bundleIndex
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension ReceivingInitAttempt: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeReceivingInitAttempt: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ReceivingInitAttempt {
+        return
+            try ReceivingInitAttempt(
+                carrierIndex: FfiConverterUInt32.read(from: &buf), 
+                bundleIndex: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ReceivingInitAttempt, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.carrierIndex, into: &buf)
+        FfiConverterUInt32.write(value.bundleIndex, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReceivingInitAttempt_lift(_ buf: RustBuffer) throws -> ReceivingInitAttempt {
+    return try FfiConverterTypeReceivingInitAttempt.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReceivingInitAttempt_lower(_ value: ReceivingInitAttempt) -> RustBuffer {
+    return FfiConverterTypeReceivingInitAttempt.lower(value)
+}
+
+
+/**
+ * The wire-visible shape of a queued message, for planning a receiving-session init.
+ * No ciphertext: deciding whether a message *could* open a session must not require its body.
+ */
+public struct ReceivingInitCarrier: Equatable, Hashable {
+    public var messageNumber: UInt32
+    public var oneTimePrekeyId: UInt32
+    public var kemCiphertextBytes: UInt32
+    public var pqMessageEpoch: UInt32
+    public var isSessionResetInit: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(messageNumber: UInt32, oneTimePrekeyId: UInt32, kemCiphertextBytes: UInt32, pqMessageEpoch: UInt32, isSessionResetInit: Bool) {
+        self.messageNumber = messageNumber
+        self.oneTimePrekeyId = oneTimePrekeyId
+        self.kemCiphertextBytes = kemCiphertextBytes
+        self.pqMessageEpoch = pqMessageEpoch
+        self.isSessionResetInit = isSessionResetInit
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension ReceivingInitCarrier: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeReceivingInitCarrier: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ReceivingInitCarrier {
+        return
+            try ReceivingInitCarrier(
+                messageNumber: FfiConverterUInt32.read(from: &buf), 
+                oneTimePrekeyId: FfiConverterUInt32.read(from: &buf), 
+                kemCiphertextBytes: FfiConverterUInt32.read(from: &buf), 
+                pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
+                isSessionResetInit: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ReceivingInitCarrier, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.messageNumber, into: &buf)
+        FfiConverterUInt32.write(value.oneTimePrekeyId, into: &buf)
+        FfiConverterUInt32.write(value.kemCiphertextBytes, into: &buf)
+        FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
+        FfiConverterBool.write(value.isSessionResetInit, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReceivingInitCarrier_lift(_ buf: RustBuffer) throws -> ReceivingInitCarrier {
+    return try FfiConverterTypeReceivingInitCarrier.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReceivingInitCarrier_lower(_ value: ReceivingInitCarrier) -> RustBuffer {
+    return FfiConverterTypeReceivingInitCarrier.lower(value)
+}
+
+
 public struct RecoveryKeypair: Equatable, Hashable {
     public var privateKey: [UInt8]
     public var publicKey: [UInt8]
@@ -4762,6 +4982,58 @@ public func FfiConverterTypeSrRecoveryBundle_lower(_ value: SrRecoveryBundle) ->
 }
 
 
+public struct TeardownDecision: Equatable, Hashable {
+    public var deviceId: String
+    public var action: TeardownAction
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(deviceId: String, action: TeardownAction) {
+        self.deviceId = deviceId
+        self.action = action
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension TeardownDecision: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTeardownDecision: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TeardownDecision {
+        return
+            try TeardownDecision(
+                deviceId: FfiConverterString.read(from: &buf), 
+                action: FfiConverterTypeTeardownAction.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TeardownDecision, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.deviceId, into: &buf)
+        FfiConverterTypeTeardownAction.write(value.action, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTeardownDecision_lift(_ buf: RustBuffer) throws -> TeardownDecision {
+    return try FfiConverterTypeTeardownDecision.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTeardownDecision_lower(_ value: TeardownDecision) -> RustBuffer {
+    return FfiConverterTypeTeardownDecision.lower(value)
+}
+
+
 public struct TimingConfig: Equatable, Hashable {
     public var heartbeatIntervalSec: UInt64
     public var heartbeatJitterMs: UInt64
@@ -4911,9 +5183,6 @@ public func FfiConverterTypeWirePayload_lower(_ value: WirePayload) -> RustBuffe
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-/**
- * Result of checking whether a message has already been processed.
- */
 
 public enum AckCheckResult: Equatable, Hashable {
     
@@ -5859,6 +6128,76 @@ public func FfiConverterTypeCryptoError_lower(_ value: CryptoError) -> RustBuffe
     return FfiConverterTypeCryptoError.lower(value)
 }
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Result of checking whether a message has already been processed.
+ * Whose device an outgoing copy is for. A copy to our own device is the pair (me, me), which the
+ * relay already knows; a copy to a peer's device is not, and must be sealed to that device's key.
+ */
+
+public enum DeliveryAudience: Equatable, Hashable {
+    
+    case recipient
+    case ownReplica
+
+
+
+}
+
+#if compiler(>=6)
+extension DeliveryAudience: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeliveryAudience: FfiConverterRustBuffer {
+    typealias SwiftType = DeliveryAudience
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeliveryAudience {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .recipient
+        
+        case 2: return .ownReplica
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DeliveryAudience, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .recipient:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .ownReplica:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeliveryAudience_lift(_ buf: RustBuffer) throws -> DeliveryAudience {
+    return try FfiConverterTypeDeliveryAudience.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeliveryAudience_lower(_ value: DeliveryAudience) -> RustBuffer {
+    return FfiConverterTypeDeliveryAudience.lower(value)
+}
+
+
 
 /**
  * Errors that can occur during MLS group operations.
@@ -5981,6 +6320,176 @@ public func FfiConverterTypeMlsError_lift(_ buf: RustBuffer) throws -> MlsError 
 public func FfiConverterTypeMlsError_lower(_ value: MlsError) -> RustBuffer {
     return FfiConverterTypeMlsError.lower(value)
 }
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What a queued message is, for the purpose of opening a receiving session.
+ */
+
+public enum ReceivingInitKind: Equatable, Hashable {
+    
+    /**
+     * Carries an X3DH init: this message can open a session.
+     */
+    case handshake
+    /**
+     * Already inside a ratchet. Initialising from it fails and destroys the queue behind it.
+     */
+    case midRatchet
+    /**
+     * `message_number == 0` but a PQ epoch has advanced — a re-keyed continuation, not an opener.
+     */
+    case midSessionLeftover
+
+
+
+}
+
+#if compiler(>=6)
+extension ReceivingInitKind: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeReceivingInitKind: FfiConverterRustBuffer {
+    typealias SwiftType = ReceivingInitKind
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ReceivingInitKind {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .handshake
+        
+        case 2: return .midRatchet
+        
+        case 3: return .midSessionLeftover
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ReceivingInitKind, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .handshake:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .midRatchet:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .midSessionLeftover:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReceivingInitKind_lift(_ buf: RustBuffer) throws -> ReceivingInitKind {
+    return try FfiConverterTypeReceivingInitKind.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReceivingInitKind_lower(_ value: ReceivingInitKind) -> RustBuffer {
+    return FfiConverterTypeReceivingInitKind.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What to do about one device when tearing down a session with a peer.
+ * See orchestration::teardown_plan — the decision lives in the core because it is a plan,
+ * and a plan is protocol.
+ */
+
+public enum TeardownAction: Equatable, Hashable {
+    
+    /**
+     * We hold a session with this device: send, then archive ours.
+     */
+    case sendAndArchive
+    /**
+     * No session of ours, but the peer is demonstrably still on one — send, archive nothing.
+     */
+    case sendOnly
+    /**
+     * Nothing to condemn, no evidence anyone is on a dead session — say nothing.
+     */
+    case skip
+
+
+
+}
+
+#if compiler(>=6)
+extension TeardownAction: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTeardownAction: FfiConverterRustBuffer {
+    typealias SwiftType = TeardownAction
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TeardownAction {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .sendAndArchive
+        
+        case 2: return .sendOnly
+        
+        case 3: return .skip
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: TeardownAction, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .sendAndArchive:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .sendOnly:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .skip:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTeardownAction_lift(_ buf: RustBuffer) throws -> TeardownAction {
+    return try FfiConverterTypeTeardownAction.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTeardownAction_lower(_ value: TeardownAction) -> RustBuffer {
+    return FfiConverterTypeTeardownAction.lower(value)
+}
+
 
 
 
@@ -6593,6 +7102,31 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeDeliveryTarget: FfiConverterRustBuffer {
+    typealias SwiftType = [DeliveryTarget]
+
+    public static func write(_ value: [DeliveryTarget], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDeliveryTarget.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DeliveryTarget] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DeliveryTarget]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDeliveryTarget.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeOfflineBatchMessage: FfiConverterRustBuffer {
     typealias SwiftType = [OfflineBatchMessage]
 
@@ -6660,6 +7194,81 @@ fileprivate struct FfiConverterSequenceTypeOtpkPair: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeOtpkPair.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeReceivingInitAttempt: FfiConverterRustBuffer {
+    typealias SwiftType = [ReceivingInitAttempt]
+
+    public static func write(_ value: [ReceivingInitAttempt], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeReceivingInitAttempt.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ReceivingInitAttempt] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ReceivingInitAttempt]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeReceivingInitAttempt.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeReceivingInitCarrier: FfiConverterRustBuffer {
+    typealias SwiftType = [ReceivingInitCarrier]
+
+    public static func write(_ value: [ReceivingInitCarrier], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeReceivingInitCarrier.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ReceivingInitCarrier] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ReceivingInitCarrier]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeReceivingInitCarrier.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeTeardownDecision: FfiConverterRustBuffer {
+    typealias SwiftType = [TeardownDecision]
+
+    public static func write(_ value: [TeardownDecision], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeTeardownDecision.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [TeardownDecision] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [TeardownDecision]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeTeardownDecision.read(from: &buf))
         }
         return seq
     }
@@ -7008,6 +7617,23 @@ public func mnemonicToSeed(mnemonic: String)throws  -> [UInt8]  {
 })
 }
 /**
+ * Every device that must receive its own ciphertext of an outgoing message.
+ * The caller owns the account-space facts — whose devices these are, and whether the
+ * recipient is itself — and passes them in; the decision over the sets is made here.
+ * Empty strings mean "unknown"/"none" for `our_device_id` and `primary_send_covered`.
+ */
+public func planSend(recipientDeviceIds: [String], ownDeviceIds: [String], ourDeviceId: String, recipientIsSelf: Bool, primarySendCovered: String) -> [DeliveryTarget]  {
+    return try!  FfiConverterSequenceTypeDeliveryTarget.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_plan_send(
+        FfiConverterSequenceString.lower(recipientDeviceIds),
+        FfiConverterSequenceString.lower(ownDeviceIds),
+        FfiConverterString.lower(ourDeviceId),
+        FfiConverterBool.lower(recipientIsSelf),
+        FfiConverterString.lower(primarySendCovered),$0
+    )
+})
+}
+/**
  * Blind a 32-byte nonce for OPRF token issuance.
  * Returns packed 64 bytes: blinded_point[0..32] || blind_factor[32..64].
  * blinded_point is sent to server; blind_factor is kept secret until finalize().
@@ -7085,6 +7711,19 @@ public func randomSendDelayMs(maxDelayMs: UInt64) -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
     uniffi_construct_core_fn_func_random_send_delay_ms(
         FfiConverterUInt64.lower(maxDelayMs),$0
+    )
+})
+}
+/**
+ * Classify a queued message: can it open a receiving session?
+ * One rule, one implementation — every client asks rather than reimplements. A
+ * `message_number == 0` with an advanced PQ epoch is shaped like an opener and is not one,
+ * which is why this is a named function and not an inline check.
+ */
+public func receivingInitKind(carrier: ReceivingInitCarrier) -> ReceivingInitKind  {
+    return try!  FfiConverterTypeReceivingInitKind_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_receiving_init_kind(
+        FfiConverterTypeReceivingInitCarrier_lower(carrier),$0
     )
 })
 }
@@ -7408,6 +8047,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_mnemonic_to_seed() != 53142) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_plan_send() != 10892) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_pp_blind_token() != 34290) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7424,6 +8066,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_random_send_delay_ms() != 9943) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_receiving_init_kind() != 46602) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_recommended_send_delay_ms() != 24315) {
@@ -7697,6 +8342,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_one_time_prekey_count() != 21478) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_plan_receiving_init() != 11391) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_plan_teardown() != 62343) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_prekeys_available_count() != 33104) {

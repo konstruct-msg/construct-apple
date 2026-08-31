@@ -109,34 +109,48 @@ enum DeviceDeliveryPlan {
         recipientIsSelf: Bool,
         primarySendCovered: String? = nil
     ) -> [DeviceDeliveryTarget] {
-        let replicas: [DeviceDeliveryTarget] = {
-            guard let ourDeviceId, !ourDeviceId.isEmpty else { return [] }
-            return ownDevices
-                .filter { $0.deviceId != ourDeviceId }
-                .map {
-                    DeviceDeliveryTarget(
-                        deviceId: $0.deviceId,
-                        bundle: $0.bundle,
-                        audience: .ownReplica
-                    )
-                }
-        }()
+        // **The decision lives in the core** (`orchestration::send_plan`). This is the translation
+        // around it: the core is handed device id sets and the account-space facts it cannot
+        // derive, and hands back who to send to and as what. See AGENTS.md, "The core decides,
+        // this app executes".
+        let plan = planSend(
+            recipientDeviceIds: recipientDevices.map(\.deviceId),
+            ownDeviceIds: ownDevices.map(\.deviceId),
+            // Empty means "unknown" to the core, which is why the optional collapses here rather
+            // than being answered with a guess: without our own device id no replica copy is
+            // planned at all, and that refusal is the core's, not ours.
+            ourDeviceId: ourDeviceId ?? "",
+            recipientIsSelf: recipientIsSelf,
+            primarySendCovered: primarySendCovered ?? ""
+        )
 
-        guard !recipientIsSelf else { return replicas }
+        // Re-associated **by device id, never by position**. The bundles the caller needs are in
+        // two arrays that the plan filters, so an index into either stops meaning what it meant
+        // the moment anything is dropped — and dropping is this function's entire content. A
+        // device id is `SHA256(identity_public)[0..16]`, so it is unique by construction and this
+        // lookup is exact rather than merely convenient.
+        var bundlesById: [String: PublicKeyBundleData] = [:]
+        for device in recipientDevices + ownDevices {
+            bundlesById[device.deviceId] = device.bundle
+        }
 
-        let theirs = recipientDevices
-            .filter { device in
-                guard let primarySendCovered, !primarySendCovered.isEmpty else { return true }
-                return device.deviceId != primarySendCovered
-            }
-            .map {
-                DeviceDeliveryTarget(
-                    deviceId: $0.deviceId,
-                    bundle: $0.bundle,
-                    audience: .recipient
+        return plan.compactMap { target in
+            guard let bundle = bundlesById[target.deviceId] else {
+                // Unreachable while the caller passes the arrays it derived the ids from. Logged
+                // rather than force-unwrapped because the alternative to a missing bundle is a
+                // crash on the send path, and a skipped copy is recoverable.
+                Log.error(
+                    "DeviceDeliveryPlan: no bundle for planned device \(target.deviceId.prefix(8))… — skipping its copy",
+                    category: "MultiDevice"
                 )
+                return nil
             }
-        return theirs + replicas
+            return DeviceDeliveryTarget(
+                deviceId: target.deviceId,
+                bundle: bundle,
+                audience: target.audience == .ownReplica ? .ownReplica : .recipient
+            )
+        }
     }
 
     /// The wire id one chunk of a copy travels under.

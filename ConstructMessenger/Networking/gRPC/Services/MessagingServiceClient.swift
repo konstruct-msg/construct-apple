@@ -284,13 +284,47 @@ final class MessagingServiceClient: Sendable {
     ///   a one-time prekey (3-DH) instead of looping 4-DH. It is sealed to the peer's identity key
     ///   and padded to a fixed size by `EndSessionPayload`; a peer that cannot read it recovers
     ///   without a hint, which is what every peer did before hints existed.
+    /// Tear down the session with **one device**.
+    ///
+    /// `deviceId` is a `CryptoDeviceId`, and that is the whole point. This used to take whatever
+    /// its caller held — an account id from the router paths, a device id from the core's actions —
+    /// and pass `recipientDeviceId: nil` either way. Both halves were wrong, mirror-image:
+    ///
+    /// - An account id reached **every** device's queue, so a divergence with one device tore down
+    ///   the healthy sessions of its siblings.
+    /// - A device id went into `Envelope.recipient`, a field in the account space, where the server
+    ///   parses a UUID, gets none, and writes the envelope to a stream nothing subscribes to.
+    ///   Accepted, acknowledged, delivered nowhere — the same defect §B.4 closed for the heartbeat
+    ///   (`b29ea419`), left standing on the neighbouring path.
+    ///
+    /// Both were measured on 2026-08-30: 12 sends to a device and 10 to an account, one peer, one
+    /// run. Fanning out over a peer's devices is the caller's job now
+    /// (`SessionAddressing.deviceIds` + the core's `planTeardown`), so this function has exactly one
+    /// recipient and no
+    /// opinion about how many there were.
     func sendEndSession(
-        to recipientId: String,
+        toDevice deviceId: String,
         reason: String? = nil,
         resetReason: Shared_Proto_Messaging_V1_SessionResetReason = .unspecified
     ) async throws -> EndSessionResponse {
         let myUserId = await MainActor.run { AuthSessionManager.shared.currentUserId } ?? ""
         let messageId = UUID().uuidString
+
+        // The account to address and the key to seal to, from one row and one pass. Asked
+        // separately they could come from different contacts, and the envelope would then be
+        // addressed to one person and sealed to another — undeliverable, and undetectable from
+        // either side. Same seam the heartbeat takes, for the same reason.
+        guard let peer = await MainActor.run(resultType: (accountId: String, identityKey: Data)?.self, body: {
+            SessionAddressing.peer(
+                ofDevice: deviceId,
+                in: PersistenceController.shared.container.viewContext
+            )
+        }) else {
+            throw StealthDowngradeBlocked(
+                reason: "no pinned key for device \(deviceId.prefix(8))… — END_SESSION cannot be addressed"
+            )
+        }
+        let recipientId = peer.accountId
 
         // Stealth: seal END_SESSION like a message body — the real content type (.sessionReset)
         // rides inside SealedInner and is recovered on receive, so the outer envelope leaks no
@@ -298,14 +332,11 @@ final class MessagingServiceClient: Sendable {
         // it works during teardown. Fail-closed under stealth-on: never emit an identified
         // END_SESSION (decisions/sealed-sender-session-control-channel.md). If we can't seal, the
         // peer recovers via its own decrypt-fail path — anonymity over an eager teardown signal.
-        func resolveRecipientIK() async -> Data? {
-            await MainActor.run {
-                StealthSenderService.recipientIdentityKey(
-                    recipientId: recipientId,
-                    context: PersistenceController.shared.container.viewContext
-                )
-            }
-        }
+        //
+        // The key is the **target device's**, not the account's pin. Sealing to it is also what
+        // routes the envelope: `buildSealedInner` derives `SealedInner.recipient_device` from the
+        // key it seals to, so "who can open this" and "where does it go" stay one value (§A.0).
+        func resolveRecipientIK() async -> Data? { peer.identityKey }
 
         // Built before the stealth branch, and deliberately: `buildEnvelope` fills
         // `encrypted_payload` *before* it decides whether the send is sealed, so this payload is on
@@ -348,10 +379,19 @@ final class MessagingServiceClient: Sendable {
                     messageId: messageId,
                     recipientId: recipientId,
                     senderId: myUserId,
-                    conversationId: ConversationId.direct(myUserId: myUserId, theirUserId: recipientId),
+                    // Empty on purpose. `direct:<me>:<them>` names the person on the other side in
+                    // the clear, on an envelope whose whole point is that the relay learns nothing
+                    // about the pair — and it used to carry `direct:<account>:<device>` besides,
+                    // both id spaces in one string. It has no reader on the server and is blanked
+                    // on delivery. Same emptying as the fan-out and the heartbeat.
+                    conversationId: "",
                     encryptedPayload: controlPayload,
                     timestamp: UInt64(Date().timeIntervalSince1970),
-                    recipientDeviceId: nil,
+                    // `buildEnvelope` writes this only on the unsealed branch: on the sealed one the
+                    // device rides inside `SealedInner`, because the outer field is visible to the
+                    // relay (`8e390f48`). Passing it here is what makes the DEBUG stealth-off path
+                    // route to one device instead of all of them.
+                    recipientDeviceId: deviceId,
                     contentType: .sessionReset,
                     sealedInnerBytes: inner
                 )

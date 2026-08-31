@@ -120,6 +120,42 @@ theme file is **shared, never copied** — the copy is what killed the last atte
 - **VEIL is not ICE.** VEIL is our obfuscation layer (`Veil*` / `veil_*`, `Networking/gRPC/VEIL/`);
   WebRTC ICE is call NAT traversal (`Services/Calls/`, `Ice*`) and stays named "ICE".
 
+## The core decides, this app executes
+
+**Before writing any session or crypto decision in Swift, open `~/Code/construct-core/src/construct_core.udl`.**
+It is the list of what the core already does, and this app keeps rebuilding entries from it. Already
+exported and already ignored at least once each: `derive_device_id`, `tie_break_role`,
+`get_all_session_contact_ids` (the devices we hold sessions with — half of any per-device plan),
+`get_session_health`, both init paths, `remove_session`.
+
+The test for where something belongs is not "which side has the data at hand" — the client always
+has it at hand, which is how this rule keeps getting broken. It is:
+
+| Question | Answer |
+|---|---|
+| Must two clients compute this **identically** for a message to be readable? | **core** |
+| Does it read or write ratchet/session state? | **core** |
+| Is it "which sessions does this operation touch"? | **core** — a plan is protocol |
+| Is it a mapping to a server-assigned id (account UUID, mailbox, chat row)? | this app |
+| Is it network, Core Data, Keychain, UI? | this app |
+
+A decision reimplemented here does not fail loudly when it diverges from the core or from
+`construct-tui` — it drops a copy, and the message simply does not appear. That is why the rule is
+"ask the core", not "match the core": a comment promising that two implementations agree is a
+comment saying one of them should have been a call to the other
+(`decisions/one-meaning-two-carriers.md`).
+
+**The account space stops at the seam.** The core does not know `ServerUserId` — deliberately.
+So the `account → devices` directory is this app's job, and that is the *only* part of a per-device
+plan that belongs here: translate the account to a set of `CryptoDeviceId`, hand the **set** to the
+core, and let the core decide which of them the operation touches. Building the plan here because we
+did the translation here is exactly the inversion that produced `MultiDeviceSendCoordinator`.
+
+Current known exceptions, with their destination — do not treat them as settled placements:
+`SessionAddressing.teardownTargets` and the responder candidate walk in `PublicKeyBundleHandler` are
+plans living in Swift and belong in the core; `PeerDevice` is a legitimate local store but is not the
+authority on a peer's device set. See `decisions/a-peer-is-a-set-of-devices.md`.
+
 ## Architecture invariants
 
 Before any architectural decision, search the vault:
