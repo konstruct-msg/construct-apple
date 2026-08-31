@@ -25,17 +25,17 @@ struct DesktopRootView: View {
     @Environment(DeepLinkHandler.self) private var deepLinkHandler
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.commandBridge) private var commandBridge
+    @Environment(\.openSettings) private var openSettings
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
     @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showAddContact = false
     @State private var sidebarMode: SidebarMode = .chats
     @State private var callManager = CallManager.shared
     @State private var showReceiveHistorySync = false
     @State private var historySyncPendingDeviceId: String? = nil
 
-    private enum SidebarMode { case chats, synaps }
+    private enum SidebarMode: Hashable { case chats, synaps }
 
     private var orientationCompletedForCurrentUser: Bool {
         OrientationStore.isCompleted(
@@ -114,6 +114,12 @@ struct DesktopRootView: View {
                     await BlindTokenService.shared.bootstrapInitialBatch()
                 }
             }
+
+            if AuthSessionManager.shared.isSessionValid, CryptoManager.shared.isInitialized {
+                Task {
+                    await SessionInitializationService.shared.upgradeAllAtRiskSessionsOnForeground()
+                }
+            }
         }
         .onChange(of: deepLinkHandler.deepLink) { _, newDeepLink in
             handleDeepLink(newDeepLink)
@@ -152,8 +158,8 @@ struct DesktopRootView: View {
     private func wireCommandBridge() {
         commandBridge.onNewConversation = { chatsViewModel.showNewChat = true }
         commandBridge.onAddContact      = { showAddContact = true }
-        commandBridge.onFocusSearch     = { chatsViewModel.sidebarSearchFocused = true }
-        commandBridge.onGlobalSearch    = { chatsViewModel.sidebarSearchFocused = true }
+        commandBridge.onFocusSearch     = { focusSidebarSearch() }
+        commandBridge.onGlobalSearch    = { focusSidebarSearch() }
         commandBridge.onSelectNext      = {
             NotificationCenter.default.post(name: .desktopSelectNextChat, object: nil)
         }
@@ -173,57 +179,48 @@ struct DesktopRootView: View {
             Log.info("Manual message sync (⌘R)", category: "Desktop")
             Task { await BackgroundFetchManager.shared.fetchPendingMessages() }
         }
+        commandBridge.onShowSecurity    = {
+            UserDefaults.standard.set(
+                DesktopSettingsSelection.securitySectionRawValue,
+                forKey: DesktopSettingsSelection.selectedSectionKey
+            )
+            openSettings()
+        }
+    }
+
+    private func focusSidebarSearch() {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            sidebarMode = .chats
+        }
+        chatsViewModel.sidebarSearchFocused = true
     }
 
     // MARK: - Main split view (authenticated)
 
     private var mainContent: some View {
-        let splitView = NavigationSplitView(columnVisibility: $columnVisibility) {
-            // Sidebar: mode toggle + chats list (synaps takes detail pane instead)
-            VStack(spacing: 0) {
-                sidebarModeBar
-                Rectangle().fill(Color.CT.noise).frame(height: 1)
-
-                if sidebarMode == .chats {
-                    DesktopChatsListView()
-                        .environment(chatsViewModel)
-                } else {
-                    // Synaps cloud is in the detail pane — sidebar shows nothing
-                    Color.CT.bg.frame(maxHeight: .infinity)
-                }
-            }
-            .background(Color.CT.bg)
-            .navigationSplitViewColumnWidth(min: 230, ideal: 280, max: 360)
-        } detail: {
-            if sidebarMode == .synaps {
-                DesktopSynapsView(onSwitchToChats: {
-                    withAnimation(.easeInOut(duration: 0.15)) { sidebarMode = .chats }
-                })
-                .environment(chatsViewModel)
-                .environment(\.managedObjectContext, viewContext)
-            } else if let chatId = chatsViewModel.chatToOpen,
-               let chat = fetchChat(id: chatId) {
-                DesktopChatView(chat: chat, context: viewContext)
-                    .ignoresSafeArea(.container, edges: .top) // ensure custom glass nav is flush to the top of the split detail column
-                    .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
-                        handleDrop(providers: providers, into: chat)
-                    }
-            } else {
-                DesktopEmptyStateView()
-                    .onDrop(of: [.fileURL], isTargeted: nil) { _ in false }
-            }
+        let splitView = HSplitView {
+            sidebarPane
+            detailPane
         }
+        .background(Color.CT.bg)
 
         let decorated = splitView
             .frame(minWidth: 700, minHeight: 480)
-            .onChange(of: sidebarMode) { _, mode in
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    columnVisibility = mode == .synaps ? .detailOnly : .all
-                }
-            }
             .onReceive(NotificationCenter.default.publisher(for: .openSynapsTab)) { _ in
                 withAnimation(.easeInOut(duration: 0.15)) {
                     sidebarMode = .synaps
+                }
+            }
+            // Opening a chat is a request to see it, wherever it came from — a row in the people
+            // list, a node in the Synaps cloud, a deep link. Handled here rather than in either
+            // child because both of them do it and neither owns `sidebarMode`; a callback per child
+            // would be the same rule written twice, and the one added second would be the one that
+            // drifted. Only a *change* flips the mode, so entering PEOPLE with a chat still open
+            // from before does not bounce straight back out.
+            .onChange(of: chatsViewModel.chatToOpen) { _, newValue in
+                guard newValue != nil, sidebarMode == .synaps else { return }
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    sidebarMode = .chats
                 }
             }
             // Incoming call banner — bottom-center
@@ -265,6 +262,59 @@ struct DesktopRootView: View {
         return decorated
     }
 
+    /// What fills the pane to the right of the sidebar.
+    ///
+    /// **The detail follows the sidebar mode**, which is the rule the `HSplitView` conversion lost.
+    /// Before it, `.synaps` put `DesktopSynapsView` in the detail column and hid the sidebar
+    /// (`columnVisibility = .detailOnly`); the conversion removed the hiding — which is all that was
+    /// wanted — and, with it, the only reference to `DesktopSynapsView` in the app. The view kept
+    /// compiling, so nothing said so: picking PEOPLE showed a people list beside an empty state, and
+    /// the honeycomb cloud, the profile popovers and **the incoming contact-request section** —
+    /// which exists nowhere else on Desktop — became unreachable.
+    @ViewBuilder
+    private var detailPane: some View {
+        if sidebarMode == .synaps {
+            // No `onSwitchToChats`: that button existed because Synaps used to occupy the whole
+            // window with no other way back. The mode picker in the sidebar is always visible now,
+            // so the button would be a second control for one thing.
+            DesktopSynapsView()
+                .environment(chatsViewModel)
+                .environment(\.managedObjectContext, viewContext)
+        } else if let chatId = chatsViewModel.chatToOpen,
+                  let chat = fetchChat(id: chatId) {
+            DesktopChatView(chat: chat, context: viewContext)
+                .ignoresSafeArea(.container, edges: .top) // ensure custom glass nav is flush to the top of the split detail column
+                .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
+                    handleDrop(providers: providers, into: chat)
+                }
+        } else {
+            DesktopEmptyStateView()
+                .onDrop(of: [.fileURL], isTargeted: nil) { _ in false }
+        }
+    }
+
+    private var sidebarPane: some View {
+        VStack(spacing: 0) {
+            sidebarModeBar
+            Rectangle().fill(Color.CT.noise).frame(height: 1)
+
+            if sidebarMode == .chats {
+                DesktopChatsListView()
+                    .environment(chatsViewModel)
+            } else {
+                DesktopPeopleListView()
+                    .environment(chatsViewModel)
+            }
+        }
+        .background(Color.CT.bg)
+        .frame(minWidth: 230, idealWidth: 280, maxWidth: 360, maxHeight: .infinity)
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(Color.CT.noise)
+                .frame(width: 1)
+        }
+    }
+
     // MARK: - Call state helpers
 
     private var isIncomingState: Bool {
@@ -299,52 +349,27 @@ struct DesktopRootView: View {
         return nil
     }
 
-    // MARK: - Sidebar mode toggle bar
+    // MARK: - Sidebar header
 
     private var sidebarModeBar: some View {
-        HStack(spacing: 0) {
-            sidebarTab(label: "CHATS", mode: .chats)
-            Rectangle().fill(Color.CT.noise).frame(width: 1)
-            sidebarTab(label: "SYNAPSES", mode: .synaps)
-
-            Spacer()
-
-            // QR scan button (add contact via QR)
-            Button {
-                showAddContact = true
-            } label: {
-                Image(systemName: "qrcode.viewfinder")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(Color.CT.textDim)
-                    .padding(.horizontal, 10)
+        GeometryReader { proxy in
+            Picker("", selection: $sidebarMode) {
+                Text(LocalizedStringKey("chats"))
+                    .font(CTFont.medium(12))
+                    .tag(SidebarMode.chats)
+                Text(LocalizedStringKey("people"))
+                    .font(CTFont.medium(12))
+                    .tag(SidebarMode.synaps)
             }
-            .buttonStyle(.plain)
-            .help("Scan QR code to add contact")
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+            .labelsHidden()
+            .frame(width: proxy.size.width)
+            .frame(height: proxy.size.height, alignment: .center)
         }
-        .frame(height: 34)
+        .padding(.horizontal, CTLayout.edgePad)
+        .frame(height: CTLayout.navBarHeight)
         .background(Color.CT.bg)
-    }
-
-    private func sidebarTab(label: String, mode: SidebarMode) -> some View {
-        let isActive = sidebarMode == mode
-        return Button {
-            withAnimation(.easeInOut(duration: 0.15)) { sidebarMode = mode }
-        } label: {
-            VStack(spacing: 0) {
-                Text(label)
-                    .font(CTFont.bold(10))
-                    .tracking(3)
-                    .foregroundStyle(isActive ? Color.CT.accent : Color.CT.textDim)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 33)
-                // Active underline
-                Rectangle()
-                    .fill(isActive ? Color.CT.accent : Color.clear)
-                    .frame(height: 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Drag & Drop into chat
