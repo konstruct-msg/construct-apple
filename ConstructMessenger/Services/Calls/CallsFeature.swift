@@ -1,9 +1,14 @@
 import Foundation
 
 enum CallsFeature {
-    /// Audio calls — fully implemented.
+    /// Audio calls — implemented for iOS; Desktop entry points stay disabled while the
+    /// protocol is being stabilized.
     static var isEnabled: Bool {
+        #if os(macOS)
+        false
+        #else
         !PreviewDetector.isRunningInPreview
+        #endif
     }
 
     /// Video calls — wiring is in place across the call-entrypoint UI and
