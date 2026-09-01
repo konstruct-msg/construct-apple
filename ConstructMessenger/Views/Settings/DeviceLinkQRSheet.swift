@@ -11,6 +11,25 @@ import CoreImage.CIFilterBuiltins
 
 struct DeviceLinkQRSheet: View {
 
+    private enum HistorySyncSenderSheet: Identifiable {
+        case send
+        case skip
+
+        var id: String {
+            switch self {
+            case .send: return "send"
+            case .skip: return "skip"
+            }
+        }
+
+        var mode: SendBackupNearbyView.Mode {
+            switch self {
+            case .send: return .historySync
+            case .skip: return .historySyncSkip
+            }
+        }
+    }
+
     @Environment(\.dismiss) private var dismiss
 
     @State private var vm = DeviceLinkViewModel()
@@ -22,7 +41,7 @@ struct DeviceLinkQRSheet: View {
     @State private var baselineDeviceIds: Set<String> = []
     @State private var newlyLinkedDeviceId: String? = nil
     @State private var showHistorySyncOffer = false
-    @State private var showSendHistorySync = false
+    @State private var activeHistorySyncSender: HistorySyncSenderSheet? = nil
     @State private var linkPollTask: Task<Void, Never>? = nil
 
     var body: some View {
@@ -66,17 +85,21 @@ struct DeviceLinkQRSheet: View {
         ) {
             Button(NSLocalizedString("history_sync_send_offer_yes", comment: "")) {
                 showHistorySyncOffer = false
-                showSendHistorySync = true
+                activeHistorySyncSender = .send
             }
             Button(NSLocalizedString("history_sync_send_offer_skip", comment: ""), role: .cancel) {
                 showHistorySyncOffer = false
-                dismiss()
+                if historySyncPIN != nil {
+                    activeHistorySyncSender = .skip
+                } else {
+                    dismiss()
+                }
             }
         } message: {
             Text(NSLocalizedString("history_sync_send_offer_message", comment: ""))
         }
-        .sheet(isPresented: $showSendHistorySync) {
-            SendBackupNearbyView(mode: .historySync, autoPairingPIN: historySyncPIN)
+        .sheet(item: $activeHistorySyncSender) { sheet in
+            SendBackupNearbyView(mode: sheet.mode, autoPairingPIN: historySyncPIN)
                 .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                 .onDisappear { dismiss() }
         }
@@ -103,7 +126,11 @@ struct DeviceLinkQRSheet: View {
                 guard let devices = try? await AuthServiceClient.shared.listDevices() else { continue }
                 if let fresh = devices.first(where: { !$0.isCurrent && !baselineDeviceIds.contains($0.id) }) {
                     newlyLinkedDeviceId = fresh.id
-                    showHistorySyncOffer = true
+                    if DeviceLinkHistorySyncPolicy.isPostLinkEnabled {
+                        showHistorySyncOffer = true
+                    } else {
+                        dismiss()
+                    }
                     return
                 }
             }

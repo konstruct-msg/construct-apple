@@ -238,6 +238,15 @@ struct ReceiveBackupNearbyView: View {
     // MARK: - Logic
 
     private func handleReceiveComplete() {
+        let disposition = NearbyReceiveCompletionDisposition.decide(
+            isHistorySyncMode: mode == .historySync,
+            transferType: service.receivedType
+        )
+        if disposition == .finishWithoutHistory {
+            service.receivedPayload = nil
+            dismiss()
+            return
+        }
         guard let payload = service.receivedPayload else { return }
         isStaging = true
         Task {

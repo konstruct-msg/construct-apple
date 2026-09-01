@@ -115,6 +115,31 @@ final class TokenUtilsTests: XCTestCase {
         XCTAssertNil(TokenUtils.extractUserId(from: "v4.public.\(payloadB64)"))
     }
 
+    // MARK: - extractIssuedAt
+
+    func testExtractIssuedAt_Paseto() {
+        XCTAssertEqual(TokenUtils.extractIssuedAt(from: pasetoToken), 1_700_000_000)
+    }
+
+    func testExtractIssuedAt_JWT() {
+        XCTAssertEqual(TokenUtils.extractIssuedAt(from: jwtToken), 1_700_000_000)
+    }
+
+    func testExtractIssuedAt_Unknown() {
+        XCTAssertNil(TokenUtils.extractIssuedAt(from: "garbage"))
+    }
+
+    func testDeviceLinkCheckpointCursorUsesTokenIssuedAt() {
+        XCTAssertEqual(
+            DeviceLinkStreamCursorPolicy.checkpointCursor(accessToken: pasetoToken),
+            "1700000000000-0"
+        )
+    }
+
+    func testDeviceLinkCheckpointCursorRejectsInvalidIssuedAt() {
+        XCTAssertNil(DeviceLinkStreamCursorPolicy.checkpointCursor(issuedAtSeconds: 0))
+    }
+
     // MARK: - JWT alg guard (migration compatibility)
 
     func test_JWT_RS256_accepted() {

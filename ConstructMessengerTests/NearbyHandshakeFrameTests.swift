@@ -96,6 +96,33 @@ final class NearbyHandshakeFrameTests: XCTestCase {
         XCTAssertEqual(frame.payloadLength, 987_654)
     }
 
+    func testHistorySyncSkipFrameParsesAsControlTransfer() throws {
+        let frame = try Frame.parse(makeFrame(type: 0x03, payloadLength: 0))
+
+        XCTAssertEqual(frame.type, .historySyncSkipped)
+        XCTAssertEqual(frame.payloadLength, 0)
+    }
+
+    func testHistorySyncSkipFromPhoneFinishesReceiverWithoutStagingPayload() {
+        XCTAssertEqual(
+            NearbyReceiveCompletionDisposition.decide(
+                isHistorySyncMode: true,
+                transferType: .historySyncSkipped
+            ),
+            .finishWithoutHistory
+        )
+    }
+
+    func testHistorySyncSkipControlDoesNotBypassManualBackupImportValidation() {
+        XCTAssertEqual(
+            NearbyReceiveCompletionDisposition.decide(
+                isHistorySyncMode: false,
+                transferType: .historySyncSkipped
+            ),
+            .stagePayload
+        )
+    }
+
     func testZeroLengthPayloadIsAccepted() throws {
         XCTAssertEqual(try Frame.parse(makeFrame(payloadLength: 0)).payloadLength, 0)
     }

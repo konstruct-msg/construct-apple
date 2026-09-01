@@ -16,14 +16,33 @@ import SwiftUI
 #if os(iOS)
 struct DeviceLinkScanView: View {
 
+    private enum HistorySyncSenderSheet: Identifiable {
+        case send
+        case skip
+
+        var id: String {
+            switch self {
+            case .send: return "send"
+            case .skip: return "skip"
+            }
+        }
+
+        var mode: SendBackupNearbyView.Mode {
+            switch self {
+            case .send: return .historySync
+            case .skip: return .historySyncSkip
+            }
+        }
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(AuthViewModel.self) private var authViewModel
 
     @State private var vm = DeviceLinkViewModel()
     @State private var showError = false
     @State private var showReceiveHistorySync = false
-    @State private var showSendHistorySync = false
     @State private var showHistorySyncOffer = false
+    @State private var activeHistorySyncSender: HistorySyncSenderSheet? = nil
     @State private var historySyncPIN: String? = nil
     /// Receiver-side auto PIN (derived from our own new device id) so history sync auto-connects.
     @State private var receiveHistorySyncPIN: String? = nil
@@ -94,11 +113,16 @@ struct DeviceLinkScanView: View {
         ) {
             Button(LocalizedStringKey("history_sync_send_offer_yes")) {
                 showHistorySyncOffer = false
-                showSendHistorySync = true
+                activeHistorySyncSender = .send
             }
             Button(LocalizedStringKey("history_sync_send_offer_skip"), role: .cancel) {
                 showHistorySyncOffer = false
-                dismiss()
+                if historySyncPIN != nil {
+                    activeHistorySyncSender = .skip
+                } else {
+                    authViewModel.clearDeviceLinkPhase()
+                    dismiss()
+                }
             }
         } message: {
             Text(LocalizedStringKey("history_sync_send_offer_message"))
@@ -113,6 +137,11 @@ struct DeviceLinkScanView: View {
             guard let outcome else { return }
             Task {
                 await authViewModel.completeDeviceLink(outcome)
+                guard DeviceLinkHistorySyncPolicy.isPostLinkEnabled else {
+                    dismiss()
+                    return
+                }
+
                 switch outcome.role {
                 case .linkedNewDevice:
                     receiveHistorySyncPIN = HistorySyncPairing.pin(
@@ -140,8 +169,8 @@ struct DeviceLinkScanView: View {
                     dismiss()
                 }
         }
-        .sheet(isPresented: $showSendHistorySync) {
-            SendBackupNearbyView(mode: .historySync, autoPairingPIN: historySyncPIN)
+        .sheet(item: $activeHistorySyncSender) { sheet in
+            SendBackupNearbyView(mode: sheet.mode, autoPairingPIN: historySyncPIN)
                 .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                 .onDisappear {
                     authViewModel.clearDeviceLinkPhase()
