@@ -35,23 +35,23 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         var endSessionStaleQueries: [String] = []
         var endSessionRequests: [String] = []
 
-        func messageRouter(_ router: MessageRouter, needsPublicKeyBundle userId: String, for message: ChatMessage) {}
-        func messageRouter(_ router: MessageRouter, needsEndSession userId: String) {
-            endSessionRequests.append(userId)
+        func messageRouter(_ router: MessageRouter, needsPublicKeyBundle peer: PeerAddress, for message: ChatMessage) {}
+        func messageRouter(_ router: MessageRouter, needsEndSession peer: PeerAddress) {
+            endSessionRequests.append(peer.account)
         }
-        func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64) {}
-        func messageRouter(_ router: MessageRouter, isEndSessionStale userId: String, timestamp: UInt64) -> Bool {
-            endSessionStaleQueries.append(userId)
+        func messageRouter(_ router: MessageRouter, receivedEndSession peer: PeerAddress, timestamp: UInt64) {}
+        func messageRouter(_ router: MessageRouter, isEndSessionStale peer: PeerAddress, timestamp: UInt64) -> Bool {
+            endSessionStaleQueries.append(peer.account)
             return true   // short-circuit: classification is what we assert
         }
-        func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64, initEphemeral: Data) -> Bool {
-            resetInitSupersededQueries.append(userId)
+        func messageRouter(_ router: MessageRouter, isResetInitSuperseded peer: PeerAddress, timestamp: UInt64, initEphemeral: Data) -> Bool {
+            resetInitSupersededQueries.append(peer.account)
             return true   // short-circuit
         }
-        func messageRouter(_ router: MessageRouter, didWinTieBreak userId: String) {}
-        func messageRouter(_ router: MessageRouter, needsSessionHeal userId: String, failedMessage: ChatMessage) {}
+        func messageRouter(_ router: MessageRouter, didWinTieBreak peer: PeerAddress) {}
+        func messageRouter(_ router: MessageRouter, needsSessionHeal peer: PeerAddress, failedMessage: ChatMessage) {}
         func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {}
-        func messageRouter(_ router: MessageRouter, needsUsernameUpdate userId: String) {}
+        func messageRouter(_ router: MessageRouter, needsUsernameUpdate peer: PeerAddress) {}
     }
 
     private var context: NSManagedObjectContext!

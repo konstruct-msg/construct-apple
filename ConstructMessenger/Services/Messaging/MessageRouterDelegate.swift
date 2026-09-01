@@ -12,22 +12,29 @@ import CoreData
 
 /// Receives session and delivery events emitted by `MessageRouter` during
 /// incoming message processing. All methods are called on `@MainActor`.
+///
+/// Every peer is named by `PeerAddress`, never by a bare id. The events on this protocol come
+/// from two sources in two identity spaces — the envelope names an account, a Rust orchestrator
+/// action names a device — and while both were `String` under the label `userId` the conformer
+/// had no way to tell which it had been handed. It did not: `needsEndSession` reached a bundle
+/// fetch that asks the server for an *account*, with a device id in it, on every path the core
+/// originated. See `PeerAddress` for the log of that failure.
 @MainActor
 protocol MessageRouterDelegate: AnyObject {
 
     // MARK: - Session control
 
     /// The Rust orchestrator detected a session divergence and wants us to send END_SESSION.
-    func messageRouter(_ router: MessageRouter, needsEndSession userId: String)
+    func messageRouter(_ router: MessageRouter, needsEndSession peer: PeerAddress)
 
     /// An END_SESSION message was successfully received and the session archived.
-    func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64)
+    func messageRouter(_ router: MessageRouter, receivedEndSession peer: PeerAddress, timestamp: UInt64)
 
-    /// Return `true` when an END_SESSION from `userId` carrying `timestamp` is stale
+    /// Return `true` when an END_SESSION from `peer` carrying `timestamp` is stale
     /// (pre-dates the currently established session) and should be silently discarded.
-    func messageRouter(_ router: MessageRouter, isEndSessionStale userId: String, timestamp: UInt64) -> Bool
+    func messageRouter(_ router: MessageRouter, isEndSessionStale peer: PeerAddress, timestamp: UInt64) -> Bool
 
-    /// Return `true` when a SESSION_RESET_INIT from `userId` is *superseded* — either we have
+    /// Return `true` when a SESSION_RESET_INIT from `peer` is *superseded* — either we have
     /// already applied this exact init (identified by `initEphemeral`, its X3DH ephemeral public
     /// key), or it pre-dates the current session's establishment (a server backlog replay). Such an
     /// init is coalesced, ACK-only. A live init returns `false` and MUST be applied, even while a
@@ -38,7 +45,7 @@ protocol MessageRouterDelegate: AnyObject {
     /// could not tell them apart. See `SessionReducer.isResetInitSuperseded`.
     func messageRouter(
         _ router: MessageRouter,
-        isResetInitSuperseded userId: String,
+        isResetInitSuperseded peer: PeerAddress,
         timestamp: UInt64,
         initEphemeral: Data
     ) -> Bool
@@ -47,15 +54,15 @@ protocol MessageRouterDelegate: AnyObject {
 
     /// No DR session exists yet — the caller must fetch the sender's public-key bundle
     /// and call `initReceivingSession`, then replay `message`.
-    func messageRouter(_ router: MessageRouter, needsPublicKeyBundle userId: String, for message: ChatMessage)
+    func messageRouter(_ router: MessageRouter, needsPublicKeyBundle peer: PeerAddress, for message: ChatMessage)
 
     /// A tie-break was resolved in our favour — we are the INITIATOR.
-    func messageRouter(_ router: MessageRouter, didWinTieBreak userId: String)
+    func messageRouter(_ router: MessageRouter, didWinTieBreak peer: PeerAddress)
 
     // MARK: - Session healing
 
     /// Session decrypt failed with `messageNumber == 0` — healing should be attempted.
-    func messageRouter(_ router: MessageRouter, needsSessionHeal userId: String, failedMessage: ChatMessage)
+    func messageRouter(_ router: MessageRouter, needsSessionHeal peer: PeerAddress, failedMessage: ChatMessage)
 
     // MARK: - Delivery
 
@@ -70,5 +77,5 @@ protocol MessageRouterDelegate: AnyObject {
     // MARK: - Contact metadata
 
     /// The contact's stored username looks like a UUID placeholder; a fresh bundle fetch is needed.
-    func messageRouter(_ router: MessageRouter, needsUsernameUpdate userId: String)
+    func messageRouter(_ router: MessageRouter, needsUsernameUpdate peer: PeerAddress)
 }

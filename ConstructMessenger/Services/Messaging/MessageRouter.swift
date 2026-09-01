@@ -546,7 +546,7 @@ final class MessageRouter {
             // strands the RESPONDER on a dead ratchet → END_SESSION storm (2026-07-26 desync).
             if delegate?.messageRouter(
                 self,
-                isResetInitSuperseded: otherUserId,
+                isResetInitSuperseded: .account(otherUserId),
                 timestamp: message.timestamp,
                 initEphemeral: message.ephemeralPublicKey
             ) == true {
@@ -716,7 +716,9 @@ final class MessageRouter {
         }
         guard CryptoManager.shared.orchestratorCore != nil else {
             Log.error("OrchestratorCore still nil after reload — requesting END_SESSION from \(otherUserId.prefix(8))…", category: "MessageRouter")
-            delegate?.messageRouter(self, needsEndSession: otherUserId)
+            // No device is named on purpose: the core never loaded, so nothing has told us which
+            // of the peer's sessions this is about. The teardown plan takes the whole peer.
+            delegate?.messageRouter(self, needsEndSession: .account(otherUserId))
             if isNewChat { context.delete(chat) }
             // Transient (Keychain locked / core not loaded): don't advance — let the server
             // re-deliver after the core recovers rather than acking an unprocessed message.
@@ -757,7 +759,9 @@ final class MessageRouter {
                 // Core Data validation errors). The failed receipt + END_SESSION handle recovery
                 // on the live stream.
                 PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-                delegate?.messageRouter(self, needsEndSession: otherUserId)
+                // `candidate` is the device whose session refused the event, and the refusal was
+                // the core's, not this session's — so the teardown is about the peer, not it.
+                delegate?.messageRouter(self, needsEndSession: .account(otherUserId))
                 if isNewChat { context.delete(chat) }
                 return
             }
@@ -888,9 +892,12 @@ final class MessageRouter {
             // case must be handled here before the loop falls through to "no routing decision".
             _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
             return
-        case .sessionHealNeeded(_, let role):
+        case .sessionHealNeeded(let divergedDevice, let role):
             // Named by device by the core; healing, the confirmation tracker and everything else
-            // below are keyed by account, which is what this function was called with.
+            // below are keyed by account, which is what this function was called with. Both
+            // halves travel from here on, so the tie-break and the session suite id — which are
+            // device-keyed and were being asked in the account space — can be asked correctly.
+            let peer = PeerAddress(account: otherUserId, device: divergedDevice)
             let contactId = otherUserId
             // Same window, same reasoning as `.sendEndSession` below, and until 2026-08-21 this
             // branch did not ask: healing as RESPONDER runs `archiveSession(.manualReset)`, so
@@ -907,12 +914,23 @@ final class MessageRouter {
                 if isNewChat { context.delete(chat) }
                 return
             }
-            handleRustHealDecision(role: role, contactId: contactId, message: message, in: context)
+            handleRustHealDecision(role: role, peer: peer, message: message, in: context)
             if isNewChat { context.delete(chat) }
             // Queued for heal — hold the cursor until heal drains (success) or clears (give-up).
             streamOutcome = .deferred
             return
-        case .sendEndSession(let contactId):
+        case .sendEndSession(let divergedDevice):
+            // Named by device by the core — `divergedDevice` is the session that could not open
+            // this message. Everything below is keyed by account (the confirmation tracker, the
+            // pending queue, the healing queue, the ACK store), so it takes `otherUserId`; only
+            // the teardown itself is about the device, and it travels named on the address.
+            //
+            // Until 2026-09-01 one variable called `contactId` carried the device id into all of
+            // them. `removePendingMessages` and `clearQueue` then looked up a key nothing files
+            // under and cleared nothing, `isPending` asked about a peer that never had a gate,
+            // and the delegate call at the end took the device id all the way to a bundle fetch
+            // that asks the server for an account. See `PeerAddress`.
+            let peer = PeerAddress(account: otherUserId, device: divergedDevice)
             // While our own SESSION_RESET_INIT is still unacked we are the side that replaced
             // the session; the peer is necessarily behind. A decrypt failure here is the
             // expected consequence of our own re-init, not evidence that the ratchet diverged,
@@ -923,29 +941,38 @@ final class MessageRouter {
             // or watchdog give-up) resolves it, and a genuine divergence still tears down then,
             // one confirm window later.
             if case .hold = SessionReducer.confirmGateAction(
-                isPending: SessionConfirmationTracker.shared.isPending(contactId),
+                isPending: SessionConfirmationTracker.shared.isPending(peer.account),
                 isControlCarrier: message.isEndSession || message.isSessionResetInit
             ) {
-                Log.info("SESSION_STATE[end_session_deferred]: decrypt failed for \(contactId.prefix(8))… while our SESSION_RESET_INIT is unacked — holding, not tearing down", category: "SessionInit")
-                streamOutcome = holdUntilConfirmResolves(message, from: contactId, reason: "dr_fail_pending_confirm")
+                Log.info("SESSION_STATE[end_session_deferred]: decrypt failed for \(peer) while our SESSION_RESET_INIT is unacked — holding, not tearing down", category: "SessionInit")
+                streamOutcome = holdUntilConfirmResolves(message, from: peer.account, reason: "dr_fail_pending_confirm")
                 if isNewChat { context.delete(chat) }
                 return
             }
-            Log.info("SESSION_STATE[rust_end_session]: DR diverged for \(contactId.prefix(8))… — sending END_SESSION", category: "SessionInit")
+            Log.info("SESSION_STATE[rust_end_session]: DR diverged for \(peer) — sending END_SESSION", category: "SessionInit")
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "rust_end_session")
             // Give-up: resolve each discarded message's watermark as it goes. Bare `remove`
             // left held messages deferred forever, pinning the device cursor behind messages
             // nothing would ever revisit — invisible while the queue only ever held inits.
-            removePendingMessages(for: contactId)
-            SessionHealingService.shared.clearQueue(for: contactId, in: context)
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            delegate?.messageRouter(self, needsEndSession: contactId)
+            removePendingMessages(for: peer.account)
+            SessionHealingService.shared.clearQueue(for: peer.account, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: peer.account, in: context)
+            delegate?.messageRouter(self, needsEndSession: peer)
             if isNewChat { context.delete(chat) }
             return
-        case .fetchPublicKeyBundle(let userId):
-            Log.info("SESSION_STATE[rust_session_lost]: re-queuing \(message.id.prefix(8))… for \(userId.prefix(8))…", category: "SessionInit")
-            pendingQueue.enqueue(message, for: userId)
-            delegate?.messageRouter(self, needsPublicKeyBundle: userId, for: message)
+        case .fetchPublicKeyBundle(let lostDevice):
+            // Same split as `.sendEndSession` above. `pendingQueue` is drained by account
+            // (`drainPendingQueue(for:)`, `handleFirstMessage` and `handleEndSession` all file
+            // and count under `otherUserId`), so filing under the core's device id here put the
+            // message somewhere nothing would ever look for it — deferred, holding the cursor,
+            // until the queue's own TTL dropped it.
+            Log.info("SESSION_STATE[rust_session_lost]: re-queuing \(message.id.prefix(8))… for \(PeerAddress(account: otherUserId, device: lostDevice))", category: "SessionInit")
+            pendingQueue.enqueue(message, for: otherUserId)
+            delegate?.messageRouter(
+                self,
+                needsPublicKeyBundle: PeerAddress(account: otherUserId, device: lostDevice),
+                for: message
+            )
             // Re-queued for session re-establishment — hold the cursor until drained/cleared.
             streamOutcome = .deferred
             return
@@ -1754,7 +1781,7 @@ final class MessageRouter {
                     toUserId: userId,
                     in: context
                 )
-                delegate?.messageRouter(self, needsEndSession: userId)
+                delegate?.messageRouter(self, needsEndSession: .account(userId))
             }
             if isNewChat { context.delete(chat) }
             // Give-up: message is marked processed + sender asked to restart; nothing to drain,
@@ -1802,7 +1829,7 @@ final class MessageRouter {
         }
 
         if isFirstForUser {
-            delegate?.messageRouter(self, needsPublicKeyBundle: userId, for: message)
+            delegate?.messageRouter(self, needsPublicKeyBundle: .account(userId), for: message)
         }
 
         // Queued for session init — hold the resume cursor until this message is drained
@@ -1822,11 +1849,17 @@ final class MessageRouter {
     ///   can establish a fresh one, then trigger the RESPONDER heal path.
     private func handleRustHealDecision(
         role: String,
-        contactId: String,
+        peer: PeerAddress,
         message: ChatMessage,
         in context: NSManagedObjectContext
     ) {
-        let suiteId = Int(KeychainManager.shared.loadSessionSuiteId(userId: contactId) ?? 0)
+        // Device-keyed, because that is the space it is *written* in: every
+        // `saveSessionSuiteId` call site passes the `contactId` it just handed
+        // `core.initSession`. Read by account, it missed every time and reported 0 — which is
+        // why `suiteId=0` stands beside `negotiated=3` in every log this line appears in.
+        let suiteId = Int(peer.deviceOrPinned().flatMap {
+            KeychainManager.shared.loadSessionSuiteId(userId: $0)
+        } ?? 0)
 
         // The pair the core actually ranked. These lines used to print the signed-in account id
         // against `contactId`, with a `>` or `<` between them — a restatement of the rule in the
@@ -1835,29 +1868,33 @@ final class MessageRouter {
         // decision, in the log someone reads precisely when they are chasing a deadlock.
         // Stand run 2026-08-26 printed it that way on a pair where both spaces happened to agree.
         let mine = SessionAddressing.localIdentity()
-        let theirs = SessionAddressing.contactId(forPeer: contactId) ?? "unnameable"
+        let theirs = peer.deviceOrPinned() ?? "unnameable"
         let ranked = "\(mine.prefix(8))… vs \(theirs.prefix(8))…"
 
         if role == "Initiator" {
             // We are INITIATOR (higher device id — see SessionAddressing.role) — WE WIN the tie-break.
             // The Rust session is already intact thanks to the DR snapshot/rollback.
             Log.info("SESSION_STATE[tie_break_win]: kept INITIATOR (core ranked \(ranked)), suiteId=\(suiteId)", category: "SessionInit")
-            PersistentACKStore.shared.markProcessed(message.id, senderId: contactId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: peer.account, in: context)
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "tie_break_win")
-            delegate?.messageRouter(self, didWinTieBreak: contactId)
+            delegate?.messageRouter(self, didWinTieBreak: peer)
         } else {
             // We are RESPONDER (lower deviceId) — peer WINS. Archive our session and heal.
             guard SessionHealingService.shared.canHeal(message) else {
-                Log.error("SESSION_STATE[heal_limit_exceeded]: too many heal attempts for \(contactId.prefix(8))… — sending END_SESSION", category: "SessionInit")
+                Log.error("SESSION_STATE[heal_limit_exceeded]: too many heal attempts for \(peer) — sending END_SESSION", category: "SessionInit")
                 PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "heal_limit_exceeded")
-                delegate?.messageRouter(self, needsEndSession: contactId)
+                delegate?.messageRouter(self, needsEndSession: peer)
                 return
             }
             Log.info("SESSION_STATE[heal_triggered]: becoming RESPONDER (core ranked \(ranked)), suiteId=\(suiteId)", category: "SessionInit")
-            CryptoManager.shared.archiveSession(for: contactId, reason: .manualReset)
+            // The desynchronised session is the one the core just named. Archiving by account
+            // resolves through `contactId(forPeer:)` to the peer's *pinned* device, which on a
+            // multi-device peer is not necessarily this one — so it put away a healthy session
+            // and left the broken one in place.
+            CryptoManager.shared.archiveSession(for: peer.deviceOrPinned() ?? peer.account, reason: .manualReset)
             SessionHealingService.shared.enqueue(message, in: context)
-            pendingQueue.enqueue(message, for: contactId)
-            delegate?.messageRouter(self, needsSessionHeal: contactId, failedMessage: message)
+            pendingQueue.enqueue(message, for: peer.account)
+            delegate?.messageRouter(self, needsSessionHeal: peer, failedMessage: message)
         }
     }
 
@@ -1874,7 +1911,7 @@ final class MessageRouter {
         
         if usernameIsGuid || displayNameIsGuid {
             Log.info("Username for \(userId) is still UUID, requesting update", category: "MessageRouter")
-            delegate?.messageRouter(self, needsUsernameUpdate: userId)
+            delegate?.messageRouter(self, needsUsernameUpdate: .account(userId))
         }
     }
     
@@ -2068,7 +2105,7 @@ final class MessageRouter {
         // predates our current active session, it was queued from a previous session
         // cycle and re-delivered by the server. ACK it (already done) and stop here —
         // tearing down a healthy session based on a stale END_SESSION causes cascades.
-        if delegate?.messageRouter(self, isEndSessionStale: userId, timestamp: messageTimestamp) == true {
+        if delegate?.messageRouter(self, isEndSessionStale: .account(userId), timestamp: messageTimestamp) == true {
             Log.info("Discarding stale END_SESSION from \(userId.prefix(8))… (ts=\(messageTimestamp))", category: "MessageRouter")
             return
         }
@@ -2125,7 +2162,7 @@ final class MessageRouter {
         SessionHealingService.shared.clearQueue(for: userId, in: context)
 
         // 4. Notify coordinator so the natural INITIATOR can prewarm immediately.
-        delegate?.messageRouter(self, receivedEndSession: userId, timestamp: messageTimestamp)
+        delegate?.messageRouter(self, receivedEndSession: .account(userId), timestamp: messageTimestamp)
 
         Log.info("END_SESSION handled for \(userId)", category: "MessageRouter")
     }
