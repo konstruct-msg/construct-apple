@@ -278,6 +278,26 @@ enum MetricEvent: String {
     /// than device choice is wrong, because every session we hold was tried.
     case decryptDeviceWalk = "decrypt_device_walk"
 
+    /// A sealed envelope that names one of our **other** devices, dropped without an unseal
+    /// attempt.
+    ///
+    /// Expected, not a fault, and that is the whole reason it is counted apart. While
+    /// `MSG_MAILBOX_USER_WRITE=1` the relay still writes every message to the account-wide stream
+    /// as well as the per-device one, so each device receives its siblings' copies. Those are
+    /// sealed to a key it does not have and can never open.
+    ///
+    /// Until 2026-09-01 they went down the failure path: deferred for a redelivery that cannot
+    /// succeed, holding the stream cursor for the round trip, triggering a bundle-key refresh, and
+    /// counting against `stealth_unseal_failure` — a release-gate number. On a multi-device account
+    /// that is one per message per sibling, which is the 155-of-155 shape the Desktop investigation
+    /// began with.
+    ///
+    /// Its value is the measure of that duplication, so it is also the gauge for the mailbox
+    /// cutover: after `MSG_MAILBOX_USER_WRITE=0` this should fall to zero on its own, because the
+    /// copies stop being delivered here at all. A non-zero count after the flip means the account
+    /// stream is still being read.
+    case stealthCopyForSibling = "stealth_copy_for_sibling"
+
     /// The fast-UDP transport (engine-QUIC / native H3) was suppressed on this network because it
     /// failed to carry data. `label` = the ladder rung just armed (`rung1` 5min · `rung2` 1h ·
     /// `rung3` 24h), which is the gauge for "how permanently is QUIC blocked where this user is".

@@ -303,6 +303,39 @@ final class StealthSenderService: SealedSenderResolving {
     /// hand, so the caller delivers the message `.unvouched` through the normal ratchet
     /// decrypt (which is the real authentication) instead of dropping it. The
     /// certificate is anti-abuse/anonymity metadata, not the security root.
+    /// Whether this sealed copy is addressed to one of our **other** devices.
+    ///
+    /// `SealedInner.recipient_device` is plaintext by design — the field exists so the relay can
+    /// write the copy to one mailbox instead of all of them — and until now nothing read it back.
+    /// The sender has populated it since §A.0; this is the missing consumer.
+    ///
+    /// It matters because the alternative is not a wasted parse. While `MSG_MAILBOX_USER_WRITE=1`
+    /// every device of an account still receives the whole account stream, so each sibling's copy
+    /// lands here, fails to unseal — it is sealed to a key we do not have — and is then treated as
+    /// a *broken* message: deferred for a redelivery that cannot succeed, holding the stream cursor
+    /// for the round trip, triggering a bundle-key refresh, and counting against
+    /// `stealth_unseal_failure`, which is one of the numbers the release gate reads. On a
+    /// multi-device account that is every message to every sibling. It is the 155-of-155 shape the
+    /// Desktop investigation started from.
+    ///
+    /// **Empty is not a mismatch.** An empty `recipient_device` means the sender predates the
+    /// field, and an empty local identity means the Keychain is unreadable. Either way we cannot
+    /// tell, and the honest answer is "no" — the ordinary path then reports the failure as it
+    /// always did. Only a device id that is present, ours is present, and the two differ, is a
+    /// copy we can be sure was never meant for us.
+    ///
+    /// A parse failure is likewise not a mismatch: a `SealedInner` we cannot read is exactly the
+    /// corruption the normal path exists to report.
+    /// `nonisolated`: it reads two arguments and no actor state, and the receive path that
+    /// calls it has no reason to be pinned to the main actor for a plaintext field comparison.
+    nonisolated static func addressedToAnotherDevice(sealedInnerBytes: Data, ourDeviceId: String) -> Bool {
+        guard !ourDeviceId.isEmpty,
+              let inner = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInnerBytes),
+              !inner.recipientDevice.isEmpty
+        else { return false }
+        return inner.recipientDevice != ourDeviceId
+    }
+
     func resolveSender(sealedInnerBytes: Data) -> ResolvedSender? {
         guard let ourPrivKeyBytes = KeychainManager.shared.loadDeviceIdentityKey() else {
             Log.error("Stealth: no identity key in Keychain", category: "Stealth")

@@ -354,6 +354,22 @@ final class MessageRouter {
         // `from` is empty for ConstructSEALED messages — decrypt to recover sender ID.
         var message = message
         if message.from.isEmpty && !message.sealedInnerData.isEmpty {
+            // A copy sealed to one of our other devices is not a failure and must not be treated
+            // as one: it can never open here, so deferring it spends a redelivery and a stream
+            // cursor round-trip on a certainty, and counting it hides real unseal failures inside
+            // the expected ones. Checked before the attempt because the attempt is what costs.
+            if StealthSenderService.addressedToAnotherDevice(
+                sealedInnerBytes: message.sealedInnerData,
+                ourDeviceId: SessionAddressing.localIdentity()
+            ) {
+                Log.debug(
+                    "STEALTH: \(message.id.prefix(8))… is sealed to another of our devices — dropping, not ours to open",
+                    category: "MessageRouter"
+                )
+                PerformanceMetrics.shared.record(.stealthCopyForSibling, label: "routeIncomingMessage")
+                streamOutcome = .durable
+                return
+            }
             guard let resolved = sealedSenderResolver.resolveSender(sealedInnerBytes: message.sealedInnerData) else {
                 // Unseal itself failed — no sender/payload recoverable (sealed-sender-resilience
                 // lever A: this is the ONLY sealed drop). Give it one redelivery (a box that
