@@ -44,6 +44,13 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// message is often a race/stale wire frame; the peer usually follows with
     /// SESSION_RESET_INIT or a fresh init. Blind END_SESSION here doubles the reset storm
     /// (seen in device logs: AEAD fail → session_init_failed → SRI → success).
+    /// Keyed by **account**, unlike the outbound cooldown beside it, and that asymmetry is
+    /// deliberate rather than missed. The outbound gate knows which device it is tearing down —
+    /// the core's plan names it. This one does not: the relay blanks `Envelope.sender_device` by
+    /// design, so at the moment an inbound END_SESSION or SESSION_RESET_INIT is coalesced there is
+    /// no device to key by. Naming the sending device to the recipient is §D of the multi-device
+    /// plan; until then the coarser key is the honest one, and it errs toward suppressing a
+    /// duplicate reset rather than acting on one twice.
     private var lastInboundEndSessionAt: [String: Date] = [:]
     /// The SESSION_RESET_INITs we have decided to apply, per peer, identified by their X3DH
     /// ephemeral public key. See `AppliedInitLedger` for why the identity is the key and not a
@@ -304,12 +311,21 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// A failure is per device: one unreachable device must not leave the others on a session we
     /// have already stopped being able to read. The error is rethrown only when **no** device could
     /// be told, which is the case the old single-send contract described.
+    /// `rateLimited` gates **each device** through the cooldown rather than the account. Off for
+    /// the must-send paths — logout broadcast, manual reset, terminal init/heal failure — which are
+    /// deliberately not rate-limited and never were.
+    ///
+    /// Returns the number of devices a send was attempted for, which is what the rate-limited
+    /// wrapper reports: attempted, not delivered, because a network failure still consumed the
+    /// cooldown and the caller must not immediately retry.
+    @discardableResult
     func sendEndSession(
         to peerId: String,
         reason: String = "manual_reset",
         resetReason: Shared_Proto_Messaging_V1_SessionResetReason = .unspecified,
-        peerOnDeadSession: Bool = false
-    ) async throws {
+        peerOnDeadSession: Bool = false,
+        rateLimited: Bool = false
+    ) async throws -> Int {
         // Translation here, decision in the core. This app owns `account → devices` because the
         // core has no `ServerUserId`; it does not own "which of them does this teardown touch",
         // which is a plan and therefore protocol — see AGENTS.md, "The core decides, this app
@@ -323,11 +339,11 @@ final class SessionCoordinator: MessageRouterDelegate {
                 "END_SESSION skipped for \(peerId.prefix(8))… — no device can be named (\(reason))",
                 category: "SessionCoordinator"
             )
-            return
+            return 0
         }
         guard let core = CryptoManager.shared.orchestratorCore else {
             Log.error("END_SESSION skipped for \(peerId.prefix(8))… — core not initialised", category: "SessionCoordinator")
-            return
+            return 0
         }
         let plan = core.planTeardown(candidateDeviceIds: deviceSet, peerOnDeadSession: peerOnDeadSession)
         let targets = plan.filter { $0.action != TeardownAction.skip }
@@ -338,7 +354,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 "END_SESSION: nothing to tear down for \(peerId.prefix(8))… — \(deviceSet.count) device(s) all skipped (\(reason))",
                 category: "SessionCoordinator"
             )
-            return
+            return 0
         }
         Log.info(
             "Sending END_SESSION to \(peerId.prefix(8))… across \(targets.count)/\(deviceSet.count) device(s): \(reason)"
@@ -348,8 +364,19 @@ final class SessionCoordinator: MessageRouterDelegate {
 
         var firstError: Error?
         var delivered = 0
+        var attempted = 0
         for decision in targets {
             let device = decision.deviceId
+            // Per device, inside the loop. Outside it and keyed by the account, one timestamp
+            // stood for every device the plan named.
+            if rateLimited, !recordEndSessionSendIfAllowed(device, peerStillOnDeadSession: peerOnDeadSession) {
+                Log.info(
+                    "END_SESSION cooldown active for device \(device.prefix(8))… of \(peerId.prefix(8))…, skipping (\(reason))",
+                    category: "SessionCoordinator"
+                )
+                continue
+            }
+            attempted += 1
             // Identify the session being condemned BEFORE the network round-trip. The teardown
             // below destroys whatever session exists when the RPC returns, and the peer can
             // establish a new one inside that window — see
@@ -392,7 +419,8 @@ final class SessionCoordinator: MessageRouterDelegate {
             "END_SESSION complete for \(peerId.prefix(8))…: \(delivered)/\(targets.count) device(s)",
             category: "ChatsViewModel"
         )
-        if delivered == 0, let firstError { throw firstError }
+        if delivered == 0, attempted > 0, let firstError { throw firstError }
+        return attempted
     }
 
     /// Single rate-limited END_SESSION entry point for storm-prone recovery paths
@@ -401,23 +429,30 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// `SessionReducer.shouldSendEndSession` and, iff allowed, records the send time. Returns whether
     /// the caller may proceed. Both the general rate-limited path and the typed-OTPK reset path gate
     /// through this, so the cooldown read-and-record can't drift between the two sites.
+    /// Keyed by **device**, because the thing it rate-limits is.
+    ///
+    /// The teardown became per-device when the plan moved to the core, and this gate stayed on the
+    /// account outside the loop. One account-level timestamp then stood for N sends: tearing down
+    /// device A silenced device B for the whole cooldown, and B is exactly the device that might be
+    /// on a session we cannot read. The retry budget compounded it — one budget shared by every
+    /// device of the account, spent by whichever failed first.
     private func recordEndSessionSendIfAllowed(
-        _ userId: String,
+        _ deviceId: String,
         peerStillOnDeadSession: Bool = false,
         now: Date = Date()
     ) -> Bool {
         guard SessionReducer.shouldSendEndSession(
-            lastSentAt: endSessionSentAt[userId],
+            lastSentAt: endSessionSentAt[deviceId],
             now: now,
             cooldown: endSessionCooldown,
             peerStillOnDeadSession: peerStillOnDeadSession,
-            unackedRetries: endSessionUnackedRetries[userId] ?? 0
+            unackedRetries: endSessionUnackedRetries[deviceId] ?? 0
         ) else { return false }
-        endSessionSentAt[userId] = now
+        endSessionSentAt[deviceId] = now
         // Only evidence-driven sends consume the retry budget. A first send, or one on the
         // ordinary cooldown, is not a re-notification.
         if peerStillOnDeadSession {
-            endSessionUnackedRetries[userId, default: 0] += 1
+            endSessionUnackedRetries[deviceId, default: 0] += 1
         }
         return true
     }
@@ -433,22 +468,30 @@ final class SessionCoordinator: MessageRouterDelegate {
         reason: String,
         peerStillOnDeadSession: Bool = false
     ) async -> Bool {
-        guard recordEndSessionSendIfAllowed(userId, peerStillOnDeadSession: peerStillOnDeadSession) else {
-            Log.info("END_SESSION cooldown active for \(userId.prefix(8))…, skipping (\(reason))", category: "SessionCoordinator")
-            return false
-        }
         Log.info("Sending END_SESSION to \(userId.prefix(8))… (\(reason))", category: "SessionCoordinator")
         do {
-            // The same flag, forwarded rather than re-derived. It is evidence — a message arrived
-            // on a session we no longer have — and it is what turns a device we hold no session
-            // with from `.skip` into `.sendOnly` in the core's plan. That device is precisely the
-            // one that must restart, so dropping the flag here would make the recovery path unable
-            // to reach the branch it exists for.
-            try await sendEndSession(to: userId, reason: reason, peerOnDeadSession: peerStillOnDeadSession)
+            // The gate moved inside, and it had to: the cooldown is per device and the device set
+            // is only known in there, after the core has named which of them the teardown touches.
+            // Asking here meant asking about an account, then acting on N devices.
+            //
+            // The flag is forwarded rather than re-derived. It is evidence — a message arrived on a
+            // session we no longer have — and it is what turns a device we hold no session with
+            // from `.skip` into `.sendOnly` in the core's plan. That device is precisely the one
+            // that must restart, so dropping the flag here would make the recovery path unable to
+            // reach the branch it exists for.
+            return try await sendEndSession(
+                to: userId,
+                reason: reason,
+                peerOnDeadSession: peerStillOnDeadSession,
+                rateLimited: true
+            ) > 0
         } catch {
             Log.error("Failed to send END_SESSION to \(userId.prefix(8))…: \(error)", category: "SessionCoordinator")
+            // A throw means every device we attempted failed on the network. The cooldown is
+            // already recorded for each of them, so this was an attempt — reporting otherwise
+            // would invite the caller to retry straight into the same failure.
+            return true
         }
-        return true
     }
 
     /// Broadcast END_SESSION to all peers that have an active session (e.g., on logout).
@@ -1058,6 +1101,11 @@ final class SessionCoordinator: MessageRouterDelegate {
             // play those are routinely different, and acking the wrong one leaves the real
             // handshake in the queue holding the stream cursor.
             var opened: ChatMessage?
+            // The device the session opened against, for the per-device cooldown reset below.
+            // Derived rather than looked up: `PublicKeyBundleData` carries the identity key, and
+            // the device id is `deriveDeviceId` of it — the same derivation the seam uses, so the
+            // two cannot disagree.
+            var openedDevice: String?
             for (step, attempt) in attempts.enumerated() {
                 let carrier = carriers[Int(attempt.carrierIndex)]
                 success = publicKeyBundleHandler.handlePublicKeyBundleForIncomingMessage(
@@ -1069,6 +1117,9 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
                 if success {
                     opened = carrier
+                    openedDevice = SessionAddressing.cryptoIdentity(
+                        ofIdentityKey: candidates[Int(attempt.bundleIndex)].identityPublic
+                    )
                     if step > 0 {
                         Log.info(
                             "SESSION_STATE[responder_pair_found]: \(userId.prefix(8))… opened on attempt \(step + 1)/\(attempts.count) — carrier \(attempt.carrierIndex), device \(attempt.bundleIndex); the first pair was not the sender's",
@@ -1081,8 +1132,13 @@ final class SessionCoordinator: MessageRouterDelegate {
 
             if success {
                 // New session established — reset END_SESSION cooldown so future failures are handled.
-                endSessionSentAt.removeValue(forKey: userId)
-                endSessionUnackedRetries.removeValue(forKey: userId)
+                // Per device, like the gate: a session established with one device says nothing
+                // about another's, and clearing the whole account's budget would hand a device
+                // that is genuinely stuck a fresh allowance of retries.
+                if let openedDevice {
+                    endSessionSentAt.removeValue(forKey: openedDevice)
+                    endSessionUnackedRetries.removeValue(forKey: openedDevice)
+                }
                 lastInboundEndSessionAt.removeValue(forKey: userId)
                 // And stand down any END_SESSION-scheduled INITIATOR re-init: it would delete
                 // the RESPONDER session we just established.
