@@ -163,6 +163,48 @@ class AuthViewModel {
         }
     }
 
+    private func finishAuthenticatedSession(userId: String, reason: String) {
+        // Upgrade path, and it is load-bearing: every device installed before the ownership
+        // marker existed has unlabelled data plus a valid identity. Claiming here — while
+        // that identity is still authenticated and long before registration is reachable —
+        // is what stops `LocalStoreOwnership` from wiping the history of every user who
+        // updates. Removing this line does not fail a build; it deletes people's chats.
+        if LocalStoreOwnership.claimIfUnowned(userId) {
+            Log.info("Local store claimed by \(userId.prefix(8))… (first run after upgrade)", category: "Auth")
+        } else {
+            enforceLocalStoreOwnership(for: userId)
+        }
+
+        currentUserId = userId
+        isAuthenticated = true
+        deviceDeregistered = false
+        scheduleTokenRefresh()
+        CryptoManager.shared.setLocalUserId(userId)
+        loadUserFromCoreData(userId: userId)
+        runPostAuthMaintenance(reason: reason)
+    }
+
+    private func runPostAuthMaintenance(reason: String) {
+        Task { [weak self] in
+            guard self != nil else { return }
+            let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+            guard !deviceId.isEmpty else {
+                Log.error("Post-auth key maintenance skipped — deviceId unavailable (\(reason))", category: "Auth")
+                return
+            }
+            #if os(macOS)
+            Log.debug("Post-auth key maintenance (\(reason), Desktop direct core path)", category: "Auth")
+            #endif
+            await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
+            await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
+            await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+        }
+        Task { [weak self] in
+            guard self != nil else { return }
+            await ServerKeyManager.shared.prefetch()
+        }
+    }
+
     // MARK: - Session Management
     
     /// Restore existing session OR authenticate with device keys
@@ -212,40 +254,6 @@ class AuthViewModel {
             return recoverUserIdFromToken()
         }
 
-        // Common setup after any successful auth path: schedules token refresh,
-        // wires up CryptoCore, loads user profile, and starts SPK rotation check
-        // in the background so it completes before the user can share a QR code.
-        func finishAuth(userId: String) {
-            // Upgrade path, and it is load-bearing: every device installed before the ownership
-            // marker existed has unlabelled data plus a valid identity. Claiming here — while
-            // that identity is still authenticated and long before registration is reachable —
-            // is what stops `LocalStoreOwnership` from wiping the history of every user who
-            // updates. Removing this line does not fail a build; it deletes people's chats.
-            if LocalStoreOwnership.claimIfUnowned(userId) {
-                Log.info("Local store claimed by \(userId.prefix(8))… (first run after upgrade)", category: "Auth")
-            } else {
-                self.enforceLocalStoreOwnership(for: userId)
-            }
-            self.currentUserId = userId
-            self.isAuthenticated = true
-            self.deviceDeregistered = false
-            scheduleTokenRefresh()
-            CryptoManager.shared.setLocalUserId(userId)
-            loadUserFromCoreData(userId: userId)
-            Task { [weak self] in
-                guard self != nil else { return }
-                let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
-                #if os(macOS)
-                Log.debug("Post-auth SPK rotation check (Desktop direct core path)", category: "SPKRotation")
-                #endif
-                await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
-            }
-            Task { [weak self] in
-                guard self != nil else { return }
-                await ServerKeyManager.shared.prefetch()
-            }
-        }
-
         if let _ = AuthSessionManager.shared.sessionToken,
            let userId = resolvedUserId(),
            AuthSessionManager.shared.isSessionValid {
@@ -257,13 +265,13 @@ class AuthViewModel {
                 scheduleTokenRefresh()
                 CryptoManager.shared.setLocalUserId(userId)
                 if CryptoManager.shared.isInitialized {
-                    finishAuth(userId: userId)
+                    finishAuthenticatedSession(userId: userId, reason: "session_restore")
                 } else {
                     handleLostDeviceKeys(userId: userId, reason: "keys missing after session token restore")
                 }
                 return
             }
-            finishAuth(userId: userId)
+            finishAuthenticatedSession(userId: userId, reason: "session_restore")
             return
         }
 
@@ -296,13 +304,13 @@ class AuthViewModel {
                     scheduleTokenRefresh()
                     CryptoManager.shared.setLocalUserId(userId)
                     if CryptoManager.shared.isInitialized {
-                        finishAuth(userId: userId)
+                        finishAuthenticatedSession(userId: userId, reason: "token_refresh")
                     } else {
                         handleLostDeviceKeys(userId: userId, reason: "keys missing after token refresh")
                     }
                     return
                 }
-                finishAuth(userId: userId)
+                finishAuthenticatedSession(userId: userId, reason: "token_refresh")
                 Log.info("Session refreshed successfully", category: "Auth")
                 return
             } catch {
@@ -317,7 +325,7 @@ class AuthViewModel {
         switch outcome {
         case .success(let userId):
             Log.info("Device-based authentication successful", category: "Auth")
-            finishAuth(userId: userId)
+            finishAuthenticatedSession(userId: userId, reason: "device_auth")
         case .noDeviceKeys:
             Log.info("No device keys found - user needs to register")
             hasRegisteredDeviceKeys = false
@@ -474,7 +482,6 @@ class AuthViewModel {
         currentUserId = outcome.userId
         isAuthenticated = true
         hasRegisteredDeviceKeys = true
-        scheduleTokenRefresh()
 
         if outcome.role == .linkedNewDevice, !CryptoManager.shared.isInitialized {
             CryptoManager.shared.resetOrchestratorStateForDeviceLink()
@@ -482,14 +489,12 @@ class AuthViewModel {
         }
 
         await refreshUserProfileFromServer(userId: outcome.userId)
-        loadUserFromCoreData(userId: outcome.userId)
+        finishAuthenticatedSession(userId: outcome.userId, reason: "device_link")
 
-        let deviceId = KeychainManager.shared.loadDeviceID() ?? outcome.deviceId
-        Task {
-            await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
-        }
-        Task {
-            await ServerKeyManager.shared.prefetch()
+        guard DeviceLinkHistorySyncPolicy.isPostLinkEnabled else {
+            deviceLinkPhase = .idle
+            Log.info("Post-link history sync disabled — continuing with account only", category: "DeviceLink")
+            return
         }
 
         switch outcome.role {
@@ -641,7 +646,7 @@ class AuthViewModel {
 
     /// Called from KeysRecoveryView "Try Again" button in the `.deviceDeregistered` mode —
     /// re-attempts device authentication (the rejection may have been a transient server
-    /// error). Clears `deviceDeregistered` on success via finishAuth().
+    /// error). Clears `deviceDeregistered` on success via finishAuthenticatedSession().
     func retryDeviceAuthentication() {
         Task { [weak self] in
             await self?.restoreOrAuthenticateDevice()

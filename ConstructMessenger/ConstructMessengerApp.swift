@@ -79,14 +79,8 @@ struct Construct_MessengerApp: App {
                 // Kick the TransportRouter FSM into action. If the initial state demands ICE
                 // (mode=.on or censored region), this triggers the first proxy probe.
                 await TransportRouter.shared.bootstrap()
-                // One-time migration: upload Kyber SPK for users registered before PQC launch.
-                // Returns immediately if already done (UserDefaults flag). Remove in a future version.
-                if authViewModel.isAuthenticated,
-                   let deviceId = KeychainManager.shared.loadDeviceID() {
-                    await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
-                    // Phase 1: lazily publish the hybrid PQ identity bundle (Ed25519 + ML-DSA-65).
-                    await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
-                }
+                // Post-auth key maintenance lives in AuthViewModel; this task can run before
+                // async session restore completes.
             }
         }
     }
