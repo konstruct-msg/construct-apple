@@ -344,7 +344,17 @@ final class AuthServiceClient: Sendable {
         }
     }
 
-    /// Revoke (remotely log out) a device. Cannot revoke the current device.
+    /// Revoke (remotely log out) a device.
+    ///
+    /// The server refuses the account's **primary** device with `FAILED_PRECONDITION`, not the
+    /// *current* one — deactivation is irreversible there (an inactive device cannot
+    /// authenticate, and nothing sets `is_active` back), so revoking the device that owns the
+    /// passwordless identity would end the account. Revoking the current device is allowed and
+    /// blocklists this caller's own token.
+    ///
+    /// This comment said "cannot revoke the current device" until 2026-09-01. It was never true,
+    /// and reading it as the contract is what sent one investigation down the wrong path: the
+    /// server had no primary-device guard at all, which is the defect it hid.
     func revokeDevice(deviceId: String) async throws {
         try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.revokeDevice) { grpcClient in
             let deviceClient = Shared_Proto_Services_V1_DeviceService.Client(wrapping: grpcClient)
