@@ -204,10 +204,11 @@ enum SessionAddressing {
     /// answer that fails this is refused loudly rather than pinned — it is the same check
     /// `InviteVerifier` runs on an invite.
     ///
-    /// **Nothing is removed here.** A device absent from one answer may be deleted, or the answer
-    /// may be partial; the two are not separable from a single fetch, and deleting a row would
-    /// discard the only durable pin we hold for a device we may still owe a teardown. Device
-    /// removal needs the server's device-set divergence answer (§A.3 of the multi-device plan).
+    /// **Nothing is removed here.** A device absent from `devices` may be deleted, or the answer
+    /// may be narrowed, or the client may have dropped it locally on a failed hybrid-PQ check —
+    /// three different states that look identical in this list. Pruning belongs to
+    /// `reconcileDevices(_:activeSet:ofPeer:in:)`, which is given the set the server states
+    /// separately for exactly that reason (§A.3).
     ///
     /// An empty `devices` is not recorded, for the reason stated on `devices(ofPeer:in:)`.
     ///
@@ -259,6 +260,66 @@ enum SessionAddressing {
             )
         } catch {
             Log.error("PEER_DEVICE_PERSIST_FAIL for \(accountId.prefix(8))…: \(error)", category: "Crypto")
+        }
+    }
+
+    /// Record what the server said **and forget what it no longer names.**
+    ///
+    /// `activeSet` is `GetPreKeyBundlesResponse.active_devices`: the account's device set, stated
+    /// by the server as its own answer rather than inferred from the bundles it happened to
+    /// return. That distinction is the whole reason this function can exist and `recordDevices`
+    /// cannot prune — `devices` is narrowed by the request, and narrowed again by this client,
+    /// which drops any device whose hybrid-PQ bundle fails verification. Such a device is alive;
+    /// only that bundle was unusable. Absence from `devices` means nothing; absence from
+    /// `activeSet` means the device is gone.
+    ///
+    /// Why it matters: a Desktop signed out on 2026-09-01 was correctly deactivated server-side,
+    /// and every peer went on holding its row. Nothing retires a device on this side, so the fan-out
+    /// keeps sealing a copy to a key nobody holds and the teardown plan keeps naming it. The server
+    /// stopped serving that device within seconds; the peers would have carried it forever.
+    ///
+    /// **An empty `activeSet` prunes nothing.** proto3 cannot distinguish an absent field from an
+    /// empty one, so a server that predates `active_devices` answers exactly like an account whose
+    /// every device was revoked. The two outcomes are not symmetric: not pruning costs a wasted
+    /// copy to a device that is gone, pruning on empty deletes every peer's device set on the first
+    /// fetch after launch. An account with no active devices has nothing to send to either way.
+    ///
+    /// A device the server just handed us a bundle for is kept even if `activeSet` omits it. That
+    /// combination is the server contradicting itself inside one response, and the bundle is the
+    /// half we can check: it carries a key whose derivation we verify. Trusting the list over the
+    /// evidence would delete a device we are holding proof of.
+    ///
+    /// Runs on `context`'s queue, like its caller.
+    static func reconcileDevices(
+        _ devices: [(deviceId: String, identityKey: Data)],
+        activeSet: [String],
+        ofPeer accountId: String,
+        in context: NSManagedObjectContext
+    ) {
+        recordDevices(devices, ofPeer: accountId, in: context)
+
+        guard !accountId.isEmpty, !activeSet.isEmpty else { return }
+
+        let keep = Set(activeSet).union(devices.map(\.deviceId))
+        let stale = Self.devices(ofPeer: accountId, in: context)
+            .map(\.deviceId)
+            .filter { !keep.contains($0) }
+        guard !stale.isEmpty else { return }
+
+        for deviceId in stale {
+            guard let row = peerDeviceRow(deviceId, in: context) else { continue }
+            context.delete(row)
+        }
+        do {
+            try context.saveOrThrow(category: "Crypto")
+            Log.info(
+                "PEER_DEVICE_RETIRED: \(stale.count) device(s) of \(accountId.prefix(8))… no longer "
+                + "active — \(stale.map { $0.prefix(8) + "…" }.joined(separator: ",")) "
+                + "(set is now \(Self.devices(ofPeer: accountId, in: context).count))",
+                category: "Crypto"
+            )
+        } catch {
+            Log.error("PEER_DEVICE_RETIRE_FAIL for \(accountId.prefix(8))…: \(error)", category: "Crypto")
         }
     }
 

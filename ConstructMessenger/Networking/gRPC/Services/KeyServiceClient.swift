@@ -95,7 +95,7 @@ final class KeyServiceClient: Sendable {
         // server/gateway does not learn who is fetching whose bundle. Bundles are public keys, and
         // key-service's GetPreKeyBundles reads no caller identity (IP-only rate limiting), so the
         // unauthenticated fetch is safe end-to-end. Off → authenticated (current behaviour).
-        let bundles = try await GRPCChannelManager.shared.performRPC(sealed: FeatureFlags.sealedSenderUnauthenticatedTransport, timeout: GRPCTimeouts.getPreKeyBundles) { grpcClient in
+        let (bundles, activeDevices) = try await GRPCChannelManager.shared.performRPC(sealed: FeatureFlags.sealedSenderUnauthenticatedTransport, timeout: GRPCTimeouts.getPreKeyBundles) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetPreKeyBundlesRequest()
@@ -109,7 +109,7 @@ final class KeyServiceClient: Sendable {
                 request: .init(message: request)
             )
 
-            return response.bundles.compactMap { deviceBundle -> DeviceBundleData? in
+            let accepted = response.bundles.compactMap { deviceBundle -> DeviceBundleData? in
                 let b = deviceBundle.bundle
                 guard !b.identityKey.isEmpty else { return nil }
 
@@ -175,6 +175,12 @@ final class KeyServiceClient: Sendable {
                 )
                 return DeviceBundleData(deviceId: deviceBundle.deviceID, bundle: bundle, platform: deviceBundle.platform)
             }
+            // Carried out of the closure beside the bundles, and deliberately not folded into
+            // them: `accepted` above has already dropped devices this client refused (failed
+            // hybrid-PQ verification), and `active_devices` is the server's own answer about which
+            // devices exist. Merging the two would destroy the only distinction that makes
+            // pruning safe. See `SessionAddressing.reconcileDevices`.
+            return (accepted, response.activeDevices)
         }
         // Recorded here rather than at each call site: a registry every caller has to remember to
         // update is stale for whichever path was added last, and the staleness is invisible —
@@ -193,7 +199,9 @@ final class KeyServiceClient: Sendable {
         // write that lands after that would leave the first use of a newly-linked device reading an
         // incomplete set. It is one small write against a background context.
         await context.perform {
-            SessionAddressing.recordDevices(pins, ofPeer: userId, in: context)
+            SessionAddressing.reconcileDevices(
+                pins, activeSet: activeDevices, ofPeer: userId, in: context
+            )
         }
         return bundles
     }

@@ -245,3 +245,150 @@ final class PeerDeviceSetTests: XCTestCase {
         XCTAssertEqual(SessionAddressing.peer(ofDevice: one.deviceId, in: context)?.accountId, accountA)
     }
 }
+
+// MARK: - §A.3 — the server states the set, so absence becomes evidence
+
+/// `recordDevices` could never prune, and said so: a device missing from one answer may be gone,
+/// or the answer may be narrowed, or this client may have dropped it itself on a failed hybrid-PQ
+/// check. Three states, one appearance.
+///
+/// `GetPreKeyBundlesResponse.active_devices` separates them by being the server's own answer about
+/// which devices exist, independent of which bundles came back. `reconcileDevices` is the only
+/// place allowed to delete a row.
+///
+/// Devices 2026-09-01: a Desktop signed out at 12:15:51 was deactivated server-side and stopped
+/// being served within seconds; every peer went on holding its row, sealing fan-out copies to a key
+/// nobody held. Peer A's set only lost it because A was reinstalled.
+extension PeerDeviceSetTests {
+
+    private var accountC: String { "14f28d31-0000-0000-0000-0000000000cc" }
+
+    func testARetiredDeviceIsForgotten() throws {
+        let kept = device(0x11)
+        let retired = device(0x22)
+        makeContact(id: accountC, key: kept.identityKey)
+        SessionAddressing.recordDevices(
+            [(deviceId: kept.deviceId, identityKey: kept.identityKey),
+             (deviceId: retired.deviceId, identityKey: retired.identityKey)],
+            ofPeer: accountC, in: context
+        )
+        XCTAssertEqual(
+            Set(SessionAddressing.deviceIds(ofPeer: accountC, in: context)),
+            [kept.deviceId, retired.deviceId],
+            "pre-condition: both devices are pinned, or the deletion below proves nothing"
+        )
+
+        // The server now names only one of them.
+        SessionAddressing.reconcileDevices(
+            [(deviceId: kept.deviceId, identityKey: kept.identityKey)],
+            activeSet: [kept.deviceId],
+            ofPeer: accountC, in: context
+        )
+
+        XCTAssertEqual(
+            SessionAddressing.deviceIds(ofPeer: accountC, in: context), [kept.deviceId],
+            "a device the server no longer lists must be forgotten"
+        )
+    }
+
+    /// **The rollout guard.** proto3 gives an absent field the same value as an empty one, so a
+    /// server that predates `active_devices` answers exactly like an account whose every device was
+    /// revoked. Not pruning costs one wasted copy; pruning on empty deletes every peer's device set
+    /// on the first fetch after launch.
+    func testAnEmptyActiveSetPrunesNothing() throws {
+        let a = device(0x11)
+        let b = device(0x22)
+        makeContact(id: accountC, key: a.identityKey)
+        SessionAddressing.recordDevices(
+            [(deviceId: a.deviceId, identityKey: a.identityKey),
+             (deviceId: b.deviceId, identityKey: b.identityKey)],
+            ofPeer: accountC, in: context
+        )
+
+        SessionAddressing.reconcileDevices([], activeSet: [], ofPeer: accountC, in: context)
+
+        XCTAssertEqual(
+            Set(SessionAddressing.deviceIds(ofPeer: accountC, in: context)),
+            [a.deviceId, b.deviceId],
+            "an empty set is an old server, not an empty account"
+        )
+    }
+
+    /// A device this client dropped locally — a failed hybrid-PQ bundle — is absent from `devices`
+    /// but present in `activeSet`. It is alive; only that bundle was unusable. Pruning on the
+    /// bundle list, which is what `recordDevices` was asked for and refused, would delete it.
+    func testADeviceDroppedByLocalVerificationSurvives() throws {
+        let good = device(0x11)
+        let unverifiable = device(0x22)
+        makeContact(id: accountC, key: good.identityKey)
+        SessionAddressing.recordDevices(
+            [(deviceId: good.deviceId, identityKey: good.identityKey),
+             (deviceId: unverifiable.deviceId, identityKey: unverifiable.identityKey)],
+            ofPeer: accountC, in: context
+        )
+
+        // The fetch returned both, but only one survived verification on this side.
+        SessionAddressing.reconcileDevices(
+            [(deviceId: good.deviceId, identityKey: good.identityKey)],
+            activeSet: [good.deviceId, unverifiable.deviceId],
+            ofPeer: accountC, in: context
+        )
+
+        XCTAssertEqual(
+            Set(SessionAddressing.deviceIds(ofPeer: accountC, in: context)),
+            [good.deviceId, unverifiable.deviceId],
+            "the server says it is active; this client only failed to verify one of its bundles"
+        )
+    }
+
+    /// The server contradicting itself inside one response: a bundle for a device its own set
+    /// omits. The bundle is the half we can check — its key derives to the id — so it wins.
+    func testABundleOutweighsItsOwnAbsenceFromTheSet() throws {
+        let listed = device(0x11)
+        let bundledButUnlisted = device(0x22)
+        makeContact(id: accountC, key: listed.identityKey)
+        SessionAddressing.recordDevices(
+            [(deviceId: bundledButUnlisted.deviceId, identityKey: bundledButUnlisted.identityKey)],
+            ofPeer: accountC, in: context
+        )
+
+        SessionAddressing.reconcileDevices(
+            [(deviceId: listed.deviceId, identityKey: listed.identityKey),
+             (deviceId: bundledButUnlisted.deviceId, identityKey: bundledButUnlisted.identityKey)],
+            activeSet: [listed.deviceId],
+            ofPeer: accountC, in: context
+        )
+
+        XCTAssertTrue(
+            SessionAddressing.deviceIds(ofPeer: accountC, in: context)
+                .contains(bundledButUnlisted.deviceId),
+            "we hold a verified key for it; the list is the half without evidence"
+        )
+    }
+
+    /// Retiring one account's device must not touch another's — the delete is scoped by the
+    /// `accountId` predicate, and a scan that forgot it would empty the whole table.
+    func testRetirementIsScopedToOneAccount() throws {
+        let mine = device(0x11)
+        let theirs = device(0x33)
+        makeContact(id: accountC, key: mine.identityKey)
+        makeContact(id: accountB, key: theirs.identityKey)
+        SessionAddressing.recordDevices(
+            [(deviceId: mine.deviceId, identityKey: mine.identityKey)], ofPeer: accountC, in: context
+        )
+        SessionAddressing.recordDevices(
+            [(deviceId: theirs.deviceId, identityKey: theirs.identityKey)], ofPeer: accountB, in: context
+        )
+
+        // accountC has no active devices left, per the server.
+        SessionAddressing.reconcileDevices(
+            [], activeSet: ["ffffffffffffffffffffffffffffffff"], ofPeer: accountC, in: context
+        )
+
+        XCTAssertTrue(SessionAddressing.deviceIds(ofPeer: accountC, in: context).isEmpty)
+        XCTAssertEqual(
+            SessionAddressing.deviceIds(ofPeer: accountB, in: context), [theirs.deviceId],
+            "another account's set is not this account's business"
+        )
+    }
+}
