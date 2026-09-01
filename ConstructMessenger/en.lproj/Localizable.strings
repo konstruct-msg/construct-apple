@@ -18,6 +18,7 @@
 
 // MARK: - Main Tabs
 "chats" = "Chats";
+"people" = "People";
 "settings" = "Settings";
 
 // MARK: - Auth
@@ -36,6 +37,7 @@
 // MARK: - Chats List
 "scan_qr_code_or_share_link" = "Scan a QR code or share your contact link to add verified contacts";
 "scan_qr_code" = "Scan QR Code";
+"add_contact_menu" = "Add Contact…";
 "new_contact" = "New Contact";
 
 // MARK: - Chat
@@ -1050,6 +1052,8 @@
 "history_sync_send_offer_skip" = "Skip";
 "history_sync_auto_connecting" = "Connecting to your phone…";
 "history_sync_auto_sending" = "Sending history to your computer…";
+"history_sync_skip_title" = "Skip History";
+"history_sync_skip_sending" = "Finishing without history…";
 "history_sync_user_mismatch" = "History transfer failed: this history belongs to a different identity.";
 "call_error_not_contacts" = "You can only call people you are connected with.";
 "call_error_busy" = "You're already in a call.";
@@ -1065,6 +1069,8 @@
 "general" = "General";
 "composing" = "Composing";
 "send_on_enter" = "Send with ⏎ (Shift+⏎ for new line)";
+"send_on_enter_help" = "Send (Return) · New line (Shift-Return)";
+"send_action" = "Send";
 "show_timestamps" = "Show timestamps on every message";
 "sign_out_confirm_title" = "Sign Out?";
 "sign_out_confirm_message" = "You will be signed out on this Mac only.";

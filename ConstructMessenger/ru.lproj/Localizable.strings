@@ -17,6 +17,7 @@
 
 // MARK: - Main Tabs
 "chats" = "Чаты";
+"people" = "Люди";
 "settings" = "Настройки";
 
 // MARK: - Auth
@@ -35,6 +36,7 @@
 // MARK: - Chats List
 "scan_qr_code_or_share_link" = "Отсканируйте QR-код или поделитесь ссылкой для добавления проверенных контактов";
 "scan_qr_code" = "Сканировать QR-код";
+"add_contact_menu" = "Добавить контакт…";
 "new_contact" = "Новый контакт";
 
 // MARK: - Chat
@@ -1061,6 +1063,8 @@
 "history_sync_send_offer_skip" = "Пропустить";
 "history_sync_auto_connecting" = "Подключение к телефону…";
 "history_sync_auto_sending" = "Отправка истории на компьютер…";
+"history_sync_skip_title" = "Пропустить историю";
+"history_sync_skip_sending" = "Завершение без истории…";
 "history_sync_user_mismatch" = "Ошибка переноса истории: история принадлежит другому аккаунту.";
 "call_error_not_contacts" = "Звонить можно только тем, с кем вы уже связаны.";
 "call_error_busy" = "Вы уже в звонке.";
@@ -1076,6 +1080,8 @@
 "general" = "Основные";
 "composing" = "Набор текста";
 "send_on_enter" = "Отправить по ⏎ (Shift+⏎ для новой строки)";
+"send_on_enter_help" = "Отправить (Return) · новая строка (Shift-Return)";
+"send_action" = "Отправить";
 "show_timestamps" = "Показывать время у каждого сообщения";
 "sign_out_confirm_title" = "Выйти?";
 "sign_out_confirm_message" = "Вы выйдете только на этом Mac.";

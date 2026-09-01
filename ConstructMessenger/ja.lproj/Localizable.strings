@@ -11,6 +11,7 @@
      
 // MARK: - Main Tabs
 "chats" = "チャット";
+"people" = "人";
 "settings" = "設定";
 
 // MARK: - Auth
@@ -29,6 +30,7 @@
 // MARK: - Chats List
 "scan_qr_code_or_share_link" = "QRコードをスキャンするか、招待リンクを共有してつながっている人を追加します";
 "scan_qr_code" = "QRコードをスキャン";
+"add_contact_menu" = "相手を追加…";
 "new_contact" = "新しい相手";
     
 // MARK: - Chat
@@ -934,6 +936,8 @@
 "history_sync_user_mismatch" = "履歴の転送に失敗しました：この履歴は別のアイデンティティのものです。";
 "history_sync_auto_connecting" = "電話に接続中…";
 "history_sync_auto_sending" = "履歴をコンピュータに送信中…";
+"history_sync_skip_title" = "履歴をスキップ";
+"history_sync_skip_sending" = "履歴なしで完了中…";
 "call_error_not_contacts" = "つながっている相手にだけ発信できます。";
 "call_error_peer_offline" = "相手はオフラインです。後でもう一度お試しください。";
 "call_error_busy" = "すでに通話中です。";
@@ -956,6 +960,8 @@
 "general" = "一般";
 "composing" = "入力中";
 "send_on_enter" = "⏎で送信（Shift+⏎で改行）";
+"send_on_enter_help" = "送信（Return）・改行（Shift-Return）";
+"send_action" = "送信";
 "show_timestamps" = "すべてのメッセージに時刻を表示";
 "sign_out_confirm_title" = "サインアウトしますか？";
 "sign_out_confirm_message" = "このMacのみサインアウトします。";
