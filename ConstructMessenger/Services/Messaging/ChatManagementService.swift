@@ -132,9 +132,9 @@ class ChatManagementService {
         // Archive crypto session. `hasStoredSessionState`, not `hasSession`: the latter sees only
         // what the core has loaded, and a chat nobody opened this run has its session on disk
         // only — so this guard used to skip, leaving a Keychain entry with no contact attached.
-        if let userId = otherUser?.id, CryptoManager.shared.hasStoredSessionState(for: userId) {
-            CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
-            Log.info("Archived crypto session for user: \(userId)", category: "ChatManagementService")
+        if let userId = otherUser?.id, CryptoManager.shared.hasStoredSessionStateForAnyDevice(ofPeer: userId) {
+            let retired = CryptoManager.shared.archiveAllSessions(ofPeer: userId, reason: .manualReset)
+            Log.info("Archived \(retired) crypto session(s) for user: \(userId)", category: "ChatManagementService")
         }
 
         // Delete only the Chat (cascade removes Messages).
@@ -171,8 +171,8 @@ class ChatManagementService {
         // irreversible action of the two, so leaving an unreachable session behind here is the
         // worse half of the same defect: the contact is gone from every list and its ratchet is
         // still in the Keychain, ready to be picked up by the next pairing with the same person.
-        if CryptoManager.shared.hasStoredSessionState(for: userId) {
-            CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
+        if CryptoManager.shared.hasStoredSessionStateForAnyDevice(ofPeer: userId) {
+            CryptoManager.shared.archiveAllSessions(ofPeer: userId, reason: .manualReset)
         }
 
         // Delete the associated chat (if any) — cascade removes Messages.

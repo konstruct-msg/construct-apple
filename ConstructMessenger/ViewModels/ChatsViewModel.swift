@@ -133,12 +133,15 @@ class ChatsViewModel {
             // it removed the archives, which are the fallback for decrypting anything still in
             // flight, and kept the live session, which is the one thing guaranteed to be wrong
             // after the peer has re-paired. See `chatStartRetiresExistingSession`.
-            if CryptoManager.shared.hasStoredSessionState(for: user.id) {
+            if CryptoManager.shared.hasStoredSessionStateForAnyDevice(ofPeer: user.id) {
+                // Every device of theirs, not the pinned one. A re-pairing that retired one
+                // ratchet and left the rest would re-establish beside sessions the peer has
+                // already thrown away.
+                let retired = CryptoManager.shared.archiveAllSessions(ofPeer: user.id, reason: .manualReset)
                 Log.info(
-                    "Invite redeem: retiring the existing session with \(user.id.prefix(8))… before re-establishing",
+                    "Invite redeem: retired \(retired) session(s) with \(user.id.prefix(8))… before re-establishing",
                     category: "SessionInit"
                 )
-                CryptoManager.shared.archiveSession(for: user.id, reason: .manualReset)
             }
             SessionLifecycleController.shared.prewarmSessions(for: [user.id])
         } else if !CryptoManager.shared.hasSession(for: user.id) {

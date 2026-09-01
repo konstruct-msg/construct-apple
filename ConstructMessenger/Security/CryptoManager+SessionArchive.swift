@@ -6,11 +6,58 @@
 //  archive, restore, cleanup, and fallback-decrypt with archived sessions.
 //
 
+import CoreData
 import Foundation
 
 extension CryptoManager {
 
     // MARK: - Archive Management
+
+    /// Retire **every** session we hold with a person, and forget their archives.
+    ///
+    /// The account-shaped counterpart to `archiveSession(for:)`, which names one device. Three
+    /// callers mean the person and not a device — a redeemed invite retiring what came before, a
+    /// deleted chat, a deleted contact — and each of them retired whichever single device
+    /// `contactId(forPeer:)` happened to name, leaving the other N−1 ratchets in the Keychain.
+    ///
+    /// The comment on the contact-deletion site already described that as the worse half of the
+    /// defect: "the contact is gone from every list and its ratchet is still in the Keychain, ready
+    /// to be picked up by the next pairing with the same person." With a multi-device peer it was
+    /// not one ratchet left behind but all of them bar one.
+    ///
+    /// Deliberately **not** for inbound END_SESSION or SESSION_RESET_INIT. Those say one device
+    /// wants to restart, and archiving the account would destroy healthy sessions with devices that
+    /// never asked. Naming the sender's device is §D; until then those paths keep the single-device
+    /// behaviour they have.
+    ///
+    /// Returns how many devices were retired, so a caller can log the difference between "nothing
+    /// to do" and "we could not name anyone".
+    @discardableResult
+    func archiveAllSessions(ofPeer peerId: String, reason: ArchiveReason) -> Int {
+        var retired = 0
+        for device in SessionAddressing.deviceIds(
+            ofPeer: peerId,
+            in: PersistenceController.shared.container.viewContext
+        ) {
+            guard hasStoredSessionState(for: device) else { continue }
+            archiveSession(for: device, reason: reason)
+            clearArchivedSessions(for: device)
+            retired += 1
+        }
+        return retired
+    }
+
+    /// Whether we hold a session with **any** of a person's devices.
+    ///
+    /// The guard that belongs in front of `archiveAllSessions`: asking
+    /// `hasStoredSessionState(for: accountId)` answers about one device, so a peer whose pinned
+    /// device has no session but whose second device does would be skipped entirely.
+    func hasStoredSessionStateForAnyDevice(ofPeer peerId: String) -> Bool {
+        SessionAddressing.deviceIds(
+            ofPeer: peerId,
+            in: PersistenceController.shared.container.viewContext
+        ).contains { hasStoredSessionState(for: $0) }
+    }
 
     func clearArchivedSessions(for userId: String) {
         archiveManager.clearArchives(for: userId)
