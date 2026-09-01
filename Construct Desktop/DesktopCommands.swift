@@ -39,13 +39,6 @@ struct ConstructCommands: Commands {
             }
             .keyboardShortcut("n", modifiers: .command)
 
-            Button("Add Contact…") {
-                bridge.addContact()
-            }
-            .keyboardShortcut("n", modifiers: [.command, .option])
-
-            Divider()
-
             Button("Find Chat") {
                 bridge.focusSearch()
             }
@@ -102,6 +95,13 @@ struct ConstructCommands: Commands {
 
         // Construct menu (app-specific actions)
         CommandMenu("Construct") {
+            Button(NSLocalizedString("add_contact_menu", comment: "")) {
+                bridge.addContact()
+            }
+            .keyboardShortcut("n", modifiers: [.command, .option])
+
+            Divider()
+
             Button("Copy Node ID") {
                 bridge.copyNodeId()
             }

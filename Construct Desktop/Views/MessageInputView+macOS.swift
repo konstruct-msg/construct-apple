@@ -30,6 +30,7 @@ struct DesktopMessageInputView: View {
     @StateObject private var attachments = MessageInputAttachmentStore()
     @StateObject private var audioRecorder = AudioRecorderService.shared
     @State private var showMicPermissionAlert = false
+    @AppStorage("desktopSendOnEnter") private var sendOnEnter: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -129,9 +130,11 @@ struct DesktopMessageInputView: View {
 
     private var inputRow: some View {
         HStack(spacing: 8) {
+            attachmentButton
             MessageInputTextBar(
                 text: $text,
                 canSend: canSend,
+                sendOnReturn: sendOnEnter,
                 onSend: sendMessage,
                 onStartVoice: startVoiceRecording
             )

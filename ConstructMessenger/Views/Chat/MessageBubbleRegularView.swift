@@ -43,9 +43,25 @@ struct MessageBubbleRegularView: View {
     @State private var capsulePlacement: ReactionCapsulePlacement = .below
     @State private var bubbleGlobalFrame: CGRect = .zero
 
+    #if os(macOS)
+    @AppStorage("desktopShowTimestamps") private var showDesktopTimestamps = true
+    #endif
+
     private struct ReactionBadge: Equatable {
         let emoji: String
         let reactorUserId: String
+    }
+
+    private var shouldShowTimestamp: Bool {
+        #if os(macOS)
+        showDesktopTimestamps
+        #else
+        true
+        #endif
+    }
+
+    private var shouldShowMetaRow: Bool {
+        message.isSentByMe || message.isEdited || shouldShowTimestamp
     }
 
     var body: some View {
@@ -238,7 +254,7 @@ struct MessageBubbleRegularView: View {
                     }
                 }
 
-                if isLastInGroup {
+                if isLastInGroup && shouldShowMetaRow {
                     HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
                         if message.isSentByMe {
                             // The label is what makes this an accessibility element at all:
@@ -259,9 +275,11 @@ struct MessageBubbleRegularView: View {
                                 .foregroundColor(Color.CT.textDim)
                         }
 
-                        Text(message.safeTimestamp, style: .time)
-                            .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
-                            .foregroundColor(Color.CT.textDim)
+                        if shouldShowTimestamp {
+                            Text(message.safeTimestamp, style: .time)
+                                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                                .foregroundColor(Color.CT.textDim)
+                        }
                     }
                     .padding(.horizontal, ChatUIConstants.Bubble.metaHorizontalPadding)
                 }

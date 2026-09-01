@@ -19,6 +19,7 @@ struct DesktopChatsListView: View {
     @Environment(ChatsViewModel.self) private var chatsViewModel
     @State private var showingQRScanner = false
     @State private var searchQuery = ""
+    @FocusState private var searchFocused: Bool
 
     init() {
         let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
@@ -41,6 +42,7 @@ struct DesktopChatsListView: View {
         }
         .onAppear {
             chatsViewModel.setContext(viewContext)
+            consumeSidebarSearchFocus()
         }
         .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
             guard let chatId = note.object as? String,
@@ -49,6 +51,10 @@ struct DesktopChatsListView: View {
         }
         .onChange(of: chats.reduce(0, { $0 + Int($1.unreadCount) })) { _, total in
             chatsViewModel.totalUnreadCount = total
+        }
+        .onChange(of: chatsViewModel.sidebarSearchFocused) { _, shouldFocus in
+            guard shouldFocus else { return }
+            consumeSidebarSearchFocus()
         }
     }
 
@@ -66,11 +72,17 @@ struct DesktopChatsListView: View {
     // MARK: - Search Bar
 
     private var searchBar: some View {
-        CTSearchBar(text: $searchQuery)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+        CTSearchBar(text: $searchQuery, focused: $searchFocused)
+            .padding(.horizontal, CTLayout.edgePad)
+            .padding(.vertical, 7)
             .background(Color.CT.bg)
             .ctBorderBottom()
+    }
+
+    private func consumeSidebarSearchFocus() {
+        guard chatsViewModel.sidebarSearchFocused else { return }
+        searchFocused = true
+        chatsViewModel.sidebarSearchFocused = false
     }
 
     // MARK: - Chat List

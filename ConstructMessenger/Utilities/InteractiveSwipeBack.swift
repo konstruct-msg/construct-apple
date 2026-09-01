@@ -6,7 +6,7 @@
 //  reachable area for it.
 //
 //  Every pushed screen hides the system navigation bar
-//  (`.toolbar(.hidden, for: .navigationBar)`) so we can render the terminal-styled
+//  (`.hideSystemNavBar()`) so we can render the terminal-styled
 //  `CTNavBar` instead. Hiding the bar makes UIKit suppress the
 //  `interactivePopGestureRecognizer` (it normally drives the swipe from the back
 //  button), so the edge swipe stops working. This is unrelated to CTNavBar itself —

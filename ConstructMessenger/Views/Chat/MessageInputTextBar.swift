@@ -13,6 +13,7 @@ import Combine
 struct MessageInputTextBar: View {
     @Binding var text: String
     let canSend: Bool
+    let sendOnReturn: Bool
     let onSend: () -> Void
     let onStartVoice: (() -> Void)?     // nil on macOS
 
@@ -21,6 +22,20 @@ struct MessageInputTextBar: View {
     /// Matches the attach `plus.circle` control (``CTLayout.controlHeight`` + pill).
     private static let controlSize: CGFloat = ChatUIConstants.InputBar.height
     private static let trailingIconSize: CGFloat = ChatUIConstants.InputBar.trailingIconSize
+
+    init(
+        text: Binding<String>,
+        canSend: Bool,
+        sendOnReturn: Bool = true,
+        onSend: @escaping () -> Void,
+        onStartVoice: (() -> Void)? = nil
+    ) {
+        self._text = text
+        self.canSend = canSend
+        self.sendOnReturn = sendOnReturn
+        self.onSend = onSend
+        self.onStartVoice = onStartVoice
+    }
 
     var body: some View {
         // Center trailing controls with the single-line text row. Multi-line growth
@@ -64,6 +79,7 @@ struct MessageInputTextBar: View {
             .padding(.vertical, ChatUIConstants.InputBar.textVerticalPad)
             #if os(macOS)
             .onKeyPress(keys: [.return], phases: .down) { press in
+                guard sendOnReturn else { return .ignored }
                 guard !press.modifiers.contains(.shift) else { return .ignored }
                 if canSend { onSend() }
                 return .handled
@@ -113,7 +129,7 @@ struct MessageInputTextBar: View {
                     .frame(width: Self.controlSize, height: Self.controlSize)
                     .contentShape(Circle())
                     #if os(macOS)
-                    .help("Send (⏎) · New line (⇧⏎)")
+                    .help(NSLocalizedString(sendOnReturn ? "send_on_enter_help" : "send_action", comment: ""))
                     #endif
             }
             .buttonStyle(.plain)

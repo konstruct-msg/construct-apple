@@ -211,10 +211,9 @@ struct SynapsView: View {
                 // Consume them and navigate to the first newly-accepted contact.
                 Task {
                     let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
-                    guard let userId = pendingIds.first,
-                          let uuid = UUID(uuidString: userId) else { return }
+                    guard let userId = pendingIds.first, !userId.isEmpty else { return }
                     let req = NSFetchRequest<User>(entityName: "User")
-                    req.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+                    req.predicate = NSPredicate(format: "id == %@", userId)
                     req.fetchLimit = 1
                     if let user = try? context.fetch(req).first {
                         await MainActor.run { chatsViewModel.openOrCreateChat(with: user) }
@@ -368,9 +367,9 @@ struct SynapsView: View {
 
         let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
         let pendingUser: User? = pendingIds.first.flatMap { userId in
-            guard let uuid = UUID(uuidString: userId) else { return nil }
+            guard !userId.isEmpty else { return nil }
             let req = NSFetchRequest<User>(entityName: "User")
-            req.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+            req.predicate = NSPredicate(format: "id == %@", userId)
             req.fetchLimit = 1
             return try? context.fetch(req).first
         }

@@ -8,6 +8,11 @@
 
 import SwiftUI
 
+enum DesktopSettingsSelection {
+    static let selectedSectionKey = "desktopSettingsSelectedSection"
+    static var securitySectionRawValue: String { DesktopSettingsView.Section.security.rawValue }
+}
+
 struct DesktopSettingsView: View {
 
     enum Section: String, CaseIterable, Identifiable {
@@ -25,7 +30,12 @@ struct DesktopSettingsView: View {
         var id: String { rawValue }
     }
 
-    @State private var selected: Section = .account
+    @AppStorage(DesktopSettingsSelection.selectedSectionKey) private var selectedRawValue = Section.account.rawValue
+
+    private var selected: Section {
+        get { Section(rawValue: selectedRawValue) ?? .account }
+        nonmutating set { selectedRawValue = newValue.rawValue }
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -307,7 +317,7 @@ private struct DesktopSecuritySettingsTab: View {
                 // E2E Encryption info
                 CTSettingsSectionHeader(title: NSLocalizedString("encryption_section", comment: ""))
                 infoRow(NSLocalizedString("e2e_protocol", comment: ""),
-                        value: "Double Ratchet + Kyber-1024 (PQC)")
+                        value: "Double Ratchet + Kyber-768 (PQC)")
                 CTSep(style: .thin)
                 infoRow(NSLocalizedString("e2e_forward_secrecy", comment: ""),
                         value: "Per-message ratchet")

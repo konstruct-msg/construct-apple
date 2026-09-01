@@ -110,10 +110,9 @@ struct DesktopSynapsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .contactRequestAccepted)) { _ in
             Task {
                 let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
-                guard let userId = pendingIds.first,
-                      let uuid = UUID(uuidString: userId) else { return }
+                guard let userId = pendingIds.first, !userId.isEmpty else { return }
                 let req = NSFetchRequest<User>(entityName: "User")
-                req.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+                req.predicate = NSPredicate(format: "id == %@", userId)
                 req.fetchLimit = 1
                 if let user = try? context.fetch(req).first {
                     await MainActor.run {
@@ -188,9 +187,9 @@ struct DesktopSynapsView: View {
 
         let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
         let pendingUser: User? = pendingIds.first.flatMap { userId in
-            guard let uuid = UUID(uuidString: userId) else { return nil }
+            guard !userId.isEmpty else { return nil }
             let req = NSFetchRequest<User>(entityName: "User")
-            req.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+            req.predicate = NSPredicate(format: "id == %@", userId)
             req.fetchLimit = 1
             return try? context.fetch(req).first
         }
@@ -213,9 +212,6 @@ struct DesktopSynapsView: View {
                     selectedRequest = request
                 } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: "person.crop.circle.badge.plus")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(Color.CT.accent)
                         VStack(alignment: .leading, spacing: 2) {
                             if let name = request.displayName, !name.isEmpty {
                                 Text(name)
@@ -250,26 +246,31 @@ struct DesktopSynapsView: View {
     // MARK: - Column toolbar
 
     private var synapsToolbar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: CTLayout.chromeGap) {
             // Back to Chats (visible when Synaps occupies full canvas)
             if let switchBack = onSwitchToChats {
                 Button(action: switchBack) {
-                    Text("CHATS")
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.textDim)
+                    Label {
+                        Text(LocalizedStringKey("chats"))
+                            .font(CTFont.medium(12))
+                    } icon: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(Color.CT.textDim)
                 }
-                .buttonStyle(.plain)
-                .padding(.leading, 14)
+                .buttonStyle(.borderless)
+                .help(NSLocalizedString("show_chat_list", comment: ""))
 
-                Rectangle().fill(Color.CT.noise).frame(width: 1, height: 16)
-                    .padding(.horizontal, 8)
+                Rectangle()
+                    .fill(Color.CT.noise)
+                    .frame(width: 1, height: 18)
             }
 
-            Text(NSLocalizedString("synaps", comment: "").uppercased())
-                .font(CTFont.bold(11))
-                .tracking(4)
+            Text(LocalizedStringKey("people"))
+                .font(CTFont.bold(14))
                 .foregroundStyle(Color.CT.text)
-                .padding(.leading, onSwitchToChats == nil ? 14 : 0)
 
             Spacer()
 
@@ -277,24 +278,9 @@ struct DesktopSynapsView: View {
                 text: $searchText,
                 placeholder: LocalizedStringKey("synaps_search_prompt")
             )
-            .frame(width: 170)
-
-            Spacer().frame(width: 6)
-
-            // Add node button
-            Button {
-                NotificationCenter.default.post(name: .desktopShowAddContact, object: nil)
-            } label: {
-                Text("[+]")
-                    .font(CTFont.regular(12))
-                    .foregroundStyle(Color.CT.accent)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-            }
-            .buttonStyle(.plain)
-            .help(NSLocalizedString("add_contact", comment: ""))
-            .padding(.trailing, 10)
+            .frame(width: 190)
         }
+        .padding(.horizontal, CTLayout.edgePad)
         .frame(height: 52)
         .background(Color.CT.bg)
     }
@@ -314,14 +300,19 @@ struct DesktopSynapsView: View {
             Button {
                 NotificationCenter.default.post(name: .desktopShowAddContact, object: nil)
             } label: {
-                Text("ADD NODE")
-                    .font(CTFont.regular(12))
-                    .foregroundStyle(Color.CT.accent)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
-                    .overlay(
-                        Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 1)
-                    )
+                Label {
+                    Text(LocalizedStringKey("new_contact"))
+                        .font(CTFont.medium(12))
+                } icon: {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundStyle(Color.CT.accent)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .overlay(
+                    CTShape.control().stroke(Color.CT.accent.opacity(0.4), lineWidth: 1)
+                )
             }
             .buttonStyle(.plain)
         }

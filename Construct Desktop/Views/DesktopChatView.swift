@@ -271,10 +271,11 @@ struct DesktopChatView: View {
                 Button {
                     IncomingFloodGuard.shared.unsuppress(senderId: senderId)
                 } label: {
-                    Text("[allow →]")
+                    Label(NSLocalizedString("allow", comment: ""), systemImage: "checkmark.circle")
                         .font(CTFont.regular(12))
                         .foregroundStyle(.orange)
                 }
+                .buttonStyle(.plain)
 
                 Button {
                     if let user = viewModel.chat.otherUser {
@@ -283,10 +284,11 @@ struct DesktopChatView: View {
                     }
                     IncomingFloodGuard.shared.unsuppress(senderId: senderId)
                 } label: {
-                    Text("[block]")
+                    Label(NSLocalizedString("block_user", comment: ""), systemImage: "hand.raised.fill")
                         .font(CTFont.regular(12))
                         .foregroundStyle(Color.CT.danger)
                 }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -308,7 +310,9 @@ struct DesktopChatView: View {
                         .foregroundStyle(Color.CT.danger)
                 }
                 Spacer()
-                Text("\(selectedMessages.count) \(selectedMessages.count == 1 ? "message_selected" : "messages_selected")")
+                Text(
+                    "\(selectedMessages.count) \(NSLocalizedString(selectedMessages.count == 1 ? "message_selected" : "messages_selected", comment: ""))"
+                )
                     .font(CTFont.regular(12))
                     .foregroundStyle(Color.CT.textDim)
             }
@@ -425,10 +429,14 @@ struct DesktopChatView: View {
                 Button {
                     withAnimation { isEditMode = false; selectedMessages.removeAll() }
                 } label: {
-                    Text("[done]")
-                        .font(CTFont.bold(13))
+                    Image(systemName: "checkmark")
+                        .font(.system(size: CTLayout.navIconSize, weight: .medium))
                         .foregroundColor(Color.CT.accent)
+                        .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                 }
+                .buttonStyle(.plain)
+                .help(NSLocalizedString("done", comment: ""))
+                .accessibilityLabel(Text(NSLocalizedString("done", comment: "")))
             } else {
                 if CallsFeature.isEnabled, let otherUser = viewModel.chat.otherUser,
                    case .idle = callManager.state {
@@ -748,12 +756,14 @@ struct DesktopChatView: View {
                 provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
                     guard let data = item as? Data,
                           let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
-                    DispatchQueue.main.async {
-                        if let imgData = try? Data(contentsOf: url),
-                           let image = PlatformImage(data: imgData) {
-                            chatDropImages.append(image)
-                        } else {
-                            chatDropFileURLs.append(url)
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let imgData = try? Data(contentsOf: url)
+                        DispatchQueue.main.async {
+                            if let imgData, let image = PlatformImage(data: imgData) {
+                                chatDropImages.append(image)
+                            } else {
+                                chatDropFileURLs.append(url)
+                            }
                         }
                     }
                 }
