@@ -358,15 +358,31 @@ final class MessageRouter {
             // as one: it can never open here, so deferring it spends a redelivery and a stream
             // cursor round-trip on a certainty, and counting it hides real unseal failures inside
             // the expected ones. Checked before the attempt because the attempt is what costs.
-            if StealthSenderService.addressedToAnotherDevice(
+            if let target = StealthSenderService.otherDeviceAddressed(
                 sealedInnerBytes: message.sealedInnerData,
                 ourDeviceId: SessionAddressing.localIdentity()
             ) {
+                // Which device, and whose. The drop is the same in all three cases — this copy
+                // can never open here — but "a sibling's copy on the account stream" and "a copy
+                // for a device that is not ours at all" are a duplicate and a routing defect, and
+                // the line that said only "another of our devices" claimed the first while
+                // checking neither.
+                let origin = StealthSenderService.classifyOtherDevice(
+                    target,
+                    ourDeviceIds: MultiDeviceSendCoordinator.shared.knownOwnDeviceIds(myUserId: currentUserId)
+                )
                 Log.debug(
-                    "STEALTH: \(message.id.prefix(8))… is sealed to another of our devices — dropping, not ours to open",
+                    "STEALTH: \(message.id.prefix(8))… is sealed to \(target.prefix(8))… (\(origin.rawValue)) — dropping, not ours to open",
                     category: "MessageRouter"
                 )
-                PerformanceMetrics.shared.record(.stealthCopyForSibling, label: "routeIncomingMessage")
+                if origin == .foreign {
+                    // Not a duplicate: the relay put this in a mailbox it does not belong in.
+                    Log.error(
+                        "STEALTH: \(message.id.prefix(8))… names device \(target.prefix(8))…, which belongs to neither us nor our account",
+                        category: "MessageRouter"
+                    )
+                }
+                PerformanceMetrics.shared.record(.stealthCopyForSibling, label: origin.rawValue)
                 streamOutcome = .durable
                 return
             }

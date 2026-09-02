@@ -303,7 +303,7 @@ final class StealthSenderService: SealedSenderResolving {
     /// hand, so the caller delivers the message `.unvouched` through the normal ratchet
     /// decrypt (which is the real authentication) instead of dropping it. The
     /// certificate is anti-abuse/anonymity metadata, not the security root.
-    /// Whether this sealed copy is addressed to one of our **other** devices.
+    /// The device this sealed copy names, when that device is not this one.
     ///
     /// `SealedInner.recipient_device` is plaintext by design — the field exists so the relay can
     /// write the copy to one mailbox instead of all of them — and until now nothing read it back.
@@ -326,14 +326,43 @@ final class StealthSenderService: SealedSenderResolving {
     ///
     /// A parse failure is likewise not a mismatch: a `SealedInner` we cannot read is exactly the
     /// corruption the normal path exists to report.
+    ///
+    /// **It returns the id rather than a `Bool`** because the `Bool` could not say *whose* device
+    /// it was, and the answer to that is the difference between an expected duplicate and a
+    /// misrouted envelope. On 2026-09-02 a run that was supposed to be one device per account
+    /// dropped ten copies here; establishing that they belonged to a powered-off Desktop on our
+    /// own account, rather than to a stranger, took six passes of reverse-tracing message ids
+    /// across two logs, because the only thing recorded was that a copy had been dropped. See
+    /// `classifyOtherDevice(_:ourDeviceIds:)`, which is the half that needs the account.
+    ///
     /// `nonisolated`: it reads two arguments and no actor state, and the receive path that
     /// calls it has no reason to be pinned to the main actor for a plaintext field comparison.
-    nonisolated static func addressedToAnotherDevice(sealedInnerBytes: Data, ourDeviceId: String) -> Bool {
+    nonisolated static func otherDeviceAddressed(sealedInnerBytes: Data, ourDeviceId: String) -> String? {
         guard !ourDeviceId.isEmpty,
               let inner = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInnerBytes),
-              !inner.recipientDevice.isEmpty
-        else { return false }
-        return inner.recipientDevice != ourDeviceId
+              !inner.recipientDevice.isEmpty,
+              inner.recipientDevice != ourDeviceId
+        else { return nil }
+        return inner.recipientDevice
+    }
+
+    /// Whose device a copy we cannot open was addressed to.
+    ///
+    /// The drop is right in every case — a copy sealed to a key we do not hold can never open
+    /// here — so this changes no behaviour. What it changes is what the number means, and the
+    /// three cases are three different states of the system:
+    ///
+    /// - `.sibling` — a device of our own account. Expected while `MSG_MAILBOX_USER_WRITE=1`
+    ///   writes every message to the account-wide stream; the count is the measure of that
+    ///   duplication and should fall to zero on its own after the cutover.
+    /// - `.foreign` — a device that is neither this one nor any of ours. The relay wrote a copy
+    ///   into a mailbox it does not belong in, which is a routing defect and not a duplicate.
+    /// - `.unverified` — our own device set is not known in this process yet. **Not `.foreign`.**
+    ///   An empty set is the state of a cold cache, and reporting a defect from an absent fact is
+    ///   the same trap as reading a missing Prometheus series as a zero.
+    nonisolated static func classifyOtherDevice(_ deviceId: String, ourDeviceIds: [String]) -> SealedCopyOrigin {
+        guard !ourDeviceIds.isEmpty else { return .unverified }
+        return ourDeviceIds.contains(deviceId) ? .sibling : .foreign
     }
 
     func resolveSender(sealedInnerBytes: Data) -> ResolvedSender? {
@@ -594,6 +623,18 @@ final class StealthSenderService: SealedSenderResolving {
         )
         return nil
     }
+}
+
+/// Whose device a sealed copy we cannot open was addressed to.
+///
+/// Carried as the label on `stealth_copy_for_sibling`, replacing the call-site name that had
+/// been there — there is one call site, so that label said nothing. See
+/// `StealthSenderService.classifyOtherDevice(_:ourDeviceIds:)` for why the three cases are
+/// three different states rather than a yes and a no.
+enum SealedCopyOrigin: String {
+    case sibling
+    case foreign
+    case unverified
 }
 
 enum StealthError: Error {

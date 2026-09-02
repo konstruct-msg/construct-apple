@@ -296,6 +296,11 @@ enum MetricEvent: String {
     /// cutover: after `MSG_MAILBOX_USER_WRITE=0` this should fall to zero on its own, because the
     /// copies stop being delivered here at all. A non-zero count after the flip means the account
     /// stream is still being read.
+    ///
+    /// `label` = `SealedCopyOrigin`: `sibling` is the expected duplicate above, `foreign` is a
+    /// copy for a device that is not ours at all — a routing defect, not a duplicate — and
+    /// `unverified` means our own device set was not known in this process yet, so the question
+    /// could not be answered. The label used to be the call site, of which there is one.
     case stealthCopyForSibling = "stealth_copy_for_sibling"
 
     /// The fast-UDP transport (engine-QUIC / native H3) was suppressed on this network because it

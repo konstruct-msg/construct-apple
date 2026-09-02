@@ -181,10 +181,10 @@ class AuthViewModel {
         scheduleTokenRefresh()
         CryptoManager.shared.setLocalUserId(userId)
         loadUserFromCoreData(userId: userId)
-        runPostAuthMaintenance(reason: reason)
+        runPostAuthMaintenance(userId: userId, reason: reason)
     }
 
-    private func runPostAuthMaintenance(reason: String) {
+    private func runPostAuthMaintenance(userId: String, reason: String) {
         Task { [weak self] in
             guard self != nil else { return }
             let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
@@ -198,10 +198,45 @@ class AuthViewModel {
             await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
             await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
             await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+            await Self.logOwnDeviceSet(userId: userId, thisDeviceId: deviceId)
         }
         Task { [weak self] in
             guard self != nil else { return }
             await ServerKeyManager.shared.prefetch()
+        }
+    }
+
+    /// State the account's device set, once per authenticated session, before anything needs it.
+    ///
+    /// Until 2026-09-02 nothing did. The composition of the set was visible only indirectly, in
+    /// `SESSION_STATE[responder_candidates]`, and only when a session failed to initialise — so a
+    /// run set up as one device per account, which was actually two because a Desktop unlinked a
+    /// week earlier still counted as active, read as a clean single-device run in every log line
+    /// it produced. Every message was being sent twice and every sibling copy dropped, and the
+    /// only way to learn that was to reverse-trace message ids across two devices' logs.
+    ///
+    /// A powered-off device is indistinguishable from a live one here, deliberately: this reports
+    /// what the server holds, which is the set every sender will fan out to. It is the same fetch
+    /// the receive path already makes on a cache miss, so it also warms that cache at launch
+    /// rather than on the first message that needs it, and it never consumes a one-time pre-key.
+    private static func logOwnDeviceSet(userId: String, thisDeviceId: String) async {
+        let devices = await MultiDeviceSendCoordinator.shared.refreshOwnDevices(myUserId: userId)
+        guard !devices.isEmpty else {
+            // Not "no devices" — the fetch failed, and `refreshOwnDevices` has already said why.
+            Log.error("DEVICE_SET: \(userId.prefix(8))… — set unknown, fetch returned nothing", category: "Auth")
+            return
+        }
+        let listed = devices
+            .map { "\($0.deviceId.prefix(8))…\($0.deviceId == thisDeviceId ? "(this)" : "")" }
+            .joined(separator: ", ")
+        Log.info("DEVICE_SET: \(userId.prefix(8))… has \(devices.count) device(s): \(listed)", category: "Auth")
+        if !devices.contains(where: { $0.deviceId == thisDeviceId }) {
+            // We are authenticated as a device the key service does not list. Every peer fans out
+            // to a set that excludes us, so nothing addressed per-device can arrive.
+            Log.error(
+                "DEVICE_SET: this device \(thisDeviceId.prefix(8))… is NOT in its own account's active set",
+                category: "Auth"
+            )
         }
     }
 
