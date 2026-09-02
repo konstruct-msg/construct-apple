@@ -220,10 +220,23 @@ class AuthViewModel {
     /// the receive path already makes on a cache miss, so it also warms that cache at launch
     /// rather than on the first message that needs it, and it never consumes a one-time pre-key.
     private static func logOwnDeviceSet(userId: String, thisDeviceId: String) async {
-        let devices = await MultiDeviceSendCoordinator.shared.refreshOwnDevices(myUserId: userId)
+        // Retried, because post-auth maintenance runs while the transport is still choosing a
+        // path. On 2026-09-02 the first attempt landed in the same second as the direct→VEIL
+        // switch and came back `unavailable: "Stream unexpectedly closed."` — along with the OTPK
+        // replenish, the MLS package refresh, the push token registration and a peer bundle
+        // fetch. Every one of those retries; this did not, so the only thing it produced was an
+        // ERROR about a perfectly healthy account, and the line it exists to print never appeared
+        // for the rest of the session. Same ladder as the push registration next to it.
+        var devices: [DeviceBundleData] = []
+        for attempt in 1...3 {
+            devices = await MultiDeviceSendCoordinator.shared.refreshOwnDevices(myUserId: userId)
+            if !devices.isEmpty { break }
+            guard attempt < 3 else { break }
+            try? await Task.sleep(nanoseconds: UInt64(attempt) * 2_000_000_000)
+        }
         guard !devices.isEmpty else {
             // Not "no devices" — the fetch failed, and `refreshOwnDevices` has already said why.
-            Log.error("DEVICE_SET: \(userId.prefix(8))… — set unknown, fetch returned nothing", category: "Auth")
+            Log.error("DEVICE_SET: \(userId.prefix(8))… — set unknown after 3 attempts", category: "Auth")
             return
         }
         let listed = devices

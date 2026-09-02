@@ -76,8 +76,8 @@ final class SealedCopyForSiblingTests: XCTestCase {
 
     /// The case the old `Bool` could not express, and the reason this run's diagnosis cost six
     /// passes of reverse-tracing: a copy for a device of our own account is an expected duplicate
-    /// of the account-wide stream, and a copy for a device that is not ours at all is the relay
-    /// writing into the wrong mailbox. Both are dropped; only one is a defect.
+    /// of the account-wide stream, and a copy for a device outside the set is either a misroute or
+    /// a revoke's backlog. Both are dropped; the counts mean different things.
     func testASiblingAndAStrangerAreDifferentAnswers() {
         XCTAssertEqual(
             StealthSenderService.classifyOtherDevice("device-b", ourDeviceIds: ["device-a", "device-b"]),
@@ -85,16 +85,15 @@ final class SealedCopyForSiblingTests: XCTestCase {
         )
         XCTAssertEqual(
             StealthSenderService.classifyOtherDevice("device-z", ourDeviceIds: ["device-a", "device-b"]),
-            .foreign
+            .notOurs
         )
     }
 
     /// **The trap this exists to avoid.** An empty own-device set is a cold cache, not proof that
-    /// the device is a stranger's. Reporting `.foreign` from it would turn every sibling copy
-    /// received before the first fan-out into a fabricated routing defect — the same mistake as
-    /// reading an absent Prometheus series as a zero, which the server-side counter for this very
-    /// gate still makes.
-    func testAnUnknownOwnSetIsNotAForeignDevice() {
+    /// the device is outside our account. Reporting `.notOurs` from it would file every sibling
+    /// copy received before the first fan-out under the wrong verdict — the same mistake as
+    /// reading an absent Prometheus series as a zero.
+    func testAnUnknownOwnSetIsNotJudgedOutsideTheSet() {
         XCTAssertEqual(
             StealthSenderService.classifyOtherDevice("device-b", ourDeviceIds: []),
             .unverified
@@ -111,7 +110,7 @@ final class SealedCopyForSiblingTests: XCTestCase {
         )
         XCTAssertEqual(
             StealthSenderService.classifyOtherDevice("device-z", ourDeviceIds: ["device-a"]),
-            .foreign
+            .notOurs
         )
     }
 }

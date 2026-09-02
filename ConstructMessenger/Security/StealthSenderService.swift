@@ -355,14 +355,19 @@ final class StealthSenderService: SealedSenderResolving {
     /// - `.sibling` — a device of our own account. Expected while `MSG_MAILBOX_USER_WRITE=1`
     ///   writes every message to the account-wide stream; the count is the measure of that
     ///   duplication and should fall to zero on its own after the cutover.
-    /// - `.foreign` — a device that is neither this one nor any of ours. The relay wrote a copy
-    ///   into a mailbox it does not belong in, which is a routing defect and not a duplicate.
-    /// - `.unverified` — our own device set is not known in this process yet. **Not `.foreign`.**
-    ///   An empty set is the state of a cold cache, and reporting a defect from an absent fact is
+    /// - `.notOurs` — a device that is not in our account's **current** active set. Two causes
+    ///   this cannot separate locally, which is why the name says what is known rather than what
+    ///   is suspected: the relay wrote a copy into a mailbox it does not belong in, or the device
+    ///   was ours and has since been revoked. A revoke is always followed by a burst of these,
+    ///   because the mailbox still holds copies addressed to the device that was removed — 24 of
+    ///   them on 2026-09-02, every one from the backlog. So a single reading is not a defect; a
+    ///   count that keeps rising on a run with no recent revoke is.
+    /// - `.unverified` — our own device set is not known in this process yet. **Not `.notOurs`.**
+    ///   An empty set is the state of a cold cache, and reporting a verdict from an absent fact is
     ///   the same trap as reading a missing Prometheus series as a zero.
     nonisolated static func classifyOtherDevice(_ deviceId: String, ourDeviceIds: [String]) -> SealedCopyOrigin {
         guard !ourDeviceIds.isEmpty else { return .unverified }
-        return ourDeviceIds.contains(deviceId) ? .sibling : .foreign
+        return ourDeviceIds.contains(deviceId) ? .sibling : .notOurs
     }
 
     func resolveSender(sealedInnerBytes: Data) -> ResolvedSender? {
@@ -633,7 +638,7 @@ final class StealthSenderService: SealedSenderResolving {
 /// three different states rather than a yes and a no.
 enum SealedCopyOrigin: String {
     case sibling
-    case foreign
+    case notOurs = "not_ours"
     case unverified
 }
 

@@ -362,11 +362,17 @@ final class MessageRouter {
                 sealedInnerBytes: message.sealedInnerData,
                 ourDeviceId: SessionAddressing.localIdentity()
             ) {
-                // Which device, and whose. The drop is the same in all three cases — this copy
-                // can never open here — but "a sibling's copy on the account stream" and "a copy
-                // for a device that is not ours at all" are a duplicate and a routing defect, and
-                // the line that said only "another of our devices" claimed the first while
-                // checking neither.
+                // Which device, and whether it is currently ours. The drop is the same in all
+                // three cases — this copy can never open here — but a sibling's copy off the
+                // account stream is an expected duplicate, and a copy for a device outside the
+                // set is either a misroute or a revoke's backlog. The line that said only
+                // "another of our devices" claimed the first while checking neither.
+                //
+                // No ERROR on `.notOurs`, deliberately. The first version raised one, and the
+                // next run produced 24 of them from a single revoke: the mailbox still held
+                // copies addressed to the device that had just been removed, and every one of
+                // them read as a routing defect. The count is the instrument; a burst right
+                // after a revoke is expected, a count that keeps rising without one is not.
                 let origin = StealthSenderService.classifyOtherDevice(
                     target,
                     ourDeviceIds: MultiDeviceSendCoordinator.shared.knownOwnDeviceIds(myUserId: currentUserId)
@@ -375,13 +381,6 @@ final class MessageRouter {
                     "STEALTH: \(message.id.prefix(8))… is sealed to \(target.prefix(8))… (\(origin.rawValue)) — dropping, not ours to open",
                     category: "MessageRouter"
                 )
-                if origin == .foreign {
-                    // Not a duplicate: the relay put this in a mailbox it does not belong in.
-                    Log.error(
-                        "STEALTH: \(message.id.prefix(8))… names device \(target.prefix(8))…, which belongs to neither us nor our account",
-                        category: "MessageRouter"
-                    )
-                }
                 PerformanceMetrics.shared.record(.stealthCopyForSibling, label: origin.rawValue)
                 streamOutcome = .durable
                 return

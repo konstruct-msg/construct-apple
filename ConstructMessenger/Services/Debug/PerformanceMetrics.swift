@@ -297,10 +297,11 @@ enum MetricEvent: String {
     /// copies stop being delivered here at all. A non-zero count after the flip means the account
     /// stream is still being read.
     ///
-    /// `label` = `SealedCopyOrigin`: `sibling` is the expected duplicate above, `foreign` is a
-    /// copy for a device that is not ours at all — a routing defect, not a duplicate — and
-    /// `unverified` means our own device set was not known in this process yet, so the question
-    /// could not be answered. The label used to be the call site, of which there is one.
+    /// `label` = `SealedCopyOrigin`: `sibling` is the expected duplicate above; `not_ours` is a
+    /// copy for a device outside our account's current active set, which is either a misroute or
+    /// the backlog of a revoke and cannot be told apart here; `unverified` means our own device
+    /// set was not known in this process yet, so the question could not be answered. The label
+    /// used to be the call site, of which there is one.
     case stealthCopyForSibling = "stealth_copy_for_sibling"
 
     /// The fast-UDP transport (engine-QUIC / native H3) was suppressed on this network because it
