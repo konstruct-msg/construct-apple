@@ -279,6 +279,22 @@ class MessageRetryManager {
             return
         }
 
+        // Nothing owed, nothing to do. This has to come before the session guard below, which
+        // exists to rescue a queue and does not check that there is one.
+        //
+        // 2026-09-03, Desktop's first minute after being linked: `purged 0 orphaned payload(s),
+        // forcing re-establish`, twice. Opening a chat with no session ran a full SESSION_RESET_INIT
+        // handshake and two bundle fetches — one prewarm, one for the init, the second consuming a
+        // one-time pre-key — for an empty queue. Four of the ten bundle requests that took that
+        // device over `BUNDLE_RATE_LIMIT_PER_MIN` came from these two calls, and once the limiter
+        // refused, the session could not be rebuilt at all: every later message from the peer
+        // arrived with `flags=end_session` and nothing could act on it.
+        //
+        // A peer we owe nothing needs no session until we write to them, and the write path
+        // establishes one. The "zombie session" this rescues is a queue that cannot drain; an
+        // empty queue is not one.
+        guard !queuedMessages.isEmpty else { return }
+
         // Guard: no live session for this contact.
         //
         // If the crypto core is ready, the absence is real (the "zombie session"): any stored

@@ -1,5 +1,6 @@
 import Foundation
 import CoreData
+import GRPCCore
 import os.log
 
 /// Errors specific to the session-init layer (distinct from CryptoManagerError).
@@ -65,8 +66,11 @@ class SessionInitializationService {
     ) async throws -> PublicKeyBundleData {
         var lastError: Error?
         var delay = initialDelay
+        var attempt = 0
+        var throttledWaits = 0
 
-        for attempt in 1...maxAttempts {
+        while attempt < maxAttempts {
+            attempt += 1
             do {
                 Log.info("SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., deviceId=\(deviceId?.prefix(8) ?? "nil")..., consumeOtpk=\(consumeOneTimePrekey)", category: "SessionInit")
                 let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId, deviceId: deviceId, consumeOneTimePrekey: consumeOneTimePrekey)
@@ -74,8 +78,37 @@ class SessionInitializationService {
                 return keyBundle
             } catch {
                 lastError = error
+
+                // A rate limit is not a transport failure, and the fast ladder is the wrong answer
+                // to it. The key service allows `BUNDLE_RATE_LIMIT_PER_MIN` requests per minute
+                // and refuses the rest for the remainder of that window; 1s and 2s land inside it
+                // by construction, so all three attempts fail and the caller treats a peer it will
+                // be able to reach in under a minute as one it can never reach.
+                //
+                // Desktop, 2026-09-03, its first minute after linking: ten bundle requests in
+                // eighty seconds, then `fetch_bundle_failed` three times in three seconds,
+                // `fetch_bundle_exhausted`, `proactive_init_failed`, `watchdog_reinit_fail`. From
+                // that point every message from the peer arrived with `flags=end_session` and the
+                // session could not be rebuilt, because rebuilding it needs the bundle the limiter
+                // was refusing. Nothing was displayed on that device for the rest of the run.
+                //
+                // So a throttled answer waits out the window instead of spending an attempt on it.
+                // Bounded, because a wait long enough to clear the window is long enough that two
+                // of them is already the outer limit of what a session init may hold.
+                if Self.isRateLimited(error) {
+                    guard throttledWaits < Self.maxThrottledWaits else {
+                        Log.error("SESSION_STATE[fetch_bundle_throttled_out]: userId=\(userId.prefix(8))… — still rate-limited after \(throttledWaits) window wait(s)", category: "SessionInit")
+                        break
+                    }
+                    throttledWaits += 1
+                    attempt -= 1  // a refusal to answer is not an answer; it costs no attempt
+                    Log.info("SESSION_STATE[fetch_bundle_throttled]: userId=\(userId.prefix(8))… — waiting \(Int(Self.throttleWindowWait))s for the limiter window (wait \(throttledWaits)/\(Self.maxThrottledWaits))", category: "SessionInit")
+                    try? await Task.sleep(nanoseconds: UInt64(Self.throttleWindowWait * 1_000_000_000))
+                    continue
+                }
+
                 Log.error("SESSION_STATE[fetch_bundle_failed]: attempt=\(attempt)/\(maxAttempts), error=\(error) (\(type(of: error)))", category: "SessionInit")
-                
+
                 if attempt < maxAttempts {
                     Log.info("Retrying public key fetch in \(delay)s...", category: "SessionInit")
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
@@ -87,6 +120,24 @@ class SessionInitializationService {
         Log.error("SESSION_STATE[fetch_bundle_exhausted]: userId=\(userId.prefix(8))..., allAttemptsFailed", category: "SessionInit")
         throw lastError ?? NetworkError.connectionFailed
     }
+
+    /// The key service refusing to answer *for now*, as opposed to failing to answer.
+    static func isRateLimited(_ error: Error) -> Bool {
+        (error as? RPCError)?.code == .resourceExhausted
+    }
+
+    /// How long to wait out a bundle rate-limit window.
+    ///
+    /// The limiter's window is 60s and starts on the first request in it, so the remaining time
+    /// when we are refused is anywhere in `(0, 60]` and the server tells us nothing about it —
+    /// `resource_exhausted` carries a message and no `retry-after`. Two thirds of the window is
+    /// the point where waiting again is cheaper than waiting longer up front: it clears most
+    /// refusals in one wait, and `maxThrottledWaits` covers the rest.
+    static let throttleWindowWait: TimeInterval = 40
+
+    /// Two waits, because a session init that has held for eighty seconds should hand the
+    /// decision back rather than keep holding.
+    static let maxThrottledWaits = 2
     
     /// Initialize a session with a recipient using their public key bundle
     func initializeSession(

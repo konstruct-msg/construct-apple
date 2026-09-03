@@ -49,8 +49,11 @@ class PublicKeyBundleHandler {
     ) async throws -> PublicKeyBundleData {
         var lastError: Error?
         var delay = initialDelay
-        
-        for attempt in 1...maxAttempts {
+        var attempt = 0
+        var throttledWaits = 0
+
+        while attempt < maxAttempts {
+            attempt += 1
             do {
                 Log.info("SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., maxAttempts=\(maxAttempts)", category: "SessionInit")
                 // Bundle for an incoming first message → X3DH init, OTPK required.
@@ -72,6 +75,24 @@ class PublicKeyBundleHandler {
                     )
                     VanishedPeerStore.shared.markVanished(userId)
                     throw SessionError.peerNotFound
+                }
+
+                // The mirror of the case above: `resourceExhausted` is a refusal to answer *now*,
+                // where `notFound` is a definitive answer. Neither is a transport failure, and the
+                // 1s/2s ladder is wrong for both — there it asks a settled question again, here it
+                // spends every attempt inside the limiter's own 60s window. Same policy as
+                // `SessionInitializationService`, called rather than restated, because two ladders
+                // that must agree about one server's limiter is exactly one carrier too many.
+                if SessionInitializationService.isRateLimited(error) {
+                    guard throttledWaits < SessionInitializationService.maxThrottledWaits else {
+                        Log.error("SESSION_STATE[fetch_bundle_throttled_out]: userId=\(userId.prefix(8))… — still rate-limited after \(throttledWaits) window wait(s)", category: "SessionInit")
+                        break
+                    }
+                    throttledWaits += 1
+                    attempt -= 1
+                    Log.info("SESSION_STATE[fetch_bundle_throttled]: userId=\(userId.prefix(8))… — waiting \(Int(SessionInitializationService.throttleWindowWait))s for the limiter window (wait \(throttledWaits)/\(SessionInitializationService.maxThrottledWaits))", category: "SessionInit")
+                    try? await Task.sleep(nanoseconds: UInt64(SessionInitializationService.throttleWindowWait * 1_000_000_000))
+                    continue
                 }
 
                 if attempt < maxAttempts {
