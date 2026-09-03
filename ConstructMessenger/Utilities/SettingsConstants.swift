@@ -185,6 +185,9 @@ enum DevicesSettingsLayout {
     static let rowVerticalPadding: CGFloat = 14
     static let hintHorizontalPadding: CGFloat = 20
     static let deviceMetaSpacing: CGFloat = 2
+    /// The short device id under a device's name. Smaller than the status line beside it so the
+    /// two do not compete: the name is what a person reads, the id is what they compare.
+    static let deviceIdFontSize: CGFloat = 11
     static let currentStatusSpacing: CGFloat = 4
     static let currentStatusDotSize: CGFloat = 7
     static let dividerIndent: CGFloat = 52

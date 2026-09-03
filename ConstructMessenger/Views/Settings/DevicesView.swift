@@ -291,6 +291,22 @@ private struct DeviceRow: View {
                 Text(device.name)
                     .font(CTFont.bold(16))
 
+                // The device id, in the same eight hex characters every log line prints.
+                //
+                // A name does not identify a device. This account went through three ids in two
+                // days — `0d84b416`, `f1a3d746`, `38e653ec` — all of them the same Mac, relinked;
+                // in a list keyed by name that is three identical rows, and there is no way to see
+                // which one is still alive. The one that had been revoked kept running for a day
+                // and its handshakes archived the other device's session on every peer it talked
+                // to, and nothing on this screen could have shown that.
+                //
+                // It is also the string `DEVICE_SET` prints at every authenticated session, so the
+                // screen and the log are comparable without translating between them.
+                Text(device.id.prefix(8))
+                    .font(CTFont.regular(DevicesSettingsLayout.deviceIdFontSize))
+                    .foregroundStyle(Color.CT.textDim)
+                    .textSelection(.enabled)
+
                 if isCurrent {
                     HStack(spacing: DevicesSettingsLayout.currentStatusSpacing) {
                         Text("●")
