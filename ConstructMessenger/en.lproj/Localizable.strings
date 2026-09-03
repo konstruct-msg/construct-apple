@@ -1177,3 +1177,5 @@
 "diagnostics_skip_backlog_held" = "Head stuck: %@… (%@, %ds). Skipping may drop messages that were never delivered.";
 "diagnostics_skip_backlog_clear" = "Nothing held — the cursor is moving.";
 "diagnostics_skip_backlog_done" = "Cursor forced to %@";
+
+"device_unnamed" = "Device";

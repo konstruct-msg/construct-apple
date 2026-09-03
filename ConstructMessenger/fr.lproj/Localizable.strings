@@ -1095,3 +1095,5 @@
 "diagnostics_skip_backlog_held" = "Tête bloquée : %@… (%@, %d s). Ignorer peut perdre des messages jamais remis.";
 "diagnostics_skip_backlog_clear" = "Rien en attente — le curseur avance.";
 "diagnostics_skip_backlog_done" = "Curseur forcé à %@";
+
+"device_unnamed" = "Appareil";

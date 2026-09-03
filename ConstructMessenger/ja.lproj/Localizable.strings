@@ -1176,3 +1176,5 @@
 "diagnostics_skip_backlog_held" = "先頭が停止: %@…（%@、%d秒）。スキップすると未配信のメッセージが失われる可能性があります。";
 "diagnostics_skip_backlog_clear" = "保留はありません — カーソルは進んでいます。";
 "diagnostics_skip_backlog_done" = "カーソルを %@ に移動しました";
+
+"device_unnamed" = "デバイス";

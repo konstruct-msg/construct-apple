@@ -328,8 +328,15 @@ final class AuthServiceClient: Sendable {
                     let deviceId = di.device.deviceID
                     devices.append(LinkedDevice(
                         id: deviceId,
+                        // No synthesised id in the name. `ListDevices` returns `device_name`
+                        // empty for every device — the server stores none — so this branch is not
+                        // a fallback, it is what every row gets, and it used to spell the device
+                        // id's **last** eight characters while the row below spells its **first**
+                        // eight. One value, two fragments, in two formats, at opposite ends of the
+                        // same row: they read as two different identifiers and neither matches a
+                        // log line. The id belongs in one place, and it is there.
                         name: di.deviceName.isEmpty
-                            ? "Device …\(deviceId.suffix(8))"
+                            ? NSLocalizedString("device_unnamed", comment: "")
                             : di.deviceName,
                         platform: di.platform,
                         lastSeen: di.lastSeen > 0

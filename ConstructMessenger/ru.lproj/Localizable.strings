@@ -1188,3 +1188,5 @@
 "diagnostics_skip_backlog_held" = "Голова застряла: %@… (%@, %d с). Пропуск может потерять недоставленные сообщения.";
 "diagnostics_skip_backlog_clear" = "Ничего не удерживается — курсор двигается.";
 "diagnostics_skip_backlog_done" = "Курсор переставлен на %@";
+
+"device_unnamed" = "Устройство";
