@@ -1178,3 +1178,6 @@
 "diagnostics_skip_backlog_done" = "カーソルを %@ に移動しました";
 
 "device_unnamed" = "デバイス";
+
+"device_default_name_desktop" = "Mac";
+"device_default_name_ios" = "iPhone";

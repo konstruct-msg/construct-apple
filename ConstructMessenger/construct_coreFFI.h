@@ -1110,6 +1110,11 @@ RustBuffer uniffi_construct_core_fn_func_mlkem768_keygen(RustCallStatus *_Nonnul
 RustBuffer uniffi_construct_core_fn_func_mnemonic_to_seed(RustBuffer mnemonic, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_OPEN_WITH_DEVICE_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_OPEN_WITH_DEVICE_KEY
+RustBuffer uniffi_construct_core_fn_func_open_with_device_key(RustBuffer sealed_box, RustBuffer our_identity_priv, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_RECEIVING_DECRYPT
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_RECEIVING_DECRYPT
 RustBuffer uniffi_construct_core_fn_func_plan_receiving_decrypt(RustBuffer session_device_ids, RustBuffer preferred_device_id, RustCallStatus *_Nonnull out_status
@@ -1158,6 +1163,11 @@ RustBuffer uniffi_construct_core_fn_func_receiving_init_kind(RustBuffer carrier,
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RECOMMENDED_SEND_DELAY_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RECOMMENDED_SEND_DELAY_MS
 uint64_t uniffi_construct_core_fn_func_recommended_send_delay_ms(int8_t is_high_priority, float battery_level, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEAL_TO_DEVICE_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEAL_TO_DEVICE_KEY
+RustBuffer uniffi_construct_core_fn_func_seal_to_device_key(RustBuffer plaintext, RustBuffer device_identity_key, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEALED_SEAL_SENDER_CERT
@@ -1703,6 +1713,12 @@ uint16_t uniffi_construct_core_checksum_func_mnemonic_to_seed(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_OPEN_WITH_DEVICE_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_OPEN_WITH_DEVICE_KEY
+uint16_t uniffi_construct_core_checksum_func_open_with_device_key(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PLAN_RECEIVING_DECRYPT
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PLAN_RECEIVING_DECRYPT
 uint16_t uniffi_construct_core_checksum_func_plan_receiving_decrypt(void
@@ -1760,6 +1776,12 @@ uint16_t uniffi_construct_core_checksum_func_receiving_init_kind(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RECOMMENDED_SEND_DELAY_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RECOMMENDED_SEND_DELAY_MS
 uint16_t uniffi_construct_core_checksum_func_recommended_send_delay_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEAL_TO_DEVICE_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEAL_TO_DEVICE_KEY
+uint16_t uniffi_construct_core_checksum_func_seal_to_device_key(void
     
 );
 #endif

@@ -7616,6 +7616,19 @@ public func mnemonicToSeed(mnemonic: String)throws  -> [UInt8]  {
     )
 })
 }
+/**
+ * Open one of those copies with this device's X25519 identity private key.
+ * A copy sealed to a sibling fails the AEAD tag, so a caller finds its own by trying
+ * each — the intended use, because the stored blob carries no recipient labels.
+ */
+public func openWithDeviceKey(sealedBox: [UInt8], ourIdentityPriv: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_open_with_device_key(
+        FfiConverterSequenceUInt8.lower(sealedBox),
+        FfiConverterSequenceUInt8.lower(ourIdentityPriv),$0
+    )
+})
+}
 public func planReceivingDecrypt(sessionDeviceIds: [String], preferredDeviceId: String) -> [String]  {
     return try!  FfiConverterSequenceString.lift(try! rustCall() {
     uniffi_construct_core_fn_func_plan_receiving_decrypt(
@@ -7740,6 +7753,26 @@ public func recommendedSendDelayMs(isHighPriority: Bool, batteryLevel: Float) ->
     uniffi_construct_core_fn_func_recommended_send_delay_ms(
         FfiConverterBool.lower(isHighPriority),
         FfiConverterFloat.lower(batteryLevel),$0
+    )
+})
+}
+/**
+ * Seal a device's own metadata to one of its account's devices.
+ *
+ * Same box as `sealed_seal_sender_cert` and the same implementation — two names because
+ * there are two purposes, and a name describing one is wrong on the other.
+ *
+ * The account has no shared key: every device holds its own X25519 identity pair, and
+ * linking establishes nothing between them. So metadata is sealed once per sibling and
+ * the copies stored together — a copy per device, units of them, and in exchange a
+ * revoked device stops being sealed to on the next re-seal instead of keeping the
+ * ability to read until a key is rotated.
+ */
+public func sealToDeviceKey(plaintext: [UInt8], deviceIdentityKey: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_seal_to_device_key(
+        FfiConverterSequenceUInt8.lower(plaintext),
+        FfiConverterSequenceUInt8.lower(deviceIdentityKey),$0
     )
 })
 }
@@ -8055,6 +8088,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_mnemonic_to_seed() != 53142) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_open_with_device_key() != 7865) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_plan_receiving_decrypt() != 26416) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -8083,6 +8119,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_recommended_send_delay_ms() != 24315) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_seal_to_device_key() != 11700) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sealed_seal_sender_cert() != 11670) {

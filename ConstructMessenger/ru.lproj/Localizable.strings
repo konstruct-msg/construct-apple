@@ -1190,3 +1190,6 @@
 "diagnostics_skip_backlog_done" = "Курсор переставлен на %@";
 
 "device_unnamed" = "Устройство";
+
+"device_default_name_desktop" = "Mac";
+"device_default_name_ios" = "iPhone";

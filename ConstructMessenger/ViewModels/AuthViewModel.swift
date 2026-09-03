@@ -243,6 +243,12 @@ class AuthViewModel {
             .map { "\($0.deviceId.prefix(8))…\($0.deviceId == thisDeviceId ? "(this)" : "")" }
             .joined(separator: ", ")
         Log.info("DEVICE_SET: \(userId.prefix(8))… has \(devices.count) device(s): \(listed)", category: "Auth")
+
+        // The set is known here and nowhere earlier, and it is the only thing that invalidates a
+        // published metadata blob — in both directions: a device added has no copy until we
+        // re-seal, and a device removed can still read until we do. `publish` is a no-op when the
+        // set has not moved.
+        await DeviceMetadataService.publish(myUserId: userId, reason: "device_set_known")
         if !devices.contains(where: { $0.deviceId == thisDeviceId }) {
             // We are authenticated as a device the key service does not list. Every peer fans out
             // to a set that excludes us, so nothing addressed per-device can arrive.

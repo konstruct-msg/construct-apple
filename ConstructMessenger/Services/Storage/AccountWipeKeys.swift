@@ -58,6 +58,10 @@ enum AccountWipeKeys {
         // the person signing out, and a drain after a re-registration would try to send them as
         // whoever signed in next.
         "construct.fanoutRetryQueue.v1",
+        // The device set this account's metadata blob was last sealed for. Leaves with the
+        // account: a stale marker after a re-registration would convince the next account that its
+        // metadata was already published, and its row would stay unnamed on every sibling.
+        "construct.deviceMetadata.publishedFor.v1",
         "construct.kyber_session_state",
         "construct.kyber.otpk.nextKeyId",
         "construct.kyber.spk.id",

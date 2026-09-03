@@ -664,55 +664,98 @@ public struct Shared_Proto_Services_V1_ListDevicesRequest: Sendable {
 }
 
 /// DeviceInfo - Device information
-public struct Shared_Proto_Services_V1_DeviceInfo: Sendable {
+public struct Shared_Proto_Services_V1_DeviceInfo: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Device ID
   public var device: Shared_Proto_Core_V1_DeviceId {
-    get {_device ?? Shared_Proto_Core_V1_DeviceId()}
-    set {_device = newValue}
+    get {_storage._device ?? Shared_Proto_Core_V1_DeviceId()}
+    set {_uniqueStorage()._device = newValue}
   }
   /// Returns true if `device` has been explicitly set.
-  public var hasDevice: Bool {self._device != nil}
+  public var hasDevice: Bool {_storage._device != nil}
   /// Clears the value of `device`. Subsequent reads from it will return its default value.
-  public mutating func clearDevice() {self._device = nil}
+  public mutating func clearDevice() {_uniqueStorage()._device = nil}
 
   /// Device name (user-set)
-  public var deviceName: String = String()
+  public var deviceName: String {
+    get {_storage._deviceName}
+    set {_uniqueStorage()._deviceName = newValue}
+  }
 
   /// Platform
-  public var platform: Shared_Proto_Core_V1_DevicePlatform = .unspecified
+  public var platform: Shared_Proto_Core_V1_DevicePlatform {
+    get {_storage._platform}
+    set {_uniqueStorage()._platform = newValue}
+  }
 
-  /// Last seen timestamp
-  public var lastSeen: Int64 = 0
+  /// Last seen timestamp.
+  ///
+  /// Not populated: migration 013 removed `devices.last_active_at` as timing
+  /// metadata and it has not come back, so this server has no answer to give and
+  /// sends 0. Clients must treat 0 as "unknown", never as the epoch, and settle
+  /// liveness between themselves from what actually gets delivered.
+  public var lastSeen: Int64 {
+    get {_storage._lastSeen}
+    set {_uniqueStorage()._lastSeen = newValue}
+  }
 
   /// Created timestamp
-  public var createdAt: Int64 = 0
+  public var createdAt: Int64 {
+    get {_storage._createdAt}
+    set {_uniqueStorage()._createdAt = newValue}
+  }
 
   /// Push provider (if registered)
   public var pushProvider: Shared_Proto_Services_V1_PushProvider {
-    get {_pushProvider ?? .unspecified}
-    set {_pushProvider = newValue}
+    get {_storage._pushProvider ?? .unspecified}
+    set {_uniqueStorage()._pushProvider = newValue}
   }
   /// Returns true if `pushProvider` has been explicitly set.
-  public var hasPushProvider: Bool {self._pushProvider != nil}
+  public var hasPushProvider: Bool {_storage._pushProvider != nil}
   /// Clears the value of `pushProvider`. Subsequent reads from it will return its default value.
-  public mutating func clearPushProvider() {self._pushProvider = nil}
+  public mutating func clearPushProvider() {_uniqueStorage()._pushProvider = nil}
 
   /// Is this the current device?
-  public var isCurrent: Bool = false
+  public var isCurrent: Bool {
+    get {_storage._isCurrent}
+    set {_uniqueStorage()._isCurrent = newValue}
+  }
 
   /// Device capabilities
-  public var capabilities: UInt32 = 0
+  public var capabilities: UInt32 {
+    get {_storage._capabilities}
+    set {_uniqueStorage()._capabilities = newValue}
+  }
+
+  /// The device `users.primary_device_id` names. RevokeDevice refuses to revoke
+  /// it (FAILED_PRECONDITION "cannot revoke the account's primary device"), so
+  /// without this field a client can only learn which device is primary by
+  /// trying to revoke one and reading the refusal.
+  public var isPrimary: Bool {
+    get {_storage._isPrimary}
+    set {_uniqueStorage()._isPrimary = newValue}
+  }
+
+  /// The device's own name and platform, encrypted by that device under a key the
+  /// server does not hold. Opaque here: the server stores this blob, returns it to
+  /// the account that owns it, and never parses it — `device_name` and `platform`
+  /// above stay empty and are not what a client should read. Migration 013 removed
+  /// the plaintext columns as fingerprinting and an OS leak, and that still holds;
+  /// this is how the device list gets its names and icons back without reopening
+  /// either. Empty until the device calls SetDeviceMetadata. Max 1 KiB.
+  public var sealedMetadata: Data {
+    get {_storage._sealedMetadata}
+    set {_uniqueStorage()._sealedMetadata = newValue}
+  }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _device: Shared_Proto_Core_V1_DeviceId? = nil
-  fileprivate var _pushProvider: Shared_Proto_Services_V1_PushProvider? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// ListDevicesResponse - wraps a single device in the stream
@@ -759,6 +802,94 @@ public struct Shared_Proto_Services_V1_GetDeviceInfoResponse: Sendable {
   fileprivate var _device: Shared_Proto_Services_V1_DeviceInfo? = nil
 }
 
+/// SetDeviceMetadataRequest - Store the calling device's sealed name/platform
+public struct Shared_Proto_Services_V1_SetDeviceMetadataRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Ciphertext of whatever the client chooses to show for this device — name,
+  /// platform, whatever a later version adds. The server does not read it, so its
+  /// internal shape is the clients' to agree on and can change without a server
+  /// release. Empty clears the stored value. Max 1024 bytes; larger is
+  /// INVALID_ARGUMENT, never a silent truncation.
+  public var sealedMetadata: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// SetDeviceMetadataResponse - Stored
+public struct Shared_Proto_Services_V1_SetDeviceMetadataResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var success: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// DeviceMetadata - what a device says about itself to its own account.
+///
+/// The plaintext inside a SealedDeviceMetadata copy. The server never sees it: these are the
+/// two fields migration 013 dropped from the devices table as device fingerprinting and an OS
+/// leak, and they are back only because they are now opaque to the server.
+///
+/// Clients agree on this shape between themselves; the server ships nothing when it changes.
+/// A field added here is readable only by clients that know it, which is the ordinary proto3
+/// rule and is why this is a message and not a hand-rolled encoding.
+public struct Shared_Proto_Services_V1_DeviceMetadata: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// What a person calls this device. Never a model string a client did not choose to send —
+  /// the point of 013 stands, and "iPhone 15 Pro" is a fingerprint whether the server can read
+  /// it or not.
+  public var deviceName: String = String()
+
+  /// Which platform, for the icon in the device list.
+  public var platform: Shared_Proto_Core_V1_DevicePlatform = .unspecified
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// SealedDeviceMetadata - the bytes stored in DeviceInfo.sealed_metadata.
+///
+/// One copy of the same DeviceMetadata per active device of the account, this device included,
+/// each sealed to that device's X25519 identity key (construct-core `seal_to_device_key`).
+///
+/// Per device rather than under one account key because the account has no shared key: every
+/// device holds its own identity pair and linking establishes nothing between them. The cost is
+/// a copy per device — units of them. What it buys is that a revoked device stops being sealed
+/// to on the next re-seal, instead of keeping the ability to read until someone rotates a key
+/// that today has no rotation.
+///
+/// A copy carries no recipient label, deliberately: the server promised not to parse this blob,
+/// and a field that makes parsing convenient is an invitation to start. A reader finds its own
+/// copy by trying each — one X25519 and one AEAD open per copy.
+///
+/// Re-sealed whenever the account's device set changes. A device linked after the last re-seal
+/// has no copy and shows unnamed until its siblings re-seal, which is the ordinary path they
+/// already run when they notice a new sibling.
+public struct Shared_Proto_Services_V1_SealedDeviceMetadata: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var copies: [Data] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// RevokeDeviceRequest - Revoke device
 public struct Shared_Proto_Services_V1_RevokeDeviceRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -774,32 +905,29 @@ public struct Shared_Proto_Services_V1_RevokeDeviceRequest: Sendable {
 }
 
 /// RevokeDeviceResponse - Revoke confirmation
-public struct Shared_Proto_Services_V1_RevokeDeviceResponse: @unchecked Sendable {
+public struct Shared_Proto_Services_V1_RevokeDeviceResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Success
-  public var success: Bool {
-    get {_storage._success}
-    set {_uniqueStorage()._success = newValue}
-  }
+  public var success: Bool = false
 
   /// Revoked device info
   public var revokedDevice: Shared_Proto_Services_V1_DeviceInfo {
-    get {_storage._revokedDevice ?? Shared_Proto_Services_V1_DeviceInfo()}
-    set {_uniqueStorage()._revokedDevice = newValue}
+    get {_revokedDevice ?? Shared_Proto_Services_V1_DeviceInfo()}
+    set {_revokedDevice = newValue}
   }
   /// Returns true if `revokedDevice` has been explicitly set.
-  public var hasRevokedDevice: Bool {_storage._revokedDevice != nil}
+  public var hasRevokedDevice: Bool {self._revokedDevice != nil}
   /// Clears the value of `revokedDevice`. Subsequent reads from it will return its default value.
-  public mutating func clearRevokedDevice() {_uniqueStorage()._revokedDevice = nil}
+  public mutating func clearRevokedDevice() {self._revokedDevice = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _storage = _StorageClass.defaultInstance
+  fileprivate var _revokedDevice: Shared_Proto_Services_V1_DeviceInfo? = nil
 }
 
 /// UpdatePushTokenRequest - Update push token
@@ -2297,68 +2425,132 @@ extension Shared_Proto_Services_V1_ListDevicesRequest: SwiftProtobuf.Message, Sw
 
 extension Shared_Proto_Services_V1_DeviceInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeviceInfo"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}device_name\0\u{1}platform\0\u{3}last_seen\0\u{3}created_at\0\u{3}push_provider\0\u{3}is_current\0\u{1}capabilities\0\u{c}\u{9}\u{7}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}device_name\0\u{1}platform\0\u{3}last_seen\0\u{3}created_at\0\u{3}push_provider\0\u{3}is_current\0\u{1}capabilities\0\u{3}is_primary\0\u{3}sealed_metadata\0\u{c}\u{b}\u{5}")
+
+  fileprivate class _StorageClass {
+    var _device: Shared_Proto_Core_V1_DeviceId? = nil
+    var _deviceName: String = String()
+    var _platform: Shared_Proto_Core_V1_DevicePlatform = .unspecified
+    var _lastSeen: Int64 = 0
+    var _createdAt: Int64 = 0
+    var _pushProvider: Shared_Proto_Services_V1_PushProvider? = nil
+    var _isCurrent: Bool = false
+    var _capabilities: UInt32 = 0
+    var _isPrimary: Bool = false
+    var _sealedMetadata: Data = Data()
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _device = source._device
+      _deviceName = source._deviceName
+      _platform = source._platform
+      _lastSeen = source._lastSeen
+      _createdAt = source._createdAt
+      _pushProvider = source._pushProvider
+      _isCurrent = source._isCurrent
+      _capabilities = source._capabilities
+      _isPrimary = source._isPrimary
+      _sealedMetadata = source._sealedMetadata
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._device) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.deviceName) }()
-      case 3: try { try decoder.decodeSingularEnumField(value: &self.platform) }()
-      case 4: try { try decoder.decodeSingularInt64Field(value: &self.lastSeen) }()
-      case 5: try { try decoder.decodeSingularInt64Field(value: &self.createdAt) }()
-      case 6: try { try decoder.decodeSingularEnumField(value: &self._pushProvider) }()
-      case 7: try { try decoder.decodeSingularBoolField(value: &self.isCurrent) }()
-      case 8: try { try decoder.decodeSingularUInt32Field(value: &self.capabilities) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._device) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._deviceName) }()
+        case 3: try { try decoder.decodeSingularEnumField(value: &_storage._platform) }()
+        case 4: try { try decoder.decodeSingularInt64Field(value: &_storage._lastSeen) }()
+        case 5: try { try decoder.decodeSingularInt64Field(value: &_storage._createdAt) }()
+        case 6: try { try decoder.decodeSingularEnumField(value: &_storage._pushProvider) }()
+        case 7: try { try decoder.decodeSingularBoolField(value: &_storage._isCurrent) }()
+        case 8: try { try decoder.decodeSingularUInt32Field(value: &_storage._capabilities) }()
+        case 9: try { try decoder.decodeSingularBoolField(value: &_storage._isPrimary) }()
+        case 10: try { try decoder.decodeSingularBytesField(value: &_storage._sealedMetadata) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._device {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    if !self.deviceName.isEmpty {
-      try visitor.visitSingularStringField(value: self.deviceName, fieldNumber: 2)
-    }
-    if self.platform != .unspecified {
-      try visitor.visitSingularEnumField(value: self.platform, fieldNumber: 3)
-    }
-    if self.lastSeen != 0 {
-      try visitor.visitSingularInt64Field(value: self.lastSeen, fieldNumber: 4)
-    }
-    if self.createdAt != 0 {
-      try visitor.visitSingularInt64Field(value: self.createdAt, fieldNumber: 5)
-    }
-    try { if let v = self._pushProvider {
-      try visitor.visitSingularEnumField(value: v, fieldNumber: 6)
-    } }()
-    if self.isCurrent != false {
-      try visitor.visitSingularBoolField(value: self.isCurrent, fieldNumber: 7)
-    }
-    if self.capabilities != 0 {
-      try visitor.visitSingularUInt32Field(value: self.capabilities, fieldNumber: 8)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._device {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      if !_storage._deviceName.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._deviceName, fieldNumber: 2)
+      }
+      if _storage._platform != .unspecified {
+        try visitor.visitSingularEnumField(value: _storage._platform, fieldNumber: 3)
+      }
+      if _storage._lastSeen != 0 {
+        try visitor.visitSingularInt64Field(value: _storage._lastSeen, fieldNumber: 4)
+      }
+      if _storage._createdAt != 0 {
+        try visitor.visitSingularInt64Field(value: _storage._createdAt, fieldNumber: 5)
+      }
+      try { if let v = _storage._pushProvider {
+        try visitor.visitSingularEnumField(value: v, fieldNumber: 6)
+      } }()
+      if _storage._isCurrent != false {
+        try visitor.visitSingularBoolField(value: _storage._isCurrent, fieldNumber: 7)
+      }
+      if _storage._capabilities != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._capabilities, fieldNumber: 8)
+      }
+      if _storage._isPrimary != false {
+        try visitor.visitSingularBoolField(value: _storage._isPrimary, fieldNumber: 9)
+      }
+      if !_storage._sealedMetadata.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._sealedMetadata, fieldNumber: 10)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_DeviceInfo, rhs: Shared_Proto_Services_V1_DeviceInfo) -> Bool {
-    if lhs._device != rhs._device {return false}
-    if lhs.deviceName != rhs.deviceName {return false}
-    if lhs.platform != rhs.platform {return false}
-    if lhs.lastSeen != rhs.lastSeen {return false}
-    if lhs.createdAt != rhs.createdAt {return false}
-    if lhs._pushProvider != rhs._pushProvider {return false}
-    if lhs.isCurrent != rhs.isCurrent {return false}
-    if lhs.capabilities != rhs.capabilities {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._device != rhs_storage._device {return false}
+        if _storage._deviceName != rhs_storage._deviceName {return false}
+        if _storage._platform != rhs_storage._platform {return false}
+        if _storage._lastSeen != rhs_storage._lastSeen {return false}
+        if _storage._createdAt != rhs_storage._createdAt {return false}
+        if _storage._pushProvider != rhs_storage._pushProvider {return false}
+        if _storage._isCurrent != rhs_storage._isCurrent {return false}
+        if _storage._capabilities != rhs_storage._capabilities {return false}
+        if _storage._isPrimary != rhs_storage._isPrimary {return false}
+        if _storage._sealedMetadata != rhs_storage._sealedMetadata {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2432,6 +2624,131 @@ extension Shared_Proto_Services_V1_GetDeviceInfoResponse: SwiftProtobuf.Message,
   }
 }
 
+extension Shared_Proto_Services_V1_SetDeviceMetadataRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetDeviceMetadataRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sealed_metadata\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.sealedMetadata) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sealedMetadata.isEmpty {
+      try visitor.visitSingularBytesField(value: self.sealedMetadata, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_SetDeviceMetadataRequest, rhs: Shared_Proto_Services_V1_SetDeviceMetadataRequest) -> Bool {
+    if lhs.sealedMetadata != rhs.sealedMetadata {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_SetDeviceMetadataResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetDeviceMetadataResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.success) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.success != false {
+      try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_SetDeviceMetadataResponse, rhs: Shared_Proto_Services_V1_SetDeviceMetadataResponse) -> Bool {
+    if lhs.success != rhs.success {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_DeviceMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DeviceMetadata"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_name\0\u{1}platform\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.deviceName) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.platform) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.deviceName.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceName, fieldNumber: 1)
+    }
+    if self.platform != .unspecified {
+      try visitor.visitSingularEnumField(value: self.platform, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_DeviceMetadata, rhs: Shared_Proto_Services_V1_DeviceMetadata) -> Bool {
+    if lhs.deviceName != rhs.deviceName {return false}
+    if lhs.platform != rhs.platform {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_SealedDeviceMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SealedDeviceMetadata"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}copies\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedBytesField(value: &self.copies) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.copies.isEmpty {
+      try visitor.visitRepeatedBytesField(value: self.copies, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_SealedDeviceMetadata, rhs: Shared_Proto_Services_V1_SealedDeviceMetadata) -> Bool {
+    if lhs.copies != rhs.copies {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension Shared_Proto_Services_V1_RevokeDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RevokeDeviceRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0")
@@ -2466,74 +2783,36 @@ extension Shared_Proto_Services_V1_RevokeDeviceResponse: SwiftProtobuf.Message, 
   public static let protoMessageName: String = _protobuf_package + ".RevokeDeviceResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}revoked_device\0")
 
-  fileprivate class _StorageClass {
-    var _success: Bool = false
-    var _revokedDevice: Shared_Proto_Services_V1_DeviceInfo? = nil
-
-      // This property is used as the initial default value for new instances of the type.
-      // The type itself is protecting the reference to its storage via CoW semantics.
-      // This will force a copy to be made of this reference when the first mutation occurs;
-      // hence, it is safe to mark this as `nonisolated(unsafe)`.
-      static nonisolated(unsafe) let defaultInstance = _StorageClass()
-
-    private init() {}
-
-    init(copying source: _StorageClass) {
-      _success = source._success
-      _revokedDevice = source._revokedDevice
-    }
-  }
-
-  fileprivate mutating func _uniqueStorage() -> _StorageClass {
-    if !isKnownUniquelyReferenced(&_storage) {
-      _storage = _StorageClass(copying: _storage)
-    }
-    return _storage
-  }
-
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    _ = _uniqueStorage()
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      while let fieldNumber = try decoder.nextFieldNumber() {
-        // The use of inline closures is to circumvent an issue where the compiler
-        // allocates stack space for every case branch when no optimizations are
-        // enabled. https://github.com/apple/swift-protobuf/issues/1034
-        switch fieldNumber {
-        case 1: try { try decoder.decodeSingularBoolField(value: &_storage._success) }()
-        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._revokedDevice) }()
-        default: break
-        }
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.success) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._revokedDevice) }()
+      default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every if/case branch local when no optimizations
-      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-      // https://github.com/apple/swift-protobuf/issues/1182
-      if _storage._success != false {
-        try visitor.visitSingularBoolField(value: _storage._success, fieldNumber: 1)
-      }
-      try { if let v = _storage._revokedDevice {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-      } }()
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.success != false {
+      try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
+    try { if let v = self._revokedDevice {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_RevokeDeviceResponse, rhs: Shared_Proto_Services_V1_RevokeDeviceResponse) -> Bool {
-    if lhs._storage !== rhs._storage {
-      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
-        let _storage = _args.0
-        let rhs_storage = _args.1
-        if _storage._success != rhs_storage._success {return false}
-        if _storage._revokedDevice != rhs_storage._revokedDevice {return false}
-        return true
-      }
-      if !storagesAreEqual {return false}
-    }
+    if lhs.success != rhs.success {return false}
+    if lhs._revokedDevice != rhs._revokedDevice {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -288,7 +288,7 @@ private struct DeviceRow: View {
                       color: isCurrent ? Color.CT.accent : Color.CT.textDim)
 
             VStack(alignment: .leading, spacing: DevicesSettingsLayout.deviceMetaSpacing) {
-                Text(device.name)
+                Text(displayName)
                     .font(CTFont.bold(16))
 
                 // The device id, in the same eight hex characters every log line prints.
@@ -336,8 +336,31 @@ private struct DeviceRow: View {
         }
     }
 
+    /// The device's own description, opened from `sealed_metadata`, or `nil` when there is none
+    /// to open.
+    ///
+    /// `nil` is ordinary, not an error: a device that has not published yet, or published before
+    /// this device was linked and has not re-sealed since, leaves no copy we can open. The row
+    /// then shows what it showed before any of this existed — the short id, which identifies it
+    /// either way.
+    private var described: Shared_Proto_Services_V1_DeviceMetadata? {
+        guard !device.sealedMetadata.isEmpty,
+              let ourKey = KeychainManager.shared.loadDeviceIdentityKey()
+        else { return nil }
+        return DeviceMetadataService.open(device.sealedMetadata, withIdentityPrivateKey: ourKey)
+    }
+
+    private var displayName: String {
+        // `device.name` is the localised placeholder: the server holds no name and never will.
+        if let name = described?.deviceName, !name.isEmpty { return name }
+        return device.name
+    }
+
     private var platformSFSymbol: String {
-        switch device.platform {
+        // The sealed description first — `device.platform` is what the server sent, and the
+        // server holds no platform either. It stays as the fallback for the day a federated peer
+        // sends one.
+        switch described?.platform ?? device.platform {
         case .ios:     return "iphone"
         case .desktop: return "laptopcomputer"
         case .android: return "candybarphone"

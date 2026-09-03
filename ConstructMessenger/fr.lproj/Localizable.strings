@@ -1097,3 +1097,6 @@
 "diagnostics_skip_backlog_done" = "Curseur forcé à %@";
 
 "device_unnamed" = "Appareil";
+
+"device_default_name_desktop" = "Mac";
+"device_default_name_ios" = "iPhone";
