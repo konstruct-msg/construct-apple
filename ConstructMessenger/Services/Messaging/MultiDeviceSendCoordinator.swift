@@ -99,6 +99,34 @@ final class MultiDeviceSendCoordinator {
         knownOwnDevices(myUserId: myUserId).map(\.deviceId)
     }
 
+    /// Our siblings: the same set with **this** device removed.
+    ///
+    /// Separate accessor rather than a filter at each call site, because the set already had two
+    /// consumers that filter (`senderSyncPeerIdentityKeys` here, `DeviceDeliveryPlan.targets` via
+    /// its explicit `ourDeviceId`) and one that did not — the SENDER_SYNC candidate list. There it
+    /// is not a wasted comparison: a candidate with no session sends the receive path to
+    /// `initAndDecryptSenderSync`, which fetches a bundle over the network and runs X3DH, so this
+    /// device listed as its own sibling costs one key-service request and one guaranteed AEAD
+    /// failure per sync copy. 2026-09-03, Desktop's first minute after linking:
+    ///
+    ///     Rust core initReceivingSession failed: All 1 prekey(s) failed.
+    ///     Last error: Decryption failed: AEAD decryption failed
+    ///     SENDER_SYNC: initReceivingSession failed for f1a3d746f85c8f8ce226…
+    ///
+    /// `f1a3d746…` is that device's own id. It recovered on the next candidate, so nothing was
+    /// lost — but the request was one of the ten that took it past the bundle rate limit, and past
+    /// that point it could not rebuild any session at all.
+    ///
+    /// It cannot succeed, either: a copy a sibling sealed to us does not open against a session
+    /// with ourselves. Relying on the AEAD failure to move the loop along is leaving a candidate in
+    /// the list that is only ever wrong.
+    func knownSiblingDeviceIds(myUserId: String) -> [String] {
+        let myDeviceId = AuthSessionManager.shared.currentDeviceId
+        return knownOwnDevices(myUserId: myUserId)
+            .map(\.deviceId)
+            .filter { $0 != myDeviceId }
+    }
+
     /// Fill the own-device cache from the server, for the **receive** path.
     ///
     /// Until 2026-08-18 the cache had exactly one filler — the send path — so a device that had

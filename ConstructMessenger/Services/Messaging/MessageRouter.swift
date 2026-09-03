@@ -2736,7 +2736,9 @@ final class MessageRouter {
             // server. Free to try, and it short-circuits the loop when present.
             keys.insert(message.senderDeviceId, at: 0)
         }
-        for deviceId in MultiDeviceSendCoordinator.shared.knownOwnDeviceIds(myUserId: myUserId) {
+        // Siblings, not every own device: this one cannot have sent us a SENDER_SYNC, and a
+        // candidate with no session costs a bundle fetch and an X3DH before it fails.
+        for deviceId in MultiDeviceSendCoordinator.shared.knownSiblingDeviceIds(myUserId: myUserId) {
             let key = deviceId
             if !keys.contains(key) { keys.append(key) }
         }
