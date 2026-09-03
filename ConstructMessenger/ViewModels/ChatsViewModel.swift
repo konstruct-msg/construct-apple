@@ -198,12 +198,52 @@ class ChatsViewModel {
         Log.info("Chat \(chat.id) isMuted=\(chat.isMuted)", category: "ChatsViewModel")
     }
 
+    /// Whether deleting a chat may also ask the peer to tear the session down.
+    ///
+    /// Only when this device is the account's only one. `nil` — we could not establish the device
+    /// count — is treated as "there may be a sibling", because the two errors are not
+    /// symmetrical.
+    ///
+    /// **Sending is the destructive direction, not withholding.** Delivery does not name the
+    /// sending device (§D), so the peer applies an END_SESSION to whichever device its addressing
+    /// resolves to — the account's pinned one. 2026-09-03: a Desktop linked minutes earlier
+    /// deleted an empty chat, and the peer archived the **iPhone's** session; over the run all six
+    /// of its archives landed on a device that had asked for nothing. A secondary device deleting
+    /// a chat could destroy the primary's healthy session.
+    ///
+    /// Withholding costs the peer's forward-secrecy hygiene, not the deleting user's privacy: what
+    /// "delete chat" promises is local, and `ChatManagementService.deleteChat` delivers it — it
+    /// archives every stored session for that peer and cascades the messages away. The peer is
+    /// merely left holding a ratchet nothing will use, which its own next re-init retires.
+    ///
+    /// This is an interim rule. The right behaviour is to tear down **this device's** session and
+    /// say which device that is, and that needs §D.
+    /// Exactly one, not "at most one": an account always contains the device asking, so a count of
+    /// zero is a fetch that came back empty and must read the same as `nil`. `<= 1` would make the
+    /// failure mode announce.
+    /// `nonisolated`: it reads one argument and no actor state.
+    nonisolated static func mayAnnounceTeardown(ownDeviceCount: Int?) -> Bool {
+        ownDeviceCount == 1
+    }
+
     func deleteChatWithEndSession(chat: Chat) async {
         if let userId = chat.otherUser?.id {
-            do {
-                try await SessionLifecycleController.shared.sendEndSession(to: userId, reason: "chat_deleted")
-            } catch {
-                Log.error("END_SESSION failed before chat delete (continuing): \(error)", category: "ChatsViewModel")
+            // Asked fresh rather than read from the cache: this runs once, on a deliberate user
+            // action, and a cold cache reads as "no siblings" — the answer that sends.
+            let devices = await MultiDeviceSendCoordinator.shared.refreshOwnDevices(
+                myUserId: AuthSessionManager.shared.currentUserId ?? ""
+            )
+            if Self.mayAnnounceTeardown(ownDeviceCount: devices.isEmpty ? nil : devices.count) {
+                do {
+                    try await SessionLifecycleController.shared.sendEndSession(to: userId, reason: "chat_deleted")
+                } catch {
+                    Log.error("END_SESSION failed before chat delete (continuing): \(error)", category: "ChatsViewModel")
+                }
+            } else {
+                Log.info(
+                    "Chat delete for \(userId.prefix(8))…: not announcing teardown — \(devices.isEmpty ? "device set unknown" : "\(devices.count) device(s) on this account") and delivery cannot name which one asked",
+                    category: "ChatsViewModel"
+                )
             }
         }
         chatManagementService.deleteChat(chat)
