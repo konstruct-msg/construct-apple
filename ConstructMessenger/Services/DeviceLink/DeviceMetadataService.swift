@@ -40,11 +40,16 @@ import SwiftProtobuf
 /// to start.
 enum DeviceMetadataService {
 
-    /// The largest blob the server accepts (`SetDeviceMetadataRequest`, 1 KiB). Larger is
+    /// The largest blob the server accepts (`SetDeviceMetadataRequest`, 4 KiB). Larger is
     /// `INVALID_ARGUMENT` and never a silent truncation, so the limit is checked here too — a
     /// rejected upload leaves the account with the *previous* blob, which is worse than an
     /// obviously unnamed device because it is silently out of date.
-    static let maxBlobBytes = 1024
+    ///
+    /// It grows with the device count, which is why it is not tight: a copy is
+    /// `ephemeral(32) + nonce(12) + payload + tag(16)`, so a two-field description runs around 90
+    /// bytes and 4 KiB holds a few dozen devices. An account that reached the cap would have long
+    /// since had a different problem.
+    static let maxBlobBytes = 4096
 
     // MARK: - Building
 

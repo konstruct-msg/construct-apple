@@ -745,7 +745,7 @@ public struct Shared_Proto_Services_V1_DeviceInfo: @unchecked Sendable {
   /// above stay empty and are not what a client should read. Migration 013 removed
   /// the plaintext columns as fingerprinting and an OS leak, and that still holds;
   /// this is how the device list gets its names and icons back without reopening
-  /// either. Empty until the device calls SetDeviceMetadata. Max 1 KiB.
+  /// either. Empty until the device calls SetDeviceMetadata. Max 4 KiB.
   public var sealedMetadata: Data {
     get {_storage._sealedMetadata}
     set {_uniqueStorage()._sealedMetadata = newValue}
@@ -811,8 +811,9 @@ public struct Shared_Proto_Services_V1_SetDeviceMetadataRequest: Sendable {
   /// Ciphertext of whatever the client chooses to show for this device — name,
   /// platform, whatever a later version adds. The server does not read it, so its
   /// internal shape is the clients' to agree on and can change without a server
-  /// release. Empty clears the stored value. Max 1024 bytes; larger is
-  /// INVALID_ARGUMENT, never a silent truncation.
+  /// release. Empty clears the stored value. Max 4096 bytes — the blob holds one
+  /// sealed copy per device of the account, so it grows with the device count;
+  /// larger is INVALID_ARGUMENT, never a silent truncation.
   public var sealedMetadata: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
