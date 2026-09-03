@@ -70,6 +70,46 @@ final class MultiDeviceSendCoordinator {
     private var ownDeviceCache: DeviceCache?
     private let cacheTTL: TimeInterval = 3600 // 1 hour
 
+    /// A recipient's device bundles, keyed by their account id.
+    ///
+    /// Until 2026-09-03 there was none, and `fanOutToRecipientDevices` opened with a
+    /// `getPreKeyBundles` before checking whether it needed one — so **every message** to a
+    /// two-device peer cost a key-service round trip. The key service allows
+    /// `BUNDLE_RATE_LIMIT_PER_MIN` requests a minute, and a conversation at ordinary typing pace
+    /// goes past it: five fan-outs plus three session fetches in one minute on the stand, then
+    ///
+    ///     MultiDevice fan-out skipped for ffeeddc6… — reason=bundle_fetch_failed
+    ///     believed=2: resourceExhausted: "Too many bundle requests"
+    ///
+    /// twice in a row. The peer's second device silently missed those messages. Type slowly and it
+    /// works; type normally and it does not, which is what "the behaviour is unpredictable" was.
+    private var recipientDeviceCache: [String: DeviceCache] = [:]
+
+    /// **Derived, not chosen.** Three things bound it, and only one of them is about time.
+    ///
+    /// *It cannot be shorter than the conversation.* One fetch per message is what produced the
+    /// rate-limit above. At five minutes a fan-out costs at most one fetch per five, which leaves
+    /// the whole per-minute budget to session setup and healing, where it is actually needed.
+    ///
+    /// *Revocation does not bound it at all.* A stale entry cannot deliver anything to a device
+    /// that has been revoked: the server routes by its own active set, and an envelope naming a
+    /// device that is not in it falls back to every device rather than reaching the named one
+    /// (`routing="unknown_device"`). The authority is the server's, and it is current. So the
+    /// familiar worry — "we might still be talking to a device someone removed" — is not the
+    /// constraint here.
+    ///
+    /// *What does bound it is a peer's **new** device.* It receives the envelope (the account
+    /// stream is still written) but the copy inside is sealed to the devices we knew, so it sees
+    /// nothing until we refetch. That is the window this number sets, and five minutes is short
+    /// enough to pass unnoticed by someone still setting the device up — post-link history sync
+    /// is off, so it starts empty regardless — and long enough to cost one request.
+    ///
+    /// The TTL is the backstop, not the mechanism: `recipientBundles(for:)` also drops an entry
+    /// whose device set no longer matches what `PeerDevice` holds, and that store is rewritten by
+    /// `SessionAddressing.reconcileDevices` from the `active_devices` of **every** bundles
+    /// response, wherever in the app it was made.
+    private let recipientCacheTTL: TimeInterval = 300
+
     /// True while `drainRetryQueue` is running, so a failing retry re-uses its entry instead of
     /// appending a second one. Safe as a plain `Bool` because the class is `@MainActor` and the
     /// drain never suspends between reading it and clearing it in a `defer`.
@@ -78,6 +118,75 @@ final class MultiDeviceSendCoordinator {
     /// Invalidate the own-device cache (call after linking or revoking a device).
     func invalidateOwnDeviceCache() {
         ownDeviceCache = nil
+    }
+
+    /// Cached bundles for a recipient, or `nil` when they must be fetched.
+    ///
+    /// Two ways to be stale, and the second is the one that matters. The TTL covers "nothing has
+    /// told us anything for a while". The set comparison covers "something has": `PeerDevice` is
+    /// rewritten by `SessionAddressing.reconcileDevices` from the `active_devices` of every
+    /// bundles response the app makes, so a device linked or revoked since this entry was built
+    /// shows up here without a fetch of our own.
+    private func cachedRecipientBundles(for recipientUserId: String) -> [DeviceBundleData]? {
+        guard let cache = recipientDeviceCache[recipientUserId],
+              Date().timeIntervalSince(cache.fetchedAt) < recipientCacheTTL
+        else { return nil }
+
+        let context = PersistenceController.shared.container.viewContext
+        let known = SessionAddressing.devices(ofPeer: recipientUserId, in: context).map(\.deviceId)
+        guard Self.cachedSetStillMatches(cached: cache.bundles.map(\.deviceId), known: known) else {
+            Log.info(
+                "MultiDevice: recipient bundle cache for \(recipientUserId.prefix(8))… dropped — device set changed",
+                category: "MultiDevice"
+            )
+            recipientDeviceCache[recipientUserId] = nil
+            return nil
+        }
+        return cache.bundles
+    }
+
+    /// Whether a bundle fetch for this recipient must consume a one-time pre-key.
+    ///
+    /// Only an X3DH consumes one, and X3DH happens for a device we have no session with. The call
+    /// site passed `true` unconditionally while its own comment justified it with "a device we
+    /// have no session with yet needs X3DH" — so every message to a two-device peer spent one of
+    /// each device's pre-keys, and the hundred uploaded at link time lasted a hundred messages.
+    ///
+    /// Unknown counts as "yes": a recipient we hold no devices for is one we have certainly not
+    /// established sessions with.
+    private func fanOutNeedsOneTimePrekey(for recipientUserId: String) -> Bool {
+        let context = PersistenceController.shared.container.viewContext
+        let known = SessionAddressing.devices(ofPeer: recipientUserId, in: context).map(\.deviceId)
+        return Self.needsOneTimePrekey(knownDeviceIds: known) {
+            CryptoManager.shared.hasSession(for: $0)
+        }
+    }
+
+    /// Whether a cached entry still describes the recipient's devices.
+    ///
+    /// **An empty `known` is not a match failure.** It means we hold no `PeerDevice` rows for that
+    /// account — no evidence either way — and the TTL decides alone. Reading it as "they have no
+    /// devices" would drop every entry on a peer we have never fetched devices for, which is
+    /// exactly the peer the cache is for. Same shape as the empty own-device set in
+    /// `StealthSenderService.classifyOtherDevice`, and the same trap.
+    nonisolated static func cachedSetStillMatches(cached: [String], known: [String]) -> Bool {
+        guard !known.isEmpty else { return true }
+        return Set(known) == Set(cached)
+    }
+
+    /// Whether a bundle fetch must spend a one-time pre-key.
+    ///
+    /// Only an X3DH spends one, and that happens for a device we hold no session with. Unknown
+    /// counts as yes: a recipient we hold no devices for is one we have certainly not established
+    /// sessions with, and under-consuming would leave the fan-out unable to open a session at all.
+    /// The two errors are not symmetrical — spending one we did not need costs a pre-key, not
+    /// spending one we did costs the message.
+    nonisolated static func needsOneTimePrekey(
+        knownDeviceIds: [String],
+        hasSession: (String) -> Bool
+    ) -> Bool {
+        guard !knownDeviceIds.isEmpty else { return true }
+        return knownDeviceIds.contains { !hasSession($0) }
     }
 
     // MARK: - Public API
@@ -296,9 +405,24 @@ final class MultiDeviceSendCoordinator {
             return .notRetryable
         }
         do {
-            // Per-device fan-out to a recipient: a device we have no session with yet needs
-            // X3DH, so this fetch legitimately consumes a one-time pre-key.
-            let bundles = try await KeyServiceClient.shared.getPreKeyBundles(userId: recipientUserId, consumeOneTimePrekey: true)
+            // Cache first: this used to open with the fetch, so every message to a multi-device
+            // recipient cost a key-service round trip and pushed the conversation past
+            // `BUNDLE_RATE_LIMIT_PER_MIN`. See `recipientCacheTTL` for what bounds the staleness.
+            //
+            // And the fetch consumes a one-time pre-key only when one will actually be spent —
+            // the comment here used to say "a device we have no session with yet needs X3DH"
+            // while the call asked unconditionally.
+            let bundles: [DeviceBundleData]
+            if let cached = cachedRecipientBundles(for: recipientUserId) {
+                bundles = cached
+            } else {
+                let fetched = try await KeyServiceClient.shared.getPreKeyBundles(
+                    userId: recipientUserId,
+                    consumeOneTimePrekey: fanOutNeedsOneTimePrekey(for: recipientUserId)
+                )
+                recipientDeviceCache[recipientUserId] = DeviceCache(bundles: fetched, fetchedAt: Date())
+                bundles = fetched
+            }
             guard !bundles.isEmpty else {
                 await recordSkip("no_bundles", peer: recipientUserId)
                 enqueueRetry(messageId, recipientUserId, senderUserId, owed: [])
