@@ -21,6 +21,15 @@
 //      opens Diagnostics. Without this a crash reported today would not be shareable until
 //      tomorrow, which on a 17-day schedule is most of the budget.
 //
+//  MetricKit does not carry an exception's own account of itself. 2026-09-04, build 653: entering
+//  Synaps crashed three times in a row, and the payload said `exceptionType=10 exceptionCode=0
+//  signal=6` with a call stack that symbolicated to `objc_exception_rethrow → _objc_terminate →
+//  abort` — an uncaught Objective-C exception whose name and reason appear nowhere in it. So
+//  `installUncaughtExceptionHandler` is here too, and the rule above needs one word of precision:
+//  what must not run in a dying process is a *signal* handler, on a trashed stack under
+//  async-signal-safety. An uncaught-exception handler is not that. It runs before `abort()`, on a
+//  working thread, and does one bounded thing.
+//
 //  What this is NOT: production crash telemetry. There is no backend to send to, and the on-disk
 //  store follows the file-logging rule in `LogCollector` — nothing is persisted in an App Store
 //  build. What ships to users is the capture; what we can read is the TestFlight path.
@@ -70,6 +79,7 @@ final class CrashDiagnosticsCollector: NSObject {
     /// Subscribe at launch. Cheap and idempotent; a no-op where MetricKit does not exist
     /// (simulator delivers nothing, macOS Desktop is a different target).
     func start() {
+        Self.installUncaughtExceptionHandler()
 #if canImport(MetricKit) && os(iOS)
         MXMetricManager.shared.add(self)
         Log.info("CrashDiagnostics: subscribed to MetricKit", category: "Diagnostics")
@@ -172,6 +182,75 @@ final class CrashDiagnosticsCollector: NSObject {
         """
     }
 #endif
+
+    // MARK: - Uncaught Objective-C exceptions
+
+    /// Previously installed handler, so this does not silently replace someone else's.
+    private nonisolated(unsafe) static var previousHandler: (@convention(c) (NSException) -> Void)?
+    private static var handlerInstalled = false
+
+    /// Record the two strings only the throwing process holds: `name` and `reason`.
+    ///
+    /// The report goes straight to `crashes.log` rather than through `Log`. The rotating message
+    /// log is a four-file ring and each relaunch consumes one, so a crash loop erases its own
+    /// cause: on 2026-09-04 four launches in thirty-nine seconds left an export in which the
+    /// session that performed the triggering action no longer existed. `crashes.log` is appended
+    /// to and survives that.
+    ///
+    /// Bounded on purpose — format one string, append it, return. No allocation-heavy work, no
+    /// actor hop, no async: the process is about to `abort()` and anything that blocks is a
+    /// deadlock instead of a diagnosis.
+    static func installUncaughtExceptionHandler() {
+        guard !handlerInstalled else { return }
+        handlerInstalled = true
+        previousHandler = NSGetUncaughtExceptionHandler()
+
+        NSSetUncaughtExceptionHandler { exception in
+            let stamp = ISO8601DateFormatter().string(from: Date())
+            let frames = exception.callStackSymbols.prefix(32).joined(separator: "\n  ")
+            let report = """
+
+            ========================================
+            UNCAUGHT EXCEPTION
+            ========================================
+            When:   \(stamp)
+            Name:   \(exception.name.rawValue)
+            Reason: \(exception.reason ?? "<none>")
+            Stack:
+              \(frames)
+            ========================================
+
+            """
+            CrashDiagnosticsCollector.writeSynchronously(report)
+            // Best effort, and second: it lands in the ring log that a relaunch may rotate away.
+            Log.error(
+                "UNCAUGHT \(exception.name.rawValue): \(exception.reason ?? "<none>")",
+                category: "Diagnostics"
+            )
+            CrashDiagnosticsCollector.previousHandler?(exception)
+        }
+    }
+
+    /// Append from whatever thread threw, with no actor hop.
+    ///
+    /// Duplicates `append` rather than calling it: `append` is `@MainActor` (this class is), and
+    /// an exception handler cannot await anything. `LogCollector.isEnabled` is a `let` on a plain
+    /// class, so the persistence rule is still read here and still honoured.
+    nonisolated static func writeSynchronously(_ report: String) {
+        guard LogCollector.shared.isEnabled else { return }
+        guard let data = report.data(using: .utf8) else { return }
+        let url = crashFileURL
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        if let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile()
+            handle.write(data)
+            try? handle.close()
+        } else {
+            try? data.write(to: url, options: .atomic)
+        }
+    }
 
     // MARK: - Store
 

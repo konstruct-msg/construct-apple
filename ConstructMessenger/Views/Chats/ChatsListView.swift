@@ -213,6 +213,13 @@ struct ChatsListView: View {
                         } label: {
                             Label(LocalizedStringKey("delete"), systemImage: "trash")
                         }
+                        // Stated, not inherited. `role: .destructive` colours a swipe action red
+                        // only while nothing above it names a tint; `MainTabView` applies
+                        // `.tint(Color.CT.accent)` to the whole tab view, so this button came out
+                        // the same blue as "mark unread" beside it and stopped reading as the
+                        // destructive one. Its two neighbours already state their colour — this
+                        // was the only button in the group that did not.
+                        .tint(Color.CT.danger)
                         Button {
                             toggleMarkUnread(chat)
                         } label: {

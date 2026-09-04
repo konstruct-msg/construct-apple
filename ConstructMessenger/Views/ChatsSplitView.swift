@@ -339,13 +339,15 @@ struct ChatsSplitView: View {
                             Button(role: .destructive) { deleteChat(chat) } label: {
                                 Label(LocalizedStringKey("delete"), systemImage: "trash")
                             }
+                            // See ChatsListView: an ancestor tint beats `role: .destructive`.
+                            .tint(Color.CT.danger)
                             Button { toggleMarkUnread(chat) } label: {
                                 Label(
                                     LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
                                     systemImage: chat.unreadCount > 0 ? "envelope.open" : "envelope.badge"
                                 )
                             }
-                            .tint(.blue)
+                            .tint(Color.CT.accentDim)
                         }
                         .swipeActions(edge: .leading, allowsFullSwipe: true) {
                             Button { togglePin(chat) } label: {

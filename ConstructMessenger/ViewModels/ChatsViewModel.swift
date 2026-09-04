@@ -227,12 +227,30 @@ class ChatsViewModel {
     }
 
     func deleteChatWithEndSession(chat: Chat) async {
-        if let userId = chat.otherUser?.id {
-            // Asked fresh rather than read from the cache: this runs once, on a deliberate user
-            // action, and a cold cache reads as "no siblings" — the answer that sends.
-            let devices = await MultiDeviceSendCoordinator.shared.refreshOwnDevices(
-                myUserId: AuthSessionManager.shared.currentUserId ?? ""
-            )
+        // Logged before the first `await`, because everything after it can fail to arrive.
+        // 2026-09-04: a chat was deleted in the UI, the app died on another screen moments later,
+        // and the conversation was back after relaunch — with no line anywhere saying a delete had
+        // been asked for. The durable part of this method is its last statement; the record that
+        // it was wanted has to come first.
+        let requestedFor = chat.otherUser?.id
+        Log.info(
+            "Chat delete requested for \(requestedFor?.prefix(8).description ?? "unknown")…",
+            category: "ChatsViewModel"
+        )
+        if let userId = requestedFor {
+            // The cache first, the network only when it is cold. Both answers are the same
+            // `[DeviceBundleData]`, and `knownOwnDevices` returns `[]` on a stale or missing entry
+            // — which `mayAnnounceTeardown` reads as "unknown", the non-announcing answer. So the
+            // fetch is what a cold cache costs, not what every delete costs.
+            //
+            // It is not a micro-optimisation: until the local delete runs, the user has been shown
+            // a chat disappearing that is still on disk, and each round trip in front of it widens
+            // the window in which a crash, a kill or a stalled network makes that false.
+            let myUserId = AuthSessionManager.shared.currentUserId ?? ""
+            var devices = MultiDeviceSendCoordinator.shared.knownOwnDevices(myUserId: myUserId)
+            if devices.isEmpty {
+                devices = await MultiDeviceSendCoordinator.shared.refreshOwnDevices(myUserId: myUserId)
+            }
             if Self.mayAnnounceTeardown(ownDeviceCount: devices.isEmpty ? nil : devices.count) {
                 do {
                     try await SessionLifecycleController.shared.sendEndSession(to: userId, reason: "chat_deleted")
