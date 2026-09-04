@@ -151,6 +151,9 @@ final class ChatSessionManager {
         viewModel?.isInitializingSession = true
         await sessionInitService.initializeSessionProactively(
             userId: userId,
+            // Reached from opening a conversation and from sending into one; both are a person
+            // waiting on this session, which is what the flag means.
+            hasOutboundWork: true,
             onSuccess: { [weak self] in
                 guard let self else { return }
                 self.viewModel?.isSessionReady = true

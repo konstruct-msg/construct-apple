@@ -3710,6 +3710,100 @@ public func FfiConverterTypeHybridSignatureKeyPair_lower(_ value: HybridSignatur
 }
 
 
+/**
+ * What the caller knows at the moment it wants a session. Every field is something only the
+ * caller can see — the network, the outbox, the UI; the decision over them is made in the core.
+ */
+public struct InitiationContext: Equatable, Hashable {
+    /**
+     * Ours and theirs in the space the session is addressed by. Anything else ranks a
+     * different pair — see tie_break_role.
+     */
+    public var myDeviceId: String
+    public var peerDeviceId: String
+    /**
+     * We sent a SESSION_RESET_INIT to this device; it is neither acknowledged nor expired.
+     */
+    public var ourInitInFlight: Bool
+    /**
+     * We hold the peer's init — received, not yet completed.
+     */
+    public var peerInitInFlight: Bool
+    /**
+     * Something is waiting to be sent to this device. Not "a warm session would be nice".
+     */
+    public var haveOutboundWork: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Ours and theirs in the space the session is addressed by. Anything else ranks a
+         * different pair — see tie_break_role.
+         */myDeviceId: String, peerDeviceId: String, 
+        /**
+         * We sent a SESSION_RESET_INIT to this device; it is neither acknowledged nor expired.
+         */ourInitInFlight: Bool, 
+        /**
+         * We hold the peer's init — received, not yet completed.
+         */peerInitInFlight: Bool, 
+        /**
+         * Something is waiting to be sent to this device. Not "a warm session would be nice".
+         */haveOutboundWork: Bool) {
+        self.myDeviceId = myDeviceId
+        self.peerDeviceId = peerDeviceId
+        self.ourInitInFlight = ourInitInFlight
+        self.peerInitInFlight = peerInitInFlight
+        self.haveOutboundWork = haveOutboundWork
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension InitiationContext: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInitiationContext: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InitiationContext {
+        return
+            try InitiationContext(
+                myDeviceId: FfiConverterString.read(from: &buf), 
+                peerDeviceId: FfiConverterString.read(from: &buf), 
+                ourInitInFlight: FfiConverterBool.read(from: &buf), 
+                peerInitInFlight: FfiConverterBool.read(from: &buf), 
+                haveOutboundWork: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: InitiationContext, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.myDeviceId, into: &buf)
+        FfiConverterString.write(value.peerDeviceId, into: &buf)
+        FfiConverterBool.write(value.ourInitInFlight, into: &buf)
+        FfiConverterBool.write(value.peerInitInFlight, into: &buf)
+        FfiConverterBool.write(value.haveOutboundWork, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInitiationContext_lift(_ buf: RustBuffer) throws -> InitiationContext {
+    return try FfiConverterTypeInitiationContext.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInitiationContext_lower(_ value: InitiationContext) -> RustBuffer {
+    return FfiConverterTypeInitiationContext.lower(value)
+}
+
+
 public struct InviteSignature: Equatable, Hashable {
     public var signature: [UInt8]
 
@@ -6198,6 +6292,104 @@ public func FfiConverterTypeDeliveryAudience_lower(_ value: DeliveryAudience) ->
 }
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Whether to open a session with a device right now, and as which side.
+ * See orchestration::initiation_plan. `tie_break_role` settles a collision that has happened;
+ * this settles whether to walk into one, and both peers must answer it compatibly.
+ */
+
+public enum InitiationDecision: Equatable, Hashable {
+    
+    /**
+     * Open a fresh session as INITIATOR now.
+     */
+    case initiate
+    /**
+     * One of ours is already in flight — join it. A second init derives a new root key, spends
+     * another one-time prekey, and orphans the first SESSION_RESET_INIT.
+     */
+    case joinInFlight
+    /**
+     * The peer's init is arriving and outranks ours. Take the responder side.
+     */
+    case yieldToPeer
+    /**
+     * Nothing to send and no init in the air. Opening spends a prekey on a session that carries
+     * nothing and doubles the chance of colliding with the peer's next one.
+     */
+    case wait
+
+
+
+}
+
+#if compiler(>=6)
+extension InitiationDecision: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInitiationDecision: FfiConverterRustBuffer {
+    typealias SwiftType = InitiationDecision
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InitiationDecision {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .initiate
+        
+        case 2: return .joinInFlight
+        
+        case 3: return .yieldToPeer
+        
+        case 4: return .wait
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: InitiationDecision, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .initiate:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .joinInFlight:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .yieldToPeer:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .wait:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInitiationDecision_lift(_ buf: RustBuffer) throws -> InitiationDecision {
+    return try FfiConverterTypeInitiationDecision.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInitiationDecision_lower(_ value: InitiationDecision) -> RustBuffer {
+    return FfiConverterTypeInitiationDecision.lower(value)
+}
+
+
 
 /**
  * Errors that can occur during MLS group operations.
@@ -7629,6 +7821,21 @@ public func openWithDeviceKey(sealedBox: [UInt8], ourIdentityPriv: [UInt8])throw
     )
 })
 }
+/**
+ * Whether to open a session with a device now, and as which side.
+ *
+ * Called at the moment a client wants a session and has none it can use. Answering this
+ * locally is what produced 2026-09-04: both sides opened an INITIATOR session thirty-three
+ * seconds apart, each alone when it decided, and the conversation stopped for thirty-two
+ * seconds until one fell back to responder.
+ */
+public func planInitiation(context: InitiationContext) -> InitiationDecision  {
+    return try!  FfiConverterTypeInitiationDecision_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_plan_initiation(
+        FfiConverterTypeInitiationContext_lower(context),$0
+    )
+})
+}
 public func planReceivingDecrypt(sessionDeviceIds: [String], preferredDeviceId: String) -> [String]  {
     return try!  FfiConverterSequenceString.lift(try! rustCall() {
     uniffi_construct_core_fn_func_plan_receiving_decrypt(
@@ -8089,6 +8296,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_open_with_device_key() != 7865) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_plan_initiation() != 61324) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_plan_receiving_decrypt() != 26416) {

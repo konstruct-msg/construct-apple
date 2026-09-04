@@ -218,6 +218,12 @@ final class SessionCoordinator: MessageRouterDelegate {
     func configure(streamManager: MessageStreamManager) {
         self.streamManager = streamManager
         messageRouter.delegate = self
+        // The core's initiation plan needs to know whether the peer's own init is already in our
+        // hands. The evidence is in the pending queue and `SessionInitializationService` does not
+        // own it, so it is supplied from here — the one place that owns both.
+        sessionInitService.peerInitInFlight = { [weak self] userId in
+            self?.peerHandshakeIsHeld(for: userId) ?? false
+        }
         // Cooldown timer fires off the incoming-message path; reuse the same END_SESSION
         // consumer so an owed teardown actually leaves the device.
         //
@@ -587,6 +593,13 @@ final class SessionCoordinator: MessageRouterDelegate {
 
                 await self.sessionInitService.initializeSessionProactively(
                     userId: contactId,
+                    // The only `false` in the codebase, and the reason the parameter exists.
+                    // A prewarm carries nothing: it opens a session because one is missing after a
+                    // restart. 2026-09-04 12:30:11 this ran, and thirty-three seconds later the
+                    // peer's user typed and opened a second INITIATOR session — two root keys, a
+                    // divergence on both sides, thirty-two seconds of silence and four messages
+                    // delivered in a batch. The core now answers `Wait` here.
+                    hasOutboundWork: false,
                     onSuccess: { Log.info("Prewarm \(contactId.prefix(8))…", category: "SessionInit") },
                     onFailure: { err in Log.info("Prewarm \(contactId.prefix(8))…: \(err.localizedDescription)", category: "SessionInit") }
                 )
@@ -903,6 +916,8 @@ final class SessionCoordinator: MessageRouterDelegate {
             defer { self.initiatorReinitInFlight.remove(userId) }
             await self.sessionInitService.initializeSessionProactively(
                 userId: userId,
+                // A divergence forced this; the SESSION_RESET_INIT is itself the thing to send.
+                hasOutboundWork: true,
                 onSuccess: { },
                 onFailure: { err in
                     Log.error("SESSION_STATE[initiator_announce_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
@@ -950,6 +965,8 @@ final class SessionCoordinator: MessageRouterDelegate {
             defer { endInit() }
             await self.sessionInitService.initializeSessionProactively(
                 userId: userId,
+                // The peer has queued messages and no session — the queue is the work.
+                hasOutboundWork: true,
                 onSuccess: { },
                 onFailure: { err in
                     Log.error("SESSION_STATE[zombie_recover_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
@@ -991,6 +1008,19 @@ final class SessionCoordinator: MessageRouterDelegate {
     }
 
     /// A message in the shape the core's planner reads — header facts only, no ciphertext.
+    /// Whether the peer's own session init is sitting in our pending queue, unopened.
+    ///
+    /// "Unopened" is the whole content: if it had opened a session we would not be asking whether
+    /// to start one. What is held may be an opener or may be mid-ratchet traffic, and the
+    /// difference is not ours to judge — `receivingInitKind` is the core's classifier, and the same
+    /// one `plan_receiving_init` uses to pick a carrier. Reading `isSessionResetInit` directly here
+    /// would be a second opinion on a question that already has an authority.
+    private func peerHandshakeIsHeld(for userId: String) -> Bool {
+        messageRouter.pendingQueue.messages(for: userId).contains { message in
+            receivingInitKind(carrier: Self.initCarrier(message)) == .handshake
+        }
+    }
+
     private static func initCarrier(_ message: ChatMessage) -> ReceivingInitCarrier {
         ReceivingInitCarrier(
             messageNumber: message.messageNumber,
@@ -1763,6 +1793,9 @@ final class SessionCoordinator: MessageRouterDelegate {
                     Log.info("SESSION_STATE[tie_break_watchdog]: no ack — re-sending SESSION_RESET_INIT for \(userId.prefix(8))…", category: "SessionInit")
                     await self.sessionInitService.initializeSessionProactively(
                         userId: userId,
+                        // The watchdog fires because our own SRI went unacknowledged — the work is
+                        // the re-send.
+                        hasOutboundWork: true,
                         onSuccess: { },
                         onFailure: { err in
                             Log.error("SESSION_STATE[watchdog_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
@@ -1822,6 +1855,9 @@ final class SessionCoordinator: MessageRouterDelegate {
                     defer { Task { @MainActor in endInit() } }
                     await self.sessionInitService.initializeSessionProactively(
                         userId: userId,
+                        // The fallback exists because the peer's init never arrived; taking the
+                        // initiator role is the only way the conversation moves.
+                        hasOutboundWork: true,
                         onSuccess: { Log.info("RESPONDER fallback \(userId.prefix(8))…", category: "SessionInit") },
                         onFailure: { err in Log.error("RESPONDER fallback \(userId.prefix(8))…: \(err.localizedDescription)", category: "SessionInit") }
                     )
@@ -2148,6 +2184,8 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
                 await self.sessionInitService.initializeSessionProactively(
                     userId: userId,
+                    // A message is being sent through this; that is the definition of the flag.
+                    hasOutboundWork: true,
                     onSuccess: { cont.resume(returning: ()) },
                     onFailure: { cont.resume(throwing: $0) }
                 )

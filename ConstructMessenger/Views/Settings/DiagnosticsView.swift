@@ -533,6 +533,9 @@ struct DiagnosticsView: View {
         Task { @MainActor in
             await SessionInitializationService.shared.initializeSessionProactively(
                 userId: target.id,
+                // A person pressed a button that says "re-initialise". Deferring that would be
+                // a control that does nothing and says nothing.
+                hasOutboundWork: true,
                 onSuccess: {
                     reinitStatus = "OK → \(target.name): now send TWO messages"
                     reinitOk = true

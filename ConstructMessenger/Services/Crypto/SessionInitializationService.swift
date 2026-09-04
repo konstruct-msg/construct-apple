@@ -24,6 +24,13 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
     /// no amount of retrying makes a deleted account exist. See `VanishedPeerStore`.
     case peerNotFound
 
+    /// The core said not to open a session right now — `plan_initiation` answered `Wait` or
+    /// `YieldToPeer`. Not a failure: nothing went wrong and nothing needs retrying. It is
+    /// delivered through `onFailure` because that is the only channel a caller awaiting a
+    /// continuation can be resumed on, and a caller that treats every error as terminal would
+    /// otherwise hang.
+    case initiationDeferred(decision: String)
+
     var errorDescription: String? {
         switch self {
         case .staleSPKBundle(let epoch, let knownEpoch):
@@ -36,6 +43,8 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
             return "Incoming message is not a session handshake"
         case .peerNotFound:
             return "This account no longer exists"
+        case .initiationDeferred(let decision):
+            return "Session init deferred by the core: \(decision)"
         }
     }
 }
@@ -262,6 +271,14 @@ class SessionInitializationService {
     /// atomic, so two concurrent callers can never both start a run.
     private var proactiveInitTasks: [String: Task<ProactiveInitOutcome, Never>] = [:]
 
+    /// Whether the peer's own session init is in our hands — received and not yet completed.
+    ///
+    /// Injected rather than read, because the evidence lives in `MessageRouter.pendingQueue` and
+    /// this service does not own it. `SessionCoordinator.configure` supplies it; until it does,
+    /// the answer is `false`, which is the same answer as "we have seen nothing from them" and is
+    /// therefore safe rather than merely convenient.
+    var peerInitInFlight: ((String) -> Bool)?
+
     #if DEBUG
     /// Test seam: substitutes the init run so the coalescing wrapper can be exercised without
     /// the network. Returns `true` for success. Nil in production.
@@ -282,11 +299,40 @@ class SessionInitializationService {
     /// Callers are **coalesced, not skipped**: a late joiner awaits the in-flight run and then
     /// receives the same outcome through its own callbacks. Skipping would strand its queued
     /// messages, since `onSuccess` is what flushes them.
+    /// - Parameter hasOutboundWork: whether something is actually waiting to go to this peer — a
+    ///   typed message, a queued one, a handshake we owe. No default on purpose: the one call site
+    ///   that answers `false` is the one that caused the 2026-09-04 outage, and a default would
+    ///   let the next call site inherit an answer nobody chose.
     func initializeSessionProactively(
         userId: String,
+        hasOutboundWork: Bool,
         onSuccess: @escaping () -> Void,
         onFailure: @escaping (Error) -> Void
     ) async {
+        // Asked here, before the bundle fetch, because the fetch is what spends the peer's
+        // one-time prekey. Asking after it would answer a question that has already cost what it
+        // was meant to save.
+        let decision = planInitiation(context: InitiationContext(
+            myDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
+            // The peer's pinned device, or nothing at first contact — the core takes an
+            // unnameable peer as "cannot rank", not as "cannot write to".
+            peerDeviceId: SessionAddressing.contactId(forPeer: userId) ?? "",
+            ourInitInFlight: proactiveInitTasks[userId] != nil,
+            peerInitInFlight: peerInitInFlight?(userId) ?? false,
+            haveOutboundWork: hasOutboundWork
+        ))
+        switch decision {
+        case .initiate, .joinInFlight:
+            break  // both continue below; `joinInFlight` is the coalescing branch
+        case .wait, .yieldToPeer:
+            Log.info(
+                "SESSION_STATE[initiation_deferred]: \(decision) for \(userId.prefix(8))… — outboundWork=\(hasOutboundWork), peerInit=\(peerInitInFlight?(userId) ?? false)",
+                category: "SessionInit"
+            )
+            onFailure(SessionError.initiationDeferred(decision: "\(decision)"))
+            return
+        }
+
         let outcome: ProactiveInitOutcome
         if let inFlight = proactiveInitTasks[userId] {
             Log.info("SESSION_STATE[proactive_init_coalesced]: joining in-flight init for \(userId.prefix(8))…", category: "SessionInit")
