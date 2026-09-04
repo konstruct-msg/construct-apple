@@ -86,10 +86,35 @@ class LogCollector {
     
     // MARK: - Logging
     
+    /// The most recent lines, held in memory as well as written.
+    ///
+    /// The file write below is asynchronous, so the lines a crash most needs are exactly the ones
+    /// still in `queue` when the process dies. Both uncaught-exception reports of 2026-09-04 cut
+    /// off mid-sentence for that reason, and the four-file ring then rotated the rest away on
+    /// relaunch. This ring is read synchronously by `CrashDiagnosticsCollector`.
+    private let recentLock = NSLock()
+    private var recent: [String] = []
+    private let recentCapacity = 60
+
+    /// The last `count` lines, newest last. Safe from any thread, including a dying one.
+    func recentLines(_ count: Int) -> [String] {
+        recentLock.lock()
+        defer { recentLock.unlock() }
+        return Array(recent.suffix(count))
+    }
+
     /// Append log message to file
     func append(level: String, category: String, message: String) {
         guard isEnabled else { return }
-        
+
+        // Before the hop, so a line exists in memory even when the process does not survive to
+        // write it.
+        let stamped = "[\(ISO8601DateFormatter().string(from: Date()))] [\(level)] [\(category)] \(message)"
+        recentLock.lock()
+        recent.append(stamped)
+        if recent.count > recentCapacity { recent.removeFirst(recent.count - recentCapacity) }
+        recentLock.unlock()
+
         queue.async { [weak self] in
             guard let self = self else { return }
             

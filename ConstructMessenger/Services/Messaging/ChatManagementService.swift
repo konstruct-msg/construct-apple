@@ -121,21 +121,28 @@ class ChatManagementService {
     /// remains visible in the Synaps list and can be messaged again.
     /// To fully remove a contact use pruneContact(userId:).
     func deleteChat(_ chat: Chat) {
+        let peerId = chat.otherUser?.id
+        deleteChatLocally(chat)
+        if let peerId { archiveSessions(ofPeer: peerId) }
+    }
+
+    /// Remove the conversation from this device, and nothing else.
+    ///
+    /// Split out from `deleteChat` because the two halves have different deadlines. This one is
+    /// what the person asked for and it depends on nothing: no network, no session, no peer. It
+    /// must therefore land **before** anything that can block or die, which is the opposite of the
+    /// order it used to run in.
+    ///
+    /// 2026-09-04 16:16:49 a delete was requested; the app died two seconds later while the
+    /// END_SESSION it was waiting on was still in flight, and the conversation was there again on
+    /// the next launch. The row had already gone from the list, so for those two seconds the
+    /// screen and the store disagreed about something the user had been told was done.
+    func deleteChatLocally(_ chat: Chat) {
         guard let context = viewContext else {
             Log.error("ChatManagementService: No viewContext available", category: "ChatManagementService")
             return
         }
-
         let chatId = chat.id
-        let otherUser = chat.otherUser
-
-        // Archive crypto session. `hasStoredSessionState`, not `hasSession`: the latter sees only
-        // what the core has loaded, and a chat nobody opened this run has its session on disk
-        // only — so this guard used to skip, leaving a Keychain entry with no contact attached.
-        if let userId = otherUser?.id, CryptoManager.shared.hasStoredSessionStateForAnyDevice(ofPeer: userId) {
-            let retired = CryptoManager.shared.archiveAllSessions(ofPeer: userId, reason: .manualReset)
-            Log.info("Archived \(retired) crypto session(s) for user: \(userId)", category: "ChatManagementService")
-        }
 
         // Delete only the Chat (cascade removes Messages).
         // User entity is intentionally kept — contact lives in Synaps.
@@ -148,6 +155,21 @@ class ChatManagementService {
         } catch {
             Log.error("Failed to delete chat: \(error)", category: "ChatManagementService")
         }
+    }
+
+    /// Retire every stored session with this peer.
+    ///
+    /// Runs **after** any END_SESSION the caller wants to send, because sending one needs the
+    /// session this destroys. Takes the peer id rather than the chat: by the time it is called the
+    /// chat row may already be gone, which is the point.
+    ///
+    /// `hasStoredSessionState`, not `hasSession`: the latter sees only what the core has loaded,
+    /// and a chat nobody opened this run has its session on disk only — so this guard used to
+    /// skip, leaving a Keychain entry with no contact attached.
+    func archiveSessions(ofPeer userId: String) {
+        guard CryptoManager.shared.hasStoredSessionStateForAnyDevice(ofPeer: userId) else { return }
+        let retired = CryptoManager.shared.archiveAllSessions(ofPeer: userId, reason: .manualReset)
+        Log.info("Archived \(retired) crypto session(s) for user: \(userId)", category: "ChatManagementService")
     }
 
     /// Fully remove a contact: delete User, associated Chat + Messages, session, and

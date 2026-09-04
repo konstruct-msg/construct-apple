@@ -230,22 +230,29 @@ class ChatsViewModel {
         // Logged before the first `await`, because everything after it can fail to arrive.
         // 2026-09-04: a chat was deleted in the UI, the app died on another screen moments later,
         // and the conversation was back after relaunch — with no line anywhere saying a delete had
-        // been asked for. The durable part of this method is its last statement; the record that
-        // it was wanted has to come first.
+        // been asked for.
         let requestedFor = chat.otherUser?.id
         Log.info(
             "Chat delete requested for \(requestedFor?.prefix(8).description ?? "unknown")…",
             category: "ChatsViewModel"
         )
+
+        // The delete lands first, and on purpose. It is what the person asked for, it needs
+        // nothing but the store, and the row has already left the list — so everything that can
+        // block or die belongs *after* it. On 2026-09-04 it ran last: the app died two seconds
+        // into the END_SESSION round trip and the conversation was back on the next launch, one
+        // of two requested deletes in that session having survived.
+        //
+        // The session outlives this by design. `deleteChatLocally` removes rows and nothing else,
+        // so the END_SESSION below still has a session to be encrypted with, and the archive runs
+        // after it exactly as before.
+        chatManagementService.deleteChatLocally(chat)
+
         if let userId = requestedFor {
             // The cache first, the network only when it is cold. Both answers are the same
             // `[DeviceBundleData]`, and `knownOwnDevices` returns `[]` on a stale or missing entry
             // — which `mayAnnounceTeardown` reads as "unknown", the non-announcing answer. So the
             // fetch is what a cold cache costs, not what every delete costs.
-            //
-            // It is not a micro-optimisation: until the local delete runs, the user has been shown
-            // a chat disappearing that is still on disk, and each round trip in front of it widens
-            // the window in which a crash, a kill or a stalled network makes that false.
             let myUserId = AuthSessionManager.shared.currentUserId ?? ""
             var devices = MultiDeviceSendCoordinator.shared.knownOwnDevices(myUserId: myUserId)
             if devices.isEmpty {
@@ -255,7 +262,7 @@ class ChatsViewModel {
                 do {
                     try await SessionLifecycleController.shared.sendEndSession(to: userId, reason: "chat_deleted")
                 } catch {
-                    Log.error("END_SESSION failed before chat delete (continuing): \(error)", category: "ChatsViewModel")
+                    Log.error("END_SESSION failed after chat delete (continuing): \(error)", category: "ChatsViewModel")
                 }
             } else {
                 Log.info(
@@ -263,8 +270,9 @@ class ChatsViewModel {
                     category: "ChatsViewModel"
                 )
             }
+            // After the announce, never before: sending one needs the session this destroys.
+            chatManagementService.archiveSessions(ofPeer: userId)
         }
-        chatManagementService.deleteChat(chat)
         streamLifecycle.reconnectIfSubscriptionsChanged()
     }
 }

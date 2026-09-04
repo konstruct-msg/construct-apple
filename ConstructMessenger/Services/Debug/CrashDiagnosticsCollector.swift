@@ -208,6 +208,10 @@ final class CrashDiagnosticsCollector: NSObject {
         NSSetUncaughtExceptionHandler { exception in
             let stamp = ISO8601DateFormatter().string(from: Date())
             let frames = exception.callStackSymbols.prefix(32).joined(separator: "\n  ")
+            // The lines the file write never got to. The first two reports of this kind both
+            // ended mid-sentence and the relaunch rotated the rest away, so "what was on screen"
+            // had to be inferred twice from a stack with no frames of ours in it.
+            let tail = LogCollector.shared.recentLines(40).joined(separator: "\n  ")
             let report = """
 
             ========================================
@@ -218,6 +222,8 @@ final class CrashDiagnosticsCollector: NSObject {
             Reason: \(exception.reason ?? "<none>")
             Stack:
               \(frames)
+            Last log lines before the throw:
+              \(tail)
             ========================================
 
             """
