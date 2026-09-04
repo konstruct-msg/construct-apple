@@ -1008,17 +1008,31 @@ final class SessionCoordinator: MessageRouterDelegate {
     }
 
     /// A message in the shape the core's planner reads — header facts only, no ciphertext.
-    /// Whether the peer's own session init is sitting in our pending queue, unopened.
+    /// How recently a handshake must have arrived to count as the peer opening a session *now*.
     ///
-    /// "Unopened" is the whole content: if it had opened a session we would not be asking whether
-    /// to start one. What is held may be an opener or may be mid-ratchet traffic, and the
-    /// difference is not ours to judge — `receivingInitKind` is the core's classifier, and the same
-    /// one `plan_receiving_init` uses to pick a carrier. Reading `isSessionResetInit` directly here
-    /// would be a second opinion on a question that already has an authority.
+    /// A queue entry has no upper age — it stays until a session opens or the queue is cleared —
+    /// so "we are holding a handshake" and "their init is in flight" are different statements.
+    /// Twenty seconds is generous against what the real thing takes: once a bundle is in hand the
+    /// receiving init completes in hundredths of a second, and the fetch in front of it is about
+    /// one. What the window bounds is the other case, where the handshake cannot be opened at all.
+    private static let peerInitFreshness: TimeInterval = 20
+
+    /// Whether the peer's own session init is arriving right now — received, recent, unopened.
+    ///
+    /// "Unopened" is not enough on its own, and reading it as enough is what deadlocked
+    /// 2026-09-04 18:08: an unopenable handshake sat in the queue, this answered `true` forever,
+    /// and the core correctly and permanently said `YieldToPeer`. Thirty-eight refusals in three
+    /// minutes, every recovery path — zombie recover, the tie-break watchdog, the retry drain —
+    /// turned away from a peer with four queued messages and no session. A stuck handshake is the
+    /// opposite of an init in flight, and it was being reported as one.
+    ///
+    /// What is held may be an opener or mid-ratchet traffic, and that difference is not ours to
+    /// judge: `receivingInitKind` is the core's classifier, the same one `plan_receiving_init`
+    /// uses. Reading `isSessionResetInit` here would be a second opinion on a settled question.
     private func peerHandshakeIsHeld(for userId: String) -> Bool {
-        messageRouter.pendingQueue.messages(for: userId).contains { message in
-            receivingInitKind(carrier: Self.initCarrier(message)) == .handshake
-        }
+        messageRouter.pendingQueue
+            .messages(for: userId, arrivedWithin: Self.peerInitFreshness)
+            .contains { receivingInitKind(carrier: Self.initCarrier($0)) == .handshake }
     }
 
     private static func initCarrier(_ message: ChatMessage) -> ReceivingInitCarrier {
