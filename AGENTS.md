@@ -10,7 +10,7 @@ it.
 | Build, first clone, target flags | `~/Code/construct-docs/client/ios/BUILD_GUIDE.md` |
 | UniFFI bindings | `~/Code/construct-docs/client/ios/UNIFFI_GUIDE.md` |
 | Design system (symbols, components, migration) | `~/Code/construct-docs/client/ios/DESIGN_SYSTEM_RULES.md` |
-| Session lifecycle, keychain, crypto/transport path | `~/Code/construct-docs/client/ios/ARCHITECTURE_NOTES.md` |
+| Session lifecycle, keychain, crypto/transport path | `~/Code/construct-docs/client/ios/ARCHITECTURE_NOTES.md` · target machine: `~/Code/construct-docs/decisions/session-is-one-state-machine.md` |
 | Sealed control channel | `~/Code/construct-docs/client/ios/SEALED_CONTROL_CHANNEL_REMEDIATION.md` |
 | Binary data / CFE format | `~/Code/construct-docs/client/shared/construct-ffi-binary-format.md` |
 | Product wording | `~/Code/construct-docs/client/GLOSSARY_PRODUCT_LANGUAGE.md` |
@@ -144,6 +144,7 @@ has it at hand, which is how this rule keeps getting broken. It is:
 | Must two clients compute this **identically** for a message to be readable? | **core** |
 | Does it read or write ratchet/session state? | **core** |
 | Is it "which sessions does this operation touch"? | **core** — a plan is protocol |
+| Is it the **lifecycle phase** of a session (open / heal / tear down / retry)? | **core** — a machine is protocol; do not add a coordinator dictionary. `decisions/session-is-one-state-machine.md` |
 | Is it a mapping to a server-assigned id (account UUID, mailbox, chat row)? | this app |
 | Is it network, Core Data, Keychain, UI? | this app |
 
@@ -160,9 +161,10 @@ core, and let the core decide which of them the operation touches. Building the 
 did the translation here is exactly the inversion that produced `MultiDeviceSendCoordinator`.
 
 Current known exceptions, with their destination — do not treat them as settled placements:
-`SessionAddressing.teardownTargets` and the responder candidate walk in `PublicKeyBundleHandler` are
-plans living in Swift and belong in the core; `PeerDevice` is a legitimate local store but is not the
-authority on a peer's device set. See `decisions/a-peer-is-a-set-of-devices.md`.
+the account-keyed `sessionPhases` / confirm-gate / heal walk, and `contactId(forPeer:)` on the
+hot path, are the leftover of a coordinator that still decides; they belong in the core machine
+(`decisions/session-is-one-state-machine.md`). `PeerDevice` is a legitimate local store but is not
+the authority on a peer's device set. See `decisions/a-peer-is-a-set-of-devices.md`.
 
 ## Architecture invariants
 
@@ -242,12 +244,25 @@ have been a call to it.
 
 | Type | Format | Correct use |
 |------|--------|-------------|
-| `ServerUserId` | 36-char UUID `14f28d31-…` | all session addressing: `local_user_id`, `contact_id`, `conversation_id`, contact lists |
-| `CryptoDeviceId` | 32-char hex `6f5e37ac…` | multi-device linking, QR codes only |
+| `ServerUserId` | 36-char UUID `14f28d31-…` | above the seam: gRPC, Core Data, transcript, contacts, `conversation_id`, mailbox and stream cursors |
+| `CryptoDeviceId` | 32-char hex `6f5e37ac…` | below the seam: `local_user_id`, `contact_id`, the AD, Keychain session accounts, every `plan_*`; also device linking and QR |
 
-Everything passed to the Rust session layer (`init_session`, `init_receiving_session`,
-`set_local_user_id`) must be a `ServerUserId`. Mixing the spaces breaks the Double Ratchet AD →
-permanent AEAD failure on every session.
+**A session is a ratchet between two devices**, so everything passed to the Rust session layer
+(`set_local_user_id`, `init_session`, `init_receiving_session`, `encrypt_message`,
+`decrypt_message`, `remove_session`, `forget_contact_state`, every `plan_*`) is a
+`CryptoDeviceId`. The AD binds a **pair of device ids**; the core does not know `ServerUserId` and
+must not learn it. Mixing the spaces breaks the Double Ratchet AD → permanent AEAD failure on
+every session, with no error — the message simply does not open.
+
+This table said the opposite until 2026-09-05, naming `ServerUserId` as correct for
+`local_user_id` and `contact_id`. That was true until 2026-08-26 and then was not, and the file
+that overrides every other instruction went on saying it. `decisions/identity-spaces.md` carries
+why the original fix ("always `ServerUserId`") was the accidental half of the right answer:
+the bug required the two sides to *agree*, and an account cannot name a ratchet.
+
+`SessionAddressing` is the conversion and `PeerAddress` is the seam made into an object — an
+account always, a device when the event names one. Prefer them to a bare `String` at any module
+boundary.
 
 **Sealed sender content type:**
 
