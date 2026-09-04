@@ -269,7 +269,7 @@ struct SynapsView: View {
         ) {
             Button(LocalizedStringKey("synapses_prune_action"), role: .destructive) {
                 if let user = pruneTarget {
-                    chatsViewModel.pruneContact(userId: user.id)
+                    Task { await chatsViewModel.pruneContact(userId: user.id) }
                 }
                 pruneTarget = nil
             }

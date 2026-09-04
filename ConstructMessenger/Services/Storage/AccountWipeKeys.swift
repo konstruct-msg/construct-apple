@@ -42,6 +42,11 @@ enum AccountWipeKeys {
         "biometricEnabled",
         "pinLength",
 
+        // Contacts this identity pruned. Named `construct.*` in 2026-09-04 precisely so this list
+        // has to claim it: under its old `com.konstruct.*` name it escaped the scan below, and a
+        // wipe left one identity's pruned contacts shielding the next identity's messages.
+        "construct.deletedContacts.v2",
+
         // Stream position. The omission that prompted this file: leaving it behind means the next
         // identity resumes from the previous one's watermark.
         "construct.stream.cursor",

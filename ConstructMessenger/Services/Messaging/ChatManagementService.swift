@@ -176,7 +176,17 @@ class ChatManagementService {
     /// add to DeletedContactsStore so future messages from this person are ignored.
     ///
     /// This is the "prune synapse" action — irreversible from within the app.
-    func pruneContact(userId: String) {
+    /// Remove the contact, its chats and its messages from this device.
+    ///
+    /// Local only, and deliberately so. Whether the person may still write to us is the block
+    /// button's question and the server answers it (`is_blocked_by`, checked before delivery);
+    /// this one answers "what do I keep". Two controls that both partly refuse would be one
+    /// meaning with two carriers, and the weaker carrier is this one — a client-side refusal
+    /// still costs the delivery, the battery and the decrypt attempt.
+    ///
+    /// Sessions are **not** archived here. The caller announces the teardown first, and an
+    /// announcement needs the session this would destroy — see `ChatsViewModel.pruneContact`.
+    func pruneContactLocally(userId: String) {
         guard let context = viewContext else {
             Log.error("ChatManagementService: No viewContext available", category: "ChatManagementService")
             return
@@ -189,14 +199,6 @@ class ChatManagementService {
             return
         }
 
-        // Archive crypto session if one exists — in the core or on disk. Pruning is the
-        // irreversible action of the two, so leaving an unreachable session behind here is the
-        // worse half of the same defect: the contact is gone from every list and its ratchet is
-        // still in the Keychain, ready to be picked up by the next pairing with the same person.
-        if CryptoManager.shared.hasStoredSessionStateForAnyDevice(ofPeer: userId) {
-            CryptoManager.shared.archiveAllSessions(ofPeer: userId, reason: .manualReset)
-        }
-
         // Delete the associated chat (if any) — cascade removes Messages.
         if let chats = user.chats as? Set<Chat> {
             for chat in chats {
@@ -206,7 +208,8 @@ class ChatManagementService {
             }
         }
 
-        // Block future message delivery from this contact.
+        // Not a block: a short-lived shield against the server replaying this contact's backlog
+        // straight back into a fresh row. See `DeletedContactsStore`.
         DeletedContactsStore.shared.add(userId)
         context.delete(user)
 

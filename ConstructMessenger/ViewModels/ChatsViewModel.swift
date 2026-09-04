@@ -163,8 +163,56 @@ class ChatsViewModel {
         chatManagementService.deleteChat(chat)
     }
 
-    func pruneContact(userId: String) {
-        chatManagementService.pruneContact(userId: userId)
+    /// Remove a contact from this device, and tell them the session is over.
+    ///
+    /// **Why it announces at all.** Deleting a contact used to be silent, and silence made the
+    /// state unrecoverable: `MessageRouter` resurrects a pruned contact when a **handshake**
+    /// arrives, but a peer holding a healthy session never sends one — it sends mid-ratchet
+    /// traffic, which is dropped. 2026-09-04 16:18:15 a contact was pruned; the peer sent msgNum
+    /// 1 through 5 over the next fifty-one seconds, every one dropped, every one reading *sent*
+    /// on their screen, and the conversation came back only by scanning the QR code again. The
+    /// teardown makes the door that already exists reachable: their session dies, they
+    /// re-initialise, the handshake arrives, the contact returns.
+    ///
+    /// **Why that is not a hole.** Refusing someone is the block button's job, and the server
+    /// enforces it before delivery. This control answers "what do I keep", not "what may they
+    /// do", and a client-side refusal was never the second thing anyway — it dropped the message
+    /// after paying for it.
+    ///
+    /// **Why the order differs from a chat delete.** There the local delete runs first, because
+    /// everything after it can die. Here it cannot: the teardown resolves the peer's devices from
+    /// the very rows this prune destroys, so announcing afterwards would announce to nobody. The
+    /// window that buys is honest — dying inside it leaves the contact in place, which is a state
+    /// the person can see and repeat, unlike a row that has already left the list.
+    func pruneContact(userId: String) async {
+        Log.info("Contact prune requested for \(userId.prefix(8))…", category: "ChatsViewModel")
+
+        // Same gate as a chat delete, for the same reason: delivery does not name the sending
+        // device, so a secondary device announcing a teardown has it applied to whichever device
+        // the peer's addressing resolves to — possibly our primary. Until §D lands, only an
+        // account with one device may speak for it. On a multi-device account the prune stays
+        // silent, and the peer keeps a session we will not read; that is the pre-§D cost, stated
+        // rather than hidden.
+        let myUserId = AuthSessionManager.shared.currentUserId ?? ""
+        var devices = MultiDeviceSendCoordinator.shared.knownOwnDevices(myUserId: myUserId)
+        if devices.isEmpty {
+            devices = await MultiDeviceSendCoordinator.shared.refreshOwnDevices(myUserId: myUserId)
+        }
+        if Self.mayAnnounceTeardown(ownDeviceCount: devices.isEmpty ? nil : devices.count) {
+            do {
+                try await SessionLifecycleController.shared.sendEndSession(to: userId, reason: "contact_pruned")
+            } catch {
+                Log.error("END_SESSION failed before prune (continuing): \(error)", category: "ChatsViewModel")
+            }
+        } else {
+            Log.info(
+                "Prune of \(userId.prefix(8))…: not announcing teardown — \(devices.isEmpty ? "device set unknown" : "\(devices.count) device(s) on this account") and delivery cannot name which one asked",
+                category: "ChatsViewModel"
+            )
+        }
+
+        chatManagementService.pruneContactLocally(userId: userId)
+        chatManagementService.archiveSessions(ofPeer: userId)
         streamLifecycle.reconnectIfSubscriptionsChanged()
     }
 

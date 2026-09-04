@@ -151,7 +151,9 @@ struct DesktopSynapsView: View {
             isPresented: $showPruneAlert
         ) {
             Button(NSLocalizedString("synaps_prune_action", comment: ""), role: .destructive) {
-                if let user = pruneTarget { chatsViewModel.pruneContact(userId: user.id) }
+                if let user = pruneTarget {
+                    Task { await chatsViewModel.pruneContact(userId: user.id) }
+                }
                 pruneTarget = nil
             }
             Button(NSLocalizedString("cancel", comment: ""), role: .cancel) { pruneTarget = nil }
