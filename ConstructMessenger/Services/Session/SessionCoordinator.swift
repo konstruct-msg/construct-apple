@@ -1079,6 +1079,25 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
     }
 
+    /// Which device a completed RESPONDER init names to the core.
+    ///
+    /// The order is the whole point, and reversing it is the defect this exists to keep out. The
+    /// device the session **opened against** is derived from the bundle in hand; the pinned one is
+    /// looked up in `User.knownIdentityKey`. At first contact — which is exactly when a RESPONDER
+    /// init runs — the pinned row does not exist yet, so a lookup-first order returns `nil` for a
+    /// session that was just built and has already decrypted a message.
+    ///
+    /// `nil` only when neither answers, which is the state in which the core has nothing to be
+    /// told about.
+    nonisolated static func finalizeContactId(openedDevice: String?, pinnedDevice: String?) -> String? {
+        // Normalised here rather than at three call sites: an empty string reads as a named device
+        // at every `!= nil` downstream, and `contactId(forPeer:)` is not the only thing that can
+        // hand one back.
+        if let openedDevice, !openedDevice.isEmpty { return openedDevice }
+        guard let pinnedDevice, !pinnedDevice.isEmpty else { return nil }
+        return pinnedDevice
+    }
+
     private func handlePublicKeyBundleNeeded(userId: String, message: ChatMessage) async {
         if isInitializing(userId) {
             Log.info("Session init already in progress for \(userId.prefix(8))..., skipping duplicate attempt", category: "SessionInit")
@@ -1209,10 +1228,28 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // SaveSessionToSecureStore actions — the session was already persisted
                 // by initReceivingSession above.
                 do {
-                    let sessionBytes = try CryptoManager.shared.exportSession(contactId: userId)
-                    guard let resolvedContact = SessionAddressing.contactId(forPeer: userId) else {
+                    // The device the session actually opened against — not the one the contact
+                    // list can name. Both `exportSession` and the event below resolve through
+                    // `contactId(forPeer:)`, which reads the pinned `User.knownIdentityKey`; at
+                    // first contact that row is not written yet, and first contact is exactly when
+                    // a RESPONDER init runs. `openedDevice` is derived from the bundle in hand by
+                    // the same `deriveDeviceId` the seam uses, so it answers when the pin cannot,
+                    // and passing it through `contactId(forPeer:)` is a no-op — a crypto identity
+                    // is returned unchanged.
+                    //
+                    // Devices 2026-09-04 09:38:21, one account and one device on each side: a
+                    // session that had just reported `init_receiving_success` and decrypted 46
+                    // bytes was answered here with `sessionNotFound`, and the `catch` below sent
+                    // END_SESSION over it. The peer re-initialised one second later and spent
+                    // another one-time prekey. The session was never missing; nothing could name
+                    // it.
+                    guard let resolvedContact = Self.finalizeContactId(
+                        openedDevice: openedDevice,
+                        pinnedDevice: SessionAddressing.contactId(forPeer: userId)
+                    ) else {
                         throw CryptoManagerError.sessionNotFound
                     }
+                    let sessionBytes = try CryptoManager.shared.exportSession(contactId: resolvedContact)
                     let event = CfeIncomingEvent.sessionInitCompleted(
                         contactId: resolvedContact,
                         sessionData: Data(sessionBytes)
