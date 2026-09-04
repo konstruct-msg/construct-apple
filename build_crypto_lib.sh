@@ -244,6 +244,39 @@ if [ -d "$XCFW" ]; then
   fi
 fi
 
+# ── Какое ядро лежит в каждом срезе ──────────────────────────────────────────
+# The .a files are not in git, so nothing in this repo records which
+# construct-core a working copy links against. `git log` in the sibling repo
+# answers a different question — what is checked out now, not what was built —
+# and today that answer was wrong for a whole session.
+#
+# The disagreement check is the point. AGENTS.md warns that a narrowed rebuild
+# (`--ios` without `--mac`) leaves the other slice from an older core, that
+# nothing on the iOS side notices, and that Desktop then fails to link against
+# an xcframework that looks perfectly well-formed. With a stamp per slice that
+# state is one line of output instead of a linker error a day later.
+if [ -d "$XCFW" ]; then
+  hdr "Ядро в срезах"
+  stamps=""
+  for slice in ios-arm64/libconstruct_core.a \
+               macos-arm64/libconstruct_core_mac.a \
+               ios-arm64_x86_64-simulator/libconstruct_core_sim.a; do
+    [ -f "$XCFW/$slice" ] || continue
+    stamp=$(strings -a "$XCFW/$slice" | grep -o -m1 'CONSTRUCT_CORE_VERSION=.*' || true)
+    if [ -n "$stamp" ]; then
+      ok "${slice%%/*}: $stamp"
+      stamps="$stamps$stamp\n"
+    else
+      # Cores older than construct-core 847067f carry no stamp at all.
+      warn "${slice%%/*}: без штампа — ядро старше construct-core 847067f"
+      stamps="$stamps(без штампа)\n"
+    fi
+  done
+  if [ "$(printf "$stamps" | sort -u | wc -l | tr -d ' ')" != "1" ]; then
+    warn "Срезы собраны из разных ядер. Пересоберите с --all."
+  fi
+fi
+
 # ── Готово ────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}Готово! Следующие шаги в Xcode:${NC}"
