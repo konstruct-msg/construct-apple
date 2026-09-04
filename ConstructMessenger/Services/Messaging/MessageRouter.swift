@@ -659,6 +659,17 @@ final class MessageRouter {
                 // Fall through to normal processing below.
             } else {
                 Log.debug("Skipping \(kind) from deleted contact \(otherUserId.prefix(8))… (msgNum=\(message.messageNumber) epoch=\(message.pqMessageEpoch)) — not resurrecting", category: "MessageRouter")
+                // Counted, because until 2026-09-04 this was a DEBUG line and nothing measured
+                // it. That day a contact was pruned at 16:18:15 and the peer went on sending:
+                // msgNum 1 through 5 over the next fifty-one seconds, every one dropped here,
+                // every one showing as *sent* on their screen. Neither side had a number for it.
+                //
+                // The branch above resurrects a pruned contact on a handshake — but a peer whose
+                // session is healthy never sends one, so the recovery path is unreachable in
+                // exactly the case that produces this drop. What to do about that is a product
+                // decision (telling the peer their session is dead is also telling them
+                // something); measuring how often it happens is not.
+                PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "deleted_contact")
                 return
             }
         }
