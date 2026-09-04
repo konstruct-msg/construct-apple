@@ -196,7 +196,7 @@ struct MessageBubbleRegularView: View {
                             let text = message.displayText
                             if text.isEmpty {
                                 Text((NSLocalizedString("message_unavailable", comment: "")))
-                                    .font(CTFont.regular(ChatUIConstants.Typography.messageTextSize))
+                                    .font(CTFont.message(ChatUIConstants.Typography.messageTextSize))
                                     .foregroundColor(Color.CT.textDim)
                                     .italic()
                             } else {
@@ -204,7 +204,7 @@ struct MessageBubbleRegularView: View {
                                     text,
                                     color: message.isSentByMe ? Color.CT.outMsgText : Color.CT.text
                                 )
-                                .font(CTFont.regular(ChatUIConstants.Typography.messageTextSize))
+                                .font(CTFont.message(ChatUIConstants.Typography.messageTextSize))
                                 .fixedSize(horizontal: false, vertical: true)
                             }
                         }

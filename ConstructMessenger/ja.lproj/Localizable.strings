@@ -1181,3 +1181,9 @@
 
 "device_default_name_desktop" = "Mac";
 "device_default_name_ios" = "iPhone";
+
+/* Appearance — message font */
+"chat_font" = "メッセージのフォント";
+"chat_font_mono" = "JetBrains Mono";
+"chat_font_system" = "システム";
+"chat_font_footer" = "メッセージの本文と入力欄に適用されます。ほかの画面は等幅のままです。";

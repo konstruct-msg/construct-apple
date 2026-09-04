@@ -69,13 +69,21 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 | Kind | API |
 |------|-----|
 | Colors | `Color.CT.bg`, `.text`, `.textDim`, `.accent`, `.accentDim`, `.danger`, `.noise`, `.bgMsg`, `.outMsgBg`, `.outMsgText` |
-| Fonts | `CTFont.regular/medium/bold(size)` — always JetBrains Mono |
+| Fonts | `CTFont.regular/medium/bold(size)` — always JetBrains Mono, for **chrome**. `CTFont.message(size)` for message text: the one face the reader chooses |
 | Radii / Shapes | `CTRadius` (`badge` 6 · `card` 8 · `control` 10 · `pill` 999) via `CTShape.*()` — no magic `cornerRadius: 16\|18\|22` |
 | Layout | `CTLayout` (`edgePad` 12 · `controlHeight` 42 · `hitTarget` 44 · …) |
 | Glass | `.glassCapsule()` — defaults to pill; do not pass 18/22 |
 
 - Two surface languages, never mixed on one control: **form/card** (`CTRadius.card`, solid) vs
   **composer/glass** (`pill`, `.glassCapsule()`); `CTButton`/bubbles use `CTRadius.control`.
+- **Message text is the one thing the reader picks the font for.** `CTFont.message` — bubbles and
+  the composer that fills them — reads a preference; everything else is `CTFont.*` and stays
+  monospaced unconditionally. The split is chrome vs content, the same line that already puts SF
+  Symbols on anything interactive. Do not widen it: a preference read inside `CTFont.regular`
+  would turn nav bars, `> TITLE` headers and badges into a different product. Note the old "always"
+  was never true where it mattered — JetBrains Mono ships no CJK, so Japanese bubbles have always
+  been a substituted face. `CTFont.message` also carries the size preference and `relativeTo:
+  .body`; the chrome deliberately does not scale, because it is laid out against fixed metrics.
 - **No `NavigationStack` inside sheets** — `CTNavBar(showBack: true, backAction: { dismiss() })`.
 - Background always `Color.CT.bg` (`#090909`) via `.ctBackground()`.
 - New UI must use tokens; when editing a file with a literal `8`/`10`/`18`, migrate that call site.

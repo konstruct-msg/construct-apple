@@ -114,6 +114,67 @@ enum CTFont {
     static func regular(_ size: CGFloat) -> Font { ConstructFont.mono(size, weight: .regular) }
     static func medium(_ size: CGFloat)  -> Font { ConstructFont.mono(size, weight: .medium)  }
     static func bold(_ size: CGFloat)    -> Font { ConstructFont.mono(size, weight: .bold)    }
+
+    // MARK: - Message body
+
+    /// The text of a message — in a bubble, and in the composer that produces it.
+    ///
+    /// The only font in the app the reader chooses, and the scope is the point. `regular` sets
+    /// everything: nav bars, `> TITLE` headers, badges, separators. A preference read there would
+    /// turn the whole product into a different product, and that is not what anyone asked for.
+    /// Monospace is the language of the **chrome**; what a person writes and reads is content, and
+    /// its typeface belongs to them.
+    ///
+    /// The composer follows the bubble deliberately: typing in one face and watching it land in
+    /// another is a mismatch on every single send.
+    ///
+    /// Note that "always JetBrains Mono" was never quite true where it mattered most — the family
+    /// ships no CJK glyphs, so Japanese has always been rendered in a substituted face inside
+    /// bubbles. This makes a choice out of what was already a fallback.
+    static func message(_ size: CGFloat) -> Font {
+        let scaled = size * ChatTextPreference.sizeMultiplier
+        switch ChatTextPreference.face {
+        case .mono:   return ConstructFont.mono(scaled, weight: .regular, relativeTo: .body)
+        case .system: return .system(size: scaled, weight: .regular)
+        }
+    }
+}
+
+/// What the reader chose for message text: which face, and how large.
+///
+/// Read straight from `UserDefaults` rather than injected, because `CTFont.message` is a static
+/// called from `body` in a dozen views and threading an environment value to all of them would put
+/// the preference in a dozen places instead of one. `@AppStorage` in the settings screen writes
+/// the same keys, and SwiftUI re-renders on the change.
+enum ChatTextPreference {
+
+    enum Face: String, CaseIterable {
+        /// JetBrains Mono — the terminal language, and the default.
+        case mono
+        /// The platform's own text face, which is what the OS's accessibility settings are tuned for.
+        case system
+    }
+
+    static let faceKey = "chatTextFace"
+    static let sizeKey = "textSize"
+
+    static var face: Face {
+        Face(rawValue: UserDefaults.standard.string(forKey: faceKey) ?? "") ?? .mono
+    }
+
+    /// Multiplier for the base message size.
+    ///
+    /// The `textSize` control has been in Appearance since the settings screen was written and
+    /// nothing has ever read it — the bubble used a hard-coded 15. It is wired here rather than
+    /// left for later because the two settings are one question ("can I read this comfortably")
+    /// and shipping a second control beside a dead one would be the wrong half of an apology.
+    static var sizeMultiplier: CGFloat {
+        switch UserDefaults.standard.string(forKey: sizeKey) {
+        case "compact": return 0.88
+        case "large":   return 1.18
+        default:        return 1.0
+        }
+    }
 }
 
 // MARK: - Corner Radii

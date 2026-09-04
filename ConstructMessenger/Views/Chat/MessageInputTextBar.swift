@@ -59,9 +59,9 @@ struct MessageInputTextBar: View {
     private var textField: some View {
         TextField(LocalizedStringKey("message_placeholder"), text: $text, axis: .vertical)
             #if os(macOS)
-            .font(CTFont.regular(ChatUIConstants.Typography.macOSmessageTextSize))
+            .font(CTFont.message(ChatUIConstants.Typography.macOSmessageTextSize))
             #else
-            .font(CTFont.regular(ChatUIConstants.Typography.iOSmessageTextSize))
+            .font(CTFont.message(ChatUIConstants.Typography.iOSmessageTextSize))
             #endif
             .foregroundColor(Color.CT.text)
             .textFieldStyle(.plain)

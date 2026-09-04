@@ -290,7 +290,11 @@ extension Color {
 struct ConstructFont {
     /// Monospace — timestamps, fingerprints, status labels, crypto badges.
     /// Target: JetBrains Mono (supports Cyrillic). Fallback: system monospaced.
-    static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+    /// - Parameter relativeTo: when given, the face scales with Dynamic Type. Left `nil` for the
+    ///   chrome, which is laid out against fixed metrics (`CTLayout.controlHeight`, badge insets)
+    ///   and would overflow them. Message text passes `.body`: nothing measures it, and a person
+    ///   who enlarged text at the OS level has until now got nothing from us at all.
+    static func mono(_ size: CGFloat, weight: Font.Weight = .regular, relativeTo: Font.TextStyle? = nil) -> Font {
         if let _ = fontExists("JetBrainsMono-Regular") {
             let name: String
             switch weight {
@@ -298,6 +302,7 @@ struct ConstructFont {
             case .bold:    name = "JetBrainsMono-Bold"
             default:       name = "JetBrainsMono-Regular"
             }
+            if let relativeTo { return .custom(name, size: size, relativeTo: relativeTo) }
             return .custom(name, size: size)
         }
         return .system(size: size, weight: weight, design: .monospaced)

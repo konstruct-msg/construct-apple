@@ -1193,3 +1193,9 @@
 
 "device_default_name_desktop" = "Mac";
 "device_default_name_ios" = "iPhone";
+
+/* Appearance — message font */
+"chat_font" = "Шрифт сообщений";
+"chat_font_mono" = "JetBrains Mono";
+"chat_font_system" = "Системный";
+"chat_font_footer" = "Действует на текст сообщений и поле ввода. Остальной интерфейс остаётся моноширинным.";

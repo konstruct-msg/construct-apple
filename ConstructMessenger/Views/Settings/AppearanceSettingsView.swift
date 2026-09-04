@@ -10,6 +10,7 @@ import SwiftUI
 struct AppearanceSettingsView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     @AppStorage("textSize") private var textSize: TextSize = .standard
+    @AppStorage(ChatTextPreference.faceKey) private var chatFace: ChatTextPreference.Face = .mono
     @Environment(\.dismiss) private var dismiss
     private let allThemes = AppTheme.allCases
 
@@ -74,6 +75,50 @@ struct AppearanceSettingsView: View {
                         }
                     }
                     Text(LocalizedStringKey("theme_footer"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
+                }
+
+                // MARK: - Message font
+                //
+                // Scoped to message text — bubbles and the composer that fills them — and nothing
+                // else. Monospace is the language of the chrome; what a person writes and reads is
+                // content. See `CTFont.message`.
+                VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderSpacing) {
+                    CTSettingsSectionHeader(title: NSLocalizedString("chat_font", comment: ""))
+                    CTSectionGroup {
+                        ForEach(ChatTextPreference.Face.allCases, id: \.self) { face in
+                            if face != ChatTextPreference.Face.allCases.first {
+                                ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
+                            }
+                            Button {
+                                chatFace = face
+                            } label: {
+                                HStack(spacing: AppearanceSettingsLayout.themeRowContentSpacing) {
+                                    Text(face.displayName)
+                                        .font(CTFont.bold(16))
+                                        .foregroundStyle(Color.CT.text)
+                                    Spacer()
+                                    // The row samples the face it offers, so the choice is visible
+                                    // before it is made.
+                                    Text("Aa")
+                                        .font(face == .mono ? CTFont.regular(15) : .system(size: 15))
+                                        .foregroundStyle(Color.CT.textDim)
+                                    if chatFace == face {
+                                        Text("[✓]")
+                                            .font(CTFont.bold(14))
+                                            .foregroundStyle(Color.CT.accent)
+                                    }
+                                }
+                                .padding(.horizontal, AppearanceSettingsLayout.themeRowHorizontalPadding)
+                                .padding(.vertical, AppearanceSettingsLayout.themeRowVerticalPadding)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    Text(LocalizedStringKey("chat_font_footer"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
@@ -168,6 +213,15 @@ enum AppTheme: String, CaseIterable {
 }
 
 // MARK: - Text size (for CTFont scaling in Appearance)
+extension ChatTextPreference.Face {
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .mono:   return "chat_font_mono"
+        case .system: return "chat_font_system"
+        }
+    }
+}
+
 enum TextSize: String, CaseIterable {
     case compact = "compact"
     case standard = "standard"
