@@ -1049,7 +1049,14 @@ class CryptoManager {
 
     /// Get all user IDs with active sessions
     /// Used for sending END_SESSION to all contacts on logout
-    func getAllSessionUserIds() -> [String] {
+    /// Every **device** we hold a ratchet with — the core's contact ids, which are
+    /// `CryptoDeviceId`, never account UUIDs.
+    ///
+    /// Named `getAllSessionUserIds` until 2026-09-05, and three of its four callers read the
+    /// result as an account because of it. One of them, `sendEndSessionToAllContacts`, fed each
+    /// device id to `sendEndSession(to:)`, which resolves an account to its devices — so it found
+    /// no rows and skipped every session it was asked to tear down.
+    func getAllSessionDeviceIds() -> [String] {
         return orchestratorCore?.getAllSessionContactIds() ?? []
     }
 

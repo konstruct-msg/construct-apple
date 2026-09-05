@@ -112,18 +112,21 @@ final class SessionCoordinator: MessageRouterDelegate {
     private var cooldownPurgeTimer: Timer?
     private let cooldownPurgeInterval: TimeInterval = 5 * 60 // every 5 minutes
 
-    /// Formal session state machine for each peer contact, backed by the pure `SessionReducer`.
+    /// Formal session state machine for each peer **device**, backed by the pure `SessionReducer`.
     /// Phase entries: `.initializing` / `.active(establishedAt:)`; absence (`nil`) == no session.
-    private var sessionPhases: [String: SessionReducer.Phase] = [:]
+    ///
+    /// Keyed by `SessionScope`, not by account. A ratchet is between two devices, so its phase and
+    /// its init lock are per device — see `SessionScope` for the mismatch this keying replaced.
+    private var sessionPhases: [SessionScope: SessionReducer.Phase] = [:]
 
     /// Run one reducer transition for `userId`, commit the new phase, and return its effects.
     /// Phase 1 consumes only the phase result here (initializing/active markers); the queue
     /// effects are exercised by tests and adopted by MessageRouter in a later phase.
     @discardableResult
-    private func apply(_ event: SessionReducer.Event, for userId: String) -> [SessionReducer.Effect] {
+    private func apply(_ event: SessionReducer.Event, for scope: SessionScope) -> [SessionReducer.Effect] {
         assertMainThread()
-        let (newPhase, effects) = SessionReducer.reduce(sessionPhases[userId], on: event)
-        sessionPhases[userId] = newPhase
+        let (newPhase, effects) = SessionReducer.reduce(sessionPhases[scope], on: event)
+        sessionPhases[scope] = newPhase
         // Mirror the establishment timestamp into the Keychain so the END_SESSION stale-check
         // survives restart (the in-memory phase map is empty after launch even though the Rust
         // core restored live sessions). `.active` persists the time; a teardown to `nil` clears
@@ -131,9 +134,9 @@ final class SessionCoordinator: MessageRouterDelegate {
         // must not drop its establishment time — a terminal failure will clear it via `nil`).
         switch newPhase {
         case .active(let at):
-            SessionEstablishment.record(for: userId, at: at)
+            SessionEstablishment.record(for: scope.storageKey, at: at)
         case .none:
-            SessionEstablishment.clear(for: userId)
+            SessionEstablishment.clear(for: scope.storageKey)
         case .initializing:
             break
         }
@@ -167,38 +170,52 @@ final class SessionCoordinator: MessageRouterDelegate {
         precondition(Thread.isMainThread, "SessionCoordinator state must be accessed on the main thread", file: file, line: line)
     }
 
-    /// Returns true if a session init (or heal) is currently in progress for `userId`.
-    private func isInitializing(_ userId: String) -> Bool {
+    /// Returns true if a session init (or heal) is currently in progress for `scope`.
+    ///
+    /// Per device: an init with one of a peer's devices must not report the others as busy. That
+    /// is the whole point of the scope — the account-keyed version of this predicate is what made
+    /// a peer's second device deaf while the first was initialising.
+    private func isInitializing(_ scope: SessionScope) -> Bool {
         assertMainThread()
-        if case .initializing = sessionPhases[userId] { return true }
+        if case .initializing = sessionPhases[scope] { return true }
+        // A peer-wide lock (the RESPONDER walk, first contact) covers every device of that
+        // account, so a device-scoped caller must see it. Splitting one coarse lock into per-device
+        // locks without this would let a walk and a prewarm run at once and collide on the ratchet
+        // the walk opens — a race the account-keyed version prevented by being too broad.
+        let context = viewContext ?? PersistenceController.shared.container.viewContext
+        let resolve: (String) -> String? = { PeerAddress.resolving(device: $0, in: context)?.account }
+        for (held, phase) in sessionPhases {
+            guard case .initializing = phase else { continue }
+            if held.contains(scope, resolveAccount: resolve) { return true }
+        }
         return false
     }
 
-    /// Mark `userId` as initializing and return a `defer` block that clears the state.
+    /// Mark `scope` as initializing and return a `defer` block that clears the state.
     @discardableResult
-    private func beginInit(_ userId: String) -> () -> Void {
-        apply(.initStarted, for: userId)
+    private func beginInit(_ scope: SessionScope) -> () -> Void {
+        apply(.initStarted, for: scope)
         return { [weak self] in
             // `.initEnded` only clears the marker if still .initializing — it never clobbers
             // an .active set by a success path that ran inside the same init scope.
-            self?.apply(.initEnded, for: userId)
+            self?.apply(.initEnded, for: scope)
         }
     }
 
-    /// Mark `userId` as having an active session established right now.
-    private func markActive(_ userId: String) {
-        apply(.markActive(at: UInt64(Date().timeIntervalSince1970)), for: userId)
+    /// Mark `scope` as having an active session established right now.
+    private func markActive(_ scope: SessionScope) {
+        apply(.markActive(at: UInt64(Date().timeIntervalSince1970)), for: scope)
     }
 
-    /// Return the timestamp (Unix seconds) when the active session for `userId` was established,
+    /// Return the timestamp (Unix seconds) when the active session for `scope` was established,
     /// or nil if there is no active session record.
-    private func establishedAt(for userId: String) -> UInt64? {
+    private func establishedAt(for scope: SessionScope) -> UInt64? {
         assertMainThread()
-        if case .active(let t) = sessionPhases[userId] { return t }
+        if case .active(let t) = sessionPhases[scope] { return t }
         // No in-memory phase (typical right after launch: the Rust core restored the session
         // from CFE but this map starts empty). Fall back to the persisted timestamp so the
         // END_SESSION stale-check can still filter a re-delivered old END_SESSION.
-        return SessionEstablishment.loadTimestamp(for: userId)
+        return SessionEstablishment.loadTimestamp(for: scope.storageKey)
     }
 
     // MARK: - Injected references
@@ -251,27 +268,40 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// `establishedAt` may be empty (older builds never persisted them). Without a timestamp,
     /// re-delivered END_SESSION is never filtered as stale and tears down healthy sessions →
     /// SESSION_RESET_INIT / openStream storms. Hydrate once the core is ready.
+    ///
+    /// This walks the core's session list, which is **device** ids. Until 2026-09-05 it wrote them
+    /// into an account-keyed map and an account-keyed Keychain namespace, so the entries it
+    /// stamped were read by nobody: every lookup still answered `nil`, and
+    /// `isEndSessionStale(nil, …)` is `false` — the teardown is honoured. The function written to
+    /// stop redelivered END_SESSIONs from destroying restored sessions could not do it, and the
+    /// log line said it had.
     func hydrateEstablishedTimestampsForRestoredSessions() {
         assertMainThread()
         guard CryptoManager.shared.isCoreReady else { return }
-        let ids = CryptoManager.shared.getAllSessionUserIds()
-        guard !ids.isEmpty else { return }
+        let deviceIds = CryptoManager.shared.getAllSessionDeviceIds()
+        guard !deviceIds.isEmpty else { return }
         var hydrated = 0
+        var carried = 0
         let now = UInt64(Date().timeIntervalSince1970)
-        for userId in ids {
-            if establishedAt(for: userId) != nil { continue }
-            // Prefer an existing Keychain value; otherwise stamp "now" so historical
-            // offline-queue END_SESSIONs (ts << now) are treated as stale.
-            if let persisted = SessionEstablishment.loadTimestamp(for: userId) {
-                sessionPhases[userId] = .active(establishedAt: persisted)
-            } else {
-                apply(.markActive(at: now), for: userId)
-            }
+        let context = viewContext ?? PersistenceController.shared.container.viewContext
+        for deviceId in deviceIds {
+            let scope = SessionScope.device(deviceId)
+            if establishedAt(for: scope) != nil { continue }
+            // A record written by a build that keyed this by account. Carry it across rather than
+            // stamping `now`: the real establishment time is what the stale-check compares the
+            // peer's clock against, and `now` makes every genuine teardown sent before this launch
+            // look stale. One-shot — the device-keyed write below is what later launches read.
+            let inherited = PeerAddress.resolving(device: deviceId, in: context)
+                .flatMap { SessionEstablishment.loadTimestamp(for: $0.account) }
+            if inherited != nil { carried += 1 }
+            // Prefer a real timestamp; otherwise stamp "now" so historical offline-queue
+            // END_SESSIONs (ts << now) are treated as stale.
+            apply(.markActive(at: inherited ?? now), for: scope)
             hydrated += 1
         }
         if hydrated > 0 {
             Log.info(
-                "SESSION_STATE[hydrate_established]: stamped establishedAt for \(hydrated)/\(ids.count) restored session(s)",
+                "SESSION_STATE[hydrate_established]: stamped establishedAt for \(hydrated)/\(deviceIds.count) restored session(s), \(carried) carried from an account-keyed record",
                 category: "SessionInit"
             )
         }
@@ -286,11 +316,12 @@ final class SessionCoordinator: MessageRouterDelegate {
 
     /// Called when the stream receives a KEY_SYNC control message.
     func handleKeySyncRequest(for userId: String) {
-        guard !isInitializing(userId) else {
-            Log.info("KEY_SYNC skipped — session init already in progress for \(userId.prefix(8))…", category: "SessionInit")
+        let scope = SessionScope.forAccount(userId)
+        guard !isInitializing(scope) else {
+            Log.info("KEY_SYNC skipped — session init already in progress for \(scope)", category: "SessionInit")
             return
         }
-        let endInit = beginInit(userId)
+        let endInit = beginInit(scope)
         Log.info("SESSION_STATE[key_sync]: re-keying sending session for \(userId.prefix(8))…", category: "SessionInit")
         Task { [weak self] in
             guard let self else { return }
@@ -565,12 +596,13 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // also reaches this point sees the flag and skips — otherwise both tasks
                 // would slip past the guard, race through fetchBundle, and the second
                 // would delete the session just created by the first.
+                let scope = SessionScope.forAccount(contactId)
                 guard !CryptoManager.shared.hasOrRestoreSession(for: contactId),
-                      !self.isInitializing(contactId) else {
-                    Log.info("Prewarm skipped — session exists or init in progress for \(contactId.prefix(8))…", category: "SessionInit")
+                      !self.isInitializing(scope) else {
+                    Log.info("Prewarm skipped — session exists or init in progress for \(scope)", category: "SessionInit")
                     continue
                 }
-                let endInit = self.beginInit(contactId)
+                let endInit = self.beginInit(scope)
                 defer { endInit() }
 
                 // Notify the peer that our session is missing ONLY when this prewarm
@@ -609,11 +641,31 @@ final class SessionCoordinator: MessageRouterDelegate {
 
     func sendEndSessionToAllContacts(reason: String = "logout") async {
         Log.info("Sending END_SESSION to all contacts: \(reason)", category: "ChatsViewModel")
-        let sessionUserIds = CryptoManager.shared.getAllSessionUserIds()
-        Log.info("Found \(sessionUserIds.count) active sessions", category: "ChatsViewModel")
+        // The core lists **devices**; `sendEndSession` takes an **account** and resolves it to the
+        // device set itself (the teardown plan is the core's, the translation is ours). Feeding it
+        // device ids — which is what this did while the accessor was called
+        // `getAllSessionUserIds` — made `deviceIds(ofPeer:)` find no rows, so every session was
+        // skipped with "no device can be named" and logout tore down nothing at all.
+        let context = PersistenceController.shared.container.viewContext
+        let deviceIds = CryptoManager.shared.getAllSessionDeviceIds()
+        // Deduped: a peer with three devices is one teardown over a set, not three over subsets.
+        var accountIds: [String] = []
+        var seen = Set<String>()
+        var unresolved = 0
+        for deviceId in deviceIds {
+            guard let account = PeerAddress.resolving(device: deviceId, in: context)?.account else {
+                unresolved += 1
+                continue
+            }
+            if seen.insert(account).inserted { accountIds.append(account) }
+        }
+        Log.info(
+            "Found \(deviceIds.count) active session device(s) → \(accountIds.count) contact(s)\(unresolved > 0 ? ", \(unresolved) unattributable" : "")",
+            category: "ChatsViewModel"
+        )
         var successCount = 0
         var failCount = 0
-        for userId in sessionUserIds {
+        for userId in accountIds {
             do {
                 try await sendEndSession(to: userId, reason: reason)
                 successCount += 1
@@ -635,7 +687,7 @@ final class SessionCoordinator: MessageRouterDelegate {
     func messageRouter(_ router: MessageRouter, needsPublicKeyBundle peer: PeerAddress, for message: ChatMessage) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.handlePublicKeyBundleNeeded(userId: peer.account, message: message)
+            await self.handlePublicKeyBundleNeeded(peer: peer, message: message)
         }
     }
 
@@ -741,19 +793,21 @@ final class SessionCoordinator: MessageRouterDelegate {
     func messageRouter(_ router: MessageRouter, needsSessionHeal peer: PeerAddress, failedMessage: ChatMessage) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.handleSessionHealNeeded(userId: peer.account, failedMessage: failedMessage)
+            await self.handleSessionHealNeeded(peer: peer, failedMessage: failedMessage)
         }
     }
 
     /// Seconds of clock-skew tolerance when deciding whether an END_SESSION pre-dates our session.
     private static let endSessionStaleFudge: UInt64 = 5
 
-    /// Account-keyed, and stays so knowingly: the relay blanks `sender_device` on an inbound
-    /// teardown, so `peer.device` is `nil` on every call that reaches here today. `establishedAt`
-    /// and `lastInboundEndSessionAt` are keyed to match. §D is what would change this.
+    /// The relay blanks `sender_device` on an inbound teardown, so `peer.device` is `nil` on every
+    /// call that reaches here today and `SessionScope(peer)` resolves to the pinned device — the
+    /// only session such a teardown can be about while §D is missing. Written as a scope rather
+    /// than an account so that §D, when it lands, changes this by supplying the device and nothing
+    /// here has to be revisited. `lastInboundEndSessionAt` beside it is still account-keyed.
     func messageRouter(_ router: MessageRouter, isEndSessionStale peer: PeerAddress, timestamp: UInt64) -> Bool {
         let userId = peer.account
-        let established = establishedAt(for: userId)
+        let established = establishedAt(for: SessionScope(peer))
         let stale = SessionReducer.isEndSessionStale(
             establishedAt: established, timestamp: timestamp, fudgeSeconds: Self.endSessionStaleFudge
         )
@@ -775,10 +829,12 @@ final class SessionCoordinator: MessageRouterDelegate {
         timestamp: UInt64,
         initEphemeral: Data
     ) -> Bool {
-        // Account-keyed for the same reason as `isEndSessionStale`: a SESSION_RESET_INIT arrives
-        // sealed, and the sender's device is not on the envelope.
+        // Same shape as `isEndSessionStale`: a SESSION_RESET_INIT arrives sealed and the sender's
+        // device is not on the envelope, so the scope resolves to the pinned device today.
+        // `appliedResetInits` below stays account-keyed — it is the ledger the state machine
+        // absorbs as a field of `Opening` (see decisions/session-is-one-state-machine, step 2).
         let userId = peer.account
-        let established = establishedAt(for: userId)
+        let established = establishedAt(for: SessionScope(peer))
         var ledger = appliedResetInits[userId] ?? AppliedInitLedger()
         let alreadyApplied = ledger.contains(initEphemeral)
         let superseded = SessionReducer.isResetInitSuperseded(
@@ -950,8 +1006,9 @@ final class SessionCoordinator: MessageRouterDelegate {
             return
         }
         guard !CryptoManager.shared.hasSession(for: userId) else { return }
-        guard !isInitializing(userId) else {
-            Log.debug("reestablishSessionForQueuedOutbound: init already in progress for \(userId.prefix(8))…", category: "SessionInit")
+        let scope = SessionScope.forAccount(userId)
+        guard !isInitializing(scope) else {
+            Log.debug("reestablishSessionForQueuedOutbound: init already in progress for \(scope)", category: "SessionInit")
             return
         }
         Log.info("SESSION_STATE[zombie_recover]: no session for purely-outbound peer \(userId.prefix(8))… with queued messages — forcing INITIATOR re-establish", category: "SessionInit")
@@ -959,7 +1016,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // any await, so the SRI (not a coalesced init ping) owns msgNum=0 and a fast peer's
         // `session_ready` cannot arrive before the gate exists.
         SessionConfirmationTracker.shared.markPending(userId)
-        let endInit = beginInit(userId)
+        let endInit = beginInit(scope)
         Task { [weak self] in
             guard let self else { endInit(); return }
             defer { endInit() }
@@ -1073,8 +1130,10 @@ final class SessionCoordinator: MessageRouterDelegate {
                 PersistentACKStore.shared.markProcessed(id, senderId: userId, in: context)
             }
         }
-        // Reset phase to absent + clear the pending queue, via the reducer.
-        perform(apply(.initFailed, for: userId), for: userId)
+        // Reset phase to absent + clear the pending queue, via the reducer. All three callers are
+        // the RESPONDER walk giving up, and it opened no ratchet — so the subject is the peer-wide
+        // scope it locked, not any one device.
+        perform(apply(.initFailed, for: .wholePeer(userId)), for: userId)
 
         let withinPostEndSessionGrace: Bool = {
             guard let t = lastInboundEndSessionAt[userId] else { return false }
@@ -1142,12 +1201,17 @@ final class SessionCoordinator: MessageRouterDelegate {
         return pinnedDevice
     }
 
-    private func handlePublicKeyBundleNeeded(userId: String, message: ChatMessage) async {
-        if isInitializing(userId) {
-            Log.info("Session init already in progress for \(userId.prefix(8))..., skipping duplicate attempt", category: "SessionInit")
+    private func handlePublicKeyBundleNeeded(peer: PeerAddress, message: ChatMessage) async {
+        let userId = peer.account
+        // Peer-wide, and that is not the seam being dropped: the fetch returns the account's whole
+        // device set and `plan_receiving_init` decides which device the carrier binds, so until it
+        // answers this operation can open a ratchet with any of them.
+        let scope = SessionScope.wholePeer(userId)
+        if isInitializing(scope) {
+            Log.info("Session init already in progress for \(scope), skipping duplicate attempt", category: "SessionInit")
             return
         }
-        let endInit = beginInit(userId)
+        let endInit = beginInit(scope)
         Log.debug("Locked session init for \(userId.prefix(8))...", category: "SessionInit")
 
         do {
@@ -1319,7 +1383,15 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // Transition to .active (records establishment time for stale END_SESSION
                 // filtering) and drain the pending queue — both via the reducer: .initSucceeded
                 // yields .active + a .drainQueuedMessages effect performed below.
-                perform(apply(.initSucceeded(at: UInt64(Date().timeIntervalSince1970)), for: userId),
+                // The walk locked the peer's whole device set, but it opened a ratchet with
+                // exactly one device — and that is what the establishment record is about. Filing
+                // it under the account is the mismatch `SessionScope` exists to remove: hydration
+                // reads this back by device on the next launch.
+                let openedScope = Self.finalizeContactId(
+                    openedDevice: openedDevice,
+                    pinnedDevice: SessionAddressing.contactId(forPeer: userId)
+                ).map(SessionScope.device) ?? scope
+                perform(apply(.initSucceeded(at: UInt64(Date().timeIntervalSince1970)), for: openedScope),
                         for: userId, alreadyHandled: opened?.id)
                 // Re-send messages that were re-queued on prior END_SESSION receipt.
                 sendSessionQueuedMessages(for: userId)
@@ -1359,17 +1431,22 @@ final class SessionCoordinator: MessageRouterDelegate {
 
     // MARK: - Session healing
 
-    private func handleSessionHealNeeded(userId: String, failedMessage: ChatMessage) async {
-        if isInitializing(userId) {
-            Log.info("Heal skipped — session init already in progress for \(userId.prefix(8))…", category: "SessionInit")
+    private func handleSessionHealNeeded(peer: PeerAddress, failedMessage: ChatMessage) async {
+        let userId = peer.account
+        // The device whose ratchet failed, not the peer's pinned one. Healing is about one
+        // ratchet, and taking the lock on the pinned device meant a failure on a peer's second
+        // device blocked — and reported itself as — work on their first.
+        let scope = SessionScope(peer)
+        if isInitializing(scope) {
+            Log.info("Heal skipped — session init already in progress for \(scope)", category: "SessionInit")
             return
         }
-        let endInit = beginInit(userId)
-        Log.info("SESSION_STATE[heal_start]: fetching fresh bundle for \(userId.prefix(8))…", category: "SessionInit")
+        let endInit = beginInit(scope)
+        Log.info("SESSION_STATE[heal_start]: fetching fresh bundle for \(scope)", category: "SessionInit")
 
         defer {
             endInit()
-            Log.debug("Heal lock released for \(userId.prefix(8))…", category: "SessionInit")
+            Log.debug("Heal lock released for \(scope)", category: "SessionInit")
         }
 
         guard let context = viewContext else { return }
@@ -1855,15 +1932,16 @@ final class SessionCoordinator: MessageRouterDelegate {
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 // Override gate — the mirror of the watchdog, via the reducer authority.
+                let scope = SessionScope.forAccount(userId)
                 guard SessionReducer.shouldResponderOverride(
                     hasSession: CryptoManager.shared.hasSession(for: userId),
-                    isInitializing: self.isInitializing(userId)
+                    isInitializing: self.isInitializing(scope)
                 ) else {
                     Log.debug("RESPONDER fallback: session already established / initializing for \(userId.prefix(8))… — skipping", category: "SessionInit")
                     return
                 }
                 Log.info("RESPONDER fallback: no init from \(userId.prefix(8))… after \(Int(self.responderFallbackTimeout))s — taking INITIATOR role", category: "SessionInit")
-                let endInit = self.beginInit(userId)
+                let endInit = self.beginInit(scope)
                 Task { [weak self] in
                     guard let self else { return }
                     defer { Task { @MainActor in endInit() } }
@@ -1976,7 +2054,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 cancelTieBreakWatchdog(for: peerId)
                 cancelResponderFallback(for: peerId)
                 cancelPendingEndSessionReinit(for: peerId, reason: "session_ready")
-                markActive(peerId)
+                markActive(.forAccount(peerId))
                 releaseConfirmGate(for: peerId)
                 return
             case .end, .unspecified, .UNRECOGNIZED:
@@ -2018,7 +2096,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             cancelTieBreakWatchdog(for: peerId)
             cancelResponderFallback(for: peerId)
             cancelPendingEndSessionReinit(for: peerId, reason: "session_ready_legacy")
-            markActive(peerId)
+            markActive(.forAccount(peerId))
             SessionConfirmationTracker.shared.markConfirmed(peerId)
             sendSessionQueuedMessages(for: peerId)
             return
