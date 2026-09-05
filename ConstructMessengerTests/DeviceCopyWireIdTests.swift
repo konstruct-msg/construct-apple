@@ -51,6 +51,97 @@ final class DeviceCopyWireIdTests: XCTestCase {
         )!
     }
 
+    /// The id the app would actually hold for a device, derived from its identity key exactly as
+    /// `SessionAddressing.cryptoIdentity` and the core's `derive_device_id` do. The fixture's
+    /// `Device.id` is an arbitrary literal; §D returns the derived one, because the key that
+    /// reproduced the MAC is the only evidence there is.
+    private func derivedId(_ d: Device) -> String {
+        deriveDeviceId(identityPublicKey: [UInt8](d.pub))
+    }
+
+    // MARK: - §D: the tag names the device that wrote the copy
+
+    /// The point of §D. Verifying the tag already had to try each candidate key; the one that
+    /// reproduces the MAC is the sender, and it used to be discarded.
+    ///
+    /// Mutation: return `senderDevice: nil` on the `.ours` branch — this reddens, and the receive
+    /// path silently goes back to guessing by walking every session.
+    func testTheMatchingKeyNamesTheSender() {
+        let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
+        let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let reading = DeviceCopyWireId.read(
+            wireId: "\(base)-fd-\(tag(from: a, to: b))",
+            ourDeviceId: b.id,
+            ourIdentityPrivateKey: b.priv,
+            peerIdentityKeys: [a.pub],
+            peerDeviceSetIsComplete: true
+        )
+        XCTAssertEqual(reading.verdict, .ours)
+        XCTAssertEqual(reading.senderDevice, derivedId(a), "the key that reproduced the MAC is the writer")
+    }
+
+    /// The sender is picked out of a set, not confirmed against a guess — which is the whole
+    /// difference from the pinned-device assumption that archived a healthy neighbour session.
+    func testSenderIsIdentifiedAmongSeveralCandidateDevices() {
+        let phone   = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
+        let desktop = Device(id: "0a1b2c3d4e5f60718293a4b5c6d7e8f9")
+        let us      = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+
+        // Their Desktop writes to us, with their phone listed first among the candidates.
+        let reading = DeviceCopyWireId.read(
+            wireId: "\(base)-fd-\(tag(from: desktop, to: us))",
+            ourDeviceId: us.id,
+            ourIdentityPrivateKey: us.priv,
+            peerIdentityKeys: [phone.pub, desktop.pub],
+            peerDeviceSetIsComplete: true
+        )
+        XCTAssertEqual(reading.verdict, .ours)
+        XCTAssertEqual(reading.senderDevice, derivedId(desktop),
+                       "naming the first candidate instead of the matching one is the 20/20 misattribution")
+        XCTAssertNotEqual(reading.senderDevice, derivedId(phone))
+    }
+
+    /// A copy for a sibling names no sender: its tag was written for a device id we did not bind,
+    /// so nothing here attributes a writer. `nil` must mean "unknown", never "the pinned one".
+    func testForeignCopyNamesNoSender() {
+        let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
+        let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let reading = DeviceCopyWireId.read(
+            wireId: "\(base)-ss-\(tag(from: a, to: b))",
+            ourDeviceId: a.id,                    // a receives its own echo
+            ourIdentityPrivateKey: a.priv,
+            peerIdentityKeys: [b.pub],
+            peerDeviceSetIsComplete: true
+        )
+        XCTAssertEqual(reading.verdict, .foreign)
+        XCTAssertNil(reading.senderDevice)
+    }
+
+    /// The legacy 8-hex form encodes the **target** device and involves no pair secret, so it can
+    /// place a copy but can never attribute one.
+    func testLegacyTagPlacesTheCopyButNamesNoSender() {
+        let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let reading = DeviceCopyWireId.read(
+            wireId: "\(base)-ss-b3ed60ab",
+            ourDeviceId: b.id,
+            ourIdentityPrivateKey: b.priv,
+            peerIdentityKeys: [],
+            peerDeviceSetIsComplete: true
+        )
+        XCTAssertEqual(reading.verdict, .ours)
+        XCTAssertNil(reading.senderDevice, "a truncated device id is not evidence of who wrote it")
+    }
+
+    /// An untagged id — every ordinary send today — names nobody. This is the measured gap: the
+    /// primary send carries a bare UUID, so §D covers fan-out copies only until it goes.
+    func testUntaggedIdNamesNoSender() {
+        XCTAssertNil(DeviceCopyWireId.read(
+            wireId: base, ourDeviceId: "b3ed60ab5d0ef2c01f292a40bcdc3465",
+            ourIdentityPrivateKey: Device(id: "x").priv, peerIdentityKeys: [Device(id: "y").pub],
+            peerDeviceSetIsComplete: true
+        ).senderDevice)
+    }
+
     // MARK: - Reading the tag
 
     func testSingleChunkIdYieldsTheTargetTag() {
@@ -136,14 +227,14 @@ final class DeviceCopyWireIdTests: XCTestCase {
         let wireId = "\(base)-ss-\(tag)"
 
         XCTAssertEqual(
-            DeviceCopyWireId.verdict(wireId: wireId, ourDeviceId: b.id,
-                                     ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true),
+            DeviceCopyWireId.read(wireId: wireId, ourDeviceId: b.id,
+                                     ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true).verdict,
             .ours,
             "the addressed device must open it"
         )
         XCTAssertEqual(
-            DeviceCopyWireId.verdict(wireId: wireId, ourDeviceId: a.id,
-                                     ourIdentityPrivateKey: a.priv, peerIdentityKeys: [b.pub], peerDeviceSetIsComplete: true),
+            DeviceCopyWireId.read(wireId: wireId, ourDeviceId: a.id,
+                                     ourIdentityPrivateKey: a.priv, peerIdentityKeys: [b.pub], peerDeviceSetIsComplete: true).verdict,
             .foreign,
             "the sender's own echo must not be taken for a copy addressed to it"
         )
@@ -156,12 +247,12 @@ final class DeviceCopyWireIdTests: XCTestCase {
         let c = Device(id: "0a1b2c3d4e5f60718293a4b5c6d7e8f9")
         let tag = tag(from: a, to: b)
 
-        XCTAssertEqual(DeviceCopyWireId.verdict(
+        XCTAssertEqual(DeviceCopyWireId.read(
             wireId: "\(base)-ss-\(tag)",
             ourDeviceId: c.id,
             ourIdentityPrivateKey: c.priv,
             peerIdentityKeys: [a.pub, b.pub], peerDeviceSetIsComplete: true
-        ), .foreign)
+        ).verdict, .foreign)
     }
 
     // MARK: - Failing open
@@ -175,14 +266,14 @@ final class DeviceCopyWireIdTests: XCTestCase {
         let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
         let tag = tag(from: a, to: b)
 
-        XCTAssertEqual(DeviceCopyWireId.verdict(
-            wireId: base, ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true), .undecidable, "not a sender-sync id")
-        XCTAssertEqual(DeviceCopyWireId.verdict(
-            wireId: "\(base)-ss-\(tag)", ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [], peerDeviceSetIsComplete: true), .undecidable, "no secrets known yet")
-        XCTAssertEqual(DeviceCopyWireId.verdict(
-            wireId: "\(base)-ss-\(tag)", ourDeviceId: nil, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true), .undecidable, "no device id")
-        XCTAssertEqual(DeviceCopyWireId.verdict(
-            wireId: "\(base)-ss-zzz", ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true), .undecidable, "unknown tag shape")
+        XCTAssertEqual(DeviceCopyWireId.read(
+            wireId: base, ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true).verdict, .undecidable, "not a sender-sync id")
+        XCTAssertEqual(DeviceCopyWireId.read(
+            wireId: "\(base)-ss-\(tag)", ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [], peerDeviceSetIsComplete: true).verdict, .undecidable, "no secrets known yet")
+        XCTAssertEqual(DeviceCopyWireId.read(
+            wireId: "\(base)-ss-\(tag)", ourDeviceId: nil, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true).verdict, .undecidable, "no device id")
+        XCTAssertEqual(DeviceCopyWireId.read(
+            wireId: "\(base)-ss-zzz", ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true).verdict, .undecidable, "unknown tag shape")
     }
 
     // MARK: - A copy from a peer, where we know less
@@ -207,13 +298,13 @@ final class DeviceCopyWireIdTests: XCTestCase {
         let tag = tag(from: peerUnpinned, to: me)
 
         XCTAssertEqual(
-            DeviceCopyWireId.verdict(
+            DeviceCopyWireId.read(
                 wireId: "\(base)\(DeviceDeliveryPlan.Marker.recipient)\(tag)",
                 ourDeviceId: me.id,
                 ourIdentityPrivateKey: me.priv,
                 peerIdentityKeys: [peerKnown.pub],
                 peerDeviceSetIsComplete: false
-            ),
+            ).verdict,
             .undecidable,
             "a copy we cannot place must be attempted, never discarded"
         )
@@ -236,13 +327,13 @@ final class DeviceCopyWireIdTests: XCTestCase {
         let tag = tag(from: peer, to: mySibling)
 
         XCTAssertEqual(
-            DeviceCopyWireId.verdict(
+            DeviceCopyWireId.read(
                 wireId: "\(base)\(DeviceDeliveryPlan.Marker.recipient)\(tag)",
                 ourDeviceId: me.id,
                 ourIdentityPrivateKey: me.priv,
                 peerIdentityKeys: [peer.pub],
                 peerDeviceSetIsComplete: true
-            ),
+            ).verdict,
             .foreign
         )
     }
@@ -254,12 +345,12 @@ final class DeviceCopyWireIdTests: XCTestCase {
         let tag = tag(from: me, to: sibling)
 
         XCTAssertEqual(
-            DeviceCopyWireId.verdict(
+            DeviceCopyWireId.read(
                 wireId: "\(base)\(DeviceDeliveryPlan.Marker.ownReplica)\(tag)",
                 ourDeviceId: me.id,
                 ourIdentityPrivateKey: me.priv,
                 peerIdentityKeys: [sibling.pub], peerDeviceSetIsComplete: true
-            ),
+            ).verdict,
             .foreign
         )
     }
@@ -288,15 +379,15 @@ final class DeviceCopyWireIdTests: XCTestCase {
         let mine = "bfbcef09a4db589922c2cfd0cf34885a"
         let theirs = "b3ed60ab5d0ef2c01f292a40bcdc3465"
 
-        XCTAssertEqual(DeviceCopyWireId.verdict(
+        XCTAssertEqual(DeviceCopyWireId.read(
             wireId: "\(base)-ss-bfbcef09", ourDeviceId: mine,
-            ourIdentityPrivateKey: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true), .ours)
-        XCTAssertEqual(DeviceCopyWireId.verdict(
+            ourIdentityPrivateKey: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true).verdict, .ours)
+        XCTAssertEqual(DeviceCopyWireId.read(
             wireId: "\(base)-ss-b3ed60ab", ourDeviceId: mine,
-            ourIdentityPrivateKey: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true), .foreign)
-        XCTAssertEqual(DeviceCopyWireId.verdict(
+            ourIdentityPrivateKey: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true).verdict, .foreign)
+        XCTAssertEqual(DeviceCopyWireId.read(
             wireId: "\(base)-ss-b3ed60ab", ourDeviceId: theirs,
-            ourIdentityPrivateKey: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true), .ours)
+            ourIdentityPrivateKey: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true).verdict, .ours)
     }
 
     // MARK: - The secret itself

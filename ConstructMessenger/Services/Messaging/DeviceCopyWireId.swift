@@ -39,6 +39,33 @@ enum DeviceCopyVerdict: Equatable {
     }
 }
 
+/// What a wire id tells us about a per-device copy: whose it is, and who wrote it.
+///
+/// The two answers come from one computation. Verifying the tag means deriving the pair secret
+/// against each candidate peer key until one reproduces the MAC — and the key that reproduces it
+/// **is the device that wrote the copy**, because X25519 is symmetric in the pair and only the
+/// holder of that private half could have produced this tag for our device.
+///
+/// Until 2026-09-05 that key was found and discarded: `verdict` returned `.ours` and nothing
+/// carried the sender. The receive path then guessed the sending device by walking every session
+/// we hold with the peer, and on a total failure the core faithfully named the session we had
+/// guessed — so a message from the peer's Desktop archived the session with their iPhone. Six
+/// times out of six on the 2026-09-03 stand.
+struct DeviceCopyReading: Equatable {
+
+    let verdict: DeviceCopyVerdict
+
+    /// The device that **wrote** this copy, when the tag named it.
+    ///
+    /// `nil` whenever the tag could not be attributed: no marker, the legacy 8-hex form (which
+    /// encodes the target, not the pair), unusable key material, or a sender device we hold no
+    /// identity key for. A `nil` here is "we do not know", never "it was the pinned one" — the
+    /// substitution that made the walk look like it worked.
+    let senderDevice: String?
+
+    static let undecidable = DeviceCopyReading(verdict: .undecidable, senderDevice: nil)
+}
+
 /// Reading of the device-tag suffix `DeviceDeliveryPlan` puts on a per-device copy.
 ///
 /// Delivery is not per device: `messaging-service/src/core.rs` writes the same envelope to every
@@ -113,13 +140,13 @@ enum DeviceCopyWireId {
     /// now answers that question, and the flag is what carries the answer here rather than this
     /// function guessing from the size of the array it was handed — an empty list and a list we
     /// have no reason to trust look identical from in here.
-    static func verdict(
+    static func read(
         wireId: String,
         ourDeviceId: String?,
         ourIdentityPrivateKey: Data?,
         peerIdentityKeys: [Data],
         peerDeviceSetIsComplete: Bool
-    ) -> DeviceCopyVerdict {
+    ) -> DeviceCopyReading {
         guard let tag = targetDeviceTag(of: wireId),
               let base = baseId(of: wireId),
               let audience = audience(of: wireId) else {
@@ -131,9 +158,11 @@ enum DeviceCopyWireId {
             guard let ourDeviceId, !ourDeviceId.isEmpty,
                   let ourIdentityPrivateKey, !peerIdentityKeys.isEmpty else { return .undecidable }
 
+            // `first(where:)`, not `contains`. The key that reproduces the MAC names the device
+            // that wrote this copy — the whole of §D, and it was being computed and thrown away.
             // The target is bound into the MAC, so a copy we sent to another device does not match
             // here even though we share its pair secret.
-            let isOurs = peerIdentityKeys.contains {
+            let senderKey = peerIdentityKeys.first {
                 SenderSyncDeviceTag.matches(
                     tag,
                     baseMessageId: base,
@@ -142,21 +171,37 @@ enum DeviceCopyWireId {
                     peerIdentityPublicKey: $0
                 )
             }
-            if isOurs { return .ours }
+            if let senderKey {
+                return DeviceCopyReading(
+                    verdict: .ours,
+                    senderDevice: deriveDeviceId(identityPublicKey: [UInt8](senderKey))
+                )
+            }
             // Own replicas: we hold every sibling's key, so a tag matching none of them is a
             // sibling's. Peer copies: only when the caller vouches that it knows their devices.
             let canConcludeForeign = audience == .ownReplica || peerDeviceSetIsComplete
-            return canConcludeForeign ? .foreign : .undecidable
+            return DeviceCopyReading(
+                verdict: canConcludeForeign ? .foreign : .undecidable,
+                // No sender either way: a foreign copy's tag was written for a device whose id we
+                // did not bind, so nothing here attributes it.
+                senderDevice: nil
+            )
 
         case SenderSyncDeviceTag.legacyHexLength:
             // Sender at or below 0.18.0 wrote `deviceId.prefix(8)`. Prefix, not equality —
             // comparing a full device id against a truncated tag never matches, and every copy
             // including our own would be discarded as foreign.
             //
+            // Names no sender: this form encodes the **target**, and no pair secret was involved,
+            // so there is nothing to attribute a writer with.
+            //
             // Removal condition: no builds at or below 0.18.0 left in the field. Until then
             // dropping this stops placing copies from a tester who has not updated.
             guard let ourDeviceId, !ourDeviceId.isEmpty else { return .undecidable }
-            return ourDeviceId.hasPrefix(tag) ? .ours : .foreign
+            return DeviceCopyReading(
+                verdict: ourDeviceId.hasPrefix(tag) ? .ours : .foreign,
+                senderDevice: nil
+            )
 
         default:
             return .undecidable

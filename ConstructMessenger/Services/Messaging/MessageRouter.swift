@@ -302,15 +302,28 @@ final class MessageRouter {
         // `.undecidable` means we cannot tell — a peer device we never pinned looks the same as a
         // sibling's copy — and it is treated as ours: attempting a copy costs a failed decrypt,
         // discarding one loses a message from the transcript.
+        // §D: the device that wrote this copy, when its tag names one. A local, not a map keyed by
+        // message id — the naming and the decrypt that consumes it are both in this function, and a
+        // dictionary here would be one more thing to expire.
+        var namedSenderDevice: String?
+
         if DeviceCopyWireId.audience(of: message.id) == .recipient {
-            let verdict = DeviceCopyWireId.verdict(
+            let reading = DeviceCopyWireId.read(
                 wireId: message.id,
                 ourDeviceId: AuthSessionManager.shared.currentDeviceId,
                 ourIdentityPrivateKey: MultiDeviceSendCoordinator.shared.ourIdentityPrivateKey(),
                 peerIdentityKeys: PeerDeviceRegistry.shared.identityKeys(of: message.from),
                 peerDeviceSetIsComplete: PeerDeviceRegistry.shared.deviceSetIsKnown(for: message.from)
             )
+            let verdict = reading.verdict
             PerformanceMetrics.shared.record(.deviceCopyVerdict, label: verdict.metricLabel)
+            // §D. The tag verification just named the device that wrote this copy; remembered here
+            // so the decrypt below asks that device's session instead of walking, and so a failure
+            // is attributed to it instead of to whichever session the walk happened to try last.
+            if let sender = reading.senderDevice {
+                namedSenderDevice = sender
+                PerformanceMetrics.shared.record(.deviceCopyVerdict, label: "sender_named")
+            }
             if verdict == .foreign {
                 Log.debug(
                     "FAN-OUT: \(message.id.prefix(8))… is addressed to another of our devices — skipping",
@@ -761,7 +774,9 @@ final class MessageRouter {
         // ours, because `ServerUserId` does not exist there. The pinned device goes first, so a
         // single-device peer runs this loop exactly once against exactly the session it uses
         // today — this must cost that case nothing, and it is the property the tests pin.
-        let decryptCandidates = receivingDecryptCandidates(for: otherUserId, in: context)
+        let decryptCandidates = receivingDecryptCandidates(
+            for: otherUserId, namedSender: namedSenderDevice, in: context
+        )
 
         var actions: [CfeAction] = []
         var decryptedAs: String?
@@ -1160,6 +1175,7 @@ final class MessageRouter {
     /// used before there was a walk at all.
     private func receivingDecryptCandidates(
         for otherUserId: String,
+        namedSender: String?,
         in context: NSManagedObjectContext
     ) -> [String] {
         let pinned = SessionAddressing.contactId(forPeer: otherUserId)
@@ -1167,13 +1183,28 @@ final class MessageRouter {
             return pinned.map { [$0] } ?? []
         }
         let held = Set(core.getAllSessionContactIds())
+
+        // §D. The tag named the device that wrote this message, so there is nothing to search: one
+        // ratchet can open it and the others provably cannot. Returned alone rather than merely
+        // preferred — a walk past a known answer is not caution, it is N−1 decrypt attempts whose
+        // only possible outcome is failure, and after §B (sealed fan-out) an attempt is no longer
+        // a free one.
+        //
+        // Only when we actually hold that session. A named device we have no ratchet with falls
+        // through to the ordinary list, where the miss takes the init path and names it correctly.
+        if let namedSender, held.contains(namedSender) {
+            return [namedSender]
+        }
+
         let known = SessionAddressing.deviceIds(ofPeer: otherUserId, in: context).filter(held.contains)
         // Nothing on record is not the same as nothing to try: a peer we have never enumerated
         // still has the pinned session, and that is the state every single-device account is in.
         let sessions = known.isEmpty ? (pinned.map { [$0] } ?? []) : known
         return planReceivingDecrypt(
             sessionDeviceIds: sessions,
-            preferredDeviceId: lastDecryptingDevice[otherUserId] ?? pinned ?? ""
+            // A named sender we hold no session with is still the best preference: the plan puts
+            // it first, and the actions that come back then name it rather than the pinned device.
+            preferredDeviceId: namedSender ?? lastDecryptingDevice[otherUserId] ?? pinned ?? ""
         )
     }
 
@@ -2617,7 +2648,7 @@ final class MessageRouter {
         //
         // The tag is a MAC under a secret only the two devices share, not the device id it used to
         // be; see SenderSyncDeviceTag for what the readable form gave the relay.
-        if DeviceCopyWireId.verdict(
+        if DeviceCopyWireId.read(
             wireId: message.id,
             ourDeviceId: AuthSessionManager.shared.currentDeviceId,
             ourIdentityPrivateKey: MultiDeviceSendCoordinator.shared.ourIdentityPrivateKey(),
@@ -2625,7 +2656,7 @@ final class MessageRouter {
             // Own replicas: the cache holds every sibling we know of, and the verdict does not
             // consult this flag for that audience — passed for the shape, not for the decision.
             peerDeviceSetIsComplete: true
-        ) == .foreign {
+        ).verdict == .foreign {
             Log.debug(
                 "SENDER_SYNC: \(message.id) is addressed to another of our devices — skipping",
                 category: "MessageRouter"
