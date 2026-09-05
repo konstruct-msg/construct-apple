@@ -1421,6 +1421,23 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func exportSession(contactId: String) throws  -> [UInt8]
     
+    /**
+     * Drop every piece of local orchestration state this core holds about `contact_id`:
+     * the ratchet, the archive and its timestamp, the prekey counter, the heal record, the PQ
+     * contribution, the init lock, the cooldown, the pending END_SESSION, the prewarm mark and
+     * the active-chat mark.
+     *
+     * `remove_session` removes the ratchet **and nothing else**, so all of the above outlive it
+     * and steer the next add for the same device — a contact the platform has already forgotten.
+     * None of them is reachable from outside this crate, which is why "the platform deleted this
+     * contact" had no expression here until now.
+     *
+     * Silent on the wire on purpose: a local deletion boundary, not a protocol reset. It archives
+     * nothing and emits no END_SESSION. A caller that wants the peer told does that first, with
+     * `plan_teardown`, and forgets afterwards.
+     */
+    func forgetContactState(contactId: String) 
+    
     func generateOneTimePrekeys(count: UInt32) throws  -> [OtpkPair]
     
     func getAllSessionContactIds()  -> [String]
@@ -1730,6 +1747,29 @@ open func exportSession(contactId: String)throws  -> [UInt8]  {
         FfiConverterString.lower(contactId),$0
     )
 })
+}
+    
+    /**
+     * Drop every piece of local orchestration state this core holds about `contact_id`:
+     * the ratchet, the archive and its timestamp, the prekey counter, the heal record, the PQ
+     * contribution, the init lock, the cooldown, the pending END_SESSION, the prewarm mark and
+     * the active-chat mark.
+     *
+     * `remove_session` removes the ratchet **and nothing else**, so all of the above outlive it
+     * and steer the next add for the same device — a contact the platform has already forgotten.
+     * None of them is reachable from outside this crate, which is why "the platform deleted this
+     * contact" had no expression here until now.
+     *
+     * Silent on the wire on purpose: a local deletion boundary, not a protocol reset. It archives
+     * nothing and emits no END_SESSION. A caller that wants the peer told does that first, with
+     * `plan_teardown`, and forgets afterwards.
+     */
+open func forgetContactState(contactId: String)  {try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_forget_contact_state(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
+    )
+}
 }
     
 open func generateOneTimePrekeys(count: UInt32)throws  -> [OtpkPair]  {
@@ -8539,6 +8579,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_export_session() != 59847) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_forget_contact_state() != 50563) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_generate_one_time_prekeys() != 33822) {

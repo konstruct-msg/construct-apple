@@ -187,12 +187,24 @@ class ChatsViewModel {
     func pruneContact(userId: String) async {
         Log.info("Contact prune requested for \(userId.prefix(8))…", category: "ChatsViewModel")
 
+        // Every device of this contact, resolved **before** anything local is destroyed.
+        //
+        // `deviceIds(ofPeer:)` prefers `PeerDevice` rows — which survive the prune, having no
+        // relationship to `User` — but falls back to `contactId(forPeer:)`, and that reads
+        // `User.knownIdentityKey`, which does not. So for a contact we hold no `PeerDevice` row
+        // for, which is every peer we have only ever received from, resolving after the prune
+        // returns nothing. `archiveSessions(ofPeer:)` ran in exactly that position and archived
+        // nothing for those contacts.
+        let context = PersistenceController.shared.container.viewContext
+        let peerDevices = SessionAddressing.deviceIds(ofPeer: userId, in: context)
+
         // Same gate as a chat delete, for the same reason: delivery does not name the sending
         // device, so a secondary device announcing a teardown has it applied to whichever device
-        // the peer's addressing resolves to — possibly our primary. Until §D lands, only an
-        // account with one device may speak for it. On a multi-device account the prune stays
-        // silent, and the peer keeps a session we will not read; that is the pre-§D cost, stated
-        // rather than hidden.
+        // the peer's addressing resolves to — possibly our primary. §D landed 2026-09-05 and our
+        // END_SESSION now names the device that sent it, so the hazard is gone against a peer that
+        // reads the tag; the gate stays for peers on older builds, which still attribute an
+        // inbound teardown to their pinned device. On a multi-device account the prune stays
+        // silent, and the peer keeps a session we will not read; that cost is stated, not hidden.
         let myUserId = AuthSessionManager.shared.currentUserId ?? ""
         var devices = MultiDeviceSendCoordinator.shared.knownOwnDevices(myUserId: myUserId)
         if devices.isEmpty {
@@ -212,7 +224,27 @@ class ChatsViewModel {
         }
 
         chatManagementService.pruneContactLocally(userId: userId)
-        chatManagementService.archiveSessions(ofPeer: userId)
+
+        // Forget rather than archive. An archive keeps the ratchet for a late message, which is
+        // the right answer for a session that ended; this contact is gone, and the leftovers are
+        // what steer the next add if they ever come back. `forgetContactState` (core 0.16.0) drops
+        // the archive, the prekey counter, the heal record, the PQ contribution, the init lock,
+        // the cooldown, the pending END_SESSION and the queued carriers — none of which
+        // `remove_session` touched, and none of which was reachable from here before.
+        for device in peerDevices {
+            CryptoManager.shared.forgetContactState(for: device)
+        }
+        // The core's heal record is not the one this app consults. `SessionHealingService` holds
+        // its **own** `RustHealingQueue` instance — a different object from the one inside
+        // `OrchestratorCore.lifecycle` — and it is that one which answers `canHeal` and counts
+        // attempts. Forgetting in the core leaves it untouched, so the prune has to clear both.
+        // Collapsing the two is step 4 of decisions/session-is-one-state-machine.
+        SessionHealingService.shared.clearQueue(for: userId, in: context)
+
+        Log.info(
+            "Synapse pruned: \(userId.prefix(8))… — forgot \(peerDevices.count) device session(s)",
+            category: "ChatsViewModel"
+        )
         streamLifecycle.reconnectIfSubscriptionsChanged()
     }
 

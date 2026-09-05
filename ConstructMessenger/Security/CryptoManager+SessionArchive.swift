@@ -97,6 +97,33 @@ extension CryptoManager {
         return removedFromCore || hadKeychainEntry
     }
 
+    /// Forget everything we hold about one **device** of a contact we have deleted.
+    ///
+    /// The completion of `remove_session`, which is only the ratchet. The core also holds an
+    /// archive and its timestamp, a prekey counter, a heal record, a PQ contribution, an init
+    /// lock, a cooldown, a pending END_SESSION, a prewarm mark, an active-chat mark and the
+    /// router's queued carriers for that contact — none of it reachable from here until
+    /// `forget_contact_state` was exported (core 0.16.0). Until then "delete this contact" removed
+    /// the ratchet and the next add for the same device was steered by the leftovers of a contact
+    /// the platform had already forgotten.
+    ///
+    /// Silent on the wire, and deliberately: this is a local deletion boundary, not a protocol
+    /// reset. A caller that wants the peer told does that first — `pruneContact` announces before
+    /// it forgets, because the announcement needs the very rows the forget destroys.
+    ///
+    /// The Keychain half stays here: the core owns its own state, this app owns the four entries
+    /// hanging off the same device id.
+    func forgetContactState(for deviceId: String) {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard !deviceId.isEmpty else { return }
+        orchestratorCore?.forgetContactState(contactId: deviceId)
+        KeychainManager.shared.deleteSession(for: deviceId)
+        KeychainManager.shared.deleteSessionSuiteId(userId: deviceId)
+        KeychainManager.shared.deleteSessionAtRiskFlag(for: deviceId)
+        KeychainManager.shared.deleteSessionEstablishedAt(for: deviceId)
+    }
+
     func restoreRecentSessions(limit: Int = 10) {
         guard orchestratorCore != nil else {
             Log.error("Cannot restore sessions - core not initialized", category: "CryptoManager")
