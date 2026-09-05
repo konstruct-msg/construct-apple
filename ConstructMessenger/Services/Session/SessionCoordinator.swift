@@ -1575,6 +1575,11 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// the outgoing side was flushed at these sites, which is precisely why the incoming side had
     /// to be a discard rather than a hold — there was nowhere for a held message to be released.
     /// A future fourth release site gets both by construction.
+    /// Account-keyed, and blocked on §D for the opposite reason to the outbound side: the gate is
+    /// *raised* where we know the device (we are about to send an SRI to it), and *released* by an
+    /// inbound `session_ready` / ping whose sender the relay does not name. Keying it by device
+    /// would mean a confirmation that cannot name itself never releases the gate, and sends to
+    /// that peer deadlock — strictly worse than the coarse key.
     private func releaseConfirmGate(for userId: String, lapsed: Bool = false) {
         assertMainThread()
         if lapsed {

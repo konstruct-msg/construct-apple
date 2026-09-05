@@ -33,6 +33,11 @@ final class PendingSessionQueue {
     /// Enqueue `message` for `userId`. No-op when the queue is already at capacity.
     /// Returns `true` if the message was accepted, `false` if the cap was hit.
     @discardableResult
+    // Keyed by **account**, and it cannot move to a device until §D of the multi-device plan
+    // lands. Everything here is filed from an incoming envelope, and the relay blanks
+    // `sender_device` by design — there is no device to key by at the moment a message is held.
+    // Step 1 of `session-is-one-state-machine` lists this queue, and measuring it is what showed
+    // §D is *inside* that step rather than after it.
     func enqueue(_ message: ChatMessage, for userId: String) -> Bool {
         let current = queues[userId]?.count ?? 0
         guard current < maxPerUser else { return false }

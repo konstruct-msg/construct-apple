@@ -267,8 +267,23 @@ class SessionInitializationService {
         case failure(Error)
     }
 
-    /// In-flight proactive inits, keyed by peer. `@MainActor` makes lookup-then-insert
+    /// In-flight proactive inits, keyed by **account**. `@MainActor` makes lookup-then-insert
     /// atomic, so two concurrent callers can never both start a run.
+    ///
+    /// Stays account-keyed while step 1 of `session-is-one-state-machine` moved `sessionPhases`
+    /// to `SessionScope`, and the reason is not oversight: **a single-flight key must be stable
+    /// for the lifetime of the flight, and this one's scope is not.** At first contact
+    /// `SessionScope.forAccount` is `.peer(account)`; the bundle fetch inside `performProactiveInit`
+    /// is what writes `User.knownIdentityKey` (`KeyServiceClient`), so from that moment the same
+    /// account resolves to `.device(pinned)`. A late joiner arriving after the pin would compute
+    /// the device scope, miss the entry filed under the peer scope, and start a second run —
+    /// burning a second OTPK and replacing the first session, which is the 2026-07-31 divergence
+    /// this map exists to prevent.
+    ///
+    /// What unblocks it is the run naming its target device up front instead of resolving
+    /// `contactId(forPeer:)` inside — step 6 of the same decision. Until then the account key is
+    /// the correct one, because today one INITIATOR run targets exactly one pinned device and the
+    /// two keys are 1:1.
     private var proactiveInitTasks: [String: Task<ProactiveInitOutcome, Never>] = [:]
 
     /// Whether the peer's own session init is in our hands — received and not yet completed.
