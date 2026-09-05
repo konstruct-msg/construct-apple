@@ -128,11 +128,25 @@ final class MessagingServiceClient: Sendable {
         let bgTaskId = await MainActor.run { UIApplication.shared.beginBackgroundTask(withName: "send-msg-rpc") { } }
         defer { Task { @MainActor in UIApplication.shared.endBackgroundTask(bgTaskId) } }
         #endif
+        // §D. The same chokepoint reasoning as sealing above: the device that wrote a copy has to
+        // be nameable to its recipient, and a per-caller decision drifted here once already. The
+        // fan-out has tagged its copies since 2026-08-17; `primarySendCovered` is exactly what
+        // keeps the recipient's pinned device *out* of that fan-out, so the one target receiving
+        // most of the traffic was the one arriving unattributable.
+        //
+        // Returns the id unchanged when nothing can attribute it — a fan-out copy that is already
+        // tagged, a first contact with no pinned key, an unreadable Keychain — and the receiver
+        // then walks its sessions exactly as before.
+        let wireMessageId = PrimarySendTag.wireId(
+            baseMessageId: messageId,
+            recipientId: recipientId,
+            recipientDeviceId: recipientDeviceId
+        )
         return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
             let envelope = Self.buildEnvelope(
-                messageId: messageId,
+                messageId: wireMessageId,
                 recipientId: recipientId,
                 senderId: senderId,
                 conversationId: conversationId,
