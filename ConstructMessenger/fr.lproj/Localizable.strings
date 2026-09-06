@@ -1106,3 +1106,9 @@
 "chat_font_mono" = "JetBrains Mono";
 "chat_font_system" = "Système";
 "chat_font_footer" = "S'applique au texte des messages et au champ de saisie. Le reste de l'interface reste à chasse fixe.";
+
+"text_size" = "Taille du texte";
+"text_size_compact" = "Compacte";
+"text_size_standard" = "Standard";
+"text_size_large" = "Grande";
+"text_size_footer" = "S'applique au texte des messages et au champ de saisie. Le reste de l'interface conserve sa taille.";

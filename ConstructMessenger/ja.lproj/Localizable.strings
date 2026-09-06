@@ -1187,3 +1187,9 @@
 "chat_font_mono" = "JetBrains Mono";
 "chat_font_system" = "システム";
 "chat_font_footer" = "メッセージの本文と入力欄に適用されます。ほかの画面は等幅のままです。";
+
+"text_size" = "文字サイズ";
+"text_size_compact" = "小";
+"text_size_standard" = "標準";
+"text_size_large" = "大";
+"text_size_footer" = "メッセージの本文と入力欄に適用されます。ほかの画面の文字サイズは変わりません。";

@@ -27,6 +27,26 @@
 # check fails on a *new* one. Deleting a name from BASELINE after fixing it is the
 # point; adding one is not.
 #
+# Check 3 read only `NSLocalizedString("…")` under `ConstructMessenger/` until
+# 2026-09-06, which is two blind spots, not one:
+#
+#   * `LocalizedStringKey("…")` — SwiftUI localizes it identically, and it is what an
+#     enum's `displayName` returns. Appearance shipped `"compact"` / `"standard"` /
+#     `"large"` and `text_size_footer` with no entry in any locale; all four rendered
+#     their own key on screen while this script reported success.
+#   * `Construct Desktop/` was never scanned at all.
+#
+# One form stays invisible and cannot be grepped: a bare literal returned from a
+# `-> LocalizedStringKey` property, which is what an enum `displayName` used to be. The
+# Appearance enums were converted to return a resolved `String` via `NSLocalizedString`
+# so they land in this scan; prefer that shape over a key-typed literal.
+#
+# Both are covered now, which made twenty-one more already-broken keys visible at once.
+# They are seeded into BASELINE the same way and for the same stated reason as the
+# original twelve — turning the ratchet on today beats writing twenty-one strings of
+# product copy first. That seeding is a one-off with a date on it: appending to
+# BASELINE is still not what this file is for.
+#
 # ja.lproj and fr.lproj used to be exempt from check 1 — "partial translations in
 # progress", 922 and 472 of 966 keys, with iOS falling back per missing key. They were
 # completed on 2026-08-16 and are now held to the same rule, because the exemption is
@@ -36,6 +56,9 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STRINGS="$ROOT/ConstructMessenger"
+# Code scanned by check 3. The `.strings` files live only under `$STRINGS`, but Desktop
+# reads the same catalogue and must be held to it.
+CODE_ROOTS=("$ROOT/ConstructMessenger" "$ROOT/Construct Desktop")
 FAIL=0
 
 # Keys used in code that resolve to nothing, as of 2026-08-14. Each renders as the
@@ -50,9 +73,29 @@ spam_force_banned
 spam_warning_wait
 stt_error_no_model
 stt_error_unavailable
-text_size
 transcription
 trasncription
+call_status_busy
+call_status_calling
+call_status_connected
+call_status_connecting
+call_status_declined
+call_status_ended
+call_status_failed
+mic_denied_message_macos
+mic_denied_title
+spam_force_send
+spam_seconds
+spam_strong_warning_body
+spam_strong_warning_title
+spam_warning_title
+synaps_empty_subtitle
+synaps_empty_title
+synaps_prune_action
+synaps_prune_message
+synaps_prune_title
+synaps_search_prompt
+voice_ready_to_send
 EOF
 )
 
@@ -90,8 +133,11 @@ done
 [ "$FAIL" -eq 0 ] && echo "✓ no duplicate keys in any .strings file"
 
 # ── 3. code keys resolve ──────────────────────────────────────────────────────
-code_keys=$(grep -rhoE 'NSLocalizedString\("[^"]+"' --include="*.swift" "$STRINGS" \
-            | sed -E 's/NSLocalizedString\("//; s/"$//' | sort -u)
+code_keys=$( { grep -rhoE 'NSLocalizedString\("[^"]+"' --include="*.swift" "${CODE_ROOTS[@]}" \
+                 | sed -E 's/NSLocalizedString\("//; s/"$//'
+               grep -rhoE 'LocalizedStringKey\("[^"]+"' --include="*.swift" "${CODE_ROOTS[@]}" \
+                 | sed -E 's/LocalizedStringKey\("//; s/"$//'
+             } | sort -u)
 unresolved=$(comm -23 <(echo "$code_keys") <(echo "$en_keys"))
 new_unresolved=$(comm -23 <(echo "$unresolved") <(echo "$BASELINE" | sort))
 

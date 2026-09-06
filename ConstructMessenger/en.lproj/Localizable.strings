@@ -1188,3 +1188,9 @@
 "chat_font_mono" = "JetBrains Mono";
 "chat_font_system" = "System";
 "chat_font_footer" = "Applies to message text and the composer. The rest of the interface stays monospaced.";
+
+"text_size" = "Text size";
+"text_size_compact" = "Compact";
+"text_size_standard" = "Standard";
+"text_size_large" = "Large";
+"text_size_footer" = "Applies to message text and the composer. The rest of the interface keeps its size.";

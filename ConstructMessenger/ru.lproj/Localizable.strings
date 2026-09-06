@@ -1199,3 +1199,9 @@
 "chat_font_mono" = "JetBrains Mono";
 "chat_font_system" = "Системный";
 "chat_font_footer" = "Действует на текст сообщений и поле ввода. Остальной интерфейс остаётся моноширинным.";
+
+"text_size" = "Размер текста";
+"text_size_compact" = "Компактный";
+"text_size_standard" = "Обычный";
+"text_size_large" = "Крупный";
+"text_size_footer" = "Действует на текст сообщений и поле ввода. Остальной интерфейс не меняет размер.";

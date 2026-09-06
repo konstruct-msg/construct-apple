@@ -96,18 +96,17 @@ struct AppearanceSettingsView: View {
                                 chatFace = face
                             } label: {
                                 HStack(spacing: AppearanceSettingsLayout.themeRowContentSpacing) {
+                                    // The row is set in the face it offers, so the choice is
+                                    // visible before it is made. `CTFont.message` cannot be used
+                                    // here — it reads the current preference, which would render
+                                    // both rows in the selected face and show nothing.
                                     Text(face.displayName)
-                                        .font(CTFont.bold(16))
+                                        .font(face == .mono ? CTFont.bold(16) : .system(size: 16, weight: .bold))
                                         .foregroundStyle(Color.CT.text)
                                     Spacer()
-                                    // The row samples the face it offers, so the choice is visible
-                                    // before it is made.
-                                    Text("Aa")
-                                        .font(face == .mono ? CTFont.regular(15) : .system(size: 15))
-                                        .foregroundStyle(Color.CT.textDim)
                                     if chatFace == face {
-                                        Text("[✓]")
-                                            .font(CTFont.bold(14))
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14, weight: .semibold))
                                             .foregroundStyle(Color.CT.accent)
                                     }
                                 }
@@ -139,8 +138,8 @@ struct AppearanceSettingsView: View {
                                         .foregroundStyle(Color.CT.text)
                                     Spacer()
                                     if textSize == size {
-                                        Text("[✓]")
-                                            .font(CTFont.bold(14))
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14, weight: .semibold))
                                             .foregroundStyle(Color.CT.accent)
                                     }
                                 }
@@ -179,11 +178,14 @@ enum AppTheme: String, CaseIterable {
     /// Only dark theme is currently implemented.
     var isAvailable: Bool { true }
 
-    var displayName: LocalizedStringKey {
+    /// Resolved here rather than returned as a `LocalizedStringKey`: a bare literal typed as a
+    /// key localizes correctly and is invisible to `scripts/check_localization.sh`, so a missing
+    /// entry ships green. See the note in that script.
+    var displayName: String {
         switch self {
-        case .automatic: return "automatic"
-        case .light: return "light"
-        case .dark: return "dark"
+        case .automatic: return NSLocalizedString("automatic", comment: "")
+        case .light:     return NSLocalizedString("light", comment: "")
+        case .dark:      return NSLocalizedString("dark", comment: "")
         }
     }
 
@@ -214,10 +216,10 @@ enum AppTheme: String, CaseIterable {
 
 // MARK: - Text size (for CTFont scaling in Appearance)
 extension ChatTextPreference.Face {
-    var displayName: LocalizedStringKey {
+    var displayName: String {
         switch self {
-        case .mono:   return "chat_font_mono"
-        case .system: return "chat_font_system"
+        case .mono:   return NSLocalizedString("chat_font_mono", comment: "")
+        case .system: return NSLocalizedString("chat_font_system", comment: "")
         }
     }
 }
@@ -227,11 +229,14 @@ enum TextSize: String, CaseIterable {
     case standard = "standard"
     case large = "large"
 
-    var displayName: LocalizedStringKey {
+    /// Namespaced like `chat_font_*`. The bare `"compact"` / `"standard"` / `"large"` these
+    /// replace had no entry in any locale, so all three rows rendered their own key. A one-word
+    /// key is also the kind that later collides with an unrelated screen's noun.
+    var displayName: String {
         switch self {
-        case .compact: return "compact"
-        case .standard: return "standard"
-        case .large: return "large"
+        case .compact:  return NSLocalizedString("text_size_compact", comment: "")
+        case .standard: return NSLocalizedString("text_size_standard", comment: "")
+        case .large:    return NSLocalizedString("text_size_large", comment: "")
         }
     }
 }

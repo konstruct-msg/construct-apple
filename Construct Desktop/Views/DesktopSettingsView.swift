@@ -217,11 +217,11 @@ enum DesktopTextSize: String, CaseIterable {
     case standard = "standard"
     case large = "large"
 
-    var displayName: LocalizedStringKey {
+    var displayName: String {
         switch self {
-        case .compact: return "compact"
-        case .standard: return "standard"
-        case .large: return "large"
+        case .compact:  return NSLocalizedString("text_size_compact", comment: "")
+        case .standard: return NSLocalizedString("text_size_standard", comment: "")
+        case .large:    return NSLocalizedString("text_size_large", comment: "")
         }
     }
 }
@@ -247,13 +247,13 @@ private struct DesktopAppearanceSettingsTab: View {
                                     .font(.system(size: 14))
                                     .foregroundStyle(appTheme == theme ? Color.CT.accent : Color.CT.textDim)
                                     .frame(width: 24, alignment: .leading)
-                                Text(LocalizedStringKey(theme.rawValue.capitalized))
+                                Text(theme.displayName)
                                     .font(CTFont.regular(13))
                                     .foregroundStyle(appTheme == theme ? Color.CT.text : Color.CT.textDim)
                                 Spacer()
                                 if appTheme == theme {
-                                    Text("[✓]")
-                                        .font(CTFont.regular(12))
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 12, weight: .semibold))
                                         .foregroundStyle(Color.CT.accent)
                                 }
                             }
@@ -280,8 +280,8 @@ private struct DesktopAppearanceSettingsTab: View {
                                     .foregroundStyle(textSize == size ? Color.CT.text : Color.CT.textDim)
                                 Spacer()
                                 if textSize == size {
-                                    Text("[✓]")
-                                        .font(CTFont.regular(12))
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 12, weight: .semibold))
                                         .foregroundStyle(Color.CT.accent)
                                 }
                             }
