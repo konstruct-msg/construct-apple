@@ -302,9 +302,16 @@ final class MessageRouter {
         // `.undecidable` means we cannot tell — a peer device we never pinned looks the same as a
         // sibling's copy — and it is treated as ours: attempting a copy costs a failed decrypt,
         // discarding one loses a message from the transcript.
-        // §D: the device that wrote this copy, when its tag names one. A local, not a map keyed by
-        // message id — the naming and the decrypt that consumes it are both in this function, and a
-        // dictionary here would be one more thing to expire.
+        // §D: the device that wrote this copy. A local, not a map keyed by message id — the naming
+        // and the decrypt that consumes it are both in this function, and a dictionary here would
+        // be one more thing to expire.
+        //
+        // Written twice below, and only the second one fires in practice. The wire-id tag is read
+        // here because it is the only answer available *before* the unseal; on a sealed delivery
+        // there is no tag to read, because the relay rebuilds the envelope from `sealed_inner` and
+        // stamps its own id (measured 2026-09-06: 32 tagged copies sent, 0 of 773 incoming ids
+        // carrying a marker). The certificate answers it after the unseal instead. The branch is
+        // kept for the identified path, which still delivers `Envelope.message_id` verbatim.
         var namedSenderDevice: String?
 
         if DeviceCopyWireId.audience(of: message.id) == .recipient {
@@ -440,6 +447,14 @@ final class MessageRouter {
                 "STEALTH: resolved sender → \(resolved.senderId.prefix(8))… ct=\(resolved.contentType) kind=\(recoveredKind.rawValue)",
                 category: "MessageRouter"
             )
+            // §D, the half that works. The certificate names the writing device, sealed to us and
+            // covered by the server signature, so the decrypt below asks that one session instead
+            // of walking the peer's devices. The tag branch above cannot supply this on a sealed
+            // delivery — see `ResolvedSender.senderDeviceId` — and every delivery is sealed.
+            if !message.senderDeviceId.isEmpty {
+                namedSenderDevice = message.senderDeviceId
+                PerformanceMetrics.shared.record(.deviceCopyVerdict, label: "sender_named")
+            }
             // Nothing branches on `resolved.contentType` beyond this point for the four types that
             // moved into the frame (12/14/25/26) — it is UNSPECIFIED for all of them now. Only
             // END_SESSION (21) and SESSION_RESET_INIT (24) still say anything here.
@@ -2670,10 +2685,11 @@ final class MessageRouter {
         // and cannot travel inside it. We try our own-device sessions; the one that opens the
         // message is the answer, and it is a cryptographic one rather than a claim.
         //
-        // `message.senderDeviceId` is always empty here — the server does not deliver it — so the
-        // old code took the `message.from` branch, looked up a session that is the *primary*
-        // session with ourselves, and got nowhere. It is still tried first, since a single-device
-        // account has nothing else.
+        // `message.senderDeviceId` was always empty here until the unseal boundary began recovering
+        // it from the sender certificate (2026-09-06); before that the old code took the
+        // `message.from` branch, looked up a session that is the *primary* session with ourselves,
+        // and got nowhere. `message.from` is still tried, since a single-device account has nothing
+        // else and an older sibling's certificate may not name a device.
         let candidates = senderSyncSessionCandidates(myUserId: currentUserId, message: message)
         guard let opened = openSenderSync(message, candidates: candidates) else {
             handleUnopenedSenderSync(message, candidates: candidates, in: context)
@@ -2774,8 +2790,8 @@ final class MessageRouter {
     private func senderSyncSessionCandidates(myUserId: String, message: ChatMessage) -> [String] {
         var keys: [String] = [message.from]
         if !message.senderDeviceId.isEmpty {
-            // Only ever populated by a local/federated path that does not go through the blanking
-            // server. Free to try, and it short-circuits the loop when present.
+            // The sibling that wrote this copy, from its sender certificate. Free to try, and it
+            // short-circuits the loop when present.
             keys.insert(message.senderDeviceId, at: 0)
         }
         // Siblings, not every own device: this one cannot have sent us a SENDER_SYNC, and a

@@ -411,7 +411,12 @@ final class StealthSenderService: SealedSenderResolving {
         } else {
             rememberIdentityFromCertificate(cert)
         }
-        return ResolvedSender(senderId: cert.senderUserID, contentType: contentType, trust: trust)
+        return ResolvedSender(
+            senderId: cert.senderUserID,
+            senderDeviceId: cert.senderDeviceID,
+            contentType: contentType,
+            trust: trust
+        )
     }
 
     /// Pin `cert.senderIdentityKey` when the signature vouches, ignoring expiry.
@@ -681,6 +686,26 @@ enum SenderTrust: Equatable {
 /// `nil` from that call means the box could not be opened at all.
 struct ResolvedSender: Equatable {
     let senderId: String
+    /// The device that wrote this message, from `SenderCertificate.sender_device_id`.
+    ///
+    /// The sealed path is the only one that can answer this. The relay blanks
+    /// `Envelope.sender_device` on delivery on purpose — server metadata must not carry E2E
+    /// meaning — so before the unseal the field is empty on every delivered message, and §D
+    /// tried to recover it from a tag on the wire id. That id does not survive: the sealed
+    /// branch of `send_message` rebuilds the delivered envelope from `sealed_inner` alone and
+    /// stamps a server id, so the tag was written into the one field guaranteed not to arrive
+    /// (see `ServerMessageIdMap`, which exists because the sender has to translate that id back).
+    ///
+    /// The certificate was already the answer. `identity-service` fills `sender_device_id` from
+    /// the caller's `x-device-id`, checks it against an active row in `devices`, and covers it
+    /// with the same signature that vouches the sender. It is sealed to the recipient's identity
+    /// key, so the relay never reads it — which is the property §D wanted and a MAC only
+    /// approximates.
+    ///
+    /// Not gated on `trust`: an unvouched certificate makes this an unauthenticated claim, and so
+    /// is `senderId` beside it, which already routes. Naming the wrong device costs one failed
+    /// decrypt before the walk resumes; the ratchet is the real auth here as everywhere else.
+    let senderDeviceId: String
     let contentType: UInt8
     let trust: SenderTrust
 }

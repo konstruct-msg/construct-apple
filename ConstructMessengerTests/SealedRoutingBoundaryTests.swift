@@ -60,6 +60,8 @@ final class SealedRoutingBoundaryTests: XCTestCase {
     private var savedUserId: String?
     private let me = UUID().uuidString
     private let peer = UUID().uuidString
+    /// A `CryptoDeviceId`: 32 hex characters, the space every session key lives in.
+    private let senderDevice = "651e765cbbd33b4e48631fb802c2b3d2"
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -174,7 +176,12 @@ final class SealedRoutingBoundaryTests: XCTestCase {
 
     private func stubUnseal(contentType: UInt8) {
         router.sealedSenderResolver = StubResolver(
-            resolved: ResolvedSender(senderId: peer, contentType: contentType, trust: .vouched(.signature))
+            resolved: ResolvedSender(
+            senderId: peer,
+            senderDeviceId: senderDevice,
+            contentType: contentType,
+            trust: .vouched(.signature)
+        )
         )
     }
 
@@ -238,6 +245,7 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
 
     private let peer = "7574fdec-ca31-44ac-9d43-0e6e870fe4d5"
     private let me = "0a1c609f-b37d-4d67-b7b2-b0f8ec16d167"
+    private let senderDevice = "651e765cbbd33b4e48631fb802c2b3d2"
 
     /// Every field distinct and non-default, so a dropped one reads as a changed value rather
     /// than coinciding with the default it would fall back to.
@@ -257,7 +265,8 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
             kyberOtpkId: 42,
             pqMessageEpoch: 9,
             pqRatchetField: Data(repeating: 0x44, count: 24),
-            senderDeviceId: "651e765cbbd33b4e48631fb802c2b3d2",
+            // Deliberately not `senderDevice`: the boundary must overwrite this, not keep it.
+            senderDeviceId: "00000000000000000000000000000000",
             conversationId: "direct:a:b",
             replyToMessageId: "reply-target",
             rawPayload: Data(repeating: 0x55, count: 1428),
@@ -266,7 +275,12 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
     }
 
     private func resolved(contentType: UInt8 = 24) -> ResolvedSender {
-        ResolvedSender(senderId: peer, contentType: contentType, trust: .vouched(.signature))
+        ResolvedSender(
+            senderId: peer,
+            senderDeviceId: senderDevice,
+            contentType: contentType,
+            trust: .vouched(.signature)
+        )
     }
 
     // MARK: The regression
@@ -299,17 +313,29 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
         XCTAssertEqual(rebuilt.oneTimePreKeyId, carrier.oneTimePreKeyId, "X3DH OTPK id — init fails without it")
         XCTAssertEqual(rebuilt.kemCiphertext, carrier.kemCiphertext, "PQXDH decapsulation input")
         XCTAssertEqual(rebuilt.kyberOtpkId, carrier.kyberOtpkId, "selects SPK vs one-time Kyber secret")
-        XCTAssertEqual(rebuilt.senderDeviceId, carrier.senderDeviceId)
         XCTAssertEqual(rebuilt.conversationId, carrier.conversationId)
         XCTAssertEqual(rebuilt.replyToMessageId, carrier.replyToMessageId)
         XCTAssertEqual(rebuilt.rawPayload, carrier.rawPayload, "the orchestrator's decrypt input")
     }
 
-    // MARK: The three deliberate replacements
+    // MARK: The four deliberate replacements
 
     func testSenderIsReplacedByTheResolvedIdentity() {
         let rebuilt = sealedCarrier().resolvingSealedSender(resolved(), currentUserId: me)
         XCTAssertEqual(rebuilt.from, peer, "sealed `from` is empty on the wire — resolution fills it")
+    }
+
+    /// The relay blanks `Envelope.sender_device`, so the carrier reaching this boundary never
+    /// names a device. The certificate does, and §D's whole purpose is that the decrypt asks that
+    /// one session instead of walking the peer's devices — a value silently carried through from
+    /// the blanked outer field would leave the walk in place and look identical.
+    func testSendingDeviceIsReplacedByTheCertifiedOne() {
+        let carrier = sealedCarrier()
+        let rebuilt = carrier.resolvingSealedSender(resolved(), currentUserId: me)
+        XCTAssertEqual(rebuilt.senderDeviceId, senderDevice,
+                       "the sending device must come from the certificate, not the blanked envelope")
+        XCTAssertNotEqual(rebuilt.senderDeviceId, carrier.senderDeviceId,
+                          "carrying the outer value through would name the wrong session")
     }
 
     func testContentTypeAndKindComeFromTheSealedInner() {
