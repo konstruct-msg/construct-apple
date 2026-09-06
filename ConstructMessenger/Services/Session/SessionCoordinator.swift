@@ -1150,10 +1150,11 @@ final class SessionCoordinator: MessageRouterDelegate {
 
             // Single branch authority — grace/otpk/plain decided by the reducer.
             // Cooldown (per-peer storm rate limit) is still applied at each send site.
-            switch SessionReducer.initFailureAction(
+            let failureAction = SessionReducer.initFailureAction(
                 otpkUnreproducible: otpkUnreproducible,
                 withinInboundGrace: withinPostEndSessionGrace
-            ) {
+            )
+            switch failureAction {
             case .suppressWithinGrace:
                 Log.info(
                     "SESSION_STATE[init_fail_grace]: suppressed END_SESSION for \(userId.prefix(8))… (within \(Int(self.postEndSessionInitFailGrace))s of inbound END_SESSION)",
@@ -1167,7 +1168,8 @@ final class SessionCoordinator: MessageRouterDelegate {
                         try await self.sendEndSession(
                             to: userId,
                             reason: "session_init_failed_otpk_unreproducible",
-                            resetReason: .otpkUnreproducible
+                            resetReason: .otpkUnreproducible,
+                            peerOnDeadSession: failureAction.peerOnDeadSession
                         )
                     } catch {
                         Log.error("SESSION_STATE[init_failed_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
@@ -1177,7 +1179,11 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
 
             case .sendPlain:
-                _ = await self.sendEndSessionRateLimited(to: userId, reason: "session_init_failed")
+                _ = await self.sendEndSessionRateLimited(
+                    to: userId,
+                    reason: "session_init_failed",
+                    peerStillOnDeadSession: failureAction.peerOnDeadSession
+                )
             }
         }
     }
@@ -1502,7 +1508,12 @@ final class SessionCoordinator: MessageRouterDelegate {
                         try await sendEndSession(
                             to: userId,
                             reason: otpkUnreproducible ? "heal_exhausted_otpk_unreproducible" : "heal_exhausted",
-                            resetReason: otpkUnreproducible ? .otpkUnreproducible : .unspecified
+                            resetReason: otpkUnreproducible ? .otpkUnreproducible : .unspecified,
+                            // `failedMessage` is a message that arrived and stayed unreadable
+                            // after every heal attempt. See the note on the otpk branch above:
+                            // without this the teardown plan skips the devices we hold no
+                            // session with, which after an exhausted heal is all of them.
+                            peerOnDeadSession: true
                         )
                     } catch {
                         Log.error("SESSION_STATE[heal_exhausted_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")

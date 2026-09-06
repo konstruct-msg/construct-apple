@@ -400,6 +400,30 @@ enum SessionReducer {
         /// Plain init failure outside the inbound-END_SESSION grace → ordinary rate-limited
         /// END_SESSION so the peer re-inits.
         case sendPlain
+
+        /// Whether this branch has **evidence** that the peer is talking on a session we cannot
+        /// read, which is what `plan_teardown` needs to turn a device we hold no session with
+        /// from `.skip` into `.sendOnly`.
+        ///
+        /// Both sending branches have it, and for the same reason: they are only reached because
+        /// a message arrived and no session could be built for it. Dropping the flag is not a
+        /// smaller signal, it is silence — after a failed RESPONDER init we hold no session with
+        /// *any* of the peer's devices, so every one of them plans as `.skip` and nothing is sent.
+        /// Measured 2026-09-06: six rounds of `otpk_unreproducible` in four minutes, each ending
+        /// `2 device(s) all skipped`, no END_SESSION on the wire, and the peer re-sending the same
+        /// unreadable message throughout. The recovery request was suppressed by the very
+        /// condition that made it necessary.
+        ///
+        /// It lives here rather than as a literal at the three send sites because this enum is
+        /// already the branch authority, and a policy repeated at call sites is the shape that
+        /// drifts — the otpk site and the heal-exhausted site are in different functions 300 lines
+        /// apart and were already inconsistent with `session_out_of_sync`, which passes it.
+        var peerOnDeadSession: Bool {
+            switch self {
+            case .sendTypedOtpk, .sendPlain: return true
+            case .suppressWithinGrace:       return false
+            }
+        }
     }
 
     static func initFailureAction(
