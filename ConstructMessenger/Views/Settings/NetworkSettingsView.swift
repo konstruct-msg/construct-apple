@@ -31,6 +31,10 @@ struct NetworkSettingsView: View {
     @State private var veilImportIsError = false
     /// Bumped after an import to refresh the configured-status row.
     @State private var veilTicketRefresh = 0
+    /// Minting a bootstrap voucher for someone who has no way in yet. Hidden while the
+    /// server reports the flow disabled — read once per appearance, not per redraw.
+    @State private var showingVeilVoucher = false
+    @State private var veilVoucherOffered = VeilVoucherAvailability.isOffered
 //    #if DEBUG
     @State private var engineQuicOn = FeatureFlags.engineQuicExperimental
 //    #endif
@@ -38,15 +42,20 @@ struct NetworkSettingsView: View {
     @State private var engineQuicObfOn = FeatureFlags.engineQuicObfuscated
     #endif
 
-    private var veilConfiguredRelay: String? {
+    private var hasVeilAccessConfigured: Bool {
         _ = veilTicketRefresh
-        let addr = VEILConfig.ruRelayAddress
-        return VeilTicketStore.ticket(for: addr) != nil ? addr : nil
+        return VeilAccessStatus.isConfigured
     }
 
-    private var hasVeilAccessConfigured: Bool {
-        veilConfiguredRelay != nil
+    #if DEBUG
+    /// Debug builds name the fronts; release builds must not. A front learned from a
+    /// voucher exists in no public artifact by design, and a settings screen is one
+    /// screenshot away from public.
+    private var veilConfiguredAddressesDebug: [String] {
+        _ = veilTicketRefresh
+        return VeilAccessStatus.configuredAddresses()
     }
+    #endif
 
     var body: some View {
         VStack(spacing: 0) {
@@ -459,11 +468,20 @@ struct NetworkSettingsView: View {
         CTSettingsSectionHeader(title: NSLocalizedString("veil_config_section", comment: "").uppercased())
         CTSectionGroup {
             HStack {
-                if let relay = veilConfiguredRelay {
-                    Text(String(format: NSLocalizedString("veil_config_active", comment: ""), relay))
+                if hasVeilAccessConfigured {
+                    // Status only — never the coordinates. The addresses are appended in
+                    // debug builds, which do not leave the operator's own devices.
+                    #if DEBUG
+                    Text(NSLocalizedString("veil_config_active", comment: "")
+                         + " — " + veilConfiguredAddressesDebug.joined(separator: ", "))
                         .font(CTFont.regular(11))
                         .foregroundColor(Color.CT.accent)
                         .textSelection(.enabled)
+                    #else
+                    Text(LocalizedStringKey("veil_config_active"))
+                        .font(CTFont.regular(11))
+                        .foregroundColor(Color.CT.accent)
+                    #endif
                 } else {
                     Text(LocalizedStringKey("veil_config_none"))
                         .font(CTFont.regular(11))
@@ -486,6 +504,14 @@ struct NetworkSettingsView: View {
             }
             .buttonStyle(.plain)
 
+            if veilVoucherOffered {
+                CTSep(style: .thin)
+                Button { showingVeilVoucher = true } label: {
+                    veilAccessRow(icon: "qrcode", title: NSLocalizedString("veil_voucher_row", comment: ""))
+                }
+                .buttonStyle(.plain)
+            }
+
             if let msg = veilImportMessage {
                 CTSep(style: .thin)
                 Text(msg)
@@ -501,6 +527,13 @@ struct NetworkSettingsView: View {
                 showingVeilScanner = false
                 handleVeilImport(code)
             }
+        }
+        .sheet(isPresented: $showingVeilVoucher, onDismiss: {
+            // The sheet learns from the server whether the flow exists; pick that up so
+            // the row disappears without waiting for the screen to be reopened.
+            veilVoucherOffered = VeilVoucherAvailability.isOffered
+        }) {
+            VeilVoucherQRSheet()
         }
         .alert(NSLocalizedString("veil_config_paste", comment: ""), isPresented: $showingVeilPaste) {
             TextField(NSLocalizedString("veil_config_paste", comment: ""), text: $veilPasteText)

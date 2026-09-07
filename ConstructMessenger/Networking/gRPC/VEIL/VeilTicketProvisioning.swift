@@ -67,22 +67,50 @@ enum VeilConfigImporter {
 
     /// Import a base64url-encoded signed config blob (from a scanned QR or a
     /// `konstruct://veil-config?d=<blob>` deep link). Verifies the Ed25519 signature
-    /// and that the blob targets a relay we pin, then stores the ticket. Returns the
-    /// relay address on success.
+    /// over the blob AND the issuer signature on the capability inside it, then pins
+    /// the coordinates and stores the capability. Returns the relay address on success.
+    ///
+    /// This used to refuse any relay absent from `hardcodedRelaySPKIs` — "only relays we
+    /// ship a pin for are accepted" — which meant a front could only be given to a client
+    /// by publishing its coordinates in the binary or the manifest. That is the flow that
+    /// produced the 2026-09-07 disclosure. The anchor is now the *signature*: see
+    /// construct-docs decisions/veil-front-coordinates-are-not-public.md.
     @discardableResult
     static func importBlob(_ blobBase64URL: String) -> Result<String, Error> {
         do {
             let cfg = try parseAndVerify(blobBase64URL: blobBase64URL)
-            // The signature proves authenticity; this proves the blob targets the relay
-            // we expect (defends against redirection to a rogue relay even with a valid
-            // signature). Only relays we ship a pin for are accepted.
-            guard let knownSPKI = VEILConfig.hardcodedRelaySPKIs[cfg.relay] else {
-                return .failure(ImportError.unknownRelay)
-            }
-            guard knownSPKI.lowercased() == cfg.spki.lowercased() else {
-                return .failure(ImportError.spkiMismatch)
+
+            // The outer signature proves the issuer authored the blob. The capability
+            // inside carries its own issuer signature and validity window — the same
+            // offline check the relay performs. Verify it BEFORE anything is pinned, so a
+            // blob that could never authenticate does not leave a trusted address behind.
+            try verifyInnerCapability(cfg.ticket)
+
+            // Defense in depth is preserved where an independent anchor exists: for an
+            // address the binary or the signed manifest already vouches for, the pins must
+            // agree, so a valid signature still cannot redirect a known relay elsewhere.
+            let knownSPKI = VEILConfig.hardcodedRelaySPKIs[cfg.relay]
+                ?? VeilCertFetcher.spkiPinSync(for: cfg.relay)
+            var learned = false
+            if let knownSPKI, !knownSPKI.isEmpty {
+                guard knownSPKI.lowercased() == cfg.spki.lowercased() else {
+                    return .failure(ImportError.spkiMismatch)
+                }
+            } else {
+                // No independent anchor: the two verified signatures are the anchor, and
+                // the coordinates are pinned per-address. `save` refuses a malformed or
+                // empty pin, so an unpinnable front is never imported.
+                guard VeilLearnedFrontStore.shared.save(
+                    address: cfg.relay, sni: cfg.sni, spki: cfg.spki
+                ) else {
+                    return .failure(ImportError.malformed)
+                }
+                learned = true
             }
             guard VeilTicketStore.store(ticket: cfg.ticket, for: cfg.relay) else {
+                // Roll the pin back rather than leaving a trusted address with no way to
+                // authenticate to it — the next dial would burn a probe on a certain 403.
+                if learned { _ = VeilLearnedFrontStore.shared.remove(cfg.relay) }
                 return .failure(ImportError.malformed)
             }
             // If the (signed) blob carries a Salamander PSK, provision it for the QUIC gateway
@@ -91,7 +119,7 @@ enum VeilConfigImporter {
                 QuicObfPskStore.store(psk: obfPsk, for: QuicGatewayConfig.host)
                 Log.info("Imported Salamander PSK for QUIC gateway \(QuicGatewayConfig.host) (len=\(obfPsk.count))", category: "VEIL")
             }
-            Log.info("Imported veil-front ticket for \(cfg.relay) (len=\(cfg.ticket.count))", category: "VEIL")
+            Log.info("Imported veil-front ticket for \(cfg.relay) (len=\(cfg.ticket.count), learned=\(learned))", category: "VEIL")
             return .success(cfg.relay)
         } catch {
             Log.error("veil-config import failed: \(error)", category: "VEIL")
@@ -176,6 +204,19 @@ enum VeilConfigImporter {
         // in blobs that don't provision the obfuscated QUIC path.
         let obfPsk = (obj["obf_psk"] as? String).flatMap { Data(veilHexString: $0) }
         return VeilConfigBlob(relay: relay, sni: sni, spki: spki, ticket: capability, exp: exp, obfPsk: obfPsk)
+    }
+
+    /// Verify the capability carried inside a config blob against `relayConfigSigningKey`.
+    ///
+    /// `make-config-link` issues a v1 capability; a key-bound CapabilityV2 is tolerated in
+    /// the same field so a future issuer needs no client change. The v1 error is the one
+    /// reported — it carries the useful reason (`.expired` rather than `.malformed`).
+    private static func verifyInnerCapability(_ capabilityB64: String) throws {
+        do {
+            _ = try parseCapability(capabilityB64)
+        } catch {
+            guard (try? parseCapabilityV2(capabilityB64)) != nil else { throw error }
+        }
     }
 
     /// Ed25519 over canonical JSON (sorted keys, no `signature` field) — the same

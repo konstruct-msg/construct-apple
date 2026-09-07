@@ -461,7 +461,7 @@
 "veil_config_paste" = "Coller le code de configuration";
 "veil_config_import" = "Importer";
 "veil_config_section" = "ACCÈS VEIL";
-"veil_config_active" = "Accès configuré pour %@";
+"veil_config_active" = "Accès configuré";
 "veil_config_none" = "Aucun accès configuré";
 "traffic_protection" = "Protection du trafic";
 "veil_footer_short" = "VEIL masque le trafic comme du HTTPS standard. La configuration est fournie automatiquement.";
@@ -1112,3 +1112,18 @@
 "text_size_standard" = "Standard";
 "text_size_large" = "Grande";
 "text_size_footer" = "S'applique au texte des messages et au champ de saisie. Le reste de l'interface conserve sa taille.";
+
+/* VEIL bootstrap voucher — donner un accès à quelqu'un qui n'en a pas encore. */
+"veil_voucher_row" = "Donner un accès";
+"veil_voucher_title" = "Donner un accès";
+"veil_voucher_instructions" = "Faites-lui scanner ce code dans Konstruct. Cela configure sa connexion — ce n'est pas une invitation de contact.";
+"veil_voucher_expires_in" = "Valable encore %@";
+"veil_voucher_expired" = "Ce code a expiré";
+"veil_voucher_new" = "Créer un nouveau code";
+"veil_voucher_quota" = "Vous avez distribué vos codes pour aujourd'hui. Réessayez plus tard.";
+"veil_voucher_quota_retry" = "Vous avez distribué vos codes pour aujourd'hui. Réessayez dans environ %d h.";
+"veil_voucher_unavailable" = "La distribution d'accès n'est pas disponible pour le moment.";
+"veil_voucher_err_generic" = "Impossible de créer le code";
+"veil_voucher_privacy_hint" = "Ne montrez ce code qu'à la personne concernée. Ne le publiez pas et ne l'envoyez pas par un canal public.";
+"veil_voucher_intro" = "Crée un code à usage unique qui configure la connexion de quelqu'un qui n'arrive pas encore à joindre Konstruct. Il est valable peu de temps, et vous pouvez en créer trois par jour.";
+"veil_voucher_create" = "Créer un code";

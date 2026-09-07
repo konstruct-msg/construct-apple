@@ -52,6 +52,35 @@ final class VeilServiceClient: Sendable {
         let capabilityVersion: UInt32
     }
 
+    /// A minted bootstrap voucher: a complete `konstruct://veil-config?d=…` deep link
+    /// the holder shows as a QR for someone who has no way in yet.
+    ///
+    /// `configURI` carries the front's coordinates inside a signed blob. It is a value to
+    /// be **encoded**, never one to be displayed or parsed for UI: rendering the host it
+    /// contains would put a private front on a screenshot, which is the disclosure this
+    /// whole path exists to avoid. See construct-docs
+    /// decisions/veil-front-coordinates-are-not-public.md.
+    struct BootstrapVoucher: Sendable {
+        let configURI: String
+        /// Unix expiry, for the countdown. Same value as the blob's `exp`.
+        let exp: Int64
+    }
+
+    /// Mint a short-lived transport voucher for a not-yet-registered peer.
+    ///
+    /// The request is empty by design — the client does not name a front, the server picks
+    /// one (`select_voucher_front`), so this RPC gives an enumeration surface to nobody.
+    /// Server-side it is feature-flagged and quota'd (3 per 24h); `.unimplemented` means
+    /// the flag is off and the caller should hide the entry point rather than retry.
+    func issueBootstrapVoucher() async throws -> BootstrapVoucher {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.issueVeilCapability) { grpcClient in
+            let client = Shared_Proto_Services_V1_VeilService.Client(wrapping: grpcClient)
+            let request = Shared_Proto_Services_V1_IssueBootstrapVoucherRequest()
+            let response = try await client.issueBootstrapVoucher(request: .init(message: request))
+            return BootstrapVoucher(configURI: response.configUri, exp: response.exp)
+        }
+    }
+
     /// `CapabilityV2.role` values (ticket B1) — mirrors `construct-veil-protocol`'s
     /// `ROLE_USER`/`ROLE_RELAY` constants.
     enum Role: UInt32 {

@@ -44,9 +44,19 @@ enum VeilRelaySelector {
     static func cachedRelayAddresses() -> [String] {
         let base = VeilProxyStore.cachedRelayAddresses(fallback: VEILConfig.hardcodedRelayAddresses)
         let discovered = DiscoveredRelayStore.shared.addresses()
-        guard !discovered.isEmpty else { return base }
-        var seen = Set(base)
-        return base + discovered.filter { seen.insert($0).inserted }
+        // Fronts learned from a signature lead, newest first. Order is the tie-break the
+        // pool actually uses: `RelayPool.best()` is `min(by:)` on the failure score, and
+        // `min(by:)` keeps the earliest element among equals — while `updateRelays`
+        // rebuilds the pool with an empty failure map. So after an import every candidate
+        // scores zero and position decides, which is how a freshly vouched front gets
+        // tried before a seed relay instead of after it.
+        //
+        // A learned front that is dead loses this on its first failure and the pool
+        // rotates, so leading costs at most one probe.
+        let learned = VeilLearnedFrontStore.shared.addresses()
+        guard !learned.isEmpty || !discovered.isEmpty else { return base }
+        var seen = Set<String>()
+        return (learned + base + discovered).filter { seen.insert($0).inserted }
     }
 
     static func certificateExpiryAddresses() -> Set<String> {

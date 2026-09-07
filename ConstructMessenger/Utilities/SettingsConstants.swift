@@ -278,6 +278,20 @@ enum DeviceLinkQRLayout {
     static let errorMessageHorizontalPadding: CGFloat = 24
 }
 
+enum VeilVoucherLayout {
+    static let rootSpacing: CGFloat = 0
+    static let loadingSpacing: CGFloat = CTLayout.edgePad
+    static let loadingIndicatorScale: CGFloat = 1.4
+    static let contentSpacing: CGFloat = 24
+    static let contentTopPadding: CGFloat = 20
+    static let contentBottomPadding: CGFloat = 32
+    static let textHorizontalPadding: CGFloat = 24
+    static let messageSpacing: CGFloat = CTLayout.sectionGap
+    static let statusIconSize: CGFloat = 36
+    static let qrSize: CGFloat = 220
+    static let qrPadding: CGFloat = CTLayout.sectionGap
+}
+
 enum AccountSettingsLayout {
     static let sectionDisabledOpacity: Double = 0.5
     static let footerHorizontalPadding: CGFloat = 20

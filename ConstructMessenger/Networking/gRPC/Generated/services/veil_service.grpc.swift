@@ -32,9 +32,22 @@ public enum Shared_Proto_Services_V1_VeilService: Sendable {
                 method: "IssueVeilCapability"
             )
         }
+        /// Namespace for "IssueBootstrapVoucher" metadata.
+        public enum IssueBootstrapVoucher: Sendable {
+            /// Request type for "IssueBootstrapVoucher".
+            public typealias Input = Shared_Proto_Services_V1_IssueBootstrapVoucherRequest
+            /// Response type for "IssueBootstrapVoucher".
+            public typealias Output = Shared_Proto_Services_V1_IssueBootstrapVoucherResponse
+            /// Descriptor for "IssueBootstrapVoucher".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.VeilService"),
+                method: "IssueBootstrapVoucher"
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.services.v1.VeilService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
-            IssueVeilCapability.descriptor
+            IssueVeilCapability.descriptor,
+            IssueBootstrapVoucher.descriptor
         ]
     }
 }
@@ -68,7 +81,7 @@ extension Shared_Proto_Services_V1_VeilService {
     /// > до истечения текущей.
     /// > 
     /// > IssueVeilCapability — JWT-gated (требует валидную пользовательскую сессию;
-    /// > user_id берётся из метаданных x-user-id, проставленных gateway/envoy).
+    /// > extract_user_id verifies Bearer; optional x-user-id must match claims).
     public protocol ClientProtocol: Sendable {
         /// Call the "IssueVeilCapability" method.
         ///
@@ -92,6 +105,31 @@ extension Shared_Proto_Services_V1_VeilService {
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_IssueVeilCapabilityResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
+
+        /// Call the "IssueBootstrapVoucher" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > JWT-gated (Bearer verified in-process; Caddy does not inject x-user-id).
+        /// > Mints a short-lived B2 transport voucher (bearer until TTL, not one-use)
+        /// > for a not-yet-registered peer. Not a contact invite. Feature-flagged; default off.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_IssueBootstrapVoucherRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_IssueBootstrapVoucherRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_IssueBootstrapVoucherResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func issueBootstrapVoucher<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_IssueBootstrapVoucherRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_IssueBootstrapVoucherRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_IssueBootstrapVoucherResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_IssueBootstrapVoucherResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
     }
 
     /// Generated client for the "shared.proto.services.v1.VeilService" service.
@@ -114,7 +152,7 @@ extension Shared_Proto_Services_V1_VeilService {
     /// > до истечения текущей.
     /// > 
     /// > IssueVeilCapability — JWT-gated (требует валидную пользовательскую сессию;
-    /// > user_id берётся из метаданных x-user-id, проставленных gateway/envoy).
+    /// > extract_user_id verifies Bearer; optional x-user-id must match claims).
     public struct Client<Transport>: ClientProtocol where Transport: GRPCCore.ClientTransport {
         private let client: GRPCCore.GRPCClient<Transport>
 
@@ -159,6 +197,42 @@ extension Shared_Proto_Services_V1_VeilService {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "IssueBootstrapVoucher" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > JWT-gated (Bearer verified in-process; Caddy does not inject x-user-id).
+        /// > Mints a short-lived B2 transport voucher (bearer until TTL, not one-use)
+        /// > for a not-yet-registered peer. Not a contact invite. Feature-flagged; default off.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_IssueBootstrapVoucherRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_IssueBootstrapVoucherRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_IssueBootstrapVoucherResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func issueBootstrapVoucher<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_IssueBootstrapVoucherRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_IssueBootstrapVoucherRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_IssueBootstrapVoucherResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_IssueBootstrapVoucherResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_VeilService.Method.IssueBootstrapVoucher.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -189,6 +263,37 @@ extension Shared_Proto_Services_V1_VeilService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_IssueVeilCapabilityRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_IssueVeilCapabilityResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "IssueBootstrapVoucher" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > JWT-gated (Bearer verified in-process; Caddy does not inject x-user-id).
+    /// > Mints a short-lived B2 transport voucher (bearer until TTL, not one-use)
+    /// > for a not-yet-registered peer. Not a contact invite. Feature-flagged; default off.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_IssueBootstrapVoucherRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func issueBootstrapVoucher<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_IssueBootstrapVoucherRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_IssueBootstrapVoucherResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.issueBootstrapVoucher(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_IssueBootstrapVoucherRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_IssueBootstrapVoucherResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -225,6 +330,41 @@ extension Shared_Proto_Services_V1_VeilService.ClientProtocol {
             metadata: metadata
         )
         return try await self.issueVeilCapability(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "IssueBootstrapVoucher" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > JWT-gated (Bearer verified in-process; Caddy does not inject x-user-id).
+    /// > Mints a short-lived B2 transport voucher (bearer until TTL, not one-use)
+    /// > for a not-yet-registered peer. Not a contact invite. Feature-flagged; default off.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func issueBootstrapVoucher<Result>(
+        _ message: Shared_Proto_Services_V1_IssueBootstrapVoucherRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_IssueBootstrapVoucherResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_IssueBootstrapVoucherRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.issueBootstrapVoucher(
             request: request,
             options: options,
             onResponse: handleResponse

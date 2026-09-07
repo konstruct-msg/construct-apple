@@ -500,7 +500,7 @@
 "veil_config_paste" = "Вставить код конфигурации";
 "veil_config_import" = "Импорт";
 "veil_config_section" = "ДОСТУП VEIL";
-"veil_config_active" = "Доступ настроен для %@";
+"veil_config_active" = "Доступ настроен";
 "veil_config_none" = "Доступ не настроен";
 "traffic_protection" = "Защита трафика";
 "veil_footer_short" = "VEIL маскирует трафик под обычный HTTPS. Конфигурация предоставляется автоматически.";
@@ -1205,3 +1205,18 @@
 "text_size_standard" = "Обычный";
 "text_size_large" = "Крупный";
 "text_size_footer" = "Действует на текст сообщений и поле ввода. Остальной интерфейс не меняет размер.";
+
+/* VEIL bootstrap voucher — дать доступ тому, у кого входа ещё нет. */
+"veil_voucher_row" = "Дать кому-то доступ";
+"veil_voucher_title" = "Дать доступ";
+"veil_voucher_instructions" = "Пусть отсканирует этот код в Konstruct. Это настройка подключения, а не приглашение в контакты.";
+"veil_voucher_expires_in" = "Действует ещё %@";
+"veil_voucher_expired" = "Код истёк";
+"veil_voucher_new" = "Создать новый код";
+"veil_voucher_quota" = "Коды на сегодня закончились. Попробуйте позже.";
+"veil_voucher_quota_retry" = "Коды на сегодня закончились. Попробуйте примерно через %d ч.";
+"veil_voucher_unavailable" = "Выдача доступа сейчас недоступна.";
+"veil_voucher_err_generic" = "Не удалось создать код";
+"veil_voucher_privacy_hint" = "Показывайте код только тому, для кого он предназначен. Не публикуйте его и не отправляйте через открытый канал.";
+"veil_voucher_intro" = "Создаёт одноразовый код, который настроит подключение тому, кто пока не может добраться до Konstruct. Код действует недолго, в сутки можно создать три.";
+"veil_voucher_create" = "Создать код";

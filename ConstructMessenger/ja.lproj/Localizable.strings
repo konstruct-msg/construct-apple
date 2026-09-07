@@ -1089,7 +1089,7 @@
 "veil_config_paste" = "設定コードを貼り付け";
 "veil_config_import" = "インポート";
 "veil_config_section" = "VEILアクセス";
-"veil_config_active" = "%@ 用のアクセス設定済み";
+"veil_config_active" = "アクセス設定済み";
 "veil_config_none" = "アクセス未設定";
 "veil_footer_off_obf_active" = "VEILオフ — 直接トラフィックはQUIC（Salamander）で難読化されています。";
 "veil_footer_off_obf_fallback" = "VEILオフ — QUIC難読化は有効ですが、現在はH2フォールバック（難読化なし）です。";
@@ -1193,3 +1193,18 @@
 "text_size_standard" = "標準";
 "text_size_large" = "大";
 "text_size_footer" = "メッセージの本文と入力欄に適用されます。ほかの画面の文字サイズは変わりません。";
+
+/* VEIL bootstrap voucher — まだ接続手段のない相手にアクセスを渡す。 */
+"veil_voucher_row" = "アクセスを渡す";
+"veil_voucher_title" = "アクセスを渡す";
+"veil_voucher_instructions" = "相手に Konstruct でこのコードをスキャンしてもらってください。接続の設定であり、連絡先の招待ではありません。";
+"veil_voucher_expires_in" = "残り %@ 有効";
+"veil_voucher_expired" = "このコードは期限切れです";
+"veil_voucher_new" = "新しいコードを作成";
+"veil_voucher_quota" = "本日の発行分を使い切りました。時間をおいてお試しください。";
+"veil_voucher_quota_retry" = "本日の発行分を使い切りました。約 %d 時間後にお試しください。";
+"veil_voucher_unavailable" = "現在アクセスの発行は利用できません。";
+"veil_voucher_err_generic" = "コードを作成できませんでした";
+"veil_voucher_privacy_hint" = "このコードは渡す相手にだけ見せてください。公開したり、オープンな経路で送らないでください。";
+"veil_voucher_intro" = "まだ Konstruct に接続できない相手のために、接続を設定する使い捨てコードを作ります。有効時間は短く、1日に3つまで作成できます。";
+"veil_voucher_create" = "コードを作成";

@@ -123,6 +123,34 @@ public struct Shared_Proto_Services_V1_EntryPoint: Sendable {
   public init() {}
 }
 
+/// Empty. Server picks the front via select_voucher_front over VEIL_RELAYS.
+public struct Shared_Proto_Services_V1_IssueBootstrapVoucherRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Shared_Proto_Services_V1_IssueBootstrapVoucherResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Full deep link: konstruct://veil-config?d=<base64url JSON>.
+  /// Client QR-encodes this string. Do not display coordinates parsed from it.
+  public var configUri: String = String()
+
+  /// Unix seconds; same as JSON exp / capability not_after. For countdown UI.
+  public var exp: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "shared.proto.services.v1"
@@ -282,6 +310,60 @@ extension Shared_Proto_Services_V1_EntryPoint: SwiftProtobuf.Message, SwiftProto
     if lhs.sni != rhs.sni {return false}
     if lhs.notAfter != rhs.notAfter {return false}
     if lhs.capabilityVersion != rhs.capabilityVersion {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_IssueBootstrapVoucherRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".IssueBootstrapVoucherRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_IssueBootstrapVoucherRequest, rhs: Shared_Proto_Services_V1_IssueBootstrapVoucherRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_IssueBootstrapVoucherResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".IssueBootstrapVoucherResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}config_uri\0\u{1}exp\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.configUri) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.exp) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.configUri.isEmpty {
+      try visitor.visitSingularStringField(value: self.configUri, fieldNumber: 1)
+    }
+    if self.exp != 0 {
+      try visitor.visitSingularInt64Field(value: self.exp, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_IssueBootstrapVoucherResponse, rhs: Shared_Proto_Services_V1_IssueBootstrapVoucherResponse) -> Bool {
+    if lhs.configUri != rhs.configUri {return false}
+    if lhs.exp != rhs.exp {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
