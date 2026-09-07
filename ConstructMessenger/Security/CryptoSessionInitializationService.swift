@@ -42,7 +42,13 @@ final class CryptoSessionInitializationService {
         }
 
         if core.hasSession(contactId: contactId) {
-            archiveSession(userId, .manualReset)
+            // `contactId`, not `userId`: the line above asked about **this** device and this is
+            // what puts its answer away. Passed the account instead, the archive resolves through
+            // the pinned key and reaches a different device of the same peer — or, right after a
+            // prune, none at all (`archiveSession: … has no pinned key — nothing addressed to
+            // archive`, measured 2026-09-06 12:29:37 while the core held the session it was
+            // being asked about).
+            archiveSession(contactId, .manualReset)
         }
 
         guard let suiteID = UInt16(recipientBundle.suiteId) else {
@@ -81,7 +87,17 @@ final class CryptoSessionInitializationService {
             // ratchet), not the bundle's crypto suite — the bundle only ever says 1/2.
             let negotiatedSuite = core.getSessionSuiteId(contactId: contactId)
             KeychainManager.shared.saveSessionSuiteId(userId: contactId, suiteId: negotiatedSuite > 0 ? negotiatedSuite : suiteID)
-            saveSession(userId)
+            // `contactId`, for the reason this whole function names a device rather than an
+            // account: the session was opened under the key in the bundle, and `saveSession`
+            // exports by the name it is given. Handed `userId` it resolves through the pinned
+            // key, asks the core for a session that device does not have, and writes nothing —
+            // `Session export failed: SessionNotFound` — while every log line around it says the
+            // init succeeded. Measured 2026-09-06 on three of three inits that opened against a
+            // device other than the pinned one, and on none of the inits that did not.
+            //
+            // The suite id above was already written under `contactId`. That is how far apart
+            // the two halves of one fact had drifted.
+            saveSession(contactId)
             Log.info("SESSION_STATE[suite_negotiated]: peer=\(userId.prefix(8))…, bundleSuite=\(suiteID), supportsPqRatchet=\(supportsPqRatchet), negotiated=\(negotiatedSuite)", category: "SessionInit")
             Log.info("INITIATOR session created\(allowStale ? " (degraded/at-risk)" : ""): \(sessionId.prefix(16))...", category: "CryptoManager")
         } catch CryptoError.PeerSpkStale(let message) {
@@ -127,7 +143,13 @@ final class CryptoSessionInitializationService {
         }
 
         if core.hasSession(contactId: contactId) {
-            archiveSession(userId, .manualReset)
+            // `contactId`, not `userId`: the line above asked about **this** device and this is
+            // what puts its answer away. Passed the account instead, the archive resolves through
+            // the pinned key and reaches a different device of the same peer — or, right after a
+            // prune, none at all (`archiveSession: … has no pinned key — nothing addressed to
+            // archive`, measured 2026-09-06 12:29:37 while the core held the session it was
+            // being asked about).
+            archiveSession(contactId, .manualReset)
         }
 
         guard let suiteID = UInt16(recipientBundle.suiteId) else {
@@ -237,7 +259,17 @@ final class CryptoSessionInitializationService {
                 }
             }
 
-            saveSession(userId)
+            // `contactId`, for the reason this whole function names a device rather than an
+            // account: the session was opened under the key in the bundle, and `saveSession`
+            // exports by the name it is given. Handed `userId` it resolves through the pinned
+            // key, asks the core for a session that device does not have, and writes nothing —
+            // `Session export failed: SessionNotFound` — while every log line around it says the
+            // init succeeded. Measured 2026-09-06 on three of three inits that opened against a
+            // device other than the pinned one, and on none of the inits that did not.
+            //
+            // The suite id above was already written under `contactId`. That is how far apart
+            // the two halves of one fact had drifted.
+            saveSession(contactId)
 
             return Data(plaintext)
         } catch {
