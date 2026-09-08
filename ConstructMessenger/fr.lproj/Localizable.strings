@@ -463,6 +463,15 @@
 "veil_config_section" = "ACCÈS VEIL";
 "veil_config_active" = "Accès configuré";
 "veil_config_none" = "Aucun accès configuré";
+
+/* Bootstrap voucher — réception du code (porte « pas de connexion ? » à l'accueil) */
+"onboarding_cant_connect" = "Pas de connexion ?";
+"veil_bootstrap_title" = "Pas de connexion";
+"veil_bootstrap_intro" = "Si Konstruct n'arrive pas à joindre le réseau ici, une personne déjà connectée peut vous donner un code d'accès à usage unique. Demandez-le-lui, puis scannez-le ou collez-le ci-dessous.";
+"veil_bootstrap_scan_subtitle" = "Dirigez la caméra vers son code";
+"veil_bootstrap_paste_subtitle" = "Si le code vous a été envoyé sous forme de texte";
+"veil_bootstrap_ok" = "Connexion configurée";
+"veil_bootstrap_ok_hint" = "Revenez en arrière et créez ou restaurez votre identité — cela passera désormais par cette connexion.";
 "traffic_protection" = "Protection du trafic";
 "veil_footer_short" = "VEIL masque le trafic comme du HTTPS standard. La configuration est fournie automatiquement.";
 

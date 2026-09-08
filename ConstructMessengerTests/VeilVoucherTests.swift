@@ -140,4 +140,20 @@ final class VeilVoucherTests: XCTestCase {
         ) { _ in true }
         XCTAssertEqual(configured, ["a.example:443"])
     }
+
+    // MARK: - Redemption
+
+    @MainActor
+    func testRedeemingGarbageArmsNothing() {
+        // `redeem` arms the transport only on success. A failed scan — a QR from some
+        // other app, a truncated paste — must not push a pool or force VEIL on, or a
+        // mistyped code would strand an onboarding device on a transport it has no
+        // credential for.
+        let before = VeilLearnedFrontStore.shared.addresses()
+        let result = VeilVoucherRedemption.redeem("not-a-voucher")
+        guard case .failure = result else {
+            return XCTFail("garbage must not import")
+        }
+        XCTAssertEqual(VeilLearnedFrontStore.shared.addresses(), before)
+    }
 }

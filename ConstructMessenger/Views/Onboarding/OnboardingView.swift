@@ -20,6 +20,7 @@ struct OnboardingView: View {
     @State private var showingRegistration = false
     @State private var showingExistingIdentity = false
     @State private var showingNetworkSettings = false
+    @State private var showingVeilBootstrap = false
     @State private var availabilityTask: Task<Void, Never>? = nil
     
     var body: some View {
@@ -108,6 +109,19 @@ struct OnboardingView: View {
                     .accessibilityIdentifier(A11y.Onboarding.existingIdentity)
                     .accessibilityHint(NSLocalizedString("onboarding_existing_intro", comment: ""))
 
+                    // Last-resort door for a device that cannot reach the server at all:
+                    // redeem an access code from someone already connected. Plain secondary
+                    // text on purpose — nobody who can reach clearnet needs to find it.
+                    Button { showingVeilBootstrap = true } label: {
+                        Text(NSLocalizedString("onboarding_cant_connect", comment: ""))
+                            .font(CTFont.regular(12))
+                            .foregroundColor(Color.CT.textDim)
+                            .multilineTextAlignment(.center)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 10)
+                    .accessibilityIdentifier(A11y.Onboarding.cantConnect)
+
                     // Pre-login diagnostics escape hatch (DEBUG/internal only): lets onboarding /
                     // recovery failures be diagnosed without an account. Absent in Release —
                     // production collects no logs, so there is nothing to share and no debug surface.
@@ -136,6 +150,9 @@ struct OnboardingView: View {
             .sheet(isPresented: $showingExistingIdentity) {
                 ExistingIdentityChooserView()
                     .environment(recoveryVM)
+            }
+            .sheet(isPresented: $showingVeilBootstrap) {
+                VeilBootstrapScanView()
             }
             .sheet(isPresented: $showingNetworkSettings) {
                 NavigationStack {

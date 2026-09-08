@@ -561,16 +561,14 @@ struct NetworkSettingsView: View {
     }
 
     private func handleVeilImport(_ text: String) {
-        switch VeilConfigImporter.importScannedOrPasted(text) {
+        // Re-snapshotting the pool is `VeilVoucherRedemption`'s job: it pushes the
+        // learned front into the router itself instead of relying on the manifest
+        // fetch inside `startIfNeeded()`, which fails on a censored network.
+        switch VeilVoucherRedemption.redeem(text) {
         case .success:
             veilImportIsError = false
             veilImportMessage = NSLocalizedString("veil_config_import_ok", comment: "")
             veilTicketRefresh += 1
-            // Re-snapshot the relay list so the new ticket is used immediately.
-            Task {
-                let vm = VeilProxyManager.shared
-                if vm.mode != .off { vm.stop(); await vm.startIfEnabled() }
-            }
         case .failure(let err):
             veilImportIsError = true
             veilImportMessage = err.localizedDescription

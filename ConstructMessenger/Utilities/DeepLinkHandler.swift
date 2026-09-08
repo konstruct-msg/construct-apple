@@ -34,9 +34,10 @@ class DeepLinkHandler {
                 case .success(let relay):
                     self.veilConfigImported = relay
                     self.veilConfigImportError = nil
-                    // Re-snapshot the relay list so the freshly imported ticket is used.
-                    let vm = VeilProxyManager.shared
-                    if vm.mode != .off { vm.stop(); await vm.startIfEnabled() }
+                    // Make the learned front reachable now. On a device that is not
+                    // registered yet this is the only thing that will — see
+                    // `VeilVoucherRedemption.armTransport`.
+                    await VeilVoucherRedemption.armTransport()
                 case .failure(let error):
                     self.veilConfigImported = nil
                     self.veilConfigImportError = error.localizedDescription

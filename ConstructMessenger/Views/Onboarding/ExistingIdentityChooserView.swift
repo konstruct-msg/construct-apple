@@ -15,6 +15,7 @@ struct ExistingIdentityChooserView: View {
 
     @State private var showingRecovery = false
     @State private var showingDeviceLink = false
+    @State private var showingVeilBootstrap = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,6 +50,19 @@ struct ExistingIdentityChooserView: View {
                     ) {
                         showingDeviceLink = true
                     }
+
+                    // Restore and link both talk to the server before there is a
+                    // session, so they hit the same wall as registration on a blocked
+                    // network. Same door, same weight as on the first screen.
+                    Button { showingVeilBootstrap = true } label: {
+                        Text(NSLocalizedString("onboarding_cant_connect", comment: ""))
+                            .font(CTFont.regular(12))
+                            .foregroundColor(Color.CT.textDim)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
                 }
                 .padding(.horizontal, CTLayout.edgePad)
                 .padding(.bottom, CTLayout.sectionGap)
@@ -60,6 +74,9 @@ struct ExistingIdentityChooserView: View {
         .sheet(isPresented: $showingRecovery) {
             RecoveryEntryView()
                 .environment(recoveryVM)
+        }
+        .sheet(isPresented: $showingVeilBootstrap) {
+            VeilBootstrapScanView()
         }
         .sheet(isPresented: $showingDeviceLink) {
             #if os(iOS)

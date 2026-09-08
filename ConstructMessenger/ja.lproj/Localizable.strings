@@ -1091,6 +1091,15 @@
 "veil_config_section" = "VEILアクセス";
 "veil_config_active" = "アクセス設定済み";
 "veil_config_none" = "アクセス未設定";
+
+/* Bootstrap voucher — 受け取り側（オンボーディングの「接続できない?」入口） */
+"onboarding_cant_connect" = "接続できませんか?";
+"veil_bootstrap_title" = "接続できない";
+"veil_bootstrap_intro" = "ここで Konstruct がネットワークに到達できない場合、すでに接続できている人が一回限りのアクセスコードを発行できます。それをもらって、下でスキャンするか貼り付けてください。";
+"veil_bootstrap_scan_subtitle" = "相手のコードにカメラを向けます";
+"veil_bootstrap_paste_subtitle" = "コードをテキストで受け取った場合";
+"veil_bootstrap_ok" = "接続を設定しました";
+"veil_bootstrap_ok_hint" = "戻ってアイデンティティを作成または復元してください。今後はこの接続を経由します。";
 "veil_footer_off_obf_active" = "VEILオフ — 直接トラフィックはQUIC（Salamander）で難読化されています。";
 "veil_footer_off_obf_fallback" = "VEILオフ — QUIC難読化は有効ですが、現在はH2フォールバック（難読化なし）です。";
 "veil_import_err_expired" = "この設定は期限切れです — 新しいものを取得してください";

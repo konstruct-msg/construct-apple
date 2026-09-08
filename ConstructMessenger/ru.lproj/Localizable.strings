@@ -502,6 +502,15 @@
 "veil_config_section" = "ДОСТУП VEIL";
 "veil_config_active" = "Доступ настроен";
 "veil_config_none" = "Доступ не настроен";
+
+/* Bootstrap voucher — приём кода (дверь «не подключается?» в онбординге) */
+"onboarding_cant_connect" = "Не подключается?";
+"veil_bootstrap_title" = "Не подключается";
+"veil_bootstrap_intro" = "Если Konstruct не может выйти в сеть здесь, тот, у кого связь уже есть, может выдать вам одноразовый код доступа. Попросите его и отсканируйте или вставьте ниже.";
+"veil_bootstrap_scan_subtitle" = "Наведите камеру на его код";
+"veil_bootstrap_paste_subtitle" = "Если код прислали текстом";
+"veil_bootstrap_ok" = "Подключение настроено";
+"veil_bootstrap_ok_hint" = "Вернитесь и создайте или восстановите личность — теперь это пойдёт через это подключение.";
 "traffic_protection" = "Защита трафика";
 "veil_footer_short" = "VEIL маскирует трафик под обычный HTTPS. Конфигурация предоставляется автоматически.";
 
