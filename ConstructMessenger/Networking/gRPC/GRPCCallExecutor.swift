@@ -78,6 +78,15 @@ final class GRPCCallExecutor: Sendable {
                     target = .direct(.h2)
                 }
                 await TransportRouter.shared.send(.rpcSucceeded(via: target, latencyMs: latencyMs))
+                if case .veil(_, let relay) = target {
+                    // The tunnel just proved it works — top up this relay's credentials
+                    // over it. Rate-limited inside; no-ops while a live capability is
+                    // stored. Without this a voucher-bootstrapped device never asks for
+                    // a replacement for the 45-minute B2 it arrived on, and there is no
+                    // second chance: once that expires the RPC needed to renew it has no
+                    // transport left to travel on.
+                    await MainActor.run { VeilProxyManager.shared.noteRelaySuccess(address: relay) }
+                }
                 return result
             } catch {
                 lastError = error

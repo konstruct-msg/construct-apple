@@ -97,20 +97,22 @@ final class VeilProxyManager: ObservableObject {
         .unknown  // ConnectionLoop uses simple failure counting
     }
 
-    /// Record a successful RPC through VEIL. Updates the session-verified set and the
-    /// persisted quality score. Triggers side effects on the first success of the session.
-    func recordRelaySuccess(address: String, latency: TimeInterval) {
-        Task {
-            await TransportRouter.shared.send(
-                .rpcSucceeded(via: .veil(port: 0, relay: address), latencyMs: Int(latency * 1000))
-            )
-        }
-        // VEIL is confirmed working — ensure / renew capabilities in-band
-        // (each step no-ops unless needed; rate-limited internally).
+    /// An RPC succeeded through `address` — top up that relay's credentials over the
+    /// tunnel that just proved it works.
+    ///
+    /// This replaces `recordRelaySuccess`, which did the same thing and had **no call
+    /// sites**: the FSM event it posted is already sent by `GRPCCallExecutor`, so
+    /// nothing missed it, and the capability half — the only part that was not
+    /// duplicated elsewhere — simply never ran. A voucher-bootstrapped device therefore
+    /// never asked for a replacement for the 45-minute B2 it arrived on.
+    ///
+    /// Called on every VEIL RPC success. Each step is rate-limited internally and
+    /// no-ops while a live capability is stored.
+    func noteRelaySuccess(address: String) {
+        guard !address.isEmpty else { return }
         VeilCapabilityProvisioner.shared.provisionIfNeeded(relayAddress: address)
         VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: address)
-        // Ticket B1: bootstrap/renew the key-bound capability over the same live
-        // tunnel (no-ops unless needed; rate-limited internally).
+        // Ticket B1: bootstrap/renew the key-bound capability over the same live tunnel.
         VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: address)
     }
 
@@ -252,7 +254,7 @@ final class VeilProxyManager: ObservableObject {
         // Capability pipeline over whatever transport is up (typically direct right
         // after the user toggles). First-issue is the critical path when no ticket
         // was ever imported; renew/B1 no-op unless needed.
-        ensureCapabilitiesForPrimaryRelay()
+        ensureCapabilitiesForActiveRelay()
 
         await startIfNeeded()
     }
@@ -275,7 +277,7 @@ final class VeilProxyManager: ObservableObject {
         // ALWAYS run capability ensure on a registered device with VEIL not off —
         // including auto+direct. First-issue over clearnet is how we remove the
         // manual QR/paste dependency for normal logins. Rate-limited internally.
-        ensureCapabilitiesForPrimaryRelay()
+        ensureCapabilitiesForActiveRelay()
 
         if mode == .auto {
             let snap = await TransportRouter.shared.snapshot()
@@ -296,10 +298,29 @@ final class VeilProxyManager: ObservableObject {
         await fetchConfigAndEvictIfRemoved()
     }
 
-    /// First-issue (if missing) → near-expiry renew → B1 bootstrap/renew for the
-    /// primary seed relay. Safe to call often; each step is rate-limited + no-ops when idle.
-    private func ensureCapabilitiesForPrimaryRelay() {
-        let address = VEILConfig.ruRelayAddress
+    /// The relay the capability pipeline should target.
+    ///
+    /// It used to be `VEILConfig.ruRelayAddress` unconditionally, which is wrong for
+    /// any device that is not on the seed front. A peer bootstrapped from a voucher
+    /// holds a 45-minute B2 for a *learned* front and needs its replacement issued
+    /// against that address; asking for the seed instead leaves the front it is
+    /// actually connected through to expire out from under it.
+    ///
+    /// Order: the relay in use, then the most recently learned front, then the seed.
+    /// The pipeline's three steps are singletons sharing one rate limiter, so this
+    /// deliberately yields a single address rather than a list — the other fronts are
+    /// EntryDirectory's job (pre-issued alternates), not this one's.
+    func capabilityTargetAddress() -> String {
+        if let active = activeRelay?.address, !active.isEmpty { return active }
+        if let learned = VeilLearnedFrontStore.shared.mostRecent()?.address { return learned }
+        return VEILConfig.ruRelayAddress
+    }
+
+    /// First-issue (if missing) → near-expiry renew → B1 bootstrap/renew, for whichever
+    /// relay this device actually depends on. Safe to call often; each step is
+    /// rate-limited and no-ops when idle.
+    func ensureCapabilitiesForActiveRelay() {
+        let address = capabilityTargetAddress()
         VeilCapabilityProvisioner.shared.provisionIfNeeded(relayAddress: address)
         VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: address)
         VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: address)

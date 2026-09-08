@@ -394,6 +394,11 @@ struct RegistrationFlowView: View {
                 userId: registerData.userId
             )
             VeilProxyManager.shared.configureFromServer(cert: registerData.veilBridgeCert ?? "")
+            // A device that registered *through* a voucher's front arrived on a
+            // 45-minute B2 and has, as of this line, its first session token. Ask for a
+            // durable capability now rather than waiting for whatever RPC happens next:
+            // the whole window is 45 minutes, and it is the front the device depends on.
+            VeilProxyManager.shared.ensureCapabilitiesForActiveRelay()
             
             // 4. Verify session tokens
             Log.info("Verifying session tokens...", category: "Registration")

@@ -918,7 +918,11 @@ class AuthViewModel {
             expiresIn: max(expiresIn, 0),  // Don't clamp negative (already-expired) TTL to 1 hour
             userId: userId
         )
-        
+        // Restore / device-link reach a session the same way registration does, and a
+        // device that got here through a voucher is on a 45-minute B2. The capability
+        // pipeline is JWT-gated, so this is the first moment it can do anything.
+        VeilProxyManager.shared.ensureCapabilitiesForActiveRelay()
+
         if let savedToken = AuthSessionManager.shared.sessionToken {
             if savedToken == token {
                 Log.info("Access token saved and verified correctly", category: "Auth")

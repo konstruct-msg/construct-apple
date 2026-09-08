@@ -174,6 +174,28 @@ final class VeilVoucherTests: XCTestCase {
     }
 
     @MainActor
+    func testCapabilityTargetPrefersALearnedFrontOverTheSeed() throws {
+        // The bug behind a voucher-bootstrapped device losing its front after 45
+        // minutes: the pipeline asked for `VEILConfig.ruRelayAddress` no matter which
+        // relay the device was actually on, so the learned front's B2 expired with no
+        // replacement ever requested.
+        let store = VeilLearnedFrontStore.shared
+        let address = "target.example:443"
+        try XCTSkipUnless(store.pin(for: address) == nil, "address must start unlearned")
+        defer { store.remove(address) }
+
+        let seed = VeilProxyManager.shared.capabilityTargetAddress()
+        XCTAssertEqual(seed, VEILConfig.ruRelayAddress,
+                       "with nothing learned and no active relay, the seed is the target")
+
+        XCTAssertTrue(store.save(
+            address: address, sni: "target.example", spki: String(repeating: "e", count: 64)
+        ))
+        XCTAssertEqual(VeilProxyManager.shared.capabilityTargetAddress(), address,
+                       "a learned front must be the pipeline's target, not the seed")
+    }
+
+    @MainActor
     func testAMalformedVoucherLinkIsClaimedAndReportedAsAVoucher() {
         // Claimed (so the contact parser never sees it) but refused, with the importer's
         // own message rather than "scan a Konstruct contact code".
