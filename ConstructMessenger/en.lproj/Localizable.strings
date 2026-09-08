@@ -326,7 +326,7 @@
 "change_avatar" = "Change Photo";
 
 // Onboarding (identity gate — create / restore / link)
-"onboarding_tagline" = "the internet is a space of free thought.\nidentity is a construct.";
+"onboarding_tagline" = "the internet is a space of free thought.";
 "onboarding_username_placeholder" = "choose a public alias (optional)";
 "onboarding_create_identity" = "Create identity";
 "onboarding_already_have" = "Already have an identity?";

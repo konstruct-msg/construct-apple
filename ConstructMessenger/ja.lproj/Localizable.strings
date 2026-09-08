@@ -307,7 +307,7 @@
 "change_avatar" = "写真を変更";
 
 // Onboarding (identity gate — create / restore / link)
-"onboarding_tagline" = "インターネットは自由な思考の空間。\nアイデンティティは構築物。";
+"onboarding_tagline" = "インターネットは自由な思考の空間。";
 "onboarding_username_placeholder" = "公開エイリアスを選択 (任意)";
 "onboarding_create_identity" = "アイデンティティを作成";
 "onboarding_already_have" = "すでにアイデンティティがありますか？";

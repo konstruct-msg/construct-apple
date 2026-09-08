@@ -286,7 +286,7 @@
 "change_avatar" = "Сменить фото";
 
 // Onboarding (identity gate — create / restore / link)
-"onboarding_tagline" = "интернет — пространство свободы выражения мысли.\nидентичность — конструкт.";
+"onboarding_tagline" = "интернет — пространство свободы выражения мысли.";
 "onboarding_username_placeholder" = "публичный псевдоним (опционально)";
 "onboarding_create_identity" = "Создать идентичность";
 "onboarding_already_have" = "Уже есть идентичность?";
