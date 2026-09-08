@@ -33,6 +33,29 @@ enum VeilVoucherRedemption {
         return result
     }
 
+    /// A voucher scanned with the *contact* camera must be redeemed, not rejected.
+    ///
+    /// "Have them scan this code in Konstruct" sends people to the camera they already
+    /// know — the one on the chats screen — and that path handed the link to
+    /// `LinkParser.parseContactLink`, which failed it with "scan a Konstruct contact
+    /// code". The code was fine; only the reader was wrong.
+    ///
+    /// Returns the message to show, or nil when this is not a voucher and the caller
+    /// should carry on with its own contact parse. Only the explicit
+    /// `konstruct://veil-config` form is claimed here — never a bare capability, which
+    /// must not be able to shadow a contact code.
+    static func messageIfVoucher(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+              DeepLinkHandler.veilConfigBlob(from: url) != nil else { return nil }
+        switch redeem(trimmed) {
+        case .success:
+            return NSLocalizedString("veil_config_import_ok", comment: "")
+        case .failure(let error):
+            return error.localizedDescription
+        }
+    }
+
     /// Push the learned front into the proxy pool and get a probe running on it.
     ///
     /// The snapshot is pushed here rather than left to `startIfNeeded()`, because

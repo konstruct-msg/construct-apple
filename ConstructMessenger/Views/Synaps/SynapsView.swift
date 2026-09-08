@@ -704,6 +704,14 @@ struct SynapsView: View {
     // MARK: - QR Handler
 
     private func handleScannedQR(_ urlString: String) {
+        // A voucher scanned here is a voucher, not a malformed contact code.
+        if let message = VeilVoucherRedemption.messageIfVoucher(urlString) {
+            showingQRScanner = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                ErrorRouter.shared.report(.unknown(message))
+            }
+            return
+        }
         guard let url = URL(string: urlString) else {
             showingQRScanner = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {

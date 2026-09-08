@@ -156,4 +156,29 @@ final class VeilVoucherTests: XCTestCase {
         }
         XCTAssertEqual(VeilLearnedFrontStore.shared.addresses(), before)
     }
+
+    @MainActor
+    func testAContactCodeIsNotClaimedByTheVoucherReader() {
+        // The contact scanners consult `messageIfVoucher` first. It must claim only the
+        // explicit veil-config form — a contact link that fell through to the voucher
+        // importer would fail with the wrong message, which is the bug in reverse.
+        for text in [
+            "konstruct://contact?u=abc&k=def",
+            "https://konstruct.cc/u/someone",
+            "",
+            "not a url at all",
+        ] {
+            XCTAssertNil(VeilVoucherRedemption.messageIfVoucher(text),
+                         "must not claim \(text.isEmpty ? "<empty>" : text)")
+        }
+    }
+
+    @MainActor
+    func testAMalformedVoucherLinkIsClaimedAndReportedAsAVoucher() {
+        // Claimed (so the contact parser never sees it) but refused, with the importer's
+        // own message rather than "scan a Konstruct contact code".
+        let message = VeilVoucherRedemption.messageIfVoucher("konstruct://veil-config?d=!!!")
+        XCTAssertNotNil(message)
+        XCTAssertNotEqual(message, NSLocalizedString("veil_config_import_ok", comment: ""))
+    }
 }
