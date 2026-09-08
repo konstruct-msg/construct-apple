@@ -116,9 +116,12 @@ final class VeilCapabilityProvisioner {
                 // compared the SPKI afterwards as a log line, and skipped the comparison entirely
                 // for an address in neither the manifest nor the pin set. A request for relay A
                 // answered with relay B was stored unchecked.
-                if let rejection = VeilRelayTrust.verify(
+                if let rejection = VeilRelayTrust.verifyAndLearn(
                     relayAddress: issued.relayAddress,
                     spki: issued.spki,
+                    sni: issued.sni,
+                    notAfter: issued.notAfter,
+                    signature: issued.signature,
                     capabilityB64: newB64,
                     capabilityVersion: issued.capabilityVersion
                 ) {

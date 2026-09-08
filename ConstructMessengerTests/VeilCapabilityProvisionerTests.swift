@@ -88,7 +88,8 @@ final class VeilCapabilityProvisionerTests: XCTestCase {
             spki: "aabbccdd",
             sni: "evil.example",
             notAfter: Int64(Date().timeIntervalSince1970) + 86_400,
-            capabilityVersion: 1
+            capabilityVersion: 1,
+            signature: ""
         )
         XCTAssertFalse(VeilAlternatesCache.accept(alt),
                        "server-asserted coords for an unknown relay must be rejected")
@@ -105,7 +106,8 @@ final class VeilCapabilityProvisionerTests: XCTestCase {
             spki: String(repeating: "0", count: 64),
             sni: seed.sni,
             notAfter: Int64(Date().timeIntervalSince1970) + 86_400,
-            capabilityVersion: 1
+            capabilityVersion: 1,
+            signature: ""
         )
         XCTAssertFalse(VeilAlternatesCache.accept(alt),
                        "SPKI mismatch against seed/manifest pin must be rejected")
@@ -121,7 +123,8 @@ final class VeilCapabilityProvisionerTests: XCTestCase {
             spki: "",
             sni: seed.sni,
             notAfter: Int64(Date().timeIntervalSince1970) + 86_400,
-            capabilityVersion: 1
+            capabilityVersion: 1,
+            signature: ""
         )
         XCTAssertFalse(VeilAlternatesCache.accept(alt))
     }
@@ -212,7 +215,8 @@ final class VeilCapabilityProvisionerTests: XCTestCase {
                 spki: spki,
                 sni: address,
                 notAfter: Int64(Date().timeIntervalSince1970) + 86_400,
-                capabilityVersion: 1
+                capabilityVersion: 1,
+                signature: ""
             )
             let primaryRejected = VeilRelayTrust.verify(
                 relayAddress: address,
@@ -239,7 +243,8 @@ final class VeilCapabilityProvisionerTests: XCTestCase {
             spki: seed.spki,
             sni: seed.sni,
             notAfter: Int64(Date().timeIntervalSince1970) + 86_400,
-            capabilityVersion: 1
+            capabilityVersion: 1,
+            signature: ""
         )
         XCTAssertFalse(VeilAlternatesCache.accept(alt),
                        "valid coords + invalid capability blob must be rejected")

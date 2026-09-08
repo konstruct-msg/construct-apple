@@ -38,11 +38,16 @@ final class VeilServiceClient: Sendable {
         /// validates + caches these via `VeilAlternatesCache` (they are server-asserted
         /// and only trusted against the signed relay manifest).
         let alternates: [Alternate]
+        /// Ed25519 over `{exp, relay, sni, spki}` by `relayConfigSigningKey`, as
+        /// `ed25519:<base64url>`. Empty from a server that predates the field, in which
+        /// case the coordinate falls back to the manifest / in-binary gate.
+        let signature: String
     }
 
     /// One pre-issued alternate front — the same shape as `IssuedCapability`, for a
-    /// different relay. Server-asserted: trust its coords only against the signed
-    /// relay manifest (see `VeilAlternatesCache`).
+    /// different relay. The coordinates are the *server's* assertion; what makes them
+    /// trustable is `signature`, an issuer signature over the tuple, checked by
+    /// `VeilRelayTrust.verifyAndLearn` (see `VeilAlternatesCache`).
     struct Alternate: Sendable {
         let capability: Data
         let relayAddress: String
@@ -50,6 +55,7 @@ final class VeilServiceClient: Sendable {
         let sni: String
         let notAfter: Int64
         let capabilityVersion: UInt32
+        let signature: String
     }
 
     /// A minted bootstrap voucher: a complete `konstruct://veil-config?d=…` deep link
@@ -127,9 +133,11 @@ final class VeilServiceClient: Sendable {
                         spki: $0.spki,
                         sni: $0.sni,
                         notAfter: $0.notAfter,
-                        capabilityVersion: $0.capabilityVersion
+                        capabilityVersion: $0.capabilityVersion,
+                        signature: $0.signature
                     )
-                }
+                },
+                signature: response.signature
             )
         }
     }

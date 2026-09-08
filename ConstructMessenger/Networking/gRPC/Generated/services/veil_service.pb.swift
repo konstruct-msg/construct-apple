@@ -92,6 +92,13 @@ public struct Shared_Proto_Services_V1_IssueVeilCapabilityResponse: Sendable {
   /// (bearer/key-bound), что и основная — по наличию veil_pk в запросе.
   public var alternates: [Shared_Proto_Services_V1_EntryPoint] = []
 
+  /// Ed25519 over the primary coordinate tuple
+  /// {"exp":<i64>,"relay":"<host:port>","sni":"<sni>","spki":"<hex sha256 spki>"},
+  /// as "ed25519:<base64url>". Same scheme as EntryPoint.signature. Absent =>
+  /// the client falls back to the signed-manifest / in-binary seed gate.
+  /// Required once those public lists are emptied.
+  public var signature: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -117,6 +124,12 @@ public struct Shared_Proto_Services_V1_EntryPoint: Sendable {
   public var notAfter: Int64 = 0
 
   public var capabilityVersion: UInt32 = 0
+
+  /// Ed25519 over the canonical coordinate tuple
+  /// {"exp":<i64>,"relay":"<host:port>","sni":"<sni>","spki":"<hex sha256 spki>"},
+  /// as "ed25519:<base64url>". Absent => the client falls back to the
+  /// signed-manifest gate (today's behaviour).
+  public var signature: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -202,7 +215,7 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityRequest: SwiftProtobuf.Mes
 
 extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IssueVeilCapabilityResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}capability\0\u{3}relay_address\0\u{1}spki\0\u{1}sni\0\u{3}not_after\0\u{3}capability_version\0\u{1}alternates\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}capability\0\u{3}relay_address\0\u{1}spki\0\u{1}sni\0\u{3}not_after\0\u{3}capability_version\0\u{1}alternates\0\u{1}signature\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -217,6 +230,7 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Me
       case 5: try { try decoder.decodeSingularInt64Field(value: &self.notAfter) }()
       case 6: try { try decoder.decodeSingularUInt32Field(value: &self.capabilityVersion) }()
       case 7: try { try decoder.decodeRepeatedMessageField(value: &self.alternates) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.signature) }()
       default: break
       }
     }
@@ -244,6 +258,9 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Me
     if !self.alternates.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.alternates, fieldNumber: 7)
     }
+    if !self.signature.isEmpty {
+      try visitor.visitSingularStringField(value: self.signature, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -255,6 +272,7 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Me
     if lhs.notAfter != rhs.notAfter {return false}
     if lhs.capabilityVersion != rhs.capabilityVersion {return false}
     if lhs.alternates != rhs.alternates {return false}
+    if lhs.signature != rhs.signature {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -262,7 +280,7 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Me
 
 extension Shared_Proto_Services_V1_EntryPoint: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".EntryPoint"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}capability\0\u{3}relay_address\0\u{1}spki\0\u{1}sni\0\u{3}not_after\0\u{3}capability_version\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}capability\0\u{3}relay_address\0\u{1}spki\0\u{1}sni\0\u{3}not_after\0\u{3}capability_version\0\u{1}signature\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -276,6 +294,7 @@ extension Shared_Proto_Services_V1_EntryPoint: SwiftProtobuf.Message, SwiftProto
       case 4: try { try decoder.decodeSingularStringField(value: &self.sni) }()
       case 5: try { try decoder.decodeSingularInt64Field(value: &self.notAfter) }()
       case 6: try { try decoder.decodeSingularUInt32Field(value: &self.capabilityVersion) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.signature) }()
       default: break
       }
     }
@@ -300,6 +319,9 @@ extension Shared_Proto_Services_V1_EntryPoint: SwiftProtobuf.Message, SwiftProto
     if self.capabilityVersion != 0 {
       try visitor.visitSingularUInt32Field(value: self.capabilityVersion, fieldNumber: 6)
     }
+    if !self.signature.isEmpty {
+      try visitor.visitSingularStringField(value: self.signature, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -310,6 +332,7 @@ extension Shared_Proto_Services_V1_EntryPoint: SwiftProtobuf.Message, SwiftProto
     if lhs.sni != rhs.sni {return false}
     if lhs.notAfter != rhs.notAfter {return false}
     if lhs.capabilityVersion != rhs.capabilityVersion {return false}
+    if lhs.signature != rhs.signature {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

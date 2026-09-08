@@ -342,7 +342,10 @@ enum VeilConfigImporter {
     }
 }
 
-private extension Data {
+// Module-scoped rather than file-private: `VeilEntryPointSignature` verifies the same
+// signature encoding and hex-encoded key. The `veil` prefix is what keeps these from
+// colliding with anything else that extends `Data`.
+extension Data {
     /// Decode a base64url (no-padding) string.
     init?(veilBase64URLEncoded string: String) {
         var b64 = string

@@ -101,9 +101,12 @@ final class VeilCapabilityRenewer {
                 // capability signature, stored the ticket, and only then compared the SPKI
                 // as a log line. The primary and alternates paths were fixed; this one was
                 // left behind, and a divergence nothing asserts is the kind that survives.
-                if let rejection = VeilRelayTrust.verify(
+                if let rejection = VeilRelayTrust.verifyAndLearn(
                     relayAddress: issued.relayAddress,
                     spki: issued.spki,
+                    sni: issued.sni,
+                    notAfter: issued.notAfter,
+                    signature: issued.signature,
                     capabilityB64: newB64,
                     capabilityVersion: issued.capabilityVersion
                 ) {
