@@ -107,9 +107,10 @@ struct DesktopRootView: View {
                 authViewModel.restoreSession()
             }
 
+            // No balance threshold here — `BlindTokenService.bootstrapAction` owns that decision.
+            // See the same call site in ContentView.
             if AuthSessionManager.shared.isSessionValid,
-               StealthPolicy.shared.isEnabled,
-               TokenWalletService.shared.balance < 10 {
+               StealthPolicy.shared.isEnabled {
                 Task {
                     await BlindTokenService.shared.bootstrapInitialBatch()
                 }

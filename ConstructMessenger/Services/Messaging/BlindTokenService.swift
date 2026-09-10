@@ -74,6 +74,21 @@ enum ReplenishGate: Equatable {
     case blockedByPacing
 }
 
+/// What an app-lifecycle trigger (foreground, background fetch) should do about the wallet.
+///
+/// Separate from `ReplenishGate` because it answers a different question. `ReplenishGate` is asked
+/// by a send that needs a token *now*; this one is asked when nothing is waiting, and its only
+/// interesting distinction is cold start vs banking — the first batch after install has no pacing
+/// to respect, a half-full wallet does.
+enum BootstrapAction: Equatable {
+    /// Banked deep enough, a batch is already running, or the issuer refused. Do nothing.
+    case skip
+    /// Cold wallet: pull a batch, and bypass our own pacing to do it.
+    case coldStart
+    /// Below the bank target but not cold: pull a batch, respecting pacing.
+    case bank
+}
+
 @MainActor
 final class BlindTokenService {
     static let shared = BlindTokenService()
@@ -91,9 +106,25 @@ final class BlindTokenService {
     /// Brief back-off for transient transport failures — a network blip shouldn't keep
     /// the wallet empty for a full hour.
     private static let transientRetry: TimeInterval = 120
-    /// Reactive top-up threshold: below this the wallet is refilled (per-message scope
-    /// drains it steadily, unlike per-stream's ~1/recipient/day).
-    private static let lowWaterMark = 20
+    /// Depth the wallet is filled toward whenever nothing is urgent: **one hour of the server's
+    /// own issuance budget** (`TOKEN_ISSUANCE_MAX_PER_HOUR`, 120), banked ahead of demand.
+    ///
+    /// This was 20, and 20 is why the wallet ran dry under load. The server's cap is a *rate*, not
+    /// a quota: on 2026-08-19 this account sent 1900 sealed messages against a daily budget of
+    /// 2880 and still spent 1306 of them token-less. The budget was never the binding constraint —
+    /// a 20-token buffer in front of a bursty sender was. Once a burst outruns 120/hr the issuer
+    /// answers `.rateLimited`, that arms the full-hour back-off, and every send for the rest of
+    /// the hour goes out bare; under `enforce` those are rejected messages, not degraded ones.
+    ///
+    /// Banking weakens no anti-abuse property. The server cap is untouched and still bounds
+    /// issuance; this only stops an idle client from discarding budget it is already entitled to,
+    /// so a burst draws down a buffer instead of racing the rate limiter. Well under
+    /// `TokenWalletService.maxBalance` (500), which stays the hard ceiling.
+    static let bankTarget = 120
+
+    /// A wallet this shallow is a cold start — first launch, or a relaunch after it was cleared.
+    /// Only a cold start may bypass pacing; banking is never urgent enough to.
+    static let coldStartMark = 10
 
     /// How long a send with an empty wallet waits for tokens before going ahead without one.
     /// Sized against the alternative, not against comfort: under `enforce` a token-less send is
@@ -144,6 +175,22 @@ final class BlindTokenService {
         if balance == 0 { return .start }
         if let pacingUntil, pacingUntil > now { return .blockedByPacing }
         return .start
+    }
+
+    /// What a foreground / background trigger should do about the wallet right now.
+    ///
+    /// Pure for the same reason as `gate`: the interesting part is a decision, and a decision that
+    /// exists only inside a method reachable from three view lifecycles is one nobody can assert.
+    static func bootstrapAction(
+        balance: Int,
+        isReplenishing: Bool,
+        backoffUntil: Date?,
+        now: Date = Date()
+    ) -> BootstrapAction {
+        if isReplenishing { return .skip }
+        if balance >= bankTarget { return .skip }
+        if let backoffUntil, backoffUntil > now { return .skip }
+        return balance < coldStartMark ? .coldStart : .bank
     }
 
     private var currentGate: ReplenishGate {
@@ -242,7 +289,8 @@ final class BlindTokenService {
         return served
     }
 
-    /// Reactive top-up for per-message scope: pull a fresh batch when the wallet runs low.
+    /// Reactive top-up for per-message scope: pull a fresh batch whenever the wallet sits below
+    /// the bank target.
     /// Called from the send path after a token is consumed (and on empty-wallet sends), so
     /// the wallet chases the server hourly cap instead of waiting for the next foreground /
     /// background trigger. Cheap and idempotent — guarded by the balance threshold, the
@@ -259,7 +307,7 @@ final class BlindTokenService {
     }
 
     func topUpIfLow() async {
-        guard TokenWalletService.shared.balance < Self.lowWaterMark else { return }
+        guard TokenWalletService.shared.balance < Self.bankTarget else { return }
         await replenish()
     }
 
@@ -295,24 +343,28 @@ final class BlindTokenService {
     /// - Only does work if the wallet is nearly empty.
     /// - Normal top-ups continue to use `replenish()`.
     func bootstrapInitialBatch() async {
-        guard !isReplenishing else {
-            Log.debug("BlindToken: bootstrap skipped (already replenishing)", category: "BlindToken")
+        let balance = TokenWalletService.shared.balance
+        switch Self.bootstrapAction(
+            balance: balance,
+            isReplenishing: isReplenishing,
+            backoffUntil: backoffUntil
+        ) {
+        case .skip:
+            Log.debug(
+                "BlindToken: bootstrap skipped (wallet=\(balance) target=\(Self.bankTarget) replenishing=\(isReplenishing) backoff=\(backoffUntil.map { "\($0)" } ?? "none"))",
+                category: "BlindToken"
+            )
             return
+        case .coldStart:
+            // Force bypass of pacing for the absolute first batch (a refusal still holds us back).
+            pacingUntil = nil
+            Log.info("BlindToken: starting initial bootstrap batch (wallet=\(balance))", category: "BlindToken")
+        case .bank:
+            // Below the bank target but not cold. Pull one more batch toward it and let pacing
+            // space these out — `replenish` returns immediately while paced, so this stays cheap
+            // and the wallet climbs across foregrounds instead of in one burst at the issuer.
+            Log.debug("BlindToken: banking toward \(Self.bankTarget) (wallet=\(balance))", category: "BlindToken")
         }
-        if TokenWalletService.shared.balance >= 10 {
-            Log.debug("BlindToken: bootstrap skipped (wallet already has \(TokenWalletService.shared.balance) tokens)", category: "BlindToken")
-            return
-        }
-
-        if let until = backoffUntil, Date() < until {
-            Log.debug("BlindToken: bootstrap skipped — issuer back-off active", category: "BlindToken")
-            return
-        }
-
-        // Force bypass of pacing for the absolute first batch (a refusal still holds us back).
-        pacingUntil = nil
-
-        Log.info("BlindToken: starting initial bootstrap batch", category: "BlindToken")
         await replenish(count: Self.batchSize)
     }
 
