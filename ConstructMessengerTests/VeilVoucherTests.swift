@@ -196,6 +196,51 @@ final class VeilVoucherTests: XCTestCase {
     }
 
     @MainActor
+    func testCapabilityCandidatesRankThePreferredRelayFirstAndEndAtTheSeed() throws {
+        // Second half of the same bug: preferring the *active* relay is not enough. A
+        // device settled on the seed holds a live capability for it, so an active-first
+        // target no-ops forever while the learned front — the one nothing else renews —
+        // keeps the 45-minute B2 it arrived on. The queue has to contain every relay the
+        // device depends on, so a tick can walk past a satisfied one.
+        let store = VeilLearnedFrontStore.shared
+        let learned = "candidates.example:443"
+        try XCTSkipUnless(store.pin(for: learned) == nil, "address must start unlearned")
+        defer { store.remove(learned) }
+
+        XCTAssertTrue(store.save(
+            address: learned, sni: "candidates.example", spki: String(repeating: "c", count: 64)
+        ))
+
+        let candidates = VeilProxyManager.shared.capabilityCandidateAddresses(
+            preferring: "preferred.example:443"
+        )
+        XCTAssertEqual(candidates.first, "preferred.example:443",
+                       "the relay that just proved it works is tried first")
+        XCTAssertTrue(candidates.contains(learned),
+                      "a learned front stays in the queue even when it is not the active relay")
+        XCTAssertEqual(candidates.last, VEILConfig.ruRelayAddress,
+                       "the seed is the floor, never the head")
+        XCTAssertEqual(Set(candidates).count, candidates.count, "no duplicates")
+    }
+
+    @MainActor
+    func testCapabilityCandidatesDoNotRepeatTheSeedWhenItIsAlsoPreferred() {
+        let candidates = VeilProxyManager.shared.capabilityCandidateAddresses(
+            preferring: VEILConfig.ruRelayAddress
+        )
+        XCTAssertEqual(candidates.filter { $0 == VEILConfig.ruRelayAddress }.count, 1)
+    }
+
+    @MainActor
+    func testAnUnknownRelayAlwaysNeedsCapabilityWork() {
+        // The predicate that lets a tick walk past a satisfied relay: an address with
+        // nothing in either store must read as unfinished business.
+        XCTAssertTrue(VeilProxyManager.shared.needsCapabilityWork("never.seen.example:443"))
+        XCTAssertFalse(VeilProxyManager.shared.needsCapabilityWork(""),
+                       "an empty address is not a relay")
+    }
+
+    @MainActor
     func testAMalformedVoucherLinkIsClaimedAndReportedAsAVoucher() {
         // Claimed (so the contact parser never sees it) but refused, with the importer's
         // own message rather than "scan a Konstruct contact code".

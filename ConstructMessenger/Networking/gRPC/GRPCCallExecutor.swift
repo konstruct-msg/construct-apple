@@ -78,14 +78,24 @@ final class GRPCCallExecutor: Sendable {
                     target = .direct(.h2)
                 }
                 await TransportRouter.shared.send(.rpcSucceeded(via: target, latencyMs: latencyMs))
-                if case .veil(_, let relay) = target {
-                    // The tunnel just proved it works — top up this relay's credentials
-                    // over it. Rate-limited inside; no-ops while a live capability is
-                    // stored. Without this a voucher-bootstrapped device never asks for
-                    // a replacement for the 45-minute B2 it arrived on, and there is no
-                    // second chance: once that expires the RPC needed to renew it has no
-                    // transport left to travel on.
-                    await MainActor.run { VeilProxyManager.shared.noteRelaySuccess(address: relay) }
+                // A transport just proved it works — top up relay credentials over it.
+                // Rate-limited inside; no-ops while every candidate holds a live
+                // capability. Without this a voucher-bootstrapped device never asks for
+                // a replacement for the 45-minute B2 it arrived on, and there is no
+                // second chance: once that expires the RPC needed to renew it has no
+                // transport left to travel on.
+                //
+                // Direct counts too. The pipeline's other entry point runs at launch,
+                // before `TransportRouter` has a channel, so its first attempt burns a
+                // client-side timeout and then sits out its retry window. A tick on the
+                // first working RPC — over any path — is what makes that self-heal
+                // instead of waiting for the next launch or mode toggle.
+                await MainActor.run {
+                    if case .veil(_, let relay) = target {
+                        VeilProxyManager.shared.noteRelaySuccess(address: relay)
+                    } else {
+                        VeilProxyManager.shared.ensureCapabilitiesForActiveRelay()
+                    }
                 }
                 return result
             } catch {
