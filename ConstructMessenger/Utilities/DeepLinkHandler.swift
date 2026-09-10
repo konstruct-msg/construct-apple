@@ -16,32 +16,23 @@ enum DeepLinkType: Equatable {
 class DeepLinkHandler {
     var deepLink: DeepLinkType?
 
-    /// Result of the most recent `konstruct://veil-config` import, for UI feedback.
-    /// `nil` until an import is attempted; the relay address on success.
-    var veilConfigImported: String?
-    var veilConfigImportError: String?
-
     // Function to handle URL manually, e.g., from AppDelegate or onOpenURL
     func handleURL(_ url: URL) -> Bool {
         Log.debug("DeepLinkHandler: Attempting to handle URL: \(url.absoluteString)", category: "DeepLink")
 
         // veil-front access config: konstruct://veil-config?d=<signed base64url blob>.
         // Verified + stored by VeilConfigImporter; never reaches the contact parser.
-        if let blob = Self.veilConfigBlob(from: url) {
-            let result = VeilConfigImporter.importBlob(blob)
+        //
+        // Routed through the same helper the QR scanners use, so a tapped link and a
+        // scanned code import identically and say the same thing. This used to publish
+        // `veilConfigImported` / `veilConfigImportError`, which nothing ever read — the
+        // import worked and the user saw no confirmation either way.
+        if Self.veilConfigBlob(from: url) != nil {
             Task { @MainActor in
-                switch result {
-                case .success(let relay):
-                    self.veilConfigImported = relay
-                    self.veilConfigImportError = nil
-                    // Make the learned front reachable now. On a device that is not
-                    // registered yet this is the only thing that will — see
-                    // `VeilVoucherRedemption.armTransport`.
-                    await VeilVoucherRedemption.armTransport()
-                case .failure(let error):
-                    self.veilConfigImported = nil
-                    self.veilConfigImportError = error.localizedDescription
+                guard let message = VeilVoucherRedemption.messageIfVoucher(url.absoluteString) else {
+                    return
                 }
+                ErrorRouter.shared.report(.unknown(message))
             }
             return true
         }

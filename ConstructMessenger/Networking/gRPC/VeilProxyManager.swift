@@ -320,7 +320,13 @@ final class VeilProxyManager: ObservableObject {
 
     /// Relays this device depends on, ordered by how much it would hurt to lose them:
     /// the one just proven to work, the one carrying traffic, learned fronts (newest
-    /// first), then the in-binary seed.
+    /// first), then the bundled seeds.
+    ///
+    /// The tail is `VEILConfig.hardcodedRelayAddresses`, derived from `seedRelays` —
+    /// deliberately not `ruRelayAddress` by name. Naming the seed here was one of the
+    /// two hardcodes that had to move before the seed pool can be emptied (phase 6):
+    /// with no bundled front, this list must contain only what the device actually
+    /// learned, not a constant nothing will pin.
     func capabilityCandidateAddresses(preferring address: String? = nil) -> [String] {
         var ordered: [String] = []
         func append(_ candidate: String?) {
@@ -330,7 +336,7 @@ final class VeilProxyManager: ObservableObject {
         append(address)
         append(activeRelay?.address)
         for front in VeilLearnedFrontStore.shared.all() { append(front.address) }
-        append(VEILConfig.ruRelayAddress)
+        for seed in VEILConfig.hardcodedRelayAddresses { append(seed) }
         return ordered
     }
 
@@ -349,11 +355,14 @@ final class VeilProxyManager: ObservableObject {
     /// Deliberately one address, not a list: the pipeline's three steps are singletons
     /// sharing one rate limiter, so a list would let the first candidate starve the
     /// rest. Successive ticks walk the queue instead.
-    func capabilityTargetAddress(preferring address: String? = nil) -> String {
+    /// Nil when this device knows of no relay at all — possible once `seedRelays` is
+    /// emptied and nothing has been learned yet. That is a real state, not an error:
+    /// there is simply nothing to ask for until a voucher or the manifest supplies a
+    /// front. Returning a seed constant here would send the pipeline at an address no
+    /// anchor can pin.
+    func capabilityTargetAddress(preferring address: String? = nil) -> String? {
         let candidates = capabilityCandidateAddresses(preferring: address)
-        return candidates.first(where: needsCapabilityWork)
-            ?? candidates.first
-            ?? VEILConfig.ruRelayAddress
+        return candidates.first(where: needsCapabilityWork) ?? candidates.first
     }
 
     /// First-issue (if missing) → near-expiry renew → B1 bootstrap/renew, for whichever
@@ -374,7 +383,7 @@ final class VeilProxyManager: ObservableObject {
            Date().timeIntervalSince(last) < capabilitySweepInterval { return }
         lastCapabilitySweep = Date()
 
-        let target = capabilityTargetAddress(preferring: address)
+        guard let target = capabilityTargetAddress(preferring: address) else { return }
         VeilCapabilityProvisioner.shared.provisionIfNeeded(relayAddress: target)
         VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: target)
         VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: target)

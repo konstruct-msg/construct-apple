@@ -538,6 +538,24 @@ final class ChatSendCoordinator {
                         if let k = self.sessionManager.cachedIdentityKey { return k }
                         return await self.fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: self.viewContext)
                     }()
+                    // One spend unit for this message to this person: it covers the primary
+                    // envelope below AND the fan-out copies `mirrorOutgoing` sends to their other
+                    // devices a few lines down. Both paths reach one `recipient_user_id`, which is
+                    // exactly what the server keys `token_spend_id` by, so one token pays for all
+                    // of them. Before this the two paths minted a unit each and a two-device peer
+                    // cost two tokens a message.
+                    //
+                    // The device count is a hint, not the authority (`PeerDeviceRegistry` is a
+                    // local store). Under-count → nil unit → per-envelope payment, exactly as
+                    // before; over-count → a unit that covers fewer envelopes than it was sized
+                    // for, which costs nothing.
+                    let peerDeviceCount = await PeerDeviceRegistry.shared.knownDevices(of: recipientId).count
+                    let peerSpendUnit = await TokenSpendUnit.forEnvelopeCount(
+                        TokenSpendUnit.envelopeCount(
+                            chunkCount: plan.payloads.count,
+                            recipientDeviceCount: peerDeviceCount
+                        )
+                    )
                     let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
                         plan: plan,
                         baseMessageId: messageId,
@@ -545,7 +563,8 @@ final class ChatSendCoordinator {
                         recipientId: recipientId,
                         conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: message.timestamp,
-                        recipientIdentityKey: recipientIdentityKey
+                        recipientIdentityKey: recipientIdentityKey,
+                        spendUnit: peerSpendUnit
                     )
                     TrafficProtectionService.shared.recordRealMessageSent()
                     if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
@@ -569,7 +588,8 @@ final class ChatSendCoordinator {
                                 recipientUserId: recipientId,
                                 senderUserId: currentUserId,
                                 senderDeviceId: myDeviceId,
-                                timestamp: message.timestamp
+                                timestamp: message.timestamp,
+                                peerSpendUnit: peerSpendUnit
                             )
                         }
                     }

@@ -161,15 +161,23 @@ enum VeilConfigImporter {
         return true
     }
 
-    /// Import a bare capability (base64-std) for the app's pinned default RU relay.
+    /// Import a bare capability (base64-std) for the app's first bundled seed front.
     /// Verifies the issuer Ed25519 signature and validity window client-side, then
     /// stores the verbatim base64 string (fed as-is to `veil_start`).
+    ///
+    /// A bare capability carries no coordinates, so it can only be bound to a front the
+    /// binary already pins. With no bundled seed (phase 6) there is nothing to bind it
+    /// to and the convenience path is refused rather than aimed at a constant nothing
+    /// pins — a signed config blob is the route in that case.
     @discardableResult
     static func importRawCapability(_ capabilityBase64: String) -> Result<String, Error> {
         let trimmed = capabilityBase64.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let relay = VEILConfig.hardcodedRelayAddresses.first else {
+            Log.error("veil capability import refused — a bare capability needs a bundled seed front", category: "VEIL")
+            return .failure(ImportError.malformed)
+        }
         do {
             let cap = try parseCapability(trimmed)
-            let relay = VEILConfig.ruRelayAddress
             guard VeilTicketStore.store(ticket: trimmed, for: relay) else {
                 return .failure(ImportError.malformed)
             }

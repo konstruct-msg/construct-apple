@@ -67,6 +67,22 @@ final class TokenSpendUnit {
         envelopeCount > 1 ? TokenSpendUnit() : nil
     }
 
+    /// How many wire envelopes one logical message costs **at one recipient account**: every
+    /// chunk, to every device of that account.
+    ///
+    /// Lifted out of the call sites because it is the whole decision. Sized per *path* it was
+    /// wrong in a way nothing could see: the primary send counted chunks and the fan-out counted
+    /// devices, so a one-chunk message to a two-device peer looked like one envelope from both
+    /// sides, minted no unit on either, and paid two tokens for one message. Measured 2026-09-10:
+    /// 6 of 31 spends on one device were fan-out copies of a message already paid for.
+    ///
+    /// `nonisolated` so a test can ask without the main actor. The clamps are not defensive
+    /// decoration — a zero device count is what an empty local registry returns, and multiplying
+    /// by it would silently drop the unit for every send.
+    nonisolated static func envelopeCount(chunkCount: Int, recipientDeviceCount: Int) -> Int {
+        max(1, chunkCount) * max(1, recipientDeviceCount)
+    }
+
     /// Should the envelope being built attempt to spend a token?
     ///
     /// The decision `buildSealedInner` actually runs, lifted out of it: policy asks for a token,

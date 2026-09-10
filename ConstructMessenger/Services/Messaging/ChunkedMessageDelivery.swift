@@ -26,6 +26,7 @@ final class ChunkedMessageSender {
         conversationId: String,
         timestamp: UInt64,
         recipientIdentityKey: Data? = nil,
+        spendUnit callerSpendUnit: TokenSpendUnit? = nil,
         onWirePayloadEncoded: ((String, Data) -> Void)? = nil
     ) async throws -> [SendMessageResponse] {
         var responses: [SendMessageResponse] = []
@@ -35,7 +36,20 @@ final class ChunkedMessageSender {
         // Only created for genuinely multi-envelope sends — a single chunk leaves the spend id
         // empty and keeps the legacy per-envelope path byte-for-byte, which is also the only
         // shape the server has redeemed until now.
-        let spendUnit = await TokenSpendUnit.forEnvelopeCount(plan.payloads.count)
+        //
+        // A caller-supplied unit wins, and that is the point: this send reaches ONE of the
+        // recipient's devices, and `mirrorOutgoing` reaches the rest immediately afterwards. Two
+        // paths, one logical message, one recipient account — and `token_spend_id` is keyed by
+        // `recipient_user_id` server-side, so those copies are all covered by one spend. Minting
+        // a unit here and a second one over there is what made a two-device peer cost two tokens
+        // per message: measured 2026-09-10, 6 of 31 spends on one device were fan-out copies of a
+        // message the primary send had already paid for.
+        let spendUnit: TokenSpendUnit?
+        if let callerSpendUnit {
+            spendUnit = callerSpendUnit
+        } else {
+            spendUnit = await TokenSpendUnit.forEnvelopeCount(plan.payloads.count)
+        }
 
         for (index, payload) in plan.payloads.enumerated() {
             let chunkMessageId = index == 0 ? plan.messageId.uuidString.lowercased()

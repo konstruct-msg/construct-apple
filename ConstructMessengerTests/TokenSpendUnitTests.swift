@@ -136,4 +136,44 @@ final class TokenSpendUnitTests: XCTestCase {
         XCTAssertFalse(TokenSpendUnit.shouldAttemptPayment(policyWantsToken: false, unitPaid: false))
         XCTAssertFalse(TokenSpendUnit.shouldAttemptPayment(policyWantsToken: false, unitPaid: true))
     }
+
+    // MARK: - Sizing the unit: one logical message at one recipient account
+
+    /// The 2026-09-10 case. One chunk, a peer with two devices: the primary send reaches one of
+    /// them and the fan-out reaches the other. Sized per path both looked like a single envelope,
+    /// neither minted a unit, and the message paid twice. Sized per *account* it is two envelopes
+    /// and one token.
+    func testOneChunkToATwoDevicePeerIsTwoEnvelopes() {
+        XCTAssertEqual(TokenSpendUnit.envelopeCount(chunkCount: 1, recipientDeviceCount: 2), 2)
+        XCTAssertNotNil(
+            TokenSpendUnit.forEnvelopeCount(
+                TokenSpendUnit.envelopeCount(chunkCount: 1, recipientDeviceCount: 2)
+            ),
+            "a two-device peer must get a unit — without one the fan-out copy pays a second token"
+        )
+    }
+
+    /// The shape that must not change: one chunk, one device leaves the spend id empty and takes
+    /// the legacy per-envelope path, which is the only shape the server redeemed for years.
+    func testSingleEnvelopeStillMintsNoUnit() {
+        XCTAssertEqual(TokenSpendUnit.envelopeCount(chunkCount: 1, recipientDeviceCount: 1), 1)
+        XCTAssertNil(
+            TokenSpendUnit.forEnvelopeCount(
+                TokenSpendUnit.envelopeCount(chunkCount: 1, recipientDeviceCount: 1)
+            )
+        )
+    }
+
+    /// Chunks and devices multiply: a three-chunk album to a two-device peer is six envelopes,
+    /// still one token.
+    func testChunksAndDevicesMultiply() {
+        XCTAssertEqual(TokenSpendUnit.envelopeCount(chunkCount: 3, recipientDeviceCount: 2), 6)
+    }
+
+    /// An empty local device registry returns zero, and zero is what a plain multiplication would
+    /// turn the whole count into — dropping the unit for every send on the way past.
+    func testEmptyDeviceCountDoesNotZeroTheMessage() {
+        XCTAssertEqual(TokenSpendUnit.envelopeCount(chunkCount: 4, recipientDeviceCount: 0), 4)
+        XCTAssertEqual(TokenSpendUnit.envelopeCount(chunkCount: 0, recipientDeviceCount: 3), 3)
+    }
 }

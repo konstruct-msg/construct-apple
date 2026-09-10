@@ -185,7 +185,7 @@ final class VeilVoucherTests: XCTestCase {
         defer { store.remove(address) }
 
         let seed = VeilProxyManager.shared.capabilityTargetAddress()
-        XCTAssertEqual(seed, VEILConfig.ruRelayAddress,
+        XCTAssertEqual(seed, VEILConfig.hardcodedRelayAddresses.first,
                        "with nothing learned and no active relay, the seed is the target")
 
         XCTAssertTrue(store.save(
@@ -218,17 +218,32 @@ final class VeilVoucherTests: XCTestCase {
                        "the relay that just proved it works is tried first")
         XCTAssertTrue(candidates.contains(learned),
                       "a learned front stays in the queue even when it is not the active relay")
-        XCTAssertEqual(candidates.last, VEILConfig.ruRelayAddress,
-                       "the seed is the floor, never the head")
+        XCTAssertEqual(candidates.last, VEILConfig.hardcodedRelayAddresses.last,
+                       "the seed pool is the floor, never the head")
         XCTAssertEqual(Set(candidates).count, candidates.count, "no duplicates")
     }
 
     @MainActor
-    func testCapabilityCandidatesDoNotRepeatTheSeedWhenItIsAlsoPreferred() {
-        let candidates = VeilProxyManager.shared.capabilityCandidateAddresses(
-            preferring: VEILConfig.ruRelayAddress
-        )
-        XCTAssertEqual(candidates.filter { $0 == VEILConfig.ruRelayAddress }.count, 1)
+    func testCapabilityCandidatesDoNotRepeatTheSeedWhenItIsAlsoPreferred() throws {
+        let seed = try XCTUnwrap(VEILConfig.hardcodedRelayAddresses.first)
+        let candidates = VeilProxyManager.shared.capabilityCandidateAddresses(preferring: seed)
+        XCTAssertEqual(candidates.filter { $0 == seed }.count, 1)
+    }
+
+    @MainActor
+    func testTheCandidateTailIsTheSeedPoolItselfNotANamedSeed() {
+        // Phase 6 guard: the queue's floor must be whatever `seedRelays` holds, so that
+        // emptying the seed pool leaves a device with only what it actually learned.
+        // Naming `ruRelayAddress` here would survive that edit and send the pipeline at
+        // an address no anchor can pin.
+        let candidates = VeilProxyManager.shared.capabilityCandidateAddresses()
+        for seed in VEILConfig.hardcodedRelayAddresses {
+            XCTAssertTrue(candidates.contains(seed), "every bundled seed belongs in the queue")
+        }
+        if VEILConfig.hardcodedRelayAddresses.isEmpty {
+            XCTAssertNil(VeilProxyManager.shared.capabilityTargetAddress(),
+                         "no seeds and nothing learned means there is nothing to ask for")
+        }
     }
 
     @MainActor

@@ -76,7 +76,11 @@ final class VeilCapabilityProvisioner {
     /// Fire-and-forget. Safe to call frequently (launch, foreground, VEIL success,
     /// config refresh). No-ops when a live ticket is already stored, when there is
     /// no session token (RPC is JWT-gated), or when rate-limited.
-    func provisionIfNeeded(relayAddress: String = VEILConfig.ruRelayAddress) {
+    /// `relayAddress` is required. It used to default to `VEILConfig.ruRelayAddress`,
+    /// which was the second of the two seed hardcodes blocking phase 6 — a default that
+    /// silently aimed the pipeline at the bundled front no matter which relay the caller
+    /// meant, and would name a non-existent constant once the seed pool is emptied.
+    func provisionIfNeeded(relayAddress: String) {
         guard !inFlight else { return }
 
         let stored = VeilTicketStore.ticket(for: relayAddress)

@@ -344,7 +344,8 @@ final class MultiDeviceSendCoordinator {
         recipientUserId: String,
         senderUserId: String,
         senderDeviceId: String,
-        timestamp: UInt64
+        timestamp: UInt64,
+        peerSpendUnit: TokenSpendUnit? = nil
     ) async {
         await sendSenderSync(
             plaintext: wirePlaintext,
@@ -363,7 +364,8 @@ final class MultiDeviceSendCoordinator {
             recipientUserId: recipientUserId,
             senderUserId: senderUserId,
             senderDeviceId: senderDeviceId,
-            timestamp: timestamp
+            timestamp: timestamp,
+            spendUnit: peerSpendUnit
         )
     }
 
@@ -385,7 +387,8 @@ final class MultiDeviceSendCoordinator {
         senderUserId: String,
         senderDeviceId: String,
         timestamp: UInt64,
-        onlyDevices: [String]? = nil
+        onlyDevices: [String]? = nil,
+        spendUnit callerSpendUnit: TokenSpendUnit? = nil
     ) async -> FanoutOutcome {
         // Four ways out of this function, three of them silent until 2026-08-30. A skipped
         // device is not visible anywhere else: the message is delivered, the sender sees "sent",
@@ -470,7 +473,19 @@ final class MultiDeviceSendCoordinator {
             // fan-out is what makes this matter: an unsealed copy paid nothing, and paying per
             // envelope instead would multiply a three-photo album by the recipient's device count
             // and empty a young account's hourly allowance on one tap.
-            let spendUnit = await TokenSpendUnit.forEnvelopeCount(planned.count * chunks.count)
+            // The caller's unit when there is one: these copies and the primary send are one
+            // logical message to one account, and the server keys the unit by
+            // `recipient_user_id`. Minting a fresh one here would pay twice for the same message.
+            let spendUnit: TokenSpendUnit?
+            if let callerSpendUnit {
+                spendUnit = callerSpendUnit
+            } else {
+                spendUnit = await TokenSpendUnit.forEnvelopeCount(
+                    TokenSpendUnit.envelopeCount(
+                        chunkCount: chunks.count, recipientDeviceCount: planned.count
+                    )
+                )
+            }
 
             var owed: [String] = []
             for target in planned {
@@ -751,6 +766,18 @@ final class MultiDeviceSendCoordinator {
                 recipientIsSelf: true
             )
 
+            // Our own account is a DIFFERENT recipient from the peer, so this cannot join the
+            // peer's unit — the server keys `token_spend_id` by `recipient_user_id` precisely so
+            // one token cannot cover envelopes to two people. It gets its own unit instead, which
+            // matters as soon as there is more than one sibling or the message is chunked; with a
+            // single sibling and a single chunk it is one envelope and still one token, and that
+            // one is irreducible.
+            let syncSpendUnit = await TokenSpendUnit.forEnvelopeCount(
+                TokenSpendUnit.envelopeCount(
+                    chunkCount: plan.payloads.count, recipientDeviceCount: targets.count
+                )
+            )
+
             for target in targets {
                 // The tag names the device this copy is for, to that device only. It used to be
                 // `deviceId.prefix(8)` — the id in plain hex, which the relay reads on every copy
@@ -781,7 +808,8 @@ final class MultiDeviceSendCoordinator {
                         recipientDeviceId: target.deviceId,
                         timestamp: timestamp,
                         contentType: .senderSync,
-                        audience: .ownDevice
+                        audience: .ownDevice,
+                        spendUnit: syncSpendUnit
                     )
                 }
             }
