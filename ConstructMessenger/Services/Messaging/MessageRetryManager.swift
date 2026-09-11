@@ -57,6 +57,17 @@ class MessageRetryManager {
         // deanonymisation). nil under stealth-on makes resealAndSend throw → we queue + nudge a fetch.
         let recipientIdentityKey = StealthSenderService.recipientIdentityKey(recipientId: recipientId, context: context)
 
+        // The spend unit of the original send, if it paid and is still inside the server's window.
+        // A retry is the same logical message to the same account, so every envelope below carries
+        // this id and buys nothing: the server answers `UnitCovered` off the `pp:unit:` record the
+        // first send opened. Nil means there is nothing to ride on — no unit, or too long ago — and
+        // the retry pays exactly as it did before.
+        //
+        // Hoisted above the loop on purpose. A multi-chunk message re-sends chunk by chunk, and a
+        // unit minted inside the loop would be a different id per chunk, which is the per-envelope
+        // cost this exists to remove.
+        let retrySpendUnit = TokenSpendUnitStore.paidUnit(baseMessageId: capturedMessageId, recipientId: recipientId)
+
         // Prefer re-sending the exact same encrypted payload bytes.
         if let chunks = OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: capturedMessageId) {
             Task { [weak self] in
@@ -72,7 +83,9 @@ class MessageRetryManager {
                             recipientId: recipientId,
                             senderId: capturedSenderId,
                             timestamp: capturedTimestamp,
-                            recipientIdentityKey: recipientIdentityKey
+                            recipientIdentityKey: recipientIdentityKey,
+                            spendUnit: retrySpendUnit,
+                            baseMessageId: capturedMessageId
                         )
                         if finalErrorCode.isEmpty, !response.errorCode.isEmpty {
                             finalErrorCode = response.errorCode
@@ -185,7 +198,9 @@ class MessageRetryManager {
         recipientId: String,
         senderId: String,
         timestamp: UInt64,
-        recipientIdentityKey: Data?
+        recipientIdentityKey: Data?,
+        spendUnit: TokenSpendUnit? = nil,
+        baseMessageId: String? = nil
     ) async throws -> SendMessageResponse {
         let conversationId = ConversationId.direct(myUserId: senderId, theirUserId: recipientId)
 
@@ -202,14 +217,22 @@ class MessageRetryManager {
         do {
             sealedInner = try await StealthSenderService.buildSealedInner(
                 recipientUserId: recipientId, recipientIdentityKey: recipientIK,
-                encryptedPayload: wirePayload, contentType: .generic)
+                encryptedPayload: wirePayload, contentType: .generic, spendUnit: spendUnit)
         } catch {
             throw StealthDowngradeBlocked(reason: "retry seal failed: \(error)")
         }
         return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
-            try await StealthSenderService.buildSealedInner(
+            // Reached only on the server's `privacy_pass:` rejection, which for a reused unit means
+            // exactly one thing: the redemption we were riding on is not there. Drop the stored id
+            // as well as the in-memory paid flag, or the next retry of this message would rebuild
+            // from the store and be rejected the same way, turning a one-shot recovery into a loop.
+            spendUnit?.invalidatePayment()
+            if let baseMessageId {
+                TokenSpendUnitStore.forget(baseMessageId: baseMessageId, recipientId: recipientId)
+            }
+            return try await StealthSenderService.buildSealedInner(
                 recipientUserId: recipientId, recipientIdentityKey: recipientIK,
-                encryptedPayload: wirePayload, contentType: .generic)
+                encryptedPayload: wirePayload, contentType: .generic, spendUnit: spendUnit)
         }, send: { inner in
             if FeatureFlags.sealedSenderUnauthenticatedTransport {
                 return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)
@@ -629,7 +652,8 @@ class MessageRetryManager {
                 recipientId: recipientId,
                 conversationId: ConversationId.direct(myUserId: senderId, theirUserId: recipientId),
                 timestamp: UInt64(Date().timeIntervalSince1970),
-                recipientIdentityKey: recipientIdentityKey
+                recipientIdentityKey: recipientIdentityKey,
+                spendUnit: TokenSpendUnitStore.paidUnit(baseMessageId: messageId, recipientId: recipientId)
             )
             switch aggregated.status.lowercased() {
             case "failed":    return aggregated.retryable ? .queued : .failed

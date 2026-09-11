@@ -545,17 +545,18 @@ final class ChatSendCoordinator {
                     // of them. Before this the two paths minted a unit each and a two-device peer
                     // cost two tokens a message.
                     //
-                    // The device count is a hint, not the authority (`PeerDeviceRegistry` is a
-                    // local store). Under-count → nil unit → per-envelope payment, exactly as
-                    // before; over-count → a unit that covers fewer envelopes than it was sized
-                    // for, which costs nothing.
-                    let peerDeviceCount = await PeerDeviceRegistry.shared.knownDevices(of: recipientId).count
-                    let peerSpendUnit = await TokenSpendUnit.forEnvelopeCount(
-                        TokenSpendUnit.envelopeCount(
-                            chunkCount: plan.payloads.count,
-                            recipientDeviceCount: peerDeviceCount
-                        )
-                    )
+                    // Minted unconditionally rather than sized from a device count. Sizing is what
+                    // broke it: this site asked `PeerDeviceRegistry`, which only `KeyServiceClient`
+                    // writes and which reads 1 for a peer whose second device we learned about from
+                    // a bundle fetch elsewhere — so `forEnvelopeCount` returned nil, the fan-out
+                    // then minted nothing either, and a two-device peer cost two tokens a message.
+                    // Measured 2026-09-11: zero "covered by unit" lines in 71 spends.
+                    //
+                    // A unit that ends up covering one envelope costs nothing — the server takes the
+                    // identical `redeem_token` path for the first envelope either way — and it is
+                    // also what lets `MessageRetryManager` reuse the redemption instead of buying a
+                    // second token for the same body.
+                    let peerSpendUnit = await TokenSpendUnit.forMessage()
                     let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
                         plan: plan,
                         baseMessageId: messageId,
@@ -591,8 +592,22 @@ final class ChatSendCoordinator {
                                 timestamp: message.timestamp,
                                 peerSpendUnit: peerSpendUnit
                             )
+                            // The fan-out is the payer whenever the primary send could not be (an
+                            // empty wallet on the first envelope does not condemn the rest — see
+                            // TokenSpendUnit). Recording here as well as below is why a retry of
+                            // such a message still rides on a redemption rather than buying one.
+                            await TokenSpendUnitStore.remember(
+                                peerSpendUnit, baseMessageId: messageId, recipientId: recipientId
+                            )
                         }
                     }
+                    // A retry of this message is the same logical message to the same account, so
+                    // it must ride on this redemption rather than buy another. Recorded only if a
+                    // token was really attached — `remember` ignores an unpaid unit, because there
+                    // would be nothing on the server for the retry to be covered by.
+                    TokenSpendUnitStore.remember(
+                        peerSpendUnit, baseMessageId: messageId, recipientId: recipientId
+                    )
                     let deliveryStatus: DeliveryStatus
                     let ecStr = aggregated.errorCode.isEmpty ? "" : " errorCode=\(aggregated.errorCode)"
                     let raStr = aggregated.retryAfterMs > 0 ? " retryAfterMs=\(aggregated.retryAfterMs)" : ""

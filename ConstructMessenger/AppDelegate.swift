@@ -47,6 +47,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         DispatchQueue.global(qos: .utility).async {
             OutgoingWirePayloadStore.shared.sweepExpired()
 
+            // Same shape, same reason: a spend unit whose message was never retried is never asked
+            // for by id, so its per-key expiry never runs. This is the only thing that bounds that
+            // keyspace. On the main actor because the store is, and it is a handful of small keys.
+            Task { @MainActor in TokenSpendUnitStore.sweepExpired() }
+
             // Drain message thumbnails out of UserDefaults — 37 MB of JPEG in a 4 MB domain, which
             // is why CFPreferences started refusing writes for everything else living there.
             // See ThumbnailStore. Reads migrate lazily too; this catches the ones nobody opens.
