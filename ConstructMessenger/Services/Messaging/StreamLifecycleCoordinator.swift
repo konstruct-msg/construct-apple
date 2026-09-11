@@ -181,6 +181,12 @@ final class StreamLifecycleCoordinator {
                 }
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
                 await MlsKeyPackageService.replenishIfNeeded(deviceId: deviceId)
+                // Publish a week of intake tags. It belongs beside the other key housekeeping and
+                // not at app launch: what this publishes is what *our contacts* present to be let
+                // through without a token, so a window that drains does not degrade this device —
+                // it quietly puts everyone who writes to us back on the wallet. Once per epoch;
+                // the call is a no-op on every launch after the first of the day.
+                await IntakeCredentialService.shared.publishTagWindowIfNeeded()
                 AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
             }
         }

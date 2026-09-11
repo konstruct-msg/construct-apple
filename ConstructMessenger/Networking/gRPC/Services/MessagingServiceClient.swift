@@ -223,6 +223,33 @@ final class MessagingServiceClient: Sendable {
         }
     }
 
+    // MARK: - Intake tags
+
+    /// Tell the server which intake tags this account accepts, so envelopes from vouched contacts
+    /// owe no Privacy Pass token.
+    ///
+    /// Authenticated on purpose — the server takes the account from our credentials and ignores
+    /// anything we might put in the body, because a request-supplied id would make publishing a
+    /// way to vouch for someone else's incoming traffic.
+    ///
+    /// Returns how many entries landed. Fewer than sent is not an error: an epoch already past its
+    /// grace or a window longer than the server's cap is dropped entry by entry, and a partly
+    /// usable publish beats a refused one.
+    func publishIntakeTags(_ entries: [(epoch: UInt64, tag: Data)]) async throws -> UInt32 {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
+            let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
+            var request = Shared_Proto_Services_V1_PublishIntakeTagsRequest()
+            request.tags = entries.map { entry in
+                var e = Shared_Proto_Services_V1_IntakeTagEntry()
+                e.epoch = entry.epoch
+                e.tag = entry.tag
+                return e
+            }
+            let response = try await msgClient.publishIntakeTags(request: .init(message: request))
+            return response.accepted
+        }
+    }
+
     // MARK: - Send Sealed Message (stealth-sealed-sender-v2 Phase 2)
 
     /// Sends a sealed-sender message over the unauthenticated sealed channel via the

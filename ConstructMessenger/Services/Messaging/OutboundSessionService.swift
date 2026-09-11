@@ -357,6 +357,80 @@ final class OutboundSessionService {
         }
     }
 
+    /// Hands `contactId` the intake key this account accepts (content_type=27), so their
+    /// envelopes to us carry a tag instead of buying a Privacy Pass token.
+    ///
+    /// Sent lazily — the first time we write to a peer who does not have it — rather than swept
+    /// across the contact graph on upgrade. A sweep would be a hundred sealed control envelopes at
+    /// once, each of which must itself be paid for, and would pay that for contacts the user may
+    /// never write to again.
+    ///
+    /// Fail-closed like every other sealed control message: the key is a secret, so it is sealed
+    /// or it is not sent. There is no identified fallback and there must not be — an unsealed one
+    /// hands any relay a credential it can spend on us.
+    func sendIntakeKey(to contactId: String, recipientIdentityKey: Data?) async {
+        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        guard CryptoManager.shared.hasSession(for: contactId) else { return }
+        guard let identityKey = recipientIdentityKey, StealthPolicy.shared.shouldUseSealedSender() else {
+            // No key to seal to, or stealth off. Leave the peer unmarked so the next send retries;
+            // marking it here would spend the one chance this mechanism gets per contact.
+            return
+        }
+
+        let key = IntakeCredentialService.shared.ownIntakeKey()
+        let frameId = UUID().uuidString.lowercased()
+
+        do {
+            // Type 27 rides in KNST byte 5, inside the ciphertext, and the orchestrator and
+            // SealedInner are told nothing — the same treatment every framed control type gets,
+            // and here it is load-bearing rather than consistent: a relay that could read byte 5
+            // would read the key itself.
+            let wirePayload = try encryptOutgoing(
+                plaintext: ChunkedMessageCodec.frameWhole(
+                    key, contentType: 27, messageId: UUID(uuidString: frameId) ?? UUID()
+                ),
+                messageId: frameId,
+                recipientId: contactId,
+                contentType: 0
+            )
+            let sealedInner = try await StealthSenderService.buildSealedInner(
+                recipientUserId: contactId,
+                recipientIdentityKey: identityKey,
+                encryptedPayload: wirePayload,
+                contentType: .generic
+            )
+            _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+                try await StealthSenderService.buildSealedInner(
+                    recipientUserId: contactId,
+                    recipientIdentityKey: identityKey,
+                    encryptedPayload: wirePayload,
+                    contentType: .generic
+                )
+            }, send: { inner in
+                if FeatureFlags.sealedSenderUnauthenticatedTransport {
+                    return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)
+                } else {
+                    return try await MessagingServiceClient.shared.sendMessage(
+                        messageId: frameId,
+                        recipientId: contactId,
+                        senderId: myId,
+                        conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
+                        encryptedPayload: wirePayload,
+                        timestamp: UInt64(Date().timeIntervalSince1970),
+                        sealing: .sealed(inner)
+                    )
+                }
+            })
+            // Marked only after the send returned. Marking before would cost this contact the
+            // mechanism permanently on one failed RPC, and the saving it buys is per-message
+            // forever — far more than the one envelope a retry costs.
+            await MainActor.run { IntakeCredentialService.shared.markOurKeySent(to: contactId) }
+            Log.info("Intake: handed our key to \(contactId.prefix(8))…", category: "Intake")
+        } catch {
+            Log.info("Intake: could not hand our key to \(contactId.prefix(8))… (\(error.localizedDescription)) — will retry on the next send", category: "Intake")
+        }
+    }
+
     /// Sends an E2E-encrypted delivery receipt (content_type=14) to `contactId`.
     ///
     /// Payload format: binary proto `Shared_Proto_Signaling_V1_DeliveryReceipt` with

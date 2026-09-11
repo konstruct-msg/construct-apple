@@ -1032,6 +1032,12 @@ RustBuffer uniffi_construct_core_fn_func_generate_ephemeral_keypair(RustCallStat
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_INTAKE_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_INTAKE_KEY
+RustBuffer uniffi_construct_core_fn_func_generate_intake_key(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_MNEMONIC
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_MNEMONIC
 RustBuffer uniffi_construct_core_fn_func_generate_mnemonic(uint8_t word_count, RustCallStatus *_Nonnull out_status
@@ -1066,6 +1072,16 @@ int8_t uniffi_construct_core_fn_func_hybrid_verify(RustBuffer public_key, RustBu
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IMPORT_MLS_STORE_CFE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IMPORT_MLS_STORE_CFE
 uint64_t uniffi_construct_core_fn_func_import_mls_store_cfe(RustBuffer data, RustBuffer signer_private_key, RustBuffer signer_public_key, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_EPOCH
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_EPOCH
+uint64_t uniffi_construct_core_fn_func_intake_epoch(uint64_t unix_seconds, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_TAG
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_TAG
+RustBuffer uniffi_construct_core_fn_func_intake_tag(RustBuffer intake_key, RustBuffer recipient_account_id, uint64_t epoch, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IS_DUMMY_MESSAGE
@@ -1627,6 +1643,12 @@ uint16_t uniffi_construct_core_checksum_func_generate_ephemeral_keypair(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_INTAKE_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_INTAKE_KEY
+uint16_t uniffi_construct_core_checksum_func_generate_intake_key(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_MNEMONIC
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_MNEMONIC
 uint16_t uniffi_construct_core_checksum_func_generate_mnemonic(void
@@ -1666,6 +1688,18 @@ uint16_t uniffi_construct_core_checksum_func_hybrid_verify(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_IMPORT_MLS_STORE_CFE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_IMPORT_MLS_STORE_CFE
 uint16_t uniffi_construct_core_checksum_func_import_mls_store_cfe(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_EPOCH
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_EPOCH
+uint16_t uniffi_construct_core_checksum_func_intake_epoch(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_TAG
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_TAG
+uint16_t uniffi_construct_core_checksum_func_intake_tag(void
     
 );
 #endif

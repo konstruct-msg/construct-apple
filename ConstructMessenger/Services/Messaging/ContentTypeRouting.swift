@@ -105,6 +105,10 @@ enum FrameDisposition: String, Equatable, CaseIterable {
 enum FramedSideChannel: String, Equatable {
     case callSignal = "call_signal"
     case deliveryReceipt = "delivery_receipt"
+    /// 27 — the peer hands us the `intake_key` their account accepts, so our envelopes to them
+    /// can carry an intake tag instead of buying a Privacy Pass token. Framed, and it has to be:
+    /// the key is a secret, so a relay that could read it could use it.
+    case intakeKey = "intake_key"
 }
 
 /// Named mapping used at the unseal boundary and by ingest parsers.
@@ -116,7 +120,7 @@ enum ContentTypeRouting {
         switch contentType {
         case 1:                  return .transcriptIncoming
         case 23:                 return .transcriptOwnDevice
-        case 12, 13, 14, 21, 24, 25, 26:
+        case 12, 13, 14, 21, 24, 25, 26, 27:
                                  return .silentControl
         default:                 return .notCarried
         }
@@ -131,6 +135,7 @@ enum ContentTypeRouting {
         switch contentType {
         case 12: return .callSignal
         case 14: return .deliveryReceipt
+        case 27: return .intakeKey
         default: return nil
         }
     }
@@ -163,7 +168,7 @@ enum ContentTypeRouting {
     static func isKnownControlContentType(_ contentType: UInt8) -> Bool {
         if SessionControlCodec.op(forContentType: Int(contentType)) != nil { return true }
         switch contentType {
-        case 12, 14, 23: return true  // callSignal, deliveryReceipt, senderSync
+        case 12, 14, 23, 27: return true  // callSignal, deliveryReceipt, senderSync, intakeKey
         default: return false
         }
     }

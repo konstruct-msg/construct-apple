@@ -2434,6 +2434,14 @@ final class MessageRouter {
         case .deliveryReceipt:
             handleIncomingE2EDeliveryReceipt(control.payload, messageId: messageId, from: otherUserId, in: context)
             return true
+        case .intakeKey:
+            // The peer hands us the key their account accepts, so our envelopes to them carry a
+            // tag instead of buying a Privacy Pass token. `resolvedSender` and not `otherUserId`:
+            // under sealed sender the outer name is not the author, and a key filed under the
+            // wrong account is one we would never use and never notice not using.
+            IntakeCredentialService.shared.recordPeerIntakeKey(control.payload, from: resolvedSender)
+            PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
+            return true
         case nil:
             return false
         }

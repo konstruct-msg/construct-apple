@@ -7689,6 +7689,12 @@ public func generateEphemeralKeypair()throws  -> EphemeralKeyPair  {
     )
 })
 }
+public func generateIntakeKey() -> [UInt8]  {
+    return try!  FfiConverterSequenceUInt8.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_generate_intake_key($0
+    )
+})
+}
 public func generateMnemonic(wordCount: UInt8)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_generate_mnemonic(
@@ -7758,6 +7764,22 @@ public func importMlsStoreCfe(data: [UInt8], signerPrivateKey: [UInt8], signerPu
         FfiConverterSequenceUInt8.lower(data),
         FfiConverterSequenceUInt8.lower(signerPrivateKey),
         FfiConverterSequenceUInt8.lower(signerPublicKey),$0
+    )
+})
+}
+public func intakeEpoch(unixSeconds: UInt64) -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_intake_epoch(
+        FfiConverterUInt64.lower(unixSeconds),$0
+    )
+})
+}
+public func intakeTag(intakeKey: [UInt8], recipientAccountId: String, epoch: UInt64)throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_intake_tag(
+        FfiConverterSequenceUInt8.lower(intakeKey),
+        FfiConverterString.lower(recipientAccountId),
+        FfiConverterUInt64.lower(epoch),$0
     )
 })
 }
@@ -8287,6 +8309,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_generate_ephemeral_keypair() != 59553) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_generate_intake_key() != 3346) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_generate_mnemonic() != 45721) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -8306,6 +8331,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_import_mls_store_cfe() != 54998) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_intake_epoch() != 2449) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_intake_tag() != 7949) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_is_dummy_message() != 41979) {

@@ -608,6 +608,18 @@ final class ChatSendCoordinator {
                     TokenSpendUnitStore.remember(
                         peerSpendUnit, baseMessageId: messageId, recipientId: recipientId
                     )
+                    // Lazy grandfathering: the first time we write to a peer who has no intake key
+                    // of ours, hand them one. After this their envelopes to us stop buying tokens —
+                    // including the delivery receipt for this very message, which is 36–38% of the
+                    // bill on its own. Off the send path, because a control envelope must not delay
+                    // the bubble the user is watching.
+                    if IntakeCredentialService.shared.peerNeedsOurKey(recipientId) {
+                        Task { [recipientIdentityKey] in
+                            await OutboundSessionService.shared.sendIntakeKey(
+                                to: recipientId, recipientIdentityKey: recipientIdentityKey
+                            )
+                        }
+                    }
                     let deliveryStatus: DeliveryStatus
                     let ecStr = aggregated.errorCode.isEmpty ? "" : " errorCode=\(aggregated.errorCode)"
                     let raStr = aggregated.retryAfterMs > 0 ? " retryAfterMs=\(aggregated.retryAfterMs)" : ""

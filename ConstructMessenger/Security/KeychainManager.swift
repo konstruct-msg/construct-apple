@@ -31,7 +31,10 @@ class KeychainManager {
         // v2: written by callers that used to rely on the WhenUnlocked default.
         "construct.kyber_session_state", "tracked_prekey_ids",
         // v3: at-rest key for partial multi-chunk messages (background decrypt must read it).
-        "construct.reassembly_store_key"
+        "construct.reassembly_store_key",
+        // v4: this account's intake key — a sealed send built during a background push decrypt
+        // attaches the peer's tag, so an unreadable key there would silently charge a token.
+        "construct.intake.own"
     ]
 
     /// Account prefixes whose items are created dynamically (per key id / contact / user) and
@@ -39,7 +42,8 @@ class KeychainManager {
     private static let cryptoKeyAccountPrefixes: [String] = [
         "construct.kyber.otpk.sk.",   // per-key-id Kyber OTPK secrets
         "construct.pq_deferred.",     // per-contact deferred PQ contributions
-        "session_archives_"           // per-user archived sessions
+        "session_archives_",          // per-user archived sessions
+        "construct.intake.peer."      // per-account intake keys a peer handed us
     ]
 
     /// One-time migration of crypto key material from the legacy `WhenUnlockedThisDeviceOnly`
@@ -162,6 +166,45 @@ class KeychainManager {
 
     func loadReassemblyStoreKey() -> Data? {
         return load(forKey: "construct.reassembly_store_key")
+    }
+
+    // MARK: - Intake credentials
+
+    /// This account's own `intake_key` — the secret every vouched contact is given so their
+    /// envelopes to us owe no Privacy Pass token.
+    ///
+    /// One per account, so all our devices must hold the same bytes; a device that minted its own
+    /// would leave half our contacts presenting a credential the server does not recognise.
+    ///
+    /// `cryptoKeyAccessible` for the same reason as the reassembly key: a reply built during a
+    /// background push decrypt needs it, and under `WhenUnlocked*` it would be missing exactly
+    /// then — the send would still go, just paying a token nobody can see it paid.
+    func saveOwnIntakeKey(_ key: Data) {
+        _ = save(key, forKey: "construct.intake.own", accessible: Self.cryptoKeyAccessible)
+    }
+
+    func loadOwnIntakeKey() -> Data? {
+        return load(forKey: "construct.intake.own")
+    }
+
+    /// The `intake_key` a peer handed us, so our envelopes to *them* carry a tag instead of a
+    /// token. Keyed by their account id, lowercased — the same normalisation `construct-core`
+    /// applies inside the derivation, so a peer id spelled two ways cannot become two entries.
+    func savePeerIntakeKey(_ key: Data, forAccount accountId: String) {
+        _ = save(key, forKey: Self.peerIntakeKeyAccount(accountId), accessible: Self.cryptoKeyAccessible)
+    }
+
+    func loadPeerIntakeKey(forAccount accountId: String) -> Data? {
+        return load(forKey: Self.peerIntakeKeyAccount(accountId))
+    }
+
+    /// Forget a peer's key — they rotated, or we removed them.
+    func deletePeerIntakeKey(forAccount accountId: String) {
+        delete(forKey: Self.peerIntakeKeyAccount(accountId))
+    }
+
+    private static func peerIntakeKeyAccount(_ accountId: String) -> String {
+        "construct.intake.peer.\(accountId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
     }
 
     /// Check if device is registered (has device ID and keys)

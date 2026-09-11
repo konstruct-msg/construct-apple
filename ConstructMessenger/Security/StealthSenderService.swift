@@ -513,8 +513,22 @@ final class StealthSenderService: SealedSenderResolving {
         // Within a spend unit only one envelope pays; the rest ride on its redemption. The
         // payer is whoever *succeeds*, not whoever is first — see TokenSpendUnit for why an
         // empty wallet on chunk 0 must not condemn chunks 1…29.
+        // An envelope the recipient has vouched for owes nothing, so the token machinery below is
+        // skipped entirely. Attached per envelope rather than per spend unit: the tag is bound to
+        // the recipient and the epoch, not to this message, so every envelope of a vouched send
+        // carries the same one and none of them needs a unit to ride on.
+        //
+        // Nil is the ordinary case during rollout — we hold no key for this peer yet — and it is
+        // not a failure: the envelope pays with a token exactly as it did before this existed.
+        // Grandfathering is lazy by decision, so the peer's key arrives the first time they write
+        // to us rather than in a sweep.
+        let intakeTagSealed = await IntakeCredentialService.shared.sealedTag(forRecipient: recipientUserId)
+        if let intakeTagSealed {
+            inner.intakeTagSealed = intakeTagSealed
+        }
+
         let unitAlreadyPaid = spendUnit.map { !$0.shouldAttemptPayment } ?? false
-        let wantedToken = TokenSpendUnit.shouldAttemptPayment(
+        let wantedToken = intakeTagSealed == nil && TokenSpendUnit.shouldAttemptPayment(
             policyWantsToken: StealthPolicy.shared.shouldConsumeToken(),
             unitPaid: unitAlreadyPaid
         )
@@ -532,7 +546,11 @@ final class StealthSenderService: SealedSenderResolving {
         if wantedToken, canSeal, TokenWalletService.shared.balance == 0 {
             await BlindTokenService.shared.ensureTokenAvailable()
         }
-        if unitAlreadyPaid {
+        if intakeTagSealed != nil {
+            // The one line that distinguishes "vouched" from "wallet empty" in a device log. Both
+            // send without a token; only one of them is the mechanism working.
+            Log.info("Stealth: sealed send VOUCHED by intake tag — no token owed", category: "Stealth")
+        } else if unitAlreadyPaid {
             // Covered by an earlier envelope of the same logical message. Deliberately silent
             // about the wallet — nothing was spent. Logged so an album's cost is legible in a
             // device log as one WITH-token line followed by N covered ones.

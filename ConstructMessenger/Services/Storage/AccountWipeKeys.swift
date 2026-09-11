@@ -33,6 +33,15 @@ enum AccountWipeKeys {
         "construct.deviceId",
         "construct.localStore.ownerUserId",
         "construct.pendingRegistrationBundle",
+        // This account's intake key, and the note of which epoch we last published tags for.
+        // Wiped together: a new account minting a fresh key while the old publish marker says
+        // "already done today" would publish nothing until tomorrow, and every contact would pay
+        // for a day with nothing on this device saying why.
+        "construct.intake.own",
+        "construct.intake.lastPublishedEpoch.v1",
+        // Who already holds our key. Wiped because the new account's key is a different secret —
+        // a stale list would suppress the lazy hand-off to every contact it names.
+        "construct.intake.sentTo.v1",
         "session_expires",
         "is_discoverable",
         "recovery_is_setup",
@@ -115,6 +124,12 @@ enum AccountWipeKeys {
     static let wipedPrefixes: [String] = [
         "construct.contact_request_seen.",
         "construct.outgoingWirePayload.",
+        // Intake keys a peer handed us. Wiped: they are the peers' secrets, held only so our
+        // envelopes to them owe no token, and an account that is gone has no envelopes to send.
+        // Keeping them would leave one person's contact graph readable in the next person's
+        // Keychain.
+        "construct.intake.peer.",
+        "construct.tokenSpendUnit.v1.",
         "construct.kyber.otpk.sk.",
         "construct.pq_deferred.",
         // Where `SecureStoreSlot.KyberSignedPrekey` would land. No reachable emitter today
