@@ -185,6 +185,9 @@ enum DevicesSettingsLayout {
     static let rowVerticalPadding: CGFloat = 14
     static let hintHorizontalPadding: CGFloat = 20
     static let deviceMetaSpacing: CGFloat = 2
+    /// The short device id under a device's name. Smaller than the status line beside it so the
+    /// two do not compete: the name is what a person reads, the id is what they compare.
+    static let deviceIdFontSize: CGFloat = 11
     static let currentStatusSpacing: CGFloat = 4
     static let currentStatusDotSize: CGFloat = 7
     static let dividerIndent: CGFloat = 52
@@ -273,6 +276,20 @@ enum DeviceLinkQRLayout {
     static let actionButtonVerticalPadding: CGFloat = CTLayout.chromeGap
     static let actionButtonStrokeWidth: CGFloat = 0.5
     static let errorMessageHorizontalPadding: CGFloat = 24
+}
+
+enum VeilVoucherLayout {
+    static let rootSpacing: CGFloat = 0
+    static let loadingSpacing: CGFloat = CTLayout.edgePad
+    static let loadingIndicatorScale: CGFloat = 1.4
+    static let contentSpacing: CGFloat = 24
+    static let contentTopPadding: CGFloat = 20
+    static let contentBottomPadding: CGFloat = 32
+    static let textHorizontalPadding: CGFloat = 24
+    static let messageSpacing: CGFloat = CTLayout.sectionGap
+    static let statusIconSize: CGFloat = 36
+    static let qrSize: CGFloat = 220
+    static let qrPadding: CGFloat = CTLayout.sectionGap
 }
 
 enum AccountSettingsLayout {

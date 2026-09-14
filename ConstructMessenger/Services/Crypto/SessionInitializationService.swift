@@ -1,5 +1,6 @@
 import Foundation
 import CoreData
+import GRPCCore
 import os.log
 
 /// Errors specific to the session-init layer (distinct from CryptoManagerError).
@@ -19,6 +20,17 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
     /// clear the pending queue, including any real handshake behind it.
     case notAHandshakeCarrier
 
+    /// The server answered `notFound` for this peer's prekey bundle. Terminal, not transient:
+    /// no amount of retrying makes a deleted account exist. See `VanishedPeerStore`.
+    case peerNotFound
+
+    /// The core said not to open a session right now — `plan_initiation` answered `Wait` or
+    /// `YieldToPeer`. Not a failure: nothing went wrong and nothing needs retrying. It is
+    /// delivered through `onFailure` because that is the only channel a caller awaiting a
+    /// continuation can be resumed on, and a caller that treats every error as terminal would
+    /// otherwise hang.
+    case initiationDeferred(decision: String)
+
     var errorDescription: String? {
         switch self {
         case .staleSPKBundle(let epoch, let knownEpoch):
@@ -29,6 +41,10 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
             return "Contact's post-quantum keys are incomplete — ask them to update the app"
         case .notAHandshakeCarrier:
             return "Incoming message is not a session handshake"
+        case .peerNotFound:
+            return "This account no longer exists"
+        case .initiationDeferred(let decision):
+            return "Session init deferred by the core: \(decision)"
         }
     }
 }
@@ -59,8 +75,11 @@ class SessionInitializationService {
     ) async throws -> PublicKeyBundleData {
         var lastError: Error?
         var delay = initialDelay
+        var attempt = 0
+        var throttledWaits = 0
 
-        for attempt in 1...maxAttempts {
+        while attempt < maxAttempts {
+            attempt += 1
             do {
                 Log.info("SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., deviceId=\(deviceId?.prefix(8) ?? "nil")..., consumeOtpk=\(consumeOneTimePrekey)", category: "SessionInit")
                 let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId, deviceId: deviceId, consumeOneTimePrekey: consumeOneTimePrekey)
@@ -68,8 +87,37 @@ class SessionInitializationService {
                 return keyBundle
             } catch {
                 lastError = error
+
+                // A rate limit is not a transport failure, and the fast ladder is the wrong answer
+                // to it. The key service allows `BUNDLE_RATE_LIMIT_PER_MIN` requests per minute
+                // and refuses the rest for the remainder of that window; 1s and 2s land inside it
+                // by construction, so all three attempts fail and the caller treats a peer it will
+                // be able to reach in under a minute as one it can never reach.
+                //
+                // Desktop, 2026-09-03, its first minute after linking: ten bundle requests in
+                // eighty seconds, then `fetch_bundle_failed` three times in three seconds,
+                // `fetch_bundle_exhausted`, `proactive_init_failed`, `watchdog_reinit_fail`. From
+                // that point every message from the peer arrived with `flags=end_session` and the
+                // session could not be rebuilt, because rebuilding it needs the bundle the limiter
+                // was refusing. Nothing was displayed on that device for the rest of the run.
+                //
+                // So a throttled answer waits out the window instead of spending an attempt on it.
+                // Bounded, because a wait long enough to clear the window is long enough that two
+                // of them is already the outer limit of what a session init may hold.
+                if Self.isRateLimited(error) {
+                    guard throttledWaits < Self.maxThrottledWaits else {
+                        Log.error("SESSION_STATE[fetch_bundle_throttled_out]: userId=\(userId.prefix(8))… — still rate-limited after \(throttledWaits) window wait(s)", category: "SessionInit")
+                        break
+                    }
+                    throttledWaits += 1
+                    attempt -= 1  // a refusal to answer is not an answer; it costs no attempt
+                    Log.info("SESSION_STATE[fetch_bundle_throttled]: userId=\(userId.prefix(8))… — waiting \(Int(Self.throttleWindowWait))s for the limiter window (wait \(throttledWaits)/\(Self.maxThrottledWaits))", category: "SessionInit")
+                    try? await Task.sleep(nanoseconds: UInt64(Self.throttleWindowWait * 1_000_000_000))
+                    continue
+                }
+
                 Log.error("SESSION_STATE[fetch_bundle_failed]: attempt=\(attempt)/\(maxAttempts), error=\(error) (\(type(of: error)))", category: "SessionInit")
-                
+
                 if attempt < maxAttempts {
                     Log.info("Retrying public key fetch in \(delay)s...", category: "SessionInit")
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
@@ -81,6 +129,24 @@ class SessionInitializationService {
         Log.error("SESSION_STATE[fetch_bundle_exhausted]: userId=\(userId.prefix(8))..., allAttemptsFailed", category: "SessionInit")
         throw lastError ?? NetworkError.connectionFailed
     }
+
+    /// The key service refusing to answer *for now*, as opposed to failing to answer.
+    static func isRateLimited(_ error: Error) -> Bool {
+        (error as? RPCError)?.code == .resourceExhausted
+    }
+
+    /// How long to wait out a bundle rate-limit window.
+    ///
+    /// The limiter's window is 60s and starts on the first request in it, so the remaining time
+    /// when we are refused is anywhere in `(0, 60]` and the server tells us nothing about it —
+    /// `resource_exhausted` carries a message and no `retry-after`. Two thirds of the window is
+    /// the point where waiting again is cheaper than waiting longer up front: it clears most
+    /// refusals in one wait, and `maxThrottledWaits` covers the rest.
+    static let throttleWindowWait: TimeInterval = 40
+
+    /// Two waits, because a session init that has held for eighty seconds should hand the
+    /// decision back rather than keep holding.
+    static let maxThrottledWaits = 2
     
     /// Initialize a session with a recipient using their public key bundle
     func initializeSession(
@@ -201,9 +267,32 @@ class SessionInitializationService {
         case failure(Error)
     }
 
-    /// In-flight proactive inits, keyed by peer. `@MainActor` makes lookup-then-insert
+    /// In-flight proactive inits, keyed by **account**. `@MainActor` makes lookup-then-insert
     /// atomic, so two concurrent callers can never both start a run.
+    ///
+    /// Stays account-keyed while step 1 of `session-is-one-state-machine` moved `sessionPhases`
+    /// to `SessionScope`, and the reason is not oversight: **a single-flight key must be stable
+    /// for the lifetime of the flight, and this one's scope is not.** At first contact
+    /// `SessionScope.forAccount` is `.peer(account)`; the bundle fetch inside `performProactiveInit`
+    /// is what writes `User.knownIdentityKey` (`KeyServiceClient`), so from that moment the same
+    /// account resolves to `.device(pinned)`. A late joiner arriving after the pin would compute
+    /// the device scope, miss the entry filed under the peer scope, and start a second run —
+    /// burning a second OTPK and replacing the first session, which is the 2026-07-31 divergence
+    /// this map exists to prevent.
+    ///
+    /// What unblocks it is the run naming its target device up front instead of resolving
+    /// `contactId(forPeer:)` inside — step 6 of the same decision. Until then the account key is
+    /// the correct one, because today one INITIATOR run targets exactly one pinned device and the
+    /// two keys are 1:1.
     private var proactiveInitTasks: [String: Task<ProactiveInitOutcome, Never>] = [:]
+
+    /// Whether the peer's own session init is in our hands — received and not yet completed.
+    ///
+    /// Injected rather than read, because the evidence lives in `MessageRouter.pendingQueue` and
+    /// this service does not own it. `SessionCoordinator.configure` supplies it; until it does,
+    /// the answer is `false`, which is the same answer as "we have seen nothing from them" and is
+    /// therefore safe rather than merely convenient.
+    var peerInitInFlight: ((String) -> Bool)?
 
     #if DEBUG
     /// Test seam: substitutes the init run so the coalescing wrapper can be exercised without
@@ -225,11 +314,40 @@ class SessionInitializationService {
     /// Callers are **coalesced, not skipped**: a late joiner awaits the in-flight run and then
     /// receives the same outcome through its own callbacks. Skipping would strand its queued
     /// messages, since `onSuccess` is what flushes them.
+    /// - Parameter hasOutboundWork: whether something is actually waiting to go to this peer — a
+    ///   typed message, a queued one, a handshake we owe. No default on purpose: the one call site
+    ///   that answers `false` is the one that caused the 2026-09-04 outage, and a default would
+    ///   let the next call site inherit an answer nobody chose.
     func initializeSessionProactively(
         userId: String,
+        hasOutboundWork: Bool,
         onSuccess: @escaping () -> Void,
         onFailure: @escaping (Error) -> Void
     ) async {
+        // Asked here, before the bundle fetch, because the fetch is what spends the peer's
+        // one-time prekey. Asking after it would answer a question that has already cost what it
+        // was meant to save.
+        let decision = planInitiation(context: InitiationContext(
+            myDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
+            // The peer's pinned device, or nothing at first contact — the core takes an
+            // unnameable peer as "cannot rank", not as "cannot write to".
+            peerDeviceId: SessionAddressing.contactId(forPeer: userId) ?? "",
+            ourInitInFlight: proactiveInitTasks[userId] != nil,
+            peerInitInFlight: peerInitInFlight?(userId) ?? false,
+            haveOutboundWork: hasOutboundWork
+        ))
+        switch decision {
+        case .initiate, .joinInFlight:
+            break  // both continue below; `joinInFlight` is the coalescing branch
+        case .wait, .yieldToPeer:
+            Log.info(
+                "SESSION_STATE[initiation_deferred]: \(decision) for \(userId.prefix(8))… — outboundWork=\(hasOutboundWork), peerInit=\(peerInitInFlight?(userId) ?? false)",
+                category: "SessionInit"
+            )
+            onFailure(SessionError.initiationDeferred(decision: "\(decision)"))
+            return
+        }
+
         let outcome: ProactiveInitOutcome
         if let inFlight = proactiveInitTasks[userId] {
             Log.info("SESSION_STATE[proactive_init_coalesced]: joining in-flight init for \(userId.prefix(8))…", category: "SessionInit")

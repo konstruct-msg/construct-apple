@@ -303,6 +303,73 @@ final class StealthSenderService: SealedSenderResolving {
     /// hand, so the caller delivers the message `.unvouched` through the normal ratchet
     /// decrypt (which is the real authentication) instead of dropping it. The
     /// certificate is anti-abuse/anonymity metadata, not the security root.
+    /// The device this sealed copy names, when that device is not this one.
+    ///
+    /// `SealedInner.recipient_device` is plaintext by design — the field exists so the relay can
+    /// write the copy to one mailbox instead of all of them — and until now nothing read it back.
+    /// The sender has populated it since §A.0; this is the missing consumer.
+    ///
+    /// It matters because the alternative is not a wasted parse. While `MSG_MAILBOX_USER_WRITE=1`
+    /// every device of an account still receives the whole account stream, so each sibling's copy
+    /// lands here, fails to unseal — it is sealed to a key we do not have — and is then treated as
+    /// a *broken* message: deferred for a redelivery that cannot succeed, holding the stream cursor
+    /// for the round trip, triggering a bundle-key refresh, and counting against
+    /// `stealth_unseal_failure`, which is one of the numbers the release gate reads. On a
+    /// multi-device account that is every message to every sibling. It is the 155-of-155 shape the
+    /// Desktop investigation started from.
+    ///
+    /// **Empty is not a mismatch.** An empty `recipient_device` means the sender predates the
+    /// field, and an empty local identity means the Keychain is unreadable. Either way we cannot
+    /// tell, and the honest answer is "no" — the ordinary path then reports the failure as it
+    /// always did. Only a device id that is present, ours is present, and the two differ, is a
+    /// copy we can be sure was never meant for us.
+    ///
+    /// A parse failure is likewise not a mismatch: a `SealedInner` we cannot read is exactly the
+    /// corruption the normal path exists to report.
+    ///
+    /// **It returns the id rather than a `Bool`** because the `Bool` could not say *whose* device
+    /// it was, and the answer to that is the difference between an expected duplicate and a
+    /// misrouted envelope. On 2026-09-02 a run that was supposed to be one device per account
+    /// dropped ten copies here; establishing that they belonged to a powered-off Desktop on our
+    /// own account, rather than to a stranger, took six passes of reverse-tracing message ids
+    /// across two logs, because the only thing recorded was that a copy had been dropped. See
+    /// `classifyOtherDevice(_:ourDeviceIds:)`, which is the half that needs the account.
+    ///
+    /// `nonisolated`: it reads two arguments and no actor state, and the receive path that
+    /// calls it has no reason to be pinned to the main actor for a plaintext field comparison.
+    nonisolated static func otherDeviceAddressed(sealedInnerBytes: Data, ourDeviceId: String) -> String? {
+        guard !ourDeviceId.isEmpty,
+              let inner = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInnerBytes),
+              !inner.recipientDevice.isEmpty,
+              inner.recipientDevice != ourDeviceId
+        else { return nil }
+        return inner.recipientDevice
+    }
+
+    /// Whose device a copy we cannot open was addressed to.
+    ///
+    /// The drop is right in every case — a copy sealed to a key we do not hold can never open
+    /// here — so this changes no behaviour. What it changes is what the number means, and the
+    /// three cases are three different states of the system:
+    ///
+    /// - `.sibling` — a device of our own account. Expected while `MSG_MAILBOX_USER_WRITE=1`
+    ///   writes every message to the account-wide stream; the count is the measure of that
+    ///   duplication and should fall to zero on its own after the cutover.
+    /// - `.notOurs` — a device that is not in our account's **current** active set. Two causes
+    ///   this cannot separate locally, which is why the name says what is known rather than what
+    ///   is suspected: the relay wrote a copy into a mailbox it does not belong in, or the device
+    ///   was ours and has since been revoked. A revoke is always followed by a burst of these,
+    ///   because the mailbox still holds copies addressed to the device that was removed — 24 of
+    ///   them on 2026-09-02, every one from the backlog. So a single reading is not a defect; a
+    ///   count that keeps rising on a run with no recent revoke is.
+    /// - `.unverified` — our own device set is not known in this process yet. **Not `.notOurs`.**
+    ///   An empty set is the state of a cold cache, and reporting a verdict from an absent fact is
+    ///   the same trap as reading a missing Prometheus series as a zero.
+    nonisolated static func classifyOtherDevice(_ deviceId: String, ourDeviceIds: [String]) -> SealedCopyOrigin {
+        guard !ourDeviceIds.isEmpty else { return .unverified }
+        return ourDeviceIds.contains(deviceId) ? .sibling : .notOurs
+    }
+
     func resolveSender(sealedInnerBytes: Data) -> ResolvedSender? {
         guard let ourPrivKeyBytes = KeychainManager.shared.loadDeviceIdentityKey() else {
             Log.error("Stealth: no identity key in Keychain", category: "Stealth")
@@ -344,7 +411,12 @@ final class StealthSenderService: SealedSenderResolving {
         } else {
             rememberIdentityFromCertificate(cert)
         }
-        return ResolvedSender(senderId: cert.senderUserID, contentType: contentType, trust: trust)
+        return ResolvedSender(
+            senderId: cert.senderUserID,
+            senderDeviceId: cert.senderDeviceID,
+            contentType: contentType,
+            trust: trust
+        )
     }
 
     /// Pin `cert.senderIdentityKey` when the signature vouches, ignoring expiry.
@@ -408,6 +480,19 @@ final class StealthSenderService: SealedSenderResolving {
         let sealedCert = try sealSenderCert(certBytes, recipientIdentityKey: recipientIdentityKey)
         var inner = Shared_Proto_Core_V1_SealedInner()
         inner.recipientUserID = recipientUserId
+        // The one device this envelope is for. Derived from the very key the certificate was
+        // just sealed to, and not passed in or looked up, because those are the two ways it
+        // could disagree with the ciphertext: a parameter can be handed the wrong device by a
+        // future caller, and a store lookup answers about the account rather than about these
+        // bytes. Deriving makes "who this is sealed to" and "who this is routed to" one value.
+        //
+        // Empty is this field's own "every active device of the recipient" — what every sealed
+        // envelope meant before it existed, and why a peer's other devices each received a
+        // ciphertext they could not decrypt. `sealSenderCert` on the line above has already
+        // accepted this key, so it is a valid 32-byte X25519 public key and the derivation
+        // cannot return nil here; `?? ""` rather than a force-unwrap so that the impossible case
+        // degrades to that old delivery instead of trapping a send that is otherwise fine.
+        inner.recipientDevice = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientIdentityKey) ?? ""
         inner.senderCertCiphertext = sealedCert
         inner.encryptedPayload = encryptedPayload
         // `.generic` is UNSPECIFIED = 0, which proto3 omits — the field does not reach the wire.
@@ -428,8 +513,22 @@ final class StealthSenderService: SealedSenderResolving {
         // Within a spend unit only one envelope pays; the rest ride on its redemption. The
         // payer is whoever *succeeds*, not whoever is first — see TokenSpendUnit for why an
         // empty wallet on chunk 0 must not condemn chunks 1…29.
+        // An envelope the recipient has vouched for owes nothing, so the token machinery below is
+        // skipped entirely. Attached per envelope rather than per spend unit: the tag is bound to
+        // the recipient and the epoch, not to this message, so every envelope of a vouched send
+        // carries the same one and none of them needs a unit to ride on.
+        //
+        // Nil is the ordinary case during rollout — we hold no key for this peer yet — and it is
+        // not a failure: the envelope pays with a token exactly as it did before this existed.
+        // Grandfathering is lazy by decision, so the peer's key arrives the first time they write
+        // to us rather than in a sweep.
+        let intakeTagSealed = await IntakeCredentialService.shared.sealedTag(forRecipient: recipientUserId)
+        if let intakeTagSealed {
+            inner.intakeTagSealed = intakeTagSealed
+        }
+
         let unitAlreadyPaid = spendUnit.map { !$0.shouldAttemptPayment } ?? false
-        let wantedToken = TokenSpendUnit.shouldAttemptPayment(
+        let wantedToken = intakeTagSealed == nil && TokenSpendUnit.shouldAttemptPayment(
             policyWantsToken: StealthPolicy.shared.shouldConsumeToken(),
             unitPaid: unitAlreadyPaid
         )
@@ -447,7 +546,11 @@ final class StealthSenderService: SealedSenderResolving {
         if wantedToken, canSeal, TokenWalletService.shared.balance == 0 {
             await BlindTokenService.shared.ensureTokenAvailable()
         }
-        if unitAlreadyPaid {
+        if intakeTagSealed != nil {
+            // The one line that distinguishes "vouched" from "wallet empty" in a device log. Both
+            // send without a token; only one of them is the mechanism working.
+            Log.info("Stealth: sealed send VOUCHED by intake tag — no token owed", category: "Stealth")
+        } else if unitAlreadyPaid {
             // Covered by an earlier envelope of the same logical message. Deliberately silent
             // about the wallet — nothing was spent. Logged so an album's cost is legible in a
             // device log as one WITH-token line followed by N covered ones.
@@ -524,18 +627,42 @@ final class StealthSenderService: SealedSenderResolving {
         req.fetchLimit = 1
         let user = (try? context.fetch(req))?.first
         if let key = user?.knownIdentityKey { return key }
+
+        // `recipientId` may be a **device id**: the core names contacts that way, and the paths
+        // that reach here from a core action — END_SESSION above all — pass what the core gave
+        // them. `User.id` is an account id, so that lookup finds nothing and the sealed send fails
+        // closed. Resolve it the other way round before giving up.
+        //
+        // This is not a fallback for a missing pin; it is the same pin, reached from the other
+        // space. If it also finds nothing, the two misses below are the real diagnosis.
+        if SessionAddressing.isCryptoIdentity(recipientId),
+           let key = SessionAddressing.identityKey(ofDevice: recipientId, in: context) {
+            return key
+        }
         // A miss here fails every sealed send to this peer closed, permanently, and the thrown
         // `StealthDowngradeBlocked` only says the key is absent — never which absence it is. That
         // gap is why TODO #45 could not be attributed to a branch from a device log. The two cases
         // have different causes and different fixes, so they get different lines.
         Log.error(
             user == nil
-                ? "IK_MISS[no_row]: no User row for \(recipientId.prefix(8))… — sealed send cannot proceed"
+                ? "IK_MISS[no_row]: no User row for \(recipientId.prefix(8))… (\(SessionAddressing.isCryptoIdentity(recipientId) ? "a device id, and no pinned key derives to it" : "an account id")) — sealed send cannot proceed"
                 : "IK_MISS[no_key]: User row for \(recipientId.prefix(8))… exists but knownIdentityKey is nil (isContact=\(user!.isContact) kt=\(user!.ktStatus)) — sealed send cannot proceed",
             category: "Stealth"
         )
         return nil
     }
+}
+
+/// Whose device a sealed copy we cannot open was addressed to.
+///
+/// Carried as the label on `stealth_copy_for_sibling`, replacing the call-site name that had
+/// been there — there is one call site, so that label said nothing. See
+/// `StealthSenderService.classifyOtherDevice(_:ourDeviceIds:)` for why the three cases are
+/// three different states rather than a yes and a no.
+enum SealedCopyOrigin: String {
+    case sibling
+    case notOurs = "not_ours"
+    case unverified
 }
 
 enum StealthError: Error {
@@ -577,6 +704,26 @@ enum SenderTrust: Equatable {
 /// `nil` from that call means the box could not be opened at all.
 struct ResolvedSender: Equatable {
     let senderId: String
+    /// The device that wrote this message, from `SenderCertificate.sender_device_id`.
+    ///
+    /// The sealed path is the only one that can answer this. The relay blanks
+    /// `Envelope.sender_device` on delivery on purpose — server metadata must not carry E2E
+    /// meaning — so before the unseal the field is empty on every delivered message, and §D
+    /// tried to recover it from a tag on the wire id. That id does not survive: the sealed
+    /// branch of `send_message` rebuilds the delivered envelope from `sealed_inner` alone and
+    /// stamps a server id, so the tag was written into the one field guaranteed not to arrive
+    /// (see `ServerMessageIdMap`, which exists because the sender has to translate that id back).
+    ///
+    /// The certificate was already the answer. `identity-service` fills `sender_device_id` from
+    /// the caller's `x-device-id`, checks it against an active row in `devices`, and covers it
+    /// with the same signature that vouches the sender. It is sealed to the recipient's identity
+    /// key, so the relay never reads it — which is the property §D wanted and a MAC only
+    /// approximates.
+    ///
+    /// Not gated on `trust`: an unvouched certificate makes this an unauthenticated claim, and so
+    /// is `senderId` beside it, which already routes. Naming the wrong device costs one failed
+    /// decrypt before the walk resumes; the ratchet is the real auth here as everywhere else.
+    let senderDeviceId: String
     let contentType: UInt8
     let trust: SenderTrust
 }

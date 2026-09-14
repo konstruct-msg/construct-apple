@@ -26,6 +26,7 @@ final class ChunkedMessageSender {
         conversationId: String,
         timestamp: UInt64,
         recipientIdentityKey: Data? = nil,
+        spendUnit callerSpendUnit: TokenSpendUnit? = nil,
         onWirePayloadEncoded: ((String, Data) -> Void)? = nil
     ) async throws -> [SendMessageResponse] {
         var responses: [SendMessageResponse] = []
@@ -35,7 +36,20 @@ final class ChunkedMessageSender {
         // Only created for genuinely multi-envelope sends — a single chunk leaves the spend id
         // empty and keeps the legacy per-envelope path byte-for-byte, which is also the only
         // shape the server has redeemed until now.
-        let spendUnit = await TokenSpendUnit.forEnvelopeCount(plan.payloads.count)
+        //
+        // A caller-supplied unit wins, and that is the point: this send reaches ONE of the
+        // recipient's devices, and `mirrorOutgoing` reaches the rest immediately afterwards. Two
+        // paths, one logical message, one recipient account — and `token_spend_id` is keyed by
+        // `recipient_user_id` server-side, so those copies are all covered by one spend. Minting
+        // a unit here and a second one over there is what made a two-device peer cost two tokens
+        // per message: measured 2026-09-10, 6 of 31 spends on one device were fan-out copies of a
+        // message the primary send had already paid for.
+        let spendUnit: TokenSpendUnit?
+        if let callerSpendUnit {
+            spendUnit = callerSpendUnit
+        } else {
+            spendUnit = await TokenSpendUnit.forEnvelopeCount(plan.payloads.count)
+        }
 
         for (index, payload) in plan.payloads.enumerated() {
             let chunkMessageId = index == 0 ? plan.messageId.uuidString.lowercased()
@@ -106,7 +120,7 @@ final class ChunkedMessageSender {
                             conversationId: conversationId,
                             encryptedPayload: encryptedPayload,
                             timestamp: timestamp,
-                            sealedInnerBytes: inner
+                            sealing: .sealed(inner)
                         )
                     }
                 })
@@ -121,7 +135,7 @@ final class ChunkedMessageSender {
                     conversationId: conversationId,
                     encryptedPayload: encryptedPayload,
                     timestamp: timestamp,
-                    sealedInnerBytes: nil
+                    sealing: .identified(.stealthDisabled)
                 )
             }
             responses.append(response)
@@ -248,6 +262,9 @@ final class ChunkedMessageReassembler {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
+            if let reaction = Self.reaction(from: content) {
+                return reaction
+            }
             if case .edit(let editMsg) = content.content {
                 return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: editMsg.newMedia)
             }
@@ -279,6 +296,9 @@ final class ChunkedMessageReassembler {
         if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
            content.content != nil
         {
+            if let reaction = Self.reaction(from: content) {
+                return reaction
+            }
             if case .edit(let editMsg) = content.content {
                 return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: editMsg.newMedia)
             }
@@ -309,6 +329,20 @@ final class ChunkedMessageReassembler {
             return text.isEmpty ? .invalid("empty plaintext") : .legacy(text)
         }
         return .invalid("non-decodable binary (\(data.count) bytes)")
+    }
+
+    /// Reaction payloads must not fall through to `.assembled` (empty text → blank bubble).
+    /// `timestampMs` is 0 from a peer that predates the field, which the reducer reads as such.
+    private static func reaction(
+        from content: Shared_Proto_Messaging_V1_MessageContent
+    ) -> ChunkedMessageResult? {
+        guard case .reaction(let msg) = content.content else { return nil }
+        return .reaction(
+            targetMessageID: msg.targetMessageID,
+            emoji: msg.emoji,
+            action: msg.action,
+            timestampMs: msg.timestampMs
+        )
     }
 
     private func extract(_ content: Shared_Proto_Messaging_V1_MessageContent)
@@ -386,6 +420,14 @@ enum ChunkedMessageResult {
     case invalid(String)
     /// Modern edit inside MessageContent.
     case edit(targetMessageID: String, newText: Shared_Proto_Messaging_V1_TextMessage, newMedia: Shared_Proto_Messaging_V1_MediaMessage)
+    /// Emoji reaction inside MessageContent. Never a chat row — apply to the target, ACK.
+    /// `timestampMs` is field 4 (`ReactionWire`); 0 means a pre-field peer.
+    case reaction(
+        targetMessageID: String,
+        emoji: String,
+        action: Shared_Proto_Messaging_V1_ReactionAction,
+        timestampMs: Int64
+    )
 }
 
 enum ChunkedMessageCodec {

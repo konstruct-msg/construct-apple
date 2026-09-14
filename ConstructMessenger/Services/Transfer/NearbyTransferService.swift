@@ -78,8 +78,9 @@ final class NearbyTransferService {
     }
 
     enum TransferType: UInt8 {
-        case backup      = 0x01  // .ctbackup payload (Core Data + MessageKeyStore)
-        case historySync = 0x02  // future: same payload, additive intent
+        case backup             = 0x01  // .ctbackup payload (Core Data + MessageKeyStore)
+        case historySync        = 0x02  // same payload, additive intent
+        case historySyncSkipped = 0x03  // post-link control: receiver should continue without history
     }
 
     // MARK: - Handshake Frame
@@ -571,6 +572,20 @@ final class NearbyTransferService {
     private func uint32LE(_ value: UInt32) -> Data {
         var le = value.littleEndian
         return Data(bytes: &le, count: 4)
+    }
+}
+
+enum NearbyReceiveCompletionDisposition: Equatable {
+    case stagePayload
+    case finishWithoutHistory
+
+    static func decide(
+        isHistorySyncMode: Bool,
+        transferType: NearbyTransferService.TransferType?
+    ) -> NearbyReceiveCompletionDisposition {
+        isHistorySyncMode && transferType == .historySyncSkipped
+            ? .finishWithoutHistory
+            : .stagePayload
     }
 }
 

@@ -26,6 +26,7 @@ enum A11y {
         static let username         = "onboarding.username"
         static let createIdentity   = "onboarding.createIdentity"
         static let existingIdentity = "onboarding.existingIdentity"
+        static let cantConnect      = "onboarding.cantConnect"
     }
 
     enum Registration {

@@ -339,13 +339,15 @@ struct ChatsSplitView: View {
                             Button(role: .destructive) { deleteChat(chat) } label: {
                                 Label(LocalizedStringKey("delete"), systemImage: "trash")
                             }
+                            // See ChatsListView: an ancestor tint beats `role: .destructive`.
+                            .tint(Color.CT.danger)
                             Button { toggleMarkUnread(chat) } label: {
                                 Label(
                                     LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
                                     systemImage: chat.unreadCount > 0 ? "envelope.open" : "envelope.badge"
                                 )
                             }
-                            .tint(.blue)
+                            .tint(Color.CT.accentDim)
                         }
                         .swipeActions(edge: .leading, allowsFullSwipe: true) {
                             Button { togglePin(chat) } label: {
@@ -528,6 +530,12 @@ struct ChatsSplitView: View {
     }
 
     private func handleScannedContact(_ urlString: String) {
+        // A voucher scanned here is a voucher, not a malformed contact code.
+        if let message = VeilVoucherRedemption.messageIfVoucher(urlString) {
+            showingQRScanner = false
+            showErrorAfterDismiss(message)
+            return
+        }
         guard let url = URL(string: urlString) else {
             showErrorAfterDismiss(NSLocalizedString("invalid_qr_code_construct", comment: ""))
             return

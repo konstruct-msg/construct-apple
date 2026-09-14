@@ -20,16 +20,7 @@ enum NetworkFingerprint {
     /// Pass empty bytes to the FFI to fall back to the Rust default fingerprint.
     @MainActor
     static func current() -> Data {
-        let label: String
-        switch NetworkReachabilityManager.shared.connectionType {
-        case .wifi:        label = "wifi"
-        case .cellular:    label = "cellular"
-        case .ethernet:    label = "wired"
-        case .other:       label = "other"
-        case .unavailable: label = "unavailable"
-        case .unknown:     label = "unknown"
-        }
-        return Data(label.utf8)
+        Data(NetworkReachabilityManager.shared.connectionType.label.utf8)
     }
 
     /// Path on disk for the persistent scores SQLite database. Caches dir is fine —

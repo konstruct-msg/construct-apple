@@ -104,13 +104,20 @@ private func timerLabel(_ duration: TimeInterval) -> some View {
 }
 
 private extension View {
+    /// The bar occupies exactly the rectangle the attach circle + text capsule occupy when idle:
+    /// the row's height, and the row's outer horizontal pad. Nothing about the composer band
+    /// moves when a recording starts — its contents are replaced, its geometry is not.
+    ///
+    /// It used to be 52pt tall inside 8pt of horizontal pad, and the composer added 8pt above and
+    /// below on top of that. Three separate reasons for the same capsule to sit somewhere the
+    /// input capsule had not been.
     var ctBar: some View {
         self
-            .frame(height: ChatUIConstants.InputBar.voiceChromeHeight)
+            .frame(height: ChatUIConstants.InputBar.height)
             .background(Color.CT.outMsgBg)
             .clipShape(CTShape.pill())
             .overlay(CTShape.pill().strokeBorder(Color.CT.accent.opacity(0.25), lineWidth: 1))
-            .padding(.horizontal, CTLayout.inlinePad)
+            .padding(.horizontal, ChatUIConstants.InputBar.rowOuterPad)
     }
 }
 

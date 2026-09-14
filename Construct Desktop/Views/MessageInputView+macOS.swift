@@ -30,6 +30,7 @@ struct DesktopMessageInputView: View {
     @StateObject private var attachments = MessageInputAttachmentStore()
     @StateObject private var audioRecorder = AudioRecorderService.shared
     @State private var showMicPermissionAlert = false
+    @AppStorage("desktopSendOnEnter") private var sendOnEnter: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -97,8 +98,11 @@ struct DesktopMessageInputView: View {
     @ViewBuilder
     private var attachmentPreviews: some View {
         if !attachments.selectedAttachments.isEmpty {
+            // The bar takes the attachments themselves and renders its own thumbnails; it took a
+            // pre-mapped `[PlatformImage]` until the iOS side gained reordering and full-size
+            // preview, both of which need the attachment, not a picture of it.
             MessagePhotoPreviewBar(
-                images: attachments.selectedAttachments.compactMap { $0.displayImage },
+                attachments: attachments.selectedAttachments,
                 onRemove: attachments.removeAttachment
             )
         }
@@ -126,9 +130,11 @@ struct DesktopMessageInputView: View {
 
     private var inputRow: some View {
         HStack(spacing: 8) {
+            attachmentButton
             MessageInputTextBar(
                 text: $text,
                 canSend: canSend,
+                sendOnReturn: sendOnEnter,
                 onSend: sendMessage,
                 onStartVoice: startVoiceRecording
             )

@@ -59,6 +59,11 @@ struct DeviceLinkShowQRView: View {
             guard let outcome else { return }
             Task {
                 await authViewModel.completeDeviceLink(outcome)
+                guard DeviceLinkHistorySyncPolicy.isPostLinkEnabled else {
+                    dismiss()
+                    return
+                }
+
                 receiveHistorySyncPIN = HistorySyncPairing.pin(
                     pendingDeviceId: outcome.deviceId,
                     userId: outcome.userId

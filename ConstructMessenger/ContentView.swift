@@ -87,10 +87,12 @@ struct ContentView: View {
                 authViewModel.restoreSession()
             }
 
-            // If stealth is on and wallet is low, ensure we have an initial/top-up batch.
+            // Foreground trigger for the token wallet. No balance threshold here on purpose:
+            // the depth to fill toward is `BlindTokenService.bankTarget`, and a second copy of it
+            // at the call site is the "one meaning, two carriers" defect — this one read `< 10`
+            // and would have silently capped the wallet at 10 no matter what the service decided.
             if AuthSessionManager.shared.isSessionValid,
-               StealthPolicy.shared.isEnabled,
-               TokenWalletService.shared.balance < 10 {
+               StealthPolicy.shared.isEnabled {
                 Task {
                     await BlindTokenService.shared.bootstrapInitialBatch()
                 }

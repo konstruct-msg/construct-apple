@@ -101,6 +101,23 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
   /// Payload is a SessionControl (op=READY). Replaces "__session_ready_<UUID>__".
   /// Server forwards opaquely (treat identically to E2EE_SIGNAL).
   case sessionReady // = 26
+
+  /// INTAKE_KEY — the recipient hands a contact the 32-byte `intake_key` its account
+  /// accepts, so that contact's envelopes can carry an intake tag instead of buying a
+  /// Privacy Pass token (see SealedInner.intake_tag_sealed).
+  ///
+  /// Payload is a framed side channel inside the ciphertext, and it has to be: the key is
+  /// a secret, and a credential readable by the relay is a credential the relay can use.
+  /// knst_byte5 = true for that reason, sealed_inner_content_type = false for the same one.
+  ///
+  /// Sent on contact establishment, on rotation (which is how a contact is revoked), and
+  /// lazily to contacts that predate the mechanism — the first send to a peer that has no
+  /// key of ours carries one. Existing contacts are not backfilled in a sweep: a hundred
+  /// contacts would mean a hundred control messages at once, each of which would itself
+  /// need paying for, so the graph migrates as it is used and pays nothing extra.
+  ///
+  /// Server forwards opaquely (treat identically to E2EE_SIGNAL).
+  case intakeKey // = 27
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -124,6 +141,7 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case 24: self = .sessionResetInit
     case 25: self = .sessionPing
     case 26: self = .sessionReady
+    case 27: self = .intakeKey
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -145,6 +163,7 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case .sessionResetInit: return 24
     case .sessionPing: return 25
     case .sessionReady: return 26
+    case .intakeKey: return 27
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -166,6 +185,7 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     .sessionResetInit,
     .sessionPing,
     .sessionReady,
+    .intakeKey,
   ]
 
 }
@@ -675,8 +695,10 @@ public struct Shared_Proto_Core_V1_SealedInner: Sendable {
   ///   • token_spend_id — optional 32-byte random id, identical on every
   ///     wire envelope of that logical message. After the first envelope
   ///     redeems a token, further envelopes that carry the same spend_id
-  ///     (token optional) are accepted without a new spend, up to the
-  ///     server chunk cap (256). Empty = legacy per-envelope redemption.
+  ///     and same recipient_user_id (token optional) are accepted without
+  ///     a new spend, up to the server chunk cap (256). The unit is bound
+  ///     to the recipient so a client-chosen id cannot cover other users.
+  ///     Empty = legacy per-envelope redemption.
   public var tokenNonce: Data = Data()
 
   public var tokenBytes: Data = Data()
@@ -684,6 +706,71 @@ public struct Shared_Proto_Core_V1_SealedInner: Sendable {
   /// Shared across all wire envelopes of one logical message (see above).
   /// Server-visible anti-abuse metadata only; not identity.
   public var tokenSpendID: Data = Data()
+
+  /// The recipient DEVICE this envelope is encrypted for (32-char hex
+  /// CryptoDeviceId), or empty for "every active device of recipient_user_id".
+  ///
+  /// Routing only, in the same server-allowed set as recipient_user_id. The
+  /// destination server must already read the recipient to deliver at all; this
+  /// narrows that recipient from an account to one of its devices, and tells the
+  /// server nothing it does not already hold: it stores the account's device
+  /// list, it already sees which device reads which mailbox (the mailbox is
+  /// selected by the device_id in the caller's token), and the sender's view of
+  /// the device set came from this server's own GetPreKeyBundles answer.
+  ///
+  /// WHY THIS FIELD EXISTS: a sealed message is encrypted in a Double Ratchet
+  /// session with ONE device, but without this field it is written to every
+  /// mailbox of the account, so the recipient's other devices each receive a
+  /// ciphertext they cannot decrypt and a certificate they cannot unseal. The
+  /// outer Envelope.recipient_device (field 4) cannot serve here — the sealed
+  /// path never builds an outer envelope, it builds this message.
+  ///
+  /// THERE IS NO SENDER-SIDE COUNTERPART AND THERE MUST NOT BE. A sealed
+  /// envelope naming the sending device would undo sealing entirely. The server
+  /// blanks Envelope.sender_device on delivery for the same reason.
+  public var recipientDevice: String = String()
+
+  /// Intake credential — what this envelope carries INSTEAD of a Privacy Pass token when
+  /// the recipient has vouched for the sender.
+  ///
+  ///   intake_tag = HMAC-SHA256(intake_key,
+  ///                            "knst-intake-v1" || 0x00 || recipient_account_id
+  ///                                             || 0x00 || epoch_be64)[0..16]
+  ///   epoch      = floor(unix_seconds / 86400)
+  ///
+  /// sealed to the destination server's X25519 key, exactly as token_bytes is and for the
+  /// same reason: SealedInner is a plaintext proto the relay parses, and a tag in the clear
+  /// is harvestable by any relay that routes the envelope — after which that relay can send
+  /// to this recipient for free until the epoch rolls.
+  ///
+  /// WHY THIS FIELD EXISTS: a token per sealed envelope charges the same for a stranger's
+  /// first contact and for the four-hundredth message between two people who have been
+  /// talking for a year. Measured 2026-09-11, delivery receipts alone were 36-38% of all
+  /// token spend, and they are spent by the person who was *written to*. The server cannot
+  /// be told which envelopes to exempt — content_type lives inside the seal on purpose
+  /// (see the DEPRECATED note on field 5) — so the question is not which envelopes are
+  /// exempt but what one carries instead.
+  ///
+  /// PER RECIPIENT, NEVER PER PAIR. The tag is identical for every sender holding the key.
+  /// A pair-wise value would be a stable pseudonymous handle for the sender inside each
+  /// epoch, which is exactly the linkability sealed sender exists to destroy. The server
+  /// therefore learns one bit — "from someone this recipient vouched for" — and nothing
+  /// that separates one contact from another.
+  ///
+  /// Contract:
+  ///   • Empty = no credential; the envelope pays with token_nonce / token_bytes as before.
+  ///   • Present and valid for recipient_user_id at the current or previous epoch = no
+  ///     token is owed, and none is checked.
+  ///   • Present and invalid = no worse than absent; the envelope falls back to the token
+  ///     path. A wrong tag must never be a delivery failure on its own, or a stale clock
+  ///     would drop messages.
+  ///   • The recipient publishes tags for a window of future epochs, so a device that has
+  ///     been offline for a day does not break its own incoming traffic.
+  ///
+  /// Derivation and normalisation live in construct-core (`intake_tag`), not in each
+  /// client: two clients disagreeing about case in recipient_account_id produce different
+  /// tags, the envelope is silently charged a token, and nothing reports a mismatch.
+  public var intakeTagSealed: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -743,7 +830,7 @@ public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
 fileprivate let _protobuf_package = "shared.proto.core.v1"
 
 extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0\u{1}CONTENT_TYPE_INTAKE_KEY\0")
 }
 
 extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {
@@ -1232,7 +1319,7 @@ extension Shared_Proto_Core_V1_SealedSenderEnvelope: SwiftProtobuf.Message, Swif
 
 extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SealedInner"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{4}\u{9}token_nonce\0\u{3}token_bytes\0\u{3}token_spend_id\0\u{c}\u{8}\u{8}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{4}\u{9}token_nonce\0\u{3}token_bytes\0\u{3}token_spend_id\0\u{3}recipient_device\0\u{3}intake_tag_sealed\0\u{c}\u{8}\u{8}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1250,6 +1337,8 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
       case 16: try { try decoder.decodeSingularBytesField(value: &self.tokenNonce) }()
       case 17: try { try decoder.decodeSingularBytesField(value: &self.tokenBytes) }()
       case 18: try { try decoder.decodeSingularBytesField(value: &self.tokenSpendID) }()
+      case 19: try { try decoder.decodeSingularStringField(value: &self.recipientDevice) }()
+      case 20: try { try decoder.decodeSingularBytesField(value: &self.intakeTagSealed) }()
       default: break
       }
     }
@@ -1286,6 +1375,12 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
     if !self.tokenSpendID.isEmpty {
       try visitor.visitSingularBytesField(value: self.tokenSpendID, fieldNumber: 18)
     }
+    if !self.recipientDevice.isEmpty {
+      try visitor.visitSingularStringField(value: self.recipientDevice, fieldNumber: 19)
+    }
+    if !self.intakeTagSealed.isEmpty {
+      try visitor.visitSingularBytesField(value: self.intakeTagSealed, fieldNumber: 20)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1300,6 +1395,8 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.tokenNonce != rhs.tokenNonce {return false}
     if lhs.tokenBytes != rhs.tokenBytes {return false}
     if lhs.tokenSpendID != rhs.tokenSpendID {return false}
+    if lhs.recipientDevice != rhs.recipientDevice {return false}
+    if lhs.intakeTagSealed != rhs.intakeTagSealed {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

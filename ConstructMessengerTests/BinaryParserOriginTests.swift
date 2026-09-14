@@ -8,7 +8,7 @@
 //  `Data` slices carry ABSOLUTE indices: `bigData[100...]` has `startIndex == 100`. A parser
 //  that counts offsets from 0, bounds-checks against `count`, and calls `subdata(in:)` — which
 //  also takes absolute indices — traps on its first subscript when handed such a slice. The
-//  trap is documented at MessagePadding.swift:36; these parsers now normalise the origin on
+//  These parsers now normalise the origin on
 //  entry so they cannot depend on how the caller happened to build the Data.
 //
 //  See sessions/2026-07-28-ios-appstore-security-stability-audit.md.

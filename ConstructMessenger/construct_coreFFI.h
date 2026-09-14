@@ -592,6 +592,11 @@ RustBuffer uniffi_construct_core_fn_method_orchestratorcore_export_private_keys(
 RustBuffer uniffi_construct_core_fn_method_orchestratorcore_export_session(uint64_t ptr, RustBuffer contact_id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_FORGET_CONTACT_STATE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_FORGET_CONTACT_STATE
+void uniffi_construct_core_fn_method_orchestratorcore_forget_contact_state(uint64_t ptr, RustBuffer contact_id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_GENERATE_ONE_TIME_PREKEYS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_GENERATE_ONE_TIME_PREKEYS
 RustBuffer uniffi_construct_core_fn_method_orchestratorcore_generate_one_time_prekeys(uint64_t ptr, uint32_t count, RustCallStatus *_Nonnull out_status
@@ -695,6 +700,16 @@ RustBuffer uniffi_construct_core_fn_method_orchestratorcore_kyber_spk(uint64_t p
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_ONE_TIME_PREKEY_COUNT
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_ONE_TIME_PREKEY_COUNT
 uint32_t uniffi_construct_core_fn_method_orchestratorcore_one_time_prekey_count(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_PLAN_RECEIVING_INIT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_PLAN_RECEIVING_INIT
+RustBuffer uniffi_construct_core_fn_method_orchestratorcore_plan_receiving_init(uint64_t ptr, RustBuffer carriers, uint32_t bundle_count, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_PLAN_TEARDOWN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_PLAN_TEARDOWN
+RustBuffer uniffi_construct_core_fn_method_orchestratorcore_plan_teardown(uint64_t ptr, RustBuffer candidate_device_ids, int8_t peer_on_dead_session, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_ORCHESTRATORCORE_PREKEYS_AVAILABLE_COUNT
@@ -991,6 +1006,16 @@ RustBuffer uniffi_construct_core_fn_func_derive_recovery_keypair(RustBuffer seed
 RustBuffer uniffi_construct_core_fn_func_derive_verifying_key_from_secret(RustBuffer identity_secret_key, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DEVICE_COPY_TAG
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DEVICE_COPY_TAG
+RustBuffer uniffi_construct_core_fn_func_device_copy_tag(RustBuffer base_message_id, RustBuffer target_device_id, RustBuffer our_identity_private, RustBuffer peer_identity_public, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DEVICE_COPY_TAG_MATCHES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DEVICE_COPY_TAG_MATCHES
+int8_t uniffi_construct_core_fn_func_device_copy_tag_matches(RustBuffer tag, RustBuffer base_message_id, RustBuffer our_device_id, RustBuffer our_identity_private, RustBuffer peer_identity_public, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_FORMAT_FEDERATED_ID
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_FORMAT_FEDERATED_ID
 RustBuffer uniffi_construct_core_fn_func_format_federated_id(RustBuffer device_id, RustBuffer server_hostname, RustCallStatus *_Nonnull out_status
@@ -1004,6 +1029,12 @@ RustBuffer uniffi_construct_core_fn_func_generate_dummy_message(uint64_t size, R
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_EPHEMERAL_KEYPAIR
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_EPHEMERAL_KEYPAIR
 RustBuffer uniffi_construct_core_fn_func_generate_ephemeral_keypair(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_INTAKE_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_INTAKE_KEY
+RustBuffer uniffi_construct_core_fn_func_generate_intake_key(RustCallStatus *_Nonnull out_status
     
 );
 #endif
@@ -1041,6 +1072,16 @@ int8_t uniffi_construct_core_fn_func_hybrid_verify(RustBuffer public_key, RustBu
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IMPORT_MLS_STORE_CFE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IMPORT_MLS_STORE_CFE
 uint64_t uniffi_construct_core_fn_func_import_mls_store_cfe(RustBuffer data, RustBuffer signer_private_key, RustBuffer signer_public_key, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_EPOCH
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_EPOCH
+uint64_t uniffi_construct_core_fn_func_intake_epoch(uint64_t unix_seconds, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_TAG
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_TAG
+RustBuffer uniffi_construct_core_fn_func_intake_tag(RustBuffer intake_key, RustBuffer recipient_account_id, uint64_t epoch, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IS_DUMMY_MESSAGE
@@ -1090,6 +1131,26 @@ RustBuffer uniffi_construct_core_fn_func_mlkem768_keygen(RustCallStatus *_Nonnul
 RustBuffer uniffi_construct_core_fn_func_mnemonic_to_seed(RustBuffer mnemonic, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_OPEN_WITH_DEVICE_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_OPEN_WITH_DEVICE_KEY
+RustBuffer uniffi_construct_core_fn_func_open_with_device_key(RustBuffer sealed_box, RustBuffer our_identity_priv, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_INITIATION
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_INITIATION
+RustBuffer uniffi_construct_core_fn_func_plan_initiation(RustBuffer context, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_RECEIVING_DECRYPT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_RECEIVING_DECRYPT
+RustBuffer uniffi_construct_core_fn_func_plan_receiving_decrypt(RustBuffer session_device_ids, RustBuffer preferred_device_id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_SEND
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_SEND
+RustBuffer uniffi_construct_core_fn_func_plan_send(RustBuffer recipient_device_ids, RustBuffer own_device_ids, RustBuffer our_device_id, int8_t recipient_is_self, RustBuffer primary_send_covered, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_BLIND_TOKEN
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_BLIND_TOKEN
 RustBuffer uniffi_construct_core_fn_func_pp_blind_token(RustBuffer nonce, RustCallStatus *_Nonnull out_status
@@ -1120,9 +1181,19 @@ int8_t uniffi_construct_core_fn_func_pp_verify_dleq(RustBuffer blinded, RustBuff
 uint64_t uniffi_construct_core_fn_func_random_send_delay_ms(uint64_t max_delay_ms, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RECEIVING_INIT_KIND
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RECEIVING_INIT_KIND
+RustBuffer uniffi_construct_core_fn_func_receiving_init_kind(RustBuffer carrier, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RECOMMENDED_SEND_DELAY_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RECOMMENDED_SEND_DELAY_MS
 uint64_t uniffi_construct_core_fn_func_recommended_send_delay_ms(int8_t is_high_priority, float battery_level, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEAL_TO_DEVICE_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEAL_TO_DEVICE_KEY
+RustBuffer uniffi_construct_core_fn_func_seal_to_device_key(RustBuffer plaintext, RustBuffer device_identity_key, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEALED_SEAL_SENDER_CERT
@@ -1185,6 +1256,11 @@ int8_t uniffi_construct_core_fn_func_supports_pq_ratchet(RustCallStatus *_Nonnul
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_TEST_PLATFORM_BRIDGE_ROUNDTRIP
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_TEST_PLATFORM_BRIDGE_ROUNDTRIP
 int8_t uniffi_construct_core_fn_func_test_platform_bridge_roundtrip(uint64_t bridge, RustBuffer key, RustBuffer data, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_TIE_BREAK_ROLE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_TIE_BREAK_ROLE
+RustBuffer uniffi_construct_core_fn_func_tie_break_role(RustBuffer my_id, RustBuffer peer_id, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VALIDATE_MNEMONIC
@@ -1537,6 +1613,18 @@ uint16_t uniffi_construct_core_checksum_func_derive_verifying_key_from_secret(vo
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DEVICE_COPY_TAG
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DEVICE_COPY_TAG
+uint16_t uniffi_construct_core_checksum_func_device_copy_tag(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DEVICE_COPY_TAG_MATCHES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DEVICE_COPY_TAG_MATCHES
+uint16_t uniffi_construct_core_checksum_func_device_copy_tag_matches(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_FORMAT_FEDERATED_ID
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_FORMAT_FEDERATED_ID
 uint16_t uniffi_construct_core_checksum_func_format_federated_id(void
@@ -1552,6 +1640,12 @@ uint16_t uniffi_construct_core_checksum_func_generate_dummy_message(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_EPHEMERAL_KEYPAIR
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_EPHEMERAL_KEYPAIR
 uint16_t uniffi_construct_core_checksum_func_generate_ephemeral_keypair(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_INTAKE_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_INTAKE_KEY
+uint16_t uniffi_construct_core_checksum_func_generate_intake_key(void
     
 );
 #endif
@@ -1594,6 +1688,18 @@ uint16_t uniffi_construct_core_checksum_func_hybrid_verify(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_IMPORT_MLS_STORE_CFE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_IMPORT_MLS_STORE_CFE
 uint16_t uniffi_construct_core_checksum_func_import_mls_store_cfe(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_EPOCH
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_EPOCH
+uint16_t uniffi_construct_core_checksum_func_intake_epoch(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_TAG
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_TAG
+uint16_t uniffi_construct_core_checksum_func_intake_tag(void
     
 );
 #endif
@@ -1651,6 +1757,30 @@ uint16_t uniffi_construct_core_checksum_func_mnemonic_to_seed(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_OPEN_WITH_DEVICE_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_OPEN_WITH_DEVICE_KEY
+uint16_t uniffi_construct_core_checksum_func_open_with_device_key(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PLAN_INITIATION
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PLAN_INITIATION
+uint16_t uniffi_construct_core_checksum_func_plan_initiation(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PLAN_RECEIVING_DECRYPT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PLAN_RECEIVING_DECRYPT
+uint16_t uniffi_construct_core_checksum_func_plan_receiving_decrypt(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PLAN_SEND
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PLAN_SEND
+uint16_t uniffi_construct_core_checksum_func_plan_send(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_BLIND_TOKEN
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_BLIND_TOKEN
 uint16_t uniffi_construct_core_checksum_func_pp_blind_token(void
@@ -1687,9 +1817,21 @@ uint16_t uniffi_construct_core_checksum_func_random_send_delay_ms(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RECEIVING_INIT_KIND
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RECEIVING_INIT_KIND
+uint16_t uniffi_construct_core_checksum_func_receiving_init_kind(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RECOMMENDED_SEND_DELAY_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RECOMMENDED_SEND_DELAY_MS
 uint16_t uniffi_construct_core_checksum_func_recommended_send_delay_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEAL_TO_DEVICE_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEAL_TO_DEVICE_KEY
+uint16_t uniffi_construct_core_checksum_func_seal_to_device_key(void
     
 );
 #endif
@@ -1762,6 +1904,12 @@ uint16_t uniffi_construct_core_checksum_func_supports_pq_ratchet(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_TEST_PLATFORM_BRIDGE_ROUNDTRIP
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_TEST_PLATFORM_BRIDGE_ROUNDTRIP
 uint16_t uniffi_construct_core_checksum_func_test_platform_bridge_roundtrip(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_TIE_BREAK_ROLE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_TIE_BREAK_ROLE
+uint16_t uniffi_construct_core_checksum_func_tie_break_role(void
     
 );
 #endif
@@ -2101,6 +2249,12 @@ uint16_t uniffi_construct_core_checksum_method_orchestratorcore_export_session(v
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_ORCHESTRATORCORE_FORGET_CONTACT_STATE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_ORCHESTRATORCORE_FORGET_CONTACT_STATE
+uint16_t uniffi_construct_core_checksum_method_orchestratorcore_forget_contact_state(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_ORCHESTRATORCORE_GENERATE_ONE_TIME_PREKEYS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_ORCHESTRATORCORE_GENERATE_ONE_TIME_PREKEYS
 uint16_t uniffi_construct_core_checksum_method_orchestratorcore_generate_one_time_prekeys(void
@@ -2224,6 +2378,18 @@ uint16_t uniffi_construct_core_checksum_method_orchestratorcore_kyber_spk(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_ORCHESTRATORCORE_ONE_TIME_PREKEY_COUNT
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_ORCHESTRATORCORE_ONE_TIME_PREKEY_COUNT
 uint16_t uniffi_construct_core_checksum_method_orchestratorcore_one_time_prekey_count(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_ORCHESTRATORCORE_PLAN_RECEIVING_INIT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_ORCHESTRATORCORE_PLAN_RECEIVING_INIT
+uint16_t uniffi_construct_core_checksum_method_orchestratorcore_plan_receiving_init(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_ORCHESTRATORCORE_PLAN_TEARDOWN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_ORCHESTRATORCORE_PLAN_TEARDOWN
+uint16_t uniffi_construct_core_checksum_method_orchestratorcore_plan_teardown(void
     
 );
 #endif

@@ -13,6 +13,7 @@ struct SendBackupNearbyView: View {
     enum Mode {
         case backup
         case historySync
+        case historySyncSkip
     }
 
     var mode: Mode = .backup
@@ -32,7 +33,7 @@ struct SendBackupNearbyView: View {
             Color.CT.bg.ignoresSafeArea()
             VStack(spacing: 0) {
                 CTNavBar(
-                    title: NSLocalizedString(mode == .historySync ? "history_sync_send_title" : "transfer_send_title", comment: ""),
+                    title: NSLocalizedString(titleKey, comment: ""),
                     showBack: true,
                     backAction: { dismiss() }
                 ) {
@@ -54,6 +55,11 @@ struct SendBackupNearbyView: View {
         } message: {
             Text(errorMessage ?? "")
         }
+        .onChange(of: service.transferState) { _, newState in
+            if mode == .historySyncSkip, case .complete = newState {
+                dismiss()
+            }
+        }
     }
 
     @ViewBuilder
@@ -67,7 +73,7 @@ struct SendBackupNearbyView: View {
                     if autoPairingPIN != nil {
                         statusView(
                             systemImage: "paperplane",
-                            label: NSLocalizedString("history_sync_auto_sending", comment: "")
+                            label: NSLocalizedString(autoSendingKey, comment: "")
                         )
                     } else {
                         advertisingView
@@ -208,6 +214,21 @@ struct SendBackupNearbyView: View {
 
     // MARK: - Logic
 
+    private var titleKey: String {
+        switch mode {
+        case .backup:
+            return "transfer_send_title"
+        case .historySync:
+            return "history_sync_send_title"
+        case .historySyncSkip:
+            return "history_sync_skip_title"
+        }
+    }
+
+    private var autoSendingKey: String {
+        mode == .historySyncSkip ? "history_sync_skip_sending" : "history_sync_auto_sending"
+    }
+
     private var formattedPIN: String {
         let p = service.pin
         guard p.count == 6 else { return p }
@@ -216,9 +237,20 @@ struct SendBackupNearbyView: View {
 
     private func prepare() async {
         do {
-            let userId = mode == .historySync ? KeychainManager.shared.loadUserID() : nil
-            let payload = try await LocalBackupService.shared.buildTransferPayload(context: context, userId: userId)
-            let transferType: NearbyTransferService.TransferType = mode == .historySync ? .historySync : .backup
+            let payload: Data
+            let transferType: NearbyTransferService.TransferType
+            switch mode {
+            case .backup:
+                payload = try await LocalBackupService.shared.buildTransferPayload(context: context)
+                transferType = .backup
+            case .historySync:
+                let userId = KeychainManager.shared.loadUserID()
+                payload = try await LocalBackupService.shared.buildTransferPayload(context: context, userId: userId)
+                transferType = .historySync
+            case .historySyncSkip:
+                payload = Data()
+                transferType = .historySyncSkipped
+            }
             service.startSending(payload: payload, type: transferType, fixedPIN: autoPairingPIN)
         } catch {
             errorMessage = error.localizedDescription

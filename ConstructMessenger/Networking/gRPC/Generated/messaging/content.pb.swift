@@ -693,6 +693,11 @@ public struct Shared_Proto_Messaging_V1_ReactionMessage: Sendable {
   /// Action (add or remove reaction)
   public var action: Shared_Proto_Messaging_V1_ReactionAction = .unspecified
 
+  /// Client last-write-wins clock, milliseconds since Unix epoch, set at tap.
+  /// Must not be the server envelope timestamp (sealed-sender redelivery disagrees).
+  /// 0 = pre-field peer; any timed update beats it. See MESSAGE_REACTIONS_SPEC.
+  public var timestampMs: Int64 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1675,7 +1680,7 @@ extension Shared_Proto_Messaging_V1_VoiceMessage: SwiftProtobuf.Message, SwiftPr
 
 extension Shared_Proto_Messaging_V1_ReactionMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ReactionMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}target_message_id\0\u{1}emoji\0\u{1}action\0\u{c}\u{4}\u{7}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}target_message_id\0\u{1}emoji\0\u{1}action\0\u{3}timestamp_ms\0\u{c}\u{5}\u{6}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1686,6 +1691,7 @@ extension Shared_Proto_Messaging_V1_ReactionMessage: SwiftProtobuf.Message, Swif
       case 1: try { try decoder.decodeSingularStringField(value: &self.targetMessageID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.emoji) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self.action) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.timestampMs) }()
       default: break
       }
     }
@@ -1701,6 +1707,9 @@ extension Shared_Proto_Messaging_V1_ReactionMessage: SwiftProtobuf.Message, Swif
     if self.action != .unspecified {
       try visitor.visitSingularEnumField(value: self.action, fieldNumber: 3)
     }
+    if self.timestampMs != 0 {
+      try visitor.visitSingularInt64Field(value: self.timestampMs, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1708,6 +1717,7 @@ extension Shared_Proto_Messaging_V1_ReactionMessage: SwiftProtobuf.Message, Swif
     if lhs.targetMessageID != rhs.targetMessageID {return false}
     if lhs.emoji != rhs.emoji {return false}
     if lhs.action != rhs.action {return false}
+    if lhs.timestampMs != rhs.timestampMs {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

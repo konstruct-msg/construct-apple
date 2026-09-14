@@ -1,5 +1,6 @@
 import XCTest
 import CryptoKit
+import SwiftProtobuf
 @testable import Construct_Messenger
 
 /// stealth-sealed-sender-v2 Phase 3 pinned the certificate to a single canonical payload
@@ -227,7 +228,6 @@ final class SealedSenderEnvelopeTests: XCTestCase {
             conversationId: "conv-xyz",
             encryptedPayload: Data([0x01, 0x02, 0x03]),
             timestamp: 42,
-            senderDeviceId: "sdev",
             recipientDeviceId: "rdev",
             contentType: .e2EeSignal,
             sealedInnerBytes: Data([0x09, 0x09, 0x09])
@@ -258,7 +258,6 @@ final class SealedSenderEnvelopeTests: XCTestCase {
             conversationId: "conv",
             encryptedPayload: payload,
             timestamp: 42,
-            senderDeviceId: nil,
             recipientDeviceId: nil,
             contentType: .e2EeSignal,
             sealedInnerBytes: Data([0x09, 0x09, 0x09])
@@ -275,7 +274,7 @@ final class SealedSenderEnvelopeTests: XCTestCase {
         let env = MessagingServiceClient.buildEnvelope(
             messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
             encryptedPayload: payload, timestamp: 42,
-            senderDeviceId: nil, recipientDeviceId: nil,
+            recipientDeviceId: nil,
             contentType: .e2EeSignal, sealedInnerBytes: nil
         )
         XCTAssertEqual(env.encryptedPayload, payload)
@@ -289,10 +288,58 @@ final class SealedSenderEnvelopeTests: XCTestCase {
         let env = MessagingServiceClient.buildEnvelope(
             messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
             encryptedPayload: Data([0x01]), timestamp: 1786992000,
-            senderDeviceId: nil, recipientDeviceId: nil,
+            recipientDeviceId: nil,
             contentType: .e2EeSignal, sealedInnerBytes: Data([0x09])
         )
         XCTAssertEqual(env.sealedSender.timestamp, 1786992000)
+    }
+
+    /// `Envelope.recipient_device` had no writer between 2026-08-17 and 2026-08-30. The removal
+    /// was correct when made — nothing read the field — and became wrong on 2026-08-29, when the
+    /// server began routing on it (`construct-server@619bad8`). Three fan-out call sites went on
+    /// passing `target.deviceId` into a function that dropped it, so a copy addressed to one
+    /// device was written to every device of the account: N copies × N devices.
+    ///
+    /// Mutation: drop the assignment again — this reddens.
+    func testIdentifiedSend_NamesTheRecipientDevice() {
+        let env = MessagingServiceClient.buildEnvelope(
+            messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
+            encryptedPayload: Data([0x01]), timestamp: 1,
+            recipientDeviceId: "6f5e37ac1b2c3d4e5f60718293a4b5c6",
+            contentType: .e2EeSignal, sealedInnerBytes: nil
+        )
+        XCTAssertTrue(env.hasRecipientDevice, "the unsealed path is the only one that can name a device")
+        XCTAssertEqual(env.recipientDevice.deviceID, "6f5e37ac1b2c3d4e5f60718293a4b5c6")
+    }
+
+    /// The outer field is visible to the relay, so a sealed send must not use it — that is the
+    /// whole reason `SealedInner.recipient_device` (field 19) exists. Naming the device outside
+    /// the seal would hand the relay a device-granular topology of exactly the traffic sealed
+    /// sender exists to hide.
+    ///
+    /// Mutation: move the assignment above the `if`/`else` — this reddens.
+    func testSealedSend_DoesNotNameTheDeviceOnTheOuterEnvelope() {
+        let env = MessagingServiceClient.buildEnvelope(
+            messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
+            encryptedPayload: Data([0x01]), timestamp: 1,
+            recipientDeviceId: "6f5e37ac1b2c3d4e5f60718293a4b5c6",
+            contentType: .e2EeSignal, sealedInnerBytes: Data([0x09])
+        )
+        XCTAssertFalse(env.hasRecipientDevice,
+                       "a sealed send names its device inside SealedInner, never on the envelope")
+    }
+
+    /// An empty device id must leave the field unset rather than set it to "". The server reads
+    /// the presence of the field: an empty named device would be a device it cannot find, which
+    /// routes as `unknown_device` and logs a warning on every ordinary send.
+    func testAnEmptyDeviceIdIsNotADevice() {
+        let env = MessagingServiceClient.buildEnvelope(
+            messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
+            encryptedPayload: Data([0x01]), timestamp: 1,
+            recipientDeviceId: "",
+            contentType: .e2EeSignal, sealedInnerBytes: nil
+        )
+        XCTAssertFalse(env.hasRecipientDevice)
     }
 
     func testIdentifiedSend_populatesSender() {
@@ -303,7 +350,6 @@ final class SealedSenderEnvelopeTests: XCTestCase {
             conversationId: "conv-xyz",
             encryptedPayload: Data([0x01]),
             timestamp: 42,
-            senderDeviceId: nil,
             recipientDeviceId: nil,
             contentType: .e2EeSignal,
             sealedInnerBytes: nil
@@ -324,12 +370,76 @@ final class SealedSenderEnvelopeTests: XCTestCase {
             conversationId: "c",
             encryptedPayload: Data(),
             timestamp: 1,
-            senderDeviceId: nil,
             recipientDeviceId: nil,
             contentType: .e2EeSignal,
             sealedInnerBytes: Data()
         )
         XCTAssertTrue(env.hasSender)
         XCTAssertFalse(env.hasSealedSender)
+    }
+}
+
+/// §A.0 client half: a sealed envelope names the device its certificate is sealed to.
+///
+/// Before `SealedInner.recipient_device`, a sealed message — which is every user message, since
+/// `StealthPolicy.isEnabled` is a release-time constant — was written to every mailbox of the
+/// recipient's account. It is encrypted in a Double Ratchet session with **one** device, so the
+/// others received a ciphertext they could not decrypt and a certificate they could not unseal.
+///
+/// The regression these tests exist to catch is silent: drop the assignment and everything still
+/// works, just fanned out to the whole account again, with no error anywhere.
+@MainActor
+final class SealedInnerRecipientDeviceTests: XCTestCase {
+
+    private func sealedInner(to identityKey: Data) async throws -> Shared_Proto_Core_V1_SealedInner {
+        let bytes = try await StealthSenderService.shared.buildSealedInner(
+            recipientUserId: "14f28d31-0000-0000-0000-000000000001",
+            certBytes: Data([0x01, 0x02, 0x03]),
+            recipientIdentityKey: identityKey,
+            encryptedPayload: Data([0xAA, 0xBB]),
+            contentType: .generic
+        )
+        return try Shared_Proto_Core_V1_SealedInner(serializedBytes: bytes)
+    }
+
+    func testNamesTheDeviceTheCertificateIsSealedTo() async throws {
+        let key = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
+        let inner = try await sealedInner(to: key)
+
+        XCTAssertFalse(
+            inner.recipientDevice.isEmpty,
+            "an empty device field is the pre-2026-08-29 account-wide delivery, silently"
+        )
+        XCTAssertEqual(
+            inner.recipientDevice,
+            SessionAddressing.cryptoIdentity(ofIdentityKey: key),
+            "the routed device must be the one whose key the certificate was sealed to"
+        )
+    }
+
+    /// The wiring, not the derivation: a device id that does not follow the key it was handed is
+    /// one read out of a store or off a parameter, and either can name a device the ciphertext
+    /// was never for.
+    func testTheDeviceFollowsTheKeyRatherThanTheAccount() async throws {
+        let keyA = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
+        let keyB = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
+
+        let deviceA = try await sealedInner(to: keyA).recipientDevice
+        let deviceB = try await sealedInner(to: keyB).recipientDevice
+
+        // Same recipientUserId both times — only the key differs.
+        XCTAssertNotEqual(deviceA, deviceB, "the device must track the key, not the account id")
+        XCTAssertEqual(deviceA, SessionAddressing.cryptoIdentity(ofIdentityKey: keyA))
+        XCTAssertEqual(deviceB, SessionAddressing.cryptoIdentity(ofIdentityKey: keyB))
+    }
+
+    func testTheDeviceIsAShapedCryptoDeviceId() async throws {
+        let key = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
+        let device = try await sealedInner(to: key).recipientDevice
+
+        // 32 hex chars — SHA256(identity_public)[0..16]. A ServerUserId here would be a 36-char
+        // dashed UUID, which is the identity-space mix-up this codebase has paid for repeatedly.
+        XCTAssertEqual(device.count, 32)
+        XCTAssertTrue(device.allSatisfy(\.isHexDigit))
     }
 }

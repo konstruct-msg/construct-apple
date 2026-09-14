@@ -96,7 +96,7 @@ struct DraftsView: View {
         }
         .background(Color.CT.bg.ignoresSafeArea())
         #if os(iOS)
-        .toolbar(.hidden, for: .navigationBar)
+        .hideSystemNavBar()
         #endif
     }
 

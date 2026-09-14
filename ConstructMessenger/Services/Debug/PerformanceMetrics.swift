@@ -172,12 +172,16 @@ enum MetricEvent: String {
     /// the same inversion `chunkReassemblyExpired` corrected. `label` = `msgNum=<n>`.
     case persistAckWithoutDurableWrite = "persist_ack_without_durable_write"
 
-    /// An incoming message was held behind the tie-break confirm gate instead of being routed —
-    /// either a peer init arriving while our SESSION_RESET_INIT is unacked (`peer_init`) or a
-    /// decrypt failure in that same window (`dr_fail_pending_confirm`). Benign and expected during
-    /// a re-init; it is the volume gauge for how much traffic a confirm window costs. The two
-    /// labels replace `undeliveredNoReceipt(stale_init)`, which counted the same event back when
-    /// it was a permanent discard. `label` = reason.
+    /// An incoming message the ratchet could not read was held behind the tie-break confirm gate
+    /// instead of being answered — a decrypt failure (`dr_fail_pending_confirm`) or a heal request
+    /// (`heal_pending_confirm`) arriving while our own SESSION_RESET_INIT is unacked. Benign and
+    /// expected during a re-init; it is the volume gauge for how much traffic a confirm window
+    /// costs. The labels replace `undeliveredNoReceipt(stale_init)`, which counted the same event
+    /// back when it was a permanent discard. `label` = reason.
+    ///
+    /// A third label, `peer_init`, was retired on 2026-08-21 with the pre-decryption hold that
+    /// emitted it. It counted `messageNumber == 0`, which named a fresh sending chain rather than a
+    /// handshake, and its largest single contributor was the peer's own `session_ready`.
     case confirmHold = "confirm_hold"
 
     /// The confirm hold hit its per-peer cap (100) and a message was genuinely dropped. This is
@@ -205,6 +209,101 @@ enum MetricEvent: String {
     /// `label` = which fields were missing.
     case senderSyncUnroutable = "sender_sync_unroutable"
 
+    /// A delivery addressed to our own account arrived on the peer path — `from == to == us` with
+    /// a content type that is not SENDER_SYNC. That shape is one of our own sends handed back by
+    /// the server's per-device fan-out, and until 2026-08-28 the receive path read it as a message
+    /// from a contact called "us": a chat with ourselves, a tie-break against our own device, and
+    /// a SESSION_RESET_INIT to ourselves that tore down a healthy session.
+    ///
+    /// `label` = the outer content type, which is the only thing that distinguishes the carriers.
+    /// A non-zero count after the receipt suppression means something else still addresses us.
+    case selfAddressedDropped = "self_addressed_dropped"
+
+    /// A device of the recipient did not get its copy of a message the sender considers sent.
+    ///
+    /// The release gate for §C asks this to be zero, and until 2026-08-31 nothing could answer it:
+    /// every way out of the fan-out logged at `info` and returned, so a device that never heard of
+    /// a message was indistinguishable from an account that has only one. Observed 2026-08-28 — a
+    /// second device linked at 11:14, the single bundle fetch after it timed out at 11:18, there
+    /// was no retry, and the copy simply never existed.
+    ///
+    /// `label` = why, a closed set of five:
+    /// `bundle_fetch_failed` (the fetch threw — the 2026-08-28 shape) · `no_bundles` (it returned
+    /// an empty list) · `send_failed` (one device's send threw, the others still went) ·
+    /// `no_sender_device` · `no_chunks`.
+    ///
+    /// **Counts occurrences, not devices**, and the distinction is the point rather than a
+    /// shortcut: on `send_failed` the loop knows exactly which device it lost, but on the three
+    /// fetch-side reasons the call that would have named the devices is the one that failed, so a
+    /// device count there could only be a guess dressed as a measurement. The log line beside each
+    /// one carries how many devices we believe the account has, from `PeerDevice`, which is a
+    /// belief and is written as one.
+    ///
+    /// Not recorded when the plan is legitimately empty — a single-device recipient the primary
+    /// send already covered is the overwhelmingly common case and is not a skip. Keeping those
+    /// apart is why "no targets" logs at `debug` and does not come here.
+    case fanoutDeviceSkipped = "fanout_device_skipped"
+
+    /// A copy owed to a recipient's device will never be sent, and the queue has stopped trying.
+    ///
+    /// Separate from `fanoutDeviceSkipped` rather than another label on it, for two reasons. A
+    /// skip is recoverable and a give-up is not, so folding them would make the §C gate — which
+    /// asks for zero skips — unable to distinguish "retried and delivered" from "retried and lost".
+    /// And `record` collapses an event's whole label breakdown once it exceeds eight distinct
+    /// values, silently; the skip reasons already stand at six, so adding terminal outcomes there
+    /// would put the breakdown one label away from disappearing without saying so.
+    ///
+    /// `label` = `exhausted` (five attempts, all failed) · `not_reconstructable` (the row is a
+    /// media message, whose wire plaintext the persisted model cannot rebuild — a pre-existing
+    /// limit of every retry path here, not one this queue introduces) · `no_row` (the message was
+    /// deleted while the copy was owed, which is the one benign member of the set) ·
+    /// `not_retryable` (the retry hit a missing device id or an empty chunk plan — not a transport
+    /// failure, so trying again would meet the same wall).
+    case fanoutRetryGaveUp = "fanout_retry_gave_up"
+
+    /// An incoming message was tried against more than one of the sender's device sessions.
+    ///
+    /// A peer's account has several devices and each has its own ratchet, so "which session
+    /// decrypts this" has as many answers as they have devices. Until 2026-08-31 it had exactly
+    /// one, and a message from the second device failed AEAD against the first device's session —
+    /// indistinguishable from a broken session, and treated as one.
+    ///
+    /// `label` = `attemptN` when the Nth device opened it · `exhausted` when none did. Recorded
+    /// only when the walk actually went past the first candidate, so a single-device account —
+    /// the overwhelming majority — contributes nothing and the count reads as "how often does
+    /// multi-device cost us an extra attempt".
+    ///
+    /// This is the number that prices §D. Naming the sending device on the wire removes the walk;
+    /// until then this says what the walk is worth. A rising `exhausted` means something other
+    /// than device choice is wrong, because every session we hold was tried.
+    case decryptDeviceWalk = "decrypt_device_walk"
+
+    /// A sealed envelope that names one of our **other** devices, dropped without an unseal
+    /// attempt.
+    ///
+    /// Expected, not a fault, and that is the whole reason it is counted apart. While
+    /// `MSG_MAILBOX_USER_WRITE=1` the relay still writes every message to the account-wide stream
+    /// as well as the per-device one, so each device receives its siblings' copies. Those are
+    /// sealed to a key it does not have and can never open.
+    ///
+    /// Until 2026-09-01 they went down the failure path: deferred for a redelivery that cannot
+    /// succeed, holding the stream cursor for the round trip, triggering a bundle-key refresh, and
+    /// counting against `stealth_unseal_failure` — a release-gate number. On a multi-device account
+    /// that is one per message per sibling, which is the 155-of-155 shape the Desktop investigation
+    /// began with.
+    ///
+    /// Its value is the measure of that duplication, so it is also the gauge for the mailbox
+    /// cutover: after `MSG_MAILBOX_USER_WRITE=0` this should fall to zero on its own, because the
+    /// copies stop being delivered here at all. A non-zero count after the flip means the account
+    /// stream is still being read.
+    ///
+    /// `label` = `SealedCopyOrigin`: `sibling` is the expected duplicate above; `not_ours` is a
+    /// copy for a device outside our account's current active set, which is either a misroute or
+    /// the backlog of a revoke and cannot be told apart here; `unverified` means our own device
+    /// set was not known in this process yet, so the question could not be answered. The label
+    /// used to be the call site, of which there is one.
+    case stealthCopyForSibling = "stealth_copy_for_sibling"
+
     /// The fast-UDP transport (engine-QUIC / native H3) was suppressed on this network because it
     /// failed to carry data. `label` = the ladder rung just armed (`rung1` 5min · `rung2` 1h ·
     /// `rung3` 24h), which is the gauge for "how permanently is QUIC blocked where this user is".
@@ -213,6 +312,14 @@ enum MetricEvent: String {
     /// What it answers is whether the ladder converges: a device that keeps re-arming `rung1` is a
     /// device whose evidence is being erased between attempts, which is the defect this replaced.
     case quicSuppressed = "quic_suppressed"
+
+    /// A network path change reached a live fast-UDP stream. `migrated` = the QUIC connection was
+    /// carried across and the stream kept running · `reconnected` = the migration was not confirmed
+    /// and the stream was reopened, which is what always happened before 2026-08-24.
+    ///
+    /// The ratio is the gauge for whether QUIC's mobility is real on the networks users are on —
+    /// it is one of the two reasons this transport exists, and until now nothing measured it.
+    case quicPathMigration = "quic_path_migration"
 
     /// A sealed send found the wallet empty and waited for issuance. `served` = a token arrived in
     /// time · `timeout` = it did not · `backoff` = the issuer was refusing, so we did not wait.
@@ -254,6 +361,12 @@ enum MetricEvent: String {
     /// incoming call from a peer who was not calling. `label` = signal kind.
     case callSignalAfterEnd = "call_signal_after_end"
 
+    /// A VoIP push arrived for a call the E2EE offer had already created. Normal — the two race, and
+    /// either can win. Counted because acting on it used to mean `begin()`, which replaced the
+    /// `ActiveCall` and took the stored offer SDP and every buffered ICE candidate with it; the
+    /// callee then answered into nothing and waited 45 s for an SDP it had held all along.
+    case incomingPushDuplicate = "incoming_push_duplicate"
+
     /// A session handshake control (SRI / ping / ready) was abandoned mid-retry because the
     /// session it announces was replaced or destroyed between attempts. Sending it anyway told the
     /// peer to reset a session that had already been superseded — see the 2026-08-04 cascade in
@@ -289,6 +402,20 @@ enum MetricEvent: String {
     /// Should be zero in a normal run: `markProcessed` is only reached after a decrypt, which
     /// already requires the core. A non-zero count means that assumption is wrong somewhere.
     case ackCacheWarmSkippedNoCore = "ack_cache_warm_skipped_no_core"
+
+    /// How a per-device copy addressed to the recipient's account was judged on arrival.
+    /// `label` = `ours` · `foreign` · `undecidable`.
+    ///
+    /// The one that matters is `undecidable`: we cannot tell a sibling's copy from a copy sent by
+    /// a peer device we never pinned, so it is opened, and opening a copy that was not ours costs
+    /// a failed decrypt. That is the safe direction — discarding one loses a message from the
+    /// transcript silently — but its *frequency* has never been measured, and the frequency is the
+    /// whole case for putting the account id inside the session record so a cold start can decide
+    /// without `PeerDeviceRegistry`.
+    ///
+    /// This counter exists so that decision is taken on a number. Until a run produces one,
+    /// "add the field" and "leave it" are both guesses.
+    case deviceCopyVerdict = "device_copy_verdict"
 }
 
 #if DEBUG
@@ -337,6 +464,35 @@ final class PerformanceMetrics: @unchecked Sendable {
     private var events: [MetricRecord] = []
     private let maxEvents = 200
 
+    /// Monotonic per-event totals, kept beside the ring buffer because the two answer different
+    /// questions and only one of them was ever asked.
+    ///
+    /// The buffer answers "what happened recently"; it holds 200 records shared by every event, so
+    /// it cannot answer "how many times did this happen" — which is what every signal in
+    /// `decisions/ios-semantic-divergence-signals.md` was added to answer. The 2026-08-04 run
+    /// recorded `duplicate_after_ack_check` 6296 times, turning the buffer over thirty times, and
+    /// the rare loud events the epic exists for are the first thing that eviction takes.
+    private var totals: [MetricEvent: Int] = [:]
+
+    /// Totals as of the last `changedSignalsSummary()`, so a quiet interval logs nothing.
+    private var reportedTotals: [MetricEvent: Int] = [:]
+
+    /// Per-label totals for the events whose label is a small closed set, and the events that have
+    /// proven it is not.
+    ///
+    /// The split matters because for several gauges the event total answers nothing on its own:
+    /// `token_wallet_wait` is the Privacy Pass enforce-readiness measurement (TODO 47) and the
+    /// decision turns entirely on `served` vs `timeout` vs `backoff`. Other events label with an
+    /// identifier — `msgNum=`, a message id, an action list — where a per-label map would grow
+    /// without bound over a run and say nothing at the end of it.
+    ///
+    /// Which is which is discovered, not declared: an event that exceeds `maxLabelsPerEvent`
+    /// distinct labels collapses to its plain total and its map is dropped. A declared list would
+    /// be a second place to keep the enum's shape, and those disagree.
+    private var labelTotals: [MetricEvent: [String: Int]] = [:]
+    private var collapsedLabels: Set<MetricEvent> = []
+    private let maxLabelsPerEvent = 8
+
     // Computed latency samples (message receive end-to-end)
     private var latencySamples: [LatencySample] = []
     private let maxSamples = 100
@@ -355,6 +511,17 @@ final class PerformanceMetrics: @unchecked Sendable {
         lock.lock()
         if events.count >= maxEvents { events.removeFirst() }
         events.append(record)
+        totals[event, default: 0] += 1
+        if !label.isEmpty, !collapsedLabels.contains(event) {
+            var byLabel = labelTotals[event] ?? [:]
+            byLabel[label, default: 0] += 1
+            if byLabel.count > maxLabelsPerEvent {
+                collapsedLabels.insert(event)
+                labelTotals[event] = nil
+            } else {
+                labelTotals[event] = byLabel
+            }
+        }
         lock.unlock()
     }
 
@@ -459,12 +626,57 @@ final class PerformanceMetrics: @unchecked Sendable {
         return relevant.map(\.durationMs).reduce(0, +) / Double(relevant.count)
     }
 
-    func count(event: MetricEvent, last n: Int? = nil) -> Int {
+    /// How many times `event` has been recorded since launch, or since the last `clearAll()`.
+    ///
+    /// Reads the monotonic total, never the ring buffer. The previous implementation counted
+    /// matches among the last 200 records of *all* events, so no answer above 200 was reachable
+    /// and every answer below it was a function of whatever else happened to be busy. Its one
+    /// production caller is the "Token-less sends" row in `DiagnosticsView`, which is the evidence
+    /// the Privacy Pass enforce decision turns on (TODO 47).
+    ///
+    /// The `last n` window it used to take had no caller and is gone rather than renamed: a
+    /// parameter that silently truncates is the same defect as the buffer it read from.
+    func count(event: MetricEvent) -> Int {
         lock.lock()
-        let slice = n == nil ? events[...] : events.suffix(n!)
-        let count = slice.filter { $0.event == event }.count
-        lock.unlock()
-        return count
+        defer { lock.unlock() }
+        return totals[event] ?? 0
+    }
+
+    /// One line of cumulative per-event totals, or `nil` if nothing has been recorded since the
+    /// last call.
+    ///
+    /// Cumulative rather than per-interval so the *last* such line in a log is the whole run — one
+    /// `grep | tail -1` instead of adding up a time series by hand — while the earlier lines still
+    /// show when a burst happened. Silent when nothing moved, so a quiet device costs no lines.
+    ///
+    /// Every event is included, the high-volume pipeline ones too: they are the denominators. A
+    /// count of failures with no count of traffic beside it is exactly how
+    /// `chunk_reassembly_incomplete` read as eleven losses for a photo that arrived intact
+    /// (`ios-semantic-divergence-signals` rule 1a).
+    ///
+    /// Events whose label is a closed set carry it: `token_wallet_wait=104(served=71,timeout=28,
+    /// backoff=5)`. That breakdown *is* the gauge — the bare total answers nothing the enforce
+    /// decision asks. Events labelled with an identifier collapse to the total; see `labelTotals`.
+    func changedSignalsSummary() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard totals != reportedTotals else { return nil }
+        reportedTotals = totals
+        return totals
+            .sorted { lhs, rhs in
+                lhs.value == rhs.value ? lhs.key.rawValue < rhs.key.rawValue : lhs.value > rhs.value
+            }
+            .map { event, total in
+                guard let byLabel = labelTotals[event], !byLabel.isEmpty else {
+                    return "\(event.rawValue)=\(total)"
+                }
+                let breakdown = byLabel
+                    .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
+                    .map { "\($0.key)=\($0.value)" }
+                    .joined(separator: ",")
+                return "\(event.rawValue)=\(total)(\(breakdown))"
+            }
+            .joined(separator: " ")
     }
 
     func p95Latency(for eventPair: String, last n: Int = 20) -> Double? {
@@ -482,6 +694,10 @@ final class PerformanceMetrics: @unchecked Sendable {
         events.removeAll()
         latencySamples.removeAll()
         pendingStarts.removeAll()
+        totals.removeAll()
+        reportedTotals.removeAll()
+        labelTotals.removeAll()
+        collapsedLabels.removeAll()
         lock.unlock()
     }
 }
@@ -525,7 +741,8 @@ final class PerformanceMetrics: @unchecked Sendable {
     @inline(__always) func coreDataSaveEnd(label: String) {}
     @inline(__always) func coreDataSaveFailed(label: String) {}
     @inline(__always) func clearAll() {}
-    @inline(__always) func count(event: MetricEvent, last n: Int? = nil) -> Int { 0 }
+    @inline(__always) func count(event: MetricEvent) -> Int { 0 }
+    @inline(__always) func changedSignalsSummary() -> String? { nil }
 }
 
 #endif

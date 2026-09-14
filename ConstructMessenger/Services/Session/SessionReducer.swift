@@ -26,6 +26,19 @@
 
 import Foundation
 
+/// The core's classification rule, reachable from inside `SessionReducer`.
+///
+/// Needed only because of name resolution: `SessionReducer.receivingInitKind` shadows the core's
+/// free function of the same base name, and Swift refuses the call rather than falling through to
+/// module scope. Qualifying by module is not the fix either — the module is `Construct_Messenger`
+/// on iOS and `Construct_Desktop` on macOS, and this file is compiled into both, so a hardcoded
+/// module name builds on one target and breaks the other.
+///
+/// At file scope there is no member to shadow, so the name resolves to the core.
+private func coreReceivingInitKind(_ carrier: ReceivingInitCarrier) -> ReceivingInitKind {
+    receivingInitKind(carrier: carrier)
+}
+
 enum SessionReducer {
 
     /// Lifecycle phase of the session with a single peer. Absence of an entry (`nil`)
@@ -122,6 +135,40 @@ enum SessionReducer {
         case midRatchet
     }
 
+    /// What to do with an envelope from a peer the server said does not exist.
+    enum VanishedPeerAction: Equatable {
+        /// Not marked, or the mark is old enough to be worth re-testing. Ordinary handling —
+        /// which means a bundle fetch, whose answer is the only thing that can settle it.
+        case proceed
+        /// Marked and still fresh: this is more of their replayed backlog. Resolve it and move
+        /// on, because no session can be built and queueing it holds the stream cursor.
+        case discard
+    }
+
+    /// How long a `notFound` verdict stands before one more bundle fetch is allowed.
+    ///
+    /// The mark has to expire somehow, because an account can be re-registered and nothing else
+    /// would ever ask again. An hour is chosen against the cost of being wrong in each direction:
+    /// too long and a returning contact waits, too short and we hammer the key service — which we
+    /// measured, `resourceExhausted: "Too many bundle requests"`, 2026-08-20.
+    static let vanishedPeerRetryAfter: TimeInterval = 60 * 60
+
+    /// - Parameter markedAt: when the server last answered `notFound` for this peer, or nil if
+    ///   it never has.
+    ///
+    /// **Deliberately blind to the envelope.** The first version revived a peer on a handshake,
+    /// which read plausibly and was wrong: `receivingInitKind` cannot tell a classic 3-DH
+    /// handshake from a classic leftover (documented hole), and a deleted account's backlog is
+    /// full of `msgNum=0` leftovers. Every one of them revived the peer, so the mark oscillated
+    /// on a 20-second cycle — marked 17:45:33, cleared 17:45:53, marked 17:45:55, cleared
+    /// 17:45:58 — and the cursor never moved. Only the server can say an account exists, so only
+    /// the server's answer clears the mark: `KeyServiceClient` on a successful fetch, or this
+    /// window lapsing and letting one fetch through to ask again.
+    static func vanishedPeerAction(markedAt: Date?, now: Date = Date()) -> VanishedPeerAction {
+        guard let markedAt else { return .proceed }
+        return now.timeIntervalSince(markedAt) < vanishedPeerRetryAfter ? .discard : .proceed
+    }
+
     /// Classify an incoming envelope for the RESPONDER init path.
     ///
     /// Handshake evidence, any one of which is enough: SESSION_RESET_INIT, a consumed OTPK,
@@ -129,6 +176,15 @@ enum SessionReducer {
     /// — the epoch is what a live PQ ratchet stamps, and a fresh session starts at 0.
     /// 3-DH classic (no OTPK, no KEM, epoch 0) stays a handshake: that is the reproducible
     /// fallback after `otpkUnreproducible`.
+    /// **The rule itself lives in the core** (`orchestration::receiving_init_plan`). This is a
+    /// forwarder plus a type adapter, not a second implementation: two clients that classify a
+    /// carrier differently do not produce an error, they produce a copy dropped as foreign and a
+    /// message that never appears, and there are two clients now. See AGENTS.md, "The core decides,
+    /// this app executes".
+    ///
+    /// The local enum survives only because six call sites read it and converting them is not this
+    /// change. When they are touched, they should take `ReceivingInitKind` from the core directly
+    /// and this adapter should go with them.
     static func receivingInitKind(
         messageNumber: UInt32,
         oneTimePreKeyId: UInt32,
@@ -136,24 +192,49 @@ enum SessionReducer {
         pqMessageEpoch: UInt32,
         isSessionResetInit: Bool
     ) -> ReceivingInitKind {
-        if messageNumber != 0 { return .midRatchet }
-        if isSessionResetInit { return .handshake }
-        if oneTimePreKeyId != 0 { return .handshake }
-        if kemCiphertextBytes > 0 { return .handshake }
-        if pqMessageEpoch > 0 { return .midSessionLeftover }
-        return .handshake
+        let carrier = ReceivingInitCarrier(
+            messageNumber: messageNumber,
+            oneTimePrekeyId: oneTimePreKeyId,
+            // The core takes a byte count, not the bytes: classifying a carrier must never require
+            // holding its body, so a caller can plan before it commits to anything.
+            kemCiphertextBytes: UInt32(max(0, kemCiphertextBytes)),
+            pqMessageEpoch: pqMessageEpoch,
+            isSessionResetInit: isSessionResetInit
+        )
+        switch coreReceivingInitKind(carrier) {
+        case .handshake:          return .handshake
+        case .midRatchet:         return .midRatchet
+        case .midSessionLeftover: return .midSessionLeftover
+        }
     }
 
-    /// The envelope to feed `initReceivingSession`: the triggering message if it is a
-    /// handshake, otherwise the first handshake in the pending queue. `nil` means we
-    /// must not init — calling it on a leftover fails and clears the queue.
-    static func pickHandshakeCarrier<T>(
-        preferred: T,
-        queued: [T],
-        kind: (T) -> ReceivingInitKind
-    ) -> T? {
-        if kind(preferred) == .handshake { return preferred }
-        return queued.first { kind($0) == .handshake }
+    /// How a drained pending queue splits after a session opens: the entry whose watermark to
+    /// release, and the messages still to route.
+    ///
+    /// **The opener is named, not positional.** Both drain sites used to say "skip the first",
+    /// which was the right message only by coincidence. The heal path opens on the message
+    /// `SessionHealingService` chose, unrelated to queue order; and since the responder walk began
+    /// trying every eligible carrier the first-message path opens on whichever carrier the peer's
+    /// device actually sent — for a multi-device peer, routinely not the first queued. A wrong
+    /// answer here is two failures at once: the real opener is re-routed into a ratchet that has
+    /// already consumed it, and an unrelated queued handshake is dropped with its watermark
+    /// released, never tried.
+    ///
+    /// `resolve` is nil when the opener is not in the queue at all, which is normal rather than a
+    /// loss: the first-message path opens on the message that triggered the fetch, and that one
+    /// reaches init before it is ever enqueued. Distinguishing the two is the point — a missing id
+    /// that *should* have been queued means the queue lost it, and that must not read the same as
+    /// a message which was never in it.
+    static func drainSplit(
+        queuedIds: [String],
+        openedOn: String?
+    ) -> (resolve: String?, toRoute: [String]) {
+        guard let openedOn, let index = queuedIds.firstIndex(of: openedOn) else {
+            return (nil, queuedIds)
+        }
+        var rest = queuedIds
+        rest.remove(at: index)
+        return (openedOn, rest)
     }
 
     /// Pure disposition for an incoming message, fed by the authoritative facts MessageRouter
@@ -319,6 +400,30 @@ enum SessionReducer {
         /// Plain init failure outside the inbound-END_SESSION grace → ordinary rate-limited
         /// END_SESSION so the peer re-inits.
         case sendPlain
+
+        /// Whether this branch has **evidence** that the peer is talking on a session we cannot
+        /// read, which is what `plan_teardown` needs to turn a device we hold no session with
+        /// from `.skip` into `.sendOnly`.
+        ///
+        /// Both sending branches have it, and for the same reason: they are only reached because
+        /// a message arrived and no session could be built for it. Dropping the flag is not a
+        /// smaller signal, it is silence — after a failed RESPONDER init we hold no session with
+        /// *any* of the peer's devices, so every one of them plans as `.skip` and nothing is sent.
+        /// Measured 2026-09-06: six rounds of `otpk_unreproducible` in four minutes, each ending
+        /// `2 device(s) all skipped`, no END_SESSION on the wire, and the peer re-sending the same
+        /// unreadable message throughout. The recovery request was suppressed by the very
+        /// condition that made it necessary.
+        ///
+        /// It lives here rather than as a literal at the three send sites because this enum is
+        /// already the branch authority, and a policy repeated at call sites is the shape that
+        /// drifts — the otpk site and the heal-exhausted site are in different functions 300 lines
+        /// apart and were already inconsistent with `session_out_of_sync`, which passes it.
+        var peerOnDeadSession: Bool {
+            switch self {
+            case .sendTypedOtpk, .sendPlain: return true
+            case .suppressWithinGrace:       return false
+            }
+        }
     }
 
     static func initFailureAction(
@@ -371,31 +476,12 @@ enum SessionReducer {
         return now.timeIntervalSince(lastHandledAt) >= cooldown
     }
 
-    // MARK: - Tie-break role (the single Swift authority)
+    // MARK: - Tie-break role
 
-    /// Role in a concurrent-init tie-break.
-    enum Role: Equatable { case initiator, responder }
-
-    /// Deterministic tie-break role, **matching the Rust core byte-for-byte**
-    /// (`construct-core` `message_router.rs::tie_break_role`): plain string comparison of the two
-    /// `ServerUserId`s, **higher id = INITIATOR**. Both peers compute this independently over the
-    /// same pair, so any disagreement means both-initiator / both-responder → permanent deadlock.
-    /// This is why it must be one authority and must not normalise (lowercasing here would diverge
-    /// from Rust). For canonical lowercase dashed UUIDs, string order == UUID-byte order, so this
-    /// supersedes the old `DeviceIdOrdering` UUID-byte compare (which diverged from Rust only on
-    /// non-canonical / mixed-case ids — a latent fragility, now removed).
-    ///
-    /// - Note: operands are `ServerUserId`s (36-char UUID), **not** `CryptoDeviceId`s — the old
-    ///   "deviceId" naming was a misnomer; the AD and the Rust rule both key on userId.
-    static func tieBreakRole(myId: String, peerId: String) -> Role {
-        myId > peerId ? .initiator : .responder
-    }
-
-    /// Whether we are the natural INITIATOR (higher userId) for this peer — the proactive-prewarm
-    /// and responder-fallback predicate. Equal ids (self / echo) are not an initiator.
-    static func isNaturalInitiator(myId: String, peerId: String) -> Bool {
-        myId != peerId && tieBreakRole(myId: myId, peerId: peerId) == .initiator
-    }
+    // The rule lives in the core and is reached through `SessionAddressing.role(mine:theirs:)`.
+    // It used to be reimplemented here, under a comment promising it matched the core byte-for-byte
+    // — see that function for what the promise cost. The reducer stays pure: it takes
+    // `isNaturalInitiator` as an input and never computes it.
 
     // MARK: - Confirmation gate (INITIATOR awaiting RESPONDER session_ready)
 
@@ -431,27 +517,39 @@ enum SessionReducer {
         case hold
     }
 
-    /// The gate's disposition for one incoming message — the single authority for both points at
-    /// which the question is asked: before decryption (a peer msgNum=0) and after it (the core
-    /// answered `sendEndSession`).
+    /// The gate's disposition for one incoming message the core has already failed to read —
+    /// the single authority for both points at which that question is asked (`sendEndSession`
+    /// and `sessionHealNeeded`).
     ///
     /// Both must **hold**, never discard. Inside our own confirm window we are the side that
-    /// replaced the session, so a peer init that cannot be read and a decrypt failure are both
-    /// consequences of our own re-init, not evidence about the peer. Answering either with a
-    /// discard cost a user message on 2026-08-04: the peer's live init was marked processed (so
-    /// the server never redelivered it) and the message that followed it one second later tore the
-    /// session down and went with it.
+    /// replaced the session, so a message that cannot be read is a consequence of our own re-init,
+    /// not evidence about the peer. Answering it with a discard cost a user message on 2026-08-04:
+    /// the peer's live init was marked processed (so the server never redelivered it) and the
+    /// message that followed it one second later tore the session down and went with it.
     ///
     /// Control carriers are exempt. END_SESSION and SESSION_RESET_INIT are what drives the
     /// convergence the gate is waiting for — holding them would make the gate wait on itself.
+    ///
+    /// **The gate is asked only after decryption, and that is the whole rule.** It used to be
+    /// asked before it too, on `messageNumber == 0`, and that question has no answer at the
+    /// envelope: a DH sending chain restarts at 0 on every ratchet turn, so the predicate reads
+    /// every peer's first message under a fresh chain as a handshake. `session_ready` (ct 26) is
+    /// exactly such a message — it is the RESPONDER's first send under the session *we* created,
+    /// and since 2026-08-03 its type rides inside the ciphertext, so nothing before decryption can
+    /// tell it apart. The gate therefore held its own key: device log 2026-08-21 has 16 of the
+    /// peer's 19 `session_ready` sitting in the buffer of the gate waiting for them, 27 held
+    /// messages of which **none** was ever saved, and 19 dropped as superseded once the watchdog's
+    /// re-init moved the epoch out from under them.
+    ///
+    /// Decryption is the exact test the guess was approximating: a message readable by the session
+    /// we hold is by definition not a peer init we must keep away from the ratchet. So it is fed
+    /// to the ratchet, and only the ratchet's refusal reaches this function.
     static func confirmGateAction(
         isPending: Bool,
-        isControlCarrier: Bool,
-        isPeerInit: Bool,
-        decryptFailed: Bool
+        isControlCarrier: Bool
     ) -> ConfirmGateAction {
         guard isPending, !isControlCarrier else { return .route }
-        return (isPeerInit || decryptFailed) ? .hold : .route
+        return .hold
     }
 
     /// Whether a handshake-control retry may still speak for the session it was created to
@@ -494,15 +592,22 @@ enum SessionReducer {
     ///     15:23:27  heal_triggered: becoming RESPONDER
     ///     15:23:27  Archiving session … reason: manual_reset      ← a 60-second-old good session
     ///
-    /// Only a peer *init* is dropped. A payload (`messageNumber > 0`) is replayed whatever its
-    /// age: dropping user content on a guess is the failure §1d exists to prevent, and a payload
-    /// that cannot decrypt is a question for the healing path, not for this one.
+    /// Only a peer *init* is dropped. Anything else is replayed whatever its age: dropping user
+    /// content on a guess is the failure §1d exists to prevent, and a payload that cannot decrypt
+    /// is a question for the healing path, not for this one.
+    ///
+    /// `kind` is a ``ReceivingInitKind`` and not a `Bool` on purpose. Both callers used to compute
+    /// it as `messageNumber == 0`, which is the misreading this codebase has now paid for three
+    /// times — the RESPONDER init guard, the deleted-contact guard, and here. A sending chain
+    /// restarts at 0 on every ratchet turn, so that predicate drops the peer's first message under
+    /// a fresh chain, and on 2026-08-21 it dropped 19 of them. Taking the classifier's own type
+    /// means the next call site has to obtain a verdict rather than re-invent one.
     static func heldReplayDisposition(
         heldAgainst: SessionEpoch?,
         current: SessionEpoch?,
-        isPeerInit: Bool
+        kind: ReceivingInitKind
     ) -> HeldReplayDisposition {
-        guard isPeerInit else { return .replay }
+        guard kind == .handshake else { return .replay }
         // No session now: nothing has superseded it, and it may be the very handshake that
         // establishes one.
         guard current != nil else { return .replay }

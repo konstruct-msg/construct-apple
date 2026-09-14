@@ -248,4 +248,140 @@ final class CallOfferOrderingTests: XCTestCase {
             "the guard exists to refuse the empty offer, not to refuse offers"
         )
     }
+
+    // MARK: - The push that arrives second (build 630, 2026-08-22)
+
+    //  The other ordering, and the one the tests above never reached: the offer wins the race, and
+    //  the push lands on a call that is already ringing with its SDP held and its ICE buffered.
+    //  `handleIncomingPush` called `begin()` regardless, which replaces the ActiveCall and takes
+    //  both with it:
+    //
+    //      11:37:56  Incoming offer SDP from ffeeddc6… sdp=1155b
+    //      11:37:57  Buffered 32/32 E2EE ICE candidates (pending SDP)
+    //      11:37:58  Incoming VoIP push — CallKit notified sync
+    //      11:37:58  CallKit reportNewIncomingCall failed: Code=2   ← callUUIDAlreadyExists
+    //      11:37:59  "Answered before the offer arrived — waiting up to 45s for SDP"
+    //      11:38:14  Call end   state=connecting answered=false mediaConnected=false
+
+    /// The regression. A push for the call we are already tracking adds nothing and must not be
+    /// allowed to restart it.
+    ///
+    /// Mutation: return `.beginNewCall` when `matchesTrackedCallId` — restores the discard.
+    func testPushForTheCallWeAlreadyTrackDoesNotRestartIt() {
+        XCTAssertEqual(
+            incomingPushDisposition(
+                hasActiveCall: true,
+                isBusyState: false,
+                matchesTrackedCallId: true
+            ),
+            .alreadyTracking,
+            "begin() here replaces the ActiveCall, and the stored offer SDP and every buffered ICE "
+            + "candidate go with it — the callee then answers into nothing"
+        )
+    }
+
+    /// The state the old busy guard did not cover, and the whole reason this decision is separate
+    /// from it: a call ringing from an offer nobody has answered sits in `.incoming`, which is not
+    /// a busy state. Being busy and already tracking this call are different questions.
+    ///
+    /// Mutation: `guard isBusyState else { return .beginNewCall }` before the match check.
+    func testTrackingOutranksNotBeingBusy() {
+        XCTAssertEqual(
+            incomingPushDisposition(
+                hasActiveCall: true,
+                isBusyState: false,
+                matchesTrackedCallId: true
+            ),
+            .alreadyTracking
+        )
+        XCTAssertEqual(
+            incomingPushDisposition(
+                hasActiveCall: true,
+                isBusyState: true,
+                matchesTrackedCallId: true
+            ),
+            .alreadyTracking,
+            "our own call reaching a busy state does not make its own push a second call"
+        )
+    }
+
+    /// The guard that must survive: a *different* call arriving while one is up is still declined.
+    /// Without this the fix would let a second caller close the call in progress.
+    ///
+    /// Mutation: return `.alreadyTracking` when `hasActiveCall`, ignoring the id.
+    func testADifferentCallDuringOneInProgressIsStillDeclined() {
+        XCTAssertEqual(
+            incomingPushDisposition(
+                hasActiveCall: true,
+                isBusyState: true,
+                matchesTrackedCallId: false
+            ),
+            .declineBusy
+        )
+    }
+
+    /// A stale ActiveCall left behind in a non-busy state must not block a genuinely new call —
+    /// this is the path the foreground `IncomingCallNotification` fallback takes.
+    func testADifferentCallWithNothingInProgressBegins() {
+        XCTAssertEqual(
+            incomingPushDisposition(
+                hasActiveCall: true,
+                isBusyState: false,
+                matchesTrackedCallId: false
+            ),
+            .beginNewCall
+        )
+    }
+
+    /// The ordinary case, which must keep working: the push wins the race and is the first anyone
+    /// has heard of this call.
+    ///
+    /// Mutation: return `.alreadyTracking` unconditionally — the one that would silently stop every
+    /// push-first incoming call.
+    func testAPushWithNoCallInFlightBegins() {
+        XCTAssertEqual(
+            incomingPushDisposition(
+                hasActiveCall: false,
+                isBusyState: false,
+                matchesTrackedCallId: false
+            ),
+            .beginNewCall
+        )
+    }
+
+    /// With no ActiveCall there is nothing to match or be busy with, and neither flag may leak into
+    /// the decision — a stale reading of either cannot swallow a real call.
+    func testWithNoActiveCallTheOtherFlagsDoNotMatter() {
+        for busy in [true, false] {
+            for match in [true, false] {
+                XCTAssertEqual(
+                    incomingPushDisposition(
+                        hasActiveCall: false,
+                        isBusyState: busy,
+                        matchesTrackedCallId: match
+                    ),
+                    .beginNewCall,
+                    "busy=\(busy) match=\(match)"
+                )
+            }
+        }
+    }
+
+    /// Every combination maps to one disposition and each is reachable — the one that was missing
+    /// is the one that cost the call.
+    func testEveryPushOrderingHasADisposition() {
+        var seen: Set<IncomingPushDisposition> = []
+        for hasActive in [true, false] {
+            for busy in [true, false] {
+                for match in [true, false] {
+                    seen.insert(incomingPushDisposition(
+                        hasActiveCall: hasActive,
+                        isBusyState: busy,
+                        matchesTrackedCallId: match
+                    ))
+                }
+            }
+        }
+        XCTAssertEqual(seen, [.declineBusy, .alreadyTracking, .beginNewCall])
+    }
 }

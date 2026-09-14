@@ -120,6 +120,10 @@ final class ProactiveInitCoalescingTests: XCTestCase {
     ) async {
         await service.initializeSessionProactively(
             userId: peer,
+            // These tests are about coalescing, which only happens once a run has started —
+            // so every call here has work to carry. A `false` would defer instead, and the
+            // suite would pass by never reaching the thing it measures.
+            hasOutboundWork: true,
             onSuccess: { Task { await onSuccess() } },
             onFailure: { _ in Task { await onFailure() } }
         )

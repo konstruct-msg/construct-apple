@@ -10,9 +10,9 @@ it.
 | Build, first clone, target flags | `~/Code/construct-docs/client/ios/BUILD_GUIDE.md` |
 | UniFFI bindings | `~/Code/construct-docs/client/ios/UNIFFI_GUIDE.md` |
 | Design system (symbols, components, migration) | `~/Code/construct-docs/client/ios/DESIGN_SYSTEM_RULES.md` |
-| Session lifecycle, keychain, crypto/transport path | `~/Code/construct-docs/client/ios/ARCHITECTURE_NOTES.md` |
+| Session lifecycle, keychain, crypto/transport path | `~/Code/construct-docs/client/ios/ARCHITECTURE_NOTES.md` · target machine: `~/Code/construct-docs/decisions/session-is-one-state-machine.md` |
 | Sealed control channel | `~/Code/construct-docs/client/ios/SEALED_CONTROL_CHANNEL_REMEDIATION.md` |
-| Binary data / CFE format | `~/Code/construct-docs/client/construct-ffi-binary-format.md` |
+| Binary data / CFE format | `~/Code/construct-docs/client/shared/construct-ffi-binary-format.md` |
 | Product wording | `~/Code/construct-docs/client/GLOSSARY_PRODUCT_LANGUAGE.md` |
 | How to test | `docs/TESTING.md` → `~/Code/construct-docs/decisions/testing-by-pure-decision.md` |
 | Two-simulator E2E stand | `docs/TWO_SIM_STAND.md` |
@@ -39,12 +39,17 @@ Sibling repos: `~/Code/construct-core` (crypto), `~/Code/construct-transport` (Q
 
 ```bash
 ./build_crypto_lib.sh --all      # first build: ConstructCore.xcframework (iOS+sim+mac)
-./build_transport_lib.sh         # first build: ConstructTransport.xcframework
+./build_transport_lib.sh --all   # first build: ConstructTransport.xcframework (iOS+sim+mac)
 ./build_crypto_lib.sh --ios      # quick rebuild after Rust changes (~45s)
 ```
 
+- **`--all` on both, always, unless you are rebuilding for one platform on purpose.** Without it
+  `build_transport_lib.sh` omits the `macos-arm64` slice, and this file said to run it bare until
+  2026-08-23. Nothing on the iOS side notices; `Construct Desktop/` then fails to link against an
+  xcframework that looks perfectly well-formed.
 - The `*.xcframework` binaries are **not** in git — a fresh clone must build them before Xcode can
-  compile anything.
+  compile anything. `Info.plist` **is** tracked, which is the only reason a narrowed rebuild shows
+  up as a diff at all.
 - **Never pin `OS=` in a `-destination`.** Simulator runtimes are replaced with every Xcode
   upgrade; a pinned one stops resolving and the failure reads like a project problem. This file
   said `iPhone 16,OS=18.6` for months after that runtime was gone. Check
@@ -64,13 +69,21 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 | Kind | API |
 |------|-----|
 | Colors | `Color.CT.bg`, `.text`, `.textDim`, `.accent`, `.accentDim`, `.danger`, `.noise`, `.bgMsg`, `.outMsgBg`, `.outMsgText` |
-| Fonts | `CTFont.regular/medium/bold(size)` — always JetBrains Mono |
+| Fonts | `CTFont.regular/medium/bold(size)` — always JetBrains Mono, for **chrome**. `CTFont.message(size)` for message text: the one face the reader chooses |
 | Radii / Shapes | `CTRadius` (`badge` 6 · `card` 8 · `control` 10 · `pill` 999) via `CTShape.*()` — no magic `cornerRadius: 16\|18\|22` |
 | Layout | `CTLayout` (`edgePad` 12 · `controlHeight` 42 · `hitTarget` 44 · …) |
 | Glass | `.glassCapsule()` — defaults to pill; do not pass 18/22 |
 
 - Two surface languages, never mixed on one control: **form/card** (`CTRadius.card`, solid) vs
   **composer/glass** (`pill`, `.glassCapsule()`); `CTButton`/bubbles use `CTRadius.control`.
+- **Message text is the one thing the reader picks the font for.** `CTFont.message` — bubbles and
+  the composer that fills them — reads a preference; everything else is `CTFont.*` and stays
+  monospaced unconditionally. The split is chrome vs content, the same line that already puts SF
+  Symbols on anything interactive. Do not widen it: a preference read inside `CTFont.regular`
+  would turn nav bars, `> TITLE` headers and badges into a different product. Note the old "always"
+  was never true where it mattered — JetBrains Mono ships no CJK, so Japanese bubbles have always
+  been a substituted face. `CTFont.message` also carries the size preference and `relativeTo:
+  .body`; the chrome deliberately does not scale, because it is laid out against fixed metrics.
 - **No `NavigationStack` inside sheets** — `CTNavBar(showBack: true, backAction: { dismiss() })`.
 - Background always `Color.CT.bg` (`#090909`) via `.ctBackground()`.
 - New UI must use tokens; when editing a file with a literal `8`/`10`/`18`, migrate that call site.
@@ -81,14 +94,11 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 **Xcode Previews do not run in the app target.** It links WebRTC and WhisperKit, and the preview
 process dies at launch with `_objc_fatal: Attempt to use unknown class` whenever those load — on
 any iOS runtime, independent of app code, and compile flags cannot help because the frameworks stay
-linked. The 53 `#Preview` blocks in the app are therefore decorative today.
+linked. Every `#Preview` block in the app is therefore decorative today.
 
-A standalone SwiftPM package (`ConstructUI/`) was added 2026-06-08 to work around this: no
-dependency on the app, so its preview process ran. It was **removed 2026-08-14** — it held a copy
-of `ConstructTheme.swift` that nothing kept in sync, and by deletion it had drifted ~900 lines from
-the app's. A preview surface showing a design the app no longer has is worse than no preview
-surface. Recover it from history (`git show 95e73323`) if you rebuild the idea, but solve the
-sync problem first: one theme file, shared, not copied.
+A separate previewable package is a recurring idea and was tried once. If you rebuild it, the
+theme file is **shared, never copied** — the copy is what killed the last attempt. Read
+`decisions/one-theme-file-shared-not-copied.md` first.
 
 ## Localization
 
@@ -97,37 +107,71 @@ sync problem first: one theme file, shared, not copied.
   `scripts/check_localization.sh` enforces parity, no duplicate keys, no key that resolves to
   nothing, and that a translation carries the same format specifiers as its English source by
   position and conversion type; CI runs it. A key with no entry is displayed to the user
-  verbatim — twelve of them are on real screens right now, listed in that script's `BASELINE`.
-  A wrong specifier is worse than a wrong word: it crashes, and only in the locale nobody on the
-  team runs.
+  verbatim — the ones already on real screens are listed in that script's `BASELINE`, and the
+  check exists to fail on a *new* one. A wrong specifier is worse than a wrong word: it crashes,
+  and only in the locale nobody on the team runs.
 - `ja` and `fr` were exempt from parity until 2026-08-16 as "partial translations in progress",
-  and were 922 and 472 of 966 keys by the time anyone counted. The exemption is what let them
-  fall behind — nothing reported the gap, so it grew by whatever each release added. A locale
+  and had fallen hundreds of keys behind by the time anyone counted. The exemption is what let
+  that happen — nothing reported the gap, so it grew by whatever each release added. A locale
   allowed to lag does. Both are complete now and held to the same rule.
 - **One product name per script.** `Konstruct` in Latin, `Конструкт` in Russian, `コンストラクト`
-  in Japanese. The Japanese used to be **共創** — a kanji reading meaning "co-creation", changed
-  2026-08-16: a reader had no way to connect it to the Konstruct in the App Store, and spoken
-  aloud "kyōsō" is an exact homophone of 競争, "competition". The one deliberate exception is
-  `onboarding_tagline`, where "identity is a construct" is the common noun and the pun.
+  in Japanese — a localized name is a transliteration, never a translation. The one deliberate
+  exception is `onboarding_tagline`, where "identity is a construct" is the common noun and the
+  pun. Why the Japanese changed: `client/GLOSSARY_PRODUCT_LANGUAGE.md` in the vault.
 - **App Store listing copy lives in `fastlane/metadata/<locale>/`**, not only in App Store
-  Connect, so a change to it has a diff and a reviewer. Four store locales: `en-US`, `ru`, `ja`,
-  `fr-FR`. `scripts/check_appstore_metadata.sh` enforces Apple's field limits **in characters,
-  not bytes** — a Japanese subtitle is 28 characters and 84 bytes — plus locale parity and the
-  keyword formatting that wastes budget. Fastlane itself is not a dependency; the layout is
-  borrowed so `deliver` can consume it later. `fastlane/metadata/README.md` states what must
-  never go in the copy: a claim we cannot show today, protocol jargon, or any number that also
-  lives in code.
+  Connect, so a change to it has a diff and a reviewer. Read `fastlane/metadata/README.md` before
+  touching it — field limits, the four store locales, and what must never go in the copy.
+  `scripts/check_appstore_metadata.sh` enforces the mechanical part and CI runs it.
 - Nav titles: `CTNavBar` applies `.uppercased()` + `.tracking(4)` — pass the raw localized string.
 - UI copy is plain language ("people / chats / device", never "node / stream / replica"). Code
   identifiers keep domain names — no renames.
 - **VEIL is not ICE.** VEIL is our obfuscation layer (`Veil*` / `veil_*`, `Networking/gRPC/VEIL/`);
   WebRTC ICE is call NAT traversal (`Services/Calls/`, `Ice*`) and stays named "ICE".
 
+## The core decides, this app executes
+
+**Before writing any session or crypto decision in Swift, open `~/Code/construct-core/src/construct_core.udl`.**
+It is the list of what the core already does, and this app keeps rebuilding entries from it. Already
+exported and already ignored at least once each: `derive_device_id`, `tie_break_role`,
+`get_all_session_contact_ids` (the devices we hold sessions with — half of any per-device plan),
+`get_session_health`, both init paths, `remove_session`.
+
+The test for where something belongs is not "which side has the data at hand" — the client always
+has it at hand, which is how this rule keeps getting broken. It is:
+
+| Question | Answer |
+|---|---|
+| Must two clients compute this **identically** for a message to be readable? | **core** |
+| Does it read or write ratchet/session state? | **core** |
+| Is it "which sessions does this operation touch"? | **core** — a plan is protocol |
+| Is it the **lifecycle phase** of a session (open / heal / tear down / retry)? | **core** — a machine is protocol; do not add a coordinator dictionary. `decisions/session-is-one-state-machine.md` |
+| Is it a mapping to a server-assigned id (account UUID, mailbox, chat row)? | this app |
+| Is it network, Core Data, Keychain, UI? | this app |
+
+A decision reimplemented here does not fail loudly when it diverges from the core or from
+`construct-tui` — it drops a copy, and the message simply does not appear. That is why the rule is
+"ask the core", not "match the core": a comment promising that two implementations agree is a
+comment saying one of them should have been a call to the other
+(`decisions/one-meaning-two-carriers.md`).
+
+**The account space stops at the seam.** The core does not know `ServerUserId` — deliberately.
+So the `account → devices` directory is this app's job, and that is the *only* part of a per-device
+plan that belongs here: translate the account to a set of `CryptoDeviceId`, hand the **set** to the
+core, and let the core decide which of them the operation touches. Building the plan here because we
+did the translation here is exactly the inversion that produced `MultiDeviceSendCoordinator`.
+
+Current known exceptions, with their destination — do not treat them as settled placements:
+the account-keyed `sessionPhases` / confirm-gate / heal walk, and `contactId(forPeer:)` on the
+hot path, are the leftover of a coordinator that still decides; they belong in the core machine
+(`decisions/session-is-one-state-machine.md`). `PeerDevice` is a legitimate local store but is not
+the authority on a peer's device set. See `decisions/a-peer-is-a-set-of-devices.md`.
+
 ## Architecture invariants
 
 Before any architectural decision, search the vault:
 `grep -ril <topic> ~/Code/construct-docs/{architecture,backend,client,cryptocore,security,decisions}`.
-Before touching `Networking/gRPC/ICE/`, read `decisions/ice-connection-loop-complexity.md`.
+Before touching `Networking/gRPC/VEIL/` or `Services/Calls/`, read
+`decisions/ice-connection-loop-complexity.md` — it predates the rename below and covers both.
 
 - **INITIATOR and RESPONDER init paths are distinct** (`init_session` vs
   `init_receiving_session`); tie-break: higher deviceId wins as INITIATOR.
@@ -189,16 +233,36 @@ FFI, proto `bytes`, zero base64 in the path? If not, fix the design before mergi
 This codebase's recurring defect class is **one meaning carried by two values with nothing
 enforcing their agreement**. Both instances below are permanent invariants, not migrations.
 
+**Read `~/Code/construct-docs/decisions/one-meaning-two-carriers.md` before adding any field,
+counter, constant or timeout.** It catalogues the six forms this takes — two of which do not look
+like duplication at all — the three mechanical detectors that find them, and the order of
+preference for fixing one. The short version: hand-synchronising two carriers is not a fix, and a
+comment promising that something "must match" another implementation is a comment saying it should
+have been a call to it.
+
 **User identity spaces** (`Utilities/UserIdentity.swift`):
 
 | Type | Format | Correct use |
 |------|--------|-------------|
-| `ServerUserId` | 36-char UUID `14f28d31-…` | all session addressing: `local_user_id`, `contact_id`, `conversation_id`, contact lists |
-| `CryptoDeviceId` | 32-char hex `6f5e37ac…` | multi-device linking, QR codes only |
+| `ServerUserId` | 36-char UUID `14f28d31-…` | above the seam: gRPC, Core Data, transcript, contacts, `conversation_id`, mailbox and stream cursors |
+| `CryptoDeviceId` | 32-char hex `6f5e37ac…` | below the seam: `local_user_id`, `contact_id`, the AD, Keychain session accounts, every `plan_*`; also device linking and QR |
 
-Everything passed to the Rust session layer (`init_session`, `init_receiving_session`,
-`set_local_user_id`) must be a `ServerUserId`. Mixing the spaces breaks the Double Ratchet AD →
-permanent AEAD failure on every session.
+**A session is a ratchet between two devices**, so everything passed to the Rust session layer
+(`set_local_user_id`, `init_session`, `init_receiving_session`, `encrypt_message`,
+`decrypt_message`, `remove_session`, `forget_contact_state`, every `plan_*`) is a
+`CryptoDeviceId`. The AD binds a **pair of device ids**; the core does not know `ServerUserId` and
+must not learn it. Mixing the spaces breaks the Double Ratchet AD → permanent AEAD failure on
+every session, with no error — the message simply does not open.
+
+This table said the opposite until 2026-09-05, naming `ServerUserId` as correct for
+`local_user_id` and `contact_id`. That was true until 2026-08-26 and then was not, and the file
+that overrides every other instruction went on saying it. `decisions/identity-spaces.md` carries
+why the original fix ("always `ServerUserId`") was the accidental half of the right answer:
+the bug required the two sides to *agree*, and an account cannot name a ratchet.
+
+`SessionAddressing` is the conversion and `PeerAddress` is the seam made into an object — an
+account always, a device when the event names one. Prefer them to a bare `String` at any module
+boundary.
 
 **Sealed sender content type:**
 
@@ -210,6 +274,21 @@ permanent AEAD failure on every session.
 Any routing decision on a sealed delivery must read the post-unseal `contentType` (via
 `ContentTypeRouting.kind(for:)`, `ChatMessage.isEndSession`, …). Never branch on the outer
 `messageType` string after `resolveSender`.
+
+**Content-type meaning is cross-client, and this app is not its author.** There is now a second
+implementation (`construct-tui`), so "the protocol" and "what iOS does" are different things, and
+the first comparison found them already diverged on 13 and 23 — silently, because the symptom is a
+payload that is a bubble on one client and nothing on the other.
+
+- Numeric values come from the generated `Shared_Proto_Core_V1_ContentType`. Do not write `21` or
+  `= 25` as a fresh literal; the existing switches keep theirs only because they predate this rule.
+- What a client must *do* with a type — transcript or control, which handler, whether a sealed
+  envelope may name it — is `~/Code/construct-protos/conformance/knst_content_types.json`, vendored
+  into `ConstructMessenger/Networking/gRPC/Generated/conformance/` by `./generate_grpc_swift.sh`
+  and read by `ConstructMessengerTests/ContentTypeConformanceTests.swift`.
+- **Adding a content type means adding its row there in the same change.** A type this app has not
+  learned then reddens a named test instead of arriving as a payload nobody classifies.
+- Read `decisions/wire-format-one-authority.md` before changing any of the five mappings it lists.
 
 ## Testing
 

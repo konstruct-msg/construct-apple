@@ -57,6 +57,17 @@ class MessageRetryManager {
         // deanonymisation). nil under stealth-on makes resealAndSend throw → we queue + nudge a fetch.
         let recipientIdentityKey = StealthSenderService.recipientIdentityKey(recipientId: recipientId, context: context)
 
+        // The spend unit of the original send, if it paid and is still inside the server's window.
+        // A retry is the same logical message to the same account, so every envelope below carries
+        // this id and buys nothing: the server answers `UnitCovered` off the `pp:unit:` record the
+        // first send opened. Nil means there is nothing to ride on — no unit, or too long ago — and
+        // the retry pays exactly as it did before.
+        //
+        // Hoisted above the loop on purpose. A multi-chunk message re-sends chunk by chunk, and a
+        // unit minted inside the loop would be a different id per chunk, which is the per-envelope
+        // cost this exists to remove.
+        let retrySpendUnit = TokenSpendUnitStore.paidUnit(baseMessageId: capturedMessageId, recipientId: recipientId)
+
         // Prefer re-sending the exact same encrypted payload bytes.
         if let chunks = OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: capturedMessageId) {
             Task { [weak self] in
@@ -72,7 +83,9 @@ class MessageRetryManager {
                             recipientId: recipientId,
                             senderId: capturedSenderId,
                             timestamp: capturedTimestamp,
-                            recipientIdentityKey: recipientIdentityKey
+                            recipientIdentityKey: recipientIdentityKey,
+                            spendUnit: retrySpendUnit,
+                            baseMessageId: capturedMessageId
                         )
                         if finalErrorCode.isEmpty, !response.errorCode.isEmpty {
                             finalErrorCode = response.errorCode
@@ -185,14 +198,17 @@ class MessageRetryManager {
         recipientId: String,
         senderId: String,
         timestamp: UInt64,
-        recipientIdentityKey: Data?
+        recipientIdentityKey: Data?,
+        spendUnit: TokenSpendUnit? = nil,
+        baseMessageId: String? = nil
     ) async throws -> SendMessageResponse {
         let conversationId = ConversationId.direct(myUserId: senderId, theirUserId: recipientId)
 
         guard StealthPolicy.shared.shouldUseSealedSender() else {
             return try await MessagingServiceClient.shared.sendMessage(
                 messageId: chunkId, recipientId: recipientId, senderId: senderId,
-                conversationId: conversationId, encryptedPayload: wirePayload, timestamp: timestamp)
+                conversationId: conversationId, encryptedPayload: wirePayload, timestamp: timestamp,
+                sealing: .identified(.stealthDisabled))
         }
         guard let recipientIK = recipientIdentityKey else {
             throw StealthDowngradeBlocked(reason: "retry: no recipient identity key for \(recipientId.prefix(8))…")
@@ -201,14 +217,22 @@ class MessageRetryManager {
         do {
             sealedInner = try await StealthSenderService.buildSealedInner(
                 recipientUserId: recipientId, recipientIdentityKey: recipientIK,
-                encryptedPayload: wirePayload, contentType: .generic)
+                encryptedPayload: wirePayload, contentType: .generic, spendUnit: spendUnit)
         } catch {
             throw StealthDowngradeBlocked(reason: "retry seal failed: \(error)")
         }
         return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
-            try await StealthSenderService.buildSealedInner(
+            // Reached only on the server's `privacy_pass:` rejection, which for a reused unit means
+            // exactly one thing: the redemption we were riding on is not there. Drop the stored id
+            // as well as the in-memory paid flag, or the next retry of this message would rebuild
+            // from the store and be rejected the same way, turning a one-shot recovery into a loop.
+            spendUnit?.invalidatePayment()
+            if let baseMessageId {
+                TokenSpendUnitStore.forget(baseMessageId: baseMessageId, recipientId: recipientId)
+            }
+            return try await StealthSenderService.buildSealedInner(
                 recipientUserId: recipientId, recipientIdentityKey: recipientIK,
-                encryptedPayload: wirePayload, contentType: .generic)
+                encryptedPayload: wirePayload, contentType: .generic, spendUnit: spendUnit)
         }, send: { inner in
             if FeatureFlags.sealedSenderUnauthenticatedTransport {
                 return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)
@@ -216,7 +240,7 @@ class MessageRetryManager {
                 return try await MessagingServiceClient.shared.sendMessage(
                     messageId: chunkId, recipientId: recipientId, senderId: senderId,
                     conversationId: conversationId, encryptedPayload: wirePayload,
-                    timestamp: timestamp, sealedInnerBytes: inner)
+                    timestamp: timestamp, sealing: .sealed(inner))
             }
         })
     }
@@ -277,6 +301,22 @@ class MessageRetryManager {
         guard let queuedMessages = try? context.fetch(fetchRequest) else {
             return
         }
+
+        // Nothing owed, nothing to do. This has to come before the session guard below, which
+        // exists to rescue a queue and does not check that there is one.
+        //
+        // 2026-09-03, Desktop's first minute after being linked: `purged 0 orphaned payload(s),
+        // forcing re-establish`, twice. Opening a chat with no session ran a full SESSION_RESET_INIT
+        // handshake and two bundle fetches — one prewarm, one for the init, the second consuming a
+        // one-time pre-key — for an empty queue. Four of the ten bundle requests that took that
+        // device over `BUNDLE_RATE_LIMIT_PER_MIN` came from these two calls, and once the limiter
+        // refused, the session could not be rebuilt at all: every later message from the peer
+        // arrived with `flags=end_session` and nothing could act on it.
+        //
+        // A peer we owe nothing needs no session until we write to them, and the write path
+        // establishes one. The "zombie session" this rescues is a queue that cannot drain; an
+        // empty queue is not one.
+        guard !queuedMessages.isEmpty else { return }
 
         // Guard: no live session for this contact.
         //
@@ -403,6 +443,15 @@ class MessageRetryManager {
                         }
                         Log.debug("Re-sent queued message via gRPC: \(messageId) status=\(finalStatus) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
                     }
+                    // The stored-ciphertext resend reached the recipient's primary device. The
+                    // other devices need the message too, and the stored chunks cannot give it to
+                    // them: that ciphertext is bound to this one ratchet. So the copy is rebuilt
+                    // from the row's plaintext, under the same message id, which reproduces the
+                    // framing the primary send used.
+                    if finalStatus == .sent || finalStatus == .delivered {
+                        await self.mirrorStoredResend(messageId: messageId, recipientId: recipientId,
+                                                      senderId: currentUserId, context: context)
+                    }
                 } catch is StealthDowngradeBlocked {
                     await MainActor.run {
                         let fr = Message.fetchRequest()
@@ -453,6 +502,95 @@ class MessageRetryManager {
         }
     }
 
+    /// Mirror for the stored-ciphertext branch, which holds no plaintext of its own.
+    ///
+    /// Media is the one case that cannot be mirrored here and says so instead of returning
+    /// quietly: its wire plaintext is not reconstructable from the persisted model, so a media
+    /// message that went out on retry still reaches one device only. That is a smaller hole than
+    /// the one this closes, and it is now a line in the log rather than nothing.
+    @MainActor
+    private func mirrorStoredResend(
+        messageId: String,
+        recipientId: String,
+        senderId: String,
+        context: NSManagedObjectContext
+    ) async {
+        let fr = Message.fetchRequest()
+        fr.predicate = NSPredicate(format: "id == %@", messageId)
+        fr.fetchLimit = 1
+        guard let message = try? context.fetch(fr).first else { return }
+        guard let plaintext = Self.recoverWirePlaintext(for: message) else {
+            Log.info(
+                "Retry mirror skipped for \(messageId.prefix(8))… — reason=plaintext not reconstructable " +
+                "(\(message.contentType == .media ? "media" : "no recoverable text")); other devices will not see it",
+                category: "MessageRetryManager"
+            )
+            return
+        }
+        let plan = ChunkedMessageSender.shared.buildPlan(
+            plaintext: plaintext,
+            messageId: UUID(uuidString: messageId) ?? UUID()
+        )
+        guard !plan.payloads.isEmpty else { return }
+        await Self.mirror(messageId: messageId, wirePlaintext: plaintext, chunks: plan.payloads,
+                          recipientId: recipientId, senderId: senderId)
+    }
+
+    /// The pre-KNST `MessageContent` bytes for a stored row, or nil when they cannot be rebuilt.
+    ///
+    /// Media returns nil: its wire plaintext is a binary album proto that the persisted model
+    /// cannot reconstruct. Both retry branches need this — one to re-encrypt, the other only to
+    /// mirror — so it lives in one place rather than being inlined at the first caller and
+    /// forgotten at the second, which is how the mirror went missing in the first place.
+    static func recoverWirePlaintext(for message: Message) -> Data? {
+        guard message.contentType != .media else { return nil }
+        let text = message.displayText
+        guard !text.isEmpty, !MessageContentType.isControlPayload(text) else { return nil }
+
+        var textMsg = Shared_Proto_Messaging_V1_TextMessage()
+        textMsg.text = text
+        if let replyId = message.replyToMessageId, !replyId.isEmpty {
+            var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
+            quoted.messageID = replyId
+            quoted.textPreview = message.replyToContent ?? ""
+            textMsg.quoted = quoted
+        }
+        var content = Shared_Proto_Messaging_V1_MessageContent()
+        content.text = textMsg
+        guard let plaintext = try? content.serializedData(), !plaintext.isEmpty else { return nil }
+        return plaintext
+    }
+
+    /// Tell the other devices — ours and the recipient's — about a message this path just sent.
+    ///
+    /// The composer path has always done this; this one never did, so a message that failed its
+    /// first attempt and succeeded on retry reached exactly one device and stayed there, while
+    /// the sender's UI said sent. Measured on a three-device run 2026-08-30: of fifteen sends,
+    /// the two that went out first-try were mirrored and the thirteen that went through here
+    /// were not.
+    @MainActor
+    private static func mirror(
+        messageId: String,
+        wirePlaintext: Data,
+        chunks: [Data],
+        recipientId: String,
+        senderId: String
+    ) async {
+        guard let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty else {
+            Log.info("Retry mirror skipped for \(messageId.prefix(8))… — reason=no device id", category: "MessageRetryManager")
+            return
+        }
+        await MultiDeviceSendCoordinator.shared.mirrorOutgoing(
+            wirePlaintext: wirePlaintext,
+            chunks: chunks,
+            messageId: messageId,
+            recipientUserId: recipientId,
+            senderUserId: senderId,
+            senderDeviceId: myDeviceId,
+            timestamp: UInt64(Date().timeIntervalSince1970)
+        )
+    }
+
     /// Re-encrypts a queued/failed message's recoverable plaintext under the CURRENT session with a
     /// FRESH wire message id and sends it. Used when the original wire payload is gone (TTL expiry,
     /// or purged after a zombie-session re-establishment) — the stale ciphertext was bound to a
@@ -486,28 +624,8 @@ class MessageRetryManager {
             SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
             return .queued
         }
-        guard message.contentType != .media else {
-            Log.info("reencryptAndSend: \(messageId.prefix(8))… is media — cannot reconstruct wire plaintext, failing", category: "MessageRetryManager")
-            return .failed
-        }
-        let text = message.displayText
-        guard !text.isEmpty, !MessageContentType.isControlPayload(text) else {
+        guard let plaintext = Self.recoverWirePlaintext(for: message) else {
             Log.error("reencryptAndSend: \(messageId.prefix(8))… has no recoverable plaintext — failing", category: "MessageRetryManager")
-            return .failed
-        }
-
-        var textMsg = Shared_Proto_Messaging_V1_TextMessage()
-        textMsg.text = text
-        if let replyId = message.replyToMessageId, !replyId.isEmpty {
-            var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
-            quoted.messageID = replyId
-            quoted.textPreview = message.replyToContent ?? ""
-            textMsg.quoted = quoted
-        }
-        var content = Shared_Proto_Messaging_V1_MessageContent()
-        content.text = textMsg
-        guard let plaintext = try? content.serializedData(), !plaintext.isEmpty else {
-            Log.error("reencryptAndSend: failed to serialize MessageContent for \(messageId.prefix(8))…", category: "MessageRetryManager")
             return .failed
         }
 
@@ -534,13 +652,20 @@ class MessageRetryManager {
                 recipientId: recipientId,
                 conversationId: ConversationId.direct(myUserId: senderId, theirUserId: recipientId),
                 timestamp: UInt64(Date().timeIntervalSince1970),
-                recipientIdentityKey: recipientIdentityKey
+                recipientIdentityKey: recipientIdentityKey,
+                spendUnit: TokenSpendUnitStore.paidUnit(baseMessageId: messageId, recipientId: recipientId)
             )
             switch aggregated.status.lowercased() {
             case "failed":    return aggregated.retryable ? .queued : .failed
             case "queued":    return .queued
-            case "delivered": return .delivered
-            default:          return .sent
+            case "delivered":
+                await Self.mirror(messageId: messageId, wirePlaintext: plaintext, chunks: plan.payloads,
+                                  recipientId: recipientId, senderId: senderId)
+                return .delivered
+            default:
+                await Self.mirror(messageId: messageId, wirePlaintext: plaintext, chunks: plan.payloads,
+                                  recipientId: recipientId, senderId: senderId)
+                return .sent
             }
         } catch is StealthDowngradeBlocked {
             Log.info("reencryptAndSend: sealed send blocked (cannot seal) for \(messageId.prefix(8))… — queueing, nudging bundle fetch", category: "MessageRetryManager")

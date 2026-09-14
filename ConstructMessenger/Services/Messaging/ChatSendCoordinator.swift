@@ -538,6 +538,25 @@ final class ChatSendCoordinator {
                         if let k = self.sessionManager.cachedIdentityKey { return k }
                         return await self.fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: self.viewContext)
                     }()
+                    // One spend unit for this message to this person: it covers the primary
+                    // envelope below AND the fan-out copies `mirrorOutgoing` sends to their other
+                    // devices a few lines down. Both paths reach one `recipient_user_id`, which is
+                    // exactly what the server keys `token_spend_id` by, so one token pays for all
+                    // of them. Before this the two paths minted a unit each and a two-device peer
+                    // cost two tokens a message.
+                    //
+                    // Minted unconditionally rather than sized from a device count. Sizing is what
+                    // broke it: this site asked `PeerDeviceRegistry`, which only `KeyServiceClient`
+                    // writes and which reads 1 for a peer whose second device we learned about from
+                    // a bundle fetch elsewhere — so `forEnvelopeCount` returned nil, the fan-out
+                    // then minted nothing either, and a two-device peer cost two tokens a message.
+                    // Measured 2026-09-11: zero "covered by unit" lines in 71 spends.
+                    //
+                    // A unit that ends up covering one envelope costs nothing — the server takes the
+                    // identical `redeem_token` path for the first envelope either way — and it is
+                    // also what lets `MessageRetryManager` reuse the redemption instead of buying a
+                    // second token for the same body.
+                    let peerSpendUnit = await TokenSpendUnit.forMessage()
                     let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
                         plan: plan,
                         baseMessageId: messageId,
@@ -545,22 +564,59 @@ final class ChatSendCoordinator {
                         recipientId: recipientId,
                         conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: message.timestamp,
-                        recipientIdentityKey: recipientIdentityKey
+                        recipientIdentityKey: recipientIdentityKey,
+                        spendUnit: peerSpendUnit
                     )
                     TrafficProtectionService.shared.recordRealMessageSent()
                     if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
                         // C1c: sync the same wire bytes as the primary send (MessageContent / pre-KNST),
                         // not display JSON. Coordinator re-applies KNST framing per own device.
                         let wireForSync = plaintextData
+                        let chunksForFanOut = plan.payloads
                         Task { [weak self] in
                             _ = self
-                            await MultiDeviceSendCoordinator.shared.sendSenderSync(
-                                plaintext: wireForSync,
+                            // Our own other devices, then the recipient's. The primary send above
+                            // reached one of theirs — the device their pinned key names — and the
+                            // server copies that envelope to all their streams, but only that
+                            // device holds the session that opens it.
+                            //
+                            // One call, because the retry path must make the same one: see
+                            // `mirrorOutgoing`.
+                            await MultiDeviceSendCoordinator.shared.mirrorOutgoing(
+                                wirePlaintext: wireForSync,
+                                chunks: chunksForFanOut,
                                 messageId: messageId,
-                                originalRecipientUserId: recipientId,
+                                recipientUserId: recipientId,
                                 senderUserId: currentUserId,
                                 senderDeviceId: myDeviceId,
-                                timestamp: message.timestamp
+                                timestamp: message.timestamp,
+                                peerSpendUnit: peerSpendUnit
+                            )
+                            // The fan-out is the payer whenever the primary send could not be (an
+                            // empty wallet on the first envelope does not condemn the rest — see
+                            // TokenSpendUnit). Recording here as well as below is why a retry of
+                            // such a message still rides on a redemption rather than buying one.
+                            await TokenSpendUnitStore.remember(
+                                peerSpendUnit, baseMessageId: messageId, recipientId: recipientId
+                            )
+                        }
+                    }
+                    // A retry of this message is the same logical message to the same account, so
+                    // it must ride on this redemption rather than buy another. Recorded only if a
+                    // token was really attached — `remember` ignores an unpaid unit, because there
+                    // would be nothing on the server for the retry to be covered by.
+                    TokenSpendUnitStore.remember(
+                        peerSpendUnit, baseMessageId: messageId, recipientId: recipientId
+                    )
+                    // Lazy grandfathering: the first time we write to a peer who has no intake key
+                    // of ours, hand them one. After this their envelopes to us stop buying tokens —
+                    // including the delivery receipt for this very message, which is 36–38% of the
+                    // bill on its own. Off the send path, because a control envelope must not delay
+                    // the bubble the user is watching.
+                    if IntakeCredentialService.shared.peerNeedsOurKey(recipientId) {
+                        Task { [recipientIdentityKey] in
+                            await OutboundSessionService.shared.sendIntakeKey(
+                                to: recipientId, recipientIdentityKey: recipientIdentityKey
                             )
                         }
                     }
@@ -847,6 +903,98 @@ final class ChatSendCoordinator {
                     AppError.mediaUploadFailed(error.localizedDescription),
                     recovery: { [weak self] in self?.retryMessage_byId(placeholderId) }
                 )
+            }
+        }
+    }
+
+    // MARK: - Reaction
+
+    /// Optimistic apply, then the same pipeline as `editMessage`. Never a chat row.
+    /// Double-tap likes pass `ReactionReducer.likeEmoji`.
+    func sendReaction(_ message: Message, emoji: String) {
+        guard let recipientId = chat.otherUser?.id,
+              let currentUserId = AuthSessionManager.shared.currentUserId else { return }
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let existing = ReactionStore.row(
+            targetMessageId: message.id,
+            reactorUserId: currentUserId,
+            in: viewContext
+        )
+        guard let plan = ReactionReducer.sendPlan(
+            targetMessageId: message.id,
+            currentEmoji: existing?.emoji,
+            tapped: emoji,
+            nowMs: nowMs
+        ) else { return }
+        guard let payload = ReactionWire.encode(plan) else {
+            ErrorRouter.shared.report(.unknown(NSLocalizedString("reaction_failed", comment: "")))
+            return
+        }
+
+        let previous = existing.map { ReactionReducer.Row(emoji: $0.emoji, timestampMs: $0.timestampMs) }
+        _ = ReactionStore.applyIncoming(
+            targetMessageId: plan.targetMessageId,
+            reactorUserId: currentUserId,
+            actionRawValue: ReactionWire.actionRawValue(plan.incoming),
+            emoji: ReactionWire.emoji(plan.incoming),
+            payloadTimestampMs: plan.timestampMs,
+            fallbackTimestampMs: plan.timestampMs,
+            nowMs: plan.timestampMs,
+            in: viewContext
+        )
+
+        let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId)
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let actionId = UUID().uuidString.lowercased()
+                let chunkPlan = ChunkedMessageSender.shared.buildPlan(
+                    plaintext: payload,
+                    messageId: UUID(uuidString: actionId) ?? UUID()
+                )
+                let recipientIdentityKey: Data? = StealthPolicy.shared.shouldUseSealedSender()
+                    ? await fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: viewContext)
+                    : nil
+
+                _ = try await OutboundMessagePipeline.shared.sendChunks(
+                    plan: chunkPlan,
+                    baseMessageId: actionId,
+                    senderId: currentUserId,
+                    recipientId: recipientId,
+                    conversationId: conversationId,
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    recipientIdentityKey: recipientIdentityKey
+                )
+
+                if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
+                    let now = UInt64(Date().timeIntervalSince1970)
+                    // A reaction or edit is as much a per-device fact as a message: a device
+                    // that never sees it renders the transcript differently from its siblings.
+                    await MultiDeviceSendCoordinator.shared.mirrorOutgoing(
+                        wirePlaintext: payload,
+                        chunks: chunkPlan.payloads,
+                        messageId: actionId,
+                        recipientUserId: recipientId,
+                        senderUserId: currentUserId,
+                        senderDeviceId: myDeviceId,
+                        timestamp: now
+                    )
+                }
+            } catch is StealthDowngradeBlocked {
+                Log.info(
+                    "Stealth: reaction send blocked (cannot seal) — rolling back \(message.id.prefix(8))…",
+                    category: "ChatSendCoordinator"
+                )
+                ReactionStore.restoreLocal(
+                    targetMessageId: plan.targetMessageId,
+                    reactorUserId: currentUserId,
+                    previous: previous,
+                    nowMs: plan.timestampMs,
+                    in: self.viewContext
+                )
+                ErrorRouter.shared.report(.unknown(NSLocalizedString("reaction_failed", comment: "")))
+            } catch {
+                ErrorRouter.shared.report(.unknown(NSLocalizedString("reaction_failed", comment: "")))
             }
         }
     }

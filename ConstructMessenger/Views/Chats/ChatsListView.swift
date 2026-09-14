@@ -72,7 +72,7 @@ struct ChatsListView: View {
                 .frame(maxHeight: .infinity, alignment: .top)
             }
             .ctBackground()
-            .toolbar(.hidden, for: .navigationBar)
+            .hideSystemNavBar()
             .navigationDestination(for: String.self) { chatId in
                     if let chat = chats.first(where: { $0.id == chatId }) {
                         ChatView(chat: chat, context: viewContext)
@@ -213,6 +213,13 @@ struct ChatsListView: View {
                         } label: {
                             Label(LocalizedStringKey("delete"), systemImage: "trash")
                         }
+                        // Stated, not inherited. `role: .destructive` colours a swipe action red
+                        // only while nothing above it names a tint; `MainTabView` applies
+                        // `.tint(Color.CT.accent)` to the whole tab view, so this button came out
+                        // the same blue as "mark unread" beside it and stopped reading as the
+                        // destructive one. Its two neighbours already state their colour — this
+                        // was the only button in the group that did not.
+                        .tint(Color.CT.danger)
                         Button {
                             toggleMarkUnread(chat)
                         } label: {
@@ -415,6 +422,12 @@ struct ChatsListView: View {
 
     private func handleScannedContact(_ urlString: String) {
         Log.info("ChatsListView: Handling scanned URL: \(urlString)", category: "ChatsListView")
+        // A voucher scanned here is a voucher, not a malformed contact code.
+        if let message = VeilVoucherRedemption.messageIfVoucher(urlString) {
+            showingQRScanner = false
+            showErrorAfterDismiss(message)
+            return
+        }
         guard let url = URL(string: urlString) else {
             showErrorAfterDismiss(NSLocalizedString("invalid_qr_code_construct", comment: ""))
             return

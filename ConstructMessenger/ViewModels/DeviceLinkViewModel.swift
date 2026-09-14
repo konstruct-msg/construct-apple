@@ -319,6 +319,9 @@ final class DeviceLinkViewModel {
             expiresIn: expiresIn,
             userId: result.userId
         )
+        if role == .linkedNewDevice, !DeviceLinkHistorySyncPolicy.isPostLinkEnabled {
+            DeviceLinkStreamCursorPolicy.applyAccountOnlyCheckpoint(accessToken: result.accessToken)
+        }
         VeilProxyManager.shared.configureFromServer(cert: result.veilBridgeCert ?? "")
 
         CryptoManager.shared.resetOrchestratorStateForDeviceLink()

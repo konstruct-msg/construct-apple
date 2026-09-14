@@ -184,17 +184,17 @@ final class ContactRequestsViewModel {
     // MARK: - Private helpers
 
     private func resolveDisplayName(for userId: String) -> String? {
-        guard let uuid = UUID(uuidString: userId) else { return nil }
+        guard !userId.isEmpty else { return nil }
         let request = NSFetchRequest<User>(entityName: "User")
-        request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+        request.predicate = NSPredicate(format: "id == %@", userId)
         request.fetchLimit = 1
         return try? viewContext.fetch(request).first?.displayName
     }
 
     private func resolveUsername(for userId: String) -> String? {
-        guard let uuid = UUID(uuidString: userId) else { return nil }
+        guard !userId.isEmpty else { return nil }
         let request = NSFetchRequest<User>(entityName: "User")
-        request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+        request.predicate = NSPredicate(format: "id == %@", userId)
         request.fetchLimit = 1
         return try? viewContext.fetch(request).first?.username
     }

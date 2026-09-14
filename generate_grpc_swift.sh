@@ -46,6 +46,25 @@ protoc \
     --plugin=protoc-gen-grpc-swift-2="$(which protoc-gen-grpc-swift-2)" \
     $PROTO_FILES
 
+# Cross-client conformance vectors travel with the protos they classify.
+#
+# Vendored rather than read from the sibling checkout for the same reason the .pb.swift files
+# are: a test that reaches outside the repository passes or fails depending on what else is on
+# the machine. `ContentTypeConformanceTests` reads this copy, and regenerating is what updates
+# it — so a content type added to envelope.proto without teaching this client reddens a test
+# instead of arriving as a payload nobody classifies.
+# Every file in that directory, not a named one: the list grows with each mechanism that moves
+# into the core, and a vendoring step that names its fixtures silently stops covering the next.
+mkdir -p "$OUTPUT_DIR/conformance"
+VECTORS_FOUND=0
+for vectors in "$PROTOS_DIR"/conformance/*.json; do
+    [ -f "$vectors" ] || continue
+    cp "$vectors" "$OUTPUT_DIR/conformance/"
+    success "Vendored conformance vectors ($(basename "$vectors"))"
+    VECTORS_FOUND=$((VECTORS_FOUND + 1))
+done
+[ "$VECTORS_FOUND" -gt 0 ] || error "No conformance vectors found in $PROTOS_DIR/conformance"
+
 # Count generated files
 PB_COUNT=$(find "$OUTPUT_DIR" -name "*.pb.swift" | wc -l | tr -d ' ')
 GRPC_COUNT=$(find "$OUTPUT_DIR" -name "*.grpc.swift" | wc -l | tr -d ' ')

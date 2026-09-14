@@ -42,7 +42,7 @@ struct TransportDiagnosticsView: View {
         }
         .ctBackground()
         #if os(iOS)
-        .toolbar(.hidden, for: .navigationBar)
+        .hideSystemNavBar()
         #endif
         .onReceive(timer) { now = $0 }
     }

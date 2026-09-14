@@ -93,6 +93,37 @@ enum ChatUIConstants {
         static let metaHorizontalPadding: CGFloat = 4
     }
 
+    /// Reaction badge on a bubble, and the quick-set capsule.
+    enum Reaction {
+        static let badgeFontSize: CGFloat = 14
+        static let badgePadH: CGFloat = 6
+        static let badgePadV: CGFloat = 4
+        /// How far the chip hangs below the bubble. Horizontal corner is
+        /// ``badgeAlignment``. Must exceed ``Bubble.verticalPadding`` (8) and
+        /// the last-line glyph height: a value of 8 left the heart sitting on
+        /// "прикольный".
+        static let badgeOverlap: CGFloat = 18
+
+        static let capsuleEmojiSize: CGFloat = 22
+        static let capsuleItem: CGFloat = 36
+        static let capsuleItemSpacing: CGFloat = 4
+        static let capsuleDot: CGFloat = 4
+        static let capsuleHeight: CGFloat = 44
+        static let capsuleGap: CGFloat = CTLayout.inlinePad
+
+        /// Full-picker grid cell. At or above `CTLayout.hitTarget` so a cell is tappable — the
+        /// grid is the whole screen's content, and a cell you have to aim at is worse than the
+        /// keyboard it replaced.
+        static let pickerCell: CGFloat = CTLayout.hitTarget
+        static let pickerEmojiSize: CGFloat = 28
+
+        /// Timestamp lives on the author's side (sent = trailing). The like sits
+        /// on the other corner so the two do not stack.
+        static func badgeAlignment(isSentByMe: Bool) -> Alignment {
+            isSentByMe ? .bottomLeading : .bottomTrailing
+        }
+    }
+
     /// Swipe-to-reply, tuned to stay out of the interactive back gesture's way.
     ///
     /// The two gestures point the same direction, and incoming bubbles sit against the
@@ -173,7 +204,14 @@ enum ChatUIConstants {
         /// One-line bar looks stadium-like; multi-line stays the same family (no
         /// pill↔control jump). Does not clamp to height/2 so tall text is not oval-clipped.
         static let cornerRadius: CGFloat = CTLayout.controlHeight / 2
-        /// Target single-line control height (attach / send / scroll FAB).
+        /// Target single-line control height (attach / send / scroll FAB) — **and** the voice
+        /// recording / preview bars, which replace this row in place.
+        ///
+        /// The voice bars had their own `voiceChromeHeight = 52` against this row's 42, plus 8pt
+        /// of vertical padding above and below. So starting a recording grew the composer band by
+        /// 26pt and the capsule sat 13pt above where the input capsule had been — it looked like
+        /// the bar jumped, because it did. One height for one band; the bar swaps the row's
+        /// contents, not its geometry.
         static let height: CGFloat = CTLayout.controlHeight
         static let horizontalPadding: CGFloat = CTLayout.edgePad
         /// Leading inset inside the text field capsule.
@@ -186,8 +224,8 @@ enum ChatUIConstants {
         static let rowOuterPad: CGFloat = 4
         /// Gap between reply/edit aux bar and the attach+field row.
         static let auxBarGap: CGFloat = CTLayout.inlinePad
-        /// Voice recording / preview bar height.
-        static let voiceChromeHeight: CGFloat = 52
+        /// Voice bar height is `height` — see the note there. No separate constant: the two are
+        /// the same measurement, and while they were two values one of them was free to drift.
         static let voiceChromeIconSize: CGFloat = 22
     }
 }

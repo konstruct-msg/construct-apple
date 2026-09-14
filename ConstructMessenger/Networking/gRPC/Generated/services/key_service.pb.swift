@@ -505,6 +505,30 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundlesResponse: Sendable {
   /// Devices that had no pre-keys available
   public var unavailableDevices: [String] = []
 
+  /// EVERY active device of `user_id`, whether or not this call asked about it and whether or
+  /// not a bundle could be built for it. The account's device set, stated as such.
+  ///
+  /// Why it is a field of its own rather than "whatever `bundles` happens to contain": a client
+  /// cannot prune its local device set from `bundles`, and the two reasons are independent.
+  ///  * The request may narrow the query (`device_ids`), so `bundles` is a subset by design.
+  ///  * The client drops entries from `bundles` on its own — construct-messenger discards a
+  ///    device whose hybrid PQ bundle fails verification. That device exists; only this bundle
+  ///    was unusable. Pruning on `bundles` would delete it.
+  /// Absence from `bundles` is therefore not evidence of anything. Absence from THIS field is:
+  /// the device is not active for this account, right now, and a peer holding it should forget it.
+  ///
+  /// **Empty is not an answer, and a client must never prune on it.** proto3 gives an absent
+  /// field the same value as an explicitly empty one, so a server that predates this field is
+  /// indistinguishable from an account whose every device was revoked. The two outcomes are not
+  /// symmetric: refusing to prune on empty costs a wasted fan-out to a device that is gone, while
+  /// pruning on empty during a rollout deletes every peer's device set at once. An account with no
+  /// active devices has nothing to send to either way.
+  ///
+  /// This tells a caller nothing it could not already learn: the same set is what an unnarrowed
+  /// fetch returns bundles for, and it is the server's own registry. See
+  /// construct-docs/client/specs/MULTIDEVICE_PROTOCOL_PLAN.md §A.3.
+  public var activeDevices: [String] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1497,7 +1521,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundlesRequest: SwiftProtobuf.Messag
 
 extension Shared_Proto_Services_V1_GetPreKeyBundlesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPreKeyBundlesResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}bundles\0\u{3}unavailable_devices\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}bundles\0\u{3}unavailable_devices\0\u{3}active_devices\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1507,6 +1531,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundlesResponse: SwiftProtobuf.Messa
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.bundles) }()
       case 2: try { try decoder.decodeRepeatedStringField(value: &self.unavailableDevices) }()
+      case 3: try { try decoder.decodeRepeatedStringField(value: &self.activeDevices) }()
       default: break
       }
     }
@@ -1519,12 +1544,16 @@ extension Shared_Proto_Services_V1_GetPreKeyBundlesResponse: SwiftProtobuf.Messa
     if !self.unavailableDevices.isEmpty {
       try visitor.visitRepeatedStringField(value: self.unavailableDevices, fieldNumber: 2)
     }
+    if !self.activeDevices.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.activeDevices, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_GetPreKeyBundlesResponse, rhs: Shared_Proto_Services_V1_GetPreKeyBundlesResponse) -> Bool {
     if lhs.bundles != rhs.bundles {return false}
     if lhs.unavailableDevices != rhs.unavailableDevices {return false}
+    if lhs.activeDevices != rhs.activeDevices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

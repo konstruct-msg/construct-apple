@@ -57,8 +57,6 @@ final class SessionActionExecutor {
             break
         case .archiveSession:
             break
-        case .loadSessionFromSecureStore:
-            break
         case .markMessageDelivered:
             break
         case .sendEncryptedMessage:
@@ -69,7 +67,7 @@ final class SessionActionExecutor {
             break
 
         // ── Storage (currently in OutboundSessionService) ─────────
-        case .saveSessionToSecureStore:
+        case .saveToSecureStore:
             OutboundSessionService.shared.executeStorageActions([action])
 
         case .sessionTerminated(let contactId, let archiveBytes):

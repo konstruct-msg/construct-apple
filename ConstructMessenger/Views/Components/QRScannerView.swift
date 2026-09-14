@@ -271,17 +271,10 @@ struct QRScannerView: View {
             return
         }
 
-        let lower = normalized.lowercased()
-        // Signed dynamic invites + device-link QR only (legacy /c/ is rejected by LinkParser).
-        if lower.hasPrefix("https://konstruct.cc/add") ||
-           lower.hasPrefix("https://web.konstruct.cc/add") ||
-           lower.hasPrefix(InviteConfig.qrCodePrefixScheme) ||
-           // Device link flows (Settings → Link Replica, onboarding join-request from Desktop)
-           lower.hasPrefix("konstruct://link") {
-            deliverScannedInvite(normalized)
-        } else if isBase64Like(normalized) {
-            deliverScannedInvite("konstruct://add?invite=\(normalized)")
-        } else {
+        switch QRScanRouter.route(normalized) {
+        case .deliver(let payload):
+            deliverScannedInvite(payload)
+        case .invalid:
             #if os(iOS)
             UINotificationFeedbackGenerator().notificationOccurred(.error)
             #endif
@@ -298,12 +291,6 @@ struct QRScannerView: View {
         onCodeScanned(payload)
     }
 
-    private func isBase64Like(_ value: String) -> Bool {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= QRScannerConfig.minBase64Length else { return false }
-        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=_-")
-        return trimmed.rangeOfCharacter(from: allowed.inverted) == nil
-    }
 
     private func normalizeScannedCode(_ code: String) -> String {
         var value = code.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -366,10 +353,6 @@ private struct ScannerCornerBrackets: Shape {
 
         return p
     }
-}
-
-private enum QRScannerConfig {
-    static let minBase64Length = 40
 }
 
 // MARK: - QR Code Scanner Logic

@@ -113,6 +113,41 @@ final class StreamCursorTracker {
         return c
     }
 
+    /// Abandon everything currently held and jump the committed cursor to the furthest entry the
+    /// server has delivered on this connection. Returns the new cursor, or nil if nothing is held.
+    ///
+    /// **This deliberately breaks the invariant at the top of this file**, and it is the only thing
+    /// here that does. Advancing past an unresolved entry tells the server to trim a message we
+    /// never persisted, which is message loss — the exact outcome the contiguous-prefix rule
+    /// exists to prevent. So it is never automatic: no timer calls it, no heuristic calls it, and
+    /// it must not acquire one. A stall is safe by design, and the correct fix for any given stall
+    /// is to resolve whatever is stuck.
+    ///
+    /// It exists because "safe" is not the same as "recoverable". On 2026-08-20 a device had been
+    /// resuming from 31 July for three weeks: the head entry belonged to an account the server had
+    /// deleted, so nothing would ever resolve it, and every reconnect re-read the whole backlog
+    /// behind it. The only way out was reinstalling the app, which also destroys the identity —
+    /// a worse loss than the one this risks, and the user reached for it because nothing else
+    /// existed. That cause is fixed (`VanishedPeerStore`); the next unresolvable head will have a
+    /// different one, and the escape hatch should already be there when it does.
+    ///
+    /// Exposed only as an explicit action in Diagnostics, worded as what it is: skipping whatever
+    /// has piled up, at the risk of dropping messages that were never delivered.
+    @discardableResult
+    func skipHeldBacklog() -> String? {
+        guard let furthest = entries.last else { return nil }
+        let held = entries.count
+        let blocker = headBlocker()
+        entries.removeAll()
+        committed = furthest.cursor
+        persist(furthest.cursor)
+        Log.error(
+            "STREAM_CURSOR[skipped]: user skipped \(held) held entr\(held == 1 ? "y" : "ies") — cursor forced to \(furthest.cursor); head was \(blocker.map { "\($0.messageId.prefix(8))… (\($0.state), \(Int($0.age))s)" } ?? "none"). Anything unresolved in that range is now unrecoverable.",
+            category: "StreamReplay"
+        )
+        return furthest.cursor
+    }
+
     /// The entry currently holding the committed cursor back, if any.
     ///
     /// The stall above is safe — the server re-delivers and the client dedups — but it is not

@@ -29,3 +29,43 @@ enum DeviceLinkPhase: Equatable {
     case historySyncReceive(pendingDeviceId: String)
     case historySyncSend(pendingDeviceId: String)
 }
+
+/// Runtime gate for automatic post-link history transfer.
+///
+/// Nearby history transfer remains implemented, but account linking currently enters the app
+/// without prompting for history so multi-device fan-out can be verified independently.
+enum DeviceLinkHistorySyncPolicy {
+    static let isPostLinkEnabled = false
+}
+
+/// Cursor policy for account-only links when history transfer is intentionally skipped.
+enum DeviceLinkStreamCursorPolicy {
+    static func checkpointCursor(accessToken: String) -> String? {
+        guard let issuedAtSeconds = TokenUtils.extractIssuedAt(from: accessToken) else {
+            return nil
+        }
+        return checkpointCursor(issuedAtSeconds: issuedAtSeconds)
+    }
+
+    static func checkpointCursor(issuedAtSeconds: Int64) -> String? {
+        guard issuedAtSeconds > 0, issuedAtSeconds <= Int64.max / 1000 else {
+            return nil
+        }
+        return "\(issuedAtSeconds * 1000)-0"
+    }
+
+    @MainActor
+    static func applyAccountOnlyCheckpoint(accessToken: String) {
+        guard let cursor = checkpointCursor(accessToken: accessToken) else {
+            Log.error(
+                "Account-only device link could not derive stream checkpoint from token iat; next stream may request full backlog",
+                category: "DeviceLink"
+            )
+            return
+        }
+
+        StreamCursorStore.save(cursor)
+        StreamCursorTracker.shared.reset()
+        Log.info("Account-only device link checkpointed stream cursor=\(cursor)", category: "DeviceLink")
+    }
+}

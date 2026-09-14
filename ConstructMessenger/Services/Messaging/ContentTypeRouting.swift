@@ -81,9 +81,64 @@ enum SealedEnvelopeType: CaseIterable {
     }
 }
 
+/// What a client must do with the payload behind a KNST byte-5 value.
+///
+/// Raw values are the strings in `construct-protos/conformance/knst_content_types.json`, which is
+/// the authority across implementations and which `ContentTypeConformanceTests` reads. Until
+/// 2026-08-23 this classification existed only as literals scattered through `MessageRouter`'s
+/// frame dispatch, and the TUI carried its own list built from a different question — the two had
+/// already drifted on 13 and 23. Nothing failed, because the symptom of divergence here is a
+/// payload that is a bubble on one client and nothing on the other, weeks later.
+enum FrameDisposition: String, Equatable, CaseIterable {
+    /// User content from the peer. Belongs in the transcript.
+    case transcriptIncoming = "transcript_incoming"
+    /// Our own message echoed from another device of this account — a *sent* bubble.
+    case transcriptOwnDevice = "transcript_own_device"
+    /// Must never reach the transcript. A bubble here is a user-visible defect;
+    /// `__session_reset_notify__` spent four months being one.
+    case silentControl = "silent_control"
+    /// No current producer frames this. A peer sending one is ahead of us: do not guess.
+    case notCarried = "not_carried"
+}
+
+/// The handler a framed control payload belongs to.
+enum FramedSideChannel: String, Equatable {
+    case callSignal = "call_signal"
+    case deliveryReceipt = "delivery_receipt"
+    /// 27 — the peer hands us the `intake_key` their account accepts, so our envelopes to them
+    /// can carry an intake tag instead of buying a Privacy Pass token. Framed, and it has to be:
+    /// the key is a secret, so a relay that could read it could use it.
+    case intakeKey = "intake_key"
+}
+
 /// Named mapping used at the unseal boundary and by ingest parsers.
 /// Phase-1 hotfix + Phase-2 sole classifier — do not duplicate these cases inline.
 enum ContentTypeRouting {
+
+    /// Classification of a KNST byte-5 value. One table, checked against the cross-client vectors.
+    static func disposition(forFrameContentType contentType: UInt8) -> FrameDisposition {
+        switch contentType {
+        case 1:                  return .transcriptIncoming
+        case 23:                 return .transcriptOwnDevice
+        case 12, 13, 14, 21, 24, 25, 26, 27:
+                                 return .silentControl
+        default:                 return .notCarried
+        }
+    }
+
+    /// Which side-channel handler owns a framed payload, or nil when byte 5 names none.
+    ///
+    /// Extracted from `MessageRouter.handleFramedSideChannel`'s switch so the mapping is an
+    /// object a test can reach, per the rule about naming boundaries. The switch there now asks
+    /// this rather than repeating `case 12` / `case 14`.
+    static func framedSideChannel(for contentType: UInt8) -> FramedSideChannel? {
+        switch contentType {
+        case 12: return .callSignal
+        case 14: return .deliveryReceipt
+        case 27: return .intakeKey
+        default: return nil
+        }
+    }
 
     /// Derive routing kind from an authoritative `contentType` (post-unseal or identified outer).
     static func kind(for contentType: UInt8) -> WireMessageKind {
@@ -113,7 +168,7 @@ enum ContentTypeRouting {
     static func isKnownControlContentType(_ contentType: UInt8) -> Bool {
         if SessionControlCodec.op(forContentType: Int(contentType)) != nil { return true }
         switch contentType {
-        case 12, 14, 23: return true  // callSignal, deliveryReceipt, senderSync
+        case 12, 14, 23, 27: return true  // callSignal, deliveryReceipt, senderSync, intakeKey
         default: return false
         }
     }

@@ -1,0 +1,74 @@
+{
+  "$schema_version": 1,
+  "$authority": "construct-core :: crypto::device_copy_tag",
+  "$spec": "construct-docs/decisions/sender-sync-routing-inside-the-ciphertext.md",
+  "$decision": "construct-docs/decisions/core-repatriation-execution-plan.md",
+  "$purpose": [
+    "Delivery is per account, not per device: messaging-service writes the same envelope to every",
+    "one of the recipient's per-device streams. When one message produces one ciphertext per",
+    "target device, every device receives all of them and must recognise which copy is its own —",
+    "cheaply, because a copy with message_number 0 that opens under no session takes the recovery",
+    "path and fetches a key bundle over the network for a message that was never its to read.",
+    "The tag answers that, and the relay cannot compute it even though it serves both public keys.",
+    "Two implementations of this that disagree do not produce an error. They produce a copy",
+    "discarded as foreign, a message that never appears, and no way to tell which side is wrong.",
+    "iOS carried the only implementation until 2026-08-25; it now lives in the core, and these",
+    "vectors are what keeps any future one honest.",
+    "The values below were produced by the iOS CryptoKit implementation BEFORE the port and then",
+    "asserted against the Rust one — a vector generated from the code it verifies proves nothing."
+  ],
+  "$construction": {
+    "pair_secret": "HKDF-SHA256(ikm = X25519(our_identity_private, peer_identity_public), salt = \"ConstructSSTAG-v1\", info = \"\") -> 32 bytes",
+    "mac_input": "base_message_id_utf8 || 0x00 || target_device_id_utf8",
+    "tag": "HMAC-SHA256(pair_secret, mac_input)[0..8], lowercase hex — 16 characters",
+    "why_the_target_is_in_the_mac": [
+      "The pair secret alone is symmetric: A and B derive the same value, so a tag keyed on it",
+      "says 'this concerns A and B' and not which of the two it is for. Delivery hands the sender",
+      "its own copy back, so A would read its own echo as addressed to itself and try to open a",
+      "message it had just encrypted. Binding the target makes the tag directional while leaving",
+      "it opaque — the relay can compute neither direction."
+    ],
+    "base_message_id": "the id WITHOUT any per-device or per-chunk suffix, so every chunk of one message carries one tag and the receiver can recompute it from whichever chunk arrives first",
+    "undecidable_is_not_foreign": "a verifier must return 'does not match' rather than raising for unusable input, and callers must read that as 'not foreign': wrongly opening a copy costs failed decrypts, wrongly discarding one loses a message from the transcript, silently"
+  },
+  "$legacy": {
+    "tag_hex_len": 16,
+    "legacy_tag_hex_len": 8,
+    "note": [
+      "Senders at or below iOS 0.18.0 wrote device_id[0..8] — the device id in plain hex, which the",
+      "relay could read on every copy it routed. The two forms are told apart by length alone,",
+      "which is why the current one is not also 8. Removal condition: no builds at or below 0.18.0",
+      "left in the field. A client comparing a full device id against a truncated tag by equality",
+      "rather than prefix discards every copy including its own."
+    ]
+  },
+  "keys": {
+    "a_private": "0101010101010101010101010101010101010101010101010101010101010101",
+    "a_public": "a4e09292b651c278b9772c569f5fa9bb13d906b46ab68c9df9dc2b4409f8a209",
+    "b_private": "0202020202020202020202020202020202020202020202020202020202020202",
+    "b_public": "ce8d3ad1ccb633ec7b70c17814a5c76ecd029685050d344745ba05870e587d59",
+    "note": "raw X25519 scalars; both X25519 implementations clamp on use, so the private bytes are pinned unclamped as a caller would supply them"
+  },
+  "vectors": [
+    {
+      "name": "pair secret is symmetric",
+      "our_private": "0101010101010101010101010101010101010101010101010101010101010101",
+      "peer_public": "ce8d3ad1ccb633ec7b70c17814a5c76ecd029685050d344745ba05870e587d59",
+      "pair_secret": "7af783d487a32aa296b82c9198ca34a848a3ae2cf9323389d968e65d1ab99e45"
+    },
+    {
+      "name": "same secret derived from the other side",
+      "our_private": "0202020202020202020202020202020202020202020202020202020202020202",
+      "peer_public": "a4e09292b651c278b9772c569f5fa9bb13d906b46ab68c9df9dc2b4409f8a209",
+      "pair_secret": "7af783d487a32aa296b82c9198ca34a848a3ae2cf9323389d968e65d1ab99e45"
+    },
+    {
+      "name": "tag for a copy A sends to device B",
+      "our_private": "0101010101010101010101010101010101010101010101010101010101010101",
+      "peer_public": "ce8d3ad1ccb633ec7b70c17814a5c76ecd029685050d344745ba05870e587d59",
+      "base_message_id": "1aa6abac-0000-4000-8000-000000000001",
+      "target_device_id": "6f5e37acb3ed60ab6f5e37acb3ed60ab",
+      "tag": "13819e444aa59d15"
+    }
+  ]
+}

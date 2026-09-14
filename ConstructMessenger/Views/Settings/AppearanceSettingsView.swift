@@ -10,6 +10,7 @@ import SwiftUI
 struct AppearanceSettingsView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     @AppStorage("textSize") private var textSize: TextSize = .standard
+    @AppStorage(ChatTextPreference.faceKey) private var chatFace: ChatTextPreference.Face = .mono
     @Environment(\.dismiss) private var dismiss
     private let allThemes = AppTheme.allCases
 
@@ -79,6 +80,49 @@ struct AppearanceSettingsView: View {
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                 }
 
+                // MARK: - Message font
+                //
+                // Scoped to message text — bubbles and the composer that fills them — and nothing
+                // else. Monospace is the language of the chrome; what a person writes and reads is
+                // content. See `CTFont.message`.
+                VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderSpacing) {
+                    CTSettingsSectionHeader(title: NSLocalizedString("chat_font", comment: ""))
+                    CTSectionGroup {
+                        ForEach(ChatTextPreference.Face.allCases, id: \.self) { face in
+                            if face != ChatTextPreference.Face.allCases.first {
+                                ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
+                            }
+                            Button {
+                                chatFace = face
+                            } label: {
+                                HStack(spacing: AppearanceSettingsLayout.themeRowContentSpacing) {
+                                    // The row is set in the face it offers, so the choice is
+                                    // visible before it is made. `CTFont.message` cannot be used
+                                    // here — it reads the current preference, which would render
+                                    // both rows in the selected face and show nothing.
+                                    Text(face.displayName)
+                                        .font(face == .mono ? CTFont.bold(16) : .system(size: 16, weight: .bold))
+                                        .foregroundStyle(Color.CT.text)
+                                    Spacer()
+                                    if chatFace == face {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(Color.CT.accent)
+                                    }
+                                }
+                                .padding(.horizontal, AppearanceSettingsLayout.themeRowHorizontalPadding)
+                                .padding(.vertical, AppearanceSettingsLayout.themeRowVerticalPadding)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    Text(LocalizedStringKey("chat_font_footer"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
+                }
+
                 // MARK: - Text size (moved from hardcoded; applies to CTFont)
                 VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderSpacing) {
                     CTSettingsSectionHeader(title: NSLocalizedString("text_size", comment: ""))
@@ -94,8 +138,8 @@ struct AppearanceSettingsView: View {
                                         .foregroundStyle(Color.CT.text)
                                     Spacer()
                                     if textSize == size {
-                                        Text("[✓]")
-                                            .font(CTFont.bold(14))
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14, weight: .semibold))
                                             .foregroundStyle(Color.CT.accent)
                                     }
                                 }
@@ -116,7 +160,7 @@ struct AppearanceSettingsView: View {
         }
         .background(Color.CT.bg.ignoresSafeArea())
         #if os(iOS)
-        .toolbar(.hidden, for: .navigationBar)
+        .hideSystemNavBar()
         #endif
         .onAppear {
             // If user previously selected an unavailable theme, reset to dark
@@ -134,11 +178,14 @@ enum AppTheme: String, CaseIterable {
     /// Only dark theme is currently implemented.
     var isAvailable: Bool { true }
 
-    var displayName: LocalizedStringKey {
+    /// Resolved here rather than returned as a `LocalizedStringKey`: a bare literal typed as a
+    /// key localizes correctly and is invisible to `scripts/check_localization.sh`, so a missing
+    /// entry ships green. See the note in that script.
+    var displayName: String {
         switch self {
-        case .automatic: return "automatic"
-        case .light: return "light"
-        case .dark: return "dark"
+        case .automatic: return NSLocalizedString("automatic", comment: "")
+        case .light:     return NSLocalizedString("light", comment: "")
+        case .dark:      return NSLocalizedString("dark", comment: "")
         }
     }
 
@@ -168,16 +215,28 @@ enum AppTheme: String, CaseIterable {
 }
 
 // MARK: - Text size (for CTFont scaling in Appearance)
+extension ChatTextPreference.Face {
+    var displayName: String {
+        switch self {
+        case .mono:   return NSLocalizedString("chat_font_mono", comment: "")
+        case .system: return NSLocalizedString("chat_font_system", comment: "")
+        }
+    }
+}
+
 enum TextSize: String, CaseIterable {
     case compact = "compact"
     case standard = "standard"
     case large = "large"
 
-    var displayName: LocalizedStringKey {
+    /// Namespaced like `chat_font_*`. The bare `"compact"` / `"standard"` / `"large"` these
+    /// replace had no entry in any locale, so all three rows rendered their own key. A one-word
+    /// key is also the kind that later collides with an unrelated screen's noun.
+    var displayName: String {
         switch self {
-        case .compact: return "compact"
-        case .standard: return "standard"
-        case .large: return "large"
+        case .compact:  return NSLocalizedString("text_size_compact", comment: "")
+        case .standard: return NSLocalizedString("text_size_standard", comment: "")
+        case .large:    return NSLocalizedString("text_size_large", comment: "")
         }
     }
 }

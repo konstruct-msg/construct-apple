@@ -295,6 +295,8 @@ private struct CallHistoryRow: View {
             Button(role: .destructive, action: onDelete) {
                 Text(NSLocalizedString("delete", comment: ""))
             }
+            // See ChatsListView: an ancestor tint beats `role: .destructive`.
+            .tint(Color.CT.danger)
             Button(action: onCallBack) {
                 Text(NSLocalizedString("call_call_back", comment: ""))
             }

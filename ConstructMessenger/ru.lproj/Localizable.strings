@@ -17,6 +17,7 @@
 
 // MARK: - Main Tabs
 "chats" = "Чаты";
+"people" = "Люди";
 "settings" = "Настройки";
 
 // MARK: - Auth
@@ -35,6 +36,7 @@
 // MARK: - Chats List
 "scan_qr_code_or_share_link" = "Отсканируйте QR-код или поделитесь ссылкой для добавления проверенных контактов";
 "scan_qr_code" = "Сканировать QR-код";
+"add_contact_menu" = "Добавить контакт…";
 "new_contact" = "Новый контакт";
 
 // MARK: - Chat
@@ -284,7 +286,7 @@
 "change_avatar" = "Сменить фото";
 
 // Onboarding (identity gate — create / restore / link)
-"onboarding_tagline" = "интернет — пространство свободы выражения мысли.\nидентичность — конструкт.";
+"onboarding_tagline" = "интернет — пространство свободы выражения мысли.";
 "onboarding_username_placeholder" = "публичный псевдоним (опционально)";
 "onboarding_create_identity" = "Создать идентичность";
 "onboarding_already_have" = "Уже есть идентичность?";
@@ -498,8 +500,17 @@
 "veil_config_paste" = "Вставить код конфигурации";
 "veil_config_import" = "Импорт";
 "veil_config_section" = "ДОСТУП VEIL";
-"veil_config_active" = "Доступ настроен для %@";
+"veil_config_active" = "Доступ настроен";
 "veil_config_none" = "Доступ не настроен";
+
+/* Bootstrap voucher — приём кода (дверь «не подключается?» в онбординге) */
+"onboarding_cant_connect" = "Не подключается?";
+"veil_bootstrap_title" = "Не подключается";
+"veil_bootstrap_intro" = "Если Konstruct не может выйти в сеть здесь, тот, у кого связь уже есть, может выдать вам одноразовый код доступа. Попросите его и отсканируйте или вставьте ниже.";
+"veil_bootstrap_scan_subtitle" = "Наведите камеру на его код";
+"veil_bootstrap_paste_subtitle" = "Если код прислали текстом";
+"veil_bootstrap_ok" = "Подключение настроено";
+"veil_bootstrap_ok_hint" = "Вернитесь и создайте или восстановите личность — теперь это пойдёт через это подключение.";
 "traffic_protection" = "Защита трафика";
 "veil_footer_short" = "VEIL маскирует трафик под обычный HTTPS. Конфигурация предоставляется автоматически.";
 
@@ -554,6 +565,21 @@
 "editing_message" = "Редактирование сообщения";
 "edit_message_failed" = "Не удалось изменить сообщение: %@";
 "edit_message_limit_reached" = "Достигнут лимит правок (максимум 20)";
+
+// Message reactions
+"reaction_a11y" = "Реакция: %@";
+"reaction_failed" = "Не удалось отправить реакцию";
+"react" = "Реакция";
+"reaction_pick_more" = "Все реакции";
+"emoji_group_smileys" = "Смайлы";
+"emoji_group_people" = "Люди";
+"emoji_group_nature" = "Природа";
+"emoji_group_food" = "Еда";
+"emoji_group_activity" = "Занятия";
+"emoji_group_travel" = "Путешествия";
+"emoji_group_objects" = "Предметы";
+"emoji_group_symbols" = "Символы";
+"reaction_remove" = "Убрать реакцию";
 
 // MARK: - Network Settings — Connection Route
 "endpoint" = "Эндпоинт";
@@ -1046,10 +1072,13 @@
 "history_sync_send_offer_skip" = "Пропустить";
 "history_sync_auto_connecting" = "Подключение к телефону…";
 "history_sync_auto_sending" = "Отправка истории на компьютер…";
+"history_sync_skip_title" = "Пропустить историю";
+"history_sync_skip_sending" = "Завершение без истории…";
 "history_sync_user_mismatch" = "Ошибка переноса истории: история принадлежит другому аккаунту.";
 "call_error_not_contacts" = "Звонить можно только тем, с кем вы уже связаны.";
 "call_error_busy" = "Вы уже в звонке.";
 "call_error_peer_offline" = "Собеседник не в сети. Попробуйте позже.";
+"call_error_setup_failed" = "Не удалось начать звонок. Попробуйте ещё раз.";
 
 /* Engine background push notifications */
 "notification.new_message.title" = "Новое сообщение";
@@ -1060,6 +1089,8 @@
 "general" = "Основные";
 "composing" = "Набор текста";
 "send_on_enter" = "Отправить по ⏎ (Shift+⏎ для новой строки)";
+"send_on_enter_help" = "Отправить (Return) · новая строка (Shift-Return)";
+"send_action" = "Отправить";
 "show_timestamps" = "Показывать время у каждого сообщения";
 "sign_out_confirm_title" = "Выйти?";
 "sign_out_confirm_message" = "Вы выйдете только на этом Mac.";
@@ -1161,3 +1192,40 @@
 
 "diagnostics_owned_inset_title" = "Своя вставка в ленте";
 "diagnostics_owned_inset_hint" = "Контейнер прокрутки на UIKit. Применится к следующему открытому чату.";
+
+"diagnostics_skip_backlog_title" = "Пропустить накопившееся";
+"diagnostics_skip_backlog_held" = "Голова застряла: %@… (%@, %d с). Пропуск может потерять недоставленные сообщения.";
+"diagnostics_skip_backlog_clear" = "Ничего не удерживается — курсор двигается.";
+"diagnostics_skip_backlog_done" = "Курсор переставлен на %@";
+
+"device_unnamed" = "Устройство";
+
+"device_default_name_desktop" = "Mac";
+"device_default_name_ios" = "iPhone";
+
+/* Appearance — message font */
+"chat_font" = "Шрифт сообщений";
+"chat_font_mono" = "JetBrains Mono";
+"chat_font_system" = "Системный";
+"chat_font_footer" = "Действует на текст сообщений и поле ввода. Остальной интерфейс остаётся моноширинным.";
+
+"text_size" = "Размер текста";
+"text_size_compact" = "Компактный";
+"text_size_standard" = "Обычный";
+"text_size_large" = "Крупный";
+"text_size_footer" = "Действует на текст сообщений и поле ввода. Остальной интерфейс не меняет размер.";
+
+/* VEIL bootstrap voucher — дать доступ тому, у кого входа ещё нет. */
+"veil_voucher_row" = "Дать кому-то доступ";
+"veil_voucher_title" = "Дать доступ";
+"veil_voucher_instructions" = "Пусть отсканирует этот код в Konstruct. Это настройка подключения, а не приглашение в контакты.";
+"veil_voucher_expires_in" = "Действует ещё %@";
+"veil_voucher_expired" = "Код истёк";
+"veil_voucher_new" = "Создать новый код";
+"veil_voucher_quota" = "Коды на сегодня закончились. Попробуйте позже.";
+"veil_voucher_quota_retry" = "Коды на сегодня закончились. Попробуйте примерно через %d ч.";
+"veil_voucher_unavailable" = "Выдача доступа сейчас недоступна.";
+"veil_voucher_err_generic" = "Не удалось создать код";
+"veil_voucher_privacy_hint" = "Показывайте код только тому, для кого он предназначен. Не публикуйте его и не отправляйте через открытый канал.";
+"veil_voucher_intro" = "Создаёт одноразовый код, который настроит подключение тому, кто пока не может добраться до Konstruct. Код действует недолго, в сутки можно создать три.";
+"veil_voucher_create" = "Создать код";

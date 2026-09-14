@@ -57,8 +57,18 @@ struct ChatMessage: Codable, Identifiable {
     /// Suite-3 sparse PQ-ratchet field from the wire header, serialized (empty = none).
     var pqRatchetField: Data = Data()
 
-    /// Device ID of the sending device (populated from envelope.senderDevice.deviceID).
-    /// Used for per-device session key derivation (contactId = userId:deviceId).
+    /// Device ID of the sending device.
+    ///
+    /// Empty as delivered: the server blanks `envelope.sender_device` on purpose, so that relay
+    /// metadata carries no E2E meaning. Two things fill it — a path that reads an envelope before
+    /// delivery blanks it, and, since 2026-09-06, the unseal boundary, which recovers it from the
+    /// sender certificate (`ResolvedSender.senderDeviceId`). The sealed path is now the ordinary
+    /// case, so "empty on every delivered message" — what this comment said, and what three
+    /// readers below still assume — stopped being true.
+    ///
+    /// When it holds a value it names the session outright: a contactId is a `CryptoDeviceId` and
+    /// nothing is derived from it. `MessageRouter` returns that one session instead of walking the
+    /// peer's devices, and `senderSyncSessionCandidates` puts it first.
     var senderDeviceId: String = ""
 
     /// Canonical conversation ID from the envelope (e.g. "direct:{a}:{b}").
@@ -101,8 +111,9 @@ struct ChatMessage: Codable, Identifiable {
 
     /// Rebuild with the sender and content type recovered from `SealedInner`.
     ///
-    /// This is the unseal boundary. Exactly three things change — the sender the outer envelope
-    /// had to mask, the content type it had to force generic, and the now-spent sealed bytes.
+    /// This is the unseal boundary. Exactly four things change — the sender the outer envelope
+    /// had to mask, the sending **device** the relay blanked, the content type it had to force
+    /// generic, and the now-spent sealed bytes.
     /// (Before 2026-08-02 there was a fourth, `messageType`, which had to be kept in step with
     /// `contentType` by hand. It is gone; the kind is derived from `contentType` on demand.)
     /// **Everything else must carry through verbatim**, and a field dropped here is invisible:
@@ -135,7 +146,8 @@ struct ChatMessage: Codable, Identifiable {
             kyberOtpkId: kyberOtpkId,
             pqMessageEpoch: pqMessageEpoch,
             pqRatchetField: pqRatchetField,
-            senderDeviceId: senderDeviceId,
+            // replaced: the relay blanks `sender_device`, the certificate carries it sealed
+            senderDeviceId: resolved.senderDeviceId,
             conversationId: conversationId,
             replyToMessageId: replyToMessageId,
             rawPayload: rawPayload
@@ -343,7 +355,7 @@ struct ProfileShareData: Codable {
         // This parser indexes from 0, bounds-checks against `count`, and uses `subdata(in:)`,
         // which takes ABSOLUTE indices. A `Data` slice carries a non-zero `startIndex`, so it
         // would trap on the first subscript. Normalise the origin once — no copy when the
-        // input is already zero-origin. Same trap documented at MessagePadding.swift:36.
+        // input is already zero-origin.
         // The payload here is peer-controlled decrypted content, so this must not depend on
         // how the caller happened to build the `Data`.
         let data = raw.startIndex == 0 ? raw : Data(raw)

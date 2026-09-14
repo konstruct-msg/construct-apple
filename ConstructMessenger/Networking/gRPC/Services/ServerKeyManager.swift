@@ -50,7 +50,15 @@ actor ServerKeyManager {
     func sealTokenBytes(_ plaintext: Data) -> Data? {
         guard let serverKey = tokenEncryptionKey() else { return nil }
         do {
-            return try sealBox(plaintext, to: serverKey)
+            // The core seals it. This file carried its own X25519+ChaChaPoly box until
+            // 2026-08-27, under a doc comment in `crypto/privacy_pass/mod.rs` promising the core
+            // "matches iOS `ServerKeyManager.sealBox` and construct-server's
+            // `privacy_pass::open_sealed_token_bytes`" — one comment naming three implementations
+            // of one format, none of which was ever checked against another.
+            return Data(try ppSealTokenBytes(
+                token: [UInt8](plaintext),
+                serverEncryptionKey: [UInt8](serverKey.rawRepresentation)
+            ))
         } catch {
             Log.error("ServerKeyManager: token seal failed — sending token-less: \(error)", category: "Stealth")
             return nil
@@ -114,33 +122,12 @@ actor ServerKeyManager {
         }
     }
 
-    // MARK: - Sealed box (X25519 + ChaChaPoly)
+    // The sealed box itself is gone — `crypto::privacy_pass::pp_seal_token_bytes` is the one
+    // implementation, and `TokenSealDifferentialTests` is the record that the two agreed at the
+    // moment the second was deleted: one opener, written from the format rather than from either
+    // sealer, read both.
     //
-    // Format: ephemeralPub(32) ‖ nonce(12) ‖ ciphertext ‖ tag(16)
-    // Nonce is random per message (ChaChaPoly.seal generates it).
-    //
-    // Server decryption (Phase 2.1, future):
-    //   let shared = try serverPrivKey.sharedSecretFromKeyAgreement(with: ephemeralPub)
-    //   let symKey = shared.hkdfDerivedSymmetricKey(SHA256, salt: Data(), info: "construct-token-seal-v1", count: 32)
-    //   let plaintext = try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: nonce+ct+tag), using: symKey)
-
-    private func sealBox(_ plaintext: Data, to recipientPub: Curve25519.KeyAgreement.PublicKey) throws -> Data {
-        let ephemeralPriv = Curve25519.KeyAgreement.PrivateKey()
-        let sharedSecret = try ephemeralPriv.sharedSecretFromKeyAgreement(with: recipientPub)
-        let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
-            using: SHA256.self,
-            salt: Data(),
-            sharedInfo: Data("construct-token-seal-v1".utf8),
-            outputByteCount: 32
-        )
-        let sealedBox = try ChaChaPoly.seal(plaintext, using: symmetricKey)
-        // Pack: ephemeral_pub(32) ‖ nonce(12) ‖ ciphertext ‖ tag(16)
-        let nonce = sealedBox.nonce.withUnsafeBytes { Data($0) }
-        var out = Data(capacity: 32 + 12 + sealedBox.ciphertext.count + 16)
-        out.append(ephemeralPriv.publicKey.rawRepresentation)
-        out.append(nonce)
-        out.append(sealedBox.ciphertext)
-        out.append(sealedBox.tag)
-        return out
-    }
+    // Format, for anyone reading a capture: ephemeralPub(32) ‖ nonce(12) ‖ ciphertext ‖ tag(16),
+    // key = HKDF-SHA256(ikm: X25519(eph, server), salt: ∅, info: "construct-token-seal-v1").
+    // The authority is construct-protos/conformance/knst_token_seal.json.
 }

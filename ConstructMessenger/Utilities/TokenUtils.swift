@@ -52,9 +52,29 @@ enum TokenUtils {
     /// but a valid session token still exists.
     /// Tries `sub` first, then legacy `user_id` claim (JWT only).
     static func extractUserId(from token: String) -> String? {
+        let tokenFormat = format(of: token)
+        guard let json = claims(from: token) else { return nil }
+        if let sub = json["sub"] as? String, !sub.isEmpty { return sub }
+        switch tokenFormat {
+        case .jwt:
+            if let uid = json["user_id"] as? String, !uid.isEmpty { return uid }
+        case .paseto, .unknown:
+            break
+        }
+        return nil
+    }
+
+    /// Extract the token issuance time (`iat`) as seconds since the Unix epoch.
+    /// This is used only for local lifecycle checkpoints; it is not a trust decision.
+    static func extractIssuedAt(from token: String) -> Int64? {
+        guard let json = claims(from: token) else { return nil }
+        return int64Claim("iat", in: json)
+    }
+
+    private static func claims(from token: String) -> [String: Any]? {
         switch format(of: token) {
-        case .paseto: return pasetoExtractSub(token)
-        case .jwt:    return jwtExtractSub(token)
+        case .paseto: return pasetoClaims(token)
+        case .jwt:    return jwtClaims(token)
         case .unknown: return nil
         }
     }
@@ -67,7 +87,7 @@ enum TokenUtils {
     /// (what Ed25519 signs) is "paseto.v4.public." || nonce || message — but
     /// since we do not verify the signature here, we only need to slice out
     /// the message between the nonce and the signature.
-    private static func pasetoExtractSub(_ token: String) -> String? {
+    private static func pasetoClaims(_ token: String) -> [String: Any]? {
         // Token = "v4.public." + payloadB64 + ["." + footerB64]
         let stripped = String(token.dropFirst("v4.public.".count))
         let parts = stripped.split(separator: ".")
@@ -78,11 +98,7 @@ enum TokenUtils {
         let messageStart = 32
         let messageEnd = payload.count - 64
         let messageData = payload.subdata(in: messageStart..<messageEnd)
-        guard let json = try? JSONSerialization.jsonObject(with: messageData) as? [String: Any] else {
-            return nil
-        }
-        if let sub = json["sub"] as? String, !sub.isEmpty { return sub }
-        return nil
+        return try? JSONSerialization.jsonObject(with: messageData) as? [String: Any]
     }
 
     // MARK: - Legacy JWT (RS256)
@@ -95,14 +111,26 @@ enum TokenUtils {
         return json["alg"] as? String
     }
 
-    private static func jwtExtractSub(_ token: String) -> String? {
+    private static func jwtClaims(_ token: String) -> [String: Any]? {
         let parts = token.split(separator: ".")
         guard parts.count >= 2 else { return nil }
         guard let data = base64URLDecode(String(parts[1])) else { return nil }
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        if let sub = json["sub"] as? String, !sub.isEmpty { return sub }
-        if let uid = json["user_id"] as? String, !uid.isEmpty { return uid }
-        return nil
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    private static func int64Claim(_ name: String, in json: [String: Any]) -> Int64? {
+        switch json[name] {
+        case let value as Int64:
+            return value
+        case let value as Int:
+            return Int64(value)
+        case let value as NSNumber:
+            return value.int64Value
+        case let value as String:
+            return Int64(value)
+        default:
+            return nil
+        }
     }
 
     // MARK: - base64url decode

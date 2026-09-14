@@ -56,6 +56,18 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
                 method: "SendSealedMessage"
             )
         }
+        /// Namespace for "PublishIntakeTags" metadata.
+        public enum PublishIntakeTags: Sendable {
+            /// Request type for "PublishIntakeTags".
+            public typealias Input = Shared_Proto_Services_V1_PublishIntakeTagsRequest
+            /// Response type for "PublishIntakeTags".
+            public typealias Output = Shared_Proto_Services_V1_PublishIntakeTagsResponse
+            /// Descriptor for "PublishIntakeTags".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
+                method: "PublishIntakeTags"
+            )
+        }
         /// Namespace for "EditMessage" metadata.
         public enum EditMessage: Sendable {
             /// Request type for "EditMessage".
@@ -121,6 +133,7 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
             MessageStream.descriptor,
             SendMessage.descriptor,
             SendSealedMessage.descriptor,
+            PublishIntakeTags.descriptor,
             EditMessage.descriptor,
             AddReaction.descriptor,
             RemoveReaction.descriptor,
@@ -224,6 +237,40 @@ extension Shared_Proto_Services_V1_MessagingService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SendMessageResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendMessageResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "PublishIntakeTags" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > PublishIntakeTags - the recipient tells the server which intake tags its account
+        /// > accepts, so envelopes from vouched contacts owe no Privacy Pass token
+        /// > (SealedInner.intake_tag_sealed). AUTHENTICATED: tags are stored against the caller's
+        /// > own account and never against an id taken from the request, or publishing would be a
+        /// > way to vouch for someone else's incoming traffic.
+        /// > 
+        /// > The server stores tags. It never derives one — that needs `intake_key`, and holding
+        /// > that would make a database dump free sending to every account rather than to the few
+        /// > epochs a dump happens to contain.
+        /// > 
+        /// > Publish a window of future epochs, not just today's: a device that has been offline
+        /// > for a day would otherwise break its own incoming traffic.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_PublishIntakeTagsRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_PublishIntakeTagsRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_PublishIntakeTagsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func publishIntakeTags<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishIntakeTagsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_PublishIntakeTagsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_PublishIntakeTagsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_PublishIntakeTagsResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "EditMessage" method.
@@ -472,6 +519,51 @@ extension Shared_Proto_Services_V1_MessagingService {
             try await self.client.unary(
                 request: request,
                 descriptor: Shared_Proto_Services_V1_MessagingService.Method.SendSealedMessage.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "PublishIntakeTags" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > PublishIntakeTags - the recipient tells the server which intake tags its account
+        /// > accepts, so envelopes from vouched contacts owe no Privacy Pass token
+        /// > (SealedInner.intake_tag_sealed). AUTHENTICATED: tags are stored against the caller's
+        /// > own account and never against an id taken from the request, or publishing would be a
+        /// > way to vouch for someone else's incoming traffic.
+        /// > 
+        /// > The server stores tags. It never derives one — that needs `intake_key`, and holding
+        /// > that would make a database dump free sending to every account rather than to the few
+        /// > epochs a dump happens to contain.
+        /// > 
+        /// > Publish a window of future epochs, not just today's: a device that has been offline
+        /// > for a day would otherwise break its own incoming traffic.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_PublishIntakeTagsRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_PublishIntakeTagsRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_PublishIntakeTagsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func publishIntakeTags<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishIntakeTagsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_PublishIntakeTagsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_PublishIntakeTagsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_PublishIntakeTagsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_MessagingService.Method.PublishIntakeTags.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -755,6 +847,46 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
         )
     }
 
+    /// Call the "PublishIntakeTags" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > PublishIntakeTags - the recipient tells the server which intake tags its account
+    /// > accepts, so envelopes from vouched contacts owe no Privacy Pass token
+    /// > (SealedInner.intake_tag_sealed). AUTHENTICATED: tags are stored against the caller's
+    /// > own account and never against an id taken from the request, or publishing would be a
+    /// > way to vouch for someone else's incoming traffic.
+    /// > 
+    /// > The server stores tags. It never derives one — that needs `intake_key`, and holding
+    /// > that would make a database dump free sending to every account rather than to the few
+    /// > epochs a dump happens to contain.
+    /// > 
+    /// > Publish a window of future epochs, not just today's: a device that has been offline
+    /// > for a day would otherwise break its own incoming traffic.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_PublishIntakeTagsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func publishIntakeTags<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishIntakeTagsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_PublishIntakeTagsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.publishIntakeTags(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_PublishIntakeTagsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_PublishIntakeTagsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "EditMessage" method.
     ///
     /// > Source IDL Documentation:
@@ -1012,6 +1144,50 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
             metadata: metadata
         )
         return try await self.sendSealedMessage(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "PublishIntakeTags" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > PublishIntakeTags - the recipient tells the server which intake tags its account
+    /// > accepts, so envelopes from vouched contacts owe no Privacy Pass token
+    /// > (SealedInner.intake_tag_sealed). AUTHENTICATED: tags are stored against the caller's
+    /// > own account and never against an id taken from the request, or publishing would be a
+    /// > way to vouch for someone else's incoming traffic.
+    /// > 
+    /// > The server stores tags. It never derives one — that needs `intake_key`, and holding
+    /// > that would make a database dump free sending to every account rather than to the few
+    /// > epochs a dump happens to contain.
+    /// > 
+    /// > Publish a window of future epochs, not just today's: a device that has been offline
+    /// > for a day would otherwise break its own incoming traffic.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func publishIntakeTags<Result>(
+        _ message: Shared_Proto_Services_V1_PublishIntakeTagsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_PublishIntakeTagsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishIntakeTagsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.publishIntakeTags(
             request: request,
             options: options,
             onResponse: handleResponse

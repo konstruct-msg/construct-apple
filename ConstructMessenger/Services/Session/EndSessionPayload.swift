@@ -6,6 +6,10 @@
 //
 
 import Foundation
+// Explicit, not transitive. On iOS this file compiled without it because some other import in the
+// target re-exported SwiftProtobuf; the macOS target has a different import graph and it did not,
+// which is how a missing import stayed invisible for as long as only one platform was built.
+import SwiftProtobuf
 
 /// Builds and reads the `encrypted_payload` of an END_SESSION (content type 21).
 ///

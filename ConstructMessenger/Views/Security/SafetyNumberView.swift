@@ -47,7 +47,7 @@ struct SafetyNumberView: View {
             }
         }
         .ctBackground()
-        .onAppear { computeSafetyNumber() }
+        .onAppear { refreshSafetyNumber() }
     }
 
     // MARK: - Sections
@@ -137,58 +137,31 @@ struct SafetyNumberView: View {
 
     // MARK: - Computation
 
-    private func computeSafetyNumber() {
+    /// Named apart from the core's `computeSafetyNumber` on purpose: an unqualified call to a
+    /// global of the same name from inside a method of that name is a recursion, not a call.
+    private func refreshSafetyNumber() {
         guard let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty else {
             safetyNumber = NSLocalizedString("safety_numbers_unavailable", comment: "")
             return
         }
-        safetyNumber = Self.compute(myDeviceId: myDeviceId, theirDeviceId: theirDeviceId)
-    }
-
-    /// Compute Safety Number from two device IDs.
-    ///
-    /// Algorithm matches Rust `compute_safety_number()` in `crypto/recovery.rs`:
-    /// 1. Decode hex device IDs to bytes.
-    /// 2. Sort lexicographically (ensures both parties compute the same value).
-    /// 3. Iterate SHA-512 1024 rounds: hash = SHA-512(prev_hash || input).
-    /// 4. Format first 24 bytes as 12 groups of 5 decimal digits (00000–99999).
-    static func compute(myDeviceId: String, theirDeviceId: String) -> String {
-        guard let myBytes = Data(hexString: myDeviceId),
-              let theirBytes = Data(hexString: theirDeviceId) else {
-            return ""
+        // The core computes it. This view carried its own 1024-round SHA-512 until 2026-08-27,
+        // under a comment promising the algorithm matched `crypto/recovery.rs` — which is the
+        // comment that should have been this call. The two did agree for well-formed ids; they
+        // disagreed for everything else, and the core was the one that was wrong (see below).
+        guard let computed = computeSafetyNumber(
+            myDeviceId: myDeviceId,
+            theirDeviceId: theirDeviceId
+        ) else {
+            // `nil` means the core could not read one of the ids. It used to answer anyway, with
+            // a number derived from empty bytes — so every unreadable id produced the *same*
+            // number and two people who had verified nothing would have been shown a match.
+            // There is no such thing as a partial safety number: either it is the value that
+            // differs when a key was substituted, or there is nothing to show.
+            Log.error("Safety number: the core declined to name a value for these ids", category: "Security")
+            safetyNumber = NSLocalizedString("safety_numbers_unavailable", comment: "")
+            return
         }
-
-        let (first, second) = myDeviceId < theirDeviceId
-            ? (myBytes, theirBytes)
-            : (theirBytes, myBytes)
-
-        let input: Data = first + second
-        var hash = Data(SHA512.hash(data: input))
-        for _ in 1..<1024 {
-            let combined: Data = hash + input
-            hash = Data(SHA512.hash(data: combined))
-        }
-
-        return stride(from: 0, to: 24, by: 2).map { i -> String in
-            let value = (UInt32(hash[i]) * 256 + UInt32(hash[i + 1])) % 100_000
-            return String(format: "%05d", value)
-        }.joined(separator: " ")
+        safetyNumber = computed
     }
 }
 
-// MARK: - Data hex decoding helper
-
-private extension Data {
-    init?(hexString: String) {
-        guard hexString.count % 2 == 0 else { return nil }
-        var data = Data(capacity: hexString.count / 2)
-        var index = hexString.startIndex
-        while index < hexString.endIndex {
-            let nextIndex = hexString.index(index, offsetBy: 2)
-            guard let byte = UInt8(hexString[index..<nextIndex], radix: 16) else { return nil }
-            data.append(byte)
-            index = nextIndex
-        }
-        self = data
-    }
-}

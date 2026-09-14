@@ -70,9 +70,10 @@ final class AudioRecorderService: ObservableObject {
         ]
 
         // Bracketed so a keyboard dismissal can be attributed to the audio session rather than to
-        // the composer swap — the swap was ruled out on device and this is the next candidate.
-        // See KeyboardEventTracer.
-        KeyboardEventTracer.shared.enter(.audioSessionActivating)
+        // the composer swap — the swap was ruled out on device, and by 2026-08-22 so was the whole
+        // view layer: the hide arrives with the text view still first responder, so nothing here
+        // resigns it. The bracket is now inside `configureAudioSession`, one phase per call, because
+        // the remaining question is which of the two the system reacts to. See KeyboardEventTracer.
         try configureAudioSession()
 
         let rec = try AVAudioRecorder(url: url, settings: settings)
@@ -246,11 +247,13 @@ final class AudioRecorderService: ObservableObject {
     private func configureAudioSession() throws {
         #if os(iOS) || targetEnvironment(macCatalyst)
         let session = AVAudioSession.sharedInstance()
+        KeyboardEventTracer.shared.enter(.audioSessionCategory)
         try session.setCategory(
             .playAndRecord,
             mode: .default,
             options: [.defaultToSpeaker, .allowBluetoothHFP]
         )
+        KeyboardEventTracer.shared.enter(.audioSessionActivating)
         try session.setActive(true)
         #endif
     }

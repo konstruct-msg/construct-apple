@@ -174,7 +174,10 @@ final class DebugMetricsViewModel {
         p95SessionInit = m.p95Latency(for: "session_init_start→session_init_end")
         avgGRPCConnect = m.averageLatency(for: "grpc_connect_start→grpc_connect_end")
         avgVEILStart = m.averageLatency(for: "veil_proxy_start_begin→veil_proxy_start_end")
-        streamFastFailoverCount = m.count(event: .streamOpenFastFailover, last: 200)
+        // `last: 200` used to be the whole ring buffer, so this read "all of it" on a quiet device
+        // and an arbitrary tail on a busy one. The overlay's own label says "count", and that is
+        // now what it gets.
+        streamFastFailoverCount = m.count(event: .streamOpenFastFailover)
 
     }
 

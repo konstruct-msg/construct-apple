@@ -18,6 +18,7 @@
 
 // MARK: - Main Tabs
 "chats" = "Discussions";
+"people" = "Personnes";
 "settings" = "Paramètres";
 
 // MARK: - Auth
@@ -36,6 +37,7 @@
 // MARK: - Chats List
 "scan_qr_code_or_share_link" = "Scannez un code QR ou partagez votre lien de contact pour ajouter des contacts vérifiés";
 "scan_qr_code" = "Scanner le code QR";
+"add_contact_menu" = "Ajouter un contact…";
 "new_contact" = "Nouveau contact";
 
 // MARK: - Chat
@@ -459,8 +461,17 @@
 "veil_config_paste" = "Coller le code de configuration";
 "veil_config_import" = "Importer";
 "veil_config_section" = "ACCÈS VEIL";
-"veil_config_active" = "Accès configuré pour %@";
+"veil_config_active" = "Accès configuré";
 "veil_config_none" = "Aucun accès configuré";
+
+/* Bootstrap voucher — réception du code (porte « pas de connexion ? » à l'accueil) */
+"onboarding_cant_connect" = "Pas de connexion ?";
+"veil_bootstrap_title" = "Pas de connexion";
+"veil_bootstrap_intro" = "Si Konstruct n'arrive pas à joindre le réseau ici, une personne déjà connectée peut vous donner un code d'accès à usage unique. Demandez-le-lui, puis scannez-le ou collez-le ci-dessous.";
+"veil_bootstrap_scan_subtitle" = "Dirigez la caméra vers son code";
+"veil_bootstrap_paste_subtitle" = "Si le code vous a été envoyé sous forme de texte";
+"veil_bootstrap_ok" = "Connexion configurée";
+"veil_bootstrap_ok_hint" = "Revenez en arrière et créez ou restaurez votre identité — cela passera désormais par cette connexion.";
 "traffic_protection" = "Protection du trafic";
 "veil_footer_short" = "VEIL masque le trafic comme du HTTPS standard. La configuration est fournie automatiquement.";
 
@@ -510,6 +521,21 @@
 "editing_message" = "Modification du message";
 "edit_message_failed" = "Échec de la modification du message : %@";
 "edit_message_limit_reached" = "Limite de modifications atteinte (20 modifications max)";
+
+// Message reactions
+"reaction_a11y" = "A réagi avec %@";
+"reaction_failed" = "Impossible d'envoyer la réaction";
+"react" = "Réagir";
+"reaction_pick_more" = "Toutes les réactions";
+"emoji_group_smileys" = "Émoticônes";
+"emoji_group_people" = "Personnes";
+"emoji_group_nature" = "Nature";
+"emoji_group_food" = "Nourriture";
+"emoji_group_activity" = "Activités";
+"emoji_group_travel" = "Voyages";
+"emoji_group_objects" = "Objets";
+"emoji_group_symbols" = "Symboles";
+"reaction_remove" = "Retirer la réaction";
 
 // MARK: - Network Settings — Connection Route
 "endpoint" = "Point d'accès";
@@ -976,16 +1002,21 @@
 "history_sync_offer_skip" = "Passer";
 "history_sync_auto_connecting" = "Connexion à votre téléphone…";
 "history_sync_auto_sending" = "Envoi de l’historique vers votre ordinateur…";
+"history_sync_skip_title" = "Ignorer l’historique";
+"history_sync_skip_sending" = "Finalisation sans historique…";
 "history_sync_user_mismatch" = "Échec du transfert : cet historique appartient à une autre identité.";
 "call_error_not_contacts" = "Vous ne pouvez appeler que des personnes avec qui vous êtes connecté.";
 "call_error_busy" = "Vous êtes déjà en appel.";
 "call_error_peer_offline" = "La personne est hors ligne. Réessayez plus tard.";
+"call_error_setup_failed" = "Impossible de démarrer l'appel. Réessayez.";
 "notification.new_message.title" = "Nouveau message";
 "notification.new_message.body" = "Vous avez un nouveau message chiffré.";
 "remove_avatar" = "retirer l’avatar";
 "general" = "Général";
 "composing" = "Rédaction";
 "send_on_enter" = "Envoyer avec ⏎ (Maj+⏎ pour un saut de ligne)";
+"send_on_enter_help" = "Envoyer (Retour) · nouvelle ligne (Maj-Retour)";
+"send_action" = "Envoyer";
 "show_timestamps" = "Afficher l’heure sur chaque message";
 "sign_out_confirm_title" = "Se déconnecter ?";
 "sign_out_confirm_message" = "Vous serez déconnecté sur ce Mac uniquement.";
@@ -1068,3 +1099,40 @@
 
 "diagnostics_owned_inset_title" = "Transcription à encart propre";
 "diagnostics_owned_inset_hint" = "Conteneur de défilement UIKit. S'applique au prochain chat ouvert.";
+
+"diagnostics_skip_backlog_title" = "Ignorer l'arriéré retenu";
+"diagnostics_skip_backlog_held" = "Tête bloquée : %@… (%@, %d s). Ignorer peut perdre des messages jamais remis.";
+"diagnostics_skip_backlog_clear" = "Rien en attente — le curseur avance.";
+"diagnostics_skip_backlog_done" = "Curseur forcé à %@";
+
+"device_unnamed" = "Appareil";
+
+"device_default_name_desktop" = "Mac";
+"device_default_name_ios" = "iPhone";
+
+/* Appearance — message font */
+"chat_font" = "Police des messages";
+"chat_font_mono" = "JetBrains Mono";
+"chat_font_system" = "Système";
+"chat_font_footer" = "S'applique au texte des messages et au champ de saisie. Le reste de l'interface reste à chasse fixe.";
+
+"text_size" = "Taille du texte";
+"text_size_compact" = "Compacte";
+"text_size_standard" = "Standard";
+"text_size_large" = "Grande";
+"text_size_footer" = "S'applique au texte des messages et au champ de saisie. Le reste de l'interface conserve sa taille.";
+
+/* VEIL bootstrap voucher — donner un accès à quelqu'un qui n'en a pas encore. */
+"veil_voucher_row" = "Donner un accès";
+"veil_voucher_title" = "Donner un accès";
+"veil_voucher_instructions" = "Faites-lui scanner ce code dans Konstruct. Cela configure sa connexion — ce n'est pas une invitation de contact.";
+"veil_voucher_expires_in" = "Valable encore %@";
+"veil_voucher_expired" = "Ce code a expiré";
+"veil_voucher_new" = "Créer un nouveau code";
+"veil_voucher_quota" = "Vous avez distribué vos codes pour aujourd'hui. Réessayez plus tard.";
+"veil_voucher_quota_retry" = "Vous avez distribué vos codes pour aujourd'hui. Réessayez dans environ %d h.";
+"veil_voucher_unavailable" = "La distribution d'accès n'est pas disponible pour le moment.";
+"veil_voucher_err_generic" = "Impossible de créer le code";
+"veil_voucher_privacy_hint" = "Ne montrez ce code qu'à la personne concernée. Ne le publiez pas et ne l'envoyez pas par un canal public.";
+"veil_voucher_intro" = "Crée un code à usage unique qui configure la connexion de quelqu'un qui n'arrive pas encore à joindre Konstruct. Il est valable peu de temps, et vous pouvez en créer trois par jour.";
+"veil_voucher_create" = "Créer un code";

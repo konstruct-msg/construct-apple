@@ -22,6 +22,38 @@ of the build service) instead of dying silently at your timeout.
 Six such wedges between 2026-08-08 and 2026-08-10 cost two mutations their verification; the cause
 is not yet known, so the script captures evidence for the next one.
 
+## Running a mutation battery
+
+A scripted battery — apply mutation, build, run, restore, repeat — lied three different ways in one
+session on 2026-08-28, every time in the direction of "all killed". None of the three resembled the
+others, so the rules below are mechanical rather than a matter of care.
+
+**The baseline run is part of the battery.** It goes first and must be completely green. Without it
+"mutation killed" means nothing: a battery whose first run died mid-build left its mutation in
+the tree, the next script snapshotted *that* as its restore copy, and five runs then went on top of
+a sixth, invisible mutation. The tell was one test red in every run including the clean one.
+
+**Prove the restore copy on the way in.** `grep -q` for the unmutated line before starting, and
+fail loudly if it is missing. And restore from that copy, never `git checkout --` — a file dirty
+with real uncommitted work loses it (that is how a fix vanished mid-battery and had to be
+re-applied).
+
+**Rebuild after the final restore.** `test-without-building` reuses the last built product, which
+is the last *mutation's* product. Two tests "failed" on a restored tree because the binary still
+held the mutation.
+
+**An unapplied mutation must stop the battery.** A `python3 -c` whose `assert` on the anchor fails
+still lets the wrapper print its "nothing went red" line — which reads exactly like a killed
+mutation. Check the exit status, or make the failure fatal.
+
+**One battery at a time per file.** Source-text assertions read the file at test time; two batteries
+overlapping on one file produce a red that belongs to neither.
+
+**A mutation the tests cannot reach is not killed.** `isOurOwnAccount` was mutated in the production
+line `userId == AuthSessionManager.shared.currentUserId`, which no test reaches — the
+`ownAccountOverrideForTesting` branch returns first. The report read as "killed by another test".
+Mutate the branch the tests actually execute, and record that the shadowed line stays uncovered.
+
 ## Counting tests
 
 `xcodebuild … test` prints a line per test, and a retried clone prints some twice. Count

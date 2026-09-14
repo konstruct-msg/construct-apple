@@ -57,6 +57,7 @@ struct DeviceLinkMethodView: View {
                         ) { showQR = true }
                     }
                     .padding(.horizontal, CTLayout.edgePad)
+                    .padding(.bottom, CTLayout.sectionGap)
                     .frame(maxWidth: 480)
                     .frame(maxWidth: .infinity)
                 }

@@ -66,21 +66,40 @@ struct ChatView: View {
     /// Bottom safe area, and the scroll view's own height. Held because the keyboard moves both
     /// while leaving the composer's height alone, and a latch blind to that reads a keyboard
     /// animation as a settled layout.
+    ///
+    /// Both are now written from the geometry tick, which is where they are measured. They exist as
+    /// state only because the composer's own report — which cannot see the scroll view — needs the
+    /// two numbers it does not carry. `bottomSafeAreaInset` was declared here and never assigned
+    /// at all until 2026-08-21.
     @State private var bottomSafeAreaInset: CGFloat = 0
     @State private var transcriptContainerHeight: CGFloat = 0
-    /// Where the held row sits in content coordinates, reported by that row alone.
+    /// Where the held row sits in content coordinates, reported by that row alone, tagged with
+    /// which row reported it.
     ///
     /// Only one row carries the measurement, and only while somebody is reading history — this is
     /// the exact signal `TranscriptOffsetPolicy` needs and the reason the hold rule works for a
     /// prepend *and* for a photo finishing its decode above the reader. Comparing content heights
     /// cannot tell those from growth below the reader.
-    @State private var heldRowMinY: CGFloat?
+    ///
+    /// The tag is what makes it safe to leave lying around: nothing clears this when a history
+    /// visit ends, so without it the next visit's first sample would be differenced against the
+    /// previous visit's last one — two different rows, and a shift that measures nothing.
+    @State private var anchorSample: TranscriptRowSample?
+    /// Where the row a guest scroll is heading for sits. Same reporter as the anchor, installed on
+    /// a different row and for a different question: the anchor's *movement* is the reading
+    /// position, this row's *position* is the destination.
+    @State private var scrollTargetSample: TranscriptRowSample?
     /// Last geometry sample, so the new path can hand `handleTranscriptGeometry` an `old` value
     /// the way the container's `(old, new)` callback does.
-    @State private var lastGeometry = ChatScrollGeometry(
-        distanceFromBottom: 0, width: 0, contentFits: false,
-        contentHeight: 0, visibleMinY: 0, containerHeight: 0
-    )
+    ///
+    /// A reference box rather than `@State`, and that is the point. It was `@State`, written from
+    /// `scrollViewDidScroll` — every frame of every drag. Each write invalidated this body, which
+    /// reassigns `host.rootView` in `updateUIView`, which rebuilds all thirty rows of the eager
+    /// stack, which re-measures to a slightly different height, which lands the offset again and
+    /// emits another sample. That loop is idempotent in a short chat, where the height is stable;
+    /// in a long one it is the flicker. What it was buying is the `old` argument of a log that is
+    /// off by default.
+    @State private var geometryHistory = TranscriptGeometryHistory()
     // "Is the layout settled enough to read geometry as intent" lives with the owner
     // (`layoutPrimed`). It was a `@State` here and was armed from the wrong evidence.
 
@@ -160,7 +179,7 @@ struct ChatView: View {
                     // Continuous voice playback advanced — bring the now-playing message
                     // into view (centered), then clear the target so a later replay re-scrolls.
                     guard let target else { return }
-                    viewport.scrollTo(messageId: target, anchor: .center, animated: true)
+                    jumpToMessage(target)
                     viewModel.voicePlaybackScrollTarget = nil
                 }
                 .onChange(of: searchText) { _, newValue in
@@ -169,7 +188,7 @@ struct ChatView: View {
                         let delay = ChatViewConstants.SearchDelay.scrollToResult
                         Task { @MainActor in
                             try? await Task.sleep(for: .seconds(delay))
-                            viewport.scrollTo(messageId: firstMatch.id, anchor: .center, animated: true)
+                            jumpToMessage(firstMatch.id)
                         }
                     } else if newValue.isEmpty {
                         // Search cleared: the one place besides the jump control that is
@@ -251,7 +270,7 @@ struct ChatView: View {
 
         }
         #if os(iOS)
-        .toolbar(.hidden, for: .navigationBar)
+        .hideSystemNavBar()
         .toolbar(.hidden, for: .tabBar)
         #endif
         .modifier(ComposerPlacement(usesOverlay: usesOwnedInset) { composer })
@@ -552,11 +571,16 @@ struct ChatView: View {
         if usesOwnedInset {
             ChatTranscriptScrollView(
                 bottomInset: transcriptBottomPad,
-                mode: (viewport as? ChatViewport)?.mode ?? .following,
+                mode: ownedViewport?.mode ?? .following,
                 layoutPrimed: viewport.layoutPrimed,
-                anchorMinY: heldRowMinY,
-                onLanded: { (viewport as? ChatViewport)?.noteTailLanded() },
-                onGeometry: { handleTranscriptGeometry(from: lastGeometry, to: $0) },
+                // Nil unless the sample is of the row currently bound, so a stale one cannot be
+                // read as a measurement of the new anchor.
+                anchor: anchorSample?.messageId == viewport.heldMessageId ? anchorSample : nil,
+                scrollTarget: transcriptScrollTarget,
+                landRequest: ownedViewport?.landRequest ?? 0,
+                onLanded: { ownedViewport?.noteTailLanded() },
+                onReachedScrollTarget: { ownedViewport?.noteScrollTargetResolved() },
+                onGeometry: { handleTranscriptGeometry(from: geometryHistory.last, to: $0) },
                 onUserInteraction: { viewport.noteScrollPhase(.tracking) }
             ) {
                 VStack(spacing: ChatUIConstants.Shell.listSpacing) {
@@ -569,6 +593,10 @@ struct ChatView: View {
                 .coordinateSpace(name: Self.transcriptContentSpace)
                 .environment(\.containerWidth, containerWidth)
             }
+            // The legacy path clears the badge from `registerTranscriptProxy`, which this container
+            // never calls — it has no `ScrollViewReader`, so `onProxyReady` does not exist here.
+            // Opening a chat therefore left the badge standing for the whole owned-path build.
+            .onAppear { LocalNotificationManager.shared.clearBadge() }
         } else {
             legacyTranscript(renderedMessages)
         }
@@ -577,6 +605,25 @@ struct ChatView: View {
     /// Content-space name the held row reports its position in. One name, declared beside the only
     /// two places that use it, so the reporter and the reader cannot drift apart.
     static let transcriptContentSpace = "transcript.content"
+
+    /// The viewport when it is the owned one. `viewport` is the protocol, and three of its inputs
+    /// (mode, the two request tokens) exist only on this side of the flag.
+    private var ownedViewport: ChatViewport? { viewport as? ChatViewport }
+
+    /// The pending guest scroll, paired with its measurement.
+    ///
+    /// The sample is passed only when it is of the row actually being asked for. A stale one — the
+    /// previous jump's row, still in `scrollTargetSample` because nothing clears it — would be read
+    /// as this jump's destination and land the viewport on the wrong message. Same guard, and the
+    /// same reason, as the anchor's `messageId ==` test above.
+    private var transcriptScrollTarget: TranscriptScrollTarget? {
+        guard let owned = ownedViewport, let targetId = owned.scrollTargetId else { return nil }
+        return TranscriptScrollTarget(
+            request: owned.scrollRequest,
+            anchor: owned.scrollTargetAnchor,
+            sample: scrollTargetSample?.messageId == targetId ? scrollTargetSample : nil
+        )
+    }
 
     @ViewBuilder
     private func legacyTranscript(_ renderedMessages: [Message]) -> some View {
@@ -670,6 +717,22 @@ struct ChatView: View {
     }
 
     private func handleTranscriptGeometry(from old: ChatScrollGeometry, to metrics: ChatScrollGeometry) {
+        // The inset latch is a per-tick measurement, so it is fed per tick. Its two previous call
+        // sites both fired *because* something had moved, which meant `noteInsetDelta` never once
+        // saw a quiet pass and `insetSettling` stayed true from the first container measurement
+        // onward — see `ChatViewport.insetSettling`. The latch has its own `padNoise` threshold;
+        // pre-filtering on its behalf is what broke it.
+        //
+        // Owned path only. The legacy owner answers the same call with `pinToBottom(.composerInset)`
+        // — a scroll, not a measurement — so feeding it every tick would arm a pin per frame. Its
+        // one caller stays the composer's own change report, which is all it ever watched.
+        if usesOwnedInset {
+            viewport.noteComposerGeometry(
+                composerHeight: composerHeight,
+                safeAreaBottom: metrics.safeAreaBottom,
+                containerHeight: metrics.containerHeight
+            )
+        }
         viewport.updateGeometry(metrics, messageCount: viewModel.messages.count)
         // The blank chat is a *geometry* state and no log has ever shown it: we know where the
         // messages are and nothing about where the viewport is. One line per meaningful move
@@ -679,12 +742,29 @@ struct ChatView: View {
         if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
             containerWidth = metrics.width
         }
+        // Held for the composer's own report, which cannot see the scroll view. The latch was
+        // already fed this tick, with fresher numbers than these; the thresholds are here because
+        // these two are `@State` and every write costs a body pass.
         if metrics.containerHeight.isFinite,
            abs(metrics.containerHeight - transcriptContainerHeight) > 0.5 {
             transcriptContainerHeight = metrics.containerHeight
-            reportComposerGeometry()
         }
-        lastGeometry = metrics
+        if metrics.safeAreaBottom.isFinite,
+           abs(metrics.safeAreaBottom - bottomSafeAreaInset) > 0.5 {
+            bottomSafeAreaInset = metrics.safeAreaBottom
+        }
+        // Offer the stick on the pass where following has just stopped and none is bound. Here
+        // rather than in an `.onChange(of: isFollowing)` so the offer sits next to the geometry
+        // that decided it; `bindAnchorRow` remains the authority on whether to take it.
+        //
+        // The two cheap checks are not redundant with that authority — they keep `filteredMessages`
+        // (an O(n) filter) off the per-frame path, and it has to be that list rather than
+        // `viewModel.messages`: it is what the rows are built from, so it is the only one whose
+        // first element is guaranteed to be a row that can install the reporter.
+        if !viewport.isFollowing, viewport.heldMessageId == nil {
+            viewport.bindAnchorRow(filteredMessages.first?.id)
+        }
+        geometryHistory.last = metrics
         // Near-top geometry is the reliable trigger once the user scrolls up: sentinel `onAppear`
         // alone misses the case where the top stayed materialised from entry (no second appear)
         // and would never widen the window.
@@ -773,6 +853,9 @@ struct ChatView: View {
                             },
                             onJumpToReply: { msg in
                                 peekReplyChain(for: msg)
+                            },
+                            onReact: { msg, emoji in
+                                viewModel.sendReaction(msg, emoji: emoji)
                             }
                         )
                         .id(message.id)
@@ -784,15 +867,26 @@ struct ChatView: View {
                         // viewport was left 922pt past the end. See
                         // `ChatScrollManager.shouldRecoverStrandedViewport`.
                         .background {
-                            // Only the held row measures itself. Thirty reporters would be a
+                            // At most two rows measure themselves: the held anchor, and the row a
+                            // guest scroll is trying to reach. Thirty reporters would be a
                             // per-frame cost for a number that is meaningless for every row but
-                            // this one.
-                            if usesOwnedInset, message.id == viewport.heldMessageId {
+                            // those, which is why the target is named before it is measured rather
+                            // than every row being measured in case someone asks.
+                            if usesOwnedInset,
+                               message.id == viewport.heldMessageId || message.id == ownedViewport?.scrollTargetId {
                                 GeometryReader { proxy in
                                     Color.clear.onChange(
-                                        of: proxy.frame(in: .named(Self.transcriptContentSpace)).minY,
+                                        of: proxy.frame(in: .named(Self.transcriptContentSpace)),
                                         initial: true
-                                    ) { _, y in heldRowMinY = y }
+                                    ) { _, frame in
+                                        let sample = TranscriptRowSample(
+                                            messageId: message.id,
+                                            minY: frame.minY,
+                                            height: frame.height
+                                        )
+                                        if message.id == viewport.heldMessageId { anchorSample = sample }
+                                        if message.id == ownedViewport?.scrollTargetId { scrollTargetSample = sample }
+                                    }
                                 }
                             }
                         }
@@ -928,6 +1022,35 @@ struct ChatView: View {
         replyFocusIds = [messageId.lowercased()]
     }
 
+    /// Take the reader to one message, if the transcript is showing it.
+    ///
+    /// Every guest scroll goes through here, for two reasons the call sites cannot handle
+    /// individually.
+    ///
+    /// **The id is resolved against the rendered list, and the rendered one is what travels on.**
+    /// `peekReplyChain` lowercases both ids before it asks, `Message.id` is not lowercase, and the
+    /// row that installs the target's reporter matches on `message.id` — so an unresolved id asks
+    /// for a row that, to every comparison downstream, does not exist. One normalisation, at the
+    /// boundary, rather than a `.lowercased()` at each of the places that compare.
+    ///
+    /// **A message outside the loaded window is refused here.** The destination is measured by a
+    /// reporter installed on the target row, so a message the transcript has not rendered has
+    /// nowhere to put one, and the request would sit unfulfilled forever. Saying so is the point: a
+    /// jump that silently does nothing is the defect this whole change closes, and replacing it
+    /// with a differently-shaped silence would be no better.
+    private func jumpToMessage(_ messageId: String, anchor: UnitPoint = .center) {
+        guard let rendered = filteredMessages.first(
+            where: { $0.id.caseInsensitiveCompare(messageId) == .orderedSame }
+        ) else {
+            Log.info(
+                "SCROLL_GUEST[not_rendered]: \(messageId.prefix(8))… is not in the loaded transcript — no jump",
+                category: "ChatView"
+            )
+            return
+        }
+        viewport.scrollTo(messageId: rendered.id, anchor: anchor, animated: true)
+    }
+
     /// Tap on in-bubble reply strip: scroll to parent, keep parent + child bright briefly.
     private func peekReplyChain(for message: Message) {
         let childId = message.id.lowercased()
@@ -939,7 +1062,7 @@ struct ChatView: View {
             replyFocusIds = [parentId, childId]
         }
         // Prefer scrolling to the parent (what the user is looking for).
-        viewport.scrollTo(messageId: parentId, anchor: .center, animated: true)
+        jumpToMessage(parentId)
 
         // Hold while composing a reply to this parent; otherwise auto-clear.
         let holdParent = parentId
@@ -1022,8 +1145,11 @@ struct ChatView: View {
     private func setActiveChatState(isActive: Bool) {
         guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else { return }
         KeyChangeUX.setActiveChatContact(isActive ? contactId : nil)
+        // A contact whose key is not pinned has no session for the core to schedule heartbeats
+        // against; telling it a chat opened would name a peer it has never heard of.
+        guard let peerContactId = SessionAddressing.contactId(forPeer: contactId) else { return }
         _ = try? CryptoManager.shared.handleOrchestratorEvent(
-            .activeChatChanged(contactId: contactId, isActive: isActive),
+            .activeChatChanged(contactId: peerContactId, isActive: isActive),
             tag: isActive ? "chat_active_true" : "chat_active_false"
         )
     }

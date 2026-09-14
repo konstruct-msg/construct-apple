@@ -1,7 +1,14 @@
 # Two-simulator E2E stand
 
-`scripts/two_sims.sh` runs the app on two dedicated simulators (`Construct-A` iPhone 17 Pro,
-`Construct-B` iPhone 17) for send/receive scenarios that cannot exist on a single device.
+`scripts/two_sims.sh` runs the app on dedicated simulators (`Construct-A` iPhone 17 Pro,
+`Construct-B` iPhone 17, `Construct-C` iPhone 17e) for send/receive scenarios that cannot exist on
+a single device.
+
+Two of them is the default (`SIMS=ab`) and is where the name comes from. `SIMS=abc` boots the
+third, and every command — `up`, `install`, `launch`, `status`, `shot`, `reset`, `down` — acts on
+whichever roles that names. `pair` and `link` take two letters (`pair a c`, `link a b`); the second
+may be omitted only when exactly two roles are active, because guessing who to link with three of
+them means linking the wrong pair and finding out half an hour into a run.
 
 This document lives in this repo rather than in the docs vault because it documents a script in
 this repo: the two change together and belong in the same commit.
@@ -40,15 +47,30 @@ or environment flags to the app to distinguish them: the app reads no launch arg
 (`ProcessInfo` use is Preview detection only), and a test-only branch in production code is a
 worse price than one `reset`.
 
-## `link` is the other topology, and the only one that exercises SENDER_SYNC
+## `link` is the other topology, and it needs a third simulator
 
-`pair` makes the two sims into two accounts talking to each other. `link` makes them **one account
-on two devices** — which is what a multi-device copy needs, and what two sims are not by default.
+`pair` makes two sims into two accounts talking to each other. `link` makes them **one account on
+two devices** — which is what a multi-device copy needs, and what two sims are not by default.
 Testing SENDER_SYNC against a `pair`ed stand exercises nothing: the code never runs.
 
+**Two simulators are not enough for it either, and this is why the scenario went unrun for months.**
+`link a b` consumes both into one account, and that account then has nobody to talk to — while
+SENDER_SYNC is sent only after a message has gone out successfully (`ChatSendCoordinator` calls it
+after `sendChunks` returns). No peer, no send, no copy: the run looks like "the copy did not
+arrive" when nothing was ever sent. So the multi-device topology is three roles — A and B linked
+into one account, C as the conversation partner:
+
 ```bash
-./scripts/two_sims.sh link a   # token from A's log → B's pasteboard
+SIMS=abc ./scripts/two_sims.sh run
+SIMS=abc ./scripts/two_sims.sh pair a c   # the account gets a peer
+SIMS=abc ./scripts/two_sims.sh link a b   # token from A's log → B's pasteboard
 ```
+
+`link` warns when fewer than three roles are up rather than letting the run proceed into that dead
+end.
+
+The invite is one-directional: accepting it adds the inviter on the **accepting** side only. The
+peer has to send first for the inviter to have a conversation to reply into.
 
 Then on B: `settings.devices` → `devices.linkNew` → `qrScanner.paste`. On a **fresh** B the
 designed route is onboarding instead: `onboarding.existingIdentity` → LINK THIS DEVICE → SCAN A
@@ -66,6 +88,12 @@ Three things the flow needs that `pair` does not:
   act, which is the point.
 - **iOS asks before pasting** ("would like to paste from CoreSimulatorBridge"). Allow it; the tap
   lands on the alert, not the app, and nothing is logged until you do.
+
+Three more system sheets stand between a scripted run and the app, each of which stops automation
+dead while `describe-ui` keeps reporting a perfectly normal screen underneath: `simctl openurl`
+asks "Open in Konstruct?" before a deep link reaches the app, a relaunch asks for notification
+permission, and the DEBUG metrics overlay opens over the first screen after onboarding. Tap
+`Open`, `Allow`, and `Close` respectively.
 
 Linking wipes B's own account (`confirmLink` → `deleteDeviceKeys` → fresh device id). If A's only
 contact *was* B's old account, the stand is left with a conversation whose peer has no devices —

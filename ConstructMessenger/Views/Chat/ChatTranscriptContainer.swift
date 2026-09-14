@@ -36,6 +36,62 @@ struct ChatScrollGeometry: Equatable {
     /// touching the composer, and an inset latch that cannot see that reads the keyboard as a
     /// settled layout.
     var containerHeight: CGFloat
+    /// Bottom safe area under the transcript.
+    ///
+    /// The third input of that latch, and until 2026-08-21 it did not exist: `ChatView` held a
+    /// `bottomSafeAreaInset` and passed it to `noteComposerGeometry`, and nothing ever assigned it.
+    /// Taken from the scroll view rather than from a SwiftUI proxy because the composer is an
+    /// overlay *inside* the safe area on the owned path, so its own proxy reports zero — a second
+    /// constant dressed as a measurement.
+    var safeAreaBottom: CGFloat
+}
+
+/// Where a row sits in content coordinates, and **which row that was**.
+///
+/// The identity is not decoration. `TranscriptOffsetPolicy` moves the offset by the difference
+/// between two samples, which only means anything if both are of the same row — and the row changes
+/// whenever a history visit ends and another begins. A bare `CGFloat?` carried no way to notice
+/// that, so a sample of row A and a sample of row B subtracted into a shift that was not a
+/// measurement of anything, and the offset went wherever it said.
+///
+/// Two rows are measured at a time and both use this type: the bound anchor, whose *movement* is
+/// the reading position, and the row a guest scroll is trying to reach, whose *position* is where
+/// the viewport is going. `height` is read only by the second — an anchor shift is a difference and
+/// does not care how tall the row is, while landing on a row at `.center` cannot be computed
+/// without it.
+struct TranscriptRowSample: Equatable {
+    let messageId: String
+    let minY: CGFloat
+    let height: CGFloat
+}
+
+/// A pending guest scroll: which row, where to put it, and which request this is.
+///
+/// One value rather than three parallel arguments, because the measurement lags the request by a
+/// layout pass and the two must not be readable out of step. `sample` is nil for exactly that pass
+/// — the row installs its reporter *because* it was named here — so an unmeasured target is the
+/// normal first state and not a failure to jump.
+struct TranscriptScrollTarget: Equatable {
+    /// Monotonic, so asking for the same row twice is two jumps.
+    let request: Int
+    /// 0 top, 0.5 centre, 1 bottom, within the area the composer does not cover.
+    let anchor: CGFloat
+    /// Where the target row is, once it has said. Nil until then.
+    let sample: TranscriptRowSample?
+}
+
+/// The previous geometry sample, held outside SwiftUI's invalidation.
+///
+/// Its only consumer is the `old` argument of `logScrollGeometryIfChanged`, which is gated by
+/// `ChatScrollManager.verboseGeometryLogging` and off by default. As `@State` in `ChatView` it was
+/// rewritten on every scroll delegate callback, so a value that usually goes nowhere was
+/// re-rendering the whole transcript at frame rate.
+@MainActor
+final class TranscriptGeometryHistory {
+    var last = ChatScrollGeometry(
+        distanceFromBottom: 0, width: 0, contentFits: false,
+        contentHeight: 0, visibleMinY: 0, containerHeight: 0, safeAreaBottom: 0
+    )
 }
 
 /// The transcript scroll view: sentinel, rows, bottom clearance, bottom anchor.
@@ -120,7 +176,8 @@ struct ChatTranscriptContainer<Sentinel: View, Rows: View>: View {
                     contentFits: geo.contentSize.height <= geo.visibleRect.height + 8,
                     contentHeight: geo.contentSize.height,
                     visibleMinY: geo.visibleRect.minY,
-                    containerHeight: geo.containerSize.height
+                    containerHeight: geo.containerSize.height,
+                    safeAreaBottom: geo.contentInsets.bottom
                 )
             } action: { old, new in
                 onGeometryChange(old, new)

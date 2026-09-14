@@ -314,6 +314,36 @@ enum ConnectionLoopRelayBridge {
             )
         }
 
+        // EntryDirectory Source 1′: a front this device learned from a blob signed by
+        // `relayConfigSigningKey`. Like the discovered case it is an explicit branch with
+        // the pin ALWAYS applied, because the SNI-coupled resolution below drops the pin
+        // for exactly this shape of address — unknown to both the seed maps and the
+        // manifest, ending in `:443` — and would dial it unpinned. An unpinned dial of a
+        // vouched front is the one outcome this whole path exists to prevent.
+        //
+        // Guarded on having no independent anchor, so a bundled or manifest pin still wins
+        // for a seed relay (same precedence as `VeilRelayTrust.verify`).
+        if VEILConfig.hardcodedRelaySPKIs[address] == nil,
+           VeilCertFetcher.spkiPinSync(for: address) == nil,
+           let learned = VeilLearnedFrontStore.shared.entry(for: address) {
+            return VeilRelay(
+                address: address,
+                bridgeCert: "",
+                iatMode: .enabled,
+                tlsServerName: learned.sni,
+                pinnedSpki: learned.spki,
+                // A learned front is plain-TLS veil-front: it is absent from the manifest,
+                // so there is no WebTunnel resource path to look up.
+                wtPath: nil,
+                wtHostHeader: nil,
+                alternativeSNIs: [],
+                manifestId: nil,
+                veilFrontTicket: VeilTicketStore.ticket(for: address),
+                veilCapabilityV2: VeilCapabilityV2Store.capability(for: address),
+                veilSkHex: VeilAccessKeyStore.shared.veilSkHex
+            )
+        }
+
         let resolvedCert = VeilCertFetcher.bridgeCertSync(for: address) ?? bridgeCert
         let serverPushedSNI = VeilCertFetcher.sniSync(for: address)
         let hardcodedSNI    = VEILConfig.hardcodedRelaySNIs[address]

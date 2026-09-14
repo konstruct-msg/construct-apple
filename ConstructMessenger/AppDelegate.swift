@@ -3,6 +3,9 @@
 //  Construct Messenger
 //
 //
+// `UIApplicationDelegate`, `BackgroundTasks` and the push registration are iOS-shaped; the
+// desktop app has its own lifecycle in `Construct_DesktopApp`.
+#if os(iOS)
 
 import UIKit
 import BackgroundTasks
@@ -43,6 +46,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // decodes every stored entry, and by the time this matters there are a lot of them.
         DispatchQueue.global(qos: .utility).async {
             OutgoingWirePayloadStore.shared.sweepExpired()
+
+            // Same shape, same reason: a spend unit whose message was never retried is never asked
+            // for by id, so its per-key expiry never runs. This is the only thing that bounds that
+            // keyspace. On the main actor because the store is, and it is a handful of small keys.
+            Task { @MainActor in TokenSpendUnitStore.sweepExpired() }
 
             // Drain message thumbnails out of UserDefaults — 37 MB of JPEG in a 4 MB domain, which
             // is why CFPreferences started refusing writes for everything else living there.
@@ -294,10 +302,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // device logs showed the push immediately preceding "Starting MessageStream connection"
         // on every cycle). Silent pushes exist to wake a BACKGROUNDED app (or one whose stream is
         // down) to fetch; in the foreground the stream handles it. Skip the fetch in that case.
-        let foregroundLiveStream = MainActor.assumeIsolated {
-            UIApplication.shared.applicationState == .active && MessageStreamManager.shared.isConnected
+        //
+        // Exception: an incoming call waiting on its SDP. The offer rides this stream, and a
+        // zombie "connected" QUIC session hid it for 15 s on 2026-08-22 (7CDE9769) while
+        // this skip ate every push that could have pulled it.
+        let ignoreSilentPush = MainActor.assumeIsolated {
+            shouldIgnoreSilentPush(
+                foregroundLiveStream: UIApplication.shared.applicationState == .active
+                    && MessageStreamManager.shared.isConnected,
+                callNeedsOffer: CallManager.shared.needsOfferPull
+            )
         }
-        if foregroundLiveStream {
+        if ignoreSilentPush {
             Log.info("Silent push (\(activityType ?? "?")) ignored — foreground MessageStream is live", category: "Push")
             completionHandler(.noData)
             return
@@ -425,3 +441,4 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
 // MARK: - Notification Names (system notifications only)
 // Custom app notifications replaced with @Published properties
+#endif

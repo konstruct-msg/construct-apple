@@ -211,10 +211,9 @@ struct SynapsView: View {
                 // Consume them and navigate to the first newly-accepted contact.
                 Task {
                     let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
-                    guard let userId = pendingIds.first,
-                          let uuid = UUID(uuidString: userId) else { return }
+                    guard let userId = pendingIds.first, !userId.isEmpty else { return }
                     let req = NSFetchRequest<User>(entityName: "User")
-                    req.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+                    req.predicate = NSPredicate(format: "id == %@", userId)
                     req.fetchLimit = 1
                     if let user = try? context.fetch(req).first {
                         await MainActor.run { chatsViewModel.openOrCreateChat(with: user) }
@@ -228,7 +227,7 @@ struct SynapsView: View {
                 Task { await refreshContactRequests(vm: vm, reason: "push_received") }
             }
             #if os(iOS)
-            .toolbar(.hidden, for: .navigationBar)
+            .hideSystemNavBar()
             #endif
             .sheet(isPresented: $showingQRScanner) {
                 QRScannerView { contactURL in handleScannedQR(contactURL) }
@@ -270,7 +269,7 @@ struct SynapsView: View {
         ) {
             Button(LocalizedStringKey("synapses_prune_action"), role: .destructive) {
                 if let user = pruneTarget {
-                    chatsViewModel.pruneContact(userId: user.id)
+                    Task { await chatsViewModel.pruneContact(userId: user.id) }
                 }
                 pruneTarget = nil
             }
@@ -368,9 +367,9 @@ struct SynapsView: View {
 
         let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
         let pendingUser: User? = pendingIds.first.flatMap { userId in
-            guard let uuid = UUID(uuidString: userId) else { return nil }
+            guard !userId.isEmpty else { return nil }
             let req = NSFetchRequest<User>(entityName: "User")
-            req.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+            req.predicate = NSPredicate(format: "id == %@", userId)
             req.fetchLimit = 1
             return try? context.fetch(req).first
         }
@@ -705,6 +704,14 @@ struct SynapsView: View {
     // MARK: - QR Handler
 
     private func handleScannedQR(_ urlString: String) {
+        // A voucher scanned here is a voucher, not a malformed contact code.
+        if let message = VeilVoucherRedemption.messageIfVoucher(urlString) {
+            showingQRScanner = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                ErrorRouter.shared.report(.unknown(message))
+            }
+            return
+        }
         guard let url = URL(string: urlString) else {
             showingQRScanner = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {

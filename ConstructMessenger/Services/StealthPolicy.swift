@@ -15,10 +15,11 @@
 //  in UserDefaults silently overrode the per-message default — observed on device
 //  2026-07-14. See decisions/sealed-sender-anti-abuse-economics.md.
 //
-//  Explicit exclusions (even when stealth is enabled):
-//  - E2E heartbeats (ct=13) — see decisions/stealth-heartbeat-exclusion.md
-//  - Multi-device internal sync (low value, server already knows it's the same user)
-//  - Pure session control messages (END_SESSION, resets, etc.)
+//  **This file no longer holds the exclusion list.** It held one until 2026-08-30, in a comment,
+//  and the comment was wrong in two of its three lines: session control has been sealed since
+//  2026-07-27 and heartbeats since 2026-08-30, each of which stopped being an exclusion without
+//  anything here changing. What is exempt is now `SealingExemption` — a closed set of values the
+//  chokepoint checks and a test pins to named files. Prose does not go red.
 //
 
 import Foundation
@@ -65,9 +66,9 @@ final class StealthPolicy {
     ///   cleartext session-graph leak, so they are sealed too. Enforced fail-closed at the send
     ///   chokepoints (SessionCoordinator.sendSessionControlCore / MessagingServiceClient.sendEndSession).
     ///
-    /// **Explicitly excluded (even when enabled):**
-    /// - E2E heartbeats (ct=13) — see decisions/stealth-heartbeat-exclusion.md
-    /// - Multi-device internal traffic (SenderSync, fan-out to own devices, reset broadcasts)
+    /// **What is exempt is not decided here.** A send declares `SendSealing` at the chokepoint
+    /// and the only standing exemption is `.ownDevices`; see `SendSealing.swift`. This asks a
+    /// narrower question — whether to build a seal at all — and the answer is the global switch.
     func shouldUseSealedSender() -> Bool {
         isEnabled
     }

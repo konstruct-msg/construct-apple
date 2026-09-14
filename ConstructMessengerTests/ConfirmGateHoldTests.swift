@@ -16,6 +16,20 @@
 //  failed, and tore the session down. `markProcessed` on the head meant the server never
 //  redelivered it. A showed `sent` forever; B never rendered the message.
 //
+//  On 2026-08-21 the same predicate cost 19 more. By then the gate held `messageNumber == 0`
+//  instead of discarding it, so nothing was lost at the hold — but the type of a `session_ready`
+//  had moved inside the ciphertext (2026-08-03), which left it looking like every other fresh
+//  chain restart. The gate buffered 16 of the peer's 19 acknowledgements, i.e. the only thing that
+//  could release it, and the tie-break watchdog's next re-init then superseded the whole buffer:
+//
+//      A 07:30:55  session_ready → b9161496  (msgNum=0, ct hidden in KNST byte 5)
+//      B 07:30:56  confirm_hold: holding msgNum=0 (peer_init) — buffer 1      ← the key, held
+//      B 07:31:25  tie_break_watchdog: no ack — re-sending SESSION_RESET_INIT ← epoch moves
+//      B 07:32:11  confirm_replay: 3 re-routed, 3 superseded of 6 held        ← and dropped
+//
+//  27 messages held across the run, 0 ever saved. The hold before decryption is gone; decryption
+//  is the test the predicate was approximating.
+//
 //  Acceptance is mutation-based. Each test below names the mutation that must redden it.
 //
 
@@ -26,47 +40,18 @@ final class ConfirmGateHoldTests: XCTestCase {
 
     // MARK: - The regression: nothing behind the gate may be discarded
 
-    /// The head. A peer msgNum=0 inside our confirm window is held, not discarded — we cannot yet
-    /// tell a superseded init from a live one, and only one of those two guesses is recoverable.
+    /// The loss. The core says `sendEndSession`; inside our own confirm window that is the expected
+    /// consequence of the session *we* replaced, not evidence the ratchet diverged. Tearing down
+    /// here answers our own reset with another reset.
     ///
-    /// Mutation: return `.route` for `isPeerInit`.
-    func testPeerInitInsideTheWindowIsHeld() {
-        XCTAssertEqual(
-            SessionReducer.confirmGateAction(
-                isPending: true, isControlCarrier: false, isPeerInit: true, decryptFailed: false
-            ),
-            .hold,
-            "the peer may have genuinely re-inited one second ago — that is indistinguishable "
-            + "from a stale init until the gate falls"
-        )
-    }
-
-    /// The tail, and the actual loss. The core says `sendEndSession`; inside our own confirm
-    /// window that is the expected consequence of the session *we* replaced, not evidence the
-    /// ratchet diverged. Tearing down here answers our own reset with another reset.
-    ///
-    /// Mutation: return `.route` for `decryptFailed`.
+    /// Mutation: return `.route` once `isPending`.
     func testDecryptFailureInsideTheWindowIsHeldNotTornDown() {
         XCTAssertEqual(
-            SessionReducer.confirmGateAction(
-                isPending: true, isControlCarrier: false, isPeerInit: false, decryptFailed: true
-            ),
+            SessionReducer.confirmGateAction(isPending: true, isControlCarrier: false),
             .hold,
             "this is the line the lost «Привет» died on — msgNum=1 of a handshake whose msgNum=0 "
             + "had just been discarded"
         )
-    }
-
-    /// Head and tail are the same handshake, so they must get the same answer. The defect was
-    /// precisely that one was gated and the other was not.
-    func testHeadAndTailOfTheSameHandshakeAgree() {
-        let head = SessionReducer.confirmGateAction(
-            isPending: true, isControlCarrier: false, isPeerInit: true, decryptFailed: false
-        )
-        let tail = SessionReducer.confirmGateAction(
-            isPending: true, isControlCarrier: false, isPeerInit: false, decryptFailed: true
-        )
-        XCTAssertEqual(head, tail, "gating only the init guarantees its follow-up cannot decrypt")
     }
 
     // MARK: - The gate must not swallow the traffic that resolves it
@@ -77,15 +62,7 @@ final class ConfirmGateHoldTests: XCTestCase {
     /// Mutation: drop `!isControlCarrier` from the guard.
     func testControlCarriersAreNeverHeld() {
         XCTAssertEqual(
-            SessionReducer.confirmGateAction(
-                isPending: true, isControlCarrier: true, isPeerInit: true, decryptFailed: false
-            ),
-            .route
-        )
-        XCTAssertEqual(
-            SessionReducer.confirmGateAction(
-                isPending: true, isControlCarrier: true, isPeerInit: false, decryptFailed: true
-            ),
+            SessionReducer.confirmGateAction(isPending: true, isControlCarrier: true),
             .route
         )
     }
@@ -97,32 +74,74 @@ final class ConfirmGateHoldTests: XCTestCase {
     ///
     /// Mutation: drop `isPending` from the guard.
     func testGateDownRoutesEverything() {
-        for peerInit in [true, false] {
-            for failed in [true, false] {
-                XCTAssertEqual(
-                    SessionReducer.confirmGateAction(
-                        isPending: false, isControlCarrier: false,
-                        isPeerInit: peerInit, decryptFailed: failed
-                    ),
-                    .route,
-                    "isPeerInit=\(peerInit) decryptFailed=\(failed) must route with no gate"
-                )
-            }
+        for carrier in [true, false] {
+            XCTAssertEqual(
+                SessionReducer.confirmGateAction(isPending: false, isControlCarrier: carrier),
+                .route,
+                "isControlCarrier=\(carrier) must route with no gate"
+            )
         }
     }
 
-    /// Gate up but the message decrypted fine and is not an init — ordinary mid-ratchet traffic
-    /// the peer sent after accepting our SRI, arriving before its `session_ready`. Routing it is
-    /// what keeps the hold from costing latency on the happy path.
+    // MARK: - 2026-08-21: the gate held its own key
+
+    /// The envelope of the peer's `session_ready` — the message that closes the gate. Its type
+    /// lives in KNST byte 5 inside the ciphertext (2026-08-03), so at the envelope it is a plain
+    /// `messageNumber == 0` with no handshake evidence whatever, exactly like the first send of
+    /// any fresh DH chain.
     ///
-    /// Mutation: return `.hold` unconditionally once `isPending`.
-    func testDecryptableTrafficInsideTheWindowStillRoutes() {
+    /// This is the fixture the removed pre-decryption hold could not tell from a peer init. Sixteen
+    /// of the peer's nineteen acknowledgements went into the buffer of the gate waiting for them.
+    private static func sessionReadyShapedEnvelope() -> ChatMessage {
+        ChatMessage(
+            id: "b9161496-a841-4d94-b5ab-aaf1090b4a76",
+            from: "7574fdec-ca31-44ac-9d43-0e6e870fe4d5",
+            to: "ffeeddc6-14f2-4d02-a66a-caf0d8dfeda8",
+            ephemeralPublicKey: Data(repeating: 0x05, count: 32),
+            messageNumber: 0,
+            content: Data(repeating: 0x79, count: 283),
+            suiteId: 3,
+            timestamp: 1_787_297_455
+        )
+    }
+
+    /// The predicate the hold used, applied to that envelope, against the predicate that replaced
+    /// it. `messageNumber == 0` is not a handshake, and the classifier is the only thing allowed to
+    /// answer the question.
+    ///
+    /// Mutation: make `receivingInitKind` return `.handshake` for `oneTimePreKeyId == 0 &&
+    /// kemCiphertextBytes == 0 && pqMessageEpoch > 0`.
+    func testTheAcknowledgementIsNotAHandshakeByTheClassifier() {
+        let envelope = Self.sessionReadyShapedEnvelope()
+        XCTAssertEqual(envelope.messageNumber, 0, "the old predicate fired on exactly this")
+
         XCTAssertEqual(
-            SessionReducer.confirmGateAction(
-                isPending: true, isControlCarrier: false, isPeerInit: false, decryptFailed: false
+            SessionReducer.receivingInitKind(
+                messageNumber: envelope.messageNumber,
+                oneTimePreKeyId: envelope.oneTimePreKeyId,
+                kemCiphertextBytes: envelope.kemCiphertext.count,
+                pqMessageEpoch: 4,               // a live PQ ratchet stamps one; a fresh session does not
+                isSessionResetInit: envelope.isSessionResetInit
             ),
-            .route,
-            "a message that decrypted needs no hold — the peer is already on our new session"
+            .midSessionLeftover,
+            "no consumed OTPK, no KEM ciphertext and a non-zero PQ epoch is a live chain restarting"
+        )
+    }
+
+    /// The consequence at replay: with the classifier's verdict, the acknowledgement is re-routed
+    /// rather than acknowledged-and-dropped. Under `messageNumber == 0` this returned `.superseded`
+    /// — 19 times in the 2026-08-21 run, each one final.
+    ///
+    /// Mutation: change the `kind == .handshake` guard to `kind != .midRatchet`.
+    func testAFreshChainRestartIsReplayedNotSuperseded() {
+        XCTAssertEqual(
+            SessionReducer.heldReplayDisposition(
+                heldAgainst: Self.heldAgainst,
+                current: Self.replacement,
+                kind: .midSessionLeftover
+            ),
+            .replay,
+            "the epoch moved, but this is not a handshake, so it is not this branch's to drop"
         )
     }
 
@@ -266,7 +285,7 @@ final class ConfirmGateHoldTests: XCTestCase {
             SessionReducer.heldReplayDisposition(
                 heldAgainst: Self.heldAgainst,
                 current: Self.replacement,
-                isPeerInit: true
+                kind: .handshake
             ),
             .superseded
         )
@@ -278,7 +297,7 @@ final class ConfirmGateHoldTests: XCTestCase {
             SessionReducer.heldReplayDisposition(
                 heldAgainst: Self.heldAgainst,
                 current: Self.heldAgainst,
-                isPeerInit: true
+                kind: .handshake
             ),
             .replay
         )
@@ -291,7 +310,7 @@ final class ConfirmGateHoldTests: XCTestCase {
             SessionReducer.heldReplayDisposition(
                 heldAgainst: Self.heldAgainst,
                 current: nil,
-                isPeerInit: true
+                kind: .handshake
             ),
             .replay
         )
@@ -304,7 +323,7 @@ final class ConfirmGateHoldTests: XCTestCase {
             SessionReducer.heldReplayDisposition(
                 heldAgainst: nil,
                 current: Self.replacement,
-                isPeerInit: true
+                kind: .handshake
             ),
             .superseded
         )
@@ -317,7 +336,7 @@ final class ConfirmGateHoldTests: XCTestCase {
             SessionReducer.heldReplayDisposition(
                 heldAgainst: Self.heldAgainst,
                 current: Self.replacement,
-                isPeerInit: false
+                kind: .midRatchet
             ),
             .replay
         )
@@ -332,7 +351,7 @@ final class ConfirmGateHoldTests: XCTestCase {
             SessionReducer.heldReplayDisposition(
                 heldAgainst: Self.replacement,
                 current: Self.heldAgainst,
-                isPeerInit: true
+                kind: .handshake
             ),
             .superseded,
             "there is no 'older' epoch to make an exception for"

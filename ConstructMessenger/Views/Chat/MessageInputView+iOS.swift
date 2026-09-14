@@ -28,9 +28,9 @@ struct IOSMessageInputView: View {
     @StateObject private var audioRecorder = AudioRecorderService.shared
     @StateObject private var attachments = MessageInputAttachmentStore()
     @State private var showMicPermissionAlert = false
-    /// Which queued attachment the review sheet opened on. Nil means closed — one piece of
+    /// Which queued attachment was tapped, and what it opened. Nil means closed — one piece of
     /// state rather than a bool plus an index that can disagree about which item is showing.
-    @State private var reviewingIndex: AttachmentReviewTarget?
+    @State private var attachmentTap: AttachmentTapTarget?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,13 +49,8 @@ struct IOSMessageInputView: View {
         .animation(.easeInOut(duration: 0.2), value: editingMessage != nil)
         .animation(.easeInOut(duration: 0.2), value: !attachments.selectedAttachments.isEmpty)
         .animation(.easeInOut(duration: 0.15), value: audioRecorder.state)
-        .fullScreenCover(item: $reviewingIndex) { target in
-            AttachmentReviewView(
-                attachments: attachments.selectedAttachments,
-                initialIndex: target.index,
-                onEdit: { attachments.replaceImage(at: $0, with: $1) },
-                onDelete: { attachments.removeAttachment(at: $0) }
-            )
+        .fullScreenCover(item: $attachmentTap) { target in
+            attachmentDestination(target)
         }
         .alert("Microphone Access Denied", isPresented: $showMicPermissionAlert) {
             Button("Cancel", role: .cancel) {}
@@ -85,6 +80,44 @@ struct IOSMessageInputView: View {
         }
     }
 
+    /// Where a tap on the queued attachment at `index` goes.
+    ///
+    /// An image is opened in the editor directly; the review pager is for video, which has no
+    /// editor. An index the strip and the store disagree about (the strip drops attachments with no
+    /// poster frame) falls back to the review rather than opening an editor on the wrong photo.
+    private func tapTarget(at index: Int) -> AttachmentTapTarget {
+        guard attachments.selectedAttachments.indices.contains(index),
+              attachments.selectedAttachments[index].kind == .image else {
+            return .review(index: index)
+        }
+        return .edit(index: index)
+    }
+
+    @ViewBuilder
+    private func attachmentDestination(_ target: AttachmentTapTarget) -> some View {
+        switch target {
+        case .edit(let index):
+            if attachments.selectedAttachments.indices.contains(index),
+               let image = attachments.selectedAttachments[index].displayImage {
+                MediaEditorView(
+                    image: image,
+                    onConfirm: { edited in
+                        attachments.replaceImage(at: index, with: edited)
+                        attachmentTap = nil
+                    },
+                    onCancel: { attachmentTap = nil }
+                )
+            }
+        case .review(let index):
+            AttachmentReviewView(
+                attachments: attachments.selectedAttachments,
+                initialIndex: index,
+                onEdit: { attachments.replaceImage(at: $0, with: $1) },
+                onDelete: { attachments.removeAttachment(at: $0) }
+            )
+        }
+    }
+
     @ViewBuilder
     private var replyOrEditBars: some View {
         if let msg = replyingTo {
@@ -104,10 +137,10 @@ struct IOSMessageInputView: View {
         // Quality lives in the media picker (HD / video menu). Composer only shows thumbs.
         if !attachments.selectedAttachments.isEmpty {
             MessagePhotoPreviewBar(
-                images: attachments.selectedAttachments.compactMap { $0.displayImage },
+                attachments: attachments.selectedAttachments,
                 onRemove: removePhoto,
                 onMove: attachments.moveAttachment,
-                onOpen: { reviewingIndex = AttachmentReviewTarget(index: $0) }
+                onOpen: { attachmentTap = tapTarget(at: $0) }
             )
         }
         if !attachments.selectedFileURLs.isEmpty {
@@ -126,22 +159,64 @@ struct IOSMessageInputView: View {
     /// ended, moving the whole chat twice per voice message. Nothing asked for the keyboard to go;
     /// it was a side effect of how the swap was written.
     ///
-    /// Keeping `inputRow` mounted and hidden underneath preserves focus, so the keyboard stays
-    /// exactly as the user left it. Hidden means invisible *and* inert: no hit testing (taps belong
-    /// to the voice bar above it) and hidden from accessibility, or VoiceOver would read a text
-    /// field that is not there.
+    /// Keeping `inputRow` mounted preserves focus. Mounting it was not enough, and the second half
+    /// took three device runs.
     ///
-    /// Height note: the ZStack takes the taller of the two, so the composer can still shift by the
-    /// difference between the input row and a voice bar. That is a few points against ~300 for the
-    /// keyboard, and the two are designed to the same composer height.
+    /// It used to be mounted *and made inert*: `.opacity(isIdle ? 1 : 0)` and
+    /// `.allowsHitTesting(isIdle)`, so taps would belong to the voice bar above it. Hit testing is
+    /// the problem. SwiftUI applies it as `isUserInteractionEnabled = false` on the ancestor of the
+    /// first responder, and UIKit does not let a view that cannot be interacted with stay first
+    /// responder — so the composer resigned, and the keyboard went with it. Build 634 timed it:
+    /// `will HIDE — phase=recording (+41ms)` and `(+46ms)` on two recordings, one render after
+    /// `state = .recording` publishes, with every audio-session call already finished.
+    ///
+    /// (`opacity` is the other candidate and was likely innocent here: the composer animates
+    /// `audioRecorder.state` over 150ms, so at +41ms opacity was still around 0.3, nowhere near the
+    /// 0 that would let SwiftUI collapse it to `isHidden`. Both are avoided anyway — the row's own
+    /// properties no longer depend on recording state at all.)
+    ///
+    /// So nothing about `inputRow` changes when recording starts. It is covered instead: an opaque
+    /// layer above it hides it and absorbs taps, which is what "inert" was trying to buy, without
+    /// touching the view that holds the keyboard. `accessibilityHidden` stays — it does not affect
+    /// the responder chain, and without it VoiceOver reads a text field that is not on screen.
+    ///
+    /// Height note: the ZStack takes the taller of the two, so any difference between the input
+    /// row and a voice bar moves the composer. This comment used to say the two were "designed to
+    /// the same composer height" — they were not: 52pt against 42, plus 8pt of vertical padding
+    /// on the bar and none on the row, so the band grew 26pt and the capsule sat 13pt high. Both
+    /// are `ChatUIConstants.InputBar.height` now, in the row's own `rowOuterPad`, and the bar
+    /// carries no padding of its own. The difference is zero, which is the only value that does
+    /// not need a note.
     @ViewBuilder
     private var voiceOrInputRow: some View {
         let isIdle = audioRecorder.state == .idle
+        #if DEBUG
+        // Puts the render on the keyboard timeline. If a hide still follows recording, the next
+        // log says whether it lands after this line or somewhere else entirely.
+        // `let _ =` because a bare call is a statement, and a ViewBuilder body takes declarations
+        // and views — not `()`.
+        let _ = KeyboardEventTracer.shared.noteComposerRender("isIdle=\(isIdle)")
+        #endif
 
         ZStack {
             inputRow
-                .opacity(isIdle ? 1 : 0)
-                .allowsHitTesting(isIdle)
+                // `overlay`, not a sibling in the ZStack. A `Color` is infinitely flexible, so as a
+                // sibling it took the whole proposed height, the ZStack reported that as the
+                // composer's size, and the recording capsule ended up floating in the middle of an
+                // empty screen (build 635). An overlay is sized to its host and does not
+                // participate in layout at all.
+                .overlay {
+                    if !isIdle {
+                        // `contentShape` because a Color's hit area otherwise follows its (empty)
+                        // content, and an unhandled tap would fall through to the text field and
+                        // refocus it mid-recording — the thing `allowsHitTesting(false)` prevented
+                        // at the cost of the keyboard.
+                        Color.CT.bg
+                            .contentShape(Rectangle())
+                            .onTapGesture {}
+                            .accessibilityHidden(true)
+                    }
+                }
                 .accessibilityHidden(!isIdle)
 
             switch audioRecorder.state {
@@ -152,7 +227,6 @@ struct IOSMessageInputView: View {
                     audioRecorder.cancel()
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                .padding(.vertical, CTLayout.inlinePad)
 
             case .recorded(let url, let duration, let waveform):
                 VoicePreviewBar(duration: duration, waveform: waveform) {
@@ -162,7 +236,6 @@ struct IOSMessageInputView: View {
                     audioRecorder.cancel()
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                .padding(.vertical, CTLayout.inlinePad)
 
             case .idle:
                 EmptyView()

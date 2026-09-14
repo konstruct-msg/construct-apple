@@ -41,22 +41,31 @@ final class SessionQueueWiringTests: XCTestCase {
         var bundleRequests: [String] = []
         var endSessionRequests: [String] = []
         var healRequests: [String] = []
+        /// The full addresses, kept alongside the account-only arrays above so a test can assert
+        /// *which space* the router named a peer in — the property whose absence let a device id
+        /// ride a parameter called `userId` all the way into a key-service account lookup.
+        var bundleAddresses: [PeerAddress] = []
+        var endSessionAddresses: [PeerAddress] = []
+        var healAddresses: [PeerAddress] = []
 
-        func messageRouter(_ router: MessageRouter, needsPublicKeyBundle userId: String, for message: ChatMessage) {
-            bundleRequests.append(userId)
+        func messageRouter(_ router: MessageRouter, needsPublicKeyBundle peer: PeerAddress, for message: ChatMessage) {
+            bundleRequests.append(peer.account)
+            bundleAddresses.append(peer)
         }
-        func messageRouter(_ router: MessageRouter, needsEndSession userId: String) {
-            endSessionRequests.append(userId)
+        func messageRouter(_ router: MessageRouter, needsEndSession peer: PeerAddress) {
+            endSessionRequests.append(peer.account)
+            endSessionAddresses.append(peer)
         }
-        func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64) {}
-        func messageRouter(_ router: MessageRouter, isEndSessionStale userId: String, timestamp: UInt64) -> Bool { false }
-        func messageRouter(_ router: MessageRouter, isResetInitSuperseded userId: String, timestamp: UInt64, initEphemeral: Data) -> Bool { false }
-        func messageRouter(_ router: MessageRouter, didWinTieBreak userId: String) {}
-        func messageRouter(_ router: MessageRouter, needsSessionHeal userId: String, failedMessage: ChatMessage) {
-            healRequests.append(userId)
+        func messageRouter(_ router: MessageRouter, receivedEndSession peer: PeerAddress, timestamp: UInt64) {}
+        func messageRouter(_ router: MessageRouter, isEndSessionStale peer: PeerAddress, timestamp: UInt64) -> Bool { false }
+        func messageRouter(_ router: MessageRouter, isResetInitSuperseded peer: PeerAddress, timestamp: UInt64, initEphemeral: Data) -> Bool { false }
+        func messageRouter(_ router: MessageRouter, didWinTieBreak peer: PeerAddress) {}
+        func messageRouter(_ router: MessageRouter, needsSessionHeal peer: PeerAddress, failedMessage: ChatMessage) {
+            healRequests.append(peer.account)
+            healAddresses.append(peer)
         }
         func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {}
-        func messageRouter(_ router: MessageRouter, needsUsernameUpdate userId: String) {}
+        func messageRouter(_ router: MessageRouter, needsUsernameUpdate peer: PeerAddress) {}
     }
 
     // MARK: - Fixture
@@ -196,6 +205,62 @@ final class SessionQueueWiringTests: XCTestCase {
         XCTAssertEqual(router.pendingQueue.count(for: bob), 2)
         XCTAssertEqual(delegate.bundleRequests.sorted(), [alice, bob].sorted(),
                        "Each peer starts its own init exactly once")
+    }
+
+    // MARK: - The identity space the delegate is named in
+
+    /// Every address the router hands the delegate must carry an **account** in `account`.
+    ///
+    /// Devices 2026-09-01: the parameter was one `String` called `userId`, and on the paths the
+    /// Rust orchestrator originated it held a device id. `SessionCoordinator` took it to
+    /// `initializeSessionProactively` → `fetchPublicKeyWithRetry`, and the key service answered
+    /// `notFound: "User or device not found"` three times per attempt, eight attempts per session.
+    ///
+    /// This drives the paths this suite can reach hermetically — the bundle request and the two
+    /// END_SESSION guards. The core-originated `.sendEndSession` / `.fetchPublicKeyBundle` cases
+    /// need a diverged ratchet and are covered by construction: both build their address as
+    /// `PeerAddress(account: otherUserId, device: <the id the core named>)`, and `otherUserId` is
+    /// the envelope's, which is what the assertion below pins for every other path here.
+    func testEveryAddressHandedToTheDelegateNamesAnAccount() {
+        // Two peers, because the two paths are mutually exclusive on one. A second message from
+        // the *same* peer finds `isInitInFlight` true and is merely queued, so the END_SESSION
+        // guard never runs — the first draft of this test did exactly that, and a mutation that
+        // replaced the guard's address with our own device id left it green. The union was
+        // non-empty (the bundle request was in it), which is precisely how a vacuous assertion
+        // looks from the outside.
+        let queued = UUID().uuidString    // msgNum 0, no session → bundle request
+        let midRatchet = UUID().uuidString // msgNum 5, no session → END_SESSION, never queued
+
+        router.routeIncomingMessage(incoming(from: queued, msgNum: 0), in: context)
+        router.routeIncomingMessage(incoming(from: midRatchet, msgNum: 5), in: context)
+
+        // Each source proved separately. A union guard cannot tell a driven path from a silent one.
+        XCTAssertEqual(delegate.bundleAddresses.map(\.account), [queued],
+                       "the bundle path did not run — everything below would read an empty list")
+        XCTAssertEqual(delegate.endSessionAddresses.map(\.account), [midRatchet],
+                       "the END_SESSION path did not run — everything below would read an empty list")
+
+        for address in delegate.bundleAddresses + delegate.endSessionAddresses + delegate.healAddresses {
+            XCTAssertFalse(
+                SessionAddressing.isCryptoIdentity(address.account),
+                "\(address) puts a device id where the key service reads an account UUID"
+            )
+        }
+    }
+
+    /// The other half of the same rule: an event that names no device must say so, rather than
+    /// inventing one. Both guards here fire before any session exists, so there is no device to
+    /// name — and `deviceOrPinned()` is where a caller that needs one asks for the pinned fallback
+    /// explicitly, at the point where the fallback is the right answer.
+    func testAGuardThatRunsBeforeAnySessionNamesNoDevice() {
+        let peer = UUID().uuidString
+        router.routeIncomingMessage(incoming(from: peer, msgNum: 5), in: context)
+
+        XCTAssertEqual(delegate.endSessionAddresses.count, 1)
+        XCTAssertNil(
+            delegate.endSessionAddresses.first?.device,
+            "a mid-ratchet message arrives with no session — nothing has named which device diverged"
+        )
     }
 
     // MARK: - PendingSessionQueue invariants (effector drain/disposition rely on these)

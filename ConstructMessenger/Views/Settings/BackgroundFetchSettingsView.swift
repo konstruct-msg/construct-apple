@@ -293,7 +293,7 @@ struct BackgroundFetchSettingsView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        .hideSystemNavBar()
     }
 }
 

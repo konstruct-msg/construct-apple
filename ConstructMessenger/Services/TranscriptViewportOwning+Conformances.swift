@@ -104,6 +104,10 @@ extension ChatScrollManager: TranscriptViewportOwning {
         set {}
     }
 
+    /// Nothing to bind it to. The pin series re-derives a target on each attempt rather than
+    /// holding one, which is why it cannot survive a prepend at all.
+    func bindAnchorRow(_ messageId: String?) {}
+
     var stateDescription: String {
         "mode=\(viewportMode) autoScroll=\(shouldScrollToBottom)"
     }

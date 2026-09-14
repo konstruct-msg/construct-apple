@@ -98,8 +98,8 @@ final class PerformanceBenchmarks: XCTestCase {
         let input = Data(repeating: 0xAB, count: 512)
         measure {
             for _ in 0..<10_000 {
-                let padded = MessagePadding.padCiphertext(input)
-                _ = MessagePadding.unpadCiphertext(padded)
+                let padded = input
+                _ = padded
             }
         }
     }
@@ -120,7 +120,7 @@ final class PerformanceBenchmarks: XCTestCase {
                     contactId: bob.userId,
                     plaintext: plaintext
                 ) else { return }
-                let content = MessagePadding.padCiphertext(Data(rustComponents.content))
+                let content = Data(rustComponents.content)
                 let components = MessageCryptoService.EncryptedMessageComponents(
                     ephemeralPublicKey: Data(rustComponents.ephemeralPublicKey),
                     messageNumber: rustComponents.messageNumber,
@@ -148,7 +148,7 @@ final class PerformanceBenchmarks: XCTestCase {
 
         // Establish Bob's session via msgNum=0
         let init0 = try alice.core.encryptMessage(contactId: bob.userId, plaintext: Data("__init__".utf8))
-        let init0Padded = MessagePadding.padCiphertext(Data(init0.content))
+        let init0Padded = Data(init0.content)
         let firstMsg = BinaryFirstMessage(
             ephemeralPublicKey: init0.ephemeralPublicKey,
             messageNumber: init0.messageNumber,
@@ -156,7 +156,7 @@ final class PerformanceBenchmarks: XCTestCase {
             // `padCiphertext` prepends a magic+length header and appends random bytes, so a
             // padded blob is not a valid AEAD ciphertext — passing it straight through made
             // initReceivingSession fail with "All 1 prekey(s) failed … aead::Error".
-            content: [UInt8](MessagePadding.unpadCiphertext(init0Padded)),
+            content: [UInt8](init0Padded),
             oneTimePrekeyId: init0.oneTimePrekeyId,
             suiteId: init0.suiteId,
             pqMessageEpoch: init0.pqMessageEpoch,
@@ -176,7 +176,7 @@ final class PerformanceBenchmarks: XCTestCase {
                     contactId: bob.userId,
                     plaintext: plaintext
                 ) else { return }
-                let content = MessagePadding.padCiphertext(Data(rustComponents.content))
+                let content = Data(rustComponents.content)
                 let components = MessageCryptoService.EncryptedMessageComponents(
                     ephemeralPublicKey: Data(rustComponents.ephemeralPublicKey),
                     messageNumber: rustComponents.messageNumber,
@@ -189,7 +189,7 @@ final class PerformanceBenchmarks: XCTestCase {
                 )
                 guard let wire = try? WirePayloadCoder.encode(components) else { return }
                 guard let decoded = try? WirePayloadCoder.decode(wire) else { return }
-                let unpadded = MessagePadding.unpadCiphertext(decoded.content)
+                let unpadded = decoded.content
                 _ = try? bob.core.decryptMessage(
                     contactId: alice.userId,
                     ephemeralPublicKey: decoded.ephemeralPublicKey,

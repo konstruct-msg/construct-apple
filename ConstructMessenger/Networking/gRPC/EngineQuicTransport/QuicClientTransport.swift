@@ -39,10 +39,50 @@ final class QuicClientTransport: ClientTransport, @unchecked Sendable {
         self.config = config
     }
 
+    /// Carry the live connection across a network handover instead of throwing it away.
+    ///
+    /// Returns `true` only when the gateway has answered on the new socket. `false` means either
+    /// there was nothing to migrate or the migration was not confirmed inside one connect budget —
+    /// in both cases the caller should reconnect, which is what it did unconditionally before.
+    ///
+    /// Both outcomes are ordinary. A handover to a network that cannot reach the gateway at all is
+    /// a failed migration and a failed reconnect alike; this only decides which of the two costs
+    /// the user a stream.
+    func migrateToCurrentPath() async -> Bool {
+        guard let channel = state.liveChannel() else {
+            Log.debug("engine-QUIC migration skipped — no live channel", category: "QuicTransport")
+            return false
+        }
+        let via = NetworkReachabilityManager.shared.connectionType.label
+        do {
+            let local = try await channel.rebind()
+            Log.info("engine-QUIC migrated to \(local) via \(via)", category: "QuicTransport")
+            return true
+        } catch {
+            // INFO, not ERROR: the fallback is a reconnect that works. Loud here would put a
+            // routine handover into the "0 unexplained ERROR" acceptance count.
+            Log.info("engine-QUIC migration declined via \(via): \(error)", category: "QuicTransport")
+            return false
+        }
+    }
+
     func connect() async throws {
         let obfLabel = config.obfPsk == nil ? "plain" : "salamander"
         Log.info("engine-QUIC transport build=\(transportBuildMarker()) [\(obfLabel)] → \(config.host):\(config.port)", category: "QuicTransport")
         state.markConnecting()
+        // Timed because three device runs were spent inferring this interval from the gap between
+        // two log lines, and the inference was wrong each time. The "engine-QUIC persistent
+        // connection closed" ERROR is written when the *channel* tears down, which is not when the
+        // handshake gave up: on 2026-08-24 those were 07:35:25 and 07:35:35, and the then-3s
+        // handshake budget could not account for the difference. One number here ends the
+        // arithmetic.
+        let startedAt = Date()
+        // Read once, at the attempt, not at the report: the interface is exactly what churns
+        // during these seconds. "QUIC works on cellular but not WiFi" was a reading taken by
+        // pairing this line with the nearest `Network reachability changed` in a different
+        // category, and on the 2026-08-24 log those were up to four seconds and two switches
+        // apart — enough to attribute the outcome to the wrong network.
+        let via = NetworkReachabilityManager.shared.connectionType.label
         do {
             let channel: QuicChannel
             if let psk = config.obfPsk {
@@ -61,14 +101,31 @@ final class QuicClientTransport: ClientTransport, @unchecked Sendable {
                     trustCert: config.trustCert
                 )
             }
+            Log.info(
+                "engine-QUIC connected in \(Self.elapsedMs(since: startedAt))ms "
+                + "via \(via) → \(config.host):\(config.port)",
+                category: "QuicTransport"
+            )
             state.setRunning(channel)
         } catch {
+            // The elapsed time is the whole point of this line: it separates "nothing answered on
+            // UDP/443" (≈1000ms, the Rust HANDSHAKE_TIMEOUT) from name resolution (its own 500ms
+            // budget, its own message) from anything slower, which is neither and needs looking at.
+            Log.error(
+                "engine-QUIC connect failed after \(Self.elapsedMs(since: startedAt))ms "
+                + "via \(via) → \(config.host):\(config.port): \(error)",
+                category: "QuicTransport"
+            )
             let rpcError = RPCError(code: .unavailable, message: "QUIC connect failed: \(error)")
             state.fail(rpcError)
             throw rpcError
         }
         // Hold the connection open until graceful shutdown, mirroring the H2/H3 transports.
         await state.waitForShutdown()
+    }
+
+    private static func elapsedMs(since start: Date) -> Int {
+        Int(Date().timeIntervalSince(start) * 1000)
     }
 
     func beginGracefulShutdown() {
@@ -293,28 +350,61 @@ private final class StateMachine: @unchecked Sendable {
 
     /// Connect failed: fail any pending stream waiters and release the shutdown latch.
     func fail(_ error: any Error) {
-        let (waiters, shutdown): ([CheckedContinuation<QuicChannel, any Error>], CheckedContinuation<Void, Never>?) = lock.withLock {
+        let (waiters, shutdown, retired): ([CheckedContinuation<QuicChannel, any Error>], CheckedContinuation<Void, Never>?, QuicChannel?) = lock.withLock {
             if phase != .done { phase = .failed; failureError = error }
+            let ch = _channel
             _channel = nil
             let w = channelWaiters; channelWaiters = []
             let s = shutdownContinuation; shutdownContinuation = nil
-            return (w, s)
+            return (w, s, ch)
         }
+        retire(retired, why: "connect failed")
         for w in waiters { w.resume(throwing: error) }
         shutdown?.resume()
     }
 
     func shutdown() {
-        let (waiters, cont): ([CheckedContinuation<QuicChannel, any Error>], CheckedContinuation<Void, Never>?) = lock.withLock {
+        let (waiters, cont, retired): ([CheckedContinuation<QuicChannel, any Error>], CheckedContinuation<Void, Never>?, QuicChannel?) = lock.withLock {
             phase = .done
+            let ch = _channel
             _channel = nil
             let w = channelWaiters; channelWaiters = []
             let c = shutdownContinuation; shutdownContinuation = nil
-            return (w, c)
+            return (w, c, ch)
         }
+        retire(retired, why: "graceful shutdown")
         let err = RPCError(code: .unavailable, message: "QUIC transport shut down.")
         for w in waiters { w.resume(throwing: err) }
         cont?.resume()
+    }
+
+    /// Close the Rust connection, rather than dropping our reference to it and hoping.
+    ///
+    /// THE HEAT. Releasing `_channel` retires the transport on the Swift side only; the quinn
+    /// endpoint behind it lives until the last `Arc` in Rust goes, and the stats task in
+    /// `startReceivePump` holds one for as long as it is polling. So an abandoned QUIC connection
+    /// kept its endpoint driver running, and on a network that answers UDP with ICMP unreachables
+    /// that driver burns a core — `spin_free_socket` absorbs the errors without spinning *per
+    /// error*, but nothing was asking why the socket was still being polled at all. Build 630,
+    /// 2026-08-22, nine minutes after the client had given up on QUIC entirely:
+    ///
+    ///     11:34:41  Fast-UDP (QUIC/H3) failed to open [accept_timeout] — H2 for the rest of this session
+    ///     11:34:41  engine-QUIC persistent connection force-invalidated (gen=4)
+    ///     11:34:48  QUIC stats tx_pkts=17 rx_pkts=2 ping_tx=1 close=None     ← still pinging
+    ///     11:36:19  thermal=fair     cpu=115.0%  transport=conns=1 udperr=277065498
+    ///     11:37:54  thermal=serious  cpu=106.3%  transport=conns=1 udperr=529574692
+    ///     11:43:30  thermal=serious  cpu=116.3%  transport=conns=1 udperr=1255362137
+    ///
+    /// `udperr` grew by 2.3 million per second for as long as the app was foregrounded, on a
+    /// connection nothing intended to use again. `conns=1` is the same fact, and it never fell.
+    ///
+    /// `QuicChannel.close()` was added on 2026-08-09 to make retirement explicit instead of a
+    /// consequence of drop order — and shipped with no caller, which is the producer-without-a-
+    /// consumer defect in its other direction. This is the caller.
+    private func retire(_ channel: QuicChannel?, why: String) {
+        guard let channel else { return }
+        channel.close()
+        Log.info("engine-QUIC connection closed (\(why))", category: "QuicTransport")
     }
 
     /// Await the established channel: returns immediately when running, throws if the
@@ -337,6 +427,13 @@ private final class StateMachine: @unchecked Sendable {
             }
             resume?()
         }
+    }
+
+    /// The live channel, or `nil` if there isn't one yet. Deliberately non-waiting: the only
+    /// caller is the path-change migration, and a channel that has not finished connecting has
+    /// nothing to migrate — its handshake will simply run on the new path.
+    func liveChannel() -> QuicChannel? {
+        lock.withLock { phase == .running ? _channel : nil }
     }
 
     func waitForShutdown() async {

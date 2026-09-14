@@ -11,7 +11,9 @@
 //  only when
 //    1. its address is vouched for by a trust anchor NOT under the live server's
 //       control — the Ed25519-signed relay manifest (VeilCertFetcher, verified against
-//       relayConfigSigningKey) or the in-binary pin set, AND
+//       relayConfigSigningKey), the in-binary pin set, a front already learned, or an
+//       issuer signature over this very coordinate tuple (VeilEntryPointSignature),
+//       which is the anchor that lets a front be offered without being published, AND
 //    2. the SPKI in the response matches that trusted pin (anti-redirection: the server
 //       cannot push a relay/pin the signed manifest doesn't already vouch for), AND
 //    3. the capability blob itself carries a valid issuer signature and live window.
@@ -54,17 +56,21 @@ enum VeilAlternatesCache {
     /// The three gates live in `VeilRelayTrust` so the primary-capability path applies the
     /// same ones — it used to apply strictly weaker checks to a coordinate the server picks.
     static func accept(_ alt: VeilServiceClient.Alternate) -> Bool {
-        let rejection = VeilRelayTrust.verify(
+        let rejection = VeilRelayTrust.verifyAndLearn(
             relayAddress: alt.relayAddress,
             spki: alt.spki,
+            sni: alt.sni,
+            notAfter: alt.notAfter,
+            signature: alt.signature,
             capabilityB64: alt.capability.base64EncodedString(),
             capabilityVersion: alt.capabilityVersion
         )
         guard let rejection else { return true }
         switch rejection {
         case .unknownRelay:
-            // Expected during manifest rotation, not an error: the server offered a front
-            // this build has no anchor for, and we simply do not take it.
+            // Now means the alternate carried no usable signature either — an old server,
+            // or a tuple that failed to verify. Still info, not error: an unsigned
+            // alternate is the documented fallback, and we simply do not take it.
             Log.info("VEIL alt: reject \(alt.relayAddress) — \(rejection.summary)", category: "VEIL")
         case .spkiMismatch, .invalidCapability:
             Log.error("VEIL alt: reject \(alt.relayAddress) — \(rejection.summary)", category: "VEIL")

@@ -174,6 +174,18 @@ final class RuntimeDiagnostics {
         } else {
             Log.info("RUNTIME \(message)", category: "Runtime")
         }
+
+        // The divergence-signal counters ride this sampler because they must survive the process
+        // to be worth anything: they live in memory, reset at launch, and the file that gets
+        // exported is written by `LogCollector`. Nine of the 58 `record` call sites log nothing of
+        // their own — `token_wallet_wait`, which decides Privacy Pass enforce readiness, among
+        // them — so until this line existed those events could not be read off a run at all.
+        //
+        // INFO, never ERROR: the line carries benign volume gauges alongside the loud ones, and
+        // the acceptance criterion is "0 unexplained ERROR".
+        if let signals = PerformanceMetrics.shared.changedSignalsSummary() {
+            Log.info("SIGNALS \(signals)", category: "Runtime")
+        }
     }
 }
 

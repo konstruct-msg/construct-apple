@@ -63,6 +63,12 @@ struct NewChatView: View {
     private func handleScannedContact(_ urlString: String) {
         Log.info("NewChatView: Handling scanned URL: \(urlString)", category: "NewChatView")
 
+        // A voucher scanned here is a voucher, not a malformed contact code.
+        if let message = VeilVoucherRedemption.messageIfVoucher(urlString) {
+            showingQRScanner = false
+            showErrorAfterDismiss(message)
+            return
+        }
         guard let url = URL(string: urlString) else {
             Log.error("Invalid URL string: \(urlString)", category: "NewChatView")
             showErrorAfterDismiss(NSLocalizedString("invalid_qr_code_construct", comment: "Error message for invalid QR code"))

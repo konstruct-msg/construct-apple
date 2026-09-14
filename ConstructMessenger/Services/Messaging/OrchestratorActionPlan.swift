@@ -54,7 +54,7 @@ struct OrchestratorActionPlan {
     }
 
     /// The routing verdict the incoming-message loop must follow. Independent of the
-    /// platform-side actions (`scheduleTimer`, `saveSessionToSecureStore`, …) that ride
+    /// platform-side actions (`scheduleTimer`, `saveToSecureStore`, …) that ride
     /// alongside it: those are executed, not classified.
     ///
     /// First matching action in list order wins — the same scan `MessageRouter` used to

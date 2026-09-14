@@ -147,8 +147,12 @@ final class MessageInputAttachmentStore: ObservableObject {
 
         let asset = AVURLAsset(url: movie.url)
         let duration = (try? await asset.load(.duration))?.seconds
-        // Poster must be non-nil: the preview bar maps attachments↔images by displayImage,
-        // so a dropped poster would misalign remove-by-index. Fall back to a dark placeholder.
+        // A poster is what the transcript bubble and the upload thumbnail draw, so it is worth
+        // synthesising one when the asset will not yield a frame. It is no longer load-bearing
+        // for the composer strip: that used to drop posterless attachments out of its array and
+        // misalign every index it handed back, and it now keeps the slot and draws a placeholder
+        // itself. `videoPlaceholderPoster()` is optional too — a promise made here could not have
+        // held that invariant anyway.
         let poster = (try? await MediaOptimizer.generateVideoThumbnail(from: movie.url))
             .flatMap { PlatformImage(data: $0) }
             ?? Self.videoPlaceholderPoster()

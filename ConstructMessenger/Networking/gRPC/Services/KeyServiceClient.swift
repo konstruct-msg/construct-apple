@@ -95,7 +95,7 @@ final class KeyServiceClient: Sendable {
         // server/gateway does not learn who is fetching whose bundle. Bundles are public keys, and
         // key-service's GetPreKeyBundles reads no caller identity (IP-only rate limiting), so the
         // unauthenticated fetch is safe end-to-end. Off → authenticated (current behaviour).
-        try await GRPCChannelManager.shared.performRPC(sealed: FeatureFlags.sealedSenderUnauthenticatedTransport, timeout: GRPCTimeouts.getPreKeyBundles) { grpcClient in
+        let (bundles, activeDevices) = try await GRPCChannelManager.shared.performRPC(sealed: FeatureFlags.sealedSenderUnauthenticatedTransport, timeout: GRPCTimeouts.getPreKeyBundles) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetPreKeyBundlesRequest()
@@ -109,7 +109,7 @@ final class KeyServiceClient: Sendable {
                 request: .init(message: request)
             )
 
-            return response.bundles.compactMap { deviceBundle -> DeviceBundleData? in
+            let accepted = response.bundles.compactMap { deviceBundle -> DeviceBundleData? in
                 let b = deviceBundle.bundle
                 guard !b.identityKey.isEmpty else { return nil }
 
@@ -175,7 +175,35 @@ final class KeyServiceClient: Sendable {
                 )
                 return DeviceBundleData(deviceId: deviceBundle.deviceID, bundle: bundle, platform: deviceBundle.platform)
             }
+            // Carried out of the closure beside the bundles, and deliberately not folded into
+            // them: `accepted` above has already dropped devices this client refused (failed
+            // hybrid-PQ verification), and `active_devices` is the server's own answer about which
+            // devices exist. Merging the two would destroy the only distinction that makes
+            // pruning safe. See `SessionAddressing.reconcileDevices`.
+            return (accepted, response.activeDevices)
         }
+        // Recorded here rather than at each call site: a registry every caller has to remember to
+        // update is stale for whichever path was added last, and the staleness is invisible —
+        // consumers read "we do not know this account's devices", which is a legal answer.
+        await MainActor.run {
+            PeerDeviceRegistry.shared.record(userId: userId, devices: bundles)
+        }
+        // The durable half of the same answer. The registry above expires in an hour and lives in
+        // memory; this survives relaunch and answers during a locked-device background decrypt,
+        // which is what a seal or a teardown addressed to a specific device needs. Two stores, two
+        // questions — "which devices does this account have right now" and "which devices have we
+        // pinned a key for" — and the second is the one an envelope may be built against.
+        let pins = bundles.map { (deviceId: $0.deviceId, identityKey: $0.bundle.identityPublic) }
+        let context = PersistenceController.shared.container.newBackgroundContext()
+        // Awaited, not fired off: the caller's next move is usually to act on these devices, and a
+        // write that lands after that would leave the first use of a newly-linked device reading an
+        // incomplete set. It is one small write against a background context.
+        await context.perform {
+            SessionAddressing.reconcileDevices(
+                pins, activeSet: activeDevices, ofPeer: userId, in: context
+            )
+        }
+        return bundles
     }
 
     // MARK: - Get Pre-Key Bundle (replaces CryptoAPI.getPublicKey)
@@ -388,6 +416,8 @@ final class KeyServiceClient: Sendable {
         // `.failed` outcome throws inside the RPC closure above, and a hybrid downgrade throws in
         // the switch.
         await MainActor.run {
+            // A bundle came back, so whatever marked them gone is stale.
+            VanishedPeerStore.shared.clear(userId)
             ContactLinkService.shared.rememberIdentityKeyIfUnknown(
                 userId: userId,
                 identityKey: fetched.data.identityPublic,
@@ -502,9 +532,16 @@ final class KeyServiceClient: Sendable {
             // Advertise this build's sparse-PQ-ratchet capability (SuiteID 3).
             // The server persists it (migration 063) and returns it in
             // PreKeyBundle so peers can negotiate suite-3 sessions.
-            #if os(iOS)
+            //
+            // Unguarded since 2026-08-30. This sat under `#if os(iOS)` from 2026-07-02, when
+            // macOS reached the core through `EngineAdapter` and could not call this function.
+            // That indirection was retired 2026-07-28; the guard was not, so every macOS device
+            // left the field at proto3's default and told the server it cannot do suite 3.
+            // Nothing reported it: the capability is consumed from the *peer's* bundle, which is
+            // platform-independent, so the desktop negotiated suite 3 as initiator and was
+            // negotiated down as responder — asymmetric, silent, and exactly the divergence that
+            // makes a second device useless as a test instrument.
             request.supportsPqRatchet = supportsPqRatchet()
-            #endif
 
             let response = try await keyClient.uploadPreKeys(
                 request: .init(message: request)
@@ -512,9 +549,7 @@ final class KeyServiceClient: Sendable {
             // Remember what capability the server now holds — the replenishment
             // service compares against this to force a re-upload when a build
             // flips supportsPqRatchet() while the server OTPK count is healthy.
-            #if os(iOS)
             UserDefaults.standard.set(request.supportsPqRatchet, forKey: Self.advertisedPqRatchetKey)
-            #endif
             return (classicCount: response.preKeyCount, kyberCount: response.kyberPreKeyCount)
         }
     }

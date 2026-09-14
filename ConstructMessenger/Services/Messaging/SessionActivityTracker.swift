@@ -83,7 +83,7 @@ final class SessionActivityTracker {
     ///
     /// Call on app foreground and optionally from a background task.
     func sendStaleSessionHeartbeats() async {
-        let contactIds = CryptoManager.shared.getAllSessionUserIds()
+        let contactIds = CryptoManager.shared.getAllSessionDeviceIds()
         for contactId in contactIds {
             guard let age = secondsSinceLastActivity(for: contactId) else {
                 // No activity record — might be a very old session; skip.
@@ -105,7 +105,7 @@ final class SessionActivityTracker {
 
     /// Log a full health summary for all active sessions (debug/diagnostics only).
     func logSessionHealthSummary() {
-        let contactIds = CryptoManager.shared.getAllSessionUserIds()
+        let contactIds = CryptoManager.shared.getAllSessionDeviceIds()
         guard !contactIds.isEmpty else {
             Log.debug("Session health: no active sessions", category: "SessionActivityTracker")
             return

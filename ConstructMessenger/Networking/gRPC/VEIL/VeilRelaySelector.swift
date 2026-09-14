@@ -44,9 +44,19 @@ enum VeilRelaySelector {
     static func cachedRelayAddresses() -> [String] {
         let base = VeilProxyStore.cachedRelayAddresses(fallback: VEILConfig.hardcodedRelayAddresses)
         let discovered = DiscoveredRelayStore.shared.addresses()
-        guard !discovered.isEmpty else { return base }
-        var seen = Set(base)
-        return base + discovered.filter { seen.insert($0).inserted }
+        // Fronts learned from a signature lead, newest first. Order is the tie-break the
+        // pool actually uses: `RelayPool.best()` is `min(by:)` on the failure score, and
+        // `min(by:)` keeps the earliest element among equals — while `updateRelays`
+        // rebuilds the pool with an empty failure map. So after an import every candidate
+        // scores zero and position decides, which is how a freshly vouched front gets
+        // tried before a seed relay instead of after it.
+        //
+        // A learned front that is dead loses this on its first failure and the pool
+        // rotates, so leading costs at most one probe.
+        let learned = VeilLearnedFrontStore.shared.addresses()
+        guard !learned.isEmpty || !discovered.isEmpty else { return base }
+        var seen = Set<String>()
+        return (learned + base + discovered).filter { seen.insert($0).inserted }
     }
 
     static func certificateExpiryAddresses() -> Set<String> {
@@ -78,8 +88,10 @@ enum VeilRelaySelector {
     // Reorders candidates based on GeoIP region: ruLike countries prefer the RU relay
     // (WebTunnel/obfs4-capable), all others prefer the AMS relay (lower latency for EU/global).
     private static func applyGeoIPPreference(to candidates: [String], region: GeoIPRegion) -> [String] {
-        // Only the veil-front relay remains, so every region prefers it.
-        let preferred = [VEILConfig.ruRelayAddress]
+        // Only bundled veil-fronts get a regional preference, so every region prefers
+        // the same list. Derived from `seedRelays`, not named outright: with an empty
+        // seed pool this is simply empty and the incoming order stands (phase 6).
+        let preferred = VEILConfig.hardcodedRelayAddresses
         _ = region
         let front = preferred.filter { candidates.contains($0) }
         let back = candidates.filter { !preferred.contains($0) }

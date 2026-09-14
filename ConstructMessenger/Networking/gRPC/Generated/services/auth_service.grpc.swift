@@ -2069,6 +2069,18 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
                 method: "GetDeviceInfo"
             )
         }
+        /// Namespace for "SetDeviceMetadata" metadata.
+        public enum SetDeviceMetadata: Sendable {
+            /// Request type for "SetDeviceMetadata".
+            public typealias Input = Shared_Proto_Services_V1_SetDeviceMetadataRequest
+            /// Response type for "SetDeviceMetadata".
+            public typealias Output = Shared_Proto_Services_V1_SetDeviceMetadataResponse
+            /// Descriptor for "SetDeviceMetadata".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
+                method: "SetDeviceMetadata"
+            )
+        }
         /// Namespace for "InitiateDeviceLink" metadata.
         public enum InitiateDeviceLink: Sendable {
             /// Request type for "InitiateDeviceLink".
@@ -2089,6 +2101,7 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             UnregisterPushToken.descriptor,
             VerifyDevice.descriptor,
             GetDeviceInfo.descriptor,
+            SetDeviceMetadata.descriptor,
             InitiateDeviceLink.descriptor
         ]
     }
@@ -2249,6 +2262,31 @@ extension Shared_Proto_Services_V1_DeviceService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetDeviceInfoResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetDeviceInfoResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SetDeviceMetadata" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetDeviceMetadata - Store this device's own sealed name/platform blob
+        /// > Authenticated; writes only the row named by the caller's own token. A device
+        /// > cannot set another device's metadata, including its own account's.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_SetDeviceMetadataRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_SetDeviceMetadataRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SetDeviceMetadataResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func setDeviceMetadata<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetDeviceMetadataRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SetDeviceMetadataRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SetDeviceMetadataResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SetDeviceMetadataResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "InitiateDeviceLink" method.
@@ -2498,6 +2536,42 @@ extension Shared_Proto_Services_V1_DeviceService {
             )
         }
 
+        /// Call the "SetDeviceMetadata" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetDeviceMetadata - Store this device's own sealed name/platform blob
+        /// > Authenticated; writes only the row named by the caller's own token. A device
+        /// > cannot set another device's metadata, including its own account's.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_SetDeviceMetadataRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_SetDeviceMetadataRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SetDeviceMetadataResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func setDeviceMetadata<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetDeviceMetadataRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SetDeviceMetadataRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SetDeviceMetadataResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SetDeviceMetadataResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_DeviceService.Method.SetDeviceMetadata.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "InitiateDeviceLink" method.
         ///
         /// > Source IDL Documentation:
@@ -2705,6 +2779,37 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetDeviceInfoRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetDeviceInfoResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetDeviceMetadata" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetDeviceMetadata - Store this device's own sealed name/platform blob
+    /// > Authenticated; writes only the row named by the caller's own token. A device
+    /// > cannot set another device's metadata, including its own account's.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_SetDeviceMetadataRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setDeviceMetadata<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetDeviceMetadataRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SetDeviceMetadataResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.setDeviceMetadata(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_SetDeviceMetadataRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_SetDeviceMetadataResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -2934,6 +3039,41 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
             metadata: metadata
         )
         return try await self.getDeviceInfo(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetDeviceMetadata" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetDeviceMetadata - Store this device's own sealed name/platform blob
+    /// > Authenticated; writes only the row named by the caller's own token. A device
+    /// > cannot set another device's metadata, including its own account's.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setDeviceMetadata<Result>(
+        _ message: Shared_Proto_Services_V1_SetDeviceMetadataRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SetDeviceMetadataResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetDeviceMetadataRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.setDeviceMetadata(
             request: request,
             options: options,
             onResponse: handleResponse

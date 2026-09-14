@@ -147,7 +147,7 @@ struct DevicesView: View {
         } // VStack
         .background(Color.CT.bg.ignoresSafeArea())
         #if os(iOS)
-        .toolbar(.hidden, for: .navigationBar)
+        .hideSystemNavBar()
         #endif
         .refreshable { await loadDevices() }
         .task { await loadDevices() }
@@ -288,8 +288,24 @@ private struct DeviceRow: View {
                       color: isCurrent ? Color.CT.accent : Color.CT.textDim)
 
             VStack(alignment: .leading, spacing: DevicesSettingsLayout.deviceMetaSpacing) {
-                Text(device.name)
+                Text(displayName)
                     .font(CTFont.bold(16))
+
+                // The device id, in the same eight hex characters every log line prints.
+                //
+                // A name does not identify a device. This account went through three ids in two
+                // days — `0d84b416`, `f1a3d746`, `38e653ec` — all of them the same Mac, relinked;
+                // in a list keyed by name that is three identical rows, and there is no way to see
+                // which one is still alive. The one that had been revoked kept running for a day
+                // and its handshakes archived the other device's session on every peer it talked
+                // to, and nothing on this screen could have shown that.
+                //
+                // It is also the string `DEVICE_SET` prints at every authenticated session, so the
+                // screen and the log are comparable without translating between them.
+                Text(device.id.prefix(8))
+                    .font(CTFont.regular(DevicesSettingsLayout.deviceIdFontSize))
+                    .foregroundStyle(Color.CT.textDim)
+                    .textSelection(.enabled)
 
                 if isCurrent {
                     HStack(spacing: DevicesSettingsLayout.currentStatusSpacing) {
@@ -320,8 +336,31 @@ private struct DeviceRow: View {
         }
     }
 
+    /// The device's own description, opened from `sealed_metadata`, or `nil` when there is none
+    /// to open.
+    ///
+    /// `nil` is ordinary, not an error: a device that has not published yet, or published before
+    /// this device was linked and has not re-sealed since, leaves no copy we can open. The row
+    /// then shows what it showed before any of this existed — the short id, which identifies it
+    /// either way.
+    private var described: Shared_Proto_Services_V1_DeviceMetadata? {
+        guard !device.sealedMetadata.isEmpty,
+              let ourKey = KeychainManager.shared.loadDeviceIdentityKey()
+        else { return nil }
+        return DeviceMetadataService.open(device.sealedMetadata, withIdentityPrivateKey: ourKey)
+    }
+
+    private var displayName: String {
+        // `device.name` is the localised placeholder: the server holds no name and never will.
+        if let name = described?.deviceName, !name.isEmpty { return name }
+        return device.name
+    }
+
     private var platformSFSymbol: String {
-        switch device.platform {
+        // The sealed description first — `device.platform` is what the server sent, and the
+        // server holds no platform either. It stays as the fallback for the day a federated peer
+        // sends one.
+        switch described?.platform ?? device.platform {
         case .ios:     return "iphone"
         case .desktop: return "laptopcomputer"
         case .android: return "candybarphone"

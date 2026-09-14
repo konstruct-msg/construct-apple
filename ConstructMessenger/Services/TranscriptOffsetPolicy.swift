@@ -45,6 +45,45 @@ enum TranscriptOffsetPolicy {
         max(0, contentHeight + bottomInset - viewportHeight)
     }
 
+    /// The offset that brings one row to `anchor` inside the visible area.
+    ///
+    /// The fourth rule, and the one the migration shipped without: going to an arbitrary row.
+    /// `followExplicitly` could be computed from the content height alone, so it was — and every
+    /// other destination (a search hit, the parent of a reply, the voice message that just started
+    /// playing) had no arithmetic at all and did nothing. `bottomOffset` answers "where is the end";
+    /// this answers "where is that row".
+    ///
+    /// `bottomInset` is subtracted rather than ignored: it is the composer's height, so centring in
+    /// `viewportHeight` would centre the row behind the glass and leave it visually low. What the
+    /// reader sees is `viewportHeight - bottomInset`, and that is what the row is placed within.
+    ///
+    /// Clamped at both ends for the reason `.hold` is: an offset is a place scrolling could have
+    /// reached, and past the end is not one. That bound was missing from `.hold` until device
+    /// 2026-08-21 landed beyond the content and stayed there, with nothing downstream to bring it
+    /// back — a jump to the newest message in a chat would land in exactly the same place.
+    ///
+    /// - Parameters:
+    ///   - anchor: 0 puts the row's top at the top of the visible area, 0.5 centres it, 1 puts its
+    ///     bottom at the bottom. Only the vertical component is used; the transcript does not scroll
+    ///     horizontally.
+    static func rowOffset(
+        rowMinY: CGFloat,
+        rowHeight: CGFloat,
+        anchor: CGFloat,
+        contentHeight: CGFloat,
+        viewportHeight: CGFloat,
+        bottomInset: CGFloat
+    ) -> CGFloat {
+        let visibleHeight = max(0, viewportHeight - bottomInset)
+        let target = rowMinY - (visibleHeight - rowHeight) * anchor
+        let bottom = bottomOffset(
+            contentHeight: contentHeight,
+            viewportHeight: viewportHeight,
+            bottomInset: bottomInset
+        )
+        return min(bottom, max(0, target))
+    }
+
     /// - Parameters:
     ///   - anchorShift: how far the held row moved in content coordinates during this pass, or nil
     ///     when there is no held row or its frame is not known yet. This is the exact measurement
@@ -52,13 +91,24 @@ enum TranscriptOffsetPolicy {
     ///     a photo finishing its decode above the reader are the same event, and the anchor sees
     ///     both. Comparing content heights cannot — growth above and growth below produce the same
     ///     number.
+    ///   - previousViewportHeight: the scroll view's height on the previous pass, and
+    ///     `previousBottomInset` the inset it carried then. Both are here because rule 2 asked the
+    ///     wrong question until 2026-08-22: it watched the content for growth, when what it actually
+    ///     needs to know is whether *the place the tail sits* moved. The keyboard moves it without
+    ///     touching the content at all — it shrinks the viewport — and a follower therefore kept an
+    ///     offset that was correct for the taller screen, so the keyboard came up over the last
+    ///     messages and the reader had to scroll down by hand to see what they had just sent. The
+    ///     composer growing a line does the same thing through `bottomInset`. Three inputs, one
+    ///     question.
     static func action(
         mode: ChatViewport.Mode,
         layoutPrimed: Bool,
         contentHeight: CGFloat,
         previousContentHeight: CGFloat,
         viewportHeight: CGFloat,
+        previousViewportHeight: CGFloat,
         bottomInset: CGFloat,
+        previousBottomInset: CGFloat,
         currentOffsetY: CGFloat,
         anchorShift: CGFloat?
     ) -> Action {
@@ -78,15 +128,31 @@ enum TranscriptOffsetPolicy {
 
         switch mode {
         case .following:
-            // 2. Following means the newest message is visible. The content grew, so the bottom
-            //    moved, so the offset follows it. No timer, no series, no animation.
-            guard contentHeight != previousContentHeight else { return .none }
+            // 2. Following means the newest message is visible, so the offset goes wherever the
+            //    bottom went. Edge-triggered on all three things that move it — the content growing,
+            //    the viewport shrinking (the keyboard), the inset growing (the composer) — rather
+            //    than on the offset disagreeing with `bottom`, which would also fire mid-bounce and
+            //    fight the rubber band. No timer, no series, no animation.
+            let moved = contentHeight != previousContentHeight
+                || viewportHeight != previousViewportHeight
+                || bottomInset != previousBottomInset
+            guard moved else { return .none }
             return .land(offsetY: bottom)
 
         case .readingHistory:
             // 3. Somebody is reading. Whatever grew above them must not move them.
             guard let shift = anchorShift, shift != 0 else { return .none }
-            return .hold(offsetY: max(0, currentOffsetY + shift))
+            // Clamped at both ends, because a shift is a *correction* and a correction cannot take
+            // the viewport somewhere scrolling could not. Only the lower bound was here, and the
+            // upper one is what device 2026-08-21 landed past: the transcript sat with its last
+            // message near the top of the screen and a screenful of void beneath it, and stayed
+            // there — offset beyond the end is not a place `bottomOffset` can produce, so nothing
+            // downstream brings it back.
+            //
+            // It went unnoticed until the day `anchorShift` was first delivered at all: this branch
+            // could only return `.none` while `bindHistoryPosition` had no callers, so the missing
+            // bound had nothing to be missing from.
+            return .hold(offsetY: min(bottom, max(0, currentOffsetY + shift)))
         }
     }
 }

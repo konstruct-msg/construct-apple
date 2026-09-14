@@ -97,7 +97,7 @@ struct SettingsView: View {
             .frame(maxWidth: settingsContentMaxWidth)
             .frame(maxWidth: .infinity)
             .ctBackground()
-            .toolbar(.hidden, for: .navigationBar)
+            .hideSystemNavBar()
             .onAppear {
                 viewModel.setContext(viewContext)
                 if viewModel.needsUserInfoRefresh(from: authViewModel) {

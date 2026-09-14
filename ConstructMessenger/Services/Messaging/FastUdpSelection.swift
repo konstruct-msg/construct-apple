@@ -21,20 +21,20 @@ enum FastUdpSelection {
 
     /// Should this stream open skip fast-UDP (native H3 / engine-QUIC) and go straight to H2?
     ///
-    /// - `h3Enabled` / `experimentalQuic`: the two feature flags that can supply a fast-UDP
-    ///   carrier. With neither, there is nothing to choose.
+    /// - `experimentalQuic`: the feature flag that supplies the fast-UDP carrier. Without it
+    ///   there is nothing to choose. It used to take an `h3Enabled` alongside this, for a native
+    ///   Swift H3 stack that was statically off from May and deleted 2026-08-21.
     /// - `oneShotFallback`: `shouldFallbackToH2Direct` — the previous attempt asked for H2 on the
     ///   next open specifically. Consumed by the caller, not remembered here.
     /// - `failedThisSession`: fast-UDP already failed to open in this session. In memory, cleared
     ///   on a network path change, on an explicit transport toggle, and when QUIC delivers real
     ///   server data.
     static func useH2Fallback(
-        h3Enabled: Bool,
         experimentalQuic: Bool,
         oneShotFallback: Bool,
         failedThisSession: Bool
     ) -> Bool {
-        if !h3Enabled && !experimentalQuic { return true }
+        if !experimentalQuic { return true }
         return oneShotFallback || failedThisSession
     }
 }

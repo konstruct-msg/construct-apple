@@ -23,6 +23,8 @@ import ImageIO
 
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 
 enum ImageDownsampler {
@@ -44,12 +46,19 @@ enum ImageDownsampler {
         return min(cap, Int((points * scale).rounded(.up)))
     }
 
-    #if canImport(UIKit)
     /// Decode `data` so its longest side is at most `maxPixelSize` pixels.
     ///
     /// Returns nil only when the data is not a decodable image — a caller that gets nil should
-    /// treat it exactly as it treated `UIImage(data:)` returning nil.
-    static func image(from data: Data, maxPixelSize: Int = bubbleMaxPixelSize) -> UIImage? {
+    /// treat it exactly as it treated `PlatformImage(data:)` returning nil.
+    ///
+    /// **Both platforms.** The decode is CoreGraphics and ImageIO, which are the same on macOS;
+    /// only the wrapper type differs, and `PlatformImage` already names it. This was `#if
+    /// canImport(UIKit)` until 2026-08-27, which made the whole function absent on macOS and the
+    /// unguarded call site in `MediaMessageView` the one thing standing between the desktop target
+    /// and a build. Guarding the *call site* instead would have compiled and been worse: macOS
+    /// would have fallen back to a full-resolution decode, which is the 11.8 MB this file exists
+    /// to avoid, on the platform where a chat window is smaller relative to the photo, not larger.
+    static func image(from data: Data, maxPixelSize: Int = bubbleMaxPixelSize) -> PlatformImage? {
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
             return nil
@@ -67,9 +76,14 @@ enum ImageDownsampler {
         guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else {
             // Not decodable as a thumbnail (some HEIC edge cases). Fall back rather than showing
             // nothing — a large decode is worse than a leak of correctness, not the reverse.
-            return UIImage(data: data)
+            return PlatformImage(data: data)
         }
+        #if canImport(UIKit)
         return UIImage(cgImage: cgImage)
+        #elseif canImport(AppKit)
+        // NSImage needs the size in points; the CGImage is already at the target pixel size, and
+        // passing `.zero` would make it draw at 72 dpi regardless of the screen.
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+        #endif
     }
-    #endif
 }

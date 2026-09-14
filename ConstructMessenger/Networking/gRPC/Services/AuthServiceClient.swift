@@ -312,6 +312,13 @@ final class AuthServiceClient: Sendable {
         let lastSeen: Date
         let createdAt: Date
         let isCurrent: Bool
+        /// The account's primary device, which `RevokeDevice` refuses to remove. Knowing it here
+        /// is what lets the list say so instead of finding out by being refused.
+        let isPrimary: Bool
+        /// `DeviceInfo.sealed_metadata` — the name and platform this device sealed to its
+        /// account's devices. Opaque until `DeviceMetadataService.open` is given our identity key,
+        /// and empty for a device that has not published, or published before we were linked.
+        let sealedMetadata: Data
     }
 
     /// Returns the list of devices linked to the current account.
@@ -328,15 +335,28 @@ final class AuthServiceClient: Sendable {
                     let deviceId = di.device.deviceID
                     devices.append(LinkedDevice(
                         id: deviceId,
+                        // No synthesised id in the name. `ListDevices` returns `device_name`
+                        // empty for every device — the server stores none — so this branch is not
+                        // a fallback, it is what every row gets, and it used to spell the device
+                        // id's **last** eight characters while the row below spells its **first**
+                        // eight. One value, two fragments, in two formats, at opposite ends of the
+                        // same row: they read as two different identifiers and neither matches a
+                        // log line. The id belongs in one place, and it is there.
                         name: di.deviceName.isEmpty
-                            ? "Device …\(deviceId.suffix(8))"
+                            ? NSLocalizedString("device_unnamed", comment: "")
                             : di.deviceName,
                         platform: di.platform,
+                        // `platform` and `deviceName` above are always empty on the wire — the
+                        // server holds neither, by design. Both really come from
+                        // `sealedMetadata`, which only this account can open; these two stay for
+                        // the day a federated peer sends something.
                         lastSeen: di.lastSeen > 0
                             ? Date(timeIntervalSince1970: TimeInterval(di.lastSeen))
                             : Date(timeIntervalSince1970: TimeInterval(di.createdAt)),
                         createdAt: Date(timeIntervalSince1970: TimeInterval(di.createdAt)),
-                        isCurrent: di.isCurrent
+                        isCurrent: di.isCurrent,
+                        isPrimary: di.isPrimary,
+                        sealedMetadata: di.sealedMetadata
                     ))
                 }
                 return devices
@@ -344,7 +364,33 @@ final class AuthServiceClient: Sendable {
         }
     }
 
-    /// Revoke (remotely log out) a device. Cannot revoke the current device.
+    /// Revoke (remotely log out) a device.
+    ///
+    /// The server refuses the account's **primary** device with `FAILED_PRECONDITION`, not the
+    /// *current* one — deactivation is irreversible there (an inactive device cannot
+    /// authenticate, and nothing sets `is_active` back), so revoking the device that owns the
+    /// passwordless identity would end the account. Revoking the current device is allowed and
+    /// blocklists this caller's own token.
+    ///
+    /// This comment said "cannot revoke the current device" until 2026-09-01. It was never true,
+    /// and reading it as the contract is what sent one investigation down the wrong path: the
+    /// server had no primary-device guard at all, which is the defect it hid.
+    /// Store this device's sealed name and platform.
+    ///
+    /// Writes only the row named by our own token: a device cannot set another device's metadata,
+    /// including its own account's. Over 1 KiB is `INVALID_ARGUMENT` rather than a silent
+    /// truncation, so `DeviceMetadataService` checks the size before calling.
+    func setDeviceMetadata(_ blob: Data) async throws {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.revokeDevice) { grpcClient in
+            let deviceClient = Shared_Proto_Services_V1_DeviceService.Client(wrapping: grpcClient)
+            var request = Shared_Proto_Services_V1_SetDeviceMetadataRequest()
+            request.sealedMetadata = blob
+            _ = try await deviceClient.setDeviceMetadata(request: .init(message: request)) {
+                try $0.message
+            }
+        }
+    }
+
     func revokeDevice(deviceId: String) async throws {
         try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.revokeDevice) { grpcClient in
             let deviceClient = Shared_Proto_Services_V1_DeviceService.Client(wrapping: grpcClient)

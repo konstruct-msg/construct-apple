@@ -97,7 +97,7 @@ final class MessageStreamManager {
 
     /// What to do after `openStream` throws the open-timeout sentinel (`retrying with VEIL`).
     enum OpenTimeoutDisposition: Equatable, Sendable {
-        /// H3 on direct timed out — hop to H2 once without sleeping.
+        /// Fast-UDP on direct timed out — hop to H2 once without sleeping.
         case immediateTransportFailover
         /// Same path / already H2 / VEIL path — exponential backoff (no tight immediate loop).
         case exponentialBackoff
@@ -105,17 +105,69 @@ final class MessageStreamManager {
 
     /// Build 587 log: `open timed out — reconnecting` → `reconnecting immediately (VEIL=false)`
     /// on every timeout, including same-path H2, while the app flapped active/background.
-    /// Immediate continue is only for the H3→H2 transport hop; everything else must backoff.
+    /// Immediate continue is only for the fast-UDP→H2 transport hop; everything else must backoff.
     nonisolated static func openTimeoutDisposition(
-        lastTransportWasH3: Bool,
+        lastTransportWasFastUdp: Bool,
         prefersVEIL: Bool,
         routingKeyUnchanged: Bool,
         wasDirectRouting: Bool
     ) -> OpenTimeoutDisposition {
-        if !prefersVEIL, routingKeyUnchanged, wasDirectRouting, lastTransportWasH3 {
+        if !prefersVEIL, routingKeyUnchanged, wasDirectRouting, lastTransportWasFastUdp {
             return .immediateTransportFailover
         }
         return .exponentialBackoff
+    }
+
+    /// The reason string for an interface/topology switch. One spelling, two readers
+    /// (`StreamLifecycleCoordinator` writes it, `livePathChangeAction` matches it).
+    static let networkPathChangeReason = "networkPathChanged"
+
+    /// Whether a routing reconnect must run even though the stream is live on an unchanged key.
+    ///
+    /// `performRoutingReconnect` skips a reconnect when the live stream is already on the current
+    /// routing key — that skip exists for the VEIL probe, which posts a routing change for a
+    /// stream that has already moved, and tearing that down is the dual-accept receipt storm.
+    ///
+    /// A network path change is not that case when the live stream is fast-UDP. The routing key
+    /// names the host (`direct:ams.konstruct.cc:443`), not the interface, so it survives a
+    /// WiFi↔cellular handoff unchanged — while the QUIC connection underneath it does not: its
+    /// socket now answers at an address the peer cannot reach, and quinn is not asked to migrate.
+    /// The 2026-08-24 log is the whole shape in four lines — 09:43:19 `connected in 85ms`,
+    /// 09:43:26 path change → `already live, skipping`, 09:43:40 `tx_pkts=42 rx_pkts=16` climbing
+    /// on tx alone, 09:44:01 idle `Timeout` → `stream_failure` → QUIC off for the rest of the
+    /// session. Thirty-five seconds of a stream that reported itself healthy and carried nothing.
+    ///
+    /// H2 keeps the skip: TCP either survives the handoff or fails loudly, and that case belongs
+    /// to the heartbeat watchdog.
+    ///
+    /// Since 2026-08-24 the fast-UDP case is `.migrate` rather than `.reconnect`. QUIC addresses a
+    /// connection by connection ID, so the handover need not cost it anything — quinn just has to
+    /// be told, which `QuicChannel.rebind()` now does. Reconnecting stays the fallback and runs
+    /// whenever the migration is not confirmed, so the worst case is the old behaviour plus one
+    /// connect budget.
+    enum LivePathChangeAction: Equatable {
+        /// Leave the live stream alone. The routing key moved for a reason that does not
+        /// invalidate it (the VEIL probe), and tearing it down is the dual-accept receipt storm.
+        case skip
+        /// Try to carry the QUIC connection onto the new path; reconnect only if that fails.
+        case migrate
+        /// Tear down and reopen.
+        case reconnect
+    }
+
+    /// The reason a reconnect carries when it is the fallback of a migration that was not
+    /// confirmed. It exists so the retry cannot be answered with another migration attempt: the
+    /// same call re-enters this method, and without a distinct reason a live stream on an unchanged
+    /// key would read as `.skip` and the fallback would silently do nothing.
+    static let migrationDeclinedReason = "networkPathChanged:migrationDeclined"
+
+    nonisolated static func livePathChangeAction(
+        reason: String,
+        liveStreamIsFastUdp: Bool
+    ) -> LivePathChangeAction {
+        if reason == migrationDeclinedReason { return .reconnect }
+        guard reason == networkPathChangeReason else { return .skip }
+        return liveStreamIsFastUdp ? .migrate : .skip
     }
 
     // MARK: - Callbacks
@@ -135,7 +187,7 @@ final class MessageStreamManager {
     var heartbeatWatchdogTask: Task<Void, Never>?
     /// True once the server has pushed *any* event since `openStream()` accept.
     /// Reset to false on each new openStream. Drives the first-event watchdog: if
-    /// nothing has arrived from the server within `firstServerEventWatchdogH3` seconds
+    /// nothing has arrived from the server within `firstServerEventWatchdogFastUdp` seconds
     /// (only on H3 — we don't watchdog H2/VEIL this tightly), we treat H3 as silently
     /// broken (DPI dropped UDP after handshake) and force fallback to H2.
     var firstServerEventReceived: Bool = false
@@ -151,7 +203,7 @@ final class MessageStreamManager {
     var shouldFallbackToH2Direct = false
     /// Records whether the most recent `openStream()` call attempted H3 transport.
     /// Used by connectLoop to decide whether to try H2 direct before activating VEIL.
-    var lastStreamTransportWasH3 = false
+    var lastStreamTransportWasFastUdp = false
     /// Fast-UDP (native H3 / engine-QUIC) has failed to open in **this session**.
     ///
     /// One bit, in memory, gone on relaunch and cleared by a network path change. It replaces five
@@ -312,11 +364,47 @@ final class MessageStreamManager {
         // second connect is the dual-accept / receipt storm seen in device logs.
         let currentKey = GRPCChannelManager.shared.currentRoutingKey
         if isConnected, !activeRoutingKey.isEmpty, activeRoutingKey == currentKey {
-            Log.info(
-                "Routing reconnect skipped — already live on \(currentKey) (reason=\(reason))",
-                category: "MessageStream"
-            )
-            return
+            switch Self.livePathChangeAction(
+                reason: reason,
+                liveStreamIsFastUdp: lastStreamTransportWasFastUdp
+            ) {
+            case .skip:
+                Log.info(
+                    "Routing reconnect skipped — already live on \(currentKey) (reason=\(reason))",
+                    category: "MessageStream"
+                )
+                return
+
+            case .migrate:
+                // The stream is untouched while this runs. On success it keeps running and nothing
+                // else happens; on failure we land back here with the reconnect we would have done
+                // immediately, one connect budget later.
+                Log.info(
+                    "Path changed on \(currentKey) — asking QUIC to migrate before reconnecting",
+                    category: "MessageStream"
+                )
+                #if os(iOS)
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if await GRPCChannelManager.shared.migrateEngineQuicConnection() {
+                        PerformanceMetrics.shared.record(.quicPathMigration, label: "migrated")
+                        Log.info(
+                            "QUIC migrated across the path change — stream kept on \(currentKey)",
+                            category: "MessageStream"
+                        )
+                        return
+                    }
+                    PerformanceMetrics.shared.record(.quicPathMigration, label: "reconnected")
+                    self.performRoutingReconnect(reason: Self.migrationDeclinedReason)
+                }
+                return
+                #else
+                break
+                #endif
+
+            case .reconnect:
+                break
+            }
         }
         let ids = subscriptionUserIds
         guard !ids.isEmpty || subscriptionUserIds.isEmpty else {
@@ -517,7 +605,7 @@ final class MessageStreamManager {
         // Do not clear `fastUdpFailedThisSession` / `shouldFallbackToH2Direct` — fast-UDP health
         // is session state, not stream-instance state. A network path change clears it; the end of
         // one stream does not.
-        lastStreamTransportWasH3 = false
+        lastStreamTransportWasFastUdp = false
         continuousFailureStreakStart = nil
         isInDegradedMode = false
         Log.info("MessageStream disconnected", category: "MessageStream")
@@ -669,10 +757,10 @@ final class MessageStreamManager {
                 // A clean end on fast-UDP re-arms it; a clean end on H2 does not. H2 was chosen
                 // *because* QUIC failed, so treating that as evidence about QUIC would re-probe a
                 // dead transport on every reconnect and pay the handshake timeout each time.
-                if lastStreamTransportWasH3 {
+                if lastStreamTransportWasFastUdp {
                     fastUdpFailedThisSession = false
                 }
-                lastStreamTransportWasH3 = false
+                lastStreamTransportWasFastUdp = false
                 continuousFailureStreakStart = nil
                 isInDegradedMode = false
                 try await Task.sleep(for: .seconds(NetworkTiming.Stream.cleanEndReconnectDelay))
@@ -755,13 +843,13 @@ final class MessageStreamManager {
                         routingKeyAtLoopStart: routingKeyAtLoopStart,
                         error: rpcError
                     )
-                    if lastStreamTransportWasH3 {
+                    if lastStreamTransportWasFastUdp {
                         noteFastUdpOpenFailure(context: "accept_timeout")
                     }
                     let routingKeyNow = GRPCChannelManager.shared.currentRoutingKey
                     let nowUsingVEIL = await TransportRouter.shared.snapshot().state.prefersVEIL
                     let disposition = Self.openTimeoutDisposition(
-                        lastTransportWasH3: lastStreamTransportWasH3,
+                        lastTransportWasFastUdp: lastStreamTransportWasFastUdp,
                         prefersVEIL: nowUsingVEIL,
                         routingKeyUnchanged: routingKeyNow == routingKeyAtLoopStart,
                         wasDirectRouting: routingKeyAtLoopStart.hasPrefix("direct:")
@@ -805,7 +893,7 @@ final class MessageStreamManager {
                         // Same path already timed out (often H2 after flaky network / app thrash).
                         // Fall through to the shared backoff sleep — do not tight-loop openStream.
                         shouldFallbackToH2Direct = false
-                        lastStreamTransportWasH3 = false
+                        lastStreamTransportWasFastUdp = false
                         Log.info(
                             "MessageStream open timed out on same path (VEIL=\(nowUsingVEIL)) — applying backoff",
                             category: "MessageStream"
@@ -824,7 +912,7 @@ final class MessageStreamManager {
                         routingKeyAtLoopStart: routingKeyAtLoopStart,
                         error: error
                     )
-                    if lastStreamTransportWasH3 {
+                    if lastStreamTransportWasFastUdp {
                         // First open failure → next connectLoop iteration uses H2 immediately
                         // (shouldFallbackToH2Direct), without waiting for a second full QUIC
                         // handshake timeout (often 3s each) before the stream is usable.
@@ -1017,7 +1105,7 @@ final class MessageStreamManager {
         error: Error? = nil
     ) async {
         let method = streamMethod(
-            wasH3: lastStreamTransportWasH3 || routingKeyAtLoopStart.hasPrefix("engine-quic:"),
+            wasH3: lastStreamTransportWasFastUdp || routingKeyAtLoopStart.hasPrefix("engine-quic:"),
             routingKey: routingKeyAtLoopStart,
             via: via
         )

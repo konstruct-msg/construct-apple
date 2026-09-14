@@ -146,6 +146,10 @@ class ChatViewModel {
         }
     }
 
+    func sendReaction(_ message: Message, emoji: String = ReactionReducer.likeEmoji) {
+        sendCoordinator.sendReaction(message, emoji: emoji)
+    }
+
     func retryMessage(_ message: Message) {
         sendCoordinator.retryMessage(message)
     }

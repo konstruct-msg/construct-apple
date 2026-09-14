@@ -64,18 +64,16 @@ struct Construct_DesktopApp: App {
                     await VeilProxyManager.shared.startIfEnabled()
                     await TransportRouter.shared.bootstrap()
 
-                    if authViewModel.isAuthenticated,
-                       let deviceId = KeychainManager.shared.loadDeviceID() {
-                        await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
-                        await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
-                        Log.debug("Desktop launch bootstrap — PQC + hybrid identity checks complete", category: "Desktop")
-                    }
+                    // Post-auth key maintenance lives in AuthViewModel; this task can run before
+                    // async session restore completes.
                     _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
 
-                    // WebRTC warming is guarded; calls remain iOS-only for now.
-                    #if canImport(WebRTC)
-                    WebRTCRuntime.bootstrap()
-                    #endif
+                    // Calls remain iOS-only while the protocol is being stabilized.
+                    if CallsFeature.isEnabled {
+                        #if canImport(WebRTC)
+                        WebRTCRuntime.bootstrap()
+                        #endif
+                    }
 
                     // Touch STT early on Desktop too so WhisperModelManager runs reconcileModels()
                     // (recovers models after app updates / reinstalls).

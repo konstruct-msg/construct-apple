@@ -43,9 +43,23 @@ final class TokenSpendUnit {
         self.spendId = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
     }
 
-    /// Test seam. Production always randomises.
+    /// Adopts an existing id instead of minting one. Used by `TokenSpendUnitStore.paidUnit` to
+    /// rebuild the unit of a message being retried, and by tests that need a fixed id.
     init(spendId: Data) {
         self.spendId = spendId
+    }
+
+    /// The unit of a message that already paid, rebuilt for a retry.
+    ///
+    /// Marked paid on purpose: the redemption it rides on happened on the original send, and the
+    /// server keeps `pp:unit:{sha256(spend_id | recipient)}` for two hours. Every envelope of the
+    /// retry therefore carries the id and buys nothing. If the server's record is gone after all,
+    /// enforce answers `privacy_pass:` and `StealthSendRecovery` calls `invalidatePayment()` — the
+    /// same one-shot path that already covers a unit the server never wrote.
+    static func restoredPaid(spendId: Data) -> TokenSpendUnit {
+        let unit = TokenSpendUnit(spendId: spendId)
+        unit.markPaid()
+        return unit
     }
 
     /// Should the envelope being built right now attempt to spend a token?
@@ -65,6 +79,41 @@ final class TokenSpendUnit {
     /// must not change.
     static func forEnvelopeCount(_ envelopeCount: Int) -> TokenSpendUnit? {
         envelopeCount > 1 ? TokenSpendUnit() : nil
+    }
+
+    /// One unit for one logical message, whatever it costs in envelopes.
+    ///
+    /// `forEnvelopeCount` returns nil below two envelopes to leave single-envelope sends on the
+    /// legacy per-envelope shape. That guard was written as rollout caution and it cost the whole
+    /// feature: measured 2026-09-11, `covered by unit` appears **zero** times in 71 spends across
+    /// two devices, because the two call sites each size from a device count that reads 1 (the
+    /// primary send asks `PeerDeviceRegistry`, which only `KeyServiceClient` ever writes; the
+    /// fan-out asks `planned.count`, already minus the device the primary send covered). So
+    /// `token_spend_id` has never been sent in production at all.
+    ///
+    /// Minting unconditionally is safe, and the server says why: with a spend id present and no
+    /// unit open, `redeem_token_checked` falls through `UnitLookup::NeedToken` to exactly the same
+    /// `redeem_token` call the legacy path makes, then opens the unit. The first envelope's
+    /// outcome is unchanged; the only difference is a Redis key that lets the *second* envelope —
+    /// a fan-out copy, or a retry nine minutes later — cost nothing.
+    static func forMessage() -> TokenSpendUnit {
+        TokenSpendUnit()
+    }
+
+    /// How many wire envelopes one logical message costs **at one recipient account**: every
+    /// chunk, to every device of that account.
+    ///
+    /// Lifted out of the call sites because it is the whole decision. Sized per *path* it was
+    /// wrong in a way nothing could see: the primary send counted chunks and the fan-out counted
+    /// devices, so a one-chunk message to a two-device peer looked like one envelope from both
+    /// sides, minted no unit on either, and paid two tokens for one message. Measured 2026-09-10:
+    /// 6 of 31 spends on one device were fan-out copies of a message already paid for.
+    ///
+    /// `nonisolated` so a test can ask without the main actor. The clamps are not defensive
+    /// decoration — a zero device count is what an empty local registry returns, and multiplying
+    /// by it would silently drop the unit for every send.
+    nonisolated static func envelopeCount(chunkCount: Int, recipientDeviceCount: Int) -> Int {
+        max(1, chunkCount) * max(1, recipientDeviceCount)
     }
 
     /// Should the envelope being built attempt to spend a token?

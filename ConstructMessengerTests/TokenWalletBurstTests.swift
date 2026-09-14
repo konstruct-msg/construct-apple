@@ -130,4 +130,80 @@ final class TokenWalletBurstTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - Banking the wallet ahead of demand
+
+    /// The 2026-08-19 case, and the reason the bank target exists. The wallet used to stop filling
+    /// at 20, so a burst emptied it inside one batch and every send afterwards raced the issuer's
+    /// 120/hr rate limit. At 20 tokens banked there is still budget to draw — the trigger must not
+    /// call it done.
+    func testWalletKeepsFillingPastTheOldLowWaterMark() {
+        XCTAssertEqual(
+            BlindTokenService.bootstrapAction(balance: 20, isReplenishing: false,
+                                              backoffUntil: nil, now: now),
+            .bank,
+            "20 was the old stopping point; stopping there is the defect"
+        )
+    }
+
+    /// A buffer that holds less than one batch cannot absorb a burst at all — the first send after
+    /// it drains is straight back to racing the rate limiter. Bounds the constant, not the code
+    /// path, which is why it asserts a relation rather than a number.
+    func testBankTargetIsDeeperThanOneBatch() {
+        XCTAssertGreaterThan(BlindTokenService.bankTarget, BlindTokenService.batchSize)
+    }
+
+    /// Banking stops at the target. Without this the trigger would pull batches until the server
+    /// refused, turning our own top-up into the thing that arms the full-hour back-off.
+    func testBankingStopsAtTheTarget() {
+        XCTAssertEqual(
+            BlindTokenService.bootstrapAction(balance: BlindTokenService.bankTarget,
+                                              isReplenishing: false, backoffUntil: nil, now: now),
+            .skip
+        )
+    }
+
+    /// Only a cold wallet may bypass pacing. A half-full one is banking, and banking is never
+    /// urgent — if it bypassed pacing too, every foreground would hammer the issuer.
+    func testOnlyAColdWalletBypassesPacing() {
+        XCTAssertEqual(
+            BlindTokenService.bootstrapAction(balance: 0, isReplenishing: false,
+                                              backoffUntil: nil, now: now),
+            .coldStart
+        )
+        XCTAssertEqual(
+            BlindTokenService.bootstrapAction(balance: BlindTokenService.coldStartMark,
+                                              isReplenishing: false, backoffUntil: nil, now: now),
+            .bank,
+            "at the cold-start mark the wallet is no longer cold"
+        )
+    }
+
+    /// The issuer's refusal outranks banking: re-asking inside the back-off cannot succeed, and
+    /// unlike a send with nothing in the wallet, nothing is waiting on the answer.
+    func testIssuerRefusalStopsBanking() {
+        XCTAssertEqual(
+            BlindTokenService.bootstrapAction(balance: 0, isReplenishing: false,
+                                              backoffUntil: future, now: now),
+            .skip
+        )
+        XCTAssertEqual(
+            BlindTokenService.bootstrapAction(balance: 0, isReplenishing: false,
+                                              backoffUntil: past, now: now),
+            .coldStart,
+            "an expired back-off must not keep the wallet empty"
+        )
+    }
+
+    /// A batch already in flight is never joined by a second one, at any depth.
+    func testBatchInFlightNeverStartsASecond() {
+        for balance in [0, BlindTokenService.coldStartMark, 20, BlindTokenService.bankTarget - 1] {
+            XCTAssertEqual(
+                BlindTokenService.bootstrapAction(balance: balance, isReplenishing: true,
+                                                  backoffUntil: nil, now: now),
+                .skip,
+                "wallet=\(balance)"
+            )
+        }
+    }
 }

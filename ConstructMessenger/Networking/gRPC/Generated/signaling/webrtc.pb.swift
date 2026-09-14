@@ -8,6 +8,7 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+import Foundation
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -553,9 +554,23 @@ public struct Shared_Proto_Signaling_V1_IceCandidate: Sendable {
   /// SDP MID (media stream identification)
   public var sdpMid: String = String()
 
-  /// Candidate SDP string
-  /// Example: "candidate:1 1 UDP 2130706431 192.168.1.5 54321 typ host"
-  public var candidate: String = String()
+  /// Candidate, E2EE-encrypted by the sender with the peer's Double Ratchet session.
+  ///
+  /// `bytes`, not `string`, since 2026-08-21. It carries a binary frame
+  /// ([1B version][2B suiteId LE][4B msgNum LE][4B pqEpoch LE][4B pqLen LE][pqField]
+  /// [32B epk][ciphertext]) and a `string` field forced the client to base64 it — which
+  /// is what this repo's own rule forbids: "All `bytes` fields that carry crypto material
+  /// must be `bytes`, not `string`". The plaintext it protects looks like
+  /// "candidate:1 1 UDP 2130706431 192.168.1.5 54321 typ host" — an IP and port.
+  ///
+  /// Field number and wire type are unchanged (both length-delimited), so this is not a
+  /// renumbering. What changed is the interpretation: a client predating the change wrote
+  /// UTF-8 of "ENC:v3:<base64>" here and its bytes will not parse as a frame. Acceptable
+  /// during alpha with a forced update; there is no dual-read.
+  ///
+  /// The server never reads this field — signaling-service forwards IceCandidate as an
+  /// opaque signal.
+  public var candidate: Data = Data()
 
   /// Username fragment (authentication)
   public var usernameFragment: String {
@@ -1189,7 +1204,7 @@ extension Shared_Proto_Signaling_V1_IceCandidate: SwiftProtobuf.Message, SwiftPr
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularUInt32Field(value: &self.sdpMLineIndex) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.sdpMid) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.candidate) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.candidate) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self._usernameFragment) }()
       default: break
       }
@@ -1208,7 +1223,7 @@ extension Shared_Proto_Signaling_V1_IceCandidate: SwiftProtobuf.Message, SwiftPr
       try visitor.visitSingularStringField(value: self.sdpMid, fieldNumber: 2)
     }
     if !self.candidate.isEmpty {
-      try visitor.visitSingularStringField(value: self.candidate, fieldNumber: 3)
+      try visitor.visitSingularBytesField(value: self.candidate, fieldNumber: 3)
     }
     try { if let v = self._usernameFragment {
       try visitor.visitSingularStringField(value: v, fieldNumber: 4)
