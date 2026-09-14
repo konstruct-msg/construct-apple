@@ -44,6 +44,57 @@ final class ReceiptBatchBufferTests: XCTestCase {
         XCTAssertEqual(receipts[0].messageIds, ["msg-1"])
     }
 
+    // MARK: - Piggyback
+
+    /// A real message to Alice takes Alice's receipts with it and leaves Bob's alone. Draining
+    /// everyone would attach Bob's receipt to an action taken in Alice's conversation — which is
+    /// the coupling the grid exists to remove.
+    func testDrainingOneContactLeavesTheOthersBuffered() {
+        var buffer = ReceiptBatchBuffer()
+        buffer.add(messageId: "a-1", to: alice)
+        buffer.add(messageId: "b-1", to: bob)
+
+        let receipts = buffer.drain(for: alice)
+
+        XCTAssertEqual(receipts.count, 1)
+        XCTAssertEqual(receipts[0].messageIds, ["a-1"])
+        XCTAssertEqual(buffer.pending, [bob: ["b-1"]], "Bob still waits for his own moment")
+    }
+
+    /// Nothing owed to that contact is not an error, and must not disturb the buffer.
+    func testDrainingAContactWhoIsOwedNothingIsEmpty() {
+        var buffer = ReceiptBatchBuffer()
+        buffer.add(messageId: "b-1", to: bob)
+
+        XCTAssertTrue(buffer.drain(for: alice).isEmpty)
+        XCTAssertEqual(buffer.pending, [bob: ["b-1"]])
+    }
+
+    /// The chunk ceiling applies to the piggyback path too — a storm answered while sending a
+    /// message must not become one oversized ciphertext.
+    func testPiggybackSplitsAStormIntoTheSameChunks() {
+        var buffer = ReceiptBatchBuffer()
+        for i in 0..<130 { buffer.add(messageId: "msg-\(i)", to: alice) }
+
+        let receipts = buffer.drain(for: alice)
+
+        XCTAssertEqual(receipts.count, 3, "130 ids at 64 per receipt")
+        XCTAssertEqual(receipts.reduce(0) { $0 + $1.messageIds.count }, 130)
+        XCTAssertTrue(buffer.isEmpty)
+    }
+
+    /// Re-adding after a per-contact drain must work: the dedupe set is cleared with the ids, so a
+    /// message redelivered after the piggyback is owed a receipt again.
+    func testAContactCanAccumulateAgainAfterBeingDrained() {
+        var buffer = ReceiptBatchBuffer()
+        buffer.add(messageId: "a-1", to: alice)
+        _ = buffer.drain(for: alice)
+
+        buffer.add(messageId: "a-1", to: alice)
+
+        XCTAssertEqual(buffer.pending, [alice: ["a-1"]])
+    }
+
     // MARK: - Separation
 
     /// Both peers replay at once — the run that produced this had 4211 dispatches split across two

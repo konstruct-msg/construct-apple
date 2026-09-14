@@ -185,7 +185,10 @@ enum MessageStreamParser {
             Log.error("Stream error: \(error.errorCode) - \(error.errorMessage)", category: "MessageStream")
             return nil
         case .presence(let update):
-            Log.debug("Presence: \(update.userID)", category: "MessageStream")
+            // We no longer subscribe (`includePresence = false`). A server that pushes one anyway
+            // is either older or ignoring the flag — drop it without a per-update log line, which
+            // would otherwise write a contact id into the log for an event we asked not to receive.
+            Log.debug("Presence update ignored (not subscribed): \(update.userID.prefix(8))…", category: "MessageStream")
             return nil
         case .heartbeatAck(let ack):
             Log.debug("Heartbeat ack: server=\(ack.serverTimestamp)", category: "MessageStream")

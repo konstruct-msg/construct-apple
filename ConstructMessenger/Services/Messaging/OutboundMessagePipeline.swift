@@ -57,6 +57,13 @@ final class OutboundMessagePipeline {
         recipientIdentityKey: Data? = nil,
         spendUnit: TokenSpendUnit? = nil
     ) async throws -> SendMessageResponse {
+        // Anything owed to this recipient rides out with the message instead of waiting for the
+        // receipt grid. Receipts are the only traffic this client emits as a reflex to someone
+        // else's action; next to a send the user just made they are timed by the user instead.
+        // Receipts themselves do not come through here — `sendEncryptedDeliveryReceipt` calls the
+        // messaging client directly — so this cannot re-enter.
+        DeliveryReceiptBatcher.shared.flushPiggyback(to: recipientId)
+
         let responses = try await ChunkedMessageSender.shared.sendChunks(
             plan: plan,
             senderId: senderId,

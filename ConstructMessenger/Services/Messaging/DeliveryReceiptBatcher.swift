@@ -54,6 +54,20 @@ struct ReceiptBatchBuffer: Equatable {
         pending[contactId, default: []].append(messageId)
     }
 
+    /// Everything owed to one contact, leaving the rest buffered.
+    ///
+    /// Used when a real message is about to go out to that contact: the receipt rides next to a
+    /// send the user just made, so its timing points at the user's own action rather than at when
+    /// the peer's message landed. Everyone else keeps waiting for the grid — draining them here
+    /// would attach *their* receipts to an action taken in a different conversation.
+    mutating func drain(for contactId: String) -> [(contactId: String, messageIds: [String])] {
+        guard let ids = pending.removeValue(forKey: contactId) else { return [] }
+        seen.removeValue(forKey: contactId)
+        return stride(from: 0, to: ids.count, by: Self.maxIdsPerReceipt).map { chunk in
+            (contactId, Array(ids[chunk..<min(chunk + Self.maxIdsPerReceipt, ids.count)]))
+        }
+    }
+
     /// Everything owed, as the receipts that will carry it. The buffer is left empty.
     ///
     /// Contacts are drained in sorted order for the same reason ids keep arrival order: so the
@@ -80,12 +94,24 @@ final class DeliveryReceiptBatcher {
 
     static let shared = DeliveryReceiptBatcher()
 
-    /// How long ids wait for company.
+    /// How long ids wait for company on the direct path.
     ///
     /// Long enough that a replay burst — which arrives as fast as the stream can decode, tens per
     /// second — collapses into single-digit sends. Short enough that a checkmark on a quiet
     /// one-message conversation is not something anyone notices arriving late.
-    static let flushDelay: TimeInterval = 0.5
+    static let flushDelay: TimeInterval = ReceiptFlushSchedule.directDelay
+
+    /// The grid receipts leave on while the traffic is going through VEIL. Phase is drawn once per
+    /// process, so the instants are ours and not the wall clock's; see `ReceiptFlushSchedule` for
+    /// why quantising beats delaying.
+    private let schedule = ReceiptFlushSchedule.random()
+
+    /// Whether the send should be decoupled from arrival right now.
+    ///
+    /// Read at scheduling time, not at enqueue: a batch started on the direct path and flushed
+    /// after an escalation is a batch that went out early, which is harmless. The reverse — a
+    /// receipt held for 20 seconds on a path where nobody is watching — is only a worse checkmark.
+    private var isCensoredPath: Bool { TransportRouterMirror.shared.isUsingVEIL }
 
     private var buffer = ReceiptBatchBuffer()
     /// The recipient's identity key, resolved on the caller's Core Data queue at enqueue time and
@@ -100,6 +126,11 @@ final class DeliveryReceiptBatcher {
         // A pending batch is a receipt the peer is waiting for, and the throttle has already
         // recorded these ids as sent — so dropping the buffer on suspend loses them for the full
         // 10-minute window. Flush instead.
+        //
+        // This one send is deliberately not on the grid: backgrounding is a user action, so the
+        // frame is coupled to it. The leak is bounded (it says a message arrived since the last
+        // tick) and the observer already sees the tunnel go down a moment later. Losing the
+        // receipt outright is the worse trade.
         lifecycleObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.willResignActiveNotification,
             object: nil,
@@ -135,12 +166,32 @@ final class DeliveryReceiptBatcher {
 
     private func scheduleFlush() {
         guard flushTask == nil else { return }
+        let delay = isCensoredPath
+            ? schedule.delay(enqueuedAt: Date().timeIntervalSinceReferenceDate)
+            : Self.flushDelay
         flushTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.flushDelay * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }
             self?.flushTask = nil
             self?.send(self?.drain() ?? [])
         }
+    }
+
+    /// A real message is about to go out to `contactId` — send what is owed to them with it.
+    ///
+    /// Called from `OutboundMessagePipeline`. In a live conversation this is what actually delivers
+    /// the checkmark, and it costs nothing: the outgoing frame the observer is about to see is the
+    /// user's own send, so the receipt beside it says nothing the send did not already say. The
+    /// grid timer keeps running for whatever is owed to everyone else.
+    func flushPiggyback(to contactId: String) {
+        let receipts = buffer.drain(for: contactId)
+        guard !receipts.isEmpty else { return }
+        let key = identityKeys.removeValue(forKey: contactId)
+        if buffer.isEmpty {
+            flushTask?.cancel()
+            flushTask = nil
+        }
+        send(receipts.map { ($0.contactId, $0.messageIds, key) })
     }
 
     /// Sends whatever is buffered right now, without waiting out the window.

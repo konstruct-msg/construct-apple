@@ -178,7 +178,13 @@ extension MessageStreamManager {
         var subscribeReq = Shared_Proto_Services_V1_MessageStreamRequest()
         var subscribe = Shared_Proto_Services_V1_SubscribeRequest()
         subscribe.conversationIds = subscriptionUserIds
-        subscribe.includePresence = true
+        // Presence stays off. There is no typing indicator, no online dot and no read receipt in
+        // this client by design — `MessageStreamParser` logged the updates at debug and returned
+        // nil, so asking for them bought nothing. What it cost was inbound frames timed to the
+        // moment a *contact* opened their app: a wire event with no product behind it, correlated
+        // to someone else's physical action. See decisions/veil-external-transport-review-2026-09
+        // §2.1.
+        subscribe.includePresence = false
         let resumeCursor = StreamCursorStore.load()
         if let resumeCursor {
             subscribe.sinceCursor = resumeCursor
