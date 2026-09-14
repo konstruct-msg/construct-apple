@@ -56,6 +56,40 @@ struct DesktopChatsListView: View {
             guard shouldFocus else { return }
             consumeSidebarSearchFocus()
         }
+        // ⌘J / ⌘K / ⌘1…9 are posted by the command bridge in DesktopRootView, which cannot answer
+        // them: "the next chat" means the next one *as displayed*, and the order — pinned first,
+        // then by last message, minus whatever the search box is filtering out — exists only here.
+        // Until this observer the three notifications had no listener at all and the shortcuts
+        // silently did nothing.
+        .onReceive(NotificationCenter.default.publisher(for: .desktopSelectNextChat)) { _ in
+            selectChat(step: 1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .desktopSelectPrevChat)) { _ in
+            selectChat(step: -1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .desktopJumpToChat)) { note in
+            guard let index = note.object as? Int else { return }
+            jumpToChat(index: index)
+        }
+    }
+
+    // MARK: - Keyboard navigation
+
+    /// The ids of the rows on screen, in the order they are drawn — pinned first, then by last
+    /// message, minus whatever the search box is hiding. This ordering is the reason the keyboard
+    /// shortcuts are answered here and not in `DesktopRootView`, which posts them.
+    private var visibleChatIds: [String] { filteredChats.map(\.id) }
+
+    private func selectChat(step: Int) {
+        guard let next = ChatListNavigation.step(
+            from: chatsViewModel.chatToOpen, by: step, in: visibleChatIds
+        ) else { return }
+        chatsViewModel.chatToOpen = next
+    }
+
+    private func jumpToChat(index: Int) {
+        guard let target = ChatListNavigation.jump(to: index, in: visibleChatIds) else { return }
+        chatsViewModel.chatToOpen = target
     }
 
     // MARK: - Nav Bar

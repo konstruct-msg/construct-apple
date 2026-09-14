@@ -284,6 +284,14 @@ struct DesktopRootView: View {
         } else if let chatId = chatsViewModel.chatToOpen,
                   let chat = fetchChat(id: chatId) {
             DesktopChatView(chat: chat, context: viewContext)
+                // Identity, not decoration. `DesktopChatView` seeds its `ChatViewModel` and every
+                // editing scrap — draft text, reply target, selection, search — from `@State`, and
+                // `@State` takes its initial value once per identity. The detail column keeps the
+                // same structural position when `chatToOpen` changes, so with no explicit id
+                // SwiftUI reuses the node: the model still points at whichever chat was opened
+                // first, and clicking a different row changes nothing on screen. iOS never hit this
+                // because it pushes onto a NavigationStack, where every push is a new identity.
+                .id(chatId)
                 .ignoresSafeArea(.container, edges: .top) // ensure custom glass nav is flush to the top of the split detail column
                 .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
                     handleDrop(providers: providers, into: chat)
