@@ -1394,10 +1394,9 @@ final class MessageRouter {
             if case .messageDecrypted(_, _, let plaintext) = action {
                 // The action names the peer by device, because that is what the core keeps the
                 // session under. Everything downstream of here — the transcript, the chat row,
-                // the receipt — is keyed by account, and this function was called with that
-                // account id. Taking the action's contact id would file the message under a
-                // device nothing else in the app knows about.
-                let resolvedSender = otherUserId
+                // the receipt, the intake key — is keyed by account, and this function was called
+                // with that account id. Taking the action's contact id would file the message
+                // under a device nothing else in the app knows about.
                 checkUsernameUpdate(for: otherUserId, chat: chat, in: context)
 
                 // Client-side block enforcement (decrypt-but-suppress). The ratchet has
@@ -1409,9 +1408,9 @@ final class MessageRouter {
                 // client drop is the load-bearing block. The server stream cursor still advances
                 // (.durable) + markProcessed dedups, so the queue drains and there is no redelivery.
                 // See decisions/sealed-sender-authenticated-transitional.md.
-                if BlockedContacts.isBlocked(resolvedSender, in: context) {
+                if BlockedContacts.isBlocked(otherUserId, in: context) {
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-                    Log.info("SECURITY[block_drop]: suppressed message \(message.id.prefix(8))… from blocked \(resolvedSender.prefix(8))… (ratchet advanced; no store/notify/receipt)", category: "MessageRouter")
+                    Log.info("SECURITY[block_drop]: suppressed message \(message.id.prefix(8))… from blocked \(otherUserId.prefix(8))… (ratchet advanced; no store/notify/receipt)", category: "MessageRouter")
                     continue
                 }
 
@@ -1427,8 +1426,7 @@ final class MessageRouter {
                 // the never-sealed carriers (heartbeat 13, SENDER_SYNC 23) — none of which reach
                 // this branch framed. See decisions/sealed-content-type-inside-the-plaintext-frame.md.
                 if handleFramedSideChannel(
-                    plaintext, messageId: message.id, from: otherUserId,
-                    resolvedSender: resolvedSender, in: context
+                    plaintext, messageId: message.id, from: otherUserId, in: context
                 ) {
                     continue
                 }
@@ -2413,11 +2411,20 @@ final class MessageRouter {
     ///
     /// An unknown framed type returns false: a peer speaking a newer dialect should reach the body
     /// pipeline rather than vanish.
+    /// `otherUserId` is an **account**, and every branch below depends on that. The
+    /// `.messageDecrypted` action that leads here names the peer by *device*, because that is what
+    /// the core keeps the session under; the caller passes the account instead, deliberately (see
+    /// `executeRustActions`).
+    ///
+    /// Between 2026-09-11 and 2026-09-14 there was a second parameter, `resolvedSender`, carrying
+    /// the same value under a comment explaining why the two had to differ. Both call sites —
+    /// this router and `SessionCoordinator`'s session-init path — passed one value twice. There
+    /// was no path on which they could diverge, so the comment was the only evidence the
+    /// distinction existed: one meaning on two carriers, in a signature, defended in prose.
     func handleFramedSideChannel(
         _ plaintext: Data,
         messageId: String,
         from otherUserId: String,
-        resolvedSender: String,
         in context: NSManagedObjectContext
     ) -> Bool {
         guard let control = ChunkedMessageCodec.controlFrame(plaintext) else { return false }
@@ -2425,7 +2432,7 @@ final class MessageRouter {
         switch ContentTypeRouting.framedSideChannel(for: control.contentType) {
         case .callSignal:
             if let signal = CallManager.decodeSignalProto(from: control.payload) {
-                CallManager.shared.handleCallSignalProto(from: resolvedSender, signal: signal)
+                CallManager.shared.handleCallSignalProto(from: otherUserId, signal: signal)
             } else {
                 Log.error("Call signal frame from \(otherUserId.prefix(8))… failed to decode", category: "MessageRouter")
             }
@@ -2436,10 +2443,14 @@ final class MessageRouter {
             return true
         case .intakeKey:
             // The peer hands us the key their account accepts, so our envelopes to them carry a
-            // tag instead of buying a Privacy Pass token. `resolvedSender` and not `otherUserId`:
-            // under sealed sender the outer name is not the author, and a key filed under the
-            // wrong account is one we would never use and never notice not using.
-            IntakeCredentialService.shared.recordPeerIntakeKey(control.payload, from: resolvedSender)
+            // tag instead of buying a Privacy Pass token.
+            //
+            // Filed by ACCOUNT, and that is the whole requirement: `sealedTag(forRecipient:)`
+            // looks it up by account, and the tag itself is derived over the recipient's account
+            // id. A key filed under a device id would be one we never find, never use, and —
+            // because a missing credential is a token spent rather than an error — never notice
+            // not using.
+            IntakeCredentialService.shared.recordPeerIntakeKey(control.payload, from: otherUserId)
             PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
             return true
         case nil:

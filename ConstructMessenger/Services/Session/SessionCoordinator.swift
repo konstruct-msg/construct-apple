@@ -2034,7 +2034,6 @@ final class SessionCoordinator: MessageRouterDelegate {
             decryptedBytes,
             messageId: messageData.id,
             from: messageData.from,
-            resolvedSender: messageData.from,
             in: context
         ) {
             return
