@@ -456,13 +456,14 @@ final class MessagingServiceClient: Sendable {
         // Sealed path gets the same one-shot Privacy-Pass enforce recovery as message bodies
         // (rebuild = fresh token + delivery tag around the same control payload).
         if let sealedInner {
-            return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+            return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
                 guard let ik = await resolveRecipientIK() else { return nil }
                 return try await StealthSenderService.buildSealedInner(
                     recipientUserId: recipientId,
                     recipientIdentityKey: ik,
                     encryptedPayload: controlPayload,
-                    contentType: .sessionReset
+                    contentType: .sessionReset,
+                    afterCredentialRejection: afterCredentialRejection
                 )
             }, send: sendOnce)
         }

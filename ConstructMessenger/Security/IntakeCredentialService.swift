@@ -46,6 +46,11 @@ enum IntakeTagAbsence: String {
     /// The server's X25519 key was unavailable, so the tag could not be sealed. Sending it in the
     /// clear is not an option — any relay on the path could harvest and spend it.
     case sealingFailed = "sealing_failed"
+    /// We presented a credential for this peer this epoch and the server did not honour it, so we
+    /// have stopped offering it. Their published window has a hole, or their key rotated and the
+    /// copy we hold is stale. Measured 2026-09-14: 17 `unrecognised` against 8 `vouched`, and
+    /// every one of those 17 cost an extra round trip before this existed.
+    case rejectedThisEpoch = "rejected_this_epoch"
 
     /// Classify what the Keychain gave us, or nil when the key is usable.
     ///
@@ -64,6 +69,11 @@ enum IntakeTagAbsence: String {
             // Debug, not info: this fires on every send to every peer who has not written to us,
             // and at info it would drown the category it is meant to make readable.
             Log.debug("Intake: no credential for \(peer)… (\(rawValue)) — this envelope pays a token", category: "Intake")
+        case .rejectedThisEpoch:
+            // Info, not error: the mechanism is working as designed — it tried, was refused, and
+            // stopped. Worth one line per peer per epoch because a peer that stays here is a peer
+            // whose publishing is broken, and nothing else on this device would say so.
+            Log.info("Intake: credential for \(peer)… was refused this epoch — paying tokens until it rolls", category: "Intake")
         case .storedKeyWrongSize, .derivationFailed, .sealingFailed:
             Log.error("Intake: cannot build a credential for \(peer)… (\(rawValue)) — this envelope pays a token", category: "Intake")
         }
@@ -121,6 +131,9 @@ final class IntakeCredentialService {
     /// item would be a second copy of the contact graph in a store that has no reason to carry one.
     private static let sentToKey = "construct.intake.sentTo.v1"
     private static let lastPublishedEpochKey = "construct.intake.lastPublishedEpoch.v1"
+    /// Peers whose credential the server refused, keyed by account, valued by the epoch it was
+    /// refused in. Not persisted beyond UserDefaults and not secret — same reasoning as `sentToKey`.
+    private static let rejectedKey = "construct.intake.rejected.v1"
 
     private init() {}
 
@@ -199,6 +212,15 @@ final class IntakeCredentialService {
     /// on the device that paid — which is exactly the question asked of the 09-13 stretch where
     /// the server counted 8 envelopes as `absent` and nobody could say which cause it was.
     func sealedTag(forRecipient accountId: String, now: Date = Date()) async -> Data? {
+        let epoch = intakeEpoch(unixSeconds: UInt64(now.timeIntervalSince1970))
+        // Asked before the Keychain read: a credential the server refused this epoch is not worth
+        // deriving, and offering it again would buy the same rejection plus a retry on every
+        // single send to this peer.
+        if isRejected(accountId, inEpoch: epoch) {
+            IntakeTagAbsence.rejectedThisEpoch.log(peer: accountId)
+            return nil
+        }
+
         let stored = keychain.loadPeerIntakeKey(forAccount: accountId)
         if let reason = IntakeTagAbsence.forStoredKey(stored) {
             reason.log(peer: accountId)
@@ -207,7 +229,6 @@ final class IntakeCredentialService {
         // `forStoredKey` returning nil is exactly the statement that this is a usable 32-byte key.
         guard let key = stored else { return nil }
 
-        let epoch = intakeEpoch(unixSeconds: UInt64(now.timeIntervalSince1970))
         guard let tag = try? intakeTag(
             intakeKey: [UInt8](key), recipientAccountId: accountId, epoch: epoch
         ) else {
@@ -222,6 +243,41 @@ final class IntakeCredentialService {
             return nil
         }
         return sealed
+    }
+
+    // MARK: - When the server does not honour a credential
+
+    /// The server refused an envelope that carried this peer's credential — stop offering it until
+    /// the epoch rolls.
+    ///
+    /// A Privacy Pass rejection on an envelope that paid with a credential is proof the credential
+    /// was not accepted: had it been, the server would not have looked at tokens at all. The cause
+    /// is on the recipient's side — a hole in their published window, or a rotation that left our
+    /// copy of their key stale — and neither is something this device can fix or should keep
+    /// re-testing once per message.
+    ///
+    /// Scoped to the epoch because that is the lifetime of the thing that failed. A peer who
+    /// publishes tomorrow is vouched again tomorrow, with no cache to clear and nothing to reset.
+    func noteCredentialRejected(forRecipient accountId: String, now: Date = Date()) {
+        let epoch = intakeEpoch(unixSeconds: UInt64(now.timeIntervalSince1970))
+        var rejected = rejectedEpochs()
+        // Prune while we are here: entries for past epochs are dead weight, and this is the only
+        // moment the map is written.
+        rejected = rejected.filter { $0.value >= epoch }
+        rejected[normalise(accountId)] = epoch
+        defaults.set(rejected, forKey: Self.rejectedKey)
+    }
+
+    /// Is this peer's credential suppressed for `epoch`?
+    func isRejected(_ accountId: String, inEpoch epoch: UInt64) -> Bool {
+        rejectedEpochs()[normalise(accountId)] == epoch
+    }
+
+    private func rejectedEpochs() -> [String: UInt64] {
+        // Stored through UserDefaults, which keeps numbers as NSNumber — read back as a plist
+        // dictionary rather than assuming the Swift type survives the round trip.
+        guard let raw = defaults.dictionary(forKey: Self.rejectedKey) else { return [:] }
+        return raw.compactMapValues { ($0 as? NSNumber)?.uint64Value }
     }
 
     // MARK: - Lazy distribution

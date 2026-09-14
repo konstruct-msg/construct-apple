@@ -1776,12 +1776,13 @@ final class SessionCoordinator: MessageRouterDelegate {
                         encryptedPayload: encryptedPayload,
                         contentType: sealedType
                     )
-                    _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+                    _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
                         try await StealthSenderService.buildSealedInner(
                             recipientUserId: userId,
                             recipientIdentityKey: recipientIK,
                             encryptedPayload: encryptedPayload,
-                            contentType: sealedType
+                            contentType: sealedType,
+                            afterCredentialRejection: afterCredentialRejection
                         )
                     }, send: { inner in
                         try await MessagingServiceClient.shared.sendMessage(

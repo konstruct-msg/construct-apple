@@ -221,7 +221,7 @@ class MessageRetryManager {
         } catch {
             throw StealthDowngradeBlocked(reason: "retry seal failed: \(error)")
         }
-        return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+        return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
             // Reached only on the server's `privacy_pass:` rejection, which for a reused unit means
             // exactly one thing: the redemption we were riding on is not there. Drop the stored id
             // as well as the in-memory paid flag, or the next retry of this message would rebuild
@@ -232,7 +232,8 @@ class MessageRetryManager {
             }
             return try await StealthSenderService.buildSealedInner(
                 recipientUserId: recipientId, recipientIdentityKey: recipientIK,
-                encryptedPayload: wirePayload, contentType: .generic, spendUnit: spendUnit)
+                encryptedPayload: wirePayload, contentType: .generic, spendUnit: spendUnit,
+                afterCredentialRejection: afterCredentialRejection)
         }, send: { inner in
             if FeatureFlags.sealedSenderUnauthenticatedTransport {
                 return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)

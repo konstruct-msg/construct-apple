@@ -229,12 +229,13 @@ final class ChatSessionManager {
                     encryptedPayload: payload,
                     contentType: .generic
                 )
-                _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+                _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
                     try await StealthSenderService.buildSealedInner(
                         recipientUserId: userId,
                         recipientIdentityKey: recipientIK,
                         encryptedPayload: payload,
-                        contentType: .generic
+                        contentType: .generic,
+                        afterCredentialRejection: afterCredentialRejection
                     )
                 }, send: { inner in
                     try await MessagingServiceClient.shared.sendMessage(
