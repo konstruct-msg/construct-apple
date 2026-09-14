@@ -63,3 +63,49 @@ final class IntakePublishingTests: XCTestCase {
         XCTAssertTrue(IntakePublishing.shouldPublish(lastPublishedEpoch: 20_710, currentEpoch: 20_707))
     }
 }
+
+/// Why an envelope paid a token.
+///
+/// Until 2026-09-14 all four causes returned the same silent nil, so the device log said
+/// "sealed send WITH token" and nothing more. On 2026-09-13 the server counted 8 envelopes as
+/// `absent` and the device logs could not say which cause it was — the reason these are named.
+final class IntakeTagAbsenceTests: XCTestCase {
+
+    /// The ordinary rollout state, and the answer to "why did this pay". A peer's key arrives the
+    /// first time they write to us; until then every envelope to them buys a token.
+    func testNoStoredKeyIsTheOrdinaryCause() {
+        XCTAssertEqual(IntakeTagAbsence.forStoredKey(nil), .noKeyForPeer)
+    }
+
+    /// A usable key is the one case that is not an absence at all.
+    func testAThirtyTwoByteKeyIsUsable() {
+        XCTAssertNil(IntakeTagAbsence.forStoredKey(Data(repeating: 7, count: 32)))
+    }
+
+    /// Corruption, not a bad sender: `recordPeerIntakeKey` refuses to write a key of the wrong
+    /// size, so reading one back means the stored item was damaged. Collapsing this into
+    /// `noKeyForPeer` would file a malfunction under the one cause nobody investigates.
+    func testAWrongSizedStoredKeyIsNotTheSameAsNoKey() {
+        for size in [0, 1, 16, 31, 33, 64] {
+            XCTAssertEqual(
+                IntakeTagAbsence.forStoredKey(Data(repeating: 7, count: size)),
+                .storedKeyWrongSize,
+                "a \(size)-byte stored key is corruption, not an absent one"
+            )
+        }
+        XCTAssertNotEqual(
+            IntakeTagAbsence.forStoredKey(Data(repeating: 7, count: 31)),
+            IntakeTagAbsence.forStoredKey(nil)
+        )
+    }
+
+    /// The raw values reach the log and are what someone greps for. Distinct, and stable.
+    func testEveryCauseHasItsOwnName() {
+        let all: [IntakeTagAbsence] = [.noKeyForPeer, .storedKeyWrongSize, .derivationFailed, .sealingFailed]
+        XCTAssertEqual(Set(all.map(\.rawValue)).count, all.count)
+        XCTAssertEqual(IntakeTagAbsence.noKeyForPeer.rawValue, "no_key_for_peer")
+        XCTAssertEqual(IntakeTagAbsence.storedKeyWrongSize.rawValue, "stored_key_wrong_size")
+        XCTAssertEqual(IntakeTagAbsence.derivationFailed.rawValue, "derivation_failed")
+        XCTAssertEqual(IntakeTagAbsence.sealingFailed.rawValue, "sealing_failed")
+    }
+}

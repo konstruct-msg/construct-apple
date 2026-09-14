@@ -28,6 +28,52 @@
 
 import Foundation
 
+/// Why an envelope is carrying no intake credential, and therefore paying a token.
+///
+/// Split out because the four causes need different reactions and used to be one silent `nil`.
+/// `noKeyForPeer` is the ordinary state during rollout and for anyone who has not written to us
+/// yet — it is the answer to "why did this pay", not an error. The other three are malfunctions:
+/// a stored key of the wrong size is corruption, and a derivation or seal that fails means the
+/// core or the server key is not where it should be.
+enum IntakeTagAbsence: String {
+    /// We hold no key for this account. Their key arrives the first time they write to us.
+    case noKeyForPeer = "no_key_for_peer"
+    /// A key is stored, but not 32 bytes. `recordPeerIntakeKey` refuses to write one, so this
+    /// means the stored item was damaged rather than badly received.
+    case storedKeyWrongSize = "stored_key_wrong_size"
+    /// `construct-core` could not derive the tag from a key that passed the size check.
+    case derivationFailed = "derivation_failed"
+    /// The server's X25519 key was unavailable, so the tag could not be sealed. Sending it in the
+    /// clear is not an option — any relay on the path could harvest and spend it.
+    case sealingFailed = "sealing_failed"
+
+    /// Classify what the Keychain gave us, or nil when the key is usable.
+    ///
+    /// Pure, and separate from the Keychain read, so the classification can be argued with in a
+    /// test without one (`decisions/testing-by-pure-decision.md`).
+    static func forStoredKey(_ key: Data?) -> IntakeTagAbsence? {
+        guard let key else { return .noKeyForPeer }
+        guard key.count == intakeKeyLength else { return .storedKeyWrongSize }
+        return nil
+    }
+
+    func log(peer accountId: String) {
+        let peer = accountId.prefix(8)
+        switch self {
+        case .noKeyForPeer:
+            // Debug, not info: this fires on every send to every peer who has not written to us,
+            // and at info it would drown the category it is meant to make readable.
+            Log.debug("Intake: no credential for \(peer)… (\(rawValue)) — this envelope pays a token", category: "Intake")
+        case .storedKeyWrongSize, .derivationFailed, .sealingFailed:
+            Log.error("Intake: cannot build a credential for \(peer)… (\(rawValue)) — this envelope pays a token", category: "Intake")
+        }
+    }
+}
+
+/// Length of an intake key, matching `construct-core::intake::INTAKE_KEY_LEN`. The core does not
+/// export it, so this is the one place the number is written on this side.
+private let intakeKeyLength = 32
+
 /// Pure decisions about publishing and expiry, kept out of the actor so a test can argue with them
 /// without a Keychain, a clock or a network (`decisions/testing-by-pure-decision.md`).
 enum IntakePublishing {
@@ -86,7 +132,7 @@ final class IntakeCredentialService {
     /// shipped has no key either, so the two cases are one, and there is no migration that has to
     /// find every existing install.
     func ownIntakeKey() -> Data {
-        if let existing = keychain.loadOwnIntakeKey(), existing.count == 32 {
+        if let existing = keychain.loadOwnIntakeKey(), existing.count == intakeKeyLength {
             return existing
         }
         let fresh = Data(generateIntakeKey())
@@ -135,7 +181,7 @@ final class IntakeCredentialService {
 
     /// A peer handed us the key their account accepts.
     func recordPeerIntakeKey(_ key: Data, from accountId: String) {
-        guard key.count == 32 else {
+        guard key.count == intakeKeyLength else {
             Log.error("Intake: peer \(accountId.prefix(8))… sent a \(key.count)-byte key — ignored", category: "Intake")
             return
         }
@@ -147,19 +193,35 @@ final class IntakeCredentialService {
     /// them, cannot derive, or cannot seal.
     ///
     /// Nil is not a failure: the envelope pays with a token, which is what every envelope did
-    /// before this existed.
+    /// before this existed. But it is the reason it paid, and until 2026-09-14 every one of the
+    /// four ways to get here returned the same silent nil. The device log then said
+    /// "sealed send WITH token" and nothing else, so "why did this envelope pay?" had no answer
+    /// on the device that paid — which is exactly the question asked of the 09-13 stretch where
+    /// the server counted 8 envelopes as `absent` and nobody could say which cause it was.
     func sealedTag(forRecipient accountId: String, now: Date = Date()) async -> Data? {
-        guard let key = keychain.loadPeerIntakeKey(forAccount: accountId), key.count == 32 else {
+        let stored = keychain.loadPeerIntakeKey(forAccount: accountId)
+        if let reason = IntakeTagAbsence.forStoredKey(stored) {
+            reason.log(peer: accountId)
             return nil
         }
+        // `forStoredKey` returning nil is exactly the statement that this is a usable 32-byte key.
+        guard let key = stored else { return nil }
+
         let epoch = intakeEpoch(unixSeconds: UInt64(now.timeIntervalSince1970))
         guard let tag = try? intakeTag(
             intakeKey: [UInt8](key), recipientAccountId: accountId, epoch: epoch
-        ) else { return nil }
+        ) else {
+            IntakeTagAbsence.derivationFailed.log(peer: accountId)
+            return nil
+        }
         // Sealed to the server's X25519 key with the same box `token_bytes` uses. SealedInner is a
         // plaintext proto the relay parses: a tag in the clear is one any relay can harvest and
         // then spend on this recipient until the epoch rolls.
-        return await ServerKeyManager.shared.sealTokenBytes(Data(tag))
+        guard let sealed = await ServerKeyManager.shared.sealTokenBytes(Data(tag)) else {
+            IntakeTagAbsence.sealingFailed.log(peer: accountId)
+            return nil
+        }
+        return sealed
     }
 
     // MARK: - Lazy distribution
