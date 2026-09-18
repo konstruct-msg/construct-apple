@@ -130,14 +130,24 @@ extension MessageStreamManager {
         // native Swift H3 stack that used to share this slot was deleted 2026-08-21 — it had been
         // statically unreachable behind `h3Enabled = false` since May.
         let experimentalQuic = FeatureFlags.engineQuicExperimental
-        // One probe per session, per network change. No ladder, no window, no persisted record —
-        // see decisions/no-client-side-network-learning.
-        let useH2Fallback = FastUdpSelection.useH2Fallback(
+        // When the transport router prefers VEIL (mode=on, or a probing/active relay), never
+        // emit a fast-UDP direct probe. engine-QUIC dials quic.konstruct.cc straight, bypassing
+        // the relay: during veil-probing the proxy port is not bound yet, so `directPath` below
+        // would pick QUIC and leak a naked UDP connection to the backend — exactly what VEIL
+        // exists to hide. Read the authoritative FSM snapshot, not TransportRouterMirror: the
+        // mirror still reads `.offline` at launch (before the first transition is pushed), so a
+        // mirror read let the very first stream open — during veil-probing — slip through as
+        // QUIC. Live FSM state, not a persisted record — see decisions/no-client-side-network-learning.
+        let veilPreferred = await TransportRouter.shared.snapshot().state.prefersVEIL
+        // One probe per session, per network change. No ladder, no window, no persisted record.
+        let useH2Fallback = veilPreferred || FastUdpSelection.useH2Fallback(
             experimentalQuic: experimentalQuic,
             oneShotFallback: shouldFallbackToH2Direct,
             failedThisSession: fastUdpFailedThisSession
         )
-        if fastUdpFailedThisSession {
+        if veilPreferred {
+            Log.info("VEIL preferred — suppressing fast-UDP (QUIC) direct probe", category: "MessageStream")
+        } else if fastUdpFailedThisSession {
             Log.info("Fast-UDP disabled for this session — using H2 direct", category: "MessageStream")
         }
         shouldFallbackToH2Direct = false
