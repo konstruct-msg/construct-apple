@@ -111,4 +111,57 @@ uint16_t veil_port(void);
 // veil_start returns -1 to log the exact failing method + stage.
 size_t   veil_last_error(char *buf, size_t cap);
 
+// ── Host-terminated TLS veil-front (review §3.1 variant A) ──────────────────
+//
+// The host owns the TLS to the relay (Swift Network.framework, for the native
+// Apple ClientHello fingerprint) and hands Rust the decrypted duplex plus the
+// TLS exporter it derived. Rust runs the veil-front framing over the plaintext
+// and binds a local gRPC listener.
+//
+//   relay_fd:          one end of a socketpair carrying the DECRYPTED relay
+//                      duplex; the host pumps its NWConnection ↔ the other end.
+//                      Rust takes ownership and closes it on every return.
+//   exporter/len:      32-byte sec_protocol_metadata_create_secret over
+//                      EXPORTER_LABEL ("construct veil-front auth v1").
+//   capability_v2_b64
+//   + veil_sk_hex:     AUTH v3 material; empty veil_sk_hex falls back to AUTH v2
+//                      with ticket_b64.
+//   port_out:          local TCP port the gRPC client connects to.
+//
+// Returns 0 on success, -1 on failure. See construct-veil src/ffi.rs.
+int32_t veil_proxy_start_veil_front_external(int32_t relay_fd,
+                                             const uint8_t *exporter, size_t exporter_len,
+                                             const char *capability_v2_b64,
+                                             const char *veil_sk_hex,
+                                             const char *ticket_b64,
+                                             uint16_t *port_out);
+
+// Ferry ONE host-terminated veil-front connection over an already-accepted local
+// socket (variant A, persistent-listener form). The host owns the stable local
+// gRPC listener and accepts connections; per accept it dials a fresh native
+// NWConnection and calls this once with:
+//
+//   local_fd:          the accepted local gRPC TCP socket. Rust adopts + closes it.
+//   relay_fd:          one end of a socketpair carrying the DECRYPTED relay duplex
+//                      for that NWConnection; the host pumps the other end. Rust
+//                      adopts + closes it.
+//   exporter/len:      32-byte sec_protocol_metadata_create_secret over
+//                      EXPORTER_LABEL ("construct veil-front auth v1"), for THAT
+//                      NWConnection.
+//   capability_v2_b64
+//   + veil_sk_hex:     AUTH v3 material; empty veil_sk_hex falls back to AUTH v2
+//                      with ticket_b64.
+//
+// Both fds are adopted unconditionally (closed by Rust on every path). Spawns the
+// ferry and returns immediately: 0 if started, -1 on bad arguments. The ferry ends
+// when either side closes; the host sees EOF on its socketpair end. Keeping the
+// local listener host-side lets the port outlive any single gRPC connection, which
+// removes the one-shot-listener reconnect flap. See construct-veil src/ffi.rs.
+int32_t veil_front_ferry_fd(int32_t local_fd,
+                            int32_t relay_fd,
+                            const uint8_t *exporter, size_t exporter_len,
+                            const char *capability_v2_b64,
+                            const char *veil_sk_hex,
+                            const char *ticket_b64);
+
 #endif /* ConstructMessenger_Bridging_Header_h */
