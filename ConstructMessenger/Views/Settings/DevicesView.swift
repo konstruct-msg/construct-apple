@@ -88,31 +88,33 @@ struct DevicesView: View {
                     }
 
                     // MARK: - Link / Approve
-                    VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
-                        CTSectionGroup {
-                            #if os(iOS)
-                            // Primary: open the camera to scan the QR shown on the other device.
-                            ConstructButtonRow(systemImage: "qrcode.viewfinder", title: LocalizedStringKey("link_new_device")) {
-                                showingScanner = true
+                    if DeviceLinkOfferPolicy.isLinkingOffered {
+                        VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
+                            CTSectionGroup {
+                                #if os(iOS)
+                                // Primary: open the camera to scan the QR shown on the other device.
+                                ConstructButtonRow(systemImage: "qrcode.viewfinder", title: LocalizedStringKey("link_new_device")) {
+                                    showingScanner = true
+                                }
+                                .accessibilityIdentifier(A11y.Devices.linkNew)
+                                ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
+                                // Secondary: show this device's QR (camera-broken fallback / other device scans us).
+                                ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("device_link_show_qr")) {
+                                    showingQRSheet = true
+                                }
+                                .accessibilityIdentifier(A11y.Devices.showQR)
+                                #else
+                                // macOS has no camera — the only path is showing this device's QR.
+                                ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("link_new_device")) {
+                                    showingQRSheet = true
+                                }
+                                #endif
                             }
-                            .accessibilityIdentifier(A11y.Devices.linkNew)
-                            ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
-                            // Secondary: show this device's QR (camera-broken fallback / other device scans us).
-                            ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("device_link_show_qr")) {
-                                showingQRSheet = true
-                            }
-                            .accessibilityIdentifier(A11y.Devices.showQR)
-                            #else
-                            // macOS has no camera — the only path is showing this device's QR.
-                            ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("link_new_device")) {
-                                showingQRSheet = true
-                            }
-                            #endif
+                            Text(LocalizedStringKey("linked_devices_hint"))
+                                .font(CTFont.regular(12))
+                                .foregroundStyle(Color.CT.textDim)
+                                .settingsSectionHintInsets()
                         }
-                        Text(LocalizedStringKey("linked_devices_hint"))
-                            .font(CTFont.regular(12))
-                            .foregroundStyle(Color.CT.textDim)
-                            .settingsSectionHintInsets()
                     }
 
                     // MARK: - Session management

@@ -38,6 +38,26 @@ enum DeviceLinkHistorySyncPolicy {
     static let isPostLinkEnabled = false
 }
 
+/// Whether the UI offers to link a second device at all.
+///
+/// Multi-device is not a feature this app switches on: a user who links an iPad has it. Until the
+/// three-device gate in `MULTIDEVICE_PROTOCOL_PLAN` (прогон 2) reads zero, a linked second device
+/// damages the *peer's* single-device clients (`decisions/multidevice-gate-three-asymmetries.md`),
+/// and `RecoverAccount` revokes every device before registering the new one, so the link flow is
+/// the only door to a second device. Closing it in Release closes the scenario.
+///
+/// Compile-time, like every other internal surface: `Beta.xcconfig` keeps `DEBUG` so TestFlight
+/// stays internal. Not `DeveloperMode.isEnabled` — nothing calls `registerVersionTap`, so that is
+/// `false` in every build. The device list and revoke stay reachable regardless: that is how a
+/// ghost device is removed, and testers who linked before this gate need it.
+enum DeviceLinkOfferPolicy {
+    #if DEBUG || INTERNAL_TOOLS
+    static let isLinkingOffered = true
+    #else
+    static let isLinkingOffered = false
+    #endif
+}
+
 /// Cursor policy for account-only links when history transfer is intentionally skipped.
 enum DeviceLinkStreamCursorPolicy {
     static func checkpointCursor(accessToken: String) -> String? {
