@@ -295,20 +295,25 @@ final class HistorySnapshotConformanceTests: XCTestCase {
         }
     }
 
-    /// HistorySync must not grow Core Data or CryptoKit. Transfer crypto is stage 5.
+    /// Codec/disposition stay store-agnostic. Importer and encoder (stage 3/4) are
+    /// the Core Data projection; transfer crypto is still stage 5.
     func testHistorySyncSourcesDoNotImportCoreDataOrCryptoKit() throws {
         let dir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("ConstructMessenger/Services/HistorySync")
-        let files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "swift" }
-        XCTAssertFalse(files.isEmpty)
-        for url in files {
+        let pure = [
+            "HistorySnapshotCodec.swift",
+            "HistorySnapshotDisposition.swift",
+            "HistoryBodyCodec.swift",
+            "HistoryAccountID.swift"
+        ]
+        for name in pure {
+            let url = dir.appendingPathComponent(name)
             let text = try String(contentsOf: url, encoding: .utf8)
             let imports = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-            XCTAssertFalse(imports.contains("import CoreData"), url.lastPathComponent)
-            XCTAssertFalse(imports.contains("import CryptoKit"), url.lastPathComponent)
+            XCTAssertFalse(imports.contains("import CoreData"), name)
+            XCTAssertFalse(imports.contains("import CryptoKit"), name)
         }
     }
 }

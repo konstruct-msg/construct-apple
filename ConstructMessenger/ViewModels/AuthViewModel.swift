@@ -657,7 +657,8 @@ class AuthViewModel {
     /// Every entity that carries user data. One list, used by both the ownership gate and
     /// account deletion.
     static let userDataEntityNames = [
-        "Message", "HealingMessage", "ProcessedMessage", "CallRecord", "Chat", "User"
+        "Message", "HealingMessage", "ProcessedMessage", "CallRecord", "Chat", "User",
+        "Reaction", "PeerDevice"
     ]
 
     /// Handles the critical case where the user is authenticated (has a session token) but

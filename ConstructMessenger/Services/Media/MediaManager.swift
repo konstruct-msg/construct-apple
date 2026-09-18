@@ -69,7 +69,9 @@ class MediaManager {
     ///
     /// Application Support is not purged. See `MediaEvictionPolicy` for the other half — our own
     /// quota sweep was deleting oldest-first, i.e. exactly the files that could never come back.
-    private let mediaDirectory: URL = {
+    /// Durable plaintext cache. `nonisolated` so HistorySync can import/export
+    /// on a background context without hopping to the main actor.
+    nonisolated static var onDiskDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let dir = base.appendingPathComponent("media", isDirectory: true)
         try? FileManager.default.createDirectory(
@@ -91,7 +93,9 @@ class MediaManager {
         values.isExcludedFromBackup = true
         try? mutable.setResourceValues(values)
         return dir
-    }()
+    }
+
+    private var mediaDirectory: URL { Self.onDiskDirectory }
 
     /// Where media used to live. Read-only now: drained by `migrateMediaOutOfCaches()` at launch
     /// and opportunistically on read, exactly like ThumbnailStore.
@@ -102,6 +106,36 @@ class MediaManager {
 
     private func diskCacheURL(for mediaId: String) -> URL {
         mediaDirectory.appendingPathComponent(mediaId)
+    }
+
+    nonisolated static func onDiskURL(for mediaId: String) -> URL {
+        onDiskDirectory.appendingPathComponent(mediaId)
+    }
+
+    nonisolated static func hasOnDiskFile(mediaId: String) -> Bool {
+        FileManager.default.fileExists(atPath: onDiskURL(for: mediaId).path)
+    }
+
+    /// Import a CTH1 blob. Does not rewrite an existing file and does not evict.
+    /// - Returns: `false` if the file was already present.
+    @discardableResult
+    nonisolated static func importHistoryBlob(_ data: Data, mediaId: String) -> Bool {
+        let url = onDiskURL(for: mediaId)
+        if FileManager.default.fileExists(atPath: url.path) { return false }
+        try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        return true
+    }
+
+    nonisolated static func onDiskFileSize(mediaId: String) -> UInt64? {
+        let url = onDiskURL(for: mediaId)
+        guard FileManager.default.fileExists(atPath: url.path),
+              let values = try? url.resourceValues(forKeys: [.fileSizeKey]),
+              let size = values.fileSize else { return nil }
+        return UInt64(size)
+    }
+
+    nonisolated static func loadOnDisk(mediaId: String) -> Data? {
+        try? Data(contentsOf: onDiskURL(for: mediaId))
     }
 
     private func saveToDiskcache(_ data: Data, mediaId: String) {
