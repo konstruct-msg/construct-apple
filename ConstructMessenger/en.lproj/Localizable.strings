@@ -1090,12 +1090,6 @@
 "e2e_forward_secrecy" = "Forward Secrecy";
 "e2e_key_agreement" = "Key Agreement";
 
-/* Desktop delete account sheet */
-"delete_locally_only" = "Delete locally only (offline)";
-"delete_locally_question" = "Delete Locally?";
-"delete_locally_action" = "Delete Locally";
-"delete_locally_message" = "This removes all local data. The server account may still exist if the network request failed.";
-
 /* Desktop general settings */
 "message_section" = "Messages";
 
@@ -1218,3 +1212,41 @@
 "veil_voucher_privacy_hint" = "Show this code only to the person it is for. Do not post it or send it through a public channel.";
 "veil_voucher_intro" = "Creates a one-off code that sets up a connection for someone who cannot reach Konstruct yet. It is valid for a short time, and you can create three per day.";
 "veil_voucher_create" = "Create code";
+
+/* Desktop chrome — D2–D7 */
+"find" = "Find";
+"quick_open" = "Quick Open";
+"copy_id" = "Copy ID";
+"desktop_close_chat" = "Close Chat";
+"desktop_new_conversation" = "New Conversation";
+"desktop_sync_messages" = "Sync Messages";
+"desktop_menu_navigate" = "Navigate";
+"desktop_next_chat" = "Next Chat";
+"desktop_previous_chat" = "Previous Chat";
+"desktop_jump_to_chat_fmt" = "Jump to Chat %d";
+"desktop_show_security" = "Show Security Info";
+"desktop_settings_account" = "Account";
+"desktop_settings_devices" = "Devices";
+"desktop_settings_storage" = "Storage";
+"desktop_add_my_qr" = "My QR";
+"desktop_add_from_file" = "From File";
+"desktop_add_invite_ok" = "Invite accepted";
+"desktop_add_empty" = "Nothing to add";
+"desktop_add_expires_fmt" = "Expires in %@";
+"desktop_add_show_qr" = "Show this to someone so they can scan it";
+"desktop_add_device_unregistered" = "Device not registered";
+"desktop_add_qr_failed" = "Could not create the QR code";
+"desktop_add_point_camera" = "Point the camera at a Konstruct QR code";
+"desktop_add_camera_privacy" = "Allow camera access in System Settings → Privacy & Security → Camera";
+"desktop_add_drop_image" = "Drop image here";
+"desktop_add_drop_types" = "PNG, JPG, screenshot";
+"desktop_add_choose_file" = "Choose File…";
+"desktop_add_choose_file_panel" = "Select a screenshot or image containing a Konstruct QR code";
+"desktop_add_cannot_read_file" = "Cannot read file";
+"desktop_add_cannot_decode_image" = "Cannot decode image";
+"desktop_add_cannot_load_image" = "Cannot load image";
+"desktop_add_no_qr_in_image" = "No QR code found in that image";
+"desktop_add_invite_link" = "Invite link";
+"desktop_add_invite_placeholder" = "https://konstruct.cc/add?invite=… or konstruct://add?…";
+"desktop_add_paste_clipboard" = "Paste from Clipboard";
+"desktop_add_supported" = "konstruct://add?invite=… or https://konstruct.cc/add?invite=…";

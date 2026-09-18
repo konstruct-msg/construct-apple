@@ -2,10 +2,10 @@
 //  ChatListNavigationTests.swift
 //  Construct DesktopTests
 //
-//  ⌘J / ⌘K / ⌘1…9 were dead: DesktopRootView posted three notifications and nothing in the app
-//  observed them. The arithmetic that answers them now lives apart from the view so its decisions
-//  — what happens at the ends, with nothing open, with a search box hiding the open chat — are
-//  written down as expectations rather than as whatever the code happened to do.
+//  ⌥⌘↓ / ⌥⌘↑ / ⌘1…9 were dead: DesktopRootView posted three notifications and nothing in the
+//  app observed them. The arithmetic that answers them now lives apart from the view so its
+//  decisions — what happens at the ends, with nothing open, with a search box hiding the open
+//  chat — are written down as expectations rather than as whatever the code happened to do.
 //
 
 import XCTest

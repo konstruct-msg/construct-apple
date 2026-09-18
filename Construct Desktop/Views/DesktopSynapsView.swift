@@ -54,9 +54,6 @@ struct DesktopSynapsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            synapsToolbar
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
-
             if let vm = contactRequestsVM, !vm.incomingRequests.isEmpty, searchText.isEmpty {
                 requestsSection(vm: vm)
                 Rectangle().fill(Color.CT.noise).frame(height: 1)
@@ -98,6 +95,12 @@ struct DesktopSynapsView: View {
             }
         }
         .background(Color.CT.bg)
+        .navigationTitle(NSLocalizedString("people", comment: ""))
+        .searchable(
+            text: $searchText,
+            placement: .toolbar,
+            prompt: LocalizedStringKey("synapses_search_prompt")
+        )
         .task {
             let vm = contactRequestsVM ?? ContactRequestsViewModel(viewContext: context)
             contactRequestsVM = vm
@@ -242,48 +245,6 @@ struct DesktopSynapsView: View {
                 Rectangle().fill(Color.CT.noise).frame(height: 1).padding(.horizontal, 14)
             }
         }
-        .background(Color.CT.bg)
-    }
-
-    // MARK: - Column toolbar
-
-    private var synapsToolbar: some View {
-        HStack(spacing: CTLayout.chromeGap) {
-            // Back to Chats (visible when Synaps occupies full canvas)
-            if let switchBack = onSwitchToChats {
-                Button(action: switchBack) {
-                    Label {
-                        Text(LocalizedStringKey("chats"))
-                            .font(CTFont.medium(12))
-                    } icon: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .labelStyle(.titleAndIcon)
-                    .foregroundStyle(Color.CT.textDim)
-                }
-                .buttonStyle(.borderless)
-                .help(NSLocalizedString("show_chat_list", comment: ""))
-
-                Rectangle()
-                    .fill(Color.CT.noise)
-                    .frame(width: 1, height: 18)
-            }
-
-            Text(LocalizedStringKey("people"))
-                .font(CTFont.bold(14))
-                .foregroundStyle(Color.CT.text)
-
-            Spacer()
-
-            CTSearchBar(
-                text: $searchText,
-                placeholder: LocalizedStringKey("synaps_search_prompt")
-            )
-            .frame(width: 190)
-        }
-        .padding(.horizontal, CTLayout.edgePad)
-        .frame(height: 52)
         .background(Color.CT.bg)
     }
 

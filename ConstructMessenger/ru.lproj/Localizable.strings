@@ -1101,12 +1101,6 @@
 "e2e_forward_secrecy" = "Прямая секретность";
 "e2e_key_agreement" = "Соглашение о ключах";
 
-/* Desktop delete account sheet */
-"delete_locally_only" = "Удалить только локально (оффлайн)";
-"delete_locally_question" = "Удалить локально?";
-"delete_locally_action" = "Удалить локально";
-"delete_locally_message" = "Это удалит все локальные данные. Серверный аккаунт может остаться, если сетевой запрос не прошёл.";
-
 /* Desktop general settings */
 "message_section" = "Сообщения";
 
@@ -1229,3 +1223,41 @@
 "veil_voucher_privacy_hint" = "Показывайте код только тому, для кого он предназначен. Не публикуйте его и не отправляйте через открытый канал.";
 "veil_voucher_intro" = "Создаёт одноразовый код, который настроит подключение тому, кто пока не может добраться до Konstruct. Код действует недолго, в сутки можно создать три.";
 "veil_voucher_create" = "Создать код";
+
+/* Desktop chrome — D2–D7 */
+"find" = "Найти";
+"quick_open" = "Быстрый переход";
+"copy_id" = "Скопировать ID";
+"desktop_close_chat" = "Закрыть чат";
+"desktop_new_conversation" = "Новый чат";
+"desktop_sync_messages" = "Синхронизировать сообщения";
+"desktop_menu_navigate" = "Переход";
+"desktop_next_chat" = "Следующий чат";
+"desktop_previous_chat" = "Предыдущий чат";
+"desktop_jump_to_chat_fmt" = "Чат %d";
+"desktop_show_security" = "Безопасность";
+"desktop_settings_account" = "Аккаунт";
+"desktop_settings_devices" = "Устройства";
+"desktop_settings_storage" = "Хранилище";
+"desktop_add_my_qr" = "Мой QR";
+"desktop_add_from_file" = "Из файла";
+"desktop_add_invite_ok" = "Приглашение принято";
+"desktop_add_empty" = "Нечего добавить";
+"desktop_add_expires_fmt" = "Истекает через %@";
+"desktop_add_show_qr" = "Покажите это человеку, чтобы он мог отсканировать";
+"desktop_add_device_unregistered" = "Устройство не зарегистрировано";
+"desktop_add_qr_failed" = "Не удалось создать QR-код";
+"desktop_add_point_camera" = "Наведите камеру на QR-код Конструкта";
+"desktop_add_camera_privacy" = "Разрешите камеру в Системных настройках → Конфиденциальность и безопасность → Камера";
+"desktop_add_drop_image" = "Перетащите изображение сюда";
+"desktop_add_drop_types" = "PNG, JPG, снимок экрана";
+"desktop_add_choose_file" = "Выбрать файл…";
+"desktop_add_choose_file_panel" = "Выберите снимок или изображение с QR-кодом Конструкта";
+"desktop_add_cannot_read_file" = "Не удалось прочитать файл";
+"desktop_add_cannot_decode_image" = "Не удалось разобрать изображение";
+"desktop_add_cannot_load_image" = "Не удалось загрузить изображение";
+"desktop_add_no_qr_in_image" = "В изображении нет QR-кода";
+"desktop_add_invite_link" = "Ссылка-приглашение";
+"desktop_add_invite_placeholder" = "https://konstruct.cc/add?invite=… или konstruct://add?…";
+"desktop_add_paste_clipboard" = "Вставить из буфера";
+"desktop_add_supported" = "konstruct://add?invite=… или https://konstruct.cc/add?invite=…";

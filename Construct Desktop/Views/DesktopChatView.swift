@@ -53,7 +53,9 @@ struct DesktopChatView: View {
         ZStack() {
             ChatTranscriptContainer(
                 rowSpacing: 0,
-                topContentPad: 70,
+                // Native window toolbar owns the top chrome; this is breathing room,
+                // not clearance for a floating iOS capsule (that was 70).
+                topContentPad: CTLayout.edgePad,
                 bottomContentPad: 130,
                 accessibilityIdentifier: nil,
                 onProxyReady: registerTranscriptProxy,
@@ -113,9 +115,6 @@ struct DesktopChatView: View {
         
         
             VStack(spacing: 10) {
-                chatNavBar
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)   // flush or minimal top so the glass panel sits at the very top of the chat pane
                 floodBurstBanner
                 atRiskBanner
 
@@ -149,13 +148,11 @@ struct DesktopChatView: View {
                         .padding(8)
                 }
             }
-            .overlay(alignment: .top, content: searchOverlay)
             .sheet(isPresented: $showingUserProfile) {
                 if let user = viewModel.chat.otherUser {
                     UserProfileView(user: user, showMessageButton: false)
                         .environment(\.managedObjectContext, viewContext)
-                        .presentationDetents([.large])
-                        .presentationDragIndicator(.visible)
+                        .frame(minWidth: 420, minHeight: 480)
                 }
             }
             .sheet(item: $quotingMessage) { msg in
@@ -164,8 +161,7 @@ struct DesktopChatView: View {
                     replyQuoteText = selectedQuote
                     setComposeReplyFocus(messageId: msg.id)
                 }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+                .frame(minWidth: 400, minHeight: 320)
             }
             .sheet(item: $galleryStartItem) { item in
                 MediaGalleryViewer(
@@ -232,7 +228,23 @@ struct DesktopChatView: View {
                 }
             }
         }
-        .ignoresSafeArea(.container, edges: .top) // make glass nav flush to the very top edge of the NavigationSplitView detail
+        .modifier(DesktopChatWindowTitle(
+            user: viewModel.chat.otherUser,
+            fallback: NSLocalizedString("chat", comment: ""),
+            subtitle: navigationStatusSubtitle
+        ))
+        .toolbar { chatToolbar }
+        .searchable(
+            text: $searchText,
+            isPresented: $isSearchActive,
+            placement: .toolbar,
+            prompt: LocalizedStringKey("search_messages")
+        )
+        .onChange(of: chatsViewModel.chatSearchPresented) { _, presented in
+            guard presented else { return }
+            isSearchActive = true
+            chatsViewModel.chatSearchPresented = false
+        }
     }
 
     // MARK: - View Components
@@ -400,90 +412,69 @@ struct DesktopChatView: View {
         }
     }
 
-    // MARK: - Navigation Bar
+    // MARK: - Window toolbar (D1)
 
-    private var chatNavBar: some View {
-        HStack(spacing: 10) {
-            // No back button — navigation is controlled by NavigationSplitView sidebar
-
-            if let user = viewModel.chat.otherUser {
-                DesktopChatNavTitleButton(
-                    user: user,
-                    subtitle: navigationStatusSubtitle,
-                    onOpenProfile: { showingUserProfile = true }
-                )
-            } else {
-                Button { showingUserProfile = true } label: {
-                    Text(NSLocalizedString("chat", comment: "").uppercased())
-                        .font(CTFont.bold(13))
-                        .foregroundColor(Color.CT.text)
-                }
-                .buttonStyle(.plain)
+    @ToolbarContentBuilder
+    private var chatToolbar: some ToolbarContent {
+        if contactKTStatus != .unverified {
+            ToolbarItem(placement: .automatic) {
+                ktBadge
             }
+        }
 
-            ktBadge
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                showingUserProfile = true
+            } label: {
+                Image(systemName: "person.crop.circle")
+            }
+            .help(NSLocalizedString("profile", comment: ""))
+            .disabled(viewModel.chat.otherUser == nil)
+        }
 
-            Spacer()
-
-            if isEditMode {
+        if isEditMode {
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     withAnimation { isEditMode = false; selectedMessages.removeAll() }
                 } label: {
                     Image(systemName: "checkmark")
-                        .font(.system(size: CTLayout.navIconSize, weight: .medium))
-                        .foregroundColor(Color.CT.accent)
-                        .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                 }
-                .buttonStyle(.plain)
                 .help(NSLocalizedString("done", comment: ""))
-                .accessibilityLabel(Text(NSLocalizedString("done", comment: "")))
-            } else {
-                if CallsFeature.isEnabled, let otherUser = viewModel.chat.otherUser,
-                   case .idle = callManager.state {
-                    Button {
-                        Task {
-                            await callManager.startOutgoingCall(
-                                to: otherUser.id,
-                                displayName: otherUser.resolvedDisplayName,
-                                hasVideo: false
-                            )
-                        }
-                    } label: {
-                        Image(systemName: "phone")
-                            .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
-                            .foregroundColor(Color.CT.accent)
-                    }
-                    .buttonStyle(.plain)
-                }
+            }
+        } else if CallsFeature.isEnabled,
+                  let otherUser = viewModel.chat.otherUser,
+                  case .idle = callManager.state {
+            ToolbarItem(placement: .primaryAction) {
                 Button {
-                    withAnimation { isSearchActive.toggle(); if !isSearchActive { searchText = "" } }
+                    Task {
+                        await callManager.startOutgoingCall(
+                            to: otherUser.id,
+                            displayName: otherUser.resolvedDisplayName,
+                            hasVideo: false
+                        )
+                    }
                 } label: {
-                    Image(systemName: isSearchActive ? "xmark" : "magnifyingglass")
-                        .font(.system(size: CTLayout.navIconSize, weight: .medium))
-                        .foregroundColor(Color.CT.accent)
+                    Image(systemName: "phone")
                 }
-                .buttonStyle(.plain)
+                .help(NSLocalizedString("call_voice", comment: ""))
             }
         }
-        .padding(.horizontal, 19)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
-        .background(Color.CT.bg.opacity(0.35)) // slight dark tint for terminal readability
-        .clipShape(Capsule())
-        .ctNoiseBorder() // thin noise border on top of glass
-        .shadow(color: Color.black.opacity(0.2), radius: 8, y: 2)
     }
 
     @ViewBuilder private var ktBadge: some View {
         switch contactKTStatus {
         case .verified:
-            Text("[✓]")
-                .font(CTFont.regular(11))
-                .foregroundColor(Color.CT.accent)
-        case .keyChanged, .failed:
-            Text("[!]")
-                .font(CTFont.bold(11))
-                .foregroundColor(Color.CT.danger)
+            CTStatusBadge(status: .ok, size: 12)
+                .help(NSLocalizedString("kt_verified", comment: ""))
+                .accessibilityLabel(Text(NSLocalizedString("kt_verified", comment: "")))
+        case .keyChanged:
+            CTStatusBadge(status: .warning, size: 12)
+                .help(NSLocalizedString("kt_warning", comment: ""))
+                .accessibilityLabel(Text(NSLocalizedString("kt_warning", comment: "")))
+        case .failed:
+            CTStatusBadge(status: .error, size: 12)
+                .help(NSLocalizedString("kt_warning", comment: ""))
+                .accessibilityLabel(Text(NSLocalizedString("kt_warning", comment: "")))
         case .unverified:
             EmptyView()
         }
@@ -498,15 +489,6 @@ struct DesktopChatView: View {
             return NSLocalizedString("status_no_connection", comment: "")
         }
         return nil
-    }
-
-    @ViewBuilder
-    private func searchOverlay() -> some View {
-        ChatSearchOverlayView(
-            isSearchActive: $isSearchActive,
-            searchText: $searchText,
-            resultCount: filteredMessages.count
-        )
     }
 
     // MARK: - Computed Properties
@@ -675,14 +657,7 @@ struct DesktopChatView: View {
                             },
                             onDelete: { msg in viewModel.deleteMessage(msg) },
                             onSelect: { msg in toggleMessageSelection(msg) },
-                            onEnterSelectMode: { msg in
-                                withAnimation {
-                                    isEditMode = true
-                                    isSearchActive = false
-                                    searchText = ""
-                                }
-                                selectedMessages.insert(msg.id)
-                            },
+                            onEnterSelectMode: nil,
                             onTapMedia: { msg, itemIndex in
                                 galleryStartItem = GalleryStartItem(id: msg.id, itemIndex: itemIndex)
                             },
@@ -774,29 +749,32 @@ struct DesktopChatView: View {
     }
 }
 
-// MARK: - Nav title (observes User for profile-share updates)
-
-private struct DesktopChatNavTitleButton: View {
-    @ObservedObject var user: User
+/// Pushes the peer's live display name into the window title. Chat does not
+/// publish User attribute changes (profile share), so this observes User itself.
+private struct DesktopChatWindowTitle: ViewModifier {
+    var user: User?
+    let fallback: String
     let subtitle: String?
-    let onOpenProfile: () -> Void
 
-    var body: some View {
-        Button(action: onOpenProfile) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(user.resolvedDisplayName.uppercased())
-                    .font(CTFont.bold(13))
-                    .foregroundColor(Color.CT.text)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(CTFont.regular(10))
-                        .foregroundColor(Color.CT.accentDim)
-                        .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.25), value: subtitle)
+    func body(content: Content) -> some View {
+        if let user {
+            Observing(content: content, user: user, subtitle: subtitle)
+        } else {
+            content
+                .navigationTitle(fallback)
         }
-        .buttonStyle(.plain)
+    }
+
+    private struct Observing: View {
+        let content: Content
+        @ObservedObject var user: User
+        let subtitle: String?
+
+        var body: some View {
+            content
+                .navigationTitle(user.resolvedDisplayName)
+                .navigationSubtitle(subtitle ?? "")
+        }
     }
 }
 

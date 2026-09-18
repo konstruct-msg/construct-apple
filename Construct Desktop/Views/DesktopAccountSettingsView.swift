@@ -3,7 +3,8 @@
 //  Construct Desktop
 //
 //  CT-terminal-style macOS identity settings:
-//  hexagonal avatar, display name, username, export data, delete account.
+//  hexagonal avatar, display name, username, export data.
+//  Account deletion uses the shared DeleteAccountConfirmationView (abort window).
 //
 
 import SwiftUI
@@ -71,7 +72,7 @@ struct DesktopAccountSettingsView: View {
             Text(NSLocalizedString("export_coming_soon_message", comment: ""))
         }
         .sheet(isPresented: $showDeleteConfirm) {
-            DesktopDeleteAccountSheet(
+            DeleteAccountConfirmationView(
                 onDelete: { authViewModel.deleteAccount() },
                 onCancel: { showDeleteConfirm = false }
             )
@@ -283,11 +284,13 @@ struct DesktopAccountSettingsView: View {
 
             Button { showDeleteConfirm = true } label: {
                 HStack {
-                    Text(NSLocalizedString("delete_account", comment: ""))
+                    Text(NSLocalizedString("delete_account_row", comment: ""))
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.danger)
                     Spacer()
-                    Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.danger.opacity(0.6))
+                    Text("[\(NSLocalizedString("delete_action", comment: ""))]")
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.danger.opacity(AccountSettingsLayout.dangerSecondaryOpacity))
                 }
                 .padding(.horizontal, 12).padding(.vertical, 10)
                 .contentShape(Rectangle())
@@ -323,131 +326,6 @@ struct DesktopAccountSettingsView: View {
 
     private func saveUsernameIfNeeded() async {
         await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel)
-    }
-}
-
-// MARK: - Delete Account Sheet (macOS, CT-style)
-
-struct DesktopDeleteAccountSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(AuthViewModel.self) private var authViewModel
-
-    let onDelete: () -> Void
-    let onCancel: () -> Void
-
-    @State private var countdown = 7
-    @State private var showLocalDeleteConfirm = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // CT nav bar
-            CTNavBar(
-                title: NSLocalizedString("delete_account", comment: ""),
-                showBack: true,
-                backAction: { onCancel(); dismiss() }
-            )
-
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
-
-            Spacer()
-
-            // Warning block
-            VStack(spacing: 8) {
-                Text("[!]")
-                    .font(CTFont.bold(32))
-                    .foregroundStyle(Color.CT.danger)
-
-                Text(NSLocalizedString("delete_account", comment: "").uppercased())
-                    .font(CTFont.bold(14))
-                    .foregroundStyle(Color.CT.danger)
-                    .tracking(2)
-
-                Text(NSLocalizedString("delete_account_warning", comment: ""))
-                    .font(CTFont.regular(12))
-                    .foregroundStyle(Color.CT.textDim)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 32)
-                    .padding(.top, 4)
-            }
-            .padding(.bottom, 24)
-
-            // Countdown
-            if countdown > 0 && !authViewModel.isLoading {
-                Text("[ \(countdown) ]")
-                    .font(CTFont.bold(22))
-                    .foregroundStyle(Color.CT.danger)
-                    .padding(.bottom, 24)
-            }
-
-            if authViewModel.deleteAccountFailed {
-                Button {
-                    showLocalDeleteConfirm = true
-                } label: {
-                    Text(NSLocalizedString("delete_locally_only", comment: ""))
-                        .font(CTFont.regular(12))
-                        .foregroundStyle(Color.CT.danger.opacity(0.75))
-                }
-                .buttonStyle(.plain)
-                .padding(.bottom, 12)
-            }
-
-            Spacer()
-
-            // Actions
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
-            HStack(spacing: 16) {
-                Button {
-                    onCancel()
-                    dismiss()
-                } label: {
-                    Text("[cancel]")
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.textDim)
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.escape)
-                .disabled(authViewModel.isLoading)
-
-                Spacer()
-
-                if authViewModel.isLoading {
-                    ProgressView()
-                } else {
-                    Button {
-                        onDelete()
-                    } label: {
-                        Text("[\(NSLocalizedString("delete_account", comment: "").uppercased())]")
-                            .font(CTFont.bold(13))
-                            .foregroundStyle(countdown > 0 ? Color.CT.danger.opacity(0.35) : Color.CT.danger)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(countdown > 0)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-        }
-        .frame(width: 400, height: 340)
-        .ctBackground()
-        .alert(NSLocalizedString("delete_locally_question", comment: ""), isPresented: $showLocalDeleteConfirm) {
-            Button(NSLocalizedString("delete_locally_action", comment: ""), role: .destructive) {
-                authViewModel.deleteAccountLocally()
-            }
-            Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {}
-        } message: {
-            Text(NSLocalizedString("delete_locally_message", comment: ""))
-        }
-        .task {
-            while countdown > 0 {
-                try? await Task.sleep(for: .seconds(1))
-                guard countdown > 0 else { break }
-                countdown -= 1
-            }
-        }
-        .onChange(of: authViewModel.isAuthenticated) { _, isAuthenticated in
-            if !isAuthenticated { dismiss() }
-        }
     }
 }
 

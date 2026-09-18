@@ -16,18 +16,33 @@ enum DesktopSettingsSelection {
 struct DesktopSettingsView: View {
 
     enum Section: String, CaseIterable, Identifiable {
-        case account        = "IDENTITY"
-        case devices        = "REPLICAS"
-        case appearance     = "APPEARANCE"
-        case general        = "GENERAL"
-        case security       = "SECURITY"
-        case notifications  = "NOTIFICATIONS"
-        case storage        = "STORAGE"
-        case transcription  = "TRANSCRIPTION"
-        case network        = "NETWORK"
-        case diagnostics    = "DIAGNOSTICS"
+        case account
+        case devices
+        case appearance
+        case general
+        case security
+        case notifications
+        case storage
+        case transcription
+        case network
+        case diagnostics
 
         var id: String { rawValue }
+
+        var titleKey: String {
+            switch self {
+            case .account:       return "desktop_settings_account"
+            case .devices:       return "desktop_settings_devices"
+            case .appearance:    return "appearance"
+            case .general:       return "general"
+            case .security:      return "security"
+            case .notifications: return "notifications"
+            case .storage:       return "desktop_settings_storage"
+            case .transcription: return "stt_section_title"
+            case .network:       return "network"
+            case .diagnostics:   return "diagnostics"
+            }
+        }
     }
 
     @AppStorage(DesktopSettingsSelection.selectedSectionKey) private var selectedRawValue = Section.account.rawValue
@@ -41,7 +56,7 @@ struct DesktopSettingsView: View {
         HStack(spacing: 0) {
             // MARK: Sidebar
             VStack(alignment: .leading, spacing: 0) {
-                Text("SETTINGS")
+                Text(LocalizedStringKey("settings"))
                     .font(CTFont.bold(11))
                     .foregroundStyle(Color.CT.accent)
                     .tracking(3)
@@ -100,10 +115,9 @@ struct DesktopSettingsView: View {
                         .fill(Color.CT.accent)
                         .frame(width: 2, height: 14)
                 }
-                Text(section.rawValue)
+                Text(LocalizedStringKey(section.titleKey))
                     .font(CTFont.regular(12))
                     .foregroundStyle(isActive ? Color.CT.accent : Color.CT.textDim)
-                    .tracking(isActive ? 1 : 0)
                 Spacer()
             }
             .padding(.leading, isActive ? 12 : 16)
@@ -137,7 +151,9 @@ private struct DesktopAccountSettingsTab: View {
                             .font(CTFont.regular(13))
                             .foregroundStyle(Color.CT.danger)
                         Spacer()
-                        Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.danger.opacity(0.6))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.CT.danger.opacity(0.6))
                     }
                     .padding(.horizontal, 12).padding(.vertical, 10)
                     .contentShape(Rectangle())

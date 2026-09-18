@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 enum DesktopTheme {
 
@@ -36,7 +37,9 @@ enum DesktopTheme {
     static let bubbleIncoming      = Color.CT.noise.opacity(0.5)
 
     // MARK: - Active chat row indicator
-    static let activeBorderWidth: CGFloat = 2
+    static let activeBorderWidth: CGFloat = 1
+    static let activeFillOpacity: Double = 0.12
+    static let activeStrokeOpacity: Double = 0.45
     static let activeBorderColor   = Color.CT.accent
 
     // MARK: - Typography (→ CTFont / JetBrains Mono)
@@ -49,26 +52,78 @@ enum DesktopTheme {
     }
 }
 
-// MARK: - Active chat row modifier
-
-struct DesktopActiveRowModifier: ViewModifier {
+/// Selection chrome drawn **behind** the row. The system `List(selection:)` highlight
+/// paints an opaque accent over the cell and recolors the hexagon; this view is the
+/// replacement once that highlight is turned off (`DesktopListSelectionChrome`).
+struct DesktopSelectedRowChrome: View {
     let isActive: Bool
 
-    func body(content: Content) -> some View {
-        content
-            .background(isActive ? DesktopTheme.backgroundActive : Color.clear)
-            .overlay(alignment: .leading) {
-                if isActive {
-                    Rectangle()
-                        .fill(DesktopTheme.activeBorderColor)
-                        .frame(width: DesktopTheme.activeBorderWidth)
-                }
+    var body: some View {
+        ZStack {
+            Color.CT.bg
+            if isActive {
+                CTShape.card()
+                    .fill(Color.CT.accent.opacity(DesktopTheme.activeFillOpacity))
+                    .overlay(
+                        CTShape.card()
+                            .strokeBorder(
+                                Color.CT.accent.opacity(DesktopTheme.activeStrokeOpacity),
+                                lineWidth: DesktopTheme.activeBorderWidth
+                            )
+                    )
+                    .padding(.horizontal, CTLayout.inlinePad / 2)
+                    .padding(.vertical, 2)
             }
+        }
+    }
+}
+
+/// Walks up to the enclosing `NSTableView` and drops its selection highlight.
+/// SwiftUI `List` on macOS still uses that overlay, and `listRowBackground` sits
+/// underneath it — so without this the system blue wins and tints the avatar.
+private struct DesktopListSelectionChrome: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        SelectionChromeHost()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    final class SelectionChromeHost: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            DispatchQueue.main.async { [weak self] in self?.apply() }
+        }
+
+        override func viewDidMoveToSuperview() {
+            super.viewDidMoveToSuperview()
+            DispatchQueue.main.async { [weak self] in self?.apply() }
+        }
+
+        private func apply() {
+            var view: NSView? = self
+            while let current = view {
+                if let table = current as? NSTableView {
+                    table.selectionHighlightStyle = .none
+                    return
+                }
+                view = current.superview
+            }
+        }
     }
 }
 
 extension View {
     func desktopActiveRow(_ isActive: Bool) -> some View {
-        modifier(DesktopActiveRowModifier(isActive: isActive))
+        listRowBackground(DesktopSelectedRowChrome(isActive: isActive))
+    }
+
+    /// Call once on the `List`, not per row.
+    func desktopSuppressSystemListSelection() -> some View {
+        background {
+            DesktopListSelectionChrome()
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 }

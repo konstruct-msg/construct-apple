@@ -2,7 +2,7 @@
 //  ChatListNavigation.swift
 //  Construct Desktop
 //
-//  Where ⌘J, ⌘K and ⌘1…9 land.
+//  Where ⌥⌘↓, ⌥⌘↑ and ⌘1…9 land.
 //
 //  Split out of the list view because the arithmetic has more edge cases than it looks: nothing
 //  open yet, the ends of the list, an index past the end, a search box that has hidden the chat
