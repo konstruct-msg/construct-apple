@@ -543,7 +543,11 @@ class MessageRetryManager {
     /// cannot reconstruct. Both retry branches need this — one to re-encrypt, the other only to
     /// mirror — so it lives in one place rather than being inlined at the first caller and
     /// forgotten at the second, which is how the mirror went missing in the first place.
-    static func recoverWirePlaintext(for message: Message) -> Data? {
+    /// Reads the row on whatever queue owns it (often a background `perform`). The
+    /// type is `@MainActor` for retry UI; this reconstruction is pure on the
+    /// `Message` fields and must not hop — hopping would touch a background-context
+    /// object on the main thread.
+    nonisolated static func recoverWirePlaintext(for message: Message) -> Data? {
         guard message.contentType != .media else { return nil }
         let text = message.displayText
         guard !text.isEmpty, !MessageContentType.isControlPayload(text) else { return nil }
