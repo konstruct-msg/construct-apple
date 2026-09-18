@@ -597,8 +597,9 @@ private struct MediaGridView: View {
 
     var body: some View {
         // Square-crop mosaic: 2 = two squares, 3 = big-left + 2 stacked right,
-        // 4 = balanced 2×2, 5+ = editorial hero + expanded 2-column tail. Outer corners are
-        // rounded by clipping the whole album; inner tiles are square with 2px gaps.
+        // 4 = balanced 2×2, 5+ = editorial hero + 2-column tail (a leftover last
+        // tile spans full width). Outer corners are rounded by clipping the whole
+        // album; inner tiles are square with 2px gaps.
         Group {
             switch itemCount {
             case 2:  twoLayout
@@ -678,19 +679,42 @@ private struct MediaGridView: View {
     @ViewBuilder
     private func editorialTailLayout(startingAt startIndex: Int) -> some View {
         let t = (albumWidth - spacing) / 2
+        let rows = MediaAlbumGridLayout.tailRows(itemCount: itemCount, startingAt: startIndex)
         VStack(spacing: spacing) {
-            ForEach(Array(stride(from: startIndex, to: itemCount, by: 2)), id: \.self) { rowStart in
-                HStack(spacing: spacing) {
-                    tile(rowStart, t, t)
-                    if rowStart + 1 < itemCount {
-                        tile(rowStart + 1, t, t)
-                    } else {
-                        Color.clear
-                            .frame(width: t, height: t)
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                if row.count == 2 {
+                    HStack(spacing: spacing) {
+                        tile(row[0], t, t)
+                        tile(row[1], t, t)
                     }
+                } else if let only = row.first {
+                    // Leftover last photo spans the album, rather than hanging in the left
+                    // column next to an empty cell.
+                    tile(only, albumWidth, t)
                 }
             }
         }
+    }
+}
+
+/// How the 5+ mosaic's tail is grouped. Extracted so a hanging last tile is a
+/// named decision a test can break, not a `Color.clear` spacer in the view.
+enum MediaAlbumGridLayout {
+    /// Rows of 2, with a leftover last index in its own row (drawn full-width).
+    static func tailRows(itemCount: Int, startingAt startIndex: Int) -> [[Int]] {
+        guard startIndex < itemCount else { return [] }
+        var rows: [[Int]] = []
+        var i = startIndex
+        while i < itemCount {
+            if i + 1 < itemCount {
+                rows.append([i, i + 1])
+                i += 2
+            } else {
+                rows.append([i])
+                i += 1
+            }
+        }
+        return rows
     }
 }
 

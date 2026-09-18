@@ -30,4 +30,18 @@ enum ReactionCapsulePlacement: Equatable {
         if spaceAbove >= capsuleHeight { return .above }
         return spaceBelow >= spaceAbove ? .below : .above
     }
+
+    /// Room under the bubble before the composer (which sits on the keyboard when it is up).
+    ///
+    /// `visibleBottom` is the top of the keyboard, or the window bottom when there is none.
+    /// Subtracting `composerHeight` is what the old `UIScreen.bounds - 54` skipped: with the
+    /// keyboard open that overstated the gap, the capsule went `.below`, and it rendered in
+    /// the sliver between the photo and the glass — clipped for a beat until layout settled.
+    static func spaceBelow(
+        bubbleMaxY: CGFloat,
+        visibleBottom: CGFloat,
+        composerHeight: CGFloat
+    ) -> CGFloat {
+        visibleBottom - composerHeight - bubbleMaxY
+    }
 }
