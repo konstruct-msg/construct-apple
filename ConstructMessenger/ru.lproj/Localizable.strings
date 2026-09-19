@@ -1058,6 +1058,10 @@
 "transfer_error_connection" = "Соединение прервано. Попробуйте снова.";
 "transfer_error_corrupt" = "Данные передачи повреждены. Попробуйте снова.";
 "transfer_error_cancelled" = "Передача была отменена.";
+"transfer_error_history_v1_refused" = "Эта передача слишком старая для истории чатов. Обновите другое устройство.";
+"history_sync_qr_pin_mismatch" = "Код не совпадает — начните привязку заново.";
+"history_sync_kem_key_id_mismatch" = "Файл устарел. Попросите новое устройство прислать новый файл.";
+"history_sync_no_hybrid_key" = "Обновите другое устройство и попробуйте снова.";
 
 // History Sync (device-to-device after linking)
 "history_sync_send_title" = "Передать историю";

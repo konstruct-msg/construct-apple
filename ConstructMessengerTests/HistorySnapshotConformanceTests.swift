@@ -147,10 +147,14 @@ final class HistorySnapshotConformanceTests: XCTestCase {
                 try assertDiscovery(v, keys: file.keys)
             case "V18":
                 try assertQRPin(v, keys: file.keys)
-            case "V19", "V21", "V22":
-                try assertOpeningFrame(v, expectedLen: file.constants.ctt1V2OpeningLen)
+            case "V19":
+                try assertOpeningVerifies(v, keys: file.keys, expectedLen: file.constants.ctt1V2OpeningLen)
             case "V20":
-                try assertFrame(v, magic: nil, expectedLen: file.constants.ctt1V2ReplyLen)
+                try assertReplyParses(v, expectedLen: file.constants.ctt1V2ReplyLen)
+            case "V21":
+                try assertOpeningEd25519OnlyFails(v, keys: file.keys, expectedLen: file.constants.ctt1V2OpeningLen)
+            case "V22":
+                try assertOpeningZeroKemCtMalformed(v, expectedLen: file.constants.ctt1V2OpeningLen)
             case "V23", "V24":
                 try assertFrame(v, magic: "CTHF", expectedLen: file.constants.cthfHeaderLen)
             default:
@@ -280,10 +284,66 @@ final class HistorySnapshotConformanceTests: XCTestCase {
         XCTAssertEqual(fp.count, 32)
     }
 
-    private func assertOpeningFrame(_ v: Vector, expectedLen: Int) throws {
+    private func assertOpeningVerifies(_ v: Vector, keys: Keys, expectedLen: Int) throws {
         try assertFrame(v, magic: "CTT1", expectedLen: expectedLen)
         let data = try hexData(try XCTUnwrap(v.hex))
-        XCTAssertEqual(data[4], 0x02, "\(v.id): CTT1 version byte")
+        XCTAssertEqual(data[4], 0x02, v.id)
+        let opening = try CTT1V2Opening.parse(data)
+        XCTAssertEqual(opening.type, .historySync)
+        XCTAssertEqual(try opening.serialize(), data, "\(v.id): serialize is the inverse of parse")
+        let known = CTT1V2Verify.Known(
+            identityPublic: try hexData(keys.offeringIdentityPublic),
+            hybridPublic: try hexData(keys.hybridPublic),
+            localDeviceId: try hexData(keys.receiverDeviceIdRaw),
+            kyberKeyId: 7,
+            qrFp: HistorySnapshotDisposition.qrFingerprint(
+                identityPublic: try hexData(keys.offeringIdentityPublic),
+                hybridPublic: try hexData(keys.hybridPublic)
+            )
+        )
+        if case .failure(let err) = CTT1V2Verify.opening(opening, known: known) {
+            XCTFail("\(v.id): verify failed \(err)")
+        }
+        let untagged = try hybridVerify(
+            publicKey: [UInt8](opening.senderHybridPub),
+            message: [UInt8](opening.signedTranscript),
+            signature: [UInt8](opening.signature)
+        )
+        XCTAssertFalse(untagged, "\(v.id): signature must fail without the domain tag")
+    }
+
+    private func assertReplyParses(_ v: Vector, expectedLen: Int) throws {
+        try assertFrame(v, magic: nil, expectedLen: expectedLen)
+        let data = try hexData(try XCTUnwrap(v.hex))
+        let reply = try CTT1V2Reply.parse(data)
+        XCTAssertEqual(try reply.serialize(), data, "\(v.id): serialize is the inverse of parse")
+    }
+
+    private func assertOpeningEd25519OnlyFails(_ v: Vector, keys: Keys, expectedLen: Int) throws {
+        try assertFrame(v, magic: "CTT1", expectedLen: expectedLen)
+        let opening = try CTT1V2Opening.parse(try hexData(try XCTUnwrap(v.hex)))
+        let known = CTT1V2Verify.Known(
+            identityPublic: try hexData(keys.offeringIdentityPublic),
+            hybridPublic: try hexData(keys.hybridPublic),
+            localDeviceId: try hexData(keys.receiverDeviceIdRaw),
+            kyberKeyId: 7,
+            qrFp: HistorySnapshotDisposition.qrFingerprint(
+                identityPublic: try hexData(keys.offeringIdentityPublic),
+                hybridPublic: try hexData(keys.hybridPublic)
+            )
+        )
+        if case .failure(let err) = CTT1V2Verify.opening(opening, known: known) {
+            XCTAssertEqual(err, .signatureInvalid, v.id)
+        } else {
+            XCTFail("\(v.id): Ed25519-only signature must not verify")
+        }
+    }
+
+    private func assertOpeningZeroKemCtMalformed(_ v: Vector, expectedLen: Int) throws {
+        try assertFrame(v, magic: "CTT1", expectedLen: expectedLen)
+        XCTAssertThrowsError(try CTT1V2Opening.parse(try hexData(try XCTUnwrap(v.hex))), v.id) { err in
+            XCTAssertEqual(err as? CTT1V2Error, .malformed, v.id)
+        }
     }
 
     private func assertFrame(_ v: Vector, magic: String?, expectedLen: Int) throws {

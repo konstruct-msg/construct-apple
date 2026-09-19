@@ -116,13 +116,18 @@ enum HistorySnapshotDisposition {
         hexPrefix16(sha256(Data(("ctt1_instance:" + tag).utf8)))
     }
 
-    /// Flow A pin: SHA256(identity_pub || hybrid_pub) equals the 32-byte fp.
-    static func qrPinMatches(identityPublic: Data, hybridPublic: Data, fp: Data) -> Bool {
-        guard fp.count == 32 else { return false }
+    /// Flow A pin: SHA256(identity_pub || hybrid_pub), 32 bytes.
+    static func qrFingerprint(identityPublic: Data, hybridPublic: Data) -> Data {
         var preimage = Data()
         preimage.append(identityPublic)
         preimage.append(hybridPublic)
-        return equal(Data(sha256(preimage)), fp)
+        return Data(sha256(preimage))
+    }
+
+    /// Flow A pin: SHA256(identity_pub || hybrid_pub) equals the 32-byte fp.
+    static func qrPinMatches(identityPublic: Data, hybridPublic: Data, fp: Data) -> Bool {
+        guard fp.count == 32 else { return false }
+        return equal(qrFingerprint(identityPublic: identityPublic, hybridPublic: hybridPublic), fp)
     }
 
     // MARK: - Classify

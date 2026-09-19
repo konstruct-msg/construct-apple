@@ -1047,6 +1047,10 @@
 "transfer_error_connection" = "Connection lost. Try again.";
 "transfer_error_corrupt" = "Transfer data is corrupted. Try again.";
 "transfer_error_cancelled" = "Transfer was cancelled.";
+"transfer_error_history_v1_refused" = "This transfer is too old for chat history. Update the other device.";
+"history_sync_qr_pin_mismatch" = "This code does not match — start the link again.";
+"history_sync_kem_key_id_mismatch" = "This file is stale. Ask your other device for a new file.";
+"history_sync_no_hybrid_key" = "Update the other device, then try again.";
 
 // History Sync (device-to-device after linking)
 "history_sync_send_title" = "Transfer History";

@@ -66,7 +66,15 @@ final class DeviceLinkViewModel {
 
         do {
             let result = try await AuthServiceClient.shared.initiateDeviceLink()
-            let url = "konstruct://link?token=\(result.token)"
+            var url = "konstruct://link?token=\(result.token)"
+            if let identity = try? CryptoManager.shared.localBundlePublicKeys().identityPublic,
+               let hybrid = CryptoManager.shared.hybridIdentityPublicKey(),
+               !hybrid.isEmpty {
+                let fp = HistorySnapshotDisposition.qrFingerprint(
+                    identityPublic: identity, hybridPublic: hybrid
+                )
+                url += "&fp=" + fp.map { String(format: "%02x", $0) }.joined()
+            }
             qrContent = url
             tokenExpiresAt = Date(timeIntervalSince1970: TimeInterval(result.expiresAt))
             Log.info("Device link QR generated — expires \(result.expiresAt)", category: "DeviceLink")
@@ -105,6 +113,9 @@ final class DeviceLinkViewModel {
             }
             pendingApproval = PendingApprovalInfo(deviceName: name, scannedURL: scannedURL)
         } else if let token = extractToken(from: scannedURL), !token.isEmpty {
+            if let fp = Self.extractFp(from: scannedURL) {
+                DeviceLinkPendingPin.store(fp, forToken: token)
+            }
             await confirmLink(token: token)
         } else {
             errorMessage = NSLocalizedString("device_link_invalid_qr", comment: "")
@@ -147,6 +158,7 @@ final class DeviceLinkViewModel {
                 role: .linkedNewDevice,
                 pendingDeviceId: nil
             )
+            DeviceLinkPendingPin.bindToAccount(userId: result.userId, fromToken: token)
 
         } catch {
             errorMessage = localizedError(error)
@@ -356,6 +368,27 @@ final class DeviceLinkViewModel {
             return nil
         }
         return item.value
+    }
+
+    /// 64 hex chars → 32-byte Flow A pin. Missing `fp` is allowed (old QR); history
+    /// handshake then logs `qr_pin_absent` and refuses history, not the link.
+    static func extractFp(from url: String) -> Data? {
+        guard let components = URLComponents(string: url),
+              let value = components.queryItems?.first(where: { $0.name == "fp" })?.value,
+              value.count == 64
+        else { return nil }
+        var data = Data()
+        data.reserveCapacity(32)
+        var idx = value.startIndex
+        while idx < value.endIndex {
+            let next = value.index(idx, offsetBy: 2)
+            guard next <= value.endIndex, let byte = UInt8(value[idx..<next], radix: 16) else {
+                return nil
+            }
+            data.append(byte)
+            idx = next
+        }
+        return data.count == 32 ? data : nil
     }
 
     private func localizedError(_ error: Error) -> String {

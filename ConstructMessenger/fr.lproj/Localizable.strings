@@ -994,6 +994,10 @@
 "transfer_error_connection" = "Connexion perdue. Réessayez.";
 "transfer_error_corrupt" = "Les données de transfert sont corrompues. Réessayez.";
 "transfer_error_cancelled" = "Le transfert a été annulé.";
+"transfer_error_history_v1_refused" = "Ce transfert est trop ancien pour l’historique. Mettez à jour l’autre appareil.";
+"history_sync_qr_pin_mismatch" = "Ce code ne correspond pas — recommencez la liaison.";
+"history_sync_kem_key_id_mismatch" = "Ce fichier est périmé. Demandez un nouveau fichier à l’autre appareil.";
+"history_sync_no_hybrid_key" = "Mettez à jour l’autre appareil, puis réessayez.";
 "history_sync_send_title" = "Transférer l’historique";
 "history_sync_receive_title" = "Recevoir l’historique";
 "history_sync_offer_title" = "Transférer l’historique des messages ?";

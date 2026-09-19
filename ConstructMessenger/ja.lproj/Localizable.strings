@@ -921,6 +921,10 @@
 "transfer_error_connection" = "接続が失われました。もう一度お試しください。";
 "transfer_error_corrupt" = "転送データが破損しています。もう一度お試しください。";
 "transfer_error_cancelled" = "転送がキャンセルされました。";
+"transfer_error_history_v1_refused" = "この転送はチャット履歴には古すぎます。もう一方の端末を更新してください。";
+"history_sync_qr_pin_mismatch" = "コードが一致しません。リンクをやり直してください。";
+"history_sync_kem_key_id_mismatch" = "このファイルは古くなっています。もう一方の端末に新しいファイルを依頼してください。";
+"history_sync_no_hybrid_key" = "もう一方の端末を更新してから、もう一度お試しください。";
 
 // History Sync (device-to-device after linking)
 "history_sync_send_title" = "履歴を転送";
