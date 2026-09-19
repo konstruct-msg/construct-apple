@@ -82,18 +82,11 @@ final class HistoryMemoryDuplex: @unchecked Sendable {
 
         func readExact(_ count: Int) async throws -> Data {
             while true {
-                lock.lock()
-                if data.count >= count {
-                    let out = Data(data.prefix(count))
-                    data.removeSubrange(0..<count)
-                    lock.unlock()
-                    return out
+                switch take(count) {
+                case .ready(let out): return out
+                case .closed: throw HistoryByteTransportError.closed
+                case .wait: break
                 }
-                if closed {
-                    lock.unlock()
-                    throw HistoryByteTransportError.closed
-                }
-                lock.unlock()
                 try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
                     lock.lock()
                     if data.count >= count {
@@ -108,6 +101,25 @@ final class HistoryMemoryDuplex: @unchecked Sendable {
                     }
                 }
             }
+        }
+
+        private enum Take {
+            case ready(Data)
+            case closed
+            case wait
+        }
+
+        /// One locked look at the buffer. Synchronous on purpose: `readExact` is async and an
+        /// NSLock must not be held across a suspension.
+        private func take(_ count: Int) -> Take {
+            lock.lock()
+            defer { lock.unlock() }
+            if data.count >= count {
+                let out = Data(data.prefix(count))
+                data.removeSubrange(0..<count)
+                return .ready(out)
+            }
+            return closed ? .closed : .wait
         }
 
         func close() {

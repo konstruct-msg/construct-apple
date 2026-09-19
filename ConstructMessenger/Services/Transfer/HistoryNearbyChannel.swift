@@ -203,21 +203,30 @@ final class HistoryNearbyChannel {
             userId: local.userIdRaw
         )
 
-        // The encoder walks Core Data synchronously when the stream is created, so create it
-        // on the context's queue; the records then flow to the sender from the buffer.
-        let encoder = HistorySnapshotEncoder(identity: identity)
+        // The encoder walks Core Data synchronously when the stream is created, so it lives
+        // entirely on the context's queue; only the buffered stream and the final counters
+        // come back out. The records then flow to the sender from the buffer.
+        let counters: HistoryEncodeCounters
         switch kind {
         case .transcript:
-            let records = await context.perform { encoder.encodeTranscript(context: context) }
+            let (records, c) = await context.perform {
+                let encoder = HistorySnapshotEncoder(identity: identity)
+                return (encoder.encodeTranscript(context: context), encoder.counters)
+            }
+            counters = c
             try await coordinator.sendTranscript(records: records, over: transport, session: session)
         case .media:
-            let records = await context.perform { encoder.encodeMedia(context: context) }
+            let (records, c) = await context.perform {
+                let encoder = HistorySnapshotEncoder(identity: identity)
+                return (encoder.encodeMedia(context: context), encoder.counters)
+            }
+            counters = c
             try await coordinator.sendMedia(records: records, over: transport, session: session)
         case .skip:
-            break
+            counters = HistoryEncodeCounters()
         }
         Log.info(
-            "history_phase_sent kind=\(kind) undecryptable=\(encoder.counters.messageUndecryptable) control=\(encoder.counters.messageControlSkipped) unconvertible=\(encoder.counters.messageLegacyUnconvertible) media_too_large=\(encoder.counters.mediaTooLarge)",
+            "history_phase_sent kind=\(kind) undecryptable=\(counters.messageUndecryptable) control=\(counters.messageControlSkipped) unconvertible=\(counters.messageLegacyUnconvertible) media_too_large=\(counters.mediaTooLarge)",
             category: "HistorySync"
         )
     }

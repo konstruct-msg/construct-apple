@@ -45,7 +45,10 @@ import CryptoKit
 /// plus one native NWConnection per accepted connection. Retain the instance for
 /// the life of the tunnel; `stop()` (or deinit) closes the listener and tears down
 /// every active connection, which EOFs each Rust ferry.
-final class VeilFrontExternalDialer {
+///
+/// `@unchecked Sendable`: every mutable field is guarded by `lock`; the inputs are `let`.
+/// The instance crosses into `acceptQueue` and per-connection callbacks by design.
+final class VeilFrontExternalDialer: @unchecked Sendable {
 
     enum DialError: Error, CustomStringConvertible {
         case invalidExporter
@@ -131,19 +134,25 @@ final class VeilFrontExternalDialer {
             throw error
         }
 
-        lock.lock()
-        if stopped {
-            lock.unlock()
+        guard adoptListener(bound.fd) else {
             prepared.conn.cancel()
             close(bound.fd)
             throw DialError.stopped
         }
-        listenFD = bound.fd
-        lock.unlock()
 
         // 3. Serve the validated connection as the first accepted, then loop.
         acceptQueue.async { [weak self] in self?.runAcceptLoop(first: prepared) }
         return bound.port
+    }
+
+    /// Publishes the bound listener fd unless `stop()` already ran. Kept synchronous
+    /// because `start()` is async and an NSLock must not be held across a suspension.
+    private func adoptListener(_ fd: Int32) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if stopped { return false }
+        listenFD = fd
+        return true
     }
 
     /// Closes the listener (which unblocks the accept loop) and tears down every
