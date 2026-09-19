@@ -235,6 +235,8 @@ struct DeviceBundleData {
     let bundle: PublicKeyBundleData
     /// Platform of the remote device (ios / android / desktop / unspecified).
     let platform: Shared_Proto_Core_V1_DevicePlatform
+    /// Hybrid identity public (Ed25519‖ML-DSA-65). Empty when the peer has none.
+    var hybridIdentityKey: Data = Data()
 }
 
 // MARK: - Auth Response Data

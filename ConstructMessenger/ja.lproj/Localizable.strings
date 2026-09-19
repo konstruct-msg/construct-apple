@@ -938,6 +938,9 @@
 "history_sync_send_offer_yes" = "履歴を同期";
 "history_sync_send_offer_skip" = "スキップ";
 "history_sync_user_mismatch" = "履歴の転送に失敗しました：この履歴は別のアイデンティティのものです。";
+"history_sync_chats_transferred" = "チャットを転送しました。写真とファイルを送信しています…";
+"history_sync_media_incomplete" = "チャットは転送済み、メディアは未完了です。設定から再試行するか、ファイルを保存してください。";
+"history_sync_save_file_instead" = "代わりにファイルを保存してください。";
 "history_sync_auto_connecting" = "電話に接続中…";
 "history_sync_auto_sending" = "履歴をコンピュータに送信中…";
 "history_sync_skip_title" = "履歴をスキップ";

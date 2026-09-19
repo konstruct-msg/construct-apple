@@ -1079,6 +1079,9 @@
 "history_sync_skip_title" = "Пропустить историю";
 "history_sync_skip_sending" = "Завершение без истории…";
 "history_sync_user_mismatch" = "Ошибка переноса истории: история принадлежит другому аккаунту.";
+"history_sync_chats_transferred" = "Чаты переданы. Отправляем фото и файлы…";
+"history_sync_media_incomplete" = "Чаты переданы, медиа неполные — повторите из Настроек или сохраните файл.";
+"history_sync_save_file_instead" = "Сохраните файл.";
 "call_error_not_contacts" = "Звонить можно только тем, с кем вы уже связаны.";
 "call_error_busy" = "Вы уже в звонке.";
 "call_error_peer_offline" = "Собеседник не в сети. Попробуйте позже.";

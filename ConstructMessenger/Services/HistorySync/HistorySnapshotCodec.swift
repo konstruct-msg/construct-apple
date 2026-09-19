@@ -50,36 +50,42 @@ enum HistorySnapshotCodec {
     static let maxRecordBytes: UInt64 = 512 * 1024 * 1024
 
     static func decode(_ data: Data) throws -> [HistoryRecord] {
-        var reader = Reader(data: data)
-        var out: [HistoryRecord] = []
-        while let rec = try reader.next() {
-            out.append(rec)
-            if rec.isEnd { break }
-        }
+        var reader = IncrementalReader()
+        var out = try reader.push(data)
+        out += try reader.finish()
         return out
     }
 
     static func encode(_ records: [HistoryRecord]) throws -> Data {
-        var out = Data()
-        out.append(magic)
-        out.append(version)
+        var out = encodePreamble()
         var sawEnd = false
         for rec in records {
-            try append(rec, to: &out)
+            out.append(try encodeRecord(rec))
             if rec.isEnd { sawEnd = true }
         }
         if !sawEnd { out.append(HistoryRecordType.end) }
         return out
     }
 
+    static func encodePreamble() -> Data {
+        var out = Data()
+        out.append(magic)
+        out.append(version)
+        return out
+    }
+
+    static func encodeRecord(_ record: HistoryRecord) throws -> Data {
+        var out = Data()
+        try append(record, to: &out)
+        return out
+    }
+
     static func makeStream(from data: Data) -> AsyncThrowingStream<HistoryRecord, Error> {
         AsyncThrowingStream { continuation in
-            var reader = Reader(data: data)
+            var reader = IncrementalReader()
             do {
-                while let rec = try reader.next() {
-                    continuation.yield(rec)
-                    if rec.isEnd { break }
-                }
+                for rec in try reader.push(data) { continuation.yield(rec) }
+                for rec in try reader.finish() { continuation.yield(rec) }
                 continuation.finish()
             } catch {
                 continuation.finish(throwing: error)
@@ -87,76 +93,92 @@ enum HistorySnapshotCodec {
         }
     }
 
-    // MARK: - Reader
+    /// Cap on unparsed bytes: one max record plus one nearby chunk. Do not allocate more.
+    static var maxAccumulatorBytes: Int { Int(maxRecordBytes) + 65_536 }
 
-    struct Reader {
-        private let bytes: Data
-        private var offset: Int
+    /// Feed-as-you-go reader. Incomplete records wait; `finish()` turns leftover into `truncated`.
+    struct IncrementalReader {
+        private var buffer = Data()
+        private var preambleDone = false
         private var phase: UInt32?
         private var previousKnown: UInt8?
+        private var sawEnd = false
 
-        init(data: Data) {
-            bytes = data.startIndex == 0 ? data : Data(data)
-            offset = 0
-            phase = nil
-            previousKnown = nil
-        }
-
-        mutating func next() throws -> HistoryRecord? {
-            if offset == 0 {
-                try consumePreamble()
+        mutating func push(_ data: Data) throws -> [HistoryRecord] {
+            guard !sawEnd else {
+                if !data.isEmpty { throw HistorySnapshotError.malformed }
+                return []
             }
-            guard offset < bytes.count else {
-                throw HistorySnapshotError.truncated
-            }
-            let type = bytes[offset]
-            offset += 1
-            if type == HistoryRecordType.end {
-                if offset != bytes.count {
-                    throw HistorySnapshotError.malformed
-                }
-                return .end
-            }
-            guard offset + 8 <= bytes.count else {
-                throw HistorySnapshotError.truncated
-            }
-            let payloadLen = readUInt64LE(bytes, at: offset)
-            offset += 8
-            if payloadLen > maxRecordBytes {
+            if !data.isEmpty { buffer.append(data) }
+            if buffer.count > HistorySnapshotCodec.maxAccumulatorBytes {
                 throw HistorySnapshotError.payloadTooLarge
             }
-            let remaining = bytes.count - offset
-            guard payloadLen <= UInt64(remaining) else {
-                throw HistorySnapshotError.truncated
-            }
-            let len = Int(payloadLen)
-            let payload = bytes.subdata(in: offset..<(offset + len))
-            offset += len
-
-            let record = try decodePayload(type: type, payload: payload)
-            try checkOrder(record)
-            return record
+            return try drain(requireComplete: false)
         }
 
-        private mutating func consumePreamble() throws {
-            guard bytes.count >= 6 else { throw HistorySnapshotError.truncated }
-            guard bytes[0..<4] == HistorySnapshotCodec.magic else {
-                throw HistorySnapshotError.malformed
+        mutating func finish() throws -> [HistoryRecord] {
+            let recs = try drain(requireComplete: true)
+            if !sawEnd { throw HistorySnapshotError.truncated }
+            return recs
+        }
+
+        private mutating func drain(requireComplete: Bool) throws -> [HistoryRecord] {
+            var out: [HistoryRecord] = []
+            if buffer.startIndex != 0 { buffer = Data(buffer) }
+            if !preambleDone {
+                if buffer.count < 5 {
+                    if requireComplete { throw HistorySnapshotError.truncated }
+                    return []
+                }
+                guard buffer[0..<4] == HistorySnapshotCodec.magic else {
+                    throw HistorySnapshotError.malformed
+                }
+                guard buffer[4] == HistorySnapshotCodec.version else {
+                    throw HistorySnapshotError.unknownVersion
+                }
+                buffer.removeSubrange(0..<5)
+                preambleDone = true
             }
-            guard bytes[4] == HistorySnapshotCodec.version else {
-                throw HistorySnapshotError.unknownVersion
+            while !sawEnd {
+                if buffer.isEmpty {
+                    if requireComplete { throw HistorySnapshotError.truncated }
+                    break
+                }
+                let type = buffer[0]
+                if type == HistoryRecordType.end {
+                    if buffer.count != 1 { throw HistorySnapshotError.malformed }
+                    buffer.removeAll()
+                    sawEnd = true
+                    out.append(.end)
+                    break
+                }
+                if buffer.count < 9 {
+                    if requireComplete { throw HistorySnapshotError.truncated }
+                    break
+                }
+                let payloadLen = readUInt64LE(buffer, at: 1)
+                if payloadLen > maxRecordBytes {
+                    throw HistorySnapshotError.payloadTooLarge
+                }
+                let total = 9 + Int(payloadLen)
+                if buffer.count < total {
+                    if requireComplete { throw HistorySnapshotError.truncated }
+                    break
+                }
+                let payload = buffer.subdata(in: 9..<total)
+                buffer.removeSubrange(0..<total)
+                let record = try decodePayload(type: type, payload: payload)
+                try checkOrder(record)
+                out.append(record)
             }
-            offset = 5
+            return out
         }
 
         private mutating func checkOrder(_ record: HistoryRecord) throws {
             if case .skipped = record { return }
             let incoming = record.type
             if incoming == HistoryRecordType.manifest {
-                guard let manifest = {
-                    if case .manifest(let m) = record { return m }
-                    return nil
-                }() else { return }
+                guard case .manifest(let manifest) = record else { return }
                 switch HistorySnapshotDisposition.accept(manifest: manifest, expectedUserId: manifest.userID) {
                 case .failure(let err) where err == .unknownVersion || err == .malformed:
                     throw err

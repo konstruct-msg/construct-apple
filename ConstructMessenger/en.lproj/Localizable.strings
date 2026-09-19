@@ -1068,6 +1068,9 @@
 "history_sync_skip_title" = "Skip History";
 "history_sync_skip_sending" = "Finishing without history…";
 "history_sync_user_mismatch" = "History transfer failed: this history belongs to a different identity.";
+"history_sync_chats_transferred" = "Chats transferred. Sending photos and files…";
+"history_sync_media_incomplete" = "Chats transferred, media incomplete — retry from Settings or save a file.";
+"history_sync_save_file_instead" = "Save a file instead.";
 "call_error_not_contacts" = "You can only call people you are connected with.";
 "call_error_busy" = "You're already in a call.";
 "call_error_peer_offline" = "They are offline. Try again later.";

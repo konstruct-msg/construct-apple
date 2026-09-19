@@ -36,6 +36,20 @@ enum DeviceLinkPhase: Equatable {
 /// without prompting for history so multi-device fan-out can be verified independently.
 enum DeviceLinkHistorySyncPolicy {
     static let isPostLinkEnabled = false
+
+    /// Stand-only. Production stays on `isPostLinkEnabled`.
+    #if DEBUG
+    static var debugForceEnabled = false
+    #endif
+
+    static var isOffered: Bool {
+        if isPostLinkEnabled { return true }
+        #if DEBUG
+        return debugForceEnabled
+        #else
+        return false
+        #endif
+    }
 }
 
 /// Whether the UI offers to link a second device at all.

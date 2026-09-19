@@ -545,7 +545,7 @@ class AuthViewModel {
         await refreshUserProfileFromServer(userId: outcome.userId)
         finishAuthenticatedSession(userId: outcome.userId, reason: "device_link")
 
-        guard DeviceLinkHistorySyncPolicy.isPostLinkEnabled else {
+        guard DeviceLinkHistorySyncPolicy.isOffered else {
             deviceLinkPhase = .idle
             Log.info("Post-link history sync disabled — continuing with account only", category: "DeviceLink")
             return

@@ -141,9 +141,9 @@ struct DesktopRootView: View {
             }
         }
         .sheet(isPresented: $showReceiveHistorySync) {
-            ReceiveBackupNearbyView(
-                mode: .historySync,
-                autoPairingPIN: historySyncPairingPIN(for: historySyncPendingDeviceId)
+            HistoryTransferReceiveView(
+                userId: authViewModel.currentUserId ?? "",
+                localDeviceId: KeychainManager.shared.loadDeviceID() ?? ""
             )
             .onDisappear {
                 authViewModel.clearDeviceLinkPhase()
