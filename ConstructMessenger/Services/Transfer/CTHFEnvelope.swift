@@ -116,7 +116,7 @@ enum CTHFVerify {
         var kyberKeyId: UInt32
         var senderIdentityPublic: Data
         var senderHybridPublic: Data
-        var qrFp: Data?
+        var pin: HistoryQRPin
     }
 
     static func header(_ header: CTHFHeader, known: Known) -> Result<Void, CTT1V2Error> {
@@ -131,7 +131,12 @@ enum CTHFVerify {
               HistorySnapshotDisposition.equal(header.senderHybridPub, known.senderHybridPublic) else {
             return .failure(.identityMismatch)
         }
-        if let fp = known.qrFp {
+        switch known.pin {
+        case .absent:
+            return .failure(.qrPinAbsent)
+        case .bundleOnly:
+            break
+        case .pinned(let fp):
             guard HistorySnapshotDisposition.qrPinMatches(
                 identityPublic: header.senderIdentityPub,
                 hybridPublic: header.senderHybridPub,

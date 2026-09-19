@@ -79,6 +79,15 @@ final class HistorySnapshotEncoder {
         stream(phase: 3, context: context)
     }
 
+    /// Phase 3 as an array, for a caller already inside `context.perform` — the file writer
+    /// collects before sealing. Same records as `encodeAll`.
+    func collectAll(context: NSManagedObjectContext) throws -> [HistoryRecord] {
+        counters = HistoryEncodeCounters()
+        var out: [HistoryRecord] = []
+        try emit(phase: 3, context: context, yield: { out.append($0) })
+        return out
+    }
+
     // MARK: - Stream
 
     private func stream(

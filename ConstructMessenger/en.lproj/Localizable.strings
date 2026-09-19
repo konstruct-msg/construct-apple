@@ -1081,6 +1081,14 @@
 "history_sync_settings_media" = "Media only";
 "history_sync_settings_hint" = "Send chats or leftover photos and files to a device you already linked.";
 "history_sync_composer_connecting" = "This device is still connecting to this person.";
+"history_sync_importing" = "Importing history…";
+"history_sync_imported_summary" = "%d records imported. Chats are on this device now.";
+"history_sync_qr_pin_absent" = "The link code carried no fingerprint. Update the other device and link again.";
+"history_sync_local_keys_unavailable" = "This device is not ready yet. Try again in a moment.";
+"history_sync_peer_not_found" = "Your other device is no longer in this account.";
+"history_sync_file_ready" = "File ready. Share it to your other device and import it there now — it expires within a week.";
+"history_sync_share_file" = "Share file";
+"history_sync_preparing_file" = "Preparing file…";
 "call_error_not_contacts" = "You can only call people you are connected with.";
 "call_error_busy" = "You're already in a call.";
 "call_error_peer_offline" = "They are offline. Try again later.";

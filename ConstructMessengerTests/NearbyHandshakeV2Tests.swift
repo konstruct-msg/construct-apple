@@ -122,14 +122,14 @@ final class NearbyHandshakeV2Tests: XCTestCase {
     func testMissingQrFpIsAbsent() throws {
         let opening = try CTT1V2Opening.parse(try openingVector())
         var known = try knownOffering()
-        known.qrFp = nil
+        known.pin = .absent
         XCTAssertEqual(failure(CTT1V2Verify.opening(opening, known: known)), .qrPinAbsent)
     }
 
     func testWrongQrFpIsMismatch() throws {
         let opening = try CTT1V2Opening.parse(try openingVector())
         var known = try knownOffering()
-        known.qrFp = Data(repeating: 0xFF, count: 32)
+        known.pin = .pinned(Data(repeating: 0xFF, count: 32))
         XCTAssertEqual(failure(CTT1V2Verify.opening(opening, known: known)), .qrPinMismatch)
     }
 
@@ -233,7 +233,7 @@ final class NearbyHandshakeV2Tests: XCTestCase {
             hybridPublic: hybrid,
             localDeviceId: try hexData(keys.receiverDeviceIdRaw),
             kyberKeyId: 7,
-            qrFp: HistorySnapshotDisposition.qrFingerprint(identityPublic: identity, hybridPublic: hybrid)
+            pin: .pinned(HistorySnapshotDisposition.qrFingerprint(identityPublic: identity, hybridPublic: hybrid))
         )
     }
 

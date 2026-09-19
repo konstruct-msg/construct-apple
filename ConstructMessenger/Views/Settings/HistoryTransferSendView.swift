@@ -26,6 +26,8 @@ struct HistoryTransferSendView: View {
     @Environment(\.managedObjectContext) private var context
     @State private var coordinator = HistoryTransferCoordinator()
     @State private var errorMessage: String?
+    @State private var isWritingFile = false
+    @State private var exportedFile: URL?
 
     var body: some View {
         ZStack {
@@ -43,13 +45,42 @@ struct HistoryTransferSendView: View {
                 ScrollView {
                     LazyVStack(spacing: 24) {
                         statusLabel
-                        if coordinator.phase == .idle || coordinator.phase == .saveFileInstead {
+                        if let file = exportedFile {
+                            Text(NSLocalizedString("history_sync_file_ready", comment: ""))
+                                .font(CTFont.regular(13))
+                                .foregroundStyle(Color.CT.textDim)
+                                .multilineTextAlignment(.center)
+                            CTSectionGroup {
+                                ShareLink(item: file) {
+                                    HStack(spacing: 14) {
+                                        Image(systemName: "square.and.arrow.up")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundStyle(Color.CT.accent)
+                                            .frame(minWidth: 22, alignment: .center)
+                                        Text(NSLocalizedString("history_sync_share_file", comment: ""))
+                                            .font(CTFont.regular(15))
+                                            .foregroundStyle(Color.CT.text)
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, CTLayout.edgePad)
+                                    .frame(minHeight: CTLayout.controlHeight)
+                                    .contentShape(Rectangle())
+                                }
+                            }
+                        } else if isWritingFile {
+                            HStack(spacing: CTLayout.inlinePad) {
+                                ProgressView()
+                                Text(NSLocalizedString("history_sync_preparing_file", comment: ""))
+                                    .font(CTFont.regular(13))
+                                    .foregroundStyle(Color.CT.textDim)
+                            }
+                        } else if coordinator.phase == .idle || coordinator.phase == .saveFileInstead {
                             CTSectionGroup {
                                 ConstructButtonRow(
                                     systemImage: "square.and.arrow.down",
                                     title: LocalizedStringKey("history_sync_save_file")
                                 ) {
-                                    errorMessage = NSLocalizedString("history_sync_no_hybrid_key", comment: "")
+                                    Task { await saveFile() }
                                 }
                             }
                         }
@@ -107,5 +138,38 @@ struct HistoryTransferSendView: View {
         _ = userId
         _ = peerDeviceId
         _ = context
+    }
+
+    // MARK: - File
+
+    /// Seal a phase-3 snapshot to the new device and hand it to the share sheet. The new
+    /// device's keys come from our own account's directory entry, checked against the Flow B
+    /// QR pin when we hold one. Written on a background context; nothing here touches the
+    /// view context.
+    private func saveFile() async {
+        isWritingFile = true
+        defer { isWritingFile = false }
+        do {
+            let local = try HistoryChannel.localKeys()
+            let peer = try await HistoryChannel.fetchPeerKeys(
+                ownUserId: userId,
+                peerDeviceId: peerDeviceId,
+                pinnedIdentity: DeviceLinkPendingPin.peerIdentity(forDeviceId: peerDeviceId)
+            )
+            let background = PersistenceController.shared.container.newBackgroundContext()
+            let url = try await background.perform {
+                let staging = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("konstruct-history-\(UUID().uuidString).cthf")
+                let result = try HistoryChannel.writeFile(to: staging, peer: peer, local: local, context: background)
+                let named = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(HistoryChannel.suggestedFileName(for: result.identity))
+                try? FileManager.default.removeItem(at: named)
+                try FileManager.default.moveItem(at: staging, to: named)
+                return named
+            }
+            exportedFile = url
+        } catch {
+            errorMessage = HistoryTransferUserMessage.text(for: error)
+        }
     }
 }

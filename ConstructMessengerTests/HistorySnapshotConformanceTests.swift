@@ -307,10 +307,10 @@ final class HistorySnapshotConformanceTests: XCTestCase {
             hybridPublic: try hexData(keys.hybridPublic),
             localDeviceId: try hexData(keys.receiverDeviceIdRaw),
             kyberKeyId: 7,
-            qrFp: HistorySnapshotDisposition.qrFingerprint(
+            pin: .pinned(HistorySnapshotDisposition.qrFingerprint(
                 identityPublic: try hexData(keys.offeringIdentityPublic),
                 hybridPublic: try hexData(keys.hybridPublic)
-            )
+            ))
         )
         if case .failure(let err) = CTT1V2Verify.opening(opening, known: known) {
             XCTFail("\(v.id): verify failed \(err)")
@@ -338,10 +338,10 @@ final class HistorySnapshotConformanceTests: XCTestCase {
             hybridPublic: try hexData(keys.hybridPublic),
             localDeviceId: try hexData(keys.receiverDeviceIdRaw),
             kyberKeyId: 7,
-            qrFp: HistorySnapshotDisposition.qrFingerprint(
+            pin: .pinned(HistorySnapshotDisposition.qrFingerprint(
                 identityPublic: try hexData(keys.offeringIdentityPublic),
                 hybridPublic: try hexData(keys.hybridPublic)
-            )
+            ))
         )
         if case .failure(let err) = CTT1V2Verify.opening(opening, known: known) {
             XCTAssertEqual(err, .signatureInvalid, v.id)
@@ -361,10 +361,10 @@ final class HistorySnapshotConformanceTests: XCTestCase {
             kyberKeyId: 7,
             senderIdentityPublic: try hexData(keys.offeringIdentityPublic),
             senderHybridPublic: try hexData(keys.hybridPublic),
-            qrFp: HistorySnapshotDisposition.qrFingerprint(
+            pin: .pinned(HistorySnapshotDisposition.qrFingerprint(
                 identityPublic: try hexData(keys.offeringIdentityPublic),
                 hybridPublic: try hexData(keys.hybridPublic)
-            )
+            ))
         )
         if case .failure(let err) = CTHFVerify.header(header, known: known) {
             XCTFail("\(v.id): verify failed \(err)")
@@ -390,7 +390,7 @@ final class HistorySnapshotConformanceTests: XCTestCase {
             kyberKeyId: v.currentKyberKeyId ?? 7,
             senderIdentityPublic: try hexData(keys.offeringIdentityPublic),
             senderHybridPublic: try hexData(keys.hybridPublic),
-            qrFp: nil
+            pin: .bundleOnly
         )
         if case .failure(let err) = CTHFVerify.header(header, known: known) {
             XCTAssertEqual(err, .kemKeyIdMismatch, v.id)

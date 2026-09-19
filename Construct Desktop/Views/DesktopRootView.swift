@@ -142,16 +142,19 @@ struct DesktopRootView: View {
         }
         .overlay(alignment: .top) {
             if showReceiveHistorySync {
-                HistoryTransferReceiveView(
+                // Banner, not a sheet (desktop-interaction-is-not-ios): the window stays usable
+                // while the person decides. Wi-Fi opens the receive view; file uses the importer.
+                HistoryTransferOfferView(
                     userId: authViewModel.currentUserId ?? "",
-                    localDeviceId: KeychainManager.shared.loadDeviceID() ?? ""
+                    localDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
+                    onFinish: {
+                        authViewModel.clearDeviceLinkPhase()
+                        historySyncPendingDeviceId = nil
+                        showReceiveHistorySync = false
+                    }
                 )
-                .frame(maxHeight: 220)
+                .frame(maxHeight: 360)
                 .background(Color.CT.bg)
-                .onDisappear {
-                    authViewModel.clearDeviceLinkPhase()
-                    historySyncPendingDeviceId = nil
-                }
             }
         }
     }

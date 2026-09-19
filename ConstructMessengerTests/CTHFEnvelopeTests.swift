@@ -106,10 +106,10 @@ final class CTHFEnvelopeTests: XCTestCase {
             kyberKeyId: 7,
             senderIdentityPublic: try hexData(file.keys.offeringIdentityPublic),
             senderHybridPublic: try hexData(file.keys.hybridPublic),
-            qrFp: HistorySnapshotDisposition.qrFingerprint(
+            pin: .pinned(HistorySnapshotDisposition.qrFingerprint(
                 identityPublic: try hexData(file.keys.offeringIdentityPublic),
                 hybridPublic: try hexData(file.keys.hybridPublic)
-            )
+            ))
         )
     }
 

@@ -1022,6 +1022,14 @@
 "history_sync_settings_media" = "Médias uniquement";
 "history_sync_settings_hint" = "Envoyez discussions ou photos et fichiers restants vers un appareil déjà lié.";
 "history_sync_composer_connecting" = "Cet appareil est encore en train de se connecter à cette personne.";
+"history_sync_importing" = "Importation de l’historique…";
+"history_sync_imported_summary" = "%d enregistrements importés. Les discussions sont maintenant sur cet appareil.";
+"history_sync_qr_pin_absent" = "Le code de liaison ne contenait pas d’empreinte. Mettez à jour l’autre appareil et recommencez la liaison.";
+"history_sync_local_keys_unavailable" = "Cet appareil n’est pas encore prêt. Réessayez dans un instant.";
+"history_sync_peer_not_found" = "Votre autre appareil ne fait plus partie de ce compte.";
+"history_sync_file_ready" = "Fichier prêt. Partagez-le vers votre autre appareil et importez-le maintenant : il expire sous une semaine.";
+"history_sync_share_file" = "Partager le fichier";
+"history_sync_preparing_file" = "Préparation du fichier…";
 "call_error_not_contacts" = "Vous ne pouvez appeler que des personnes avec qui vous êtes connecté.";
 "call_error_busy" = "Vous êtes déjà en appel.";
 "call_error_peer_offline" = "La personne est hors ligne. Réessayez plus tard.";

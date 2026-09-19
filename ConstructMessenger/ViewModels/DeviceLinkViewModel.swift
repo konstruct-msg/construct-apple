@@ -239,6 +239,10 @@ final class DeviceLinkViewModel {
                             role: .linkedNewDevice,
                             pendingDeviceId: pendingId
                         )
+                        // Flow B: we showed the QR, so nothing pins the offering device on this
+                        // side. Recorded so the history verifier can tell it from a Flow A QR
+                        // without `fp`, which refuses.
+                        DeviceLinkPendingPin.markBundleOnly(userId: result.userId)
                         break
                     }
                 } catch DeviceLinkError.rejected {
@@ -285,6 +289,12 @@ final class DeviceLinkViewModel {
                 newDevicePlatform: platform
             )
             approvedJoinPendingId = pendingId
+            // Flow B: the QR is the one out-of-band channel; the history sender checks the
+            // new device's bundle identity against it (`qr_pin_mismatch`), not the directory alone.
+            // base64 here is the QR text boundary, not application logic.
+            if let identity = Data(base64Encoded: pubkey.removingPercentEncoding ?? pubkey) {
+                DeviceLinkPendingPin.storePeerIdentity(identity, forDeviceId: pendingId)
+            }
             if let userId = KeychainManager.shared.loadUserID() {
                 linkOutcome = DeviceLinkOutcome(
                     role: .approvedJoinRequest,

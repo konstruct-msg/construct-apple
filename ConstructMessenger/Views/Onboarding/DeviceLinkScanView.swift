@@ -161,7 +161,7 @@ struct DeviceLinkScanView: View {
             HistoryTransferOfferView(
                 userId: authViewModel.currentUserId ?? "",
                 localDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
-                onSkip: {
+                onFinish: {
                     authViewModel.clearDeviceLinkPhase()
                     dismiss()
                 }

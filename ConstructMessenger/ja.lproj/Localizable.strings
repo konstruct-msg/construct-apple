@@ -951,6 +951,14 @@
 "history_sync_settings_media" = "メディアのみ";
 "history_sync_settings_hint" = "すでにリンクした端末にチャット、または残りの写真とファイルを送ります。";
 "history_sync_composer_connecting" = "この端末はまだこの相手に接続しています。";
+"history_sync_importing" = "履歴をインポート中…";
+"history_sync_imported_summary" = "%d 件の記録をインポートしました。チャットはこの端末で使えます。";
+"history_sync_qr_pin_absent" = "リンクコードに指紋が含まれていません。もう一方の端末を更新して、再度リンクしてください。";
+"history_sync_local_keys_unavailable" = "この端末はまだ準備中です。しばらくしてからもう一度お試しください。";
+"history_sync_peer_not_found" = "もう一方の端末はこのアカウントに存在しません。";
+"history_sync_file_ready" = "ファイルの準備ができました。もう一方の端末に共有して、今すぐインポートしてください。有効期限は1週間以内です。";
+"history_sync_share_file" = "ファイルを共有";
+"history_sync_preparing_file" = "ファイルを準備中…";
 "history_sync_auto_connecting" = "電話に接続中…";
 "history_sync_auto_sending" = "履歴をコンピュータに送信中…";
 "history_sync_skip_title" = "履歴をスキップ";

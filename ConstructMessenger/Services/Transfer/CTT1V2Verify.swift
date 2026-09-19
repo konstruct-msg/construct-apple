@@ -15,8 +15,9 @@ enum CTT1V2Verify {
         var hybridPublic: Data
         var localDeviceId: Data
         var kyberKeyId: UInt32
-        /// Flow A pin of the offering device. nil → history is refused (`qr_pin_absent`).
-        var qrFp: Data?
+        /// What the link QR pinned. `.absent` refuses history (`qr_pin_absent`);
+        /// `.bundleOnly` is Flow B's named residual and is accepted.
+        var pin: HistoryQRPin
     }
 
     static func opening(
@@ -44,13 +45,19 @@ enum CTT1V2Verify {
         }
 
         // 4. QR pin
-        guard let fp = known.qrFp else { return .failure(.qrPinAbsent) }
-        guard HistorySnapshotDisposition.qrPinMatches(
-            identityPublic: frame.senderIdentityPub,
-            hybridPublic: frame.senderHybridPub,
-            fp: fp
-        ) else {
-            return .failure(.qrPinMismatch)
+        switch known.pin {
+        case .absent:
+            return .failure(.qrPinAbsent)
+        case .bundleOnly:
+            break
+        case .pinned(let fp):
+            guard HistorySnapshotDisposition.qrPinMatches(
+                identityPublic: frame.senderIdentityPub,
+                hybridPublic: frame.senderHybridPub,
+                fp: fp
+            ) else {
+                return .failure(.qrPinMismatch)
+            }
         }
 
         // 5. signature (tagged). Decapsulate only after this returns success.

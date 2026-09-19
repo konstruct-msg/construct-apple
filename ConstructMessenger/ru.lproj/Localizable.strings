@@ -1092,6 +1092,14 @@
 "history_sync_settings_media" = "Только медиа";
 "history_sync_settings_hint" = "Отправьте чаты или оставшиеся фото и файлы на уже привязанное устройство.";
 "history_sync_composer_connecting" = "Это устройство ещё подключается к этому человеку.";
+"history_sync_importing" = "Импорт истории…";
+"history_sync_imported_summary" = "Импортировано записей: %d. Чаты теперь на этом устройстве.";
+"history_sync_qr_pin_absent" = "В коде привязки не было отпечатка. Обновите другое устройство и привяжите заново.";
+"history_sync_local_keys_unavailable" = "Это устройство ещё не готово. Попробуйте через минуту.";
+"history_sync_peer_not_found" = "Другого устройства больше нет в этом аккаунте.";
+"history_sync_file_ready" = "Файл готов. Передайте его на другое устройство и импортируйте сразу — он действует не дольше недели.";
+"history_sync_share_file" = "Поделиться файлом";
+"history_sync_preparing_file" = "Готовим файл…";
 "call_error_not_contacts" = "Звонить можно только тем, с кем вы уже связаны.";
 "call_error_busy" = "Вы уже в звонке.";
 "call_error_peer_offline" = "Собеседник не в сети. Попробуйте позже.";

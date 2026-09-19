@@ -72,7 +72,7 @@ struct DeviceLinkShowQRView: View {
             HistoryTransferOfferView(
                 userId: receiveUserId,
                 localDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
-                onSkip: {
+                onFinish: {
                     authViewModel.clearDeviceLinkPhase()
                     dismiss()
                 }
