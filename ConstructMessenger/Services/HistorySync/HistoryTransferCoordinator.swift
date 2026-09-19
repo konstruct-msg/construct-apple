@@ -61,32 +61,74 @@ final class HistoryTransferCoordinator {
     }
 
     /// Apply records as they arrive. One save per `HistorySnapshotImporter.saveBatchSize`.
+    ///
+    /// Records are pulled here (main actor) and applied in batches inside `context.perform`,
+    /// so a background context is touched only on its own queue — one hop per batch, not
+    /// per record.
     func importStream(
         over transport: HistoryByteTransport,
         session: HistoryStreamSession,
         expectedUserId: String,
-        in context: NSManagedObjectContext
+        in context: NSManagedObjectContext,
+        onManifest: ((Construct_Client_History_V1_HistoryManifest) -> Void)? = nil
     ) async throws -> HistoryImportSummary {
         let importer = HistorySnapshotImporter()
         var summary = HistoryImportSummary()
-        var sinceSave = 0
-        for try await record in HistoryNearbyStream.receive(over: transport, session: session) {
-            let result = try importer.apply(record, expectedUserId: expectedUserId, in: context)
-            summary.add(result)
-            sinceSave += 1
-            if sinceSave >= HistorySnapshotImporter.saveBatchSize {
+        var batch: [HistoryRecord] = []
+        var seen = 0
+
+        func flush() async throws {
+            guard !batch.isEmpty else { return }
+            let records = batch
+            batch.removeAll(keepingCapacity: true)
+            let partial = try await context.perform {
+                var local = HistoryImportSummary()
+                for record in records {
+                    local.add(try importer.apply(record, expectedUserId: expectedUserId, in: context))
+                }
                 try context.saveOrThrow(category: "HistorySync")
-                sinceSave = 0
+                return local
+            }
+            summary.applied += partial.applied
+            summary.conflictKeepExisting += partial.conflictKeepExisting
+            for (reason, count) in partial.skipped {
+                summary.skipped[reason, default: 0] += count
             }
         }
-        if sinceSave > 0 {
-            try context.saveOrThrow(category: "HistorySync")
+
+        for try await record in HistoryNearbyStream.receive(over: transport, session: session) {
+            if case .manifest(let m) = record { onManifest?(m) }
+            batch.append(record)
+            seen += 1
+            if batch.count >= HistorySnapshotImporter.saveBatchSize {
+                try await flush()
+            }
+            progress = Double(seen)
         }
+        try await flush()
         return summary
     }
 
     func markSkipped() {
         phase = .skipped
+    }
+
+    func markComplete() {
+        phase = .complete
+    }
+
+    /// Receiver-side phase bookkeeping: the importer does not know which phase it applied
+    /// until the manifest arrives, and the second connection is the caller's to open.
+    func markChatsTransferred() {
+        phase = .chatsTransferred
+    }
+
+    func markMedia() {
+        phase = .media
+    }
+
+    func markMediaIncomplete() {
+        phase = .mediaIncomplete
     }
 
     func markSaveFileInstead() {

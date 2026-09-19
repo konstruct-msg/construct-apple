@@ -13,6 +13,7 @@ struct HistoryTransferReceiveView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var coordinator = HistoryTransferCoordinator()
+    @State private var channel = HistoryNearbyChannel()
     @State private var errorMessage: String?
 
     var body: some View {
@@ -62,8 +63,43 @@ struct HistoryTransferReceiveView: View {
         }
     }
 
+    /// Phase 1 on the first connection; a phase-1 manifest means media follows on a second
+    /// one (K18). A skip opening ends the offer. A drop in phase 2 keeps phase-1 rows and
+    /// names the Settings retry.
     private func run() async {
-        _ = userId
-        _ = localDeviceId
+        defer { channel.cancel() }
+        do {
+            let local = try HistoryChannel.localKeys()
+            let pin = DeviceLinkPendingPin.trust(forUserId: userId)
+            let background = PersistenceController.shared.container.newBackgroundContext()
+            var expectMedia = true
+            while expectMedia {
+                let outcome = try await channel.receive(local: local, pin: pin, coordinator: coordinator, context: background)
+                switch outcome {
+                case .skipped:
+                    expectMedia = false
+                case .imported(_, let manifestPhase):
+                    switch manifestPhase {
+                    case 1:
+                        coordinator.markChatsTransferred()
+                        coordinator.markMedia()
+                    default:
+                        coordinator.markComplete()
+                        expectMedia = false
+                    }
+                }
+            }
+            DeviceLinkPendingPin.clear(forUserId: userId)
+        } catch is CancellationError {
+            // Sheet dismissed.
+        } catch {
+            Log.error("history_receive_failed phase=\(coordinator.phase) error=\(error)", category: "HistorySync")
+            if coordinator.phase == .media {
+                coordinator.markMediaIncomplete()
+            } else {
+                coordinator.markSaveFileInstead()
+            }
+            errorMessage = HistoryTransferUserMessage.text(for: error)
+        }
     }
 }

@@ -29,6 +29,7 @@ struct DevicesView: View {
     @State private var showSignOutOthersConfirm = false
     @State private var showSignOutAllConfirm = false
     @State private var historyRetryKind: HistoryTransferSendView.Kind? = nil
+    @State private var showHistoryReceive = false
 
     var body: some View {
         let otherDevices = devices.filter { !$0.isCurrent }
@@ -136,6 +137,15 @@ struct DevicesView: View {
                                 ) {
                                     historyRetryKind = .mediaOnly
                                 }
+                                ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
+                                // The other half of a retry: the device that is to receive
+                                // listens here while the offering device picks Chats / Media only.
+                                ConstructButtonRow(
+                                    systemImage: "wifi",
+                                    title: LocalizedStringKey("history_sync_receive_wifi")
+                                ) {
+                                    showHistoryReceive = true
+                                }
                             }
                             Text(LocalizedStringKey("history_sync_settings_hint"))
                                 .font(CTFont.regular(12))
@@ -182,6 +192,12 @@ struct DevicesView: View {
         .task { await loadDevices() }
 
         // MARK: Sheets
+        .sheet(isPresented: $showHistoryReceive) {
+            HistoryTransferReceiveView(
+                userId: KeychainManager.shared.loadUserID() ?? "",
+                localDeviceId: KeychainManager.shared.loadDeviceID() ?? ""
+            )
+        }
         .sheet(item: $historyRetryKind) { kind in
             HistoryTransferSendView(
                 kind: kind,

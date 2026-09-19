@@ -25,6 +25,7 @@ struct HistoryTransferSendView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var context
     @State private var coordinator = HistoryTransferCoordinator()
+    @State private var channel = HistoryNearbyChannel()
     @State private var errorMessage: String?
     @State private var isWritingFile = false
     @State private var exportedFile: URL?
@@ -129,15 +130,75 @@ struct HistoryTransferSendView: View {
             .multilineTextAlignment(.center)
     }
 
+    /// Post-link: transcript, then media, each on its own connection (K18). Settings retry runs
+    /// one phase. Skip is a CTT1 v2 opening of type 0x03 so the new device's receive screen
+    /// finishes instead of waiting; a receiver that is not listening costs one short wait.
     private func run() async {
+        defer { channel.cancel() }
         if skip || kind == .skip {
-            coordinator.markSkipped()
+            await sendSkip()
             dismiss()
             return
         }
-        _ = userId
-        _ = peerDeviceId
-        _ = context
+        do {
+            let local = try HistoryChannel.localKeys()
+            let peer = try await HistoryNearbyChannel.waitForPeerKeys(
+                ownUserId: userId,
+                peerDeviceId: peerDeviceId,
+                pinnedIdentity: DeviceLinkPendingPin.peerIdentity(forDeviceId: peerDeviceId)
+            )
+            let background = PersistenceController.shared.container.newBackgroundContext()
+            switch kind {
+            case .nearby:
+                try await channel.offer(.transcript, peer: peer, local: local, coordinator: coordinator, context: background)
+                try await channel.offer(.media, peer: peer, local: local, coordinator: coordinator, context: background)
+            case .chatsOnly:
+                try await channel.offer(.transcript, peer: peer, local: local, coordinator: coordinator, context: background)
+                coordinator.markComplete()
+            case .mediaOnly:
+                try await channel.offer(.media, peer: peer, local: local, coordinator: coordinator, context: background)
+            case .skip:
+                break
+            }
+            DeviceLinkPendingPin.clearPeerIdentity(forDeviceId: peerDeviceId)
+        } catch is CancellationError {
+            // Sheet dismissed.
+        } catch {
+            Log.error("history_send_failed kind=\(kind) error=\(error)", category: "HistorySync")
+            if coordinator.phase != .mediaIncomplete { coordinator.markSaveFileInstead() }
+            errorMessage = HistoryTransferUserMessage.text(for: error)
+        }
+    }
+
+    private static let skipWait: Duration = .seconds(15)
+
+    private func sendSkip() async {
+        guard let local = try? HistoryChannel.localKeys(),
+              let peer = try? await HistoryChannel.fetchPeerKeys(
+                ownUserId: userId,
+                peerDeviceId: peerDeviceId,
+                pinnedIdentity: DeviceLinkPendingPin.peerIdentity(forDeviceId: peerDeviceId)
+              )
+        else {
+            coordinator.markSkipped()
+            return
+        }
+        let background = PersistenceController.shared.container.newBackgroundContext()
+        let channel = self.channel
+        let coordinator = self.coordinator
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { @MainActor in
+                try? await channel.offer(.skip, peer: peer, local: local, coordinator: coordinator, context: background)
+            }
+            group.addTask {
+                try? await Task.sleep(for: Self.skipWait)
+            }
+            await group.next()
+            group.cancelAll()
+        }
+        channel.cancel()
+        coordinator.markSkipped()
+        DeviceLinkPendingPin.clearPeerIdentity(forDeviceId: peerDeviceId)
     }
 
     // MARK: - File

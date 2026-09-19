@@ -149,7 +149,9 @@ final class NearbyTransferService {
 
     // MARK: - Private
 
-    private let serviceType = "_construct-transfer._tcp"
+    /// One Bonjour type for v1 backups and CTT1 v2 history; the instance name scopes the peer.
+    static let serviceType = "_construct-transfer._tcp"
+    private var serviceType: String { Self.serviceType }
     private let queue = DispatchQueue(label: "com.construct.transfer", qos: .userInitiated)
     private let chunkSize = 65_536
 
@@ -611,6 +613,7 @@ enum NearbyReceiveCompletionDisposition: Equatable {
 /// Thread-safe one-shot flag for guarding continuation resumes.
 /// All NW callbacks are serialized on the same DispatchQueue, so this
 /// @unchecked Sendable wrapper is safe.
-private final class ResumeOnce: @unchecked Sendable {
+/// Shared with HistoryNearbyChannel: one resume per continuation, whichever handler fires first.
+final class ResumeOnce: @unchecked Sendable {
     var done = false
 }
