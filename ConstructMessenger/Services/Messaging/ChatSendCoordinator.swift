@@ -437,6 +437,7 @@ final class ChatSendCoordinator {
             msg.toUserId = recipientId
             msg.contentType = .regular
             msg.timestamp = queued.timestamp
+            msg.serverOrderKey = ServerMessageOrder.pending(localMessageId: msg.id)
             msg.deliveryStatus = .failed
             msg.isSentByMe = true
             msg.chat = chat
@@ -655,6 +656,13 @@ final class ChatSendCoordinator {
                     default:
                         deliveryStatus = .sent
                         Log.info("Unknown server status: \(aggregated.status), using .sent\(traceTag)", category: "ChatViewModel")
+                    }
+                    if let serverOrderKey = aggregated.serverOrderKey {
+                        self.persistenceService.updateServerOrder(
+                            messageId: messageId,
+                            serverOrderKey: serverOrderKey,
+                            in: self.viewContext
+                        )
                     }
                     Log.info("Updating message status from sending → \(deliveryStatus) for \(messageId)\(traceTag)", category: "ChatViewModel")
                     self.updateMessageStatus(messageId: messageId, status: deliveryStatus)

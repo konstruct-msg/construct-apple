@@ -107,7 +107,10 @@ final class AvatarRetryService {
             format: "fromUserId == %@ AND decryptedContent CONTAINS %@",
             userId, "\"type\":\"profile\""
         )
-        request.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "serverOrderKey", ascending: false),
+            NSSortDescriptor(key: "id", ascending: false)
+        ]
         request.fetchLimit = 1
         request.returnsObjectsAsFaults = false
 

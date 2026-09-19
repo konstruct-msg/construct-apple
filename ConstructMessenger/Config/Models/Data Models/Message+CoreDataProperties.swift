@@ -147,6 +147,8 @@ extension Message {
     @NSManaged public var contentTypeRaw: Int16
     @NSManaged public var suiteId: UInt16
     @NSManaged public var timestamp: Date
+    /// Server total-order key (`server-ms-seq`), separate from the sender/display timestamp.
+    @NSManaged public var serverOrderKey: String?
     @NSManaged public var isSentByMe: Bool
     @NSManaged public var deliveryStatusRaw: Int16
     @NSManaged public var retryCount: Int16
@@ -165,6 +167,12 @@ extension Message {
     /// which can occur when optimistically-inserted messages are not yet fully persisted.
     var safeTimestamp: Date {
         (value(forKey: "timestamp") as? Date) ?? Date()
+    }
+
+    /// Core Data fetches sort by the persisted key. The fallback keeps old/test-created rows
+    /// readable until the lightweight migration/backfill has assigned their key.
+    var effectiveServerOrderKey: String {
+        ServerMessageOrder.effectiveKey(for: self)
     }
 
     /// The delivery status, with the one rule that keeps ~30 uncoordinated writers honest:

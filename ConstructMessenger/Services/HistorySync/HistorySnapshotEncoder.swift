@@ -20,6 +20,8 @@
 //  - Recovery phrase, old-device JWTs, sticker pack blobs
 //  - CTCallRecord.peerName, endedAt, directionRaw
 //  - On-disk media ≥ 512 MiB (counted, not a failed snapshot)
+//  - Message.serverOrderKey (CTH1 v1 carries display timestamp only; the importer uses the
+//    legacy fallback until the snapshot format has an explicit order field)
 //
 
 import CoreData
@@ -168,7 +170,10 @@ final class HistorySnapshotEncoder {
     private func liftMessages(context: NSManagedObjectContext) throws -> [Construct_Client_History_V1_HistoryMessage] {
         var out: [Construct_Client_History_V1_HistoryMessage] = []
         let req = Message.fetchRequest()
-        req.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+        req.sortDescriptors = [
+            NSSortDescriptor(key: "serverOrderKey", ascending: true),
+            NSSortDescriptor(key: "id", ascending: true)
+        ]
         req.fetchBatchSize = Self.fetchBatchSize
         let rows = try context.fetch(req)
         for row in rows {

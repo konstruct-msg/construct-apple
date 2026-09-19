@@ -225,6 +225,8 @@ struct HistorySnapshotImporter {
         row.fromUserId = from
         row.toUserId = to
         row.timestamp = Date(timeIntervalSince1970: TimeInterval(message.timestampUnixMs) / 1000)
+        // Deliberately omitted at this boundary: CTH1 v1 has no server-order field. The normal
+        // persistence backfill assigns the legacy key from this display timestamp.
         row.isSentByMe = message.isSentByMe
         row.retryCount = 0
         row.chat = chatResult.chat

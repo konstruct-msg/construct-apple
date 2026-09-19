@@ -32,6 +32,10 @@ struct ChatMessage: Codable, Identifiable {
 
     let timestamp: UInt64
 
+    /// Transport metadata, never part of the encrypted message meaning. This is the server's
+    /// total-order key and is filled by the stream parser before the router sees the message.
+    var serverOrderKey: String? = nil
+
     /// OTPK key_id used by sender in X3DH (0 = no OTPK / fallback 3-DH).
     /// Only meaningful when messageNumber == 0 (X3DH handshake message).
     var oneTimePreKeyId: UInt32 = 0
@@ -167,6 +171,7 @@ extension ChatMessage {
     private enum CodingKeys: String, CodingKey {
         case id, from, to, ephemeralPublicKey, messageNumber, content, suiteId
         case timestamp, oneTimePreKeyId, kemCiphertext, contentType, kyberOtpkId
+        case serverOrderKey
         case pqMessageEpoch, pqRatchetField
         case senderDeviceId, conversationId, replyToMessageId, rawPayload
     }
@@ -181,6 +186,7 @@ extension ChatMessage {
         content = (try? c.decodeIfPresent(Data.self, forKey: .content)) ?? Data()
         suiteId = (try? c.decodeIfPresent(UInt16.self, forKey: .suiteId)) ?? 0
         timestamp = (try? c.decodeIfPresent(UInt64.self, forKey: .timestamp)) ?? 0
+        serverOrderKey = try? c.decodeIfPresent(String.self, forKey: .serverOrderKey)
         oneTimePreKeyId = (try? c.decodeIfPresent(UInt32.self, forKey: .oneTimePreKeyId)) ?? 0
         kemCiphertext = (try? c.decodeIfPresent(Data.self, forKey: .kemCiphertext)) ?? Data()
         contentType = (try? c.decodeIfPresent(UInt8.self, forKey: .contentType)) ?? 0

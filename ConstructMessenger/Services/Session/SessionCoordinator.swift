@@ -2126,8 +2126,18 @@ final class SessionCoordinator: MessageRouterDelegate {
         fetchRequest.fetchLimit = 1
 
         if let existing = try? context.fetch(fetchRequest).first {
+            var changed = false
+            if let serverOrderKey = messageData.serverOrderKey,
+               existing.serverOrderKey != serverOrderKey {
+                existing.serverOrderKey = serverOrderKey
+                changed = true
+            }
             if existing.fromUserId == messageData.from, !existing.hasDecryptedContent {
                 existing.applyStoredEncryption(plaintext: plaintext, contactId: messageData.from)
+                changed = true
+            }
+            if changed {
+                context.saveAndLog()
             }
             return
         }
@@ -2137,6 +2147,8 @@ final class SessionCoordinator: MessageRouterDelegate {
         message.fromUserId = messageData.from
         message.toUserId = messageData.to
         message.timestamp = Date.fromRemoteTimestamp(messageData.timestamp)
+        message.serverOrderKey = messageData.serverOrderKey
+            ?? ServerMessageOrder.legacy(timestamp: message.timestamp, messageId: canonicalId)
         message.isSentByMe = false
         message.deliveryStatus = .delivered
         message.retryCount = 0
@@ -2183,7 +2195,10 @@ final class SessionCoordinator: MessageRouterDelegate {
             NSPredicate(format: "retryCount == 0"),
             statusPredicate
         ])
-        fetch.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+        fetch.sortDescriptors = [
+            NSSortDescriptor(key: "serverOrderKey", ascending: true),
+            NSSortDescriptor(key: "id", ascending: true)
+        ]
         fetch.fetchLimit = 20
 
         let candidates: [Message]

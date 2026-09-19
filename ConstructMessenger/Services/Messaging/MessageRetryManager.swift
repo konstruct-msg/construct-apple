@@ -76,6 +76,7 @@ class MessageRetryManager {
                     var finalStatus: DeliveryStatus = .sent
                     var maxRetryAfterMs: Int64 = 0
                     var finalErrorCode: String = ""
+                    var serverOrderKey: String?
                     for (chunkId, wirePayload) in chunks {
                         let response = try await self.resealAndSend(
                             chunkId: chunkId,
@@ -93,6 +94,10 @@ class MessageRetryManager {
                         if response.retryAfterMs > maxRetryAfterMs {
                             maxRetryAfterMs = response.retryAfterMs
                         }
+                        if let responseKey = response.serverOrderKey,
+                           serverOrderKey == nil || responseKey < (serverOrderKey ?? responseKey) {
+                            serverOrderKey = responseKey
+                        }
                         switch response.status.lowercased() {
                         case "failed":
                             finalStatus = response.retryable ? .queued : .failed
@@ -109,6 +114,9 @@ class MessageRetryManager {
                         fetchRequest.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
                         liveMsg.deliveryStatus = finalStatus
+                        if let serverOrderKey {
+                            liveMsg.serverOrderKey = serverOrderKey
+                        }
                         context.saveAndLog()
                         if finalStatus == .sent || finalStatus == .delivered {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: capturedMessageId)
@@ -297,7 +305,10 @@ class MessageRetryManager {
             FeatureFlags.maxMessageRetryAttempts
         )
         fetchRequest.predicate = NSCompoundPredicate(orPredicateWithSubpredicates: [queuedPredicate, retryableFailed])
-        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+        fetchRequest.sortDescriptors = [
+            NSSortDescriptor(key: "serverOrderKey", ascending: true),
+            NSSortDescriptor(key: "id", ascending: true)
+        ]
 
         guard let queuedMessages = try? context.fetch(fetchRequest) else {
             return
@@ -404,6 +415,7 @@ class MessageRetryManager {
             for messageId in pendingIds {
                 do {
                     var finalStatus: DeliveryStatus = .sent
+                    var serverOrderKey: String?
                     if let chunks = OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: messageId) {
                         for (chunkId, wirePayload) in chunks {
                             let response = try await self.resealAndSend(
@@ -422,6 +434,10 @@ class MessageRetryManager {
                             default:
                                 break
                             }
+                            if let responseKey = response.serverOrderKey,
+                               serverOrderKey == nil || responseKey < (serverOrderKey ?? responseKey) {
+                                serverOrderKey = responseKey
+                            }
                             if finalStatus == .failed { break }
                         }
                     } else {
@@ -436,6 +452,9 @@ class MessageRetryManager {
                         fr.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fr).first else { return }
                         liveMsg.deliveryStatus = finalStatus
+                        if let serverOrderKey {
+                            liveMsg.serverOrderKey = serverOrderKey
+                        }
                         context.saveAndLog()
                         if finalStatus == .sent || finalStatus == .delivered {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
@@ -660,6 +679,15 @@ class MessageRetryManager {
                 recipientIdentityKey: recipientIdentityKey,
                 spendUnit: TokenSpendUnitStore.paidUnit(baseMessageId: messageId, recipientId: recipientId)
             )
+            if let serverOrderKey = aggregated.serverOrderKey {
+                let orderedFetch = Message.fetchRequest()
+                orderedFetch.predicate = NSPredicate(format: "id == %@", messageId)
+                orderedFetch.fetchLimit = 1
+                if let message = try? context.fetch(orderedFetch).first {
+                    message.serverOrderKey = serverOrderKey
+                    context.saveAndLog()
+                }
+            }
             switch aggregated.status.lowercased() {
             case "failed":    return aggregated.retryable ? .queued : .failed
             case "queued":    return .queued

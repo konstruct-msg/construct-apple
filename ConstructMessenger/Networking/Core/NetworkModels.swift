@@ -23,6 +23,9 @@ struct AuthResponse: Codable {
 struct SendMessageResponse: Codable {
     let messageId: String
     let status: String
+    /// Server order returned with a successful send. Zero means the server did not provide it.
+    var messageNumber: UInt64 = 0
+    var serverTimestamp: Int64 = 0
     /// False when the server returned a permanent error (e.g. BLOCKED).
     /// The sender should NOT retry the message.
     var retryable: Bool = true
@@ -33,6 +36,13 @@ struct SendMessageResponse: Codable {
     var retryAfterMs: Int64 = 0
     /// Per-attempt UUID echoed back by server for "attempt → decision" correlation.
     var attemptId: String = ""
+
+    var serverOrderKey: String? {
+        ServerMessageOrder.key(
+            serverTimestampMilliseconds: serverTimestamp,
+            sequence: messageNumber
+        )
+    }
 }
 
 struct EndSessionResponse: Codable {
