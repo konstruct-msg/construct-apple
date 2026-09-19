@@ -941,6 +941,16 @@
 "history_sync_chats_transferred" = "チャットを転送しました。写真とファイルを送信しています…";
 "history_sync_media_incomplete" = "チャットは転送済み、メディアは未完了です。設定から再試行するか、ファイルを保存してください。";
 "history_sync_save_file_instead" = "代わりにファイルを保存してください。";
+"history_sync_offer_message_with_media" = "Wi‑Fiでもう一方の端末からチャット・写真・ファイルを受け取るか、ファイルを読み込みます。スキップして空のチャットから始めることもできます。";
+"history_sync_empty_explanation" = "新しいチャットは、誰かが書き込んだときにここに表示されます。もう一方の端末の履歴はこの端末にはまだありません。";
+"history_sync_receive_wifi" = "Wi‑Fiで受信";
+"history_sync_import_file" = "ファイルを読み込む";
+"history_sync_save_file" = "ファイルを保存";
+"history_sync_settings_section" = "チャット履歴の転送";
+"history_sync_settings_chats" = "チャット";
+"history_sync_settings_media" = "メディアのみ";
+"history_sync_settings_hint" = "すでにリンクした端末にチャット、または残りの写真とファイルを送ります。";
+"history_sync_composer_connecting" = "この端末はまだこの相手に接続しています。";
 "history_sync_auto_connecting" = "電話に接続中…";
 "history_sync_auto_sending" = "履歴をコンピュータに送信中…";
 "history_sync_skip_title" = "履歴をスキップ";

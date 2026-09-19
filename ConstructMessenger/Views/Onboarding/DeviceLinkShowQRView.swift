@@ -69,10 +69,15 @@ struct DeviceLinkShowQRView: View {
             }
         }
         .fullScreenCover(isPresented: $showReceiveHistorySync) {
-            HistoryTransferReceiveView(
+            HistoryTransferOfferView(
                 userId: receiveUserId,
-                localDeviceId: KeychainManager.shared.loadDeviceID() ?? ""
+                localDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
+                onSkip: {
+                    authViewModel.clearDeviceLinkPhase()
+                    dismiss()
+                }
             )
+            .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                 .onDisappear {
                     authViewModel.clearDeviceLinkPhase()
                     dismiss()

@@ -140,14 +140,18 @@ struct DesktopRootView: View {
                 showReceiveHistorySync = true
             }
         }
-        .sheet(isPresented: $showReceiveHistorySync) {
-            HistoryTransferReceiveView(
-                userId: authViewModel.currentUserId ?? "",
-                localDeviceId: KeychainManager.shared.loadDeviceID() ?? ""
-            )
-            .onDisappear {
-                authViewModel.clearDeviceLinkPhase()
-                historySyncPendingDeviceId = nil
+        .overlay(alignment: .top) {
+            if showReceiveHistorySync {
+                HistoryTransferReceiveView(
+                    userId: authViewModel.currentUserId ?? "",
+                    localDeviceId: KeychainManager.shared.loadDeviceID() ?? ""
+                )
+                .frame(maxHeight: 220)
+                .background(Color.CT.bg)
+                .onDisappear {
+                    authViewModel.clearDeviceLinkPhase()
+                    historySyncPendingDeviceId = nil
+                }
             }
         }
     }

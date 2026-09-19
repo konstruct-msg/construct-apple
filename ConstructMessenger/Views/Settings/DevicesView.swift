@@ -28,6 +28,7 @@ struct DevicesView: View {
     @State private var showSignOutConfirm = false
     @State private var showSignOutOthersConfirm = false
     @State private var showSignOutAllConfirm = false
+    @State private var historyRetryKind: HistoryTransferSendView.Kind? = nil
 
     var body: some View {
         let otherDevices = devices.filter { !$0.isCurrent }
@@ -117,6 +118,32 @@ struct DevicesView: View {
                         }
                     }
 
+                    // MARK: - History retry (DEBUG override or enabled flag)
+                    if DeviceLinkHistorySyncPolicy.isOffered {
+                        VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
+                            CTSettingsSectionHeader(title: NSLocalizedString("history_sync_settings_section", comment: ""))
+                            CTSectionGroup {
+                                ConstructButtonRow(
+                                    systemImage: "bubble.left.and.bubble.right",
+                                    title: LocalizedStringKey("history_sync_settings_chats")
+                                ) {
+                                    historyRetryKind = .chatsOnly
+                                }
+                                ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
+                                ConstructButtonRow(
+                                    systemImage: "photo.on.rectangle",
+                                    title: LocalizedStringKey("history_sync_settings_media")
+                                ) {
+                                    historyRetryKind = .mediaOnly
+                                }
+                            }
+                            Text(LocalizedStringKey("history_sync_settings_hint"))
+                                .font(CTFont.regular(12))
+                                .foregroundStyle(Color.CT.textDim)
+                                .settingsSectionHintInsets()
+                        }
+                    }
+
                     // MARK: - Session management
                     VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
                         VStack(alignment: .leading, spacing: 0) {
@@ -155,6 +182,14 @@ struct DevicesView: View {
         .task { await loadDevices() }
 
         // MARK: Sheets
+        .sheet(item: $historyRetryKind) { kind in
+            HistoryTransferSendView(
+                kind: kind,
+                userId: KeychainManager.shared.loadUserID() ?? "",
+                peerDeviceId: devices.first(where: { !$0.isCurrent })?.id ?? ""
+            )
+            .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+        }
         .sheet(isPresented: $showingQRSheet) { DeviceLinkQRSheet() }
         #if os(iOS)
         .sheet(isPresented: $showingScanner) { DeviceLinkScanView() }

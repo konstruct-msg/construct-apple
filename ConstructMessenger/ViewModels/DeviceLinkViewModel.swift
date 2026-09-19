@@ -331,7 +331,10 @@ final class DeviceLinkViewModel {
             expiresIn: expiresIn,
             userId: result.userId
         )
-        if role == .linkedNewDevice, !DeviceLinkHistorySyncPolicy.isPostLinkEnabled {
+        // Unconditional: live mail must not replay pre-link ciphertext into empty
+        // ratchets, whether or not the history offer is shown. Must not roll back
+        // with the policy flag.
+        if role == .linkedNewDevice {
             DeviceLinkStreamCursorPolicy.applyAccountOnlyCheckpoint(accessToken: result.accessToken)
         }
         VeilProxyManager.shared.configureFromServer(cert: result.veilBridgeCert ?? "")

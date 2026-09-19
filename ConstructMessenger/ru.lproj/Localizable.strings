@@ -1082,6 +1082,16 @@
 "history_sync_chats_transferred" = "Чаты переданы. Отправляем фото и файлы…";
 "history_sync_media_incomplete" = "Чаты переданы, медиа неполные — повторите из Настроек или сохраните файл.";
 "history_sync_save_file_instead" = "Сохраните файл.";
+"history_sync_offer_message_with_media" = "Получите чаты, фото и файлы с другого устройства по Wi‑Fi или импортируйте файл. Можно пропустить и начать с пустых чатов.";
+"history_sync_empty_explanation" = "Новые чаты появятся здесь, когда вам напишут. История с другого устройства на этом пока нет.";
+"history_sync_receive_wifi" = "Получить по Wi‑Fi";
+"history_sync_import_file" = "Импортировать файл";
+"history_sync_save_file" = "Сохранить файл";
+"history_sync_settings_section" = "Перенос истории чатов";
+"history_sync_settings_chats" = "Чаты";
+"history_sync_settings_media" = "Только медиа";
+"history_sync_settings_hint" = "Отправьте чаты или оставшиеся фото и файлы на уже привязанное устройство.";
+"history_sync_composer_connecting" = "Это устройство ещё подключается к этому человеку.";
 "call_error_not_contacts" = "Звонить можно только тем, с кем вы уже связаны.";
 "call_error_busy" = "Вы уже в звонке.";
 "call_error_peer_offline" = "Собеседник не в сети. Попробуйте позже.";

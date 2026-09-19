@@ -46,6 +46,15 @@ enum CTT1V2Layout {
 
     static let senderTag = Data("ctt1v2-s".utf8)
     static let receiverTag = Data("ctt1v2-r".utf8)
+    static let fileTag = Data("cthf1".utf8)
     static let channelSalt = Data("construct_transfer_v2".utf8)
     static let fileSalt = Data("construct_history_file_v1".utf8)
+
+    static let cthfMagic = Data([0x43, 0x54, 0x48, 0x46]) // "CTHF"
+    static let cthfVersion: UInt8 = 0x01
+    static let cthfHeaderCount =
+        magicCount + versionCount
+        + snapshotIdCount + deviceIdCount + deviceIdCount + snapshotIdCount
+        + ephPubCount + identityPubCount + hybridPubCount
+        + kyberKeyIdCount + kemCtCount + hybridSigCount
 }

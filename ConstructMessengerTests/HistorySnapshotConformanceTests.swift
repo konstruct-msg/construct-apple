@@ -7,6 +7,7 @@
 //  nobody classifies.
 //
 
+import CryptoKit
 import XCTest
 @testable import Construct_Messenger
 
@@ -67,6 +68,10 @@ final class HistorySnapshotConformanceTests: XCTestCase {
         let instanceName: String?
         let preimage: String?
         let fp: String?
+        let chunk0Combined: String?
+        let chunk0Plaintext: String?
+        let fileChannelKey: String?
+        let currentKyberKeyId: UInt32?
         enum CodingKeys: String, CodingKey {
             case id, name, kind, expect, hex, records, phase, tag, fp
             case byteLen = "byte_len"
@@ -75,6 +80,10 @@ final class HistorySnapshotConformanceTests: XCTestCase {
             case preimageUtf8 = "preimage_utf8"
             case instanceName = "instance_name"
             case preimage
+            case chunk0Combined = "chunk0_combined"
+            case chunk0Plaintext = "chunk0_plaintext"
+            case fileChannelKey = "file_channel_key"
+            case currentKyberKeyId = "current_kyber_key_id"
         }
     }
 
@@ -155,8 +164,10 @@ final class HistorySnapshotConformanceTests: XCTestCase {
                 try assertOpeningEd25519OnlyFails(v, keys: file.keys, expectedLen: file.constants.ctt1V2OpeningLen)
             case "V22":
                 try assertOpeningZeroKemCtMalformed(v, expectedLen: file.constants.ctt1V2OpeningLen)
-            case "V23", "V24":
-                try assertFrame(v, magic: "CTHF", expectedLen: file.constants.cthfHeaderLen)
+            case "V23":
+                try assertCTHFHeaderVerifies(v, keys: file.keys, expectedLen: file.constants.cthfHeaderLen)
+            case "V24":
+                try assertCTHFStaleKeyId(v, keys: file.keys, expectedLen: file.constants.cthfHeaderLen)
             default:
                 XCTFail("\(v.id) \(v.name): no case — a new vector arrived and nobody classified it")
             }
@@ -336,6 +347,55 @@ final class HistorySnapshotConformanceTests: XCTestCase {
             XCTAssertEqual(err, .signatureInvalid, v.id)
         } else {
             XCTFail("\(v.id): Ed25519-only signature must not verify")
+        }
+    }
+
+    private func assertCTHFHeaderVerifies(_ v: Vector, keys: Keys, expectedLen: Int) throws {
+        try assertFrame(v, magic: "CTHF", expectedLen: expectedLen)
+        XCTAssertEqual(CTT1V2Layout.cthfHeaderCount, expectedLen)
+        let data = try hexData(try XCTUnwrap(v.hex))
+        let header = try CTHFHeader.parse(data)
+        XCTAssertEqual(try header.serialize(), data, "\(v.id): serialize is the inverse of parse")
+        let known = CTHFVerify.Known(
+            recipientDeviceId: try hexData(keys.receiverDeviceIdRaw),
+            kyberKeyId: 7,
+            senderIdentityPublic: try hexData(keys.offeringIdentityPublic),
+            senderHybridPublic: try hexData(keys.hybridPublic),
+            qrFp: HistorySnapshotDisposition.qrFingerprint(
+                identityPublic: try hexData(keys.offeringIdentityPublic),
+                hybridPublic: try hexData(keys.hybridPublic)
+            )
+        )
+        if case .failure(let err) = CTHFVerify.header(header, known: known) {
+            XCTFail("\(v.id): verify failed \(err)")
+        }
+        if let keyHex = v.fileChannelKey, let combinedHex = v.chunk0Combined, let plainHex = v.chunk0Plaintext {
+            let key = SymmetricKey(data: try hexData(keyHex))
+            let opened = try HistoryChunkCipher.open(
+                try hexData(combinedHex),
+                key: key,
+                snapshotId: header.snapshotId,
+                userId: header.userId,
+                index: 0
+            )
+            XCTAssertEqual(opened, try hexData(plainHex), v.id)
+        }
+    }
+
+    private func assertCTHFStaleKeyId(_ v: Vector, keys: Keys, expectedLen: Int) throws {
+        try assertFrame(v, magic: "CTHF", expectedLen: expectedLen)
+        let header = try CTHFHeader.parse(try hexData(try XCTUnwrap(v.hex)))
+        let known = CTHFVerify.Known(
+            recipientDeviceId: try hexData(keys.receiverDeviceIdRaw),
+            kyberKeyId: v.currentKyberKeyId ?? 7,
+            senderIdentityPublic: try hexData(keys.offeringIdentityPublic),
+            senderHybridPublic: try hexData(keys.hybridPublic),
+            qrFp: nil
+        )
+        if case .failure(let err) = CTHFVerify.header(header, known: known) {
+            XCTAssertEqual(err, .kemKeyIdMismatch, v.id)
+        } else {
+            XCTFail("\(v.id): stale Kyber key id must fail")
         }
     }
 

@@ -9,6 +9,15 @@ import CoreData
 import SwiftUI
 
 struct HistoryTransferSendView: View {
+    enum Kind: String, Identifiable {
+        case nearby
+        case skip
+        case chatsOnly
+        case mediaOnly
+        var id: String { rawValue }
+    }
+
+    var kind: Kind = .nearby
     var skip: Bool = false
     var userId: String
     var peerDeviceId: String
@@ -23,10 +32,7 @@ struct HistoryTransferSendView: View {
             Color.CT.bg.ignoresSafeArea()
             VStack(spacing: 0) {
                 CTNavBar(
-                    title: NSLocalizedString(
-                        skip ? "history_sync_skip_title" : "history_sync_send_title",
-                        comment: ""
-                    ),
+                    title: NSLocalizedString(titleKey, comment: ""),
                     showBack: true,
                     backAction: { dismiss() }
                 ) {
@@ -37,13 +43,22 @@ struct HistoryTransferSendView: View {
                 ScrollView {
                     LazyVStack(spacing: 24) {
                         statusLabel
+                        if coordinator.phase == .idle || coordinator.phase == .saveFileInstead {
+                            CTSectionGroup {
+                                ConstructButtonRow(
+                                    systemImage: "square.and.arrow.down",
+                                    title: LocalizedStringKey("history_sync_save_file")
+                                ) {
+                                    errorMessage = NSLocalizedString("history_sync_no_hybrid_key", comment: "")
+                                }
+                            }
+                        }
                     }
                     .padding(CTLayout.edgePad)
                 }
             }
         }
         .task { await run() }
-        .onDisappear { /* transport cancelled by coordinator phase */ }
         .alert(NSLocalizedString("transfer_error_title", comment: ""), isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -54,11 +69,21 @@ struct HistoryTransferSendView: View {
         }
     }
 
+    private var titleKey: String {
+        if skip || kind == .skip { return "history_sync_skip_title" }
+        switch kind {
+        case .chatsOnly: return "history_sync_settings_chats"
+        case .mediaOnly: return "history_sync_settings_media"
+        case .nearby, .skip: return "history_sync_send_title"
+        }
+    }
+
     @ViewBuilder
     private var statusLabel: some View {
         let key: String = {
             switch coordinator.phase {
-            case .idle, .transcript: return skip ? "history_sync_skip_sending" : "history_sync_auto_sending"
+            case .idle, .transcript:
+                return (skip || kind == .skip) ? "history_sync_skip_sending" : "history_sync_auto_sending"
             case .chatsTransferred: return "history_sync_chats_transferred"
             case .media: return "history_sync_auto_sending"
             case .complete: return "transfer_complete"
@@ -74,13 +99,11 @@ struct HistoryTransferSendView: View {
     }
 
     private func run() async {
-        if skip {
+        if skip || kind == .skip {
             coordinator.markSkipped()
             dismiss()
             return
         }
-        // Live CTT1 v2 send (bundle wait + handshake) uses the same coordinator
-        // as the in-process tests; Bonjour + handshake attach in the stand path.
         _ = userId
         _ = peerDeviceId
         _ = context

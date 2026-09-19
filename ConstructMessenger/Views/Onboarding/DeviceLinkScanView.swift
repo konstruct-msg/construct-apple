@@ -158,14 +158,15 @@ struct DeviceLinkScanView: View {
             }
         }
         .fullScreenCover(isPresented: $showReceiveHistorySync) {
-            HistoryTransferReceiveView(
+            HistoryTransferOfferView(
                 userId: authViewModel.currentUserId ?? "",
-                localDeviceId: KeychainManager.shared.loadDeviceID() ?? ""
-            )
-                .onDisappear {
+                localDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
+                onSkip: {
                     authViewModel.clearDeviceLinkPhase()
                     dismiss()
                 }
+            )
+            .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
         }
         .sheet(item: $activeHistorySyncSender) { sheet in
             HistoryTransferSendView(
