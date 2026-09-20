@@ -84,12 +84,12 @@ struct DesktopPeopleListView: View {
                 .foregroundStyle(Color.CT.textDim)
 
             Text(LocalizedStringKey("synapses_empty_title"))
-                .font(CTFont.bold(15))
+                .font(CTFont.ui(15, weight: .bold))
                 .foregroundStyle(Color.CT.text)
                 .multilineTextAlignment(.center)
 
             Text(LocalizedStringKey("synapses_empty_subtitle"))
-                .font(CTFont.regular(12))
+                .font(CTFont.secondary)
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, CTLayout.sectionGap)
@@ -109,7 +109,7 @@ private struct DesktopPeopleRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: CTLayout.inlinePad) {
                     Text(user.resolvedDisplayName)
-                        .font(CTFont.bold(13))
+                        .font(CTFont.bodyEmphasis)
                         .foregroundStyle(Color.CT.text)
                         .lineLimit(1)
 
@@ -125,7 +125,7 @@ private struct DesktopPeopleRow: View {
 
                 if !user.username.isEmpty {
                     Text("@\(user.username)")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.textDim)
                         .lineLimit(1)
                 }

@@ -220,15 +220,15 @@ struct DesktopSynapsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             if let name = request.displayName, !name.isEmpty {
                                 Text(name)
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.text)
                             } else if let username = request.username, !username.isEmpty {
                                 Text("@\(username)")
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.text)
                             } else {
                                 Text(DisplayNameGenerator.generate(from: request.fromUserId))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.textDim)
                             }
                         }
@@ -253,10 +253,10 @@ struct DesktopSynapsView: View {
     private var emptyState: some View {
         VStack(spacing: 14) {
             Text(LocalizedStringKey("synaps_empty_title"))
-                .font(CTFont.bold(14))
+                .font(CTFont.headline)
                 .foregroundStyle(Color.CT.text)
             Text(LocalizedStringKey("synaps_empty_subtitle"))
-                .font(CTFont.regular(12))
+                .font(CTFont.secondary)
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
@@ -265,7 +265,7 @@ struct DesktopSynapsView: View {
             } label: {
                 Label {
                     Text(LocalizedStringKey("new_contact"))
-                        .font(CTFont.medium(12))
+                        .font(CTFont.ui(12, weight: .medium))
                 } icon: {
                     Image(systemName: "person.crop.circle.badge.plus")
                         .font(.system(size: 12, weight: .medium))
@@ -421,7 +421,7 @@ private struct DesktopContactNode: View {
                     let n = metrics.unreadCount
                     let label = n > 99 ? "99+" : "\(n)"
                     Text(label)
-                        .font(CTFont.bold(n > 9 ? 8 : 9))
+                        .font(CTFont.ui(n > 9 ? 8 : 9, weight: .bold))
                         .foregroundStyle(Color.CT.bg)
                         .padding(.horizontal, n > 9 ? 4 : 0)
                         .frame(minWidth: 15, minHeight: 15)
@@ -433,7 +433,7 @@ private struct DesktopContactNode: View {
             .opacity(proximityOpacity)
 
             Text(user.resolvedDisplayName)
-                .font(CTFont.medium(10))
+                .font(CTFont.ui(10, weight: .medium))
                 .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -546,11 +546,11 @@ private struct DesktopNodePopover: View {
                     .padding(.top, 16)
 
                 Text(user.displayName)
-                    .font(CTFont.bold(13))
+                    .font(CTFont.bodyEmphasis)
                     .foregroundStyle(Color.CT.text)
 
                 Text("@\(user.username)")
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.bottom, 4)
             }

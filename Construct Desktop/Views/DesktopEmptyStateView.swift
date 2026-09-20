@@ -16,12 +16,12 @@ struct DesktopEmptyStateView: View {
             // Wordmark
             VStack(spacing: 4) {
                 Text("KONSTRUCT")
-                    .font(CTFont.bold(20))
+                    .font(CTFont.ui(20, weight: .bold))
                     .foregroundStyle(Color.CT.text)
                     .tracking(8)
 
                 Text("post-quantum secure messaging")
-                    .font(CTFont.regular(10))
+                    .font(CTFont.micro)
                     .foregroundStyle(Color.CT.textDim)
                     .tracking(2)
             }
@@ -60,7 +60,7 @@ struct DesktopEmptyStateView: View {
                 Text("·").foregroundStyle(Color.CT.textDim)
                 shortcutHint("⌘,",  "settings")
             }
-            .font(CTFont.regular(11))
+            .font(CTFont.caption)
             .foregroundStyle(Color.CT.textDim)
             .padding(.bottom, 28)
         }
@@ -79,14 +79,14 @@ struct DesktopEmptyStateView: View {
             // Header line: ┌── LABEL ──┐
             HStack(spacing: 0) {
                 Text(isAccent ? "[" : "╔")
-                    .font(CTFont.bold(9))
+                    .font(CTFont.ui(9, weight: .bold))
                     .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.textDim)
                 Text(" \(label) ")
-                    .font(CTFont.bold(9))
+                    .font(CTFont.ui(9, weight: .bold))
                     .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.text)
                     .tracking(1.5)
                 Text(isAccent ? "]" : "╗")
-                    .font(CTFont.bold(9))
+                    .font(CTFont.ui(9, weight: .bold))
                     .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.textDim)
             }
             .padding(.bottom, 10)
@@ -96,11 +96,11 @@ struct DesktopEmptyStateView: View {
                 ForEach(rows, id: \.0) { key, value in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(key)
-                            .font(CTFont.regular(8))
+                            .font(CTFont.mono(8))
                             .foregroundStyle(Color.CT.textDim)
                             .tracking(1.5)
                         Text(value)
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.text)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -132,10 +132,10 @@ struct DesktopEmptyStateView: View {
     private func shortcutHint(_ key: String, _ label: String) -> some View {
         HStack(spacing: 5) {
             Text("[\(key)]")
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundStyle(Color.CT.accent)
             Text(label)
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundStyle(Color.CT.textDim)
         }
     }

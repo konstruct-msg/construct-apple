@@ -138,7 +138,7 @@ struct DesktopChatView: View {
                         .background(Color.CT.accent.opacity(0.05))
                         .overlay(
                             Text(LocalizedStringKey("drop_to_attach"))
-                                .font(CTFont.regular(16))
+                                .font(CTFont.ui(16))
                                 .foregroundColor(Color.CT.accent)
                                 .padding(16)
                                 .background(Color.CT.bgMsg)
@@ -267,7 +267,7 @@ struct DesktopChatView: View {
         if floodGuard.suppressedSenders.contains(senderId) {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(CTFont.regular(16))
+                    .font(CTFont.ui(16))
                     .foregroundStyle(.orange)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -284,7 +284,7 @@ struct DesktopChatView: View {
                     IncomingFloodGuard.shared.unsuppress(senderId: senderId)
                 } label: {
                     Label(NSLocalizedString("allow", comment: ""), systemImage: "checkmark.circle")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(.orange)
                 }
                 .buttonStyle(.plain)
@@ -297,7 +297,7 @@ struct DesktopChatView: View {
                     IncomingFloodGuard.shared.unsuppress(senderId: senderId)
                 } label: {
                     Label(NSLocalizedString("block_user", comment: ""), systemImage: "hand.raised.fill")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.danger)
                 }
                 .buttonStyle(.plain)
@@ -325,7 +325,7 @@ struct DesktopChatView: View {
                 Text(
                     "\(selectedMessages.count) \(NSLocalizedString(selectedMessages.count == 1 ? "message_selected" : "messages_selected", comment: ""))"
                 )
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundStyle(Color.CT.textDim)
             }
             .padding()

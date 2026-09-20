@@ -249,7 +249,7 @@ private struct MyQRTab: View {
             } else {
                 Button(NSLocalizedString("qr_new_code", comment: "")) { generate() }
                     .buttonStyle(.plain)
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.accent)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
@@ -394,7 +394,7 @@ private struct CameraTab: View {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera")!)
             }
             .buttonStyle(.plain)
-            .font(CTFont.regular(13))
+            .font(CTFont.body)
             .foregroundStyle(Color.CT.bg)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -475,7 +475,7 @@ private struct FileTab: View {
                 openFilePicker()
             } label: {
                 Label(NSLocalizedString("desktop_add_choose_file", comment: ""), systemImage: "folder")
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.accent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
@@ -593,7 +593,7 @@ private struct PasteTab: View {
                     if let str = NSPasteboard.general.string(forType: .string) { text = str }
                 } label: {
                     Label(NSLocalizedString("desktop_add_paste_clipboard", comment: ""), systemImage: "doc.on.clipboard")
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -605,7 +605,7 @@ private struct PasteTab: View {
 
                 Button(NSLocalizedString("add_contact_menu", comment: "")) { submit() }
                     .buttonStyle(.plain)
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.bg)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)

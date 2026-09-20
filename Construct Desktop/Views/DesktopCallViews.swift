@@ -21,11 +21,11 @@ struct DesktopIncomingCallView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.peerName.uppercased())
-                    .font(CTFont.bold(12))
+                    .font(CTFont.ui(12, weight: .bold))
                     .tracking(1)
                     .foregroundStyle(Color.CT.text)
                 Text(NSLocalizedString("call_incoming_audio", comment: ""))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
             }
 
@@ -90,12 +90,12 @@ struct DesktopInCallView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.peerName.uppercased())
-                    .font(CTFont.bold(11))
+                    .font(CTFont.badge)
                     .tracking(1)
                     .foregroundStyle(Color.CT.text)
                     .lineLimit(1)
                 Text(statusText)
-                    .font(CTFont.regular(10))
+                    .font(CTFont.micro)
                     .foregroundStyle(isEnded ? Color.red.opacity(0.85) : Color.CT.textDim)
                     .animation(.easeInOut(duration: 0.3), value: isConnecting)
             }
@@ -106,7 +106,7 @@ struct DesktopInCallView: View {
                     CallManager.shared.endCall()
                 } label: {
                     Text(NSLocalizedString("call_dismiss", comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)

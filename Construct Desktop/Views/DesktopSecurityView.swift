@@ -24,7 +24,7 @@ struct DesktopSecurityView: View {
                         .foregroundStyle(securityViewModel.isBiometricEnabled ? Color.CT.accent : Color.CT.textDim)
                     Text(String(format: NSLocalizedString("use_biometric", comment: ""),
                                 securityViewModel.biometricDisplayName))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.text)
                     Spacer()
                     Toggle("", isOn: $securityViewModel.isBiometricEnabled)
@@ -38,7 +38,7 @@ struct DesktopSecurityView: View {
 
                     HStack(spacing: 10) {
                         Text(NSLocalizedString("lock_delay", comment: ""))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundStyle(Color.CT.text)
                         Spacer()
                         Picker("", selection: $securityViewModel.lockDelay) {
@@ -47,7 +47,7 @@ struct DesktopSecurityView: View {
                             }
                         }
                         .labelsHidden()
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .frame(maxWidth: 140)
                     }
                     .padding(.horizontal, 12).padding(.vertical, 8)
@@ -60,7 +60,7 @@ struct DesktopSecurityView: View {
                         HStack(spacing: 10) {
                             Image(systemName: "lock.fill")
                             Text(NSLocalizedString("lock_now", comment: ""))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.text)
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -74,7 +74,7 @@ struct DesktopSecurityView: View {
                 }
             } else {
                 Text(NSLocalizedString("biometric_unavailable", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 12).padding(.vertical, 10)
             }
@@ -88,17 +88,17 @@ struct DesktopSecurityView: View {
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(LocalizedStringKey("account_recovery_seed"))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundStyle(Color.CT.text)
                         if recoveryVM.isSetup, let fp = recoveryVM.fingerprint {
                             Text(fp)
-                                .font(CTFont.regular(11))
+                                .font(CTFont.mono(11))
                                 .foregroundStyle(Color.CT.textDim)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         } else if recoveryVM.statusLoaded && !recoveryVM.isSetup {
                             Text(NSLocalizedString("recovery_not_configured", comment: ""))
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundStyle(.orange)
                         }
                     }
@@ -113,7 +113,7 @@ struct DesktopSecurityView: View {
             .buttonStyle(.plain)
 
             Text(LocalizedStringKey("account_recovery_seed_hint"))
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundStyle(Color.CT.textDim)
                 .padding(.horizontal, 12)
                 .padding(.top, 4)

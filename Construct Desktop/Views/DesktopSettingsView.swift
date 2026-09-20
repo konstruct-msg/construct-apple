@@ -57,7 +57,7 @@ struct DesktopSettingsView: View {
             // MARK: Sidebar
             VStack(alignment: .leading, spacing: 0) {
                 Text(LocalizedStringKey("settings"))
-                    .font(CTFont.bold(11))
+                    .font(CTFont.badge)
                     .foregroundStyle(Color.CT.accent)
                     .tracking(3)
                     .padding(.horizontal, 16)
@@ -116,7 +116,7 @@ struct DesktopSettingsView: View {
                         .frame(width: 2, height: 14)
                 }
                 Text(LocalizedStringKey(section.titleKey))
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundStyle(isActive ? Color.CT.accent : Color.CT.textDim)
                 Spacer()
             }
@@ -148,7 +148,7 @@ private struct DesktopAccountSettingsTab: View {
                 } label: {
                     HStack {
                         Text(NSLocalizedString("sign_out", comment: ""))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundStyle(Color.CT.danger)
                         Spacer()
                         Image(systemName: "chevron.right")
@@ -195,7 +195,7 @@ private struct DesktopGeneralSettingsTab: View {
                 CTSettingsSectionHeader(title: NSLocalizedString("composing", comment: ""))
                 HStack {
                     Text(NSLocalizedString("send_on_enter", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.text)
                     Spacer()
                     Toggle("", isOn: $sendOnEnter)
@@ -210,7 +210,7 @@ private struct DesktopGeneralSettingsTab: View {
                 CTSettingsSectionHeader(title: NSLocalizedString("message_section", comment: ""))
                 HStack {
                     Text(NSLocalizedString("show_timestamps", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.text)
                     Spacer()
                     Toggle("", isOn: $showTimestamps)
@@ -264,7 +264,7 @@ private struct DesktopAppearanceSettingsTab: View {
                                     .foregroundStyle(appTheme == theme ? Color.CT.accent : Color.CT.textDim)
                                     .frame(width: 24, alignment: .leading)
                                 Text(theme.displayName)
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(appTheme == theme ? Color.CT.text : Color.CT.textDim)
                                 Spacer()
                                 if appTheme == theme {
@@ -292,7 +292,7 @@ private struct DesktopAppearanceSettingsTab: View {
                         } label: {
                             HStack(spacing: 10) {
                                 Text(size.displayName)
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(textSize == size ? Color.CT.text : Color.CT.textDim)
                                 Spacer()
                                 if textSize == size {
@@ -309,7 +309,7 @@ private struct DesktopAppearanceSettingsTab: View {
                 }
 
                 Text(LocalizedStringKey("text_size_footer"))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 12)
                     .padding(.top, 8)
@@ -356,11 +356,11 @@ private struct DesktopSecuritySettingsTab: View {
     private func infoRow(_ label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundStyle(Color.CT.textDim)
             Spacer()
             Text(value)
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.trailing)
         }

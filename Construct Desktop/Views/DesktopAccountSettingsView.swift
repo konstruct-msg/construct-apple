@@ -42,7 +42,7 @@ struct DesktopAccountSettingsView: View {
                 CTSep(style: .thick)
 
                 Text(NSLocalizedString("changes_encrypted_footer", comment: ""))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.accent.opacity(0.6))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
@@ -89,15 +89,15 @@ struct DesktopAccountSettingsView: View {
                 .foregroundStyle(Color.CT.danger)
             VStack(alignment: .leading, spacing: 6) {
                 Text(NSLocalizedString("recovery_not_configured_title", comment: "").uppercased())
-                    .font(CTFont.bold(11))
+                    .font(CTFont.badge)
                     .foregroundStyle(Color.CT.danger)
                 Text(NSLocalizedString("recovery_banner_subtitle", comment: ""))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
                 Button { showingRecoverySetup = true } label: {
                     HStack(spacing: 4) {
                         Text(NSLocalizedString("recovery_setup_action", comment: ""))
-                            .font(CTFont.bold(11))
+                            .font(CTFont.badge)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 10, weight: .semibold))
                     }
@@ -149,7 +149,7 @@ struct DesktopAccountSettingsView: View {
 
             Button { pickAvatar() } label: {
                 Text("[\(NSLocalizedString("change_photo", comment: ""))]")
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.accent)
             }
             .buttonStyle(.plain)
@@ -157,7 +157,7 @@ struct DesktopAccountSettingsView: View {
             if viewModel.profileImage != nil {
                 Button { removeAvatar() } label: {
                     Text("[\(NSLocalizedString("remove_avatar", comment: ""))]")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.danger)
                 }
                 .buttonStyle(.plain)
@@ -177,13 +177,13 @@ struct DesktopAccountSettingsView: View {
             // User ID (read-only)
             HStack {
                 Text(NSLocalizedString("user_id", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.textDim)
                     .frame(width: 120, alignment: .leading)
                 let uid = viewModel.userId
                 let short = uid.count > 16 ? "\(uid.prefix(8))…\(uid.suffix(4))" : uid
                 Text(short.isEmpty ? "—" : short)
-                    .font(CTFont.regular(11))
+                    .font(CTFont.mono(11))
                     .foregroundStyle(Color.CT.textDim)
                     .textSelection(.enabled)
                 Spacer()
@@ -195,11 +195,11 @@ struct DesktopAccountSettingsView: View {
             // Display Name (editable)
             HStack {
                 Text(NSLocalizedString("display_name", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.textDim)
                     .frame(width: 120, alignment: .leading)
                 TextField("", text: $vm.displayName)
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.text)
                     .textFieldStyle(.plain)
                     .ctInputChrome(.compact)
@@ -214,11 +214,11 @@ struct DesktopAccountSettingsView: View {
             // Username (editable, server-validated)
             HStack {
                 Text(NSLocalizedString("username", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.textDim)
                     .frame(width: 120, alignment: .leading)
                 TextField("", text: $vm.username)
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.text)
                     .textFieldStyle(.plain)
                     .ctInputChrome(
@@ -234,7 +234,7 @@ struct DesktopAccountSettingsView: View {
                     Button(NSLocalizedString("save", comment: "")) {
                         Task { await saveUsernameIfNeeded() }
                     }
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.accent)
                     .buttonStyle(.plain)
                 } else if viewModel.usernameSaved {
@@ -245,7 +245,7 @@ struct DesktopAccountSettingsView: View {
 
             if let error = viewModel.usernameSaveError {
                 Text(error)
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.danger)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)
@@ -262,7 +262,7 @@ struct DesktopAccountSettingsView: View {
             Button { showExportAlert = true } label: {
                 HStack {
                     Text(NSLocalizedString("export_my_data", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.text)
                     Spacer()
                     Image(systemName: "chevron.right")
@@ -286,11 +286,11 @@ struct DesktopAccountSettingsView: View {
             Button { showDeleteConfirm = true } label: {
                 HStack {
                     Text(NSLocalizedString("delete_account_row", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.danger)
                     Spacer()
                     Text("[\(NSLocalizedString("delete_action", comment: ""))]")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.danger.opacity(AccountSettingsLayout.dangerSecondaryOpacity))
                 }
                 .padding(.horizontal, 12).padding(.vertical, 10)

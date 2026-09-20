@@ -45,9 +45,9 @@ enum DesktopTheme {
     // MARK: - Typography (→ CTFont / JetBrains Mono)
     static func monoFont(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
         switch weight {
-        case .bold, .heavy, .black:        return CTFont.bold(size)
-        case .medium, .semibold:           return CTFont.medium(size)
-        default:                           return CTFont.regular(size)
+        case .bold, .heavy, .black:        return CTFont.ui(size, weight: .bold)
+        case .medium, .semibold:           return CTFont.ui(size, weight: .medium)
+        default:                           return CTFont.ui(size)
         }
     }
 }
