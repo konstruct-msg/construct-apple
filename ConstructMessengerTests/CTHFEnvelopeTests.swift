@@ -99,6 +99,105 @@ final class CTHFEnvelopeTests: XCTestCase {
         return SymmetricKey(data: try hexData(hex))
     }
 
+    // MARK: - Streaming
+
+    /// Records whose encoded bytes run past several 64 KiB chunks. The streaming writer flushes
+    /// mid-record and the streaming reader completes records across chunk boundaries; a snapshot
+    /// that fits in one chunk would never exercise either.
+    func testRecordsSpanningManyChunksRoundTrip() throws {
+        let header = try CTHFHeader.parse(try v23())
+        var userId = header.userId
+        if userId.count != 16 { userId = Data(repeating: 0x01, count: 16) }
+
+        var recs: [HistoryRecord] = []
+        var m = Construct_Client_History_V1_HistoryManifest()
+        m.formatVersion = 1
+        m.phase = 3
+        m.userID = userId
+        m.snapshotID = header.snapshotId
+        recs.append(.manifest(m))
+        // ~4 KiB of display name each: 64 of them clears four chunks.
+        for i in 0..<64 {
+            var c = Construct_Client_History_V1_HistoryContact()
+            c.userID = Data(repeating: UInt8(i & 0xFF), count: 16)
+            c.displayName = String(repeating: "n", count: 4096)
+            recs.append(.contact(c))
+        }
+        recs.append(.end)
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cth-span-\(UUID().uuidString).cthf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try CTHFEnvelope.write(to: url, header: header, records: recs, key: try vectorKey())
+
+        let size = try XCTUnwrap(
+            try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int
+        )
+        XCTAssertGreaterThan(size, 4 * HistoryChunkCipher.plaintextSize,
+                             "fixture must span several chunks to be worth running")
+
+        let back = try CTHFEnvelope.readRecords(from: url, header: header, key: try vectorKey())
+        XCTAssertEqual(back.count, recs.count)
+        XCTAssertEqual(back, recs)
+    }
+
+    /// The callback form and the array form must see the same records in the same order — the
+    /// array form is now a wrapper, and this is what keeps it one.
+    func testStreamingReadMatchesArrayRead() throws {
+        let url = try writeFixtureFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let header = try CTHFHeader.parse(try v23())
+        let key = try vectorKey()
+
+        var streamed: [HistoryRecord] = []
+        try CTHFEnvelope.readRecords(from: url, header: header, key: key) { streamed.append($0) }
+        XCTAssertEqual(streamed, try CTHFEnvelope.readRecords(from: url, header: header, key: key))
+        XCTAssertFalse(streamed.isEmpty)
+    }
+
+    /// A chunk header that promises more bytes than the file holds is `truncated`, not a short
+    /// snapshot. The streaming reader sees the shortfall only when it tries to read, so this is
+    /// the case the whole-file reader used to catch by comparing against `data.count`.
+    func testTruncatedMidChunkThrowsRatherThanReturningPartial() throws {
+        let url = try writeFixtureFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let full = try Data(contentsOf: url)
+        // Keep the header and the first chunk's length prefix, drop most of the chunk body.
+        try full.prefix(CTT1V2Layout.cthfHeaderCount + 8).write(to: url)
+
+        let header = try CTHFHeader.parse(try v23())
+        XCTAssertThrowsError(
+            try CTHFEnvelope.readRecords(from: url, header: header, key: try vectorKey())
+        ) { error in
+            XCTAssertEqual(error as? HistorySnapshotError, .truncated)
+        }
+    }
+
+    /// A producer that fails part-way must leave nothing behind: the importer scans for `.cthf`
+    /// files, and a half-sealed one would verify its header and then fail mid-import.
+    func testFailedWriteLeavesNoFile() throws {
+        struct Boom: Error {}
+        let header = try CTHFHeader.parse(try v23())
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cth-fail-\(UUID().uuidString).cthf")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        var m = Construct_Client_History_V1_HistoryManifest()
+        m.formatVersion = 1
+        m.phase = 3
+        m.userID = header.userId
+        m.snapshotID = header.snapshotId
+
+        XCTAssertThrowsError(
+            try CTHFEnvelope.write(to: url, header: header, key: try vectorKey()) { emit in
+                try emit(.manifest(m))
+                throw Boom()
+            }
+        )
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path),
+                       "a partial seal must not be left where the importer can find it")
+    }
+
     private func knownOffering() throws -> CTHFVerify.Known {
         let file = try loadVectors()
         return CTHFVerify.Known(

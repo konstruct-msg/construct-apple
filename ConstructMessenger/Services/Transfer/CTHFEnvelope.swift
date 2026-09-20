@@ -166,28 +166,81 @@ enum CTHFEnvelope {
         records: [HistoryRecord],
         key: SymmetricKey
     ) throws {
-        var body = try header.serialize()
-        var pending = HistorySnapshotCodec.encodePreamble()
-        for rec in records {
-            pending.append(try HistorySnapshotCodec.encodeRecord(rec))
+        try write(to: url, header: header, key: key) { emit in
+            for rec in records {
+                try emit(rec)
+            }
         }
+    }
+
+    /// Seal records to `url` as they are produced, holding at most one 64 KiB chunk.
+    ///
+    /// The whole-file form built the plaintext, then the ciphertext, then handed both to
+    /// `Data.write` — three copies of a snapshot resident at once, which is what put a ceiling on
+    /// phase-3 media. Here the only buffer that grows is `pending`, and it is drained every time it
+    /// reaches a chunk.
+    ///
+    /// The file is written to a sibling temporary and moved into place, so a failure part-way
+    /// leaves no half-sealed `.cthf` for the importer to find.
+    static func write(
+        to url: URL,
+        header: CTHFHeader,
+        key: SymmetricKey,
+        producing: ((HistoryRecord) throws -> Void) throws -> Void
+    ) throws {
+        let fm = FileManager.default
+        let tmp = url.deletingLastPathComponent()
+            .appendingPathComponent(".\(UUID().uuidString).cthf-part")
+        guard fm.createFile(atPath: tmp.path, contents: nil) else {
+            throw HistorySnapshotError.malformed
+        }
+        let handle = try FileHandle(forWritingTo: tmp)
+        var closed = false
+        func closeHandle() {
+            guard !closed else { return }
+            closed = true
+            try? handle.close()
+        }
+        defer {
+            closeHandle()
+            try? fm.removeItem(at: tmp)   // no-op once the move below succeeded
+        }
+
+        var pending = Data()
         var index: UInt32 = 0
-        while !pending.isEmpty {
-            let take = min(HistoryChunkCipher.plaintextSize, pending.count)
-            let slice = Data(pending.prefix(take))
-            pending.removeFirst(take)
-            let sealed = try HistoryChunkCipher.seal(
-                slice,
-                key: key,
-                snapshotId: header.snapshotId,
-                userId: header.userId,
-                index: index
-            )
-            body.append(HistoryChunkCipher.frame(sealed))
-            index += 1
+
+        func flush(all: Bool) throws {
+            while pending.count >= HistoryChunkCipher.plaintextSize
+                || (all && !pending.isEmpty) {
+                let take = min(HistoryChunkCipher.plaintextSize, pending.count)
+                let slice = Data(pending.prefix(take))
+                pending.removeFirst(take)
+                let sealed = try HistoryChunkCipher.seal(
+                    slice,
+                    key: key,
+                    snapshotId: header.snapshotId,
+                    userId: header.userId,
+                    index: index
+                )
+                index += 1
+                try handle.write(contentsOf: HistoryChunkCipher.frame(sealed))
+            }
         }
-        body.append(HistoryChunkCipher.eof)
-        try body.write(to: url, options: .atomic)
+
+        try handle.write(contentsOf: header.serialize())
+        pending.append(HistorySnapshotCodec.encodePreamble())
+        try producing { rec in
+            pending.append(try HistorySnapshotCodec.encodeRecord(rec))
+            try flush(all: false)
+        }
+        try flush(all: true)
+        try handle.write(contentsOf: HistoryChunkCipher.eof)
+        closeHandle()
+
+        if fm.fileExists(atPath: url.path) {
+            try fm.removeItem(at: url)
+        }
+        try fm.moveItem(at: tmp, to: url)
     }
 
     static func readRecords(
@@ -195,23 +248,43 @@ enum CTHFEnvelope {
         header: CTHFHeader,
         key: SymmetricKey
     ) throws -> [HistoryRecord] {
-        let data = try Data(contentsOf: url)
-        guard data.count >= CTT1V2Layout.cthfHeaderCount else { throw HistorySnapshotError.truncated }
-        var offset = CTT1V2Layout.cthfHeaderCount
-        var reader = HistorySnapshotCodec.IncrementalReader()
         var recs: [HistoryRecord] = []
+        try readRecords(from: url, header: header, key: key) { recs.append($0) }
+        return recs
+    }
+
+    /// Decrypt chunk by chunk and hand each record straight to `onRecord`.
+    ///
+    /// Nothing accumulates: one sealed chunk, its plaintext, and whatever records that chunk
+    /// completed. A truncated file is `truncated`, a chunk that fails to open is the cipher's
+    /// error — neither is reported as a short but valid snapshot.
+    static func readRecords(
+        from url: URL,
+        header: CTHFHeader,
+        key: SymmetricKey,
+        onRecord: (HistoryRecord) throws -> Void
+    ) throws {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+
+        try handle.seek(toOffset: UInt64(CTT1V2Layout.cthfHeaderCount))
+        var reader = HistorySnapshotCodec.IncrementalReader()
         var index: UInt32 = 0
-        while offset + 4 <= data.count {
-            let len = Int(data.subdata(in: offset..<(offset + 4)).withUnsafeBytes {
+
+        while true {
+            guard let lenBytes = try handle.read(upToCount: 4) else { break }
+            if lenBytes.isEmpty { break }
+            guard lenBytes.count == 4 else { throw HistorySnapshotError.truncated }
+            let len = Int(lenBytes.withUnsafeBytes {
                 $0.loadUnaligned(fromByteOffset: 0, as: UInt32.self).littleEndian
             })
-            offset += 4
-            if len == 0 { break }
-            guard len <= HistoryChunkCipher.maxSealedSize, offset + len <= data.count else {
+            if len == 0 { break }   // EOF frame
+            guard len <= HistoryChunkCipher.maxSealedSize else {
                 throw HistorySnapshotError.truncated
             }
-            let sealed = data.subdata(in: offset..<(offset + len))
-            offset += len
+            guard let sealed = try handle.read(upToCount: len), sealed.count == len else {
+                throw HistorySnapshotError.truncated
+            }
             let plain = try HistoryChunkCipher.open(
                 sealed,
                 key: key,
@@ -220,13 +293,27 @@ enum CTHFEnvelope {
                 index: index
             )
             index += 1
-            recs += try reader.push(plain)
+            for rec in try reader.push(plain) {
+                try onRecord(rec)
+            }
         }
-        recs += try reader.finish()
-        return recs
+        for rec in try reader.finish() {
+            try onRecord(rec)
+        }
     }
 
     /// Verify, read, import, delete on success. Leaves the file on failure.
+    /// Read only the fixed-size header off the front of the file.
+    static func readHeader(at url: URL) throws -> CTHFHeader {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        guard let front = try handle.read(upToCount: CTT1V2Layout.cthfHeaderCount),
+              front.count == CTT1V2Layout.cthfHeaderCount else {
+            throw HistorySnapshotError.truncated
+        }
+        return try CTHFHeader.parse(front)
+    }
+
     static func importFile(
         at url: URL,
         expected: CTHFVerify.Known,
@@ -234,21 +321,21 @@ enum CTHFEnvelope {
         expectedUserId: String,
         in context: NSManagedObjectContext
     ) throws -> HistoryImportSummary {
-        let data = try Data(contentsOf: url)
-        guard data.count >= CTT1V2Layout.cthfHeaderCount else { throw HistorySnapshotError.truncated }
-        let header = try CTHFHeader.parse(data.prefix(CTT1V2Layout.cthfHeaderCount))
+        let header = try readHeader(at: url)
         switch CTHFVerify.header(header, known: expected) {
         case .failure(let err):
             throw err
         case .success:
             break
         }
-        let recs = try readRecords(from: url, header: header, key: key)
-        let summary = try HistorySnapshotImporter().importRecords(
-            recs,
+        var batch = HistorySnapshotImporter().makeBatch(
             expectedUserId: expectedUserId,
             in: context
         )
+        try readRecords(from: url, header: header, key: key) { rec in
+            try batch.apply(rec)
+        }
+        let summary = try batch.finish()
         try FileManager.default.removeItem(at: url)
         return summary
     }

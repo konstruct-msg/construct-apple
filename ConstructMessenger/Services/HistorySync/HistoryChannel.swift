@@ -195,12 +195,7 @@ enum HistoryChannel {
     /// step runs on `context`'s queue.
     /// The header alone, so the directory can be asked before the file is opened for real.
     static func readHeader(at url: URL) throws -> CTHFHeader {
-        let handle = try FileHandle(forReadingFrom: url)
-        defer { try? handle.close() }
-        guard let headerBytes = try handle.read(upToCount: CTT1V2Layout.cthfHeaderCount),
-              headerBytes.count == CTT1V2Layout.cthfHeaderCount
-        else { throw HistorySnapshotError.truncated }
-        return try CTHFHeader.parse(headerBytes)
+        try CTHFEnvelope.readHeader(at: url)
     }
 
     static func importFile(

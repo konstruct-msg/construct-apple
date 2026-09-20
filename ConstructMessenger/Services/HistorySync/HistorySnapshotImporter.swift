@@ -89,21 +89,61 @@ struct HistorySnapshotImporter {
         expectedUserId: String,
         in context: NSManagedObjectContext
     ) throws -> HistoryImportSummary {
-        var summary = HistoryImportSummary()
-        var sinceSave = 0
+        var batch = makeBatch(expectedUserId: expectedUserId, in: context)
         for record in records {
-            let result = try apply(record, expectedUserId: expectedUserId, in: context)
+            try batch.apply(record)
+        }
+        return try batch.finish()
+    }
+
+    /// The same work as `importRecords`, fed one record at a time.
+    ///
+    /// A caller reading a `.cthf` off disk never has the whole array: it decodes a 64 KiB chunk,
+    /// gets whatever records that chunk completed, and moves on. Batching lives here rather than at
+    /// the call site so both entry points save on the same boundary.
+    func makeBatch(
+        expectedUserId: String,
+        in context: NSManagedObjectContext
+    ) -> Batch {
+        Batch(importer: self, expectedUserId: expectedUserId, context: context)
+    }
+
+    /// One save per `HistorySnapshotImporter.saveBatchSize` applied records, plus a final save.
+    /// Not reusable after `finish()`.
+    struct Batch {
+        private let importer: HistorySnapshotImporter
+        private let expectedUserId: String
+        private let context: NSManagedObjectContext
+        private var summary = HistoryImportSummary()
+        private var sinceSave = 0
+
+        init(
+            importer: HistorySnapshotImporter,
+            expectedUserId: String,
+            context: NSManagedObjectContext
+        ) {
+            self.importer = importer
+            self.expectedUserId = expectedUserId
+            self.context = context
+        }
+
+        mutating func apply(_ record: HistoryRecord) throws {
+            let result = try importer.apply(record, expectedUserId: expectedUserId, in: context)
             summary.add(result)
             sinceSave += 1
-            if sinceSave >= Self.saveBatchSize {
+            if sinceSave >= HistorySnapshotImporter.saveBatchSize {
                 try context.saveOrThrow(category: "HistorySync")
                 sinceSave = 0
             }
         }
-        if sinceSave > 0 {
-            try context.saveOrThrow(category: "HistorySync")
+
+        mutating func finish() throws -> HistoryImportSummary {
+            if sinceSave > 0 {
+                try context.saveOrThrow(category: "HistorySync")
+                sinceSave = 0
+            }
+            return summary
         }
-        return summary
     }
 
     // MARK: - Contact
