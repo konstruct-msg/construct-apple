@@ -221,6 +221,8 @@
 "report_spam_failed" = "報告を送信できませんでしたが、相手をブロックしました。";
 "actions" = "アクション";
 "user_is_blocked_footer" = "このユーザーはブロックされています。メッセージを送信することはできません。";
+"profile_blocked_badge" = "ブロック中";
+"composer_split_count" = "%d件のメッセージ";
 "block_user_confirmation" = "ユーザーをブロック";
 "block_user_confirmation_message" = "このユーザーをブロックしてもよろしいですか？メッセージを送信できなくなります。";
 "unblock_user_confirmation_message" = "このユーザーのブロックを解除してもよろしいですか？再びメッセージを送信できるようになります。";
@@ -530,6 +532,7 @@
 "photo" = "写真";
 "video" = "動画";
 "file_attachment" = "ファイル";
+"sticker" = "ステッカー";
 
 // MARK: - Attachments
 "attach" = "添付";
@@ -542,6 +545,7 @@
 "uploading" = "アップロード中...";
 "loading" = "読み込み中...";
 "failed_to_load" = "読み込みに失敗しました";
+"media_unavailable" = "メディアを利用できません";
 "shared_profile" = "共有プロフィール";
 
 // MARK: - Drafts

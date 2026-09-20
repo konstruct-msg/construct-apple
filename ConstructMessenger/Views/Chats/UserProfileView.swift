@@ -182,10 +182,17 @@ struct UserProfileView: View {
             .onTapGesture { if avatarImage != nil { showAvatarViewer = true } }
 
             if user.isBlocked {
-                Text("[ BLOCKED ]")
-                    .font(CTFont.bold(10))
-                    .foregroundStyle(Color.CT.danger)
-                    .tracking(2)
+                HStack(spacing: 5) {
+                    Image(systemName: "nosign")
+                        .font(.system(size: 11, weight: .semibold))
+                        .accessibilityHidden(true)
+                    Text(NSLocalizedString("profile_blocked_badge", comment: ""))
+                        .font(CTFont.ui(11, weight: .semibold, relativeTo: .caption2))
+                }
+                .foregroundStyle(Color.CT.danger)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(Color.CT.danger.opacity(0.14), in: CTShape.badge())
             }
         }
         .frame(maxWidth: .infinity)
@@ -364,14 +371,15 @@ struct UserProfileView: View {
             }
 
             profileRow(label: NSLocalizedString("session_crypto_suite", comment: "")) {
-                HStack(spacing: 8) {
-                    Text(hasSession ? "[ENC]" : "[---]")
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(hasSession ? Color.CT.accent.opacity(0.8) : Color.CT.textDim)
+                // The row below names the suite, or says there is no session; this one is
+                // only the state. `[ENC] [ OK ]` was two accent-coloured tokens that looked
+                // exactly like the tappable rows around them.
+                HStack(spacing: 6) {
+                    CTStatusBadge(status: hasSession ? .ok : .off, size: 13)
                     if hasSession {
-                        Text("[ OK ]")
-                            .font(CTFont.regular(11))
-                            .foregroundStyle(Color.CT.accent.opacity(0.6))
+                        Text(NSLocalizedString("encrypted", comment: ""))
+                            .font(CTFont.ui(13, relativeTo: .footnote))
+                            .foregroundStyle(Color.CT.text)
                     }
                 }
             }
@@ -566,9 +574,12 @@ struct UserProfileView: View {
                 .font(CTFont.regular(14))
                 .foregroundStyle(Color.CT.textDim)
             Spacer()
-            Text("[soon]")
-                .font(CTFont.regular(11))
+            Text(NSLocalizedString("settings_coming_soon", comment: ""))
+                .font(CTFont.ui(11, relativeTo: .caption2))
                 .foregroundStyle(Color.CT.textDim)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Color.CT.noise, in: CTShape.badge())
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)

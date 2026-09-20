@@ -234,6 +234,8 @@
 "report_spam_failed" = "Не удалось отправить жалобу, но пользователь заблокирован.";
 "actions" = "Действия";
 "user_is_blocked_footer" = "Этот пользователь заблокирован. Он не может отправлять вам сообщения.";
+"profile_blocked_badge" = "Заблокирован";
+"composer_split_count" = "%d сообщений";
 "block_user_confirmation" = "Заблокировать пользователя";
 "block_user_confirmation_message" = "Вы уверены, что хотите заблокировать этого пользователя? Он не сможет отправлять вам сообщения.";
 "unblock_user_confirmation_message" = "Вы уверены, что хотите разблокировать этого пользователя? Он снова сможет отправлять вам сообщения.";
@@ -593,6 +595,7 @@
 "photo" = "Фото";
 "video" = "Видео";
 "file_attachment" = "Файл";
+"sticker" = "Стикер";
 
 // MARK: - Attachments
 "attach" = "Прикрепить";
@@ -631,6 +634,7 @@
 "media_picker_video_1080" = "1080p";
 "media_picker_confirm" = "Подтвердить выбор";
 "failed_to_load" = "Не удалось загрузить";
+"media_unavailable" = "Медиа недоступно";
 "shared_profile" = "Профиль отправлен";
 
 // MARK: - Drafts

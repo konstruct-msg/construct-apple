@@ -240,6 +240,8 @@
 "report_spam_failed" = "Impossible d'envoyer le signalement, mais cette personne est désormais bloquée.";
 "actions" = "Actions";
 "user_is_blocked_footer" = "Cet utilisateur est bloqué. Il ne peut pas vous envoyer de messages.";
+"profile_blocked_badge" = "Bloqué";
+"composer_split_count" = "%d messages";
 "block_user_confirmation" = "Bloquer l'utilisateur";
 "block_user_confirmation_message" = "Êtes-vous sûr de vouloir bloquer cet utilisateur ? Il ne pourra plus vous envoyer de messages.";
 "unblock_user_confirmation_message" = "Êtes-vous sûr de vouloir débloquer cet utilisateur ? Il pourra à nouveau vous envoyer des messages.";
@@ -549,6 +551,7 @@
 "photo" = "Photo";
 "video" = "Vidéo";
 "file_attachment" = "Pièce jointe";
+"sticker" = "Sticker";
 
 // MARK: - Attachments
 "attach" = "Joindre";
@@ -562,6 +565,7 @@
 "loading" = "Chargement...";
 "send_original_quality" = "Qualité originale";
 "failed_to_load" = "Échec du chargement";
+"media_unavailable" = "Média indisponible";
 "shared_profile" = "Profil partagé";
 
 // MARK: - Drafts

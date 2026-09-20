@@ -240,6 +240,8 @@
 "report_spam_failed" = "Couldn't send the report, but this person is now blocked.";
 "actions" = "Actions";
 "user_is_blocked_footer" = "This user is blocked. They cannot send you messages.";
+"profile_blocked_badge" = "Blocked";
+"composer_split_count" = "%d messages";
 "block_user_confirmation" = "Block User";
 "block_user_confirmation_message" = "Are you sure you want to block this user? They will not be able to send you messages.";
 "unblock_user_confirmation_message" = "Are you sure you want to unblock this user? They will be able to send you messages again.";
@@ -592,6 +594,7 @@
 "photo" = "Photo";
 "video" = "Video";
 "file_attachment" = "File";
+"sticker" = "Sticker";
 
 // MARK: - Attachments
 "attach" = "Attach";
@@ -630,6 +633,7 @@
 "media_picker_video_1080" = "1080p";
 "media_picker_confirm" = "Confirm selection";
 "failed_to_load" = "Failed to load";
+"media_unavailable" = "Media unavailable";
 "shared_profile" = "Shared profile";
 
 // MARK: - Drafts
