@@ -31,10 +31,10 @@ struct DesktopChatsListView: View {
     }
 
     var body: some View {
+        @Bindable var chatsViewModel = chatsViewModel
         VStack(spacing: 0) {
-//            navBar
             searchBar
-            chatList
+            chatList(selection: $chatsViewModel.chatToOpen)
         }
         .ctBackground()
         .sheet(isPresented: $showingQRScanner) {
@@ -56,6 +56,40 @@ struct DesktopChatsListView: View {
             guard shouldFocus else { return }
             consumeSidebarSearchFocus()
         }
+        // ⌥⌘↓ / ⌥⌘↑ / ⌘1…9 are posted by the command bridge in DesktopRootView, which cannot
+        // answer them: "the next chat" means the next one *as displayed*, and the order — pinned
+        // first, then by last message, minus whatever the search box is filtering out — exists
+        // only here. Until this observer the notifications had no listener and the shortcuts
+        // silently did nothing.
+        .onReceive(NotificationCenter.default.publisher(for: .desktopSelectNextChat)) { _ in
+            selectChat(step: 1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .desktopSelectPrevChat)) { _ in
+            selectChat(step: -1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .desktopJumpToChat)) { note in
+            guard let index = note.object as? Int else { return }
+            jumpToChat(index: index)
+        }
+    }
+
+    // MARK: - Keyboard navigation
+
+    /// The ids of the rows on screen, in the order they are drawn — pinned first, then by last
+    /// message, minus whatever the search box is hiding. This ordering is the reason the keyboard
+    /// shortcuts are answered here and not in `DesktopRootView`, which posts them.
+    private var visibleChatIds: [String] { filteredChats.map(\.id) }
+
+    private func selectChat(step: Int) {
+        guard let next = ChatListNavigation.step(
+            from: chatsViewModel.chatToOpen, by: step, in: visibleChatIds
+        ) else { return }
+        chatsViewModel.chatToOpen = next
+    }
+
+    private func jumpToChat(index: Int) {
+        guard let target = ChatListNavigation.jump(to: index, in: visibleChatIds) else { return }
+        chatsViewModel.chatToOpen = target
     }
 
     // MARK: - Nav Bar
@@ -98,49 +132,42 @@ struct DesktopChatsListView: View {
         }
     }
 
-    private var chatList: some View {
-        List {
-            ForEach(filteredChats) { chat in
-                Button {
-                    chatsViewModel.chatToOpen = chat.id
-                } label: {
-                    ChatRowView(chat: chat)
-                }
-                .buttonStyle(.plain)
-                .listRowBackground(Color.CT.bg)
-                .listRowSeparatorTint(Color.CT.noise)
-                .contextMenu {
-                    Button(role: .destructive) {
-                        Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
-                    } label: {
-                        Label(LocalizedStringKey("delete"), systemImage: "trash")
+    private func chatList(selection: Binding<String?>) -> some View {
+        List(selection: selection) {
+            ForEach(filteredChats, id: \.id) { chat in
+                ChatRowView(chat: chat)
+                    .tag(chat.id)
+                    .desktopActiveRow(chatsViewModel.chatToOpen == chat.id)
+                    .listRowSeparatorTint(Color.CT.noise)
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+                        } label: {
+                            Label(LocalizedStringKey("delete"), systemImage: "trash")
+                        }
+                        Button {
+                            toggleMarkUnread(chat)
+                        } label: {
+                            Label(
+                                LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
+                                systemImage: chat.unreadCount > 0 ? "envelope.open" : "envelope.badge"
+                            )
+                        }
+                        Button {
+                            togglePin(chat)
+                        } label: {
+                            Label(
+                                LocalizedStringKey(chat.isPinned ? "unpin" : "pin"),
+                                systemImage: chat.isPinned ? "pin.slash" : "pin"
+                            )
+                        }
                     }
-                    Button {
-                        toggleMarkUnread(chat)
-                    } label: {
-                        Label(
-                            LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
-                            systemImage: chat.unreadCount > 0 ? "envelope.open" : "envelope.badge"
-                        )
-                    }
-                    Button {
-                        togglePin(chat)
-                    } label: {
-                        Label(
-                            LocalizedStringKey(chat.isPinned ? "unpin" : "pin"),
-                            systemImage: chat.isPinned ? "pin.slash" : "pin"
-                        )
-                    }
-                }
             }
-        }
-        .refreshable {
-            Log.info("Manual message sync (pull-to-refresh)", category: "DesktopChatsListView")
-            await BackgroundFetchManager.shared.fetchPendingMessages()
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Color.CT.bg)
+        .desktopSuppressSystemListSelection()
     }
 
     // MARK: - Actions

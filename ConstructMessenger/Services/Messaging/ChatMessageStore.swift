@@ -46,7 +46,7 @@ final class ChatMessageStore: NSObject {
     /// "everything not in the FRC window is older than everything in it", which the FRC does not
     /// guarantee — its `fetchLimit` is not re-applied on incremental updates, so `fetchedObjects`
     /// drifts (51/52/36 inside one second in that same log). See TODO 34.
-    private var oldestLoadedTimestamp: Date?
+    private var oldestLoadedServerOrderKey: String?
     /// Last published transcript fingerprint — skip no-op FRC storms (status-spam / receipt).
     private var lastSnapshotFingerprint: UInt64 = 0
 
@@ -83,29 +83,31 @@ final class ChatMessageStore: NSObject {
     /// matters beyond tidiness: a `ForEach` fed duplicate ids renders unpredictably, and the merge
     /// this replaces could produce them whenever the FRC window slid under it.
     ///
-    /// Sorted by `(timestamp, id)`: the id is not decoration. Messages sent in the same burst share
-    /// a timestamp to the millisecond, and without a tie-break their relative order flips between
-    /// fetches — which is a transcript that reshuffles itself while the user is looking at it.
+    /// Sorted by `(serverOrderKey, id)`: the order key is the server's total order, while the id is
+    /// a deterministic fallback for legacy/optimistic rows that share a position.
     private func fetchWindow() -> [Message] {
         let request = Message.fetchRequest()
         var predicates: [NSPredicate] = [
             NSPredicate(format: "chat == %@", chat),
             ChatMessageStore.controlMessageFilterPredicate
         ]
-        if let oldest = oldestLoadedTimestamp {
-            predicates.append(NSPredicate(format: "timestamp >= %@", oldest as NSDate))
+        if let oldest = oldestLoadedServerOrderKey {
+            predicates.append(NSPredicate(format: "serverOrderKey >= %@", oldest))
         } else {
             // No window yet (setup failed, or an empty chat): fall back to the newest page rather
             // than fetching the entire history.
             request.fetchLimit = initialMessageLimit
-            request.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "serverOrderKey", ascending: false),
+                NSSortDescriptor(key: "id", ascending: false)
+            ]
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
             let newest = ChatMessageStore.visible((try? viewContext.fetch(request)) ?? [])
             return Array(newest.reversed())
         }
         request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
         request.sortDescriptors = [
-            NSSortDescriptor(key: "timestamp", ascending: true),
+            NSSortDescriptor(key: "serverOrderKey", ascending: true),
             NSSortDescriptor(key: "id", ascending: true)
         ]
         return ChatMessageStore.visible((try? viewContext.fetch(request)) ?? [])
@@ -135,14 +137,37 @@ final class ChatMessageStore: NSObject {
 
     // MARK: - Setup
 
+    private func backfillMissingServerOrderKeys() {
+        let request = Message.fetchRequest()
+        request.predicate = NSPredicate(format: "chat == %@ AND serverOrderKey == nil", chat)
+        guard let messages = try? viewContext.fetch(request), !messages.isEmpty else { return }
+
+        for message in messages {
+            message.serverOrderKey = ServerMessageOrder.legacy(
+                timestamp: message.safeTimestamp,
+                messageId: message.id
+            )
+        }
+        do {
+            try viewContext.save()
+            Log.info("Backfilled server order for \(messages.count) transcript row(s)", category: "ChatViewModel")
+        } catch {
+            Log.error("Failed to backfill server order: \(error)", category: "ChatViewModel")
+        }
+    }
+
     func setup() {
+        backfillMissingServerOrderKeys()
         let fetchRequest = Message.fetchRequest()
         let chatPredicate = NSPredicate(format: "chat == %@", chat)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
             chatPredicate,
             ChatMessageStore.controlMessageFilterPredicate
         ])
-        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+        fetchRequest.sortDescriptors = [
+            NSSortDescriptor(key: "serverOrderKey", ascending: false),
+            NSSortDescriptor(key: "id", ascending: false)
+        ]
         fetchRequest.fetchLimit = initialMessageLimit
         fetchedResultsController = NSFetchedResultsController(
             fetchRequest: fetchRequest,
@@ -156,7 +181,7 @@ final class ChatMessageStore: NSObject {
             // The FRC exists to *notify*, not to supply the list. Its first fetch does define the
             // initial window, though: the newest page.
             let fetched = ChatMessageStore.visible(fetchedResultsController?.fetchedObjects ?? [])
-            oldestLoadedTimestamp = fetched.last?.timestamp   // sorted newest-first
+            oldestLoadedServerOrderKey = fetched.last?.serverOrderKey   // sorted newest-first
             let window = fetchWindow()
             publish(window)
             Log.debug("FRC initial fetch: \(window.count) messages (oldest-first)", category: "ChatViewModel")
@@ -174,9 +199,9 @@ final class ChatMessageStore: NSObject {
     /// near-top scroll or a short-window fill.
     func loadMoreMessages(trigger: LoadMoreTrigger = .user) {
         guard let vm = viewModel else { return }
-        guard !vm.isLoadingMore, vm.hasMoreMessages, let oldestTimestamp = oldestLoadedTimestamp else { return }
+        guard !vm.isLoadingMore, vm.hasMoreMessages, let oldestKey = oldestLoadedServerOrderKey else { return }
         vm.isLoadingMore = true
-        Log.debug("Loading more messages before \(oldestTimestamp) [trigger=\(trigger.rawValue)]", category: "ChatViewModel")
+        Log.debug("Loading more messages before \(oldestKey) [trigger=\(trigger.rawValue)]", category: "ChatViewModel")
         if trigger == .indicatorAppeared {
             PerformanceMetrics.shared.record(.loadMoreUnprompted, label: String(vm.messages.count))
         }
@@ -186,39 +211,42 @@ final class ChatMessageStore: NSObject {
         // itself is not spliced into the list. Newest-first so the last element is the oldest we
         // are admitting.
         let fetchRequest = Message.fetchRequest()
-        let chatPredicate = NSPredicate(format: "chat == %@ AND timestamp < %@", chat, oldestTimestamp as NSDate)
+        let chatPredicate = NSPredicate(format: "chat == %@ AND serverOrderKey < %@", chat, oldestKey)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
             chatPredicate,
             ChatMessageStore.controlMessageFilterPredicate
         ])
-        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+        fetchRequest.sortDescriptors = [
+            NSSortDescriptor(key: "serverOrderKey", ascending: false),
+            NSSortDescriptor(key: "id", ascending: false)
+        ]
         fetchRequest.fetchLimit = loadMoreBatchSize
         guard let older = try? viewContext.fetch(fetchRequest) else {
             Log.error("Failed to fetch more messages", category: "ChatViewModel")
             return
         }
-        guard let newBound = older.last?.timestamp else {
+        guard let newBound = older.last?.serverOrderKey else {
             vm.hasMoreMessages = false
             Log.debug("No more older messages to load", category: "ChatViewModel")
             return
         }
 
-        // Widening by timestamp, not by object identity, is what keeps a boundary shared by several
-        // messages of the same millisecond from being split across two pages.
+        // Widening by the total-order key, not by object identity, keeps a shared server position
+        // from being split across two pages.
         let previousCount = vm.messages.count
-        oldestLoadedTimestamp = newBound
+        oldestLoadedServerOrderKey = newBound
         publish(fetchWindow())
         checkIfHasMoreMessages()
         Log.debug("Loaded \(vm.messages.count - previousCount) more messages (total: \(vm.messages.count))", category: "ChatViewModel")
     }
 
     private func checkIfHasMoreMessages() {
-        guard let oldestTimestamp = oldestLoadedTimestamp else {
+        guard let oldestKey = oldestLoadedServerOrderKey else {
             viewModel?.hasMoreMessages = false
             return
         }
         let fetchRequest = Message.fetchRequest()
-        let chatPredicate = NSPredicate(format: "chat == %@ AND timestamp < %@", chat, oldestTimestamp as NSDate)
+        let chatPredicate = NSPredicate(format: "chat == %@ AND serverOrderKey < %@", chat, oldestKey)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
             chatPredicate,
             ChatMessageStore.controlMessageFilterPredicate

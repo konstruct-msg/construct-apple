@@ -42,6 +42,9 @@ enum AccountWipeKeys {
         // Who already holds our key. Wiped because the new account's key is a different secret —
         // a stale list would suppress the lazy hand-off to every contact it names.
         "construct.intake.sentTo.v1",
+        // Peers whose credential the server refused, by epoch. Same shape as `sentTo`: a list of
+        // who this account talks to, meaningless — and misleading — under the next account.
+        "construct.intake.rejected.v1",
         "session_expires",
         "is_discoverable",
         "recovery_is_setup",

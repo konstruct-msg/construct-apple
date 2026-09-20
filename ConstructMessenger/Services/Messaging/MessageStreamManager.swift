@@ -120,7 +120,7 @@ final class MessageStreamManager {
 
     /// The reason string for an interface/topology switch. One spelling, two readers
     /// (`StreamLifecycleCoordinator` writes it, `livePathChangeAction` matches it).
-    static let networkPathChangeReason = "networkPathChanged"
+    nonisolated static let networkPathChangeReason = "networkPathChanged"
 
     /// Whether a routing reconnect must run even though the stream is live on an unchanged key.
     ///
@@ -159,7 +159,7 @@ final class MessageStreamManager {
     /// confirmed. It exists so the retry cannot be answered with another migration attempt: the
     /// same call re-enters this method, and without a distinct reason a live stream on an unchanged
     /// key would read as `.skip` and the fallback would silently do nothing.
-    static let migrationDeclinedReason = "networkPathChanged:migrationDeclined"
+    nonisolated static let migrationDeclinedReason = "networkPathChanged:migrationDeclined"
 
     nonisolated static func livePathChangeAction(
         reason: String,

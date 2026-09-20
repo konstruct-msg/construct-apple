@@ -1047,6 +1047,10 @@
 "transfer_error_connection" = "Connection lost. Try again.";
 "transfer_error_corrupt" = "Transfer data is corrupted. Try again.";
 "transfer_error_cancelled" = "Transfer was cancelled.";
+"transfer_error_history_v1_refused" = "This transfer is too old for chat history. Update the other device.";
+"history_sync_qr_pin_mismatch" = "This code does not match — start the link again.";
+"history_sync_kem_key_id_mismatch" = "This file is stale. Ask your other device for a new file.";
+"history_sync_no_hybrid_key" = "Update the other device, then try again.";
 
 // History Sync (device-to-device after linking)
 "history_sync_send_title" = "Transfer History";
@@ -1064,6 +1068,27 @@
 "history_sync_skip_title" = "Skip History";
 "history_sync_skip_sending" = "Finishing without history…";
 "history_sync_user_mismatch" = "History transfer failed: this history belongs to a different identity.";
+"history_sync_chats_transferred" = "Chats transferred. Sending photos and files…";
+"history_sync_media_incomplete" = "Chats transferred, media incomplete — retry from Settings or save a file.";
+"history_sync_save_file_instead" = "Save a file instead.";
+"history_sync_offer_message_with_media" = "Receive chats, photos and files from your other device over Wi‑Fi, or import a file. You can skip and start with empty chats.";
+"history_sync_empty_explanation" = "New chats will appear here as people write to you. History from your other device is not on this one yet.";
+"history_sync_receive_wifi" = "Receive over Wi‑Fi";
+"history_sync_import_file" = "Import a file";
+"history_sync_save_file" = "Save a file";
+"history_sync_settings_section" = "Transfer chat history";
+"history_sync_settings_chats" = "Chats";
+"history_sync_settings_media" = "Media only";
+"history_sync_settings_hint" = "Send chats or leftover photos and files to a device you already linked.";
+"history_sync_composer_connecting" = "This device is still connecting to this person.";
+"history_sync_importing" = "Importing history…";
+"history_sync_imported_summary" = "%d records imported. Chats are on this device now.";
+"history_sync_qr_pin_absent" = "The link code carried no fingerprint. Update the other device and link again.";
+"history_sync_local_keys_unavailable" = "This device is not ready yet. Try again in a moment.";
+"history_sync_peer_not_found" = "Your other device is no longer in this account.";
+"history_sync_file_ready" = "File ready. Share it to your other device and import it there now — it expires within a week.";
+"history_sync_share_file" = "Share file";
+"history_sync_preparing_file" = "Preparing file…";
 "call_error_not_contacts" = "You can only call people you are connected with.";
 "call_error_busy" = "You're already in a call.";
 "call_error_peer_offline" = "They are offline. Try again later.";
@@ -1089,12 +1114,6 @@
 "e2e_protocol" = "Protocol";
 "e2e_forward_secrecy" = "Forward Secrecy";
 "e2e_key_agreement" = "Key Agreement";
-
-/* Desktop delete account sheet */
-"delete_locally_only" = "Delete locally only (offline)";
-"delete_locally_question" = "Delete Locally?";
-"delete_locally_action" = "Delete Locally";
-"delete_locally_message" = "This removes all local data. The server account may still exist if the network request failed.";
 
 /* Desktop general settings */
 "message_section" = "Messages";
@@ -1218,3 +1237,41 @@
 "veil_voucher_privacy_hint" = "Show this code only to the person it is for. Do not post it or send it through a public channel.";
 "veil_voucher_intro" = "Creates a one-off code that sets up a connection for someone who cannot reach Konstruct yet. It is valid for a short time, and you can create three per day.";
 "veil_voucher_create" = "Create code";
+
+/* Desktop chrome — D2–D7 */
+"find" = "Find";
+"quick_open" = "Quick Open";
+"copy_id" = "Copy ID";
+"desktop_close_chat" = "Close Chat";
+"desktop_new_conversation" = "New Conversation";
+"desktop_sync_messages" = "Sync Messages";
+"desktop_menu_navigate" = "Navigate";
+"desktop_next_chat" = "Next Chat";
+"desktop_previous_chat" = "Previous Chat";
+"desktop_jump_to_chat_fmt" = "Jump to Chat %d";
+"desktop_show_security" = "Show Security Info";
+"desktop_settings_account" = "Account";
+"desktop_settings_devices" = "Devices";
+"desktop_settings_storage" = "Storage";
+"desktop_add_my_qr" = "My QR";
+"desktop_add_from_file" = "From File";
+"desktop_add_invite_ok" = "Invite accepted";
+"desktop_add_empty" = "Nothing to add";
+"desktop_add_expires_fmt" = "Expires in %@";
+"desktop_add_show_qr" = "Show this to someone so they can scan it";
+"desktop_add_device_unregistered" = "Device not registered";
+"desktop_add_qr_failed" = "Could not create the QR code";
+"desktop_add_point_camera" = "Point the camera at a Konstruct QR code";
+"desktop_add_camera_privacy" = "Allow camera access in System Settings → Privacy & Security → Camera";
+"desktop_add_drop_image" = "Drop image here";
+"desktop_add_drop_types" = "PNG, JPG, screenshot";
+"desktop_add_choose_file" = "Choose File…";
+"desktop_add_choose_file_panel" = "Select a screenshot or image containing a Konstruct QR code";
+"desktop_add_cannot_read_file" = "Cannot read file";
+"desktop_add_cannot_decode_image" = "Cannot decode image";
+"desktop_add_cannot_load_image" = "Cannot load image";
+"desktop_add_no_qr_in_image" = "No QR code found in that image";
+"desktop_add_invite_link" = "Invite link";
+"desktop_add_invite_placeholder" = "https://konstruct.cc/add?invite=… or konstruct://add?…";
+"desktop_add_paste_clipboard" = "Paste from Clipboard";
+"desktop_add_supported" = "konstruct://add?invite=… or https://konstruct.cc/add?invite=…";

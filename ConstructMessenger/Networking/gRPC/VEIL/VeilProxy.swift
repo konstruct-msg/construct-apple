@@ -64,6 +64,11 @@ actor VeilProxy {
     /// Which obfuscator the coordinator picked for the active session.
     private(set) var activeMethod: VeilMethod?
 
+    /// Host-terminated TLS veil-front session (review §3.1 variant A); nil unless
+    /// that path is active. Retained so its NWConnection + socketpair pump outlive
+    /// `start(relay:)`.
+    private var externalDialer: VeilFrontExternalDialer?
+
     private let runtime: VeilProxyRuntime
 
     // MARK: - Init
@@ -95,6 +100,15 @@ actor VeilProxy {
     @discardableResult
     func start(relay: VeilRelay) async throws -> VeilStartOutcome {
         stopIfRunning()
+
+        // Host-terminated TLS veil-front (opt-in): terminate TLS in Network.framework
+        // for the native Apple ClientHello fingerprint. Falls through to the rustls
+        // coordinator when the flag is off, the relay carries no veil-front material,
+        // or the dial fails — connectivity is never sacrificed to this path.
+        if VeilProxyStore.veilFrontEnabled, VeilProxyStore.veilFrontNativeTLS,
+           let outcome = await startNativeVeilFront(relay: relay) {
+            return outcome
+        }
 
         let fingerprint = await MainActor.run { NetworkFingerprint.current() }
         let scoresPath  = NetworkFingerprint.scoresDatabasePath
@@ -131,8 +145,53 @@ actor VeilProxy {
         activeMethod = method
     }
 
+    /// Host-terminated TLS path. Returns nil to fall back to the rustls coordinator
+    /// (no relay material, or the dial failed); never throws — an experimental
+    /// fingerprint path must not cost connectivity.
+    private func startNativeVeilFront(relay: VeilRelay) async -> VeilStartOutcome? {
+        guard let spki = relay.pinnedSpki, !spki.isEmpty,
+              let (host, port) = Self.splitHostPort(relay.address) else { return nil }
+        let capabilityV2 = relay.veilCapabilityV2 ?? ""
+        let veilSk       = relay.veilSkHex ?? ""
+        let ticket       = relay.veilFrontTicket ?? ""
+        guard !(capabilityV2.isEmpty && ticket.isEmpty) else { return nil }  // no AUTH material
+
+        let dialer = VeilFrontExternalDialer(
+            host: host, port: port, sni: relay.tlsServerName ?? host,
+            pinnedSpkiHex: spki, capabilityV2B64: capabilityV2,
+            veilSkHex: veilSk, ticketB64: ticket
+        )
+        do {
+            // The dial is internally bounded (VeilFrontExternalDialer.start caps the
+            // otherwise-unbounded NWConnection handshake), so a stalled/censored
+            // handshake surfaces here as a throw and falls back to rustls rather than
+            // wedging the whole VEIL start in veil-probing — connectivity first.
+            let localPort = try await dialer.start()
+            externalDialer = dialer
+            commit(port: localPort, relay: relay, method: .veilFront)
+            Log.info(
+                "VEIL: relay=\(relay.address) method=veil-front(native-TLS) port=\(localPort)",
+                category: "VEIL"
+            )
+            return VeilStartOutcome(port: localPort, method: .veilFront, latencyMs: 0)
+        } catch {
+            Log.error("VEIL native-TLS dial failed/timeout, falling back to rustls: \(error)", category: "VEIL")
+            dialer.stop()
+            return nil
+        }
+    }
+
+    /// Splits `"host:port"` (host may be an IPv4/hostname; last colon wins).
+    private static func splitHostPort(_ addr: String) -> (String, UInt16)? {
+        guard let idx = addr.lastIndex(of: ":"),
+              let port = UInt16(addr[addr.index(after: idx)...]) else { return nil }
+        return (String(addr[..<idx]), port)
+    }
+
     private func stopIfRunning() {
         guard port != nil else { return }
+        externalDialer?.stop()
+        externalDialer = nil
         runtime.stop()
         port = nil
         currentRelay = nil

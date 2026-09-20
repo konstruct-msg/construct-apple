@@ -53,19 +53,27 @@ enum StealthSendRecovery {
     /// error — and a second rejection — propagates to the caller's normal failure path.
     /// `rebuild` returning nil (e.g. identity key no longer available) rethrows the
     /// original rejection instead of retrying — never falls back to identified.
+    ///
+    /// `rebuild` is handed `afterCredentialRejection: true` and must pass it through to
+    /// `buildSealedInner`. Replenishing the wallet is not on its own a remedy: an envelope that
+    /// presented an intake credential carried no token *by choice*, so a wallet that was never
+    /// short gets topped up, the rebuild presents the same credential, and the server refuses it
+    /// exactly as before. That is the loop measured on 2026-09-14 — balance 178 → 198 between two
+    /// identical `missing_token` refusals, with the message marked failed at the end of it. A
+    /// Privacy Pass refusal is proof the credential was not honoured, so the retry pays.
     static func sendSealed<R>(
         _ sealedInner: Data,
-        rebuild: () async throws -> Data?,
+        rebuild: (_ afterCredentialRejection: Bool) async throws -> Data?,
         send: (Data) async throws -> R
     ) async throws -> R {
         do {
             return try await send(sealedInner)
         } catch {
             guard let label = rejectionLabel(error) else { throw error }
-            Log.info("Stealth: sealed send rejected by enforce (\(label)) — replenishing and retrying once", category: "Stealth")
+            Log.info("Stealth: sealed send rejected by enforce (\(label)) — paying and retrying once", category: "Stealth")
             PerformanceMetrics.shared.record(.stealthEnforceRejected, label: label)
             await BlindTokenService.shared.forceReplenish()
-            guard let freshInner = try await rebuild() else { throw error }
+            guard let freshInner = try await rebuild(true) else { throw error }
             return try await send(freshInner)
         }
     }

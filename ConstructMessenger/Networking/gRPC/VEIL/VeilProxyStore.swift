@@ -29,6 +29,18 @@ enum VeilProxyStore {
         set { UserDefaults.standard.set(newValue, forKey: veilFrontEnabledKey) }
     }
 
+    /// Feature flag: terminate the veil-front TLS in Swift Network.framework
+    /// (native Apple ClientHello fingerprint) instead of rustls-Chrome131, via
+    /// `VeilFrontExternalDialer` (review §3.1 variant A). **Opt-in, default off** —
+    /// the rustls coordinator path stays the default until this path is validated
+    /// on-device, and it only applies when a veil-front relay with AUTH material is
+    /// selected. Off / non-Apple platforms use the rustls path unchanged.
+    static let veilFrontNativeTLSKey = "veil_front_native_tls"
+    static var veilFrontNativeTLS: Bool {
+        get { UserDefaults.standard.object(forKey: veilFrontNativeTLSKey) as? Bool ?? false }
+        set { UserDefaults.standard.set(newValue, forKey: veilFrontNativeTLSKey) }
+    }
+
     static func loadMode() -> VeilMode {
         if let raw = UserDefaults.standard.string(forKey: modeKey),
            let stored = VeilMode(rawValue: raw) {

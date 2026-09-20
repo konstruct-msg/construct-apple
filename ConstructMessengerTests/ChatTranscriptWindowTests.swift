@@ -53,7 +53,8 @@ final class ChatTranscriptWindowTests: XCTestCase {
         in chat: Chat,
         at timestamp: Date,
         text: String,
-        id: String = UUID().uuidString
+        id: String = UUID().uuidString,
+        serverOrderKey: String? = nil
     ) -> Message {
         let msg = Message(context: context)
         msg.id = id
@@ -61,6 +62,7 @@ final class ChatTranscriptWindowTests: XCTestCase {
         msg.toUserId = "me"
         msg.contentType = .regular
         msg.timestamp = timestamp
+        msg.serverOrderKey = serverOrderKey
         msg.isSentByMe = false
         msg.deliveryStatus = .delivered
         msg.retryCount = 0
@@ -77,6 +79,31 @@ final class ChatTranscriptWindowTests: XCTestCase {
     }
 
     // MARK: - The transcript must be ordered, whatever order Core Data was written in
+
+    func testTranscriptUsesServerOrderInsteadOfSenderTimestamp() throws {
+        let chat = makeChat()
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        makeMessage(
+            in: chat,
+            at: base.addingTimeInterval(600),
+            text: "server-first",
+            id: "server-first",
+            serverOrderKey: ServerMessageOrder.key(serverTimestampMilliseconds: 1_700_000_000_001, sequence: 1)
+        )
+        makeMessage(
+            in: chat,
+            at: base,
+            text: "server-second",
+            id: "server-second",
+            serverOrderKey: ServerMessageOrder.key(serverTimestampMilliseconds: 1_700_000_000_001, sequence: 2)
+        )
+        try context.save()
+
+        let (store, vm) = makeStore(for: chat)
+        store.setup()
+
+        XCTAssertEqual(vm.messages.map(\.id), ["server-first", "server-second"])
+    }
 
     /// Messages do not arrive in timestamp order — an offline-queued peer message is stored with
     /// its *original* timestamp long after newer local sends (the premise of

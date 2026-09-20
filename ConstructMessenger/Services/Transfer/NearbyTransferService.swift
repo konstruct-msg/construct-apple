@@ -37,6 +37,10 @@ enum NearbyTransferError: LocalizedError {
     case connectionClosed
     case malformedFrame
     case transferCancelled
+    case v1RefusedForHistory
+    case qrPinMismatch
+    case kemKeyIdMismatch
+    case noHybridKey
 
     var errorDescription: String? {
         switch self {
@@ -44,6 +48,10 @@ enum NearbyTransferError: LocalizedError {
         case .connectionClosed:     return NSLocalizedString("transfer_error_connection", comment: "")
         case .malformedFrame:       return NSLocalizedString("transfer_error_corrupt", comment: "")
         case .transferCancelled:    return NSLocalizedString("transfer_error_cancelled", comment: "")
+        case .v1RefusedForHistory:  return NSLocalizedString("transfer_error_history_v1_refused", comment: "")
+        case .qrPinMismatch:        return NSLocalizedString("history_sync_qr_pin_mismatch", comment: "")
+        case .kemKeyIdMismatch:     return NSLocalizedString("history_sync_kem_key_id_mismatch", comment: "")
+        case .noHybridKey:          return NSLocalizedString("history_sync_no_hybrid_key", comment: "")
         }
     }
 }
@@ -141,7 +149,9 @@ final class NearbyTransferService {
 
     // MARK: - Private
 
-    private let serviceType = "_construct-transfer._tcp"
+    /// One Bonjour type for v1 backups and CTT1 v2 history; the instance name scopes the peer.
+    static let serviceType = "_construct-transfer._tcp"
+    private var serviceType: String { Self.serviceType }
     private let queue = DispatchQueue(label: "com.construct.transfer", qos: .userInitiated)
     private let chunkSize = 65_536
 
@@ -377,8 +387,19 @@ final class NearbyTransferService {
     // MARK: - Receiver Handshake
 
     private func receiverHandshake(conn: NWConnection, pin: String) async throws -> (SymmetricKey, TransferType, Int) {
-        // Receive: [4]"CTT1" + [1]version + [32]senderPub + [1]type + [8]payloadLen = 46 bytes
-        let raw = try await receiveExact(conn, length: HandshakeFrame.byteCount)
+        // Two-step read: 46-byte prefix, then 6529 more only if version == 0x02.
+        let raw = try await receiveExact(conn, length: CTT1V2Layout.prefixCount)
+        let prefix = try CTT1V2Prefix.parse(raw)
+        if prefix.version == CTT1V2Layout.versionV2 {
+            // Remainder is consumed so a v2 peer is not left half-read. Full v2
+            // verify + reply is stage 6 (streaming). History must not fall through
+            // to PIN-HMAC.
+            _ = try await receiveExact(conn, length: CTT1V2Layout.openingAfterPrefixCount)
+            throw NearbyTransferError.malformedFrame
+        }
+        if prefix.type != .backup {
+            throw NearbyTransferError.v1RefusedForHistory
+        }
         let frame = try HandshakeFrame.parse(raw)
         let senderPub = frame.senderPub
 
@@ -592,6 +613,7 @@ enum NearbyReceiveCompletionDisposition: Equatable {
 /// Thread-safe one-shot flag for guarding continuation resumes.
 /// All NW callbacks are serialized on the same DispatchQueue, so this
 /// @unchecked Sendable wrapper is safe.
-private final class ResumeOnce: @unchecked Sendable {
+/// Shared with HistoryNearbyChannel: one resume per continuation, whichever handler fires first.
+final class ResumeOnce: @unchecked Sendable {
     var done = false
 }

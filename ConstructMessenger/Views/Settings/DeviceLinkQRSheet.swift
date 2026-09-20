@@ -126,7 +126,7 @@ struct DeviceLinkQRSheet: View {
                 guard let devices = try? await AuthServiceClient.shared.listDevices() else { continue }
                 if let fresh = devices.first(where: { !$0.isCurrent && !baselineDeviceIds.contains($0.id) }) {
                     newlyLinkedDeviceId = fresh.id
-                    if DeviceLinkHistorySyncPolicy.isPostLinkEnabled {
+                    if DeviceLinkHistorySyncPolicy.isOffered {
                         showHistorySyncOffer = true
                     } else {
                         dismiss()

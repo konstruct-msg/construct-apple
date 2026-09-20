@@ -18,6 +18,15 @@ enum MessageStreamParser {
         let cursor = response.hasStreamCursor ? response.streamCursor : nil
         switch response.response {
         case .message(let envelope):
+            // The encrypted payload's timestamp belongs to the sender. The envelope metadata is
+            // the server-side order carrier; the stream cursor supplies the exact Redis tie-breaker
+            // when an older server omits `server_metadata`.
+            let serverMetadata = envelope.hasServerMetadata ? envelope.serverMetadata : nil
+            let serverOrderKey = ServerMessageOrder.key(
+                serverTimestampMilliseconds: serverMetadata?.serverTimestamp ?? 0,
+                sequence: serverMetadata?.messageNumber ?? 0,
+                cursor: cursor
+            )
             // KEY_SYNC: server-triggered re-key signal — no encrypted payload, route directly
             if envelope.contentType == .keySync {
                 Log.info("KEY_SYNC envelope from \(envelope.sender.userID.prefix(8))…", category: "MessageStream")
@@ -41,6 +50,7 @@ enum MessageStreamParser {
                     content: decoded.content,
                     suiteId: decoded.suiteId,
                     timestamp: UInt64(envelope.timestamp),
+                    serverOrderKey: serverOrderKey,
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
                     contentType: 24,
@@ -64,6 +74,7 @@ enum MessageStreamParser {
                     content: Data(),
                     suiteId: 1,
                     timestamp: UInt64(envelope.timestamp),
+                    serverOrderKey: serverOrderKey,
                     kemCiphertext: Data(),
                     contentType: 21,
                     kyberOtpkId: 0,
@@ -89,6 +100,7 @@ enum MessageStreamParser {
                     content: decoded.content,
                     suiteId: decoded.suiteId,
                     timestamp: UInt64(envelope.timestamp),
+                    serverOrderKey: serverOrderKey,
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
                     contentType: 23,
@@ -134,6 +146,7 @@ enum MessageStreamParser {
                         content: Data(),
                         suiteId: 1,
                         timestamp: UInt64(envelope.timestamp),
+                        serverOrderKey: serverOrderKey,
                         kemCiphertext: Data(),
                         contentType: UInt8(clamping: envelope.contentType.rawValue),
                         senderDeviceId: envelope.senderDevice.deviceID,
@@ -154,6 +167,7 @@ enum MessageStreamParser {
                 content: decoded.content,
                 suiteId: decoded.suiteId,
                 timestamp: UInt64(envelope.timestamp),
+                serverOrderKey: serverOrderKey,
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
                 contentType: UInt8(clamping: envelope.contentType.rawValue),

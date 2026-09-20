@@ -2265,7 +2265,10 @@ final class MessageRouter {
             chat,
             DeliveryStatus.sent.rawValue
         )
-        msgFetch.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+        msgFetch.sortDescriptors = [
+            NSSortDescriptor(key: "serverOrderKey", ascending: true),
+            NSSortDescriptor(key: "id", ascending: true)
+        ]
 
         let messages: [Message]
         do {
@@ -2470,7 +2473,10 @@ final class MessageRouter {
     ) -> Bool {
         let fetch = Message.fetchRequest()
         fetch.predicate = NSPredicate(format: "chat == %@", chat)
-        fetch.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+        fetch.sortDescriptors = [
+            NSSortDescriptor(key: "serverOrderKey", ascending: false),
+            NSSortDescriptor(key: "id", ascending: false)
+        ]
         fetch.fetchLimit = 1
         guard let last = try? context.fetch(fetch).first else { return false }
         return last.fromUserId == "SYSTEM" && last.displayText == text
@@ -2533,6 +2539,12 @@ final class MessageRouter {
         // Check if message already exists (from background fetch, retry redelivery, …)
         if let existingMessage = try context.fetch(fetchRequest).first {
             if existingMessage.fromUserId == messageData.from {
+                var changed = false
+                if let serverOrderKey = messageData.serverOrderKey,
+                   existingMessage.serverOrderKey != serverOrderKey {
+                    existingMessage.serverOrderKey = serverOrderKey
+                    changed = true
+                }
                 // Update encrypted content if message wasn't previously decrypted
                 if !existingMessage.hasDecryptedContent {
                     Log.debug("Updating decrypted content for message \(canonicalId)", category: "MessageRouter")
@@ -2545,8 +2557,11 @@ final class MessageRouter {
                         timestamp: existingMessage.timestamp,
                         force: (chat.lastMessageText ?? "").isEmpty
                     )
+                    changed = true
+                }
+                if changed {
                     try context.saveOrThrow(category: "MessageRouter")
-                    Log.debug("Updated message decryption", category: "MessageRouter")
+                    Log.debug("Updated message content/order", category: "MessageRouter")
                 }
                 return canonicalId  // Message already exists
             }
@@ -2569,6 +2584,8 @@ final class MessageRouter {
         message.toUserId = messageData.to
         message.contentType = .regular
         message.timestamp = Date.fromRemoteTimestamp(messageData.timestamp)
+        message.serverOrderKey = messageData.serverOrderKey
+            ?? ServerMessageOrder.legacy(timestamp: message.timestamp, messageId: canonicalId)
         message.isSentByMe = false
         message.deliveryStatus = .delivered
         message.retryCount = 0
@@ -3019,7 +3036,12 @@ final class MessageRouter {
         fetch.predicate = NSPredicate(format: "id ==[c] %@", rowId)
         fetch.fetchLimit = 1
         do {
-            if try context.fetch(fetch).first != nil {
+            if let existing = try context.fetch(fetch).first {
+                if let serverOrderKey = original.serverOrderKey,
+                   existing.serverOrderKey != serverOrderKey {
+                    existing.serverOrderKey = serverOrderKey
+                    context.saveAndLog()
+                }
                 return // already saved (duplicate delivery / other chunk path)
             }
         } catch {
@@ -3032,6 +3054,8 @@ final class MessageRouter {
         msg.fromUserId = original.from
         msg.toUserId = partnerUserId
         msg.timestamp = Date.fromRemoteTimestamp(original.timestamp)
+        msg.serverOrderKey = original.serverOrderKey
+            ?? ServerMessageOrder.legacy(timestamp: msg.timestamp, messageId: rowId)
         msg.isSentByMe = true
         msg.deliveryStatus = .sent
         msg.retryCount = 0

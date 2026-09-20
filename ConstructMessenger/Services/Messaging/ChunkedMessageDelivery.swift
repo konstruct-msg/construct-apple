@@ -95,7 +95,7 @@ final class ChunkedMessageSender {
                 // the wallet is force-replenished and the SealedInner rebuilt (fresh token +
                 // delivery tag; the DR payload is reused — the ratchet does not advance).
                 // Never downgrades to an identified send (StealthSendRecovery invariant).
-                response = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+                response = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
                     // A privacy_pass rejection means the redemption we were counting on did not
                     // happen — so the rebuilt envelope has to pay again. Without this the rebuild
                     // would re-attach the same unpaid spend id and be rejected identically,
@@ -106,7 +106,8 @@ final class ChunkedMessageSender {
                         recipientIdentityKey: recipientIK,
                         encryptedPayload: encryptedPayload,
                         contentType: .generic,
-                        spendUnit: spendUnit
+                        spendUnit: spendUnit,
+                        afterCredentialRejection: afterCredentialRejection
                     )
                 }, send: { inner in
                     if FeatureFlags.sealedSenderUnauthenticatedTransport {

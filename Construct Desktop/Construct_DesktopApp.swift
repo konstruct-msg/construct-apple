@@ -10,6 +10,11 @@ import SwiftUI
 import CoreData
 import UserNotifications
 
+/// Scene identifiers for secondary Desktop windows (D2).
+enum DesktopWindowID {
+    static let synaps = "synaps"
+}
+
 @main
 struct Construct_DesktopApp: App {
 
@@ -82,10 +87,24 @@ struct Construct_DesktopApp: App {
                     #endif
                 }
         }
-        .windowStyle(.hiddenTitleBar)
+        // Native titlebar + unified toolbar (D1). Hidden titlebar was how the iOS
+        // glass chat nav sat flush to the traffic lights; the toolbar now owns that slot.
+        .windowToolbarStyle(.unified)
         .commands {
             ConstructCommands(bridge: commandBridge)
         }
+
+        // People / Synaps is its own window — not a tab that replaces the open chat (D2).
+        Window(LocalizedStringKey("people"), id: DesktopWindowID.synaps) {
+            DesktopSynapsView()
+                .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+                .environment(chatsViewModel)
+                .environment(authViewModel)
+                .environment(deepLinkHandler)
+                .frame(minWidth: 560, minHeight: 440)
+        }
+        .defaultSize(width: 720, height: 560)
+        .windowToolbarStyle(.unified)
 
         // MARK: - macOS Settings window (⌘,)
         Settings {

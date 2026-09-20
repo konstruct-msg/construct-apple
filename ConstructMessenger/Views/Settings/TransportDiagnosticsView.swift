@@ -16,6 +16,7 @@ struct TransportDiagnosticsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var mirror = TransportRouterMirror.shared
     @State private var now = Date()
+    @State private var nativeTLS = VeilProxyStore.veilFrontNativeTLS
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -34,6 +35,7 @@ struct TransportDiagnosticsView: View {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     stateSection
                     routingSection
+                    flagsSection
                     actionsSection
                     transitionsSection
                 }
@@ -77,6 +79,27 @@ struct TransportDiagnosticsView: View {
                 row("active relay", value: activeRelayLabel)
                 row("prefers VEIL", value: mirror.state.prefersVEIL ? "yes" : "no")
             }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private var flagsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CTSettingsSectionHeader(title: "FEATURE FLAGS", color: .orange)
+            Toggle(isOn: Binding(
+                get: { nativeTLS },
+                set: { nativeTLS = $0; VeilProxyStore.veilFrontNativeTLS = $0 }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("veil-front native TLS")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(.orange)
+                    Text("Terminate the veil-front TLS in Network.framework (native Apple ClientHello) instead of rustls-Chrome131. Toggle VEIL off/on to apply. Opt-in / debug.")
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                }
+            }
+            .tint(.orange)
             .padding(.horizontal, 20)
         }
     }

@@ -39,8 +39,8 @@ enum TranscriptSignature {
     /// and they are not interchangeable:
     ///
     /// - `deliveryStatusRaw`, `isEdited`, `transcriptText` — the row observes its own `Message`.
-    /// - `timestamp` — a changed timestamp re-sorts the fetch, which changes the id order, which
-    ///   this signature does capture.
+    /// - `serverOrderKey` — a changed order key re-sorts the fetch, which changes the id order,
+    ///   which this signature does capture. `timestamp` remains display metadata only.
     ///
     /// Known gap, stated rather than hidden: `ChatView.filteredMessages` filters on `displayText`
     /// while a search is active. An edit that changes text without changing the row set will not

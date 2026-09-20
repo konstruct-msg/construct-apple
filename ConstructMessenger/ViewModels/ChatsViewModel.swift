@@ -47,6 +47,8 @@ class ChatsViewModel {
     var selectedTab: Int = 0
     var showNewChat: Bool = false
     var sidebarSearchFocused: Bool = false
+    /// Desktop: ⌘F in an open chat presents the transcript search field.
+    var chatSearchPresented: Bool = false
     var totalUnreadCount: Int = 0
     var pendingDroppedImage: PlatformImage? = nil
     var pendingDroppedFileURL: URL? = nil

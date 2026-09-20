@@ -173,7 +173,12 @@ final class KeyServiceClient: Sendable {
                     kyberSpkRotationEpoch: b.hasKyberSpkRotationEpoch ? b.kyberSpkRotationEpoch : 0,
                     supportsPqRatchet: b.supportsPqRatchet
                 )
-                return DeviceBundleData(deviceId: deviceBundle.deviceID, bundle: bundle, platform: deviceBundle.platform)
+                return DeviceBundleData(
+                    deviceId: deviceBundle.deviceID,
+                    bundle: bundle,
+                    platform: deviceBundle.platform,
+                    hybridIdentityKey: b.hasHybridIdentityKey ? b.hybridIdentityKey : Data()
+                )
             }
             // Carried out of the closure beside the bundles, and deliberately not folded into
             // them: `accepted` above has already dropped devices this client refused (failed

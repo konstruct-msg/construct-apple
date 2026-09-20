@@ -586,6 +586,11 @@ class CryptoManager {
         return Data(sig)
     }
 
+    /// Transfer / CTHF path. The secret stays in the core — never `getSigningKeyBytes`.
+    func signHybrid(_ message: Data) throws -> Data {
+        try signHybrid([UInt8](message))
+    }
+
     /// Verifies a hybrid signature against a peer's hybrid public key. Both the
     /// Ed25519 and ML-DSA-65 components must validate. Stateless.
     func verifyHybrid(publicKey: [UInt8], message: [UInt8], signature: [UInt8]) throws -> Bool {

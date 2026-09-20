@@ -100,6 +100,7 @@ struct PersistenceController {
 
         migrateExistingContactsToSynaps()
         repairFutureTimestamps()
+        backfillMissingServerOrderKeys()
     }
 
     /// Pull any stored timestamp that lies in the future back to now, and repair the chat
@@ -135,7 +136,9 @@ struct PersistenceController {
         // Recompute from the (now clamped) newest surviving message rather than assigning
         // `now` — the preview text must match whatever the transcript actually ends with.
         for chat in futureChats {
-            let newest = (chat.messages as? Set<Message>)?.max(by: { $0.timestamp < $1.timestamp })
+            let newest = (chat.messages as? Set<Message>)?.max {
+                ServerMessageOrder.effectiveKey(for: $0) < ServerMessageOrder.effectiveKey(for: $1)
+            }
             if let newest {
                 chat.applyPreview(text: newest.displayText, timestamp: newest.timestamp, force: true)
             } else {
@@ -151,6 +154,30 @@ struct PersistenceController {
             )
         } catch {
             Log.error("Failed to repair future timestamps: \(error)", category: "Persistence")
+        }
+    }
+
+    /// Assign a deterministic migration key to rows written before transcript ordering became
+    /// server-authoritative. New rows are written with a real server key or an explicit pending
+    /// sentinel, so this fetch is normally empty after the first launch on the new model.
+    private func backfillMissingServerOrderKeys() {
+        let context = container.viewContext
+        let request = Message.fetchRequest()
+        request.predicate = NSPredicate(format: "serverOrderKey == nil")
+        guard let messages = try? context.fetch(request), !messages.isEmpty else { return }
+
+        for message in messages {
+            message.serverOrderKey = ServerMessageOrder.legacy(
+                timestamp: message.safeTimestamp,
+                messageId: message.id
+            )
+        }
+
+        do {
+            try context.save()
+            Log.info("Backfilled server order for \(messages.count) message(s)", category: "Persistence")
+        } catch {
+            Log.error("Failed to backfill server order: \(error)", category: "Persistence")
         }
     }
 

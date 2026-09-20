@@ -399,12 +399,13 @@ final class OutboundSessionService {
                 encryptedPayload: wirePayload,
                 contentType: .generic
             )
-            _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+            _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
                 try await StealthSenderService.buildSealedInner(
                     recipientUserId: contactId,
                     recipientIdentityKey: identityKey,
                     encryptedPayload: wirePayload,
-                    contentType: .generic
+                    contentType: .generic,
+                    afterCredentialRejection: afterCredentialRejection
                 )
             }, send: { inner in
                 if FeatureFlags.sealedSenderUnauthenticatedTransport {
@@ -510,12 +511,13 @@ final class OutboundSessionService {
                 // privacy_pass rejection; DR payload reused). Receipts carry tokens like
                 // any sealed send — no content-type exemption exists (see decisions/
                 // sealed-sender-anti-abuse-economics.md); never downgrades to identified.
-                _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+                _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
                     try await StealthSenderService.buildSealedInner(
                         recipientUserId: contactId,
                         recipientIdentityKey: identityKey,
                         encryptedPayload: wirePayload,
-                        contentType: .generic
+                        contentType: .generic,
+                        afterCredentialRejection: afterCredentialRejection
                     )
                 }, send: { inner in
                     if FeatureFlags.sealedSenderUnauthenticatedTransport {

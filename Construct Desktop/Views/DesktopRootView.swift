@@ -26,16 +26,14 @@ struct DesktopRootView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.commandBridge) private var commandBridge
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
     @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var showAddContact = false
-    @State private var sidebarMode: SidebarMode = .chats
     @State private var callManager = CallManager.shared
     @State private var showReceiveHistorySync = false
     @State private var historySyncPendingDeviceId: String? = nil
-
-    private enum SidebarMode: Hashable { case chats, synaps }
 
     private var orientationCompletedForCurrentUser: Bool {
         OrientationStore.isCompleted(
@@ -142,14 +140,21 @@ struct DesktopRootView: View {
                 showReceiveHistorySync = true
             }
         }
-        .sheet(isPresented: $showReceiveHistorySync) {
-            ReceiveBackupNearbyView(
-                mode: .historySync,
-                autoPairingPIN: historySyncPairingPIN(for: historySyncPendingDeviceId)
-            )
-            .onDisappear {
-                authViewModel.clearDeviceLinkPhase()
-                historySyncPendingDeviceId = nil
+        .overlay(alignment: .top) {
+            if showReceiveHistorySync {
+                // Banner, not a sheet (desktop-interaction-is-not-ios): the window stays usable
+                // while the person decides. Wi-Fi opens the receive view; file uses the importer.
+                HistoryTransferOfferView(
+                    userId: authViewModel.currentUserId ?? "",
+                    localDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
+                    onFinish: {
+                        authViewModel.clearDeviceLinkPhase()
+                        historySyncPendingDeviceId = nil
+                        showReceiveHistorySync = false
+                    }
+                )
+                .frame(maxHeight: 360)
+                .background(Color.CT.bg)
             }
         }
     }
@@ -160,7 +165,8 @@ struct DesktopRootView: View {
         commandBridge.onNewConversation = { chatsViewModel.showNewChat = true }
         commandBridge.onAddContact      = { showAddContact = true }
         commandBridge.onFocusSearch     = { focusSidebarSearch() }
-        commandBridge.onGlobalSearch    = { focusSidebarSearch() }
+        commandBridge.onFind            = { findInCurrentContext() }
+        commandBridge.onOpenPeople      = { openWindow(id: DesktopWindowID.synaps) }
         commandBridge.onSelectNext      = {
             NotificationCenter.default.post(name: .desktopSelectNextChat, object: nil)
         }
@@ -190,39 +196,40 @@ struct DesktopRootView: View {
     }
 
     private func focusSidebarSearch() {
-        withAnimation(.easeInOut(duration: 0.15)) {
-            sidebarMode = .chats
-        }
         chatsViewModel.sidebarSearchFocused = true
+    }
+
+    /// ⌘F — transcript search when a chat is open, otherwise the sidebar filter (D5).
+    private func findInCurrentContext() {
+        if chatsViewModel.chatToOpen != nil {
+            chatsViewModel.chatSearchPresented = true
+        } else {
+            focusSidebarSearch()
+        }
     }
 
     // MARK: - Main split view (authenticated)
 
     private var mainContent: some View {
-        let splitView = HSplitView {
+        // NavigationSplitView, not HSplitView: `.toolbar` / `.searchable` on the
+        // detail only land in the window toolbar inside a navigation split.
+        // Sidebar is always chats (D2). People live in `Window(id: synaps)`.
+        let splitView = NavigationSplitView {
             sidebarPane
+                .navigationSplitViewColumnWidth(min: 230, ideal: 280, max: 360)
+        } detail: {
             detailPane
         }
+        .navigationSplitViewStyle(.balanced)
         .background(Color.CT.bg)
+        .toolbarBackground(Color.CT.bg, for: .windowToolbar)
+        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+        .tint(Color.CT.accent)
 
         let decorated = splitView
             .frame(minWidth: 700, minHeight: 480)
             .onReceive(NotificationCenter.default.publisher(for: .openSynapsTab)) { _ in
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    sidebarMode = .synaps
-                }
-            }
-            // Opening a chat is a request to see it, wherever it came from — a row in the people
-            // list, a node in the Synaps cloud, a deep link. Handled here rather than in either
-            // child because both of them do it and neither owns `sidebarMode`; a callback per child
-            // would be the same rule written twice, and the one added second would be the one that
-            // drifted. Only a *change* flips the mode, so entering PEOPLE with a chat still open
-            // from before does not bounce straight back out.
-            .onChange(of: chatsViewModel.chatToOpen) { _, newValue in
-                guard newValue != nil, sidebarMode == .synaps else { return }
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    sidebarMode = .chats
-                }
+                openWindow(id: DesktopWindowID.synaps)
             }
             // Incoming call banner — bottom-center
             .overlay(alignment: .bottom) {
@@ -263,57 +270,45 @@ struct DesktopRootView: View {
         return decorated
     }
 
-    /// What fills the pane to the right of the sidebar.
-    ///
-    /// **The detail follows the sidebar mode**, which is the rule the `HSplitView` conversion lost.
-    /// Before it, `.synaps` put `DesktopSynapsView` in the detail column and hid the sidebar
-    /// (`columnVisibility = .detailOnly`); the conversion removed the hiding — which is all that was
-    /// wanted — and, with it, the only reference to `DesktopSynapsView` in the app. The view kept
-    /// compiling, so nothing said so: picking PEOPLE showed a people list beside an empty state, and
-    /// the honeycomb cloud, the profile popovers and **the incoming contact-request section** —
-    /// which exists nowhere else on Desktop — became unreachable.
+    /// Detail is the open chat, or the empty state. People are a separate window (D2).
     @ViewBuilder
     private var detailPane: some View {
-        if sidebarMode == .synaps {
-            // No `onSwitchToChats`: that button existed because Synaps used to occupy the whole
-            // window with no other way back. The mode picker in the sidebar is always visible now,
-            // so the button would be a second control for one thing.
-            DesktopSynapsView()
-                .environment(chatsViewModel)
-                .environment(\.managedObjectContext, viewContext)
-        } else if let chatId = chatsViewModel.chatToOpen,
+        if let chatId = chatsViewModel.chatToOpen,
                   let chat = fetchChat(id: chatId) {
             DesktopChatView(chat: chat, context: viewContext)
-                .ignoresSafeArea(.container, edges: .top) // ensure custom glass nav is flush to the top of the split detail column
+                // Identity, not decoration. `DesktopChatView` seeds its `ChatViewModel` and every
+                // editing scrap — draft text, reply target, selection, search — from `@State`, and
+                // `@State` takes its initial value once per identity. The detail column keeps the
+                // same structural position when `chatToOpen` changes, so with no explicit id
+                // SwiftUI reuses the node: the model still points at whichever chat was opened
+                // first, and clicking a different row changes nothing on screen. iOS never hit this
+                // because it pushes onto a NavigationStack, where every push is a new identity.
+                .id(chatId)
                 .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
                     handleDrop(providers: providers, into: chat)
                 }
         } else {
             DesktopEmptyStateView()
+                .navigationTitle(NSLocalizedString("construct_title", comment: ""))
                 .onDrop(of: [.fileURL], isTargeted: nil) { _ in false }
         }
     }
 
     private var sidebarPane: some View {
-        VStack(spacing: 0) {
-            sidebarModeBar
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
-
-            if sidebarMode == .chats {
-                DesktopChatsListView()
-                    .environment(chatsViewModel)
-            } else {
-                DesktopPeopleListView()
-                    .environment(chatsViewModel)
+        DesktopChatsListView()
+            .environment(chatsViewModel)
+            .background(Color.CT.bg)
+            .navigationTitle(NSLocalizedString("chats", comment: ""))
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        openWindow(id: DesktopWindowID.synaps)
+                    } label: {
+                        Image(systemName: "person.2")
+                    }
+                    .help(NSLocalizedString("people", comment: ""))
+                }
             }
-        }
-        .background(Color.CT.bg)
-        .frame(minWidth: 230, idealWidth: 280, maxWidth: 360, maxHeight: .infinity)
-        .overlay(alignment: .trailing) {
-            Rectangle()
-                .fill(Color.CT.noise)
-                .frame(width: 1)
-        }
     }
 
     // MARK: - Call state helpers
@@ -348,29 +343,6 @@ struct DesktopRootView: View {
     private var callEndReason: CallEndReason? {
         if case .ended(_, let reason) = callManager.state { return reason }
         return nil
-    }
-
-    // MARK: - Sidebar header
-
-    private var sidebarModeBar: some View {
-        GeometryReader { proxy in
-            Picker("", selection: $sidebarMode) {
-                Text(LocalizedStringKey("chats"))
-                    .font(CTFont.medium(12))
-                    .tag(SidebarMode.chats)
-                Text(LocalizedStringKey("people"))
-                    .font(CTFont.medium(12))
-                    .tag(SidebarMode.synaps)
-            }
-            .pickerStyle(.segmented)
-            .controlSize(.small)
-            .labelsHidden()
-            .frame(width: proxy.size.width)
-            .frame(height: proxy.size.height, alignment: .center)
-        }
-        .padding(.horizontal, CTLayout.edgePad)
-        .frame(height: CTLayout.navBarHeight)
-        .background(Color.CT.bg)
     }
 
     // MARK: - Drag & Drop into chat

@@ -54,6 +54,9 @@ class MessagePersistenceService {
         if let existing = try? context.fetch(fetchRequest).first {
             Log.debug("Updating existing message \(message.id)", category: "MessagePersistence")
             existing.deliveryStatus = status
+            if let serverOrderKey = message.serverOrderKey {
+                existing.serverOrderKey = serverOrderKey
+            }
             // Recover a previously undecryptable message: if the sender re-sent the same
             // message (same UUID) after a session heal, update the content so the "unavailable"
             // bubble is replaced with the actual text.
@@ -73,6 +76,10 @@ class MessagePersistenceService {
             newMessage.toUserId = message.to
             newMessage.contentType = .regular
             newMessage.timestamp = messageTimestamp
+            newMessage.serverOrderKey = message.serverOrderKey
+                ?? (isSentByMe
+                    ? ServerMessageOrder.pending(localMessageId: newMessage.id)
+                    : ServerMessageOrder.legacy(timestamp: messageTimestamp, messageId: newMessage.id))
             newMessage.isSentByMe = isSentByMe
             newMessage.deliveryStatus = status
             newMessage.retryCount = 0
@@ -112,6 +119,25 @@ class MessagePersistenceService {
         
         Log.debug("Message saved to Core Data", category: "MessagePersistence")
         return isNewMessage
+    }
+
+    /// Attach the server's authoritative order to an optimistic local row after SendMessage ACK.
+    /// The display timestamp remains untouched: it is the time the user composed the message.
+    func updateServerOrder(
+        messageId: String,
+        serverOrderKey: String,
+        in context: NSManagedObjectContext
+    ) {
+        let fetchRequest = Message.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", messageId)
+        fetchRequest.fetchLimit = 1
+        guard let message = try? context.fetch(fetchRequest).first else {
+            Log.error("Cannot find message to update server order: \(messageId)", category: "MessagePersistence")
+            return
+        }
+        guard message.serverOrderKey != serverOrderKey else { return }
+        message.serverOrderKey = serverOrderKey
+        context.saveAndLog()
     }
     
     // MARK: - Update Message Status
@@ -205,6 +231,7 @@ class MessagePersistenceService {
         // deliberately maps media payloads to `.regular` for the same reason.
         newMessage.contentType = .regular
         newMessage.timestamp = now
+        newMessage.serverOrderKey = ServerMessageOrder.pending(localMessageId: newMessage.id)
         newMessage.isSentByMe = true
         newMessage.deliveryStatus = .sending
         newMessage.retryCount = 0
@@ -259,6 +286,7 @@ class MessagePersistenceService {
         // FRC only fetches `contentTypeRaw == 0`.
         newMessage.contentType = .regular
         newMessage.timestamp = now
+        newMessage.serverOrderKey = ServerMessageOrder.pending(localMessageId: newMessage.id)
         newMessage.isSentByMe = true
         newMessage.deliveryStatus = .sending
         newMessage.retryCount = 0
@@ -440,7 +468,7 @@ class MessagePersistenceService {
         let fetchRequest = Message.fetchRequest()
         let chatPredicate = NSPredicate(format: "chat == %@", chat)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate])
-        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "serverOrderKey", ascending: false)]
         fetchRequest.fetchLimit = 1
         
         if let lastMessage = try context.fetch(fetchRequest).first {

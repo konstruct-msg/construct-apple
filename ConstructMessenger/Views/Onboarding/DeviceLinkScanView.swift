@@ -27,12 +27,7 @@ struct DeviceLinkScanView: View {
             }
         }
 
-        var mode: SendBackupNearbyView.Mode {
-            switch self {
-            case .send: return .historySync
-            case .skip: return .historySyncSkip
-            }
-        }
+        var skip: Bool { self == .skip }
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -137,7 +132,7 @@ struct DeviceLinkScanView: View {
             guard let outcome else { return }
             Task {
                 await authViewModel.completeDeviceLink(outcome)
-                guard DeviceLinkHistorySyncPolicy.isPostLinkEnabled else {
+                guard DeviceLinkHistorySyncPolicy.isOffered else {
                     dismiss()
                     return
                 }
@@ -163,14 +158,22 @@ struct DeviceLinkScanView: View {
             }
         }
         .fullScreenCover(isPresented: $showReceiveHistorySync) {
-            ReceiveBackupNearbyView(mode: .historySync, autoPairingPIN: receiveHistorySyncPIN)
-                .onDisappear {
+            HistoryTransferOfferView(
+                userId: authViewModel.currentUserId ?? "",
+                localDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
+                onFinish: {
                     authViewModel.clearDeviceLinkPhase()
                     dismiss()
                 }
+            )
+            .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
         }
         .sheet(item: $activeHistorySyncSender) { sheet in
-            SendBackupNearbyView(mode: sheet.mode, autoPairingPIN: historySyncPIN)
+            HistoryTransferSendView(
+                skip: sheet.skip,
+                userId: KeychainManager.shared.loadUserID() ?? "",
+                peerDeviceId: vm.approvedJoinPendingId ?? ""
+            )
                 .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                 .onDisappear {
                     authViewModel.clearDeviceLinkPhase()

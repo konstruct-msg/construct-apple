@@ -480,7 +480,7 @@ final class MultiDeviceSendCoordinator {
             if let callerSpendUnit {
                 spendUnit = callerSpendUnit
             } else {
-                spendUnit = await TokenSpendUnit.forEnvelopeCount(
+                spendUnit = TokenSpendUnit.forEnvelopeCount(
                     TokenSpendUnit.envelopeCount(
                         chunkCount: chunks.count, recipientDeviceCount: planned.count
                     )
@@ -772,7 +772,7 @@ final class MultiDeviceSendCoordinator {
             // matters as soon as there is more than one sibling or the message is chunked; with a
             // single sibling and a single chunk it is one envelope and still one token, and that
             // one is irreducible.
-            let syncSpendUnit = await TokenSpendUnit.forEnvelopeCount(
+            let syncSpendUnit = TokenSpendUnit.forEnvelopeCount(
                 TokenSpendUnit.envelopeCount(
                     chunkCount: plan.payloads.count, recipientDeviceCount: targets.count
                 )

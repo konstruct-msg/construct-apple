@@ -28,6 +28,8 @@ struct DevicesView: View {
     @State private var showSignOutConfirm = false
     @State private var showSignOutOthersConfirm = false
     @State private var showSignOutAllConfirm = false
+    @State private var historyRetryKind: HistoryTransferSendView.Kind? = nil
+    @State private var showHistoryReceive = false
 
     var body: some View {
         let otherDevices = devices.filter { !$0.isCurrent }
@@ -88,31 +90,68 @@ struct DevicesView: View {
                     }
 
                     // MARK: - Link / Approve
-                    VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
-                        CTSectionGroup {
-                            #if os(iOS)
-                            // Primary: open the camera to scan the QR shown on the other device.
-                            ConstructButtonRow(systemImage: "qrcode.viewfinder", title: LocalizedStringKey("link_new_device")) {
-                                showingScanner = true
+                    if DeviceLinkOfferPolicy.isLinkingOffered {
+                        VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
+                            CTSectionGroup {
+                                #if os(iOS)
+                                // Primary: open the camera to scan the QR shown on the other device.
+                                ConstructButtonRow(systemImage: "qrcode.viewfinder", title: LocalizedStringKey("link_new_device")) {
+                                    showingScanner = true
+                                }
+                                .accessibilityIdentifier(A11y.Devices.linkNew)
+                                ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
+                                // Secondary: show this device's QR (camera-broken fallback / other device scans us).
+                                ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("device_link_show_qr")) {
+                                    showingQRSheet = true
+                                }
+                                .accessibilityIdentifier(A11y.Devices.showQR)
+                                #else
+                                // macOS has no camera — the only path is showing this device's QR.
+                                ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("link_new_device")) {
+                                    showingQRSheet = true
+                                }
+                                #endif
                             }
-                            .accessibilityIdentifier(A11y.Devices.linkNew)
-                            ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
-                            // Secondary: show this device's QR (camera-broken fallback / other device scans us).
-                            ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("device_link_show_qr")) {
-                                showingQRSheet = true
-                            }
-                            .accessibilityIdentifier(A11y.Devices.showQR)
-                            #else
-                            // macOS has no camera — the only path is showing this device's QR.
-                            ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("link_new_device")) {
-                                showingQRSheet = true
-                            }
-                            #endif
+                            Text(LocalizedStringKey("linked_devices_hint"))
+                                .font(CTFont.regular(12))
+                                .foregroundStyle(Color.CT.textDim)
+                                .settingsSectionHintInsets()
                         }
-                        Text(LocalizedStringKey("linked_devices_hint"))
-                            .font(CTFont.regular(12))
-                            .foregroundStyle(Color.CT.textDim)
-                            .settingsSectionHintInsets()
+                    }
+
+                    // MARK: - History retry (DEBUG override or enabled flag)
+                    if DeviceLinkHistorySyncPolicy.isOffered {
+                        VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
+                            CTSettingsSectionHeader(title: NSLocalizedString("history_sync_settings_section", comment: ""))
+                            CTSectionGroup {
+                                ConstructButtonRow(
+                                    systemImage: "bubble.left.and.bubble.right",
+                                    title: LocalizedStringKey("history_sync_settings_chats")
+                                ) {
+                                    historyRetryKind = .chatsOnly
+                                }
+                                ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
+                                ConstructButtonRow(
+                                    systemImage: "photo.on.rectangle",
+                                    title: LocalizedStringKey("history_sync_settings_media")
+                                ) {
+                                    historyRetryKind = .mediaOnly
+                                }
+                                ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
+                                // The other half of a retry: the device that is to receive
+                                // listens here while the offering device picks Chats / Media only.
+                                ConstructButtonRow(
+                                    systemImage: "wifi",
+                                    title: LocalizedStringKey("history_sync_receive_wifi")
+                                ) {
+                                    showHistoryReceive = true
+                                }
+                            }
+                            Text(LocalizedStringKey("history_sync_settings_hint"))
+                                .font(CTFont.regular(12))
+                                .foregroundStyle(Color.CT.textDim)
+                                .settingsSectionHintInsets()
+                        }
                     }
 
                     // MARK: - Session management
@@ -153,6 +192,20 @@ struct DevicesView: View {
         .task { await loadDevices() }
 
         // MARK: Sheets
+        .sheet(isPresented: $showHistoryReceive) {
+            HistoryTransferReceiveView(
+                userId: KeychainManager.shared.loadUserID() ?? "",
+                localDeviceId: KeychainManager.shared.loadDeviceID() ?? ""
+            )
+        }
+        .sheet(item: $historyRetryKind) { kind in
+            HistoryTransferSendView(
+                kind: kind,
+                userId: KeychainManager.shared.loadUserID() ?? "",
+                peerDeviceId: devices.first(where: { !$0.isCurrent })?.id ?? ""
+            )
+            .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+        }
         .sheet(isPresented: $showingQRSheet) { DeviceLinkQRSheet() }
         #if os(iOS)
         .sheet(isPresented: $showingScanner) { DeviceLinkScanView() }

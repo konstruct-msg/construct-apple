@@ -29,34 +29,44 @@ struct DesktopAddContactView: View {
     @Environment(\.dismiss)              private var dismiss
 
     enum Mode: String, CaseIterable {
-        case myQR    = "My QR"
-        case camera  = "Scan Camera"
-        case file    = "From File"
-        case paste   = "Paste Link"
+        case paste
+        case myQR
+        case file
+        case camera
 
         var icon: String {
             switch self {
-            case .myQR:   return "qrcode"
-            case .camera: return "camera.viewfinder"
-            case .file:   return "doc.viewfinder"
             case .paste:  return "doc.on.clipboard"
+            case .myQR:   return "qrcode"
+            case .file:   return "doc.viewfinder"
+            case .camera: return "camera.viewfinder"
+            }
+        }
+
+        var titleKey: String {
+            switch self {
+            case .paste:  return "paste_invite_link"
+            case .myQR:   return "desktop_add_my_qr"
+            case .file:   return "desktop_add_from_file"
+            case .camera: return "scan_qr_code"
             }
         }
     }
 
-    @State private var mode: Mode = .myQR
+    @State private var mode: Mode = .paste
     @State private var resultMessage: String? = nil
+    @State private var resultFailed = false
 
     var body: some View {
         VStack(spacing: 0) {
             // ── Toolbar ──
             HStack {
-                Text("Add Contact")
+                Text(NSLocalizedString("add_contact_menu", comment: ""))
                     .font(.system(.headline, design: .monospaced))
                     .foregroundStyle(DesktopTheme.textPrimary)
                 Spacer()
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark.circle.fill")
+                    Image(systemName: "xmark.circle")
                         .font(.title3)
                         .foregroundStyle(DesktopTheme.textSecondary)
                 }
@@ -94,7 +104,7 @@ struct DesktopAddContactView: View {
             if let msg = resultMessage {
                 Text(msg)
                     .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(msg.hasPrefix("✅") ? Color.green : Color.red)
+                    .foregroundStyle(resultFailed ? Color.CT.danger : Color.CT.accent)
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity)
                     .background(DesktopTheme.backgroundPanel)
@@ -114,17 +124,17 @@ struct DesktopAddContactView: View {
             VStack(spacing: 4) {
                 Image(systemName: m.icon)
                     .font(.system(size: 16, weight: mode == m ? .semibold : .regular))
-                Text(m.rawValue)
+                Text(LocalizedStringKey(m.titleKey))
                     .font(.system(size: 10, design: .monospaced))
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                CTShape.card()
                     .fill(mode == m ? DesktopTheme.accent.opacity(0.15) : Color.clear)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
+                        CTShape.card()
                             .strokeBorder(mode == m ? DesktopTheme.accent.opacity(0.4) : Color.clear, lineWidth: 1)
                     )
             )
@@ -138,35 +148,40 @@ struct DesktopAddContactView: View {
     private func handleScannedCode(_ code: String) {
         let normalized = normalizeCode(code)
         guard let url = URL(string: normalized) else {
-            resultMessage = "❌ Invalid code format"
+            presentResult(NSLocalizedString("invite_error_invalid_url", comment: ""), failed: true)
             return
         }
         let accepted = deepLinkHandler.handleURL(url)
         if accepted {
-            resultMessage = "✅ Contact invite accepted"
+            presentResult(NSLocalizedString("desktop_add_invite_ok", comment: ""), failed: false)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { dismiss() }
         } else {
-            resultMessage = "❌ Not a valid Construct invite"
+            presentResult(NSLocalizedString("invite_error_unsupported_link", comment: ""), failed: true)
         }
     }
 
     private func handlePastedLink(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            resultMessage = "❌ Empty input"
+            presentResult(NSLocalizedString("desktop_add_empty", comment: ""), failed: true)
             return
         }
         guard let url = URL(string: trimmed) else {
-            resultMessage = "❌ Not a valid URL"
+            presentResult(NSLocalizedString("invite_error_invalid_url", comment: ""), failed: true)
             return
         }
         let accepted = deepLinkHandler.handleURL(url)
         if accepted {
-            resultMessage = "✅ Processing invite…"
+            presentResult(NSLocalizedString("desktop_add_invite_ok", comment: ""), failed: false)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { dismiss() }
         } else {
-            resultMessage = "❌ Not a valid Construct invite link"
+            presentResult(NSLocalizedString("invite_error_unsupported_link", comment: ""), failed: true)
         }
+    }
+
+    private func presentResult(_ message: String, failed: Bool) {
+        resultFailed = failed
+        resultMessage = message
     }
 
     private func normalizeCode(_ code: String) -> String {
@@ -205,7 +220,7 @@ private struct MyQRTab: View {
                     .frame(width: 220, height: 220)
                     .padding(16)
                     .background(Color.white)
-                    .cornerRadius(12)
+                    .clipShape(CTShape.control())
                     .shadow(color: .black.opacity(0.3), radius: 12)
             } else if let err = errorMessage {
                 VStack(spacing: 8) {
@@ -227,21 +242,21 @@ private struct MyQRTab: View {
             if timeRemaining > 0 {
                 HStack(spacing: 6) {
                     Image(systemName: "clock")
-                    Text("Expires in \(formatTime(timeRemaining))")
+                    Text(String(format: NSLocalizedString("desktop_add_expires_fmt", comment: ""), formatTime(timeRemaining)))
                 }
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(timeRemaining < 60 ? DesktopTheme.destructive : DesktopTheme.textSecondary)
             } else {
-                Button("Regenerate") { generate() }
+                Button(NSLocalizedString("qr_new_code", comment: "")) { generate() }
                     .buttonStyle(.plain)
                     .font(CTFont.regular(13))
                     .foregroundStyle(Color.CT.accent)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent.opacity(0.6), lineWidth: 1))
+                    .background(CTShape.card().stroke(Color.CT.accent.opacity(0.6), lineWidth: 1))
             }
 
-            Text("Show this to a contact so they can scan it")
+            Text(NSLocalizedString("desktop_add_show_qr", comment: ""))
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(DesktopTheme.textTertiary)
         }
@@ -270,7 +285,7 @@ private struct MyQRTab: View {
     private func generateAsync() async {
         guard let userId = authViewModel.currentUserId,
               let deviceId = KeychainManager.shared.loadDeviceID() else {
-            errorMessage = "Device not registered"
+            errorMessage = NSLocalizedString("desktop_add_device_unregistered", comment: "")
             return
         }
         do {
@@ -292,7 +307,7 @@ private struct MyQRTab: View {
             generatedAt = Date()
             timeRemaining = InviteConfig.ttlSeconds
         } catch {
-            errorMessage = "Failed to generate QR"
+            errorMessage = NSLocalizedString("desktop_add_qr_failed", comment: "")
         }
     }
 
@@ -345,7 +360,7 @@ private struct CameraTab: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                Text("Point camera at a Construct QR code")
+                Text(NSLocalizedString("desktop_add_point_camera", comment: ""))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(DesktopTheme.textSecondary)
                     .padding(.vertical, 12)
@@ -367,15 +382,15 @@ private struct CameraTab: View {
             Image(systemName: "camera.fill.badge.ellipsis")
                 .font(.system(size: 48, weight: .light))
                 .foregroundStyle(DesktopTheme.textSecondary)
-            Text("Camera Access Required")
+            Text(NSLocalizedString("camera_access_required", comment: ""))
                 .font(.system(.headline, design: .monospaced))
                 .foregroundStyle(DesktopTheme.textPrimary)
-            Text("Allow camera access in System Settings → Privacy & Security → Camera")
+            Text(NSLocalizedString("desktop_add_camera_privacy", comment: ""))
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(DesktopTheme.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 280)
-            Button("Open System Settings") {
+            Button(NSLocalizedString("open_settings", comment: "")) {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera")!)
             }
             .buttonStyle(.plain)
@@ -383,7 +398,7 @@ private struct CameraTab: View {
             .foregroundStyle(Color.CT.bg)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.CT.accent))
+            .background(CTShape.card().fill(Color.CT.accent))
         }
         .padding(32)
     }
@@ -419,10 +434,10 @@ private struct FileTab: View {
         VStack(spacing: 20) {
             // Drop zone
             ZStack {
-                RoundedRectangle(cornerRadius: 16)
+                CTShape.control()
                     .fill(dropTargeted ? DesktopTheme.accent.opacity(0.08) : DesktopTheme.backgroundPanel)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        CTShape.control()
                             .strokeBorder(
                                 dropTargeted ? DesktopTheme.accent : DesktopTheme.separator,
                                 style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
@@ -436,10 +451,10 @@ private struct FileTab: View {
                         Image(systemName: "doc.viewfinder")
                             .font(.system(size: 40, weight: .light))
                             .foregroundStyle(dropTargeted ? DesktopTheme.accent : DesktopTheme.textSecondary)
-                        Text("Drop image here")
+                        Text(NSLocalizedString("desktop_add_drop_image", comment: ""))
                             .font(.system(.body, design: .monospaced))
                             .foregroundStyle(DesktopTheme.textPrimary)
-                        Text("PNG, JPG, screenshot")
+                        Text(NSLocalizedString("desktop_add_drop_types", comment: ""))
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(DesktopTheme.textTertiary)
                     }
@@ -459,12 +474,12 @@ private struct FileTab: View {
             Button {
                 openFilePicker()
             } label: {
-                Label("Choose File…", systemImage: "folder")
+                Label(NSLocalizedString("desktop_add_choose_file", comment: ""), systemImage: "folder")
                     .font(CTFont.regular(13))
                     .foregroundStyle(Color.CT.accent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent.opacity(0.6), lineWidth: 1))
+                    .background(CTShape.card().stroke(Color.CT.accent.opacity(0.6), lineWidth: 1))
             }
             .buttonStyle(.plain)
         }
@@ -479,7 +494,7 @@ private struct FileTab: View {
                 provider.loadItem(forTypeIdentifier: "public.file-url") { item, _ in
                     guard let data = item as? Data,
                           let url = URL(dataRepresentation: data, relativeTo: nil) else {
-                        DispatchQueue.main.async { self.errorMessage = "❌ Cannot read file"; self.isProcessing = false }
+                        DispatchQueue.main.async { self.errorMessage = NSLocalizedString("desktop_add_cannot_read_file", comment: ""); self.isProcessing = false }
                         return
                     }
                     detectQR(in: url)
@@ -488,7 +503,7 @@ private struct FileTab: View {
             } else if provider.hasItemConformingToTypeIdentifier("public.image") {
                 provider.loadDataRepresentation(forTypeIdentifier: "public.image") { data, _ in
                     guard let data, let ciImage = CIImage(data: data) else {
-                        DispatchQueue.main.async { self.errorMessage = "❌ Cannot decode image"; self.isProcessing = false }
+                        DispatchQueue.main.async { self.errorMessage = NSLocalizedString("desktop_add_cannot_decode_image", comment: ""); self.isProcessing = false }
                         return
                     }
                     detectQRFromCIImage(ciImage)
@@ -504,8 +519,8 @@ private struct FileTab: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .tiff, .bmp, .gif]
         panel.allowsMultipleSelection = false
-        panel.message = "Select a screenshot or image containing a Construct QR code"
-        panel.prompt = "Scan"
+        panel.message = NSLocalizedString("desktop_add_choose_file_panel", comment: "")
+        panel.prompt = NSLocalizedString("scan_qr_code", comment: "")
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             isProcessing = true
@@ -516,7 +531,7 @@ private struct FileTab: View {
 
     private func detectQR(in url: URL) {
         guard let ciImage = CIImage(contentsOf: url) else {
-            DispatchQueue.main.async { errorMessage = "❌ Cannot load image"; isProcessing = false }
+            DispatchQueue.main.async { errorMessage = NSLocalizedString("desktop_add_cannot_load_image", comment: ""); isProcessing = false }
             return
         }
         detectQRFromCIImage(ciImage)
@@ -532,7 +547,7 @@ private struct FileTab: View {
                    let payload = obs.payloadStringValue {
                     onScanned(payload)
                 } else {
-                    errorMessage = "❌ No Construct QR code found in image"
+                    errorMessage = NSLocalizedString("desktop_add_no_qr_in_image", comment: "")
                 }
             }
         }
@@ -556,12 +571,12 @@ private struct PasteTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("INVITE LINK")
+                Text(NSLocalizedString("desktop_add_invite_link", comment: ""))
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundStyle(DesktopTheme.textTertiary)
                     .tracking(1.5)
 
-                TextField("https://konstruct.cc/add?invite=…  or  konstruct://add?…", text: $text)
+                TextField(NSLocalizedString("desktop_add_invite_placeholder", comment: ""), text: $text)
                     .textFieldStyle(.plain)
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(DesktopTheme.textPrimary)
@@ -577,30 +592,30 @@ private struct PasteTab: View {
                 Button {
                     if let str = NSPasteboard.general.string(forType: .string) { text = str }
                 } label: {
-                    Label("Paste from Clipboard", systemImage: "doc.on.clipboard")
+                    Label(NSLocalizedString("desktop_add_paste_clipboard", comment: ""), systemImage: "doc.on.clipboard")
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .background(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 1))
+                        .background(CTShape.card().stroke(Color.CT.noise, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
 
                 Spacer()
 
-                Button("Add Contact") { submit() }
+                Button(NSLocalizedString("add_contact_menu", comment: "")) { submit() }
                     .buttonStyle(.plain)
                     .font(CTFont.regular(13))
                     .foregroundStyle(Color.CT.bg)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.CT.accent))
+                    .background(CTShape.card().fill(Color.CT.accent))
                     .opacity(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1)
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .keyboardShortcut(.return, modifiers: .command)
             }
 
-            Text("Supported: konstruct://add?invite=… or https://konstruct.cc/add?invite=…")
+            Text(NSLocalizedString("desktop_add_supported", comment: ""))
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(DesktopTheme.textTertiary)
 

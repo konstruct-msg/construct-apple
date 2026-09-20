@@ -3,22 +3,23 @@
 //  Construct Desktop
 //
 //  macOS menu bar commands + keyboard shortcut system.
-//  Terminal/TUI aesthetic: vim-inspired navigation, no mouse required.
 //
-//  Keyboard map:
+//  Keyboard map (native Mac — decisions/desktop-interaction-is-not-ios D5):
 //    ⌘N          — new conversation
-//    ⌘⌥N         — add contact / scan QR
-//    ⌘K          — quick-jump (focus sidebar search)
-//    ⌘F          — find / search chats
+//    ⌘⌥N         — add contact
+//    ⌘K          — quick-open (focus sidebar search)
+//    ⌘F          — find in the current context (chat transcript, else sidebar)
 //    ⌘1…⌘9       — jump to Nth chat in sidebar
-//    ⌘J / ⌘↓     — select next chat
-//    ⌘K / ⌘↑     — select prev chat  (⌘K only when search not focused)
-//    ⌘[          — back / close detail
-//    ⌘⇧F         — global message search
+//    ⌥⌘↓         — select next chat
+//    ⌥⌘↑         — select prev chat
+//    ⌘[          — close detail (empty state)
 //    ⌘,          — open Settings
 //    ⌘W          — close front window (macOS standard)
-//    ⌘⇧C         — copy node ID of active chat
+//    ⌘⇧C         — copy id of the open chat
 //    ⌘R          — sync pending messages (manual fetch)
+//
+//  Do not bind a shortcut to a feature that does not exist. ⌘⇧F was "global search"
+//  and called the same function as ⌘F.
 //
 
 import SwiftUI
@@ -34,52 +35,51 @@ struct ConstructCommands: Commands {
 
         // Replace the default "New Window" File menu
         CommandGroup(replacing: .newItem) {
-            Button("New Conversation") {
+            Button(NSLocalizedString("desktop_new_conversation", comment: "")) {
                 bridge.newConversation()
             }
             .keyboardShortcut("n", modifiers: .command)
 
-            Button("Find Chat") {
-                bridge.focusSearch()
+            Button(NSLocalizedString("find", comment: "")) {
+                bridge.find()
             }
             .keyboardShortcut("f", modifiers: .command)
 
-            Button("Global Search") {
-                bridge.globalSearch()
-            }
-            .keyboardShortcut("f", modifiers: [.command, .shift])
-
             Divider()
 
-            Button("Sync Messages") {
+            Button(NSLocalizedString("desktop_sync_messages", comment: "")) {
                 bridge.syncMessages()
             }
             .keyboardShortcut("r", modifiers: .command)
         }
 
-        // Navigate menu (TUI-style)
-        CommandMenu("Navigate") {
-            Button("Next Chat") {
+        // Navigate menu
+        CommandMenu(LocalizedStringKey("desktop_menu_navigate")) {
+            Button(NSLocalizedString("desktop_next_chat", comment: "")) {
                 bridge.selectNextChat()
             }
-            .keyboardShortcut("j", modifiers: .command)
+            .keyboardShortcut(.downArrow, modifiers: [.command, .option])
 
-            Button("Previous Chat") {
+            Button(NSLocalizedString("desktop_previous_chat", comment: "")) {
                 bridge.selectPrevChat()
+            }
+            .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+
+            Divider()
+
+            Button(NSLocalizedString("people", comment: "")) {
+                bridge.openPeople()
+            }
+
+            Button(NSLocalizedString("quick_open", comment: "")) {
+                bridge.focusSearch()
             }
             .keyboardShortcut("k", modifiers: .command)
 
             Divider()
 
-            Button("Quick Open") {
-                bridge.focusSearch()
-            }
-            .keyboardShortcut("k", modifiers: [.command, .shift])
-
-            Divider()
-
             ForEach(1...9, id: \.self) { n in
-                Button("Jump to Chat \(n)") {
+                Button(String(format: NSLocalizedString("desktop_jump_to_chat_fmt", comment: ""), n)) {
                     bridge.jumpToChat(index: n - 1)
                 }
                 .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: .command)
@@ -87,7 +87,7 @@ struct ConstructCommands: Commands {
 
             Divider()
 
-            Button("Back") {
+            Button(NSLocalizedString("desktop_close_chat", comment: "")) {
                 bridge.back()
             }
             .keyboardShortcut("[", modifiers: .command)
@@ -102,12 +102,12 @@ struct ConstructCommands: Commands {
 
             Divider()
 
-            Button("Copy Node ID") {
+            Button(NSLocalizedString("copy_id", comment: "")) {
                 bridge.copyNodeId()
             }
             .keyboardShortcut("c", modifiers: [.command, .shift])
 
-            Button("Show Security Info") {
+            Button(NSLocalizedString("desktop_show_security", comment: "")) {
                 bridge.showSecurity()
             }
         }
@@ -127,7 +127,8 @@ final class DesktopCommandBridge {
     var onNewConversation: (() -> Void)?
     var onAddContact:      (() -> Void)?
     var onFocusSearch:     (() -> Void)?
-    var onGlobalSearch:    (() -> Void)?
+    var onFind:            (() -> Void)?
+    var onOpenPeople:      (() -> Void)?
     var onSelectNext:      (() -> Void)?
     var onSelectPrev:      (() -> Void)?
     var onJumpToIndex:     ((Int) -> Void)?
@@ -139,7 +140,8 @@ final class DesktopCommandBridge {
     func newConversation() { onNewConversation?() }
     func addContact()      { onAddContact?() }
     func focusSearch()     { onFocusSearch?() }
-    func globalSearch()    { onGlobalSearch?() }
+    func find()            { onFind?() }
+    func openPeople()      { onOpenPeople?() }
     func selectNextChat()  { onSelectNext?() }
     func selectPrevChat()  { onSelectPrev?() }
     func jumpToChat(index: Int) { onJumpToIndex?(index) }

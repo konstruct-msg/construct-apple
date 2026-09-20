@@ -150,6 +150,13 @@ final class GRPCChannelManager: Sendable {
     private nonisolated(unsafe) var _overrideProxyPort: UInt16? = nil
     private let _overrideProxyPortLock = NSLock()
 
+    // Last routing key we posted `.grpcServerChanged` for. Lets the routing-changed
+    // notification fire on every real route change (direct ⇄ ice:port) independent of
+    // whether a live `_conn` existed to tear down, while deduping repeat invalidations of
+    // the same route. See `invalidatePersistentClientIfRoutingChanged()`.
+    private nonisolated(unsafe) var _lastNotifiedRoutingKey: String = ""
+    private let _lastNotifiedRoutingKeyLock = NSLock()
+
     // Sealed-sender (stealth-sealed-sender-v2 Phase 2) persistent connection — same
     // H2 transport and VEIL/direct routing as `_conn`, but built with NO AuthInterceptor.
     // A genuinely separate HTTP/2 connection, not just a header omission on the shared
@@ -240,15 +247,29 @@ final class GRPCChannelManager: Sendable {
             didInvalidate = true
         }
         _connLock.unlock()
-        guard didInvalidate else { return }
-        Log.debug("Persistent gRPC connection invalidated (routing: \(oldKey) → \(newKey), gen=\(_connLock.withLock { _connGeneration }))", category: "GRPCChannel")
-        invalidateSealedPersistentClient()
-#if canImport(Network)
-#endif
+        if didInvalidate {
+            Log.debug("Persistent gRPC connection invalidated (routing: \(oldKey) → \(newKey), gen=\(_connLock.withLock { _connGeneration }))", category: "GRPCChannel")
+            invalidateSealedPersistentClient()
+        }
         // Notify subscribers (MessageStreamManager etc.) that routing changed so they can
-        // force-reconnect long-lived streams. Without this, a stream bound to the old
-        // connection sits silently until heartbeat-watchdog catches it (~60-90s).
-        NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
+        // force-reconnect long-lived streams — driven by the routing key ACTUALLY changing,
+        // NOT by whether there was a live `_conn` to tear down. A stream sitting in reconnect
+        // backoff has `_conn == nil`, yet that is exactly the case that most needs to hear
+        // "routing changed" (e.g. the VEIL port just became available): otherwise it waits out
+        // its whole backoff on the dead path — up to the 10-min degraded sleep — while unary
+        // RPCs (which re-dial per call) quietly migrate to VEIL. That split is the "sends work,
+        // receives don't after VEIL comes up" bug: the old `guard didInvalidate` swallowed the
+        // notification precisely when the channel had already been invalidated moments earlier
+        // (the `.invalidateGRPCClient` effect + mid-RPC failures). Dedup on the last-notified
+        // key so a no-op re-invalidation of the same route stays silent.
+        let routingChanged = _lastNotifiedRoutingKeyLock.withLock { () -> Bool in
+            guard _lastNotifiedRoutingKey != newKey else { return false }
+            _lastNotifiedRoutingKey = newKey
+            return true
+        }
+        if routingChanged {
+            NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
+        }
     }
 
     /// Invalidates the persistent connection so the next RPC gets a fresh one.

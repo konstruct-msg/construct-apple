@@ -31,6 +31,7 @@ c_dim() { printf '\033[2m%s\033[0m\n' "$*"; }
 # not checked out on CI; reporting its links as broken there and then exiting 0 anyway prints a
 # red line that means nothing, which is how a check teaches people to skim it.
 check_vault=1
+skipped_siblings=0
 if [ ! -d "$VAULT" ]; then
     check_vault=0
     c_dim "vault not found at \$VAULT — vault links unchecked (set CONSTRUCT_DOCS to check them)"
@@ -41,6 +42,33 @@ fi
 # paragraph describing it has become wrong in the other direction — which is why this list fails
 # loudly on a present path rather than staying quiet.
 KNOWN_ABSENT="ConstructUI/"
+
+# The vault is not the only sibling. `construct-core`, `construct-transport`, `construct-veil`
+# and `construct-protos` are separate repositories and are no more checked out on CI than
+# construct-docs is — yet their links were checked unconditionally, so this job failed on every
+# run since it was added. A check that cannot pass is worse than one that cannot fail: a real
+# broken path would arrive as the same red line everyone has already learned to ignore.
+#
+# Decided per sibling rather than by one flag, so a machine that has core but not veil still
+# checks the half it can.
+sibling_present() {
+    case "$1" in
+        \~/Code/*) [ -d "$HOME/Code/$(echo "${1#\~/Code/}" | cut -d/ -f1)" ] ;;
+        construct-*/*) [ -d "$HOME/Code/$(echo "$1" | cut -d/ -f1)" ] ;;
+        *) return 1 ;;
+    esac
+}
+
+is_sibling_path() {
+    case "$1" in
+        \~/Code/*|construct-*/*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Created at runtime, gitignored, and therefore absent in a fresh clone. AGENTS.md names it as
+# gitignored, so "not there" is the documented state rather than a broken reference.
+RUNTIME_CREATED="logs/"
 
 # Paths inside backticks that look like files or directories: a slash or a known extension, and
 # no spaces, globs, placeholders or call parentheses (`CTFont.regular/medium/bold(size)` is an
@@ -92,6 +120,13 @@ while IFS= read -r p; do
     if [ "$check_vault" -eq 0 ] && is_vault_path "$p"; then
         continue
     fi
+    if [ "$p" = "$RUNTIME_CREATED" ]; then
+        continue
+    fi
+    if is_sibling_path "$p" && ! sibling_present "$p"; then
+        skipped_siblings=1
+        continue
+    fi
     if [ "$p" = "$KNOWN_ABSENT" ]; then
         if [ -e "$p" ]; then
             c_red "  ✗ $p exists, but AGENTS.md describes it as removed"
@@ -107,10 +142,11 @@ while IFS= read -r p; do
 done <<< "$paths"
 
 if [ "$fail" -eq 0 ]; then
-    if [ "$check_vault" -eq 1 ]; then
+    if [ "$check_vault" -eq 1 ] && [ "$skipped_siblings" -eq 0 ]; then
         c_grn "AGENTS.md: every referenced path exists"
     else
         c_grn "AGENTS.md: every repo-local path exists"
+        c_dim "sibling repositories not checked out here — their links unchecked"
     fi
 else
     echo

@@ -215,6 +215,8 @@ final class MessagingServiceClient: Sendable {
             return SendMessageResponse(
                 messageId: response.messageID,
                 status: status,
+                messageNumber: response.messageNumber,
+                serverTimestamp: response.serverTimestamp,
                 retryable: retryable,
                 errorCode: errorCodeStr,
                 retryAfterMs: retryAfterMs,
@@ -310,6 +312,8 @@ final class MessagingServiceClient: Sendable {
             return SendMessageResponse(
                 messageId: response.messageID,
                 status: status,
+                messageNumber: response.messageNumber,
+                serverTimestamp: response.serverTimestamp,
                 retryable: retryable,
                 errorCode: errorCodeStr,
                 retryAfterMs: retryAfterMs,
@@ -456,13 +460,14 @@ final class MessagingServiceClient: Sendable {
         // Sealed path gets the same one-shot Privacy-Pass enforce recovery as message bodies
         // (rebuild = fresh token + delivery tag around the same control payload).
         if let sealedInner {
-            return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: {
+            return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
                 guard let ik = await resolveRecipientIK() else { return nil }
                 return try await StealthSenderService.buildSealedInner(
                     recipientUserId: recipientId,
                     recipientIdentityKey: ik,
                     encryptedPayload: controlPayload,
-                    contentType: .sessionReset
+                    contentType: .sessionReset,
+                    afterCredentialRejection: afterCredentialRejection
                 )
             }, send: sendOnce)
         }
@@ -503,7 +508,21 @@ final class MessagingServiceClient: Sendable {
         )
 
         var failed: [FailedMessage] = []
-        let chatMessages = response.messages.compactMap { msg -> ChatMessage? in
+        let chatMessages = response.messages.enumerated().compactMap { index, msg -> ChatMessage? in
+            // PendingMessage does not expose message_number, but its timestamp is the server's
+            // receive timestamp (not the sender's wall clock) and the response is already sorted
+            // by the server's mailbox order. Use the page index only as a same-millisecond tie
+            // breaker; a later live-stream envelope will replace this fallback with its exact key.
+            let serverOrderKey: String? = {
+                let milliseconds = msg.timestamp.multipliedReportingOverflow(by: 1_000)
+                guard msg.timestamp > 0, !milliseconds.overflow else {
+                    return nil
+                }
+                return ServerMessageOrder.key(
+                    serverTimestampMilliseconds: milliseconds.partialValue,
+                    sequence: UInt64(index)
+                )
+            }()
             // SESSION_RESET_INIT: identified path — sealed deliveries use the generic path below.
             if msg.contentType == .sessionResetInit {
                 guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
@@ -521,6 +540,7 @@ final class MessagingServiceClient: Sendable {
                     content: decoded.content,
                     suiteId: decoded.suiteId,
                     timestamp: UInt64(msg.timestamp),
+                    serverOrderKey: serverOrderKey,
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
                     contentType: 24,
@@ -542,6 +562,7 @@ final class MessagingServiceClient: Sendable {
                     content: Data(),
                     suiteId: 1,
                     timestamp: UInt64(msg.timestamp),
+                    serverOrderKey: serverOrderKey,
                     kemCiphertext: Data(),
                     contentType: 21,
                     kyberOtpkId: 0,
@@ -567,6 +588,7 @@ final class MessagingServiceClient: Sendable {
                     content: decoded.content,
                     suiteId: decoded.suiteId,
                     timestamp: UInt64(msg.timestamp),
+                    serverOrderKey: serverOrderKey,
                     oneTimePreKeyId: decoded.oneTimePreKeyId,
                     kemCiphertext: decoded.kemCiphertext ?? Data(),
                     contentType: 23,
@@ -605,6 +627,7 @@ final class MessagingServiceClient: Sendable {
                         content: Data(),
                         suiteId: 1,
                         timestamp: UInt64(msg.timestamp),
+                        serverOrderKey: serverOrderKey,
                         kemCiphertext: Data(),
                         contentType: UInt8(clamping: msg.contentType.rawValue),
                         rawPayload: preservedPayload,
@@ -624,6 +647,7 @@ final class MessagingServiceClient: Sendable {
                 content: decoded.content,
                 suiteId: decoded.suiteId,
                 timestamp: UInt64(msg.timestamp),
+                serverOrderKey: serverOrderKey,
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
                 contentType: UInt8(clamping: msg.contentType.rawValue),

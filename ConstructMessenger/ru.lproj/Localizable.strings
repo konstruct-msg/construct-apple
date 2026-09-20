@@ -1058,6 +1058,10 @@
 "transfer_error_connection" = "Соединение прервано. Попробуйте снова.";
 "transfer_error_corrupt" = "Данные передачи повреждены. Попробуйте снова.";
 "transfer_error_cancelled" = "Передача была отменена.";
+"transfer_error_history_v1_refused" = "Эта передача слишком старая для истории чатов. Обновите другое устройство.";
+"history_sync_qr_pin_mismatch" = "Код не совпадает — начните привязку заново.";
+"history_sync_kem_key_id_mismatch" = "Файл устарел. Попросите новое устройство прислать новый файл.";
+"history_sync_no_hybrid_key" = "Обновите другое устройство и попробуйте снова.";
 
 // History Sync (device-to-device after linking)
 "history_sync_send_title" = "Передать историю";
@@ -1075,6 +1079,27 @@
 "history_sync_skip_title" = "Пропустить историю";
 "history_sync_skip_sending" = "Завершение без истории…";
 "history_sync_user_mismatch" = "Ошибка переноса истории: история принадлежит другому аккаунту.";
+"history_sync_chats_transferred" = "Чаты переданы. Отправляем фото и файлы…";
+"history_sync_media_incomplete" = "Чаты переданы, медиа неполные — повторите из Настроек или сохраните файл.";
+"history_sync_save_file_instead" = "Сохраните файл.";
+"history_sync_offer_message_with_media" = "Получите чаты, фото и файлы с другого устройства по Wi‑Fi или импортируйте файл. Можно пропустить и начать с пустых чатов.";
+"history_sync_empty_explanation" = "Новые чаты появятся здесь, когда вам напишут. История с другого устройства на этом пока нет.";
+"history_sync_receive_wifi" = "Получить по Wi‑Fi";
+"history_sync_import_file" = "Импортировать файл";
+"history_sync_save_file" = "Сохранить файл";
+"history_sync_settings_section" = "Перенос истории чатов";
+"history_sync_settings_chats" = "Чаты";
+"history_sync_settings_media" = "Только медиа";
+"history_sync_settings_hint" = "Отправьте чаты или оставшиеся фото и файлы на уже привязанное устройство.";
+"history_sync_composer_connecting" = "Это устройство ещё подключается к этому человеку.";
+"history_sync_importing" = "Импорт истории…";
+"history_sync_imported_summary" = "Импортировано записей: %d. Чаты теперь на этом устройстве.";
+"history_sync_qr_pin_absent" = "В коде привязки не было отпечатка. Обновите другое устройство и привяжите заново.";
+"history_sync_local_keys_unavailable" = "Это устройство ещё не готово. Попробуйте через минуту.";
+"history_sync_peer_not_found" = "Другого устройства больше нет в этом аккаунте.";
+"history_sync_file_ready" = "Файл готов. Передайте его на другое устройство и импортируйте сразу — он действует не дольше недели.";
+"history_sync_share_file" = "Поделиться файлом";
+"history_sync_preparing_file" = "Готовим файл…";
 "call_error_not_contacts" = "Звонить можно только тем, с кем вы уже связаны.";
 "call_error_busy" = "Вы уже в звонке.";
 "call_error_peer_offline" = "Собеседник не в сети. Попробуйте позже.";
@@ -1100,12 +1125,6 @@
 "e2e_protocol" = "Протокол";
 "e2e_forward_secrecy" = "Прямая секретность";
 "e2e_key_agreement" = "Соглашение о ключах";
-
-/* Desktop delete account sheet */
-"delete_locally_only" = "Удалить только локально (оффлайн)";
-"delete_locally_question" = "Удалить локально?";
-"delete_locally_action" = "Удалить локально";
-"delete_locally_message" = "Это удалит все локальные данные. Серверный аккаунт может остаться, если сетевой запрос не прошёл.";
 
 /* Desktop general settings */
 "message_section" = "Сообщения";
@@ -1229,3 +1248,41 @@
 "veil_voucher_privacy_hint" = "Показывайте код только тому, для кого он предназначен. Не публикуйте его и не отправляйте через открытый канал.";
 "veil_voucher_intro" = "Создаёт одноразовый код, который настроит подключение тому, кто пока не может добраться до Konstruct. Код действует недолго, в сутки можно создать три.";
 "veil_voucher_create" = "Создать код";
+
+/* Desktop chrome — D2–D7 */
+"find" = "Найти";
+"quick_open" = "Быстрый переход";
+"copy_id" = "Скопировать ID";
+"desktop_close_chat" = "Закрыть чат";
+"desktop_new_conversation" = "Новый чат";
+"desktop_sync_messages" = "Синхронизировать сообщения";
+"desktop_menu_navigate" = "Переход";
+"desktop_next_chat" = "Следующий чат";
+"desktop_previous_chat" = "Предыдущий чат";
+"desktop_jump_to_chat_fmt" = "Чат %d";
+"desktop_show_security" = "Безопасность";
+"desktop_settings_account" = "Аккаунт";
+"desktop_settings_devices" = "Устройства";
+"desktop_settings_storage" = "Хранилище";
+"desktop_add_my_qr" = "Мой QR";
+"desktop_add_from_file" = "Из файла";
+"desktop_add_invite_ok" = "Приглашение принято";
+"desktop_add_empty" = "Нечего добавить";
+"desktop_add_expires_fmt" = "Истекает через %@";
+"desktop_add_show_qr" = "Покажите это человеку, чтобы он мог отсканировать";
+"desktop_add_device_unregistered" = "Устройство не зарегистрировано";
+"desktop_add_qr_failed" = "Не удалось создать QR-код";
+"desktop_add_point_camera" = "Наведите камеру на QR-код Конструкта";
+"desktop_add_camera_privacy" = "Разрешите камеру в Системных настройках → Конфиденциальность и безопасность → Камера";
+"desktop_add_drop_image" = "Перетащите изображение сюда";
+"desktop_add_drop_types" = "PNG, JPG, снимок экрана";
+"desktop_add_choose_file" = "Выбрать файл…";
+"desktop_add_choose_file_panel" = "Выберите снимок или изображение с QR-кодом Конструкта";
+"desktop_add_cannot_read_file" = "Не удалось прочитать файл";
+"desktop_add_cannot_decode_image" = "Не удалось разобрать изображение";
+"desktop_add_cannot_load_image" = "Не удалось загрузить изображение";
+"desktop_add_no_qr_in_image" = "В изображении нет QR-кода";
+"desktop_add_invite_link" = "Ссылка-приглашение";
+"desktop_add_invite_placeholder" = "https://konstruct.cc/add?invite=… или konstruct://add?…";
+"desktop_add_paste_clipboard" = "Вставить из буфера";
+"desktop_add_supported" = "konstruct://add?invite=… или https://konstruct.cc/add?invite=…";

@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>APSEnvironment</key>
+	<string>$(APS_ENVIRONMENT)</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.construct.message-refresh</string>
@@ -22,15 +24,6 @@
 			</array>
 		</dict>
 	</array>
-	<!--
-	  Mirrors the `aps-environment` entitlement (both expand the same APS_ENVIRONMENT
-	  build setting) so the push environment we report to the server can never drift
-	  from the environment APNs actually issued the token for. Do NOT derive it from
-	  `#if DEBUG`: the Beta config compiles with DEBUG defined while signing for
-	  production APNs, which mis-routed every TestFlight token to the sandbox endpoint.
-	-->
-	<key>APSEnvironment</key>
-	<string>$(APS_ENVIRONMENT)</string>
 	<key>GRPC_HOST</key>
 	<string>$(GRPC_HOST)</string>
 	<key>GRPC_PORT</key>
@@ -40,16 +33,11 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSCameraUsageDescription</key>
-	<string>Construct uses the camera to scan invite QR codes and to capture photos and videos for your messages.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Construct needs access to your photo library so you can attach photos and videos to messages.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Construct saves photos and videos to your library when you choose to save them from a chat.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Construct uses the microphone to record voice messages and make encrypted calls.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>To transcribe your voice messages into text on-device using Apple’s Speech Recognition. Audio never leaves your device.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_construct-transfer._tcp</string>
+		<string>_construct-veil._tcp</string>
+	</array>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>Construct Messenger sends you notifications for new messages.</string>
 	<key>UIBackgroundModes</key>
@@ -59,27 +47,5 @@
 		<string>remote-notification</string>
 		<string>voip</string>
 	</array>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Used to transfer your backup directly to a nearby device over WiFi.</string>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_construct-transfer._tcp</string>
-		<string>_construct-veil._tcp</string>
-	</array>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-	<!--
-	  Construct's cryptography is PUBLICLY AVAILABLE open-source code (construct-core,
-	  construct-ios, construct-veil are all public repos). Publicly available encryption
-	  source code is decontrolled under EAR §742.15(b) / License Exception TSU §740.13(e)
-	  after a one-time notification email to BIS + NSA — so the app claims the exemption and
-	  answers "false" (same posture as Signal). This is NOT the mass-market 740.17(b)(1)
-	  route: no annual self-classification report. Obligation = the one-time BIS/NSA
-	  notification (repo URLs), re-sent if the public source location changes.
-	  See decisions/export-compliance-encryption.md.
-	  INVARIANT: this "false" is valid ONLY while the crypto source stays public — if
-	  construct-core/ios/veil ever go private, revisit (likely back to 740.17(b)(1) + true).
-	-->
-
 </dict>
 </plist>

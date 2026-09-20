@@ -1354,8 +1354,12 @@ final class CallManager: CallUIManaging {
                                 // Sealed call signal with one-shot enforce recovery: fresh
                                 // token + tag on privacy_pass rejection, DR payload reused.
                                 // Never downgrades to identified (StealthSendRecovery invariant).
-                                _ = try await StealthSendRecovery.sendSealed(sealedInnerBytes, rebuild: {
-                                    await self.buildSealedForCallSignalIfNeeded(recipient: to, payload: payload)
+                                _ = try await StealthSendRecovery.sendSealed(sealedInnerBytes, rebuild: { afterCredentialRejection in
+                                    await self.buildSealedForCallSignalIfNeeded(
+                                        recipient: to,
+                                        payload: payload,
+                                        afterCredentialRejection: afterCredentialRejection
+                                    )
                                 }, send: { inner in
                                     if FeatureFlags.sealedSenderUnauthenticatedTransport {
                                         // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
@@ -1444,7 +1448,11 @@ final class CallManager: CallUIManaging {
         }
     }
 
-    private func buildSealedForCallSignalIfNeeded(recipient: String, payload: Data) async -> Data? {
+    private func buildSealedForCallSignalIfNeeded(
+        recipient: String,
+        payload: Data,
+        afterCredentialRejection: Bool = false
+    ) async -> Data? {
         guard StealthPolicy.shared.shouldUseSealedSender() else {
             return nil
         }
@@ -1459,7 +1467,8 @@ final class CallManager: CallUIManaging {
                 recipientUserId: recipient,
                 recipientIdentityKey: ik,
                 encryptedPayload: payload,
-                contentType: .generic
+                contentType: .generic,
+                afterCredentialRejection: afterCredentialRejection
             )
             Log.debug("STEALTH: built SealedInner for call signal (payload \(payload.count)b)", category: "Calls")
             return sealed

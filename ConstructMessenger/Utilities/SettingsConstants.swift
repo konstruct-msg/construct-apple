@@ -334,7 +334,8 @@ enum AccountSettingsLayout {
 }
 
 enum DeleteAccountSheetLayout {
-    static let countdownStartValue: Int = 7
+    /// Undo-send abort window after the user commits. Shared iOS / Desktop.
+    static let abortWindowSeconds: Int = 10
     static let rootSpacing: CGFloat = 0
     static let dragIndicatorWidth: CGFloat = 36
     static let dragIndicatorHeight: CGFloat = 4
@@ -358,4 +359,6 @@ enum DeleteAccountSheetLayout {
     static let deleteButtonAnimationDuration: TimeInterval = 0.25
     static let localDeleteWarningOpacity: Double = 0.75
     static let countdownStepSeconds: TimeInterval = 1
+    static let macOSSheetWidth: CGFloat = 420
+    static let macOSSheetHeight: CGFloat = 400
 }

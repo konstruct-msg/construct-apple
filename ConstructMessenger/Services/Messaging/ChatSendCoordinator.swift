@@ -437,6 +437,7 @@ final class ChatSendCoordinator {
             msg.toUserId = recipientId
             msg.contentType = .regular
             msg.timestamp = queued.timestamp
+            msg.serverOrderKey = ServerMessageOrder.pending(localMessageId: msg.id)
             msg.deliveryStatus = .failed
             msg.isSentByMe = true
             msg.chat = chat
@@ -556,7 +557,7 @@ final class ChatSendCoordinator {
                     // identical `redeem_token` path for the first envelope either way — and it is
                     // also what lets `MessageRetryManager` reuse the redemption instead of buying a
                     // second token for the same body.
-                    let peerSpendUnit = await TokenSpendUnit.forMessage()
+                    let peerSpendUnit = TokenSpendUnit.forMessage()
                     let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
                         plan: plan,
                         baseMessageId: messageId,
@@ -596,7 +597,7 @@ final class ChatSendCoordinator {
                             // empty wallet on the first envelope does not condemn the rest — see
                             // TokenSpendUnit). Recording here as well as below is why a retry of
                             // such a message still rides on a redemption rather than buying one.
-                            await TokenSpendUnitStore.remember(
+                            TokenSpendUnitStore.remember(
                                 peerSpendUnit, baseMessageId: messageId, recipientId: recipientId
                             )
                         }
@@ -655,6 +656,13 @@ final class ChatSendCoordinator {
                     default:
                         deliveryStatus = .sent
                         Log.info("Unknown server status: \(aggregated.status), using .sent\(traceTag)", category: "ChatViewModel")
+                    }
+                    if let serverOrderKey = aggregated.serverOrderKey {
+                        self.persistenceService.updateServerOrder(
+                            messageId: messageId,
+                            serverOrderKey: serverOrderKey,
+                            in: self.viewContext
+                        )
                     }
                     Log.info("Updating message status from sending → \(deliveryStatus) for \(messageId)\(traceTag)", category: "ChatViewModel")
                     self.updateMessageStatus(messageId: messageId, status: deliveryStatus)

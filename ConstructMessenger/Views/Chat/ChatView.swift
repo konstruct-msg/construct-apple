@@ -479,7 +479,18 @@ struct ChatView: View {
                 messageText = ""
             }
         )
-        .disabled(isEditMode)
+        .disabled(isEditMode || viewModel.isInitializingSession)
+        .overlay {
+            if viewModel.isInitializingSession {
+                Text(NSLocalizedString("history_sync_composer_connecting", comment: ""))
+                    .font(CTFont.regular(12))
+                    .foregroundStyle(Color.CT.textDim)
+                    .multilineTextAlignment(.center)
+                    .padding(CTLayout.inlinePad)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.CT.bg.opacity(0.85))
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             // Scroll to bottom button (appears when scrolled far from newest)
             if viewport.showJumpButton && !isEditMode {

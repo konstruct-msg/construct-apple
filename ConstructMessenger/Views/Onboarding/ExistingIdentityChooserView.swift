@@ -43,12 +43,14 @@ struct ExistingIdentityChooserView: View {
                         showingRecovery = true
                     }
 
-                    choiceCard(
-                        icon: "link",
-                        titleKey: "onboarding_link_title",
-                        subtitleKey: "onboarding_link_subtitle"
-                    ) {
-                        showingDeviceLink = true
+                    if DeviceLinkOfferPolicy.isLinkingOffered {
+                        choiceCard(
+                            icon: "link",
+                            titleKey: "onboarding_link_title",
+                            subtitleKey: "onboarding_link_subtitle"
+                        ) {
+                            showingDeviceLink = true
+                        }
                     }
 
                     // Restore and link both talk to the server before there is a

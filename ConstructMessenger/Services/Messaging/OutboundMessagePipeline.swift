@@ -95,6 +95,9 @@ final class OutboundMessagePipeline {
         var retryable = true
         var errorCode = ""
         var retryAfterMs: Int64 = 0
+        let firstServerOrderedResponse = responses
+            .filter { $0.serverOrderKey != nil }
+            .min { ($0.serverOrderKey ?? "") < ($1.serverOrderKey ?? "") }
         for r in responses {
             let st = r.status.lowercased()
             if st == "failed" {
@@ -121,6 +124,8 @@ final class OutboundMessagePipeline {
         return SendMessageResponse(
             messageId: baseMessageId,
             status: status,
+            messageNumber: firstServerOrderedResponse?.messageNumber ?? 0,
+            serverTimestamp: firstServerOrderedResponse?.serverTimestamp ?? 0,
             retryable: retryable,
             errorCode: errorCode,
             retryAfterMs: retryAfterMs

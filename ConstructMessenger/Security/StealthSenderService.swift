@@ -475,7 +475,12 @@ final class StealthSenderService: SealedSenderResolving {
         recipientIdentityKey: Data,
         encryptedPayload: Data,
         contentType: SealedEnvelopeType,
-        spendUnit: TokenSpendUnit? = nil
+        spendUnit: TokenSpendUnit? = nil,
+        /// Set by the one-shot retry in `StealthSendRecovery` after the server refused a sealed
+        /// envelope on Privacy Pass grounds. Such a refusal proves the intake credential was not
+        /// honoured — had it been, the server would never have looked at tokens — so the rebuilt
+        /// envelope must pay rather than present the same credential and be refused identically.
+        afterCredentialRejection: Bool = false
     ) async throws -> Data {
         let sealedCert = try sealSenderCert(certBytes, recipientIdentityKey: recipientIdentityKey)
         var inner = Shared_Proto_Core_V1_SealedInner()
@@ -522,7 +527,18 @@ final class StealthSenderService: SealedSenderResolving {
         // not a failure: the envelope pays with a token exactly as it did before this existed.
         // Grandfathering is lazy by decision, so the peer's key arrives the first time they write
         // to us rather than in a sweep.
-        let intakeTagSealed = await IntakeCredentialService.shared.sealedTag(forRecipient: recipientUserId)
+        //
+        // A rebuild after a Privacy Pass refusal declines the credential outright. The refusal is
+        // the server saying it did not accept it, and presenting it again buys the identical
+        // refusal — which is what turned a 17-to-8 `unrecognised`-to-`vouched` ratio into failed
+        // sends on 2026-09-14 rather than into envelopes that simply paid.
+        let intakeTagSealed: Data?
+        if afterCredentialRejection {
+            IntakeCredentialService.shared.noteCredentialRejected(forRecipient: recipientUserId)
+            intakeTagSealed = nil
+        } else {
+            intakeTagSealed = await IntakeCredentialService.shared.sealedTag(forRecipient: recipientUserId)
+        }
         if let intakeTagSealed {
             inner.intakeTagSealed = intakeTagSealed
         }
@@ -602,7 +618,8 @@ final class StealthSenderService: SealedSenderResolving {
         recipientIdentityKey: Data,
         encryptedPayload: Data,
         contentType: SealedEnvelopeType,
-        spendUnit: TokenSpendUnit? = nil
+        spendUnit: TokenSpendUnit? = nil,
+        afterCredentialRejection: Bool = false
     ) async throws -> Data {
         // getSenderCertificate is @MainActor async — call it directly (will hop automatically)
         let certBytes = try await StealthSenderService.shared.getSenderCertificate()
@@ -612,7 +629,8 @@ final class StealthSenderService: SealedSenderResolving {
             recipientIdentityKey: recipientIdentityKey,
             encryptedPayload: encryptedPayload,
             contentType: contentType,
-            spendUnit: spendUnit
+            spendUnit: spendUnit,
+            afterCredentialRejection: afterCredentialRejection
         )
     }
 

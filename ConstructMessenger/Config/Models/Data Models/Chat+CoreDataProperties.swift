@@ -108,7 +108,10 @@ extension Chat {
 
         let req = Message.fetchRequest()
         req.predicate = NSPredicate(format: "chat == %@ AND contentTypeRaw == 0", self)
-        req.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+        req.sortDescriptors = [
+            NSSortDescriptor(key: "serverOrderKey", ascending: false),
+            NSSortDescriptor(key: "id", ascending: false)
+        ]
         // A few candidates so a leaked service/control row at the tip does not pin us.
         req.fetchLimit = 8
 

@@ -250,6 +250,7 @@ struct MessageBubbleRegularView: View {
                             .onAppear { bubbleGlobalFrame = geo.frame(in: .global) }
                             .onChange(of: geo.frame(in: .global).minY) { _, _ in
                                 bubbleGlobalFrame = geo.frame(in: .global)
+                                if showReactionCapsule { updateCapsulePlacement() }
                             }
                     }
                 }
@@ -310,9 +311,11 @@ struct MessageBubbleRegularView: View {
                     showReactionCapsule = false
                 }
             }
+            #if os(iOS)
             // Simultaneous so swipe-to-reply and long-press keep the arena.
             // High-priority would steal the drag the way the old rightward reply did.
             .simultaneousGesture(doubleTapLikeGesture)
+            #endif
             .onAppear { reloadReactionBadges() }
             .onReceive(NotificationCenter.default.publisher(for: ReactionStore.didChange)) { note in
                 guard let target = note.object as? String,
@@ -366,11 +369,13 @@ struct MessageBubbleRegularView: View {
                         }
                     }
 
+                    #if os(iOS)
                     if let onEnterSelectMode {
                         Button { onEnterSelectMode(message) } label: {
                             Label("select_messages", systemImage: "checkmark.circle")
                         }
                     }
+                    #endif
 
                     Divider()
 
@@ -389,6 +394,7 @@ struct MessageBubbleRegularView: View {
                     }
                 }
             }
+            #if os(iOS)
             .offset(x: -swipeOffset)
             // Tracks the finger closely while dragging and springs home on release —
             // `@GestureState` resets instantly, so the animation has to live here.
@@ -397,6 +403,7 @@ struct MessageBubbleRegularView: View {
             .onChange(of: swipeOffset) { _, offset in
                 if offset > 0 { showReactionCapsule = false }
             }
+            #endif
             .onChange(of: isEditMode) { _, editing in
                 if editing { showReactionCapsule = false }
             }
@@ -411,7 +418,9 @@ struct MessageBubbleRegularView: View {
             }
             // The bubble slides left, so the space it vacates is on its trailing side — the same
             // side for sent and received alike, which is why this no longer switches on the author.
+            #if os(iOS)
             .overlay(alignment: .trailing) { swipeIndicatorOverlay }
+            #endif
 
             if !message.isSentByMe {
                 Spacer(minLength: ChatUIConstants.Bubble.sideGutter)
@@ -587,25 +596,47 @@ struct MessageBubbleRegularView: View {
             // The gap the alignment guide used to open by hand. A row in a stack only needs
             // padding on the side facing the bubble.
             .padding(capsulePlacement == .above ? .bottom : .top, ChatUIConstants.Reaction.capsuleGap)
+            .fixedSize(horizontal: true, vertical: true)
             .transition(.opacity)
         }
     }
 
     private func openReactionCapsule() {
+        updateCapsulePlacement()
+        // Inserting the row under an implicit animation grows its height from 0 and
+        // clips the glass for a beat. Appear at full size.
+        var t = Transaction()
+        t.animation = nil
+        withTransaction(t) { showReactionCapsule = true }
+    }
+
+    private func updateCapsulePlacement() {
         let reservedTop = CTLayout.navBarHeight + CTLayout.sectionGap
-        let reservedBottom = CTLayout.controlHeight + CTLayout.edgePad
-        #if canImport(UIKit)
-        let screenHeight = UIScreen.main.bounds.height
-        #else
-        let screenHeight = bubbleGlobalFrame.maxY + reservedBottom
-        #endif
+        let composerHeight = CTLayout.controlHeight + CTLayout.edgePad
         capsulePlacement = ReactionCapsulePlacement.decide(
             spaceAbove: bubbleGlobalFrame.minY - reservedTop,
-            spaceBelow: screenHeight - reservedBottom - bubbleGlobalFrame.maxY,
+            spaceBelow: ReactionCapsulePlacement.spaceBelow(
+                bubbleMaxY: bubbleGlobalFrame.maxY,
+                visibleBottom: capsuleVisibleBottom,
+                composerHeight: composerHeight
+            ),
             capsuleHeight: ChatUIConstants.Reaction.capsuleHeight
                 + ChatUIConstants.Reaction.capsuleGap
         )
-        showReactionCapsule = true
+    }
+
+    private var capsuleVisibleBottom: CGFloat {
+        #if canImport(UIKit)
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+        if let window = windows.first(where: \.isKeyWindow) ?? windows.first {
+            return window.keyboardLayoutGuide.layoutFrame.minY
+        }
+        return UIScreen.main.bounds.height
+        #else
+        return bubbleGlobalFrame.maxY + CTLayout.controlHeight + CTLayout.edgePad
+        #endif
     }
 
     /// How far the bubble should trail the finger, or nil when this drag is not a reply

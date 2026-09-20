@@ -53,6 +53,37 @@ final class ReactionCapsulePlacementTests: XCTestCase {
         )
     }
 
+    /// Keyboard + composer sit in `visibleBottom`; if we only subtracted 54pt from the
+    /// screen, a photo just above the keyboard looked like it had room below.
+    func testKeyboardEatingTheBelowGap_GoesAbove() {
+        let bubbleMaxY: CGFloat = 520
+        let keyboardTop: CGFloat = 560
+        let composer: CGFloat = 54
+        let below = ReactionCapsulePlacement.spaceBelow(
+            bubbleMaxY: bubbleMaxY,
+            visibleBottom: keyboardTop,
+            composerHeight: composer
+        )
+        XCTAssertLessThan(below, height)
+        XCTAssertEqual(
+            ReactionCapsulePlacement.decide(spaceAbove: 200, spaceBelow: below, capsuleHeight: height),
+            .above
+        )
+    }
+
+    func testNoKeyboardLeavesRoomBelow() {
+        let below = ReactionCapsulePlacement.spaceBelow(
+            bubbleMaxY: 400,
+            visibleBottom: 800,
+            composerHeight: 54
+        )
+        XCTAssertGreaterThan(below, height)
+        XCTAssertEqual(
+            ReactionCapsulePlacement.decide(spaceAbove: 200, spaceBelow: below, capsuleHeight: height),
+            .below
+        )
+    }
+
     func testBadgeHangClearsTheLastLineOfText() {
         XCTAssertGreaterThan(
             ChatUIConstants.Reaction.badgeOverlap,
