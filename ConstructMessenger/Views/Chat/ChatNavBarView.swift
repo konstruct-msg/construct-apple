@@ -59,7 +59,7 @@ struct ChatNavBarView: View {
                     if let subtitle {
                         Text(subtitle)
                             .font(CTFont.regular(10))
-                            .foregroundColor(Color.CT.accentDim)
+                            .foregroundColor(Color.CT.accent)
                             .lineLimit(1)
                             .transition(.opacity)
                     }

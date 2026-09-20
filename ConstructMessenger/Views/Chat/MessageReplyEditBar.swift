@@ -77,7 +77,7 @@ struct MessageEditBar: View {
             VStack(alignment: .leading, spacing: ComposerAuxBarLayout.labelPreviewSpacing) {
                 Text(LocalizedStringKey("editing_message"))
                     .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
-                    .foregroundColor(Color.CT.accentDim)
+                    .foregroundColor(Color.CT.accent)
                 Text(content)
                     .font(CTFont.regular(12))
                     .lineLimit(1)

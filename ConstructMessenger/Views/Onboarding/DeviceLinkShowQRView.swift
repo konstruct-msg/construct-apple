@@ -105,10 +105,10 @@ struct DeviceLinkShowQRView: View {
                 HStack(spacing: 6) {
                     Text(">")
                         .font(CTFont.bold(11))
-                        .foregroundColor(Color.CT.accentDim)
+                        .foregroundColor(Color.CT.accent)
                     Text(NSLocalizedString("device_link_section", comment: "").uppercased())
                         .font(CTFont.bold(11))
-                        .foregroundColor(Color.CT.accentDim)
+                        .foregroundColor(Color.CT.accent)
                         .tracking(2)
                     Spacer()
                 }

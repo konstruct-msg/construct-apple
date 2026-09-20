@@ -160,10 +160,10 @@ struct DeviceLinkQRSheet: View {
                 HStack(spacing: DeviceLinkQRLayout.sectionHeaderSpacing) {
                     Text(">")
                         .font(CTFont.bold(11))
-                        .foregroundColor(Color.CT.accentDim)
+                        .foregroundColor(Color.CT.accent)
                     Text(NSLocalizedString("device_link_section", comment: "").uppercased())
                         .font(CTFont.bold(11))
-                        .foregroundColor(Color.CT.accentDim)
+                        .foregroundColor(Color.CT.accent)
                         .tracking(2)
                     Spacer()
                 }

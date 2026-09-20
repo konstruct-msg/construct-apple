@@ -148,7 +148,7 @@ struct CallHistoryView: View {
             HStack {
                 Text(title.uppercased())
                     .font(CTFont.bold(11))
-                    .foregroundStyle(Color.CT.accentDim)
+                    .foregroundStyle(Color.CT.accent)
                 Spacer()
             }
             .padding(.horizontal, CTLayout.edgePad)

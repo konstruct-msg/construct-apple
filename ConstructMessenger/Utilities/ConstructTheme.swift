@@ -9,6 +9,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - Color Palette
 
@@ -25,17 +28,38 @@ extension Color {
         /// Outgoing message background. Dark: #111111 / Light: #CECECE
         static let outMsgBg   = Color(dark: 0x111111, light: 0xE9E9E9)
 
-        // MARK: Accent (brand blue — unchanged across themes)
-        /// Primary accent: #1A3FFF
-        static let accent     = Color(hex: 0x0062FF)
-        /// Secondary accent: #4A6AFF
-        static let accentDim  = Color(hex: 0x1E68DF)
+        // MARK: Accent
+        /// Primary accent. Dark: #008CFF / Light: #0057E0.
+        ///
+        /// Adaptive, and it has to be: a single hex cannot clear 4.5:1 as text in both themes.
+        /// #008CFF reads 5.87 on the dark background and 4.81 on a `bgMsg` card, but only 3.03 on
+        /// the light background; #0057E0 is 5.45 / 4.71 on the light pair. The old #0062FF was
+        /// 3.97 on dark — below the bar for text, and accent *is* text on action rows inside
+        /// `CTSectionGroup`. It was also below the bar under `CTButton`'s own label, which draws
+        /// in `Color.CT.bg` on this fill: 3.97 before, 5.87 now.
+        ///
+        /// Hue moved 294° → 280° and perceptual chroma 91.8 → 66.6. That trade is not avoidable:
+        /// blue contributes 7% of luminance, so any brighter blue takes its brightness from green
+        /// and red. #008CFF is the last step that still passes on a card without reading cyan.
+        /// Measurements and the candidates considered: construct-docs
+        /// `client/ios/NATIVE_AFFORDANCE_MIGRATION.md` §Stage 1.
+        static let accent     = Color(dark: 0x008CFF, light: 0x0057E0)
+        /// Pressed / hover partner of `accent`. Dark: #0077DB / Light: #0047B3.
+        ///
+        /// **Fill and hover only — never text.** No dim partner of this accent reaches 4.5:1 on
+        /// the dark background (#0077DB peaks at 4.42), so text that used to be `accentDim` is
+        /// `accent` instead.
+        static let accentDim  = Color(dark: 0x0077DB, light: 0x0047B3)
 
         // MARK: Text
         /// Primary text. Dark: #E8E8E8 / Light: #111111
         static let text       = Color(dark: 0xE8E8E8, light: 0x111111)
-        /// Timestamps, metadata, inactive.
-        static let textDim    = Color(dark: 0x818181, light: 0x333333)
+        /// Timestamps, metadata, inactive. Dark: #8A8A8A / Light: #333333.
+        ///
+        /// The dark value was #818181, which is 5.11 on the background but **4.18 on a `bgMsg`
+        /// card** — below the bar, on the surface most secondary text actually sits on. JetBrains
+        /// Mono's heavier stems hid it; the system face in the chrome does not.
+        static let textDim    = Color(dark: 0x8A8A8A, light: 0x333333)
         /// Text/icons inside outgoing bubbles. Dark: #FFFFFF (on #111111) /
         /// Light: #111111 (on #E9E9E9). Adaptive — never hardcode `.white` here,
         /// or it becomes unreadable on the light outgoing background.
@@ -114,6 +138,70 @@ enum CTFont {
     static func regular(_ size: CGFloat) -> Font { ConstructFont.mono(size, weight: .regular) }
     static func medium(_ size: CGFloat)  -> Font { ConstructFont.mono(size, weight: .medium)  }
     static func bold(_ size: CGFloat)    -> Font { ConstructFont.mono(size, weight: .bold)    }
+
+    // MARK: - The chrome / technical split
+
+    /// Chrome: nav bars, labels, section headers, buttons — anything a person reads to operate
+    /// the app rather than to read machine output.
+    ///
+    /// System face, and it scales: `relativeTo` carries Apple's Dynamic Type curve while the size
+    /// stays ours. Our scale sits below Apple's defaults on purpose — density is the identity —
+    /// so the pair is "our size, their curve", not "their size".
+    ///
+    /// `regular`/`medium`/`bold` above are the pre-split names and still resolve to monospace.
+    /// They are being replaced call site by call site; when the count reaches zero they go.
+    /// Do not hand-roll `.system(…)` at a call site to get ahead of that — use this.
+    static func ui(
+        _ size: CGFloat,
+        weight: Font.Weight = .regular,
+        relativeTo: Font.TextStyle = .footnote
+    ) -> Font {
+        .system(size: scaled(size, relativeTo: relativeTo), weight: weight)
+    }
+
+    /// Our point size put through the platform's Dynamic Type curve for `style`.
+    ///
+    /// `Font.system(size:weight:)` does not scale and `Font.custom(_:size:relativeTo:)` needs a
+    /// font name, so neither fits the system face at a size of ours. `UIFontMetrics` is the
+    /// supported way to ask for exactly that. SwiftUI rebuilds bodies when the size category
+    /// changes, so the value is recomputed then.
+    private static func scaled(_ size: CGFloat, relativeTo style: Font.TextStyle) -> CGFloat {
+        #if canImport(UIKit)
+        return UIFontMetrics(forTextStyle: uiTextStyle(style)).scaledValue(for: size)
+        #else
+        return size
+        #endif
+    }
+
+    #if canImport(UIKit)
+    private static func uiTextStyle(_ style: Font.TextStyle) -> UIFont.TextStyle {
+        switch style {
+        case .largeTitle:  return .largeTitle
+        case .title:       return .title1
+        case .title2:      return .title2
+        case .title3:      return .title3
+        case .headline:    return .headline
+        case .subheadline: return .subheadline
+        case .body:        return .body
+        case .callout:     return .callout
+        case .footnote:    return .footnote
+        case .caption:     return .caption1
+        case .caption2:    return .caption2
+        @unknown default:  return .footnote
+        }
+    }
+    #endif
+
+    /// Technical content: hex ids, fingerprints, safety numbers, device ids, counters, logs,
+    /// diagnostics. Monospace here is a decision about what the content *is*, not a house style —
+    /// it is what makes a fingerprint look different from the label beside it.
+    static func mono(
+        _ size: CGFloat,
+        weight: Font.Weight = .regular,
+        relativeTo: Font.TextStyle? = nil
+    ) -> Font {
+        ConstructFont.mono(size, weight: weight, relativeTo: relativeTo)
+    }
 
     // MARK: - Message body
 
@@ -592,10 +680,10 @@ struct CTSystemMessage: View {
         HStack(spacing: 6) {
             Text(">")
                 .font(CTFont.bold(12))
-                .foregroundColor(Color.CT.accentDim)
+                .foregroundColor(Color.CT.accent)
             Text(text)
                 .font(CTFont.regular(12))
-                .foregroundColor(Color.CT.accentDim)
+                .foregroundColor(Color.CT.accent)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 2)
@@ -671,10 +759,12 @@ struct CTNavBar<Leading: View, Trailing: View>: View {
             .frame(minWidth: showBack ? 44 : 0, alignment: .leading)
 
             // Title left-aligned
-            Text(title.uppercased())
-                .font(CTFont.bold(14))
+            // Was `title.uppercased()` at `CTFont.bold(14)` with `tracking(4)`. The spacing made
+            // a title read as a machine label rather than as the name of the screen, on all 49
+            // screens at once; this is the single most visible piece of that.
+            Text(title)
+                .font(CTFont.ui(17, weight: .semibold, relativeTo: .headline))
                 .foregroundColor(Color.CT.text)
-                .tracking(4)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, showBack ? 4 : 0)
