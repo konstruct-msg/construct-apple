@@ -235,9 +235,9 @@ struct DeviceLinkQRSheet: View {
             Button {
                 Task { await vm.generateLinkCode() }
             } label: {
-                Text("[\(NSLocalizedString("device_link_refresh", comment: "")) →]")
-                    .font(CTFont.regular(13))
-                    .foregroundColor(Color.CT.accent)
+                Label(NSLocalizedString("device_link_refresh", comment: ""), systemImage: "arrow.clockwise")
+                    .font(CTFont.ui(13, weight: .medium, relativeTo: .footnote))
+                    .foregroundStyle(Color.CT.accent)
                     .padding(.horizontal, DeviceLinkQRLayout.actionButtonHorizontalPadding)
                     .padding(.vertical, DeviceLinkQRLayout.actionButtonVerticalPadding)
                     .clipShape(CTShape.card())
@@ -264,9 +264,9 @@ struct DeviceLinkQRSheet: View {
                 vm.errorMessage = nil
                 Task { await vm.generateLinkCode() }
             } label: {
-                Text("[\(NSLocalizedString("device_link_refresh", comment: "")) →]")
-                    .font(CTFont.regular(13))
-                    .foregroundColor(Color.CT.accent)
+                Label(NSLocalizedString("device_link_refresh", comment: ""), systemImage: "arrow.clockwise")
+                    .font(CTFont.ui(13, weight: .medium, relativeTo: .footnote))
+                    .foregroundStyle(Color.CT.accent)
                     .padding(.horizontal, DeviceLinkQRLayout.actionButtonHorizontalPadding)
                     .padding(.vertical, DeviceLinkQRLayout.actionButtonVerticalPadding)
                     .clipShape(CTShape.card())

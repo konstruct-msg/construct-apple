@@ -226,9 +226,10 @@ struct NetworkSettingsView: View {
                         } else if veilManager.isRunning, let relay = veilManager.activeRelay {
                             CTSep(style: .thin)
                             HStack {
-                                Text(pathASCII(veilManager.currentTrafficPath))
-                                    .font(CTFont.regular(13))
-                                    .foregroundColor(pathColor(veilManager.currentTrafficPath))
+                                Image(systemName: pathSymbol(veilManager.currentTrafficPath))
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(pathColor(veilManager.currentTrafficPath))
+                                    .accessibilityHidden(true)
                                 Text(relay.address)
                                     .font(CTFont.regular(NetworkSettingsLayout.relayAddressFontSize))
                                     .foregroundColor(Color.CT.textDim)
@@ -631,14 +632,15 @@ struct NetworkSettingsView: View {
         }
     }
     
-    // TODO: replace with standart SF Symbols
-    private func pathASCII(_ path: TrafficPath) -> String {
+    /// Which path traffic is on right now, as state — a colour and a symbol, not a bracketed
+    /// letter that needed the legend below it to mean anything.
+    private func pathSymbol(_ path: TrafficPath) -> String {
         switch path {
-        case .direct:          return "[→]"
-        case .veilFront:        return "[v]"
-        case .veilWebTunnel:    return "[ws]"
-        case .veilCooldown:     return "[!]"
-        case .veilConnecting:   return "[~]"
+        case .direct:          return "arrow.right.circle.fill"
+        case .veilFront:       return "shield.fill"
+        case .veilWebTunnel:   return "shield.lefthalf.filled"
+        case .veilCooldown:    return "exclamationmark.circle.fill"
+        case .veilConnecting:  return "arrow.triangle.2.circlepath"
         }
     }
 
