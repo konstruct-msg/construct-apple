@@ -96,9 +96,9 @@ struct MessageInputTextBar: View {
             if remaining < 0 {
                 // Oversized: will auto-split — show chunk count
                 let chunks = MessageValidator.splitIntoChunks(text)
-                Text("→ \(chunks.count) msgs")
-                    .font(CTFont.regular(10))
-                    .foregroundColor(Color.CT.accent)
+                Text(String(format: NSLocalizedString("composer_split_count", comment: ""), chunks.count))
+                    .font(CTFont.ui(10, relativeTo: .caption2))
+                    .foregroundStyle(Color.CT.accent)
                     .padding(.trailing, 4)
                     .transition(.opacity)
             } else {

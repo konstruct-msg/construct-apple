@@ -511,10 +511,10 @@ struct MediaGalleryPage: View {
                         .tint(.white)
                         .scaleEffect(1.5)
                 } else {
-                    Text("[img]")
-                        .font(CTFont.regular(28))
-                        .foregroundColor(.white.opacity(0.3))
-                        .lineLimit(1).fixedSize()
+                    Image(systemName: "photo")
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .accessibilityHidden(true)
                 }
             }
         }
