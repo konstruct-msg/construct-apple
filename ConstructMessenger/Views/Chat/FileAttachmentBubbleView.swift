@@ -102,12 +102,12 @@ struct FileAttachmentBubbleView: View {
                     if downloading.contains(file.mediaId) {
                         ProgressView().tint(Color.CT.accent).scaleEffect(1.2)
                     } else {
-                        // TODO: rewrite with system symbols
-                        // play.circle.fill
-                        // arrow.down.circle.fill
-                        Text(downloadedURLs[file.mediaId] != nil ? "[▶]" : "[↓]")
-                            .font(CTFont.bold(20))
-                            .foregroundColor(.white)
+                        Image(systemName: downloadedURLs[file.mediaId] != nil
+                              ? "play.circle.fill"
+                              : "arrow.down.circle.fill")
+                            .font(.system(size: ChatUIConstants.Media.playButtonSize * 0.6, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .accessibilityHidden(true)
                     }
                 }
 
@@ -137,11 +137,11 @@ struct FileAttachmentBubbleView: View {
             openOrDownload(file)
         } label: {
             HStack(spacing: CTLayout.chromeGap) {
-                Text(asciiIcon(for: file.filename))
-                    .font(CTFont.regular(20))
-                    .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.accent)
+                Image(systemName: symbolName(for: file.filename))
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(isSentByMe ? Color.CT.bg : Color.CT.accent)
                     .frame(width: 32)
-                    .lineLimit(1).fixedSize()
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(file.filename)
@@ -262,23 +262,22 @@ struct FileAttachmentBubbleView: View {
         return ["mp4", "mov", "m4v", "avi", "mkv"].contains(ext)
     }
     
-    // TODO: need to replace with system image icons
-    private func asciiIcon(for filename: String) -> String {
+    /// The file type as a symbol. This was a bracketed word (`[pdf]`, `[♪]`) drawn in the
+    /// accent colour, which is the same treatment the tappable download button had — so a
+    /// type label and a control looked identical.
+    private func symbolName(for filename: String) -> String {
         let ext = (filename as NSString).pathExtension.lowercased()
         switch ext {
-        case "pdf":                          return "[pdf]"
-        case "md", "markdown", "txt":        return "[txt]"
-        case "zip", "gz", "tar", "7z":       return "[zip]"
-        case "mp3", "aac", "m4a", "wav":     return "[♪]"
-        case "mp4", "mov", "m4v":            return "[vid]"
-        case "xlsx", "xls":                  return "[xls]"
-        case "docx", "doc":                  return "[doc]"
-        default:                             return "[doc]"
+        case "pdf":                          return "doc.richtext"
+        case "md", "markdown", "txt":        return "doc.text"
+        case "zip", "gz", "tar", "7z":       return "doc.zipper"
+        case "mp3", "aac", "m4a", "wav":     return "waveform"
+        case "mp4", "mov", "m4v":            return "film"
+        case "xlsx", "xls":                  return "tablecells"
+        case "docx", "doc":                  return "doc"
+        default:                             return "doc"
         }
     }
-
-    @available(*, unavailable)
-    private func iconName(for filename: String) -> String { "" }
 }
 
 // MARK: - Video Player Support
