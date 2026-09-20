@@ -60,23 +60,23 @@ struct SpamWarningBanner: View {
         if state.isActive && state.level >= 8 && state.level < 12 {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(CTFont.regular(14))
+                    .font(CTFont.ui(14))
                     .foregroundStyle(.orange)
                     .lineLimit(1).fixedSize()
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(LocalizedStringKey("spam_warning_title"))
-                        .font(CTFont.bold(12))
+                        .font(CTFont.ui(12, weight: .bold))
                         .foregroundStyle(Color.CT.text)
                     Text(String(format: NSLocalizedString("spam_warning_wait", comment: ""), state.remainingSeconds))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                 }
 
                 Spacer()
 
                 Text("\(Int(state.progress * 100))%")
-                    .font(CTFont.medium(12))
+                    .font(CTFont.ui(12, weight: .medium))
                     .foregroundStyle(.orange)
                     .monospacedDigit()
             }
@@ -102,15 +102,15 @@ struct SpamStrongWarningSheet: View {
             Spacer()
 
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(CTFont.regular(48))
+                .font(CTFont.ui(48))
                 .foregroundStyle(.orange)
 
             VStack(spacing: 8) {
                 Text(LocalizedStringKey("spam_strong_warning_title"))
-                    .font(CTFont.bold(16))
+                    .font(CTFont.ui(16, weight: .bold))
                     .foregroundStyle(Color.CT.text)
                 Text(LocalizedStringKey("spam_strong_warning_body"))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
@@ -119,11 +119,11 @@ struct SpamStrongWarningSheet: View {
             // Countdown
             VStack(spacing: 4) {
                 Text("\(state.remainingSeconds)")
-                    .font(CTFont.bold(40))
+                    .font(CTFont.ui(40, weight: .bold))
                     .foregroundStyle(.orange)
                     .monospacedDigit()
                 Text(LocalizedStringKey("spam_seconds"))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
             }
             .frame(width: 96, height: 96)
@@ -139,7 +139,7 @@ struct SpamStrongWarningSheet: View {
                     state.showStrongSheet = false
                 } label: {
                     Text(LocalizedStringKey("spam_force_send"))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.danger)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -150,7 +150,7 @@ struct SpamStrongWarningSheet: View {
             } else {
                 Text(String(format: NSLocalizedString("spam_force_banned", comment: ""),
                             Int(LocalRateLimiter.shared.forceSendBanTimeRemaining / 60)))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
@@ -159,7 +159,7 @@ struct SpamStrongWarningSheet: View {
             Button(LocalizedStringKey("cancel")) {
                 state.showStrongSheet = false
             }
-            .font(CTFont.regular(13))
+            .font(CTFont.body)
             .foregroundStyle(Color.CT.textDim)
             .padding(.bottom, 24)
         }

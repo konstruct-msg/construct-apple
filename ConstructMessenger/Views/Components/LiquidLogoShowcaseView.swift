@@ -40,19 +40,19 @@ struct LiquidLogoShowcaseView: View {
                 VStack(spacing: 14) {
                     HStack(spacing: 16) {
                         Text(NSLocalizedString("liquid_logo.size", comment: ""))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.textDim)
                         Slider(value: $logoSize, in: 96...320)
                             .tint(Color.CT.accent)
                         Text("\(Int(logoSize))")
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.text)
                             .frame(width: 36, alignment: .trailing)
                     }
 
                     Toggle(isOn: $hapticsOn) {
                         Text(NSLocalizedString("liquid_logo.haptics", comment: ""))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.text)
                     }
                     .tint(Color.CT.accent)
@@ -64,7 +64,7 @@ struct LiquidLogoShowcaseView: View {
                             Image(systemName: "arrow.clockwise.circle.fill")
                                 .font(.system(size: 18))
                             Text(NSLocalizedString("liquid_logo.replay", comment: ""))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                         }
                         .foregroundColor(Color.CT.accent)
                         .frame(maxWidth: .infinity)
@@ -75,7 +75,7 @@ struct LiquidLogoShowcaseView: View {
                     }
 
                     Text(NSLocalizedString("liquid_logo.hint", comment: ""))
-                        .font(CTFont.regular(10))
+                        .font(CTFont.micro)
                         .foregroundColor(Color.CT.textDim)
                         .frame(maxWidth: .infinity, alignment: .center)
                 }

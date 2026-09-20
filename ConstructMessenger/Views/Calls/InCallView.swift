@@ -80,7 +80,7 @@ struct InCallView: View {
                         .foregroundStyle(Color.CT.text)
 
                     Text(statusText)
-                        .font(CTFont.regular(14))
+                        .font(CTFont.ui(14))
                         .foregroundStyle(isEnded ? Color.CT.danger.opacity(0.85) : Color.CT.textDim)
                         .animation(.easeInOut(duration: 0.3), value: isConnecting)
 
@@ -91,7 +91,7 @@ struct InCallView: View {
                             Image(systemName: "lock.fill")
                                 .font(.system(size: 10, weight: .medium))
                             Text(NSLocalizedString("call_e2ee_badge", comment: ""))
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                         }
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 10)
@@ -273,7 +273,7 @@ struct CallControlButton: View {
                     .clipShape(Circle())
                     .overlay(Circle().stroke(config.tint.opacity(0.4), lineWidth: 1))
                 Text(config.label)
-                    .font(CTFont.regular(10))
+                    .font(CTFont.micro)
                     .foregroundStyle(Color.CT.textDim)
             }
         }
@@ -312,7 +312,7 @@ struct AudioRoutePickerButton: View {
             }
 
             Text(NSLocalizedString("call_audio_route", comment: ""))
-                .font(CTFont.regular(10))
+                .font(CTFont.micro)
                 .foregroundStyle(Color.CT.textDim)
         }
         .onAppear { updateSymbol() }

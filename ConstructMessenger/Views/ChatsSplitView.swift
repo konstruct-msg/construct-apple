@@ -411,7 +411,7 @@ struct ChatsSplitView: View {
     ) -> some View {
         HStack(spacing: CTLayout.chromeGap) {
             Text(titleKey)
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundStyle(Color.CT.text)
                 .tracking(3)
                 .textCase(.uppercase)

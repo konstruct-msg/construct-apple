@@ -22,14 +22,14 @@ struct CallHistoryView: View {
         VStack(spacing: 0) {
             HStack {
                 Text(NSLocalizedString("calls_recents", comment: "").uppercased())
-                    .font(CTFont.bold(14))
+                    .font(CTFont.headline)
                     .foregroundColor(Color.CT.text)
                     .tracking(4)
                 Spacer()
                 if !records.isEmpty {
                     Button(action: { showClearConfirm = true }) {
                         Text("[\(NSLocalizedString("calls_clear", comment: ""))]")
-                            .font(CTFont.bold(13))
+                            .font(CTFont.bodyEmphasis)
                             .foregroundColor(Color.CT.danger)
                     }
                     .buttonStyle(.plain)
@@ -147,7 +147,7 @@ struct CallHistoryView: View {
             Color.CT.bg.opacity(0.96)
             HStack {
                 Text(title.uppercased())
-                    .font(CTFont.bold(11))
+                    .font(CTFont.badge)
                     .foregroundStyle(Color.CT.accent)
                 Spacer()
             }
@@ -159,7 +159,7 @@ struct CallHistoryView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Text(emptyStateText)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
         }
@@ -248,7 +248,7 @@ private struct CallHistoryRow: View {
         Button(action: onCallBack) {
             HStack(spacing: 12) {
                 Text(directionTag)
-                    .font(CTFont.regular(10))
+                    .font(CTFont.micro)
                     .foregroundStyle(directionColor)
                     .frame(width: 20, alignment: .center)
 
@@ -260,11 +260,11 @@ private struct CallHistoryRow: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(record.peerName)
-                        .font(CTFont.bold(15))
+                        .font(CTFont.ui(15, weight: .bold))
                         .foregroundStyle(record.status == .missed ? Color.CT.danger : Color.CT.text)
 
                     Text(statusLabel)
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                 }
 
@@ -272,12 +272,12 @@ private struct CallHistoryRow: View {
 
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(relativeTime)
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
 
                     if let dur = record.formattedDuration {
                         Text(dur)
-                            .font(CTFont.regular(10))
+                            .font(CTFont.mono(10))
                             .foregroundStyle(Color.CT.textDim)
                     }
                 }

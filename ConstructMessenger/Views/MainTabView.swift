@@ -193,7 +193,7 @@ struct InCallMiniBar: View {
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(Color.CT.bg)
                 Text("> \(peerName)")
-                    .font(CTFont.bold(12))
+                    .font(CTFont.ui(12, weight: .bold))
                     .foregroundStyle(Color.CT.bg)
                     .lineLimit(1)
                 Spacer(minLength: 8)
@@ -201,7 +201,7 @@ struct InCallMiniBar: View {
                     isConnecting ? "call_minibar_connecting" : "call_minibar_in_call",
                     comment: ""
                 ))
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundStyle(Color.CT.bg.opacity(0.75))
             }
             .padding(.horizontal, 14)

@@ -70,18 +70,18 @@ struct ContactRequestSheet: View {
 
                         VStack(spacing: 4) {
                             Text(displayTitle)
-                                .font(CTFont.bold(17))
+                                .font(CTFont.ui(17, weight: .bold))
                                 .foregroundColor(Color.CT.text)
                                 .multilineTextAlignment(.center)
 
                             if let subtitleHandle, subtitleHandle != displayTitle {
                                 Text(subtitleHandle)
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundColor(Color.CT.textDim)
                             }
 
                             Text(NSLocalizedString("contact_request_from_title", comment: ""))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundColor(Color.CT.textDim)
                                 .multilineTextAlignment(.center)
                                 .padding(.top, 2)
@@ -92,7 +92,7 @@ struct ContactRequestSheet: View {
 
                     if let errorMessage {
                         Text(errorMessage)
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.danger)
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity)
@@ -133,7 +133,7 @@ struct ContactRequestSheet: View {
                                         .font(.system(size: 13, weight: .semibold))
                                 }
                                 Text(NSLocalizedString("contact_request_spam_block", comment: ""))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                             }
                             .foregroundColor(isProcessing ? Color.CT.textDim : Color.CT.danger.opacity(0.9))
                             .frame(maxWidth: .infinity)
@@ -181,7 +181,7 @@ struct ContactRequestSheet: View {
                         .font(.system(size: 15, weight: .semibold))
                 }
                 Text(title)
-                    .font(CTFont.medium(14))
+                    .font(CTFont.ui(14, weight: .medium))
             }
             .foregroundColor(foreground(for: role, dimmed: dimmed))
             .frame(maxWidth: .infinity)

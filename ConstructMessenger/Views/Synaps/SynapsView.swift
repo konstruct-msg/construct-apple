@@ -385,7 +385,7 @@ struct SynapsView: View {
     private var synapsNavBar: some View {
         HStack(spacing: 10) {
             Text(NSLocalizedString("synapses", comment: "").uppercased())
-                .font(CTFont.bold(14))
+                .font(CTFont.headline)
                 .foregroundColor(Color.CT.text)
                 .tracking(4)
             Spacer()
@@ -436,7 +436,7 @@ struct SynapsView: View {
                 .padding(.bottom, 4)
 
             Text(LocalizedStringKey("synapses_empty_title"))
-                .font(CTFont.bold(16))
+                .font(CTFont.ui(16, weight: .bold))
                 .foregroundStyle(Color.CT.text)
                 .multilineTextAlignment(.center)
 
@@ -444,7 +444,7 @@ struct SynapsView: View {
             // real entry points; the subtitle already names both. No duplicate
             // action buttons here.
             Text(LocalizedStringKey("synapses_empty_subtitle"))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, CTLayout.sectionGap)
@@ -460,7 +460,7 @@ struct SynapsView: View {
         VStack(spacing: 0) {
             HStack {
                 Text(LocalizedStringKey("synapses_remote_result_header"))
-                    .font(CTFont.bold(10))
+                    .font(CTFont.ui(10, weight: .bold))
                     .foregroundStyle(Color.CT.accent)
                     .tracking(2)
                 Spacer()
@@ -478,7 +478,7 @@ struct SynapsView: View {
             case .searching:
                 HStack {
                     Text(LocalizedStringKey("synapses_searching"))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.textDim)
                     Spacer()
                     ProgressView().tint(Color.CT.accent).scaleEffect(0.7)
@@ -500,20 +500,20 @@ struct SynapsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         if profile.hasDisplayName {
                             Text(profile.displayName)
-                                .font(CTFont.bold(14))
+                                .font(CTFont.headline)
                                 .foregroundStyle(Color.CT.text)
                         }
                         if profile.hasUsername {
                             Text("@\(profile.username)")
-                                .font(CTFont.regular(12))
+                                .font(CTFont.secondary)
                                 .foregroundStyle(Color.CT.textDim)
                         } else if !fallbackQuery.isEmpty {
                             Text("@\(fallbackQuery)")
-                                .font(CTFont.regular(12))
+                                .font(CTFont.secondary)
                                 .foregroundStyle(Color.CT.text)
                         } else {
                             Text(DisplayNameGenerator.generate(from: profile.userID))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.text)
                         }
                     }
@@ -525,7 +525,7 @@ struct SynapsView: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 14, weight: .semibold))
                             Text(NSLocalizedString("contact_request_sent", comment: ""))
-                                .font(CTFont.regular(12))
+                                .font(CTFont.secondary)
                         }
                         .foregroundStyle(Color.CT.textDim)
                     } else if isSending {
@@ -541,7 +541,7 @@ struct SynapsView: View {
                                 Image(systemName: "person.badge.plus")
                                     .font(.system(size: 13, weight: .semibold))
                                 Text(NSLocalizedString("contact_request_send_action", comment: ""))
-                                    .font(CTFont.medium(12))
+                                    .font(CTFont.ui(12, weight: .medium))
                             }
                             .foregroundStyle(Color.CT.bg)
                             .padding(.horizontal, 12)
@@ -558,7 +558,7 @@ struct SynapsView: View {
             case .notFound:
                 HStack {
                     Text(LocalizedStringKey("synapses_not_found"))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.textDim)
                     Spacer()
                 }
@@ -652,19 +652,19 @@ struct SynapsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             if let name = request.displayName, !name.isEmpty {
                                 Text(name)
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.text)
                             } else if let username = request.username, !username.isEmpty {
                                 Text("@\(username)")
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.text)
                             } else {
                                 Text(DisplayNameGenerator.generate(from: request.fromUserId))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.textDim)
                             }
                             Text(NSLocalizedString("contact_request_from_title", comment: ""))
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundStyle(Color.CT.textDim)
                         }
                         Spacer()
@@ -863,7 +863,7 @@ private struct ContactCircle: View {
             .opacity(proximityOpacity)
 
             Text(user.resolvedDisplayName)
-                .font(CTFont.medium(10))
+                .font(CTFont.ui(10, weight: .medium))
                 .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -899,7 +899,7 @@ private struct ContactCircle: View {
         let n = metrics.unreadCount
         let label = n > 99 ? "99+" : "\(n)"
         return Text(label)
-            .font(CTFont.bold(n > 9 ? 8 : 9))
+            .font(CTFont.ui(n > 9 ? 8 : 9, weight: .bold))
             .foregroundStyle(Color.CT.bg)
             .padding(.horizontal, n > 9 ? 4 : 0)
             .frame(minWidth: 15, minHeight: 15)

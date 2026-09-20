@@ -42,17 +42,17 @@ struct ErrorToastView: View {
     private func toast(for error: AppError) -> some View {
         HStack(spacing: 10) {
             Text(icon(for: error))
-                .font(CTFont.bold(14))
+                .font(CTFont.headline)
                 .foregroundColor(tintColor(for: error))
                 .lineLimit(1).fixedSize()
             VStack(alignment: .leading, spacing: 2) {
                 Text(error.errorDescription ?? "An error occurred")
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .lineLimit(2)
                 if let suggestion = error.recoverySuggestion {
                     Text(suggestion)
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundColor(Color.CT.textDim)
                 }
             }
@@ -62,14 +62,14 @@ struct ErrorToastView: View {
                 Button(actionTitle) {
                     router.executeRecovery()
                 }
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(tintColor(for: error))
             } else {
                 Button {
                     router.dismiss()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(CTFont.regular(14))
+                        .font(CTFont.ui(14))
                         .foregroundColor(Color.CT.textDim)
                         .frame(width: 36, height: 36)
                         .contentShape(Rectangle())

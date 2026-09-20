@@ -34,7 +34,7 @@ struct FullScreenImageView: View {
 
             Button { isPresented = false } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(CTFont.regular(20))
+                    .font(CTFont.ui(20))
                     .foregroundColor(.white.opacity(0.9))
                     .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                     .contentShape(Rectangle())
