@@ -135,6 +135,11 @@ private extension NSColor {
 
 /// Thin wrapper around ConstructFont so CT* views need no direct dependency on UIConstants.
 enum CTFont {
+    // Pre-split names. Still monospace and still correct to call. Every call site that was ours
+    // is on a role, `ui` or `mono` now; the ones left are in files with unrelated work in flight,
+    // and these are not marked deprecated so that work does not build under thirty warnings that
+    // are not its own. When `grep -c 'CTFont\.\(regular\|medium\|bold\)('` reaches zero,
+    // these three lines go. New code: chrome is `ui` or a role, machine output is `mono`.
     static func regular(_ size: CGFloat) -> Font { ConstructFont.mono(size, weight: .regular) }
     static func medium(_ size: CGFloat)  -> Font { ConstructFont.mono(size, weight: .medium)  }
     static func bold(_ size: CGFloat)    -> Font { ConstructFont.mono(size, weight: .bold)    }
@@ -148,9 +153,7 @@ enum CTFont {
     /// stays ours. Our scale sits below Apple's defaults on purpose — density is the identity —
     /// so the pair is "our size, their curve", not "their size".
     ///
-    /// `regular`/`medium`/`bold` above are the pre-split names and still resolve to monospace.
-    /// They are being replaced call site by call site; when the count reaches zero they go.
-    /// Do not hand-roll `.system(…)` at a call site to get ahead of that — use this.
+    /// Do not hand-roll `.system(…)` at a call site — use this, or a role below.
     static func ui(
         _ size: CGFloat,
         weight: Font.Weight = .regular,
@@ -460,7 +463,7 @@ struct CTRowIcon: View {
             switch content {
             case .ascii(let symbol):
                 Text(symbol)
-                    .font(CTFont.bold(size))
+                    .font(CTFont.mono(size, weight: .bold))
                     .foregroundStyle(color)
                     .lineLimit(1)
                     .fixedSize()
@@ -560,7 +563,7 @@ struct CTNoise: View {
                     for c in 0..<cols {
                         ctx.draw(
                             Text(String(grid[r][c]))
-                                .font(CTFont.regular(10))
+                                .font(CTFont.mono(10))
                                 .foregroundColor(Color.CT.noise),
                             at: CGPoint(x: CGFloat(c) * cw, y: CGFloat(r) * ch),
                             anchor: .topLeading
@@ -594,7 +597,7 @@ struct CTModeSelector<T: Hashable>: View {
                     selection = option
                 } label: {
                     Text(labels[option] ?? "")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundColor(isSelected ? Color.CT.bg : Color.CT.textDim)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -624,7 +627,7 @@ struct CTSep: View {
 
     var body: some View {
         Text(style == .thin ? CTSymbol.thin() : CTSymbol.thick())
-            .font(CTFont.regular(10))
+            .font(CTFont.mono(10))
             .foregroundColor(Color.CT.noise)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
@@ -674,9 +677,9 @@ struct CTSearchBar: View {
 
             TextField("", text: $text,
                       prompt: Text(placeholder)
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.text)
                 .autocorrectionDisabled()
                 #if os(iOS)
@@ -721,10 +724,10 @@ struct CTSystemMessage: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(">")
-                .font(CTFont.bold(12))
+                .font(CTFont.mono(12, weight: .bold))
                 .foregroundColor(Color.CT.accent)
             Text(text)
-                .font(CTFont.regular(12))
+                .font(CTFont.secondary)
                 .foregroundColor(Color.CT.accent)
         }
         .padding(.horizontal, 12)
@@ -942,7 +945,7 @@ struct CTBetaBadge: View {
     var body: some View {
         if AppConstants.isNonProductionBuild {
             Text(NSLocalizedString("build_channel_beta", comment: "").uppercased())
-                .font(CTFont.bold(compact ? 9 : 10))
+                .font(CTFont.ui(compact ? 9 : 10, weight: .bold))
                 .tracking(compact ? 1.5 : 2)
                 .foregroundStyle(.orange)
                 .padding(.horizontal, compact ? 5 : 7)
@@ -965,10 +968,10 @@ struct CTSettingsSectionHeader: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(">")
-                .font(CTFont.bold(11))
+                .font(CTFont.mono(11, weight: .bold))
                 .foregroundColor(color)
             Text(title.uppercased())
-                .font(CTFont.bold(11))
+                .font(CTFont.badge)
                 .foregroundColor(color)
             Spacer()
         }
@@ -1005,14 +1008,14 @@ struct CTSettingsRow: View {
             }
             // Label may shrink; trailing value keeps one line (fingerprints, status).
             Text(label)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(isDestructive ? Color.CT.danger : labelColor)
                 .lineLimit(1)
                 .layoutPriority(0)
             Spacer(minLength: 8)
             if !value.isEmpty {
                 Text(value)
-                    .font(isAction ? CTFont.bold(13) : CTFont.regular(13))
+                    .font(isAction ? CTFont.bodyEmphasis : CTFont.body)
                     .foregroundColor(
                         isDestructive ? Color.CT.danger :
                         isAction      ? Color.CT.accent : valueColor
@@ -1056,7 +1059,7 @@ struct CTTextField: View {
                 TextField(placeholder, text: $text)
             }
         }
-        .font(CTFont.regular(14))
+        .font(CTFont.ui(14))
         .foregroundColor(Color.CT.text)
         .multilineTextAlignment(alignment)
         .ctInputChrome(.standard)
@@ -1087,7 +1090,7 @@ struct CTButton: View {
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundColor(fgColor)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
