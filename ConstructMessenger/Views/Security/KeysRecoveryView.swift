@@ -43,12 +43,12 @@ struct KeysRecoveryView: View {
                         // Warning block
                         VStack(alignment: .leading, spacing: 8) {
                             Text(NSLocalizedString(warningTitleKey, comment: ""))
-                                .font(CTFont.bold(13))
+                                .font(CTFont.bodyEmphasis)
                                 .foregroundColor(Color.CT.danger)
                                 .tracking(2)
 
                             Text(NSLocalizedString(warningBodyKey, comment: ""))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundColor(Color.CT.text)
                                 .lineSpacing(4)
                         }
@@ -63,7 +63,7 @@ struct KeysRecoveryView: View {
                         // Option 1: Retry
                         CTSettingsSectionHeader(title: NSLocalizedString("keys_recovery_section_retry", comment: ""))
                         Text(NSLocalizedString(retryHintKey, comment: ""))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.textDim)
                             .padding(.horizontal, 20)
                         Button {
@@ -89,7 +89,7 @@ struct KeysRecoveryView: View {
                         // Option 2: Recover with seed
                         CTSettingsSectionHeader(title: NSLocalizedString("keys_recovery_section_seed", comment: ""))
                         Text(NSLocalizedString("keys_recovery_seed_hint", comment: ""))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.textDim)
                             .padding(.horizontal, 20)
                         Button {
@@ -110,7 +110,7 @@ struct KeysRecoveryView: View {
                             color: Color.CT.danger
                         )
                         Text(NSLocalizedString("keys_recovery_new_hint", comment: ""))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.textDim)
                             .padding(.horizontal, 20)
                         Button {

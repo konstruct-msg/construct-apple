@@ -25,7 +25,7 @@ struct RecoverySetupView: View {
                         vm.resetSetup()
                         dismiss()
                     }
-                    .font(CTFont.bold(13))
+                    .font(CTFont.bodyEmphasis)
                     .foregroundColor(Color.CT.textDim)
                     .buttonStyle(.plain)
                 }
@@ -67,11 +67,11 @@ struct RecoverySetupView: View {
                 .foregroundStyle(Color.CT.accent)
                 .accessibilityHidden(true)
             Text(NSLocalizedString("recovery_intro_title", comment: ""))
-                .font(CTFont.bold(18))
+                .font(CTFont.title)
                 .foregroundColor(Color.CT.text)
                 .multilineTextAlignment(.center)
             Text(NSLocalizedString("recovery_intro_body", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -80,7 +80,7 @@ struct RecoverySetupView: View {
                 vm.startSetup()
             } label: {
                 Text(NSLocalizedString("recovery_generate", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -97,7 +97,7 @@ struct RecoverySetupView: View {
     private var wordDisplayView: some View {
         VStack(spacing: 16) {
             Text(NSLocalizedString("recovery_write_down", comment: ""))
-                .font(CTFont.bold(14))
+                .font(CTFont.headline)
                 .foregroundColor(Color.CT.text)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -110,7 +110,7 @@ struct RecoverySetupView: View {
             .padding(.horizontal)
 
             Text(NSLocalizedString("recovery_never_share", comment: ""))
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundColor(.orange)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -121,7 +121,7 @@ struct RecoverySetupView: View {
                 vm.proceedToQuiz()
             } label: {
                 Text(NSLocalizedString("recovery_wrote_it_down", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -137,11 +137,11 @@ struct RecoverySetupView: View {
     private func wordCell(index: Int, word: String) -> some View {
         HStack(spacing: 4) {
             Text("\(index + 1).")
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundColor(Color.CT.textDim)
                 .frame(width: 22, alignment: .trailing)
             Text(word)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .minimumScaleFactor(0.7)
                 .foregroundColor(Color.CT.text)
         }
@@ -170,7 +170,7 @@ struct RecoverySetupView: View {
         ScrollView {
             VStack(spacing: 24) {
                 Text(NSLocalizedString("recovery_quiz_title", comment: ""))
-                    .font(CTFont.bold(14))
+                    .font(CTFont.headline)
                     .foregroundColor(Color.CT.text)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
@@ -186,7 +186,7 @@ struct RecoverySetupView: View {
                     Task { await vm.submitSetup(userId: authVM.currentUserId ?? "") }
                 } label: {
                     Text(NSLocalizedString("recovery_confirm", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(vm.quizPassed ? Color.CT.text : Color.CT.textDim)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -228,20 +228,20 @@ struct RecoverySetupView: View {
                 .foregroundStyle(Color.CT.accent)
                 .accessibilityHidden(true)
             Text(NSLocalizedString("recovery_done_title", comment: ""))
-                .font(CTFont.bold(18))
+                .font(CTFont.title)
                 .foregroundColor(Color.CT.text)
             Text(NSLocalizedString("recovery_done_body", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             if !fingerprint.isEmpty {
                 VStack(spacing: 4) {
                     Text(NSLocalizedString("recovery_fingerprint", comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundColor(Color.CT.textDim)
                     Text(fingerprint)
-                        .font(CTFont.regular(12))
+                        .font(CTFont.mono(12))
                         .foregroundColor(Color.CT.text)
                         .padding(8)
                         .background(Color.CT.bgMsg)
@@ -254,7 +254,7 @@ struct RecoverySetupView: View {
                 dismiss()
             } label: {
                 Text(NSLocalizedString("done", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -270,14 +270,14 @@ struct RecoverySetupView: View {
         VStack(spacing: 20) {
             Spacer()
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(CTFont.regular(48))
+                .font(CTFont.ui(48))
                 .foregroundColor(.orange)
                 .lineLimit(1).fixedSize()
             Text(NSLocalizedString("recovery_error_title", comment: ""))
-                .font(CTFont.bold(16))
+                .font(CTFont.ui(16, weight: .bold))
                 .foregroundColor(Color.CT.text)
             Text(message)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -286,7 +286,7 @@ struct RecoverySetupView: View {
                 vm.resetSetup()
             } label: {
                 Text(NSLocalizedString("try_again", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -308,7 +308,7 @@ private struct QuizWordField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(String(format: NSLocalizedString("recovery_quiz_word_n", comment: ""), index + 1))
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundColor(Color.CT.textDim)
             TextField(
                 NSLocalizedString("recovery_quiz_placeholder", comment: ""),
@@ -321,7 +321,7 @@ private struct QuizWordField: View {
             #if os(iOS)
             .textInputAutocapitalization(.never)
             #endif
-            .font(CTFont.regular(13))
+            .font(CTFont.body)
             .foregroundColor(Color.CT.text)
             .padding(10)
             .background(Color.CT.bgMsg)

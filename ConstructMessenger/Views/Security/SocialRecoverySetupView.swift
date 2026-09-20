@@ -50,7 +50,7 @@ struct SocialRecoverySetupView: View {
                     service.reset()
                     dismiss()
                 }
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundColor(Color.CT.textDim)
                 .buttonStyle(.plain)
             }
@@ -79,11 +79,11 @@ struct SocialRecoverySetupView: View {
                 .foregroundStyle(Color.CT.accent)
                 .accessibilityHidden(true)
             Text(NSLocalizedString("social_recovery_intro_title", comment: "").uppercased())
-                .font(CTFont.bold(18))
+                .font(CTFont.title)
                 .foregroundColor(Color.CT.text)
                 .multilineTextAlignment(.center)
             Text(NSLocalizedString("social_recovery_intro_body", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
@@ -150,10 +150,10 @@ struct SocialRecoverySetupView: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(label)
-                        .font(CTFont.regular(14))
+                        .font(CTFont.ui(14))
                         .foregroundColor(selected ? Color.CT.text : Color.CT.textDim)
                     Text(hint)
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundColor(Color.CT.textDim)
                 }
                 Spacer()
@@ -198,7 +198,7 @@ struct SocialRecoverySetupView: View {
                     Rectangle().fill(Color.CT.noise).frame(height: 1)
 
                     Text(NSLocalizedString("social_recovery_share_warning", comment: ""))
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundColor(Color.CT.textDim)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
@@ -207,7 +207,7 @@ struct SocialRecoverySetupView: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text(NSLocalizedString("social_recovery_share_label_caption", comment: ""))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.textDim)
                         TextField(
                             NSLocalizedString("social_recovery_share_label_placeholder", comment: ""),
@@ -218,7 +218,7 @@ struct SocialRecoverySetupView: View {
                         )
                         .autocorrectionDisabled()
                         .autocapNever()
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.text)
                         .padding(10)
                         .background(Color.CT.bg)
@@ -243,11 +243,11 @@ struct SocialRecoverySetupView: View {
     private func wordCell(number: Int, word: String) -> some View {
         HStack(spacing: 4) {
             Text("\(number).")
-                .font(CTFont.regular(10))
+                .font(CTFont.micro)
                 .foregroundColor(Color.CT.textDim)
                 .frame(width: 24, alignment: .trailing)
             Text(word)
-                .font(CTFont.regular(12))
+                .font(CTFont.secondary)
                 .foregroundColor(Color.CT.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -297,7 +297,7 @@ struct SocialRecoverySetupView: View {
                 .foregroundStyle(Color.CT.accent)
                 .accessibilityHidden(true)
             Text(NSLocalizedString("social_recovery_done_title", comment: ""))
-                .font(CTFont.bold(16))
+                .font(CTFont.ui(16, weight: .bold))
                 .foregroundColor(Color.CT.text)
                 .multilineTextAlignment(.center)
 
@@ -308,13 +308,13 @@ struct SocialRecoverySetupView: View {
                         : labelValue
                     HStack(spacing: 8) {
                         Text("share \(i + 1)")
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.textDim)
                         Image(systemName: "chevron.right")
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.accent)
                         Text(label)
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.text)
                     }
                 }
@@ -325,7 +325,7 @@ struct SocialRecoverySetupView: View {
             .padding(.horizontal, 20)
 
             Text(NSLocalizedString("social_recovery_done_body", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -343,14 +343,14 @@ struct SocialRecoverySetupView: View {
         VStack(spacing: 20) {
             Spacer()
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(CTFont.regular(48))
+                .font(CTFont.ui(48))
                 .foregroundColor(.orange)
                 .lineLimit(1).fixedSize()
             Text(NSLocalizedString("recovery_error_title", comment: ""))
-                .font(CTFont.bold(16))
+                .font(CTFont.ui(16, weight: .bold))
                 .foregroundColor(Color.CT.text)
             Text(message)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -366,7 +366,7 @@ struct SocialRecoverySetupView: View {
     private func actionButton(label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(enabled ? Color.CT.text : Color.CT.textDim)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
@@ -406,10 +406,10 @@ private struct AnimatedLoadingBlock: View {
     var body: some View {
         VStack(spacing: 16) {
             Text(frames[frame])
-                .font(CTFont.bold(14))
+                .font(CTFont.headline)
                 .foregroundColor(Color.CT.accent)
             Text(label)
-                .font(CTFont.regular(12))
+                .font(CTFont.secondary)
                 .foregroundColor(Color.CT.textDim)
         }
         .onAppear {

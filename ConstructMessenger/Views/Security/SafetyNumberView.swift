@@ -56,17 +56,17 @@ struct SafetyNumberView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Text(">")
-                    .font(CTFont.bold(12))
+                    .font(CTFont.ui(12, weight: .bold))
                     .foregroundStyle(Color.CT.accent)
                 Text(NSLocalizedString("safety_numbers_verify_title", comment: "").uppercased())
-                    .font(CTFont.bold(12))
+                    .font(CTFont.ui(12, weight: .bold))
                     .foregroundStyle(Color.CT.accent)
                     .tracking(2)
             }
 
             Text(String(format: NSLocalizedString("safety_numbers_instruction", comment: ""),
                         theirDisplayName))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundStyle(Color.CT.textDim)
                 .lineSpacing(4)
         }
@@ -78,7 +78,7 @@ struct SafetyNumberView: View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
             ForEach(formattedNumber, id: \.self) { chunk in
                 Text(chunk)
-                    .font(CTFont.bold(16))
+                    .font(CTFont.mono(16, weight: .bold))
                     .foregroundStyle(Color.CT.text)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
@@ -101,7 +101,7 @@ struct SafetyNumberView: View {
                 Text(copied
                      ? NSLocalizedString("safety_numbers_copied", comment: "")
                      : NSLocalizedString("safety_numbers_copy", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(copied ? Color.CT.accent : Color.CT.text)
                 Spacer()
                 // The copy action's own affordance. `[C]` needed a legend.
@@ -120,16 +120,16 @@ struct SafetyNumberView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Text("!")
-                    .font(CTFont.bold(11))
+                    .font(CTFont.badge)
                     .foregroundStyle(Color.CT.accent.opacity(0.7))
                 Text(NSLocalizedString("safety_numbers_mismatch_header", comment: "").uppercased())
-                    .font(CTFont.bold(11))
+                    .font(CTFont.badge)
                     .foregroundStyle(Color.CT.accent.opacity(0.7))
                     .tracking(2)
             }
 
             Text(NSLocalizedString("safety_numbers_mismatch_body", comment: ""))
-                .font(CTFont.regular(12))
+                .font(CTFont.secondary)
                 .foregroundStyle(Color.CT.textDim)
                 .lineSpacing(4)
         }
