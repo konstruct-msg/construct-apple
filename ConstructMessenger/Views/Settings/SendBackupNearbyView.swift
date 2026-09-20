@@ -100,7 +100,7 @@ struct SendBackupNearbyView: View {
             ProgressView()
                 .tint(Color.CT.accent)
             Text(NSLocalizedString("transfer_preparing", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
         }
         .padding(.top, 40)
@@ -110,13 +110,13 @@ struct SendBackupNearbyView: View {
         VStack(spacing: 24) {
             VStack(spacing: 8) {
                 Text(NSLocalizedString("transfer_your_pin", comment: "").uppercased())
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .tracking(3)
                     .foregroundColor(Color.CT.textDim)
 
                 // Format PIN as "XXX XXX"
                 Text(formattedPIN)
-                    .font(CTFont.bold(36))
+                    .font(CTFont.ui(36, weight: .bold))
                     .tracking(8)
                     .foregroundColor(Color.CT.accent)
                     .monospacedDigit()
@@ -129,7 +129,7 @@ struct SendBackupNearbyView: View {
             )
 
             Text(NSLocalizedString("transfer_waiting", comment: ""))
-                .font(CTFont.regular(12))
+                .font(CTFont.secondary)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
 
@@ -142,7 +142,7 @@ struct SendBackupNearbyView: View {
     private var transferringView: some View {
         VStack(spacing: 16) {
             Text(NSLocalizedString("transfer_progress", comment: "").uppercased())
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .tracking(3)
                 .foregroundColor(Color.CT.textDim)
 
@@ -159,7 +159,7 @@ struct SendBackupNearbyView: View {
             .frame(height: 4)
 
             Text("\(Int(service.progress * 100))%")
-                .font(CTFont.bold(20))
+                .font(CTFont.ui(20, weight: .bold))
                 .foregroundColor(Color.CT.text)
                 .monospacedDigit()
         }
@@ -172,10 +172,10 @@ struct SendBackupNearbyView: View {
                 .font(.system(size: 32, weight: .bold))
                 .foregroundColor(Color.CT.accent)
             Text(NSLocalizedString("transfer_complete", comment: ""))
-                .font(CTFont.bold(15))
+                .font(CTFont.ui(15, weight: .bold))
                 .foregroundColor(Color.CT.text)
             Button(NSLocalizedString("close", comment: "")) { dismiss() }
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.accent)
                 .padding(.top, 8)
         }
@@ -188,7 +188,7 @@ struct SendBackupNearbyView: View {
                 .font(.system(size: 28, weight: .semibold))
                 .foregroundColor(Color.CT.accent)
             Text(label)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
             ProgressView().tint(Color.CT.accent)
         }
@@ -198,14 +198,14 @@ struct SendBackupNearbyView: View {
     private func failedView(_ message: String) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(CTFont.regular(28))
+                .font(CTFont.ui(28))
                 .foregroundColor(Color.CT.danger)
             Text(message)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.danger)
                 .multilineTextAlignment(.center)
             Button(NSLocalizedString("close", comment: "")) { dismiss() }
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.accent)
                 .padding(.top, 8)
         }

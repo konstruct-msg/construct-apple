@@ -38,17 +38,17 @@ struct HistoryTransferOfferView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: CTLayout.sectionGap) {
                         Text(NSLocalizedString("history_sync_offer_message_with_media", comment: ""))
-                            .font(CTFont.regular(14))
+                            .font(CTFont.ui(14))
                             .foregroundStyle(Color.CT.text)
                         Text(NSLocalizedString("history_sync_empty_explanation", comment: ""))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundStyle(Color.CT.textDim)
 
                         if isImporting {
                             HStack(spacing: CTLayout.inlinePad) {
                                 ProgressView()
                                 Text(NSLocalizedString("history_sync_importing", comment: ""))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.textDim)
                             }
                         } else {

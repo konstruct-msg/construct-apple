@@ -83,13 +83,13 @@ struct NetworkSettingsView: View {
                             .foregroundColor(statusColor)
                         VStack(alignment: .leading, spacing: NetworkSettingsLayout.statusDetailSpacing) {
                             Text(connectionManager.connectionStatus.text(localized: true))
-                                .font(CTFont.regular(14))
+                                .font(CTFont.ui(14))
                                 .foregroundStyle(Color.CT.text)
                             #if DEBUG || INTERNAL_TOOLS
                             if connectionManager.connectionStatus != .connected,
                                let phase = connectionManager.connectingPhase {
                                 Text(phase)
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(.orange)
                                     .textSelection(.enabled)
                                     .transition(.opacity)
@@ -98,7 +98,7 @@ struct NetworkSettingsView: View {
                             // Neutral, information-free route indicator ("Защищено"/"Protected") in
                             // the external build; full transport detail only on internal builds.
                             Text(path.displayDetail)
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.textDim)
                                 .textSelection(.enabled)
                         }
@@ -127,7 +127,7 @@ struct NetworkSettingsView: View {
                                     Image(systemName: "lock.fill").font(.system(size: 10))
                                 }
                                 Text(isQUIC ? NetworkSettingsLabels.quic : NetworkSettingsLabels.h2)
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                             }
                                 .foregroundColor(isLive
                                     ? (isQUIC ? Color.CT.accent : Color.CT.accentDim)
@@ -147,11 +147,11 @@ struct NetworkSettingsView: View {
                         CTSep(style: .thin)
                         HStack {
                             Text(LocalizedStringKey("last_heartbeat"))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.textDim)
                             Spacer()
                             Text(heartbeat, style: .relative)
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.textDim)
                                 .monospacedDigit()
                         }
@@ -163,7 +163,7 @@ struct NetworkSettingsView: View {
                     if let error = connectionManager.lastError {
                         CTSep(style: .thin)
                         Text(error)
-                            .font(CTFont.regular(NetworkSettingsLayout.errorMonospacedFontSize))
+                            .font(CTFont.mono(NetworkSettingsLayout.errorMonospacedFontSize))
                             .foregroundStyle(Color.CT.danger)
                             .textSelection(.enabled)
                             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
@@ -197,7 +197,7 @@ struct NetworkSettingsView: View {
                     // Tri-state mode selector (same binding as production soft control)
                     HStack {
                         Text(LocalizedStringKey("veil_title"))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                         Spacer()
                         CTModeSelector(
@@ -214,7 +214,7 @@ struct NetworkSettingsView: View {
                             CTSep(style: .thin)
                             HStack {
                                 Text(LocalizedStringKey("veil_retry"))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundColor(Color.CT.textDim)
                                 Spacer()
                                 Image(systemName: "arrow.clockwise")
@@ -231,7 +231,7 @@ struct NetworkSettingsView: View {
                                     .foregroundStyle(pathColor(veilManager.currentTrafficPath))
                                     .accessibilityHidden(true)
                                 Text(relay.address)
-                                    .font(CTFont.regular(NetworkSettingsLayout.relayAddressFontSize))
+                                    .font(CTFont.mono(NetworkSettingsLayout.relayAddressFontSize))
                                     .foregroundColor(Color.CT.textDim)
                                     .textSelection(.enabled)
                                 Spacer()
@@ -250,7 +250,7 @@ struct NetworkSettingsView: View {
                         } else if veilManager.mode != .off && !veilManager.isRunning {
                             CTSep(style: .thin)
                             Text(veilManager.lastError ?? NSLocalizedString("veil_establishing", comment: ""))
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundStyle(Color.CT.textDim)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
@@ -278,10 +278,10 @@ struct NetworkSettingsView: View {
                     Toggle(isOn: $engineQuicOn) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("QUIC / HTTP-3 transport")
-                                .font(CTFont.regular(14))
+                                .font(CTFont.ui(14))
                                 .foregroundStyle(.orange)
                             Text("Route the message stream over QUIC instead of H2. Watch the transport badge above to confirm.")
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundStyle(Color.CT.textDim)
                         }
                     }
@@ -302,10 +302,10 @@ struct NetworkSettingsView: View {
                     Toggle(isOn: $engineQuicObfOn) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("QUIC obfuscation (Salamander)")
-                                .font(CTFont.regular(14))
+                                .font(CTFont.ui(14))
                                 .foregroundStyle(.orange)
                             Text("Obfuscate QUIC datagrams to evade DPI. Needs a provisioned gateway PSK; otherwise stays plain QUIC.")
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundStyle(Color.CT.textDim)
                         }
                     }
@@ -332,7 +332,7 @@ struct NetworkSettingsView: View {
                     } label: {
                         HStack {
                             Text("Transport router state + log")
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(.orange)
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -350,14 +350,14 @@ struct NetworkSettingsView: View {
                 // Footer — mode-specific
                 if !hasVeilAccessConfigured {
                     Text(LocalizedStringKey("veil_config_none"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                         .padding(.bottom, NetworkSettingsLayout.footerVerticalPadding)
                 } else {
                     Text(LocalizedStringKey(veilFooterKey))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
@@ -433,7 +433,7 @@ struct NetworkSettingsView: View {
         CTSectionGroup {
             HStack {
                 Text(LocalizedStringKey("censorship_protection"))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.textDim)
                 Spacer()
                 CTModeSelector(
@@ -447,7 +447,7 @@ struct NetworkSettingsView: View {
         }
 
         Text(LocalizedStringKey(censorshipProtectionFooterKey))
-            .font(CTFont.regular(11))
+            .font(CTFont.caption)
             .foregroundStyle(Color.CT.textDim)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
@@ -475,17 +475,17 @@ struct NetworkSettingsView: View {
                     #if DEBUG
                     Text(NSLocalizedString("veil_config_active", comment: "")
                          + " — " + veilConfiguredAddressesDebug.joined(separator: ", "))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.mono(11))
                         .foregroundColor(Color.CT.accent)
                         .textSelection(.enabled)
                     #else
                     Text(LocalizedStringKey("veil_config_active"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundColor(Color.CT.accent)
                     #endif
                 } else {
                     Text(LocalizedStringKey("veil_config_none"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundColor(Color.CT.textDim)
                         
                 }
@@ -516,7 +516,7 @@ struct NetworkSettingsView: View {
             if let msg = veilImportMessage {
                 CTSep(style: .thin)
                 Text(msg)
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(veilImportIsError ? Color.CT.danger : Color.CT.accent)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
@@ -549,7 +549,7 @@ struct NetworkSettingsView: View {
                 .font(.system(size: 14))
                 .foregroundColor(Color.CT.accent)
             Text(title)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.text)
             Spacer()
             Image(systemName: "chevron.right")
@@ -579,7 +579,7 @@ struct NetworkSettingsView: View {
     @ViewBuilder
     private func relayBadge(label: String, color: Color) -> some View {
         Text(label)
-            .font(CTFont.regular(NetworkSettingsLayout.relayBadgeFontSize))
+            .font(CTFont.ui(NetworkSettingsLayout.relayBadgeFontSize))
             .foregroundColor(color)
             .padding(.horizontal, NetworkSettingsLayout.transportBadgeHorizontalPadding)
             .padding(.vertical, NetworkSettingsLayout.transportBadgeVerticalPadding)

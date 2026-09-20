@@ -69,7 +69,7 @@ struct AccountSettingsView: View {
                     flatDivider(thick: true)
 
                     Text(NSLocalizedString("changes_encrypted_footer", comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.accent.opacity(AccountSettingsLayout.footerTextOpacity))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, AccountSettingsLayout.footerHorizontalPadding)
@@ -217,7 +217,7 @@ struct AccountSettingsView: View {
                 Button(NSLocalizedString("save", comment: "")) {
                     handleProfileEditActionTap()
                 }
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundColor(viewModel.isSavingUsername ? Color.CT.textDim : Color.CT.accent)
                 .disabled(viewModel.isSavingUsername)
                 .buttonStyle(.plain)
@@ -255,7 +255,7 @@ struct AccountSettingsView: View {
                 showingImagePicker = true
             } label: {
                 Text("[\(NSLocalizedString("change_photo", comment: ""))]")
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(isEditingProfile ? Color.CT.textDim : Color.CT.accent)
             }
             .buttonStyle(.plain)
@@ -272,7 +272,7 @@ struct AccountSettingsView: View {
             sectionHeader(NSLocalizedString("identity_section", comment: ""))
             if isEditingProfile {
                 Text(NSLocalizedString("account_editing_profile", comment: ""))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.accent)
                     .padding(.horizontal, AccountSettingsLayout.sectionHintHorizontalPadding)
                     .padding(.bottom, AccountSettingsLayout.sectionHintBottomPadding)
@@ -295,7 +295,7 @@ struct AccountSettingsView: View {
                 Text(viewModel.isDiscoverable
                     ? NSLocalizedString("searchable_indicator", comment: "")
                     : NSLocalizedString("searchable_indicator_off", comment: ""))
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundStyle(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
             }
             .padding(.horizontal, AccountSettingsLayout.discoverableRowHorizontalPadding)
@@ -327,7 +327,7 @@ struct AccountSettingsView: View {
                                 ? NSLocalizedString("identity_fingerprint_copied", comment: "")
                                 : ownFingerprint
                         )
-                        .font(CTFont.regular(13))
+                        .font(CTFont.mono(13))
                         .foregroundStyle(Color.CT.accent)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
@@ -340,7 +340,7 @@ struct AccountSettingsView: View {
             } else {
                 profileRow(label: NSLocalizedString("identity_fingerprint", comment: "")) {
                     Text(NSLocalizedString("identity_fingerprint_unknown", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.textDim)
                 }
             }
@@ -350,10 +350,10 @@ struct AccountSettingsView: View {
             profileRow(label: NSLocalizedString("status", comment: "")) {
                 HStack(spacing: AccountSettingsLayout.inlineStatusSpacing) {
                     Text("ONLINE")
-                        .font(CTFont.regular(14))
+                        .font(CTFont.ui(14))
                         .foregroundStyle(Color.CT.accent)
                     Image(systemName: "chevron.right")
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.accent.opacity(AccountSettingsLayout.inlineStatusAccentOpacity))
                 }
             }
@@ -374,7 +374,7 @@ struct AccountSettingsView: View {
                     ? "\(uid.prefix(8))...\(uid.suffix(2))"
                     : uid
                 Text(short)
-                    .font(CTFont.regular(14))
+                    .font(CTFont.mono(14))
                     .foregroundStyle(Color.CT.textDim)
             }
             flatRowDivider()
@@ -487,10 +487,10 @@ struct AccountSettingsView: View {
     private func sectionHeader(_ title: String, color: Color = Color.CT.accent) -> some View {
         HStack(spacing: AccountSettingsLayout.sectionHeaderSpacing) {
             Text(">")
-                .font(CTFont.bold(12))
+                .font(CTFont.ui(12, weight: .bold))
                 .foregroundStyle(color)
             Text(title.uppercased())
-                .font(CTFont.bold(12))
+                .font(CTFont.ui(12, weight: .bold))
                 .foregroundStyle(color)
                 .tracking(AccountSettingsLayout.sectionHeaderTracking)
         }
@@ -501,7 +501,7 @@ struct AccountSettingsView: View {
     private func profileRow<V: View>(label: String, @ViewBuilder value: () -> V) -> some View {
         HStack {
             Text(label.lowercased())
-                .font(CTFont.regular(14))
+                .font(CTFont.ui(14))
                 .foregroundStyle(Color.CT.textDim)
             Spacer()
             value()
@@ -525,7 +525,7 @@ struct AccountSettingsView: View {
         Button(action: action) {
             HStack {
                 Text(label.lowercased())
-                    .font(CTFont.regular(14))
+                    .font(CTFont.ui(14))
                     .foregroundStyle(labelColor)
                 Spacer()
                 rowAccessoryView(accessory, color: accessoryColor)
@@ -546,12 +546,12 @@ struct AccountSettingsView: View {
         NavigationLink(destination: destination()) {
             HStack {
                 Text(label.lowercased())
-                    .font(CTFont.regular(14))
+                    .font(CTFont.ui(14))
                     .foregroundStyle(labelColor)
                 Spacer()
                 if let trailingText {
                     Text(trailingText)
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.accent)
                 } else {
                     rowAccessoryView(.chevron, color: Color.CT.accent)
@@ -569,11 +569,11 @@ struct AccountSettingsView: View {
         switch accessory {
         case .chevron:
             Image(systemName: "chevron.right")
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundStyle(color)
         case .text(let value):
             Text(value)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundStyle(color)
         }
     }
@@ -596,7 +596,7 @@ struct AccountSettingsView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         TextField(label.lowercased(), text: value)
-                            .font(CTFont.regular(15))
+                            .font(CTFont.ui(15))
                             .foregroundStyle(Color.CT.text)
                             .autocorrectionDisabled()
                             #if os(iOS)
@@ -631,11 +631,11 @@ struct AccountSettingsView: View {
             } else {
                 HStack {
                     Text(label.lowercased())
-                        .font(CTFont.regular(14))
+                        .font(CTFont.ui(14))
                         .foregroundStyle(Color.CT.textDim)
                     Spacer()
                     Text(value.wrappedValue.isEmpty ? "—" : value.wrappedValue)
-                        .font(CTFont.regular(14))
+                        .font(CTFont.ui(14))
                         .foregroundStyle(Color.CT.text)
                 }
                 .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
@@ -644,13 +644,13 @@ struct AccountSettingsView: View {
 
             if let err = errorMessage, !err.isEmpty {
                 Text("\(err)")
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.danger)
                     .padding(.horizontal, AccountSettingsLayout.sectionHintHorizontalPadding)
                     .padding(.bottom, AccountSettingsLayout.sectionHintBottomPadding)
             } else if !isEditing, let hint {
                 Text("\(hint)")
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, AccountSettingsLayout.sectionHintHorizontalPadding)
                     .padding(.bottom, AccountSettingsLayout.sectionHintBottomPadding)

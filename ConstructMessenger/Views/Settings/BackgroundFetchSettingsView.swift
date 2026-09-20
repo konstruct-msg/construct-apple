@@ -31,7 +31,7 @@ struct BackgroundFetchSettingsContent: View {
             CTSectionGroup {
                 HStack(spacing: BackgroundFetchSettingsLayout.toggleRowSpacing) {
                     Text(LocalizedStringKey("enable_background_fetch"))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(
                             isLowPowerModeEnabled
                             ? Color.CT.textDim.opacity(BackgroundFetchSettingsLayout.disabledRowOpacity)
@@ -73,12 +73,12 @@ struct BackgroundFetchSettingsContent: View {
             CTSectionGroup {
                 HStack {
                     Text(LocalizedStringKey("background_fetch_status"))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim)
                     Spacer()
                     CTStatusBadge(status: statusBadge)
                     Text(statusText)
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim)
                 }
                 .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
@@ -88,11 +88,11 @@ struct BackgroundFetchSettingsContent: View {
                     CTSep(style: .thin)
                     HStack {
                         Text(LocalizedStringKey("background_fetch_last_check"))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                         Spacer()
                         Text(formatLastCheckDate(lastFetch))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                     }
                     .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
@@ -106,10 +106,10 @@ struct BackgroundFetchSettingsContent: View {
                 CTSectionGroup {
                     VStack(alignment: .leading, spacing: BackgroundFetchSettingsLayout.warningSpacing) {
                         Text(LocalizedStringKey("background_fetch_low_power_mode_title"))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                         Text(LocalizedStringKey("background_fetch_low_power_mode_description"))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.textDim)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -137,11 +137,11 @@ struct BackgroundFetchSettingsContent: View {
     private var intervalHeader: some View {
         HStack {
             Text(LocalizedStringKey("background_fetch_interval"))
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundStyle(Color.CT.text)
             Spacer()
             Text(BackgroundFetchConfig.formatInterval(intervalMinutes))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundStyle(Color.CT.accent)
         }
     }
@@ -170,7 +170,7 @@ struct BackgroundFetchSettingsContent: View {
                         )
                     if BackgroundFetchSettingsConfig.intervalPresets.contains(value) {
                         Text(BackgroundFetchConfig.formatInterval(value))
-                            .font(CTFont.regular(BackgroundFetchSettingsLayout.tickLabelFontSize))
+                            .font(CTFont.ui(BackgroundFetchSettingsLayout.tickLabelFontSize))
                             .foregroundStyle(value == intervalMinutes ? Color.CT.accent : Color.CT.textDim)
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)
@@ -178,7 +178,7 @@ struct BackgroundFetchSettingsContent: View {
                             .minimumScaleFactor(BackgroundFetchSettingsLayout.tickLabelMinimumScale)
                     } else {
                         Text(" ")
-                            .font(CTFont.regular(BackgroundFetchSettingsLayout.tickLabelFontSize))
+                            .font(CTFont.ui(BackgroundFetchSettingsLayout.tickLabelFontSize))
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -262,7 +262,7 @@ struct BackgroundFetchSettingsContent: View {
     @ViewBuilder
     private func sectionFooter(_ key: String) -> some View {
         Text(LocalizedStringKey(key))
-            .font(CTFont.regular(11))
+            .font(CTFont.caption)
             .foregroundStyle(Color.CT.textDim)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)

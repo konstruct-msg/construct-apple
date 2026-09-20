@@ -48,7 +48,7 @@ struct HistoryTransferSendView: View {
                         statusLabel
                         if let file = exportedFile {
                             Text(NSLocalizedString("history_sync_file_ready", comment: ""))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.textDim)
                                 .multilineTextAlignment(.center)
                             CTSectionGroup {
@@ -59,7 +59,7 @@ struct HistoryTransferSendView: View {
                                             .foregroundStyle(Color.CT.accent)
                                             .frame(minWidth: 22, alignment: .center)
                                         Text(NSLocalizedString("history_sync_share_file", comment: ""))
-                                            .font(CTFont.regular(15))
+                                            .font(CTFont.ui(15))
                                             .foregroundStyle(Color.CT.text)
                                         Spacer()
                                     }
@@ -72,7 +72,7 @@ struct HistoryTransferSendView: View {
                             HStack(spacing: CTLayout.inlinePad) {
                                 ProgressView()
                                 Text(NSLocalizedString("history_sync_preparing_file", comment: ""))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.textDim)
                             }
                         } else if coordinator.phase == .idle || coordinator.phase == .saveFileInstead {
@@ -125,7 +125,7 @@ struct HistoryTransferSendView: View {
             }
         }()
         Text(NSLocalizedString(key, comment: ""))
-            .font(CTFont.regular(14))
+            .font(CTFont.ui(14))
             .foregroundStyle(Color.CT.text)
             .multilineTextAlignment(.center)
     }

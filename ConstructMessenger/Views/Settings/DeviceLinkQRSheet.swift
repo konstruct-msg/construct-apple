@@ -145,7 +145,7 @@ struct DeviceLinkQRSheet: View {
                 .tint(Color.CT.textDim)
                 .scaleEffect(DeviceLinkQRLayout.loadingIndicatorScale)
             Text(NSLocalizedString("generating", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -159,10 +159,10 @@ struct DeviceLinkQRSheet: View {
                 // Sub-header
                 HStack(spacing: DeviceLinkQRLayout.sectionHeaderSpacing) {
                     Text(">")
-                        .font(CTFont.bold(11))
+                        .font(CTFont.badge)
                         .foregroundColor(Color.CT.accent)
                     Text(NSLocalizedString("device_link_section", comment: "").uppercased())
-                        .font(CTFont.bold(11))
+                        .font(CTFont.badge)
                         .foregroundColor(Color.CT.accent)
                         .tracking(2)
                     Spacer()
@@ -171,7 +171,7 @@ struct DeviceLinkQRSheet: View {
                 .padding(.top, DeviceLinkQRLayout.sectionHeaderTopPadding)
 
                 Text(NSLocalizedString("device_link_qr_instructions", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DeviceLinkQRLayout.instructionsHorizontalPadding)
@@ -182,13 +182,13 @@ struct DeviceLinkQRSheet: View {
 
                 if !countdown.isEmpty {
                     Text(countdown)
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundColor(Color.CT.textDim)
                         .onAppear { startCountdown() }
                 }
 
                 Text(NSLocalizedString("device_link_scan_hint", comment: ""))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DeviceLinkQRLayout.scanHintHorizontalPadding)
@@ -227,10 +227,10 @@ struct DeviceLinkQRSheet: View {
     private var expiredView: some View {
         VStack(spacing: DeviceLinkQRLayout.expiredStateSpacing) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(CTFont.regular(DeviceLinkQRLayout.statusIconSize))
+                .font(CTFont.ui(DeviceLinkQRLayout.statusIconSize))
                 .foregroundColor(Color.CT.danger)
             Text(NSLocalizedString("device_link_expired", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
             Button {
                 Task { await vm.generateLinkCode() }
@@ -253,10 +253,10 @@ struct DeviceLinkQRSheet: View {
     private func errorView(message: String) -> some View {
         VStack(spacing: DeviceLinkQRLayout.expiredStateSpacing) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(CTFont.regular(DeviceLinkQRLayout.statusIconSize))
+                .font(CTFont.ui(DeviceLinkQRLayout.statusIconSize))
                 .foregroundColor(.orange)
             Text(message)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, DeviceLinkQRLayout.errorMessageHorizontalPadding)

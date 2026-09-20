@@ -45,14 +45,14 @@ struct ImportBackupView: View {
                     )
 
                     Text(NSLocalizedString("backup_import_words_subtitle", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 20)
                         .padding(.top, 4)
                         .padding(.bottom, 12)
 
                     TextEditor(text: $mnemonicText)
-                        .font(CTFont.regular(14))
+                        .font(CTFont.mono(14))
                         .foregroundStyle(Color.CT.text)
                         .scrollContentBackground(.hidden)
                         .scrollIndicators(.hidden)
@@ -70,7 +70,7 @@ struct ImportBackupView: View {
 
                     HStack {
                         Text("\(wordCount)/12")
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundStyle(wordCount == 12 ? Color.CT.accent : Color.CT.textDim)
                         Spacer()
                     }
@@ -88,18 +88,18 @@ struct ImportBackupView: View {
                         HStack {
                             if let url = selectedFileURL {
                                 Text(url.lastPathComponent)
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.text)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                             } else {
                                 Text(NSLocalizedString("backup_import_select_file", comment: ""))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.accent)
                             }
                             Spacer()
                             Image(systemName: "chevron.right")
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.accent)
                         }
                         .padding(.horizontal, 20)
@@ -111,7 +111,7 @@ struct ImportBackupView: View {
                         .padding(.bottom, 20)
 
                     Text(NSLocalizedString("backup_restore_warning", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.danger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 20)
@@ -122,7 +122,7 @@ struct ImportBackupView: View {
 
                     if let err = errorMessage {
                         Text(err)
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundStyle(Color.CT.danger)
                             .padding(.horizontal, 20)
                             .padding(.bottom, 16)
@@ -132,7 +132,7 @@ struct ImportBackupView: View {
                         HStack {
                             if isImporting { ProgressView().tint(Color.CT.bg).padding(.trailing, 6) }
                             Text(NSLocalizedString("backup_restore_button", comment: ""))
-                                .font(CTFont.bold(14))
+                                .font(CTFont.headline)
                                 .foregroundStyle(Color.CT.bg)
                         }
                         .frame(maxWidth: .infinity)

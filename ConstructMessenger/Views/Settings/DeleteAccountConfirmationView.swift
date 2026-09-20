@@ -56,12 +56,12 @@ struct DeleteAccountConfirmationView: View {
             Spacer()
 
             Text(LocalizedStringKey("delete_my_account"))
-                .font(CTFont.bold(20))
+                .font(CTFont.ui(20, weight: .bold))
                 .foregroundStyle(Color.CT.text)
                 .padding(.bottom, DeleteAccountSheetLayout.titleBottomPadding)
 
             Text(LocalizedStringKey("delete_account_confirmation_message"))
-                .font(CTFont.regular(14))
+                .font(CTFont.ui(14))
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, DeleteAccountSheetLayout.messageHorizontalPadding)
@@ -72,7 +72,7 @@ struct DeleteAccountConfirmationView: View {
                     showLocalDeleteConfirm = true
                 } label: {
                     Text(LocalizedStringKey("delete_account_local_only"))
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .underline()
                         .foregroundStyle(Color.CT.danger.opacity(DeleteAccountSheetLayout.localDeleteWarningOpacity))
                 }
@@ -95,7 +95,7 @@ struct DeleteAccountConfirmationView: View {
                         startPendingDelete()
                     } label: {
                         Text(LocalizedStringKey("delete_account"))
-                            .font(CTFont.bold(16))
+                            .font(CTFont.ui(16, weight: .bold))
                             .frame(maxWidth: .infinity)
                             .frame(height: DeleteAccountSheetLayout.actionButtonHeight)
                             .background(
@@ -120,7 +120,7 @@ struct DeleteAccountConfirmationView: View {
                 if pendingSecondsLeft == nil {
                     Button(action: dismissWithoutDeleting) {
                         Text(LocalizedStringKey("cancel"))
-                            .font(CTFont.regular(15))
+                            .font(CTFont.ui(15))
                             .foregroundStyle(Color.CT.textDim)
                     }
                     .buttonStyle(.plain)
@@ -174,7 +174,7 @@ struct DeleteAccountConfirmationView: View {
                 abortPendingDelete()
             } label: {
                 Text(String(format: NSLocalizedString("delete_account_abort_hint", comment: ""), secondsLeft))
-                    .font(CTFont.bold(15))
+                    .font(CTFont.ui(15, weight: .bold))
                     .frame(maxWidth: .infinity)
                     .frame(height: DeleteAccountSheetLayout.actionButtonHeight)
                     .background(

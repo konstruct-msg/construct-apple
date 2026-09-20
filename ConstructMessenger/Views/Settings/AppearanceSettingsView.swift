@@ -46,12 +46,12 @@ struct AppearanceSettingsView: View {
                                             color: theme.isAvailable ? theme.color : Color.CT.textDim
                                         )
                                         Text(theme.displayName)
-                                            .font(CTFont.bold(16))
+                                            .font(CTFont.ui(16, weight: .bold))
                                             .foregroundStyle(theme.isAvailable ? Color.CT.text : Color.CT.textDim)
                                         Spacer()
                                         if !theme.isAvailable {
                                             Text(LocalizedStringKey("settings_coming_soon"))
-                                                .font(CTFont.regular(10))
+                                                .font(CTFont.micro)
                                                 .foregroundStyle(Color.CT.textDim)
                                                 .padding(.horizontal, AppearanceSettingsConfig.availabilityBadgeHorizontalPadding)
                                                 .padding(.vertical, AppearanceSettingsConfig.availabilityBadgeVerticalPadding)
@@ -75,7 +75,7 @@ struct AppearanceSettingsView: View {
                         }
                     }
                     Text(LocalizedStringKey("theme_footer"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                 }
@@ -101,7 +101,7 @@ struct AppearanceSettingsView: View {
                                     // here — it reads the current preference, which would render
                                     // both rows in the selected face and show nothing.
                                     Text(face.displayName)
-                                        .font(face == .mono ? CTFont.bold(16) : .system(size: 16, weight: .bold))
+                                        .font(face == .mono ? CTFont.ui(16, weight: .bold) : .system(size: 16, weight: .bold))
                                         .foregroundStyle(Color.CT.text)
                                     Spacer()
                                     if chatFace == face {
@@ -118,7 +118,7 @@ struct AppearanceSettingsView: View {
                         }
                     }
                     Text(LocalizedStringKey("chat_font_footer"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                 }
@@ -134,7 +134,7 @@ struct AppearanceSettingsView: View {
                             } label: {
                                 HStack(spacing: AppearanceSettingsLayout.themeRowContentSpacing) {
                                     Text(size.displayName)
-                                        .font(CTFont.bold(16))
+                                        .font(CTFont.ui(16, weight: .bold))
                                         .foregroundStyle(Color.CT.text)
                                     Spacer()
                                     if textSize == size {
@@ -151,7 +151,7 @@ struct AppearanceSettingsView: View {
                         }
                     }
                     Text(LocalizedStringKey("text_size_footer"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                 }

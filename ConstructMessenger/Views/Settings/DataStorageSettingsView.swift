@@ -98,16 +98,16 @@ struct DataStorageSettingsView: View {
                         // Usage row
                         HStack(spacing: DataStorageSettingsLayout.rowContentSpacing) {
                             Image(systemName: "internaldrive")
-                                .font(CTFont.regular(DataStorageSettingsLayout.usageIconFontSize))
+                                .font(CTFont.ui(DataStorageSettingsLayout.usageIconFontSize))
                                 .foregroundStyle(Color.CT.textDim)
                                 .frame(width: SettingsLayout.rowIconMinWidth)
                             Text(NSLocalizedString("storage_media_cache", comment: "").uppercased())
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.text)
                                 .tracking(DataStorageSettingsLayout.sectionTitleTracking)
                             Spacer()
                             Text(formatBytes(cacheSize))
-                                .font(CTFont.bold(14))
+                                .font(CTFont.mono(14, weight: .bold))
                                 .foregroundStyle(cacheSize > 0 ? Color.CT.accent : Color.CT.textDim)
                                 .monospacedDigit()
                         }
@@ -148,7 +148,7 @@ struct DataStorageSettingsView: View {
                                 .frame(height: DataStorageSettingsLayout.usageBarHeight)
                                 Text(String(format: NSLocalizedString("storage_of_quota", comment: ""),
                                             formatBytes(cacheSize), formatBytes(Int64(maxDiskCacheBytesRaw))))
-                                    .font(CTFont.regular(10))
+                                    .font(CTFont.micro)
                                     .foregroundStyle(Color.CT.textDim)
                             }
                             .padding(.horizontal, DataStorageSettingsLayout.rowHorizontalPadding)
@@ -182,12 +182,12 @@ struct DataStorageSettingsView: View {
                         VStack(alignment: .leading, spacing: DataStorageSettingsLayout.quotaSectionSpacing) {
                             HStack {
                                 Text(NSLocalizedString("storage_limit", comment: "").uppercased())
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.textDim)
                                     .tracking(DataStorageSettingsLayout.sectionTitleTracking)
                                 Spacer()
                                 Text(currentQuotaLabel)
-                                    .font(CTFont.bold(14))
+                                    .font(CTFont.headline)
                                     .foregroundStyle(Color.CT.accent)
                             }
 
@@ -207,7 +207,7 @@ struct DataStorageSettingsView: View {
                                 ForEach(Array(quotas.enumerated()), id: \.offset) { pair in
                                     let i = pair.offset
                                     Text(pair.element.label)
-                                        .font(CTFont.regular(DataStorageSettingsLayout.quotaTickFontSize))
+                                        .font(CTFont.mono(DataStorageSettingsLayout.quotaTickFontSize))
                                         .foregroundStyle(
                                             selectedQuotaIndex == i
                                                 ? Color.CT.accent : Color.CT.textDim
@@ -235,11 +235,11 @@ struct DataStorageSettingsView: View {
                             } label: {
                                 HStack(spacing: DataStorageSettingsLayout.rowContentSpacing) {
                                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                                        .font(CTFont.regular(DataStorageSettingsLayout.autoEvictionCheckIconSize))
+                                        .font(CTFont.ui(DataStorageSettingsLayout.autoEvictionCheckIconSize))
                                         .foregroundStyle(isSelected ? Color.CT.accent : Color.CT.textDim)
                                         .frame(width: SettingsLayout.rowIconMinWidth)
                                     Text(pair.element.label.uppercased())
-                                        .font(CTFont.regular(13))
+                                        .font(CTFont.body)
                                         .foregroundStyle(Color.CT.text)
                                         .tracking(DataStorageSettingsLayout.sectionTitleTracking)
                                     Spacer()
@@ -265,14 +265,14 @@ struct DataStorageSettingsView: View {
                                 HStack(spacing: DataStorageSettingsLayout.rowContentSpacing) {
                                     Image(systemName: evictAfterDays == pair.element.days
                                           ? "checkmark.circle.fill" : "circle")
-                                        .font(CTFont.regular(DataStorageSettingsLayout.autoEvictionCheckIconSize))
+                                        .font(CTFont.ui(DataStorageSettingsLayout.autoEvictionCheckIconSize))
                                         .foregroundStyle(
                                             evictAfterDays == pair.element.days
                                                 ? Color.CT.accent : Color.CT.textDim
                                         )
                                         .frame(width: SettingsLayout.rowIconMinWidth)
                                     Text(pair.element.label.uppercased())
-                                        .font(CTFont.regular(13))
+                                        .font(CTFont.body)
                                         .foregroundStyle(Color.CT.text)
                                         .tracking(DataStorageSettingsLayout.sectionTitleTracking)
                                     Spacer()
@@ -322,7 +322,7 @@ struct DataStorageSettingsView: View {
     @ViewBuilder
     private func sectionFooter(_ key: String) -> some View {
         Text(LocalizedStringKey(key))
-            .font(CTFont.regular(11))
+            .font(CTFont.caption)
             .foregroundStyle(Color.CT.textDim)
             .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
             .padding(.top, DataStorageSettingsLayout.footerTopPadding)

@@ -32,7 +32,7 @@ struct HistoryTransferReceiveView: View {
                 ScrollView {
                     LazyVStack(spacing: 24) {
                         Text(NSLocalizedString(statusKey, comment: ""))
-                            .font(CTFont.regular(14))
+                            .font(CTFont.ui(14))
                             .foregroundStyle(Color.CT.text)
                             .multilineTextAlignment(.center)
                     }

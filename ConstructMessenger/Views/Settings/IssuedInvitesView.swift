@@ -63,7 +63,7 @@ struct IssuedInvitesView: View {
                             InviteConfig.ttlDescription
                         )
                     )
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, CTLayout.edgePad)
                     .padding(.top, CTLayout.edgePad)
@@ -71,13 +71,13 @@ struct IssuedInvitesView: View {
                     // Why only some rows offer revocation. An asymmetry nobody can account
                     // for reads as a bug in the rows that lack the button.
                     Text("> " + NSLocalizedString("issued_invites_revoke_scope", comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, CTLayout.edgePad)
 
                     if let notice {
                         Text("> \(notice.text)")
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundStyle(notice.isError ? Color.CT.danger : Color.CT.accent)
                             .padding(.horizontal, CTLayout.edgePad)
                             .accessibilityIdentifier(A11y.IssuedInvites.notice)
@@ -131,7 +131,7 @@ struct IssuedInvitesView: View {
                 InviteConfig.ttlDescription
             )
         )
-        .font(CTFont.regular(12))
+        .font(CTFont.secondary)
         .foregroundStyle(Color.CT.textDim)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, CTLayout.edgePad)
@@ -148,10 +148,10 @@ struct IssuedInvitesView: View {
 
             VStack(alignment: .leading, spacing: IssuedInvitesLayout.rowMetaSpacing) {
                 Text(label(for: act))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.text)
                 Text(remainingText(for: act))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
             }
             // Scoped to the label, not to the row. An identifier on a container overwrites
@@ -180,7 +180,7 @@ struct IssuedInvitesView: View {
         } else {
             Button { pendingRevoke = act } label: {
                 Text(NSLocalizedString("revoke", comment: "").lowercased())
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.danger)
                     .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
                     .padding(.vertical, ContactQRCodeLayout.refreshButtonVerticalPadding)

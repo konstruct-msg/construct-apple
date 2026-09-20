@@ -41,7 +41,7 @@ struct DraftsView: View {
                         .frame(minHeight: 120, maxHeight: 180)
                         .padding(8)
                         .background(Color.CT.bgMsg)
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.text)
                         .scrollContentBackground(.hidden)
                         .scrollIndicators(.hidden)
@@ -52,7 +52,7 @@ struct DraftsView: View {
                         addDraft()
                     } label: {
                         Text(LocalizedStringKey("save_draft"))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.text)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)

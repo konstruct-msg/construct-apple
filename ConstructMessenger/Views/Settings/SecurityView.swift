@@ -46,10 +46,10 @@ struct SecurityView: View {
                         Text(securityViewModel.isPinEnabled
                              ? LocalizedStringKey("change_pin_code")
                              : LocalizedStringKey("enable_pin_code"))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundStyle(Color.CT.text)
                         Spacer()
-                        Image(systemName: "chevron.right").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+                        Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
                     }
                     .securityRowInsets()
                     .contentShape(Rectangle())
@@ -63,7 +63,7 @@ struct SecurityView: View {
                                   color: securityViewModel.isBiometricEnabled ? Color.CT.accent : Color.CT.textDim)
                         Text(String(format: NSLocalizedString("use_biometric", comment: ""),
                                     securityViewModel.biometricDisplayName))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundStyle(Color.CT.text)
                         Spacer()
                         Toggle("", isOn: $securityViewModel.isBiometricEnabled)
@@ -82,7 +82,7 @@ struct SecurityView: View {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(Color.CT.danger)
                             Text(LocalizedStringKey("disable_pin_code"))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.danger)
                             Spacer()
                         }
@@ -99,22 +99,22 @@ struct SecurityView: View {
                     HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                         VStack(alignment: .leading, spacing: SecuritySettingsLayout.recoveryStatusSpacing) {
                             Text(LocalizedStringKey("account_recovery_seed"))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.text)
                             if recoveryVM.isSetup, let fp = recoveryVM.fingerprint {
                                 Text(fp)
-                                    .font(CTFont.regular(11))
+                                    .font(CTFont.mono(11))
                                     .foregroundStyle(Color.CT.textDim)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                             } else if recoveryVM.statusLoaded && !recoveryVM.isSetup {
                                 Text(NSLocalizedString("recovery_not_configured", comment: ""))
-                                    .font(CTFont.regular(11))
+                                    .font(CTFont.caption)
                                     .foregroundStyle(.orange)
                             }
                         }
                         Spacer()
-                        Image(systemName: "chevron.right").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+                        Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
                     }
                     .securityRowInsets()
                     .contentShape(Rectangle())
@@ -134,10 +134,10 @@ struct SecurityView: View {
                         HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                             CTRowIcon(sf: "exclamationmark.lock.fill", color: Color.CT.danger)
                             Text(LocalizedStringKey("duress_pin_change"))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.text)
                             Spacer()
-                            Image(systemName: "chevron.right").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+                            Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
                         }
                         .securityRowInsets()
                         .contentShape(Rectangle())
@@ -150,7 +150,7 @@ struct SecurityView: View {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(Color.CT.danger)
                             Text(LocalizedStringKey("disable_duress_pin"))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.danger)
                             Spacer()
                         }
@@ -164,11 +164,11 @@ struct SecurityView: View {
                             CTRowIcon(sf: "exclamationmark.lock", color: securityViewModel.isPinEnabled
                                       ? Color.CT.textDim : Color.CT.textDim.opacity(0.4))
                             Text(LocalizedStringKey("enable_duress_pin"))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(securityViewModel.isPinEnabled
                                                  ? Color.CT.text : Color.CT.text.opacity(0.4))
                             Spacer()
-                            Image(systemName: "chevron.right").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+                            Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
                         }
                         .securityRowInsets()
                         .contentShape(Rectangle())
@@ -190,12 +190,12 @@ struct SecurityView: View {
                               color: lockdown.isActive ? .orange : Color.CT.textDim)
                     VStack(alignment: .leading, spacing: SecuritySettingsLayout.lockStatusSpacing) {
                         Text(LocalizedStringKey("lockdown_mode"))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundStyle(Color.CT.text)
                         if lockdown.isActive, let since = lockdown.activatedAt {
                             Text(String(format: NSLocalizedString("lockdown_active_since", comment: ""),
                                         since.formatted(date: .abbreviated, time: .shortened)))
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundStyle(.orange)
                         }
                     }
@@ -245,7 +245,7 @@ struct SecurityView: View {
                 HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                     CTRowIcon(sf: "eye.slash.fill", color: stealthOn ? Color.CT.accent : Color.CT.danger)
                     Text(LocalizedStringKey("stealth_title"))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.text)
                     Spacer()
                     CTStatusBadge(status: stealthOn ? .on : .error, size: 11)
@@ -293,7 +293,7 @@ struct SecurityView: View {
                 HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                     CTRowIcon(sf: settingsViewModel.isDiscoverable ? "eye.fill" : "eye.slash", color: settingsViewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
                     Text(LocalizedStringKey("searchable_toggle_title"))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(hasUsername ? Color.CT.text : Color.CT.textDim)
                     Spacer()
                     if settingsViewModel.isLoadingDiscoverable {
@@ -385,13 +385,13 @@ struct SecurityView: View {
             HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                 CTRowIcon(sf: "timer")
                 Text(LocalizedStringKey("lock_delay"))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.text)
                 Spacer()
                 Text(securityViewModel.lockDelay.localizedTitle)
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundStyle(Color.CT.textDim)
-                Image(systemName: "chevron.right").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+                Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
             }
             .securityRowInsets()
             .contentShape(Rectangle())
@@ -424,7 +424,7 @@ struct SecurityView: View {
         top: CGFloat = SecuritySettingsLayout.hintTopPadding
     ) -> some View {
         Text(key)
-            .font(CTFont.regular(11))
+            .font(CTFont.caption)
             .foregroundStyle(color)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
@@ -472,12 +472,12 @@ private struct KTStatusSection: View {
         HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
             CTRowIcon(sf: "number", color: statusColor)
             Text(LocalizedStringKey("kt_status"))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundStyle(Color.CT.text)
             Spacer()
             CTStatusBadge(status: statusBadge, size: 12)
             Text(statusText)
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundStyle(statusColor)
                 .padding(.trailing, KeyTransparencySettingsLayout.statusTrailingPadding)
         }
@@ -492,7 +492,7 @@ private struct KTStatusSection: View {
         if failureCount > 0, let failedAt = lastFailedAt {
                 Text(String(format: NSLocalizedString("kt_last_failure_at", comment: ""),
                         Self.relativeFormatter.localizedString(for: failedAt, relativeTo: Date())))
-                .font(CTFont.regular(10))
+                .font(CTFont.micro)
                 .foregroundStyle(Color.CT.danger.opacity(0.8))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, KeyTransparencySettingsLayout.hintHorizontalPadding)
@@ -502,7 +502,7 @@ private struct KTStatusSection: View {
         Text(failureCount > 0
              ? LocalizedStringKey("kt_failure_hint")
              : LocalizedStringKey("kt_hint"))
-            .font(CTFont.regular(11))
+            .font(CTFont.caption)
             .foregroundStyle(failureCount > 0
                              ? Color.CT.danger
                              : Color.CT.textDim.opacity(0.6))

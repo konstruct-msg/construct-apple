@@ -59,7 +59,7 @@ struct ExportBackupView: View {
                 CTSettingsSectionHeader(title: NSLocalizedString("backup_warning_header", comment: ""))
 
                 Text(NSLocalizedString("backup_export_warning", comment: ""))
-                    .font(CTFont.regular(14))
+                    .font(CTFont.ui(14))
                     .foregroundStyle(Color.CT.text)
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
@@ -68,7 +68,7 @@ struct ExportBackupView: View {
                 Rectangle().fill(Color.CT.noise).frame(height: 1)
 
                 Text(NSLocalizedString("backup_mnemonic_warning", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.danger)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
@@ -79,7 +79,7 @@ struct ExportBackupView: View {
 
                 if let err = errorMessage {
                     Text(err)
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.danger)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 12)
@@ -89,7 +89,7 @@ struct ExportBackupView: View {
                     HStack {
                         if isWorking { ProgressView().tint(Color.CT.bg).padding(.trailing, 6) }
                         Text(NSLocalizedString("backup_generate_button", comment: ""))
-                            .font(CTFont.bold(14))
+                            .font(CTFont.headline)
                             .foregroundStyle(Color.CT.bg)
                     }
                     .frame(maxWidth: .infinity)
@@ -111,7 +111,7 @@ struct ExportBackupView: View {
                 CTSettingsSectionHeader(title: NSLocalizedString("backup_mnemonic_title", comment: ""))
 
                 Text(NSLocalizedString("backup_mnemonic_subtitle", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 20)
                     .padding(.top, 4)
@@ -123,11 +123,11 @@ struct ExportBackupView: View {
                     forEachIndexed(words) { idx, word in
                         HStack(spacing: 4) {
                             Text("\(idx + 1).")
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundStyle(Color.CT.textDim)
                                 .frame(width: 20, alignment: .trailing)
                             Text(word)
-                                .font(CTFont.bold(13))
+                                .font(CTFont.bodyEmphasis)
                                 .foregroundStyle(Color.CT.text)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -143,7 +143,7 @@ struct ExportBackupView: View {
                     PlatformClipboard.copy(mnemonic)
                 } label: {
                     Text(NSLocalizedString("backup_copy_words", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.accent)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -155,7 +155,7 @@ struct ExportBackupView: View {
                 Rectangle().fill(Color.CT.noise).frame(height: 1)
 
                 Text(NSLocalizedString("backup_mnemonic_warning", comment: ""))
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundStyle(Color.CT.danger)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
@@ -170,7 +170,7 @@ struct ExportBackupView: View {
                             .font(.system(size: 16, weight: .regular))
                             .foregroundStyle(confirmedSaved ? Color.CT.accent : Color.CT.textDim)
                         Text(NSLocalizedString("backup_confirm_saved", comment: ""))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundStyle(Color.CT.text)
                         Spacer()
                     }
@@ -182,7 +182,7 @@ struct ExportBackupView: View {
 
                 Button { step = 2 } label: {
                     Text(NSLocalizedString("backup_next_button", comment: ""))
-                        .font(CTFont.bold(14))
+                        .font(CTFont.headline)
                         .foregroundStyle(Color.CT.bg)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -203,7 +203,7 @@ struct ExportBackupView: View {
                 CTSettingsSectionHeader(title: NSLocalizedString("backup_export_step_header", comment: ""))
 
                 Text(NSLocalizedString("backup_export_step_subtitle", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 20)
                     .padding(.top, 4)
@@ -211,7 +211,7 @@ struct ExportBackupView: View {
 
                 if let err = errorMessage {
                     Text(err)
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.danger)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 16)
@@ -220,7 +220,7 @@ struct ExportBackupView: View {
                 if let url = backupURL {
                     ShareLink(item: url, preview: SharePreview(url.lastPathComponent)) {
                         Text(NSLocalizedString("backup_share_file", comment: ""))
-                            .font(CTFont.bold(14))
+                            .font(CTFont.headline)
                             .foregroundStyle(Color.CT.bg)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
@@ -229,7 +229,7 @@ struct ExportBackupView: View {
                     .padding(.horizontal, 20)
 
                     Text(url.lastPathComponent)
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
@@ -240,7 +240,7 @@ struct ExportBackupView: View {
                             Text(isWorking
                                  ? NSLocalizedString("backup_export_generating", comment: "")
                                  : NSLocalizedString("backup_create_file", comment: ""))
-                                .font(CTFont.bold(14))
+                                .font(CTFont.headline)
                                 .foregroundStyle(Color.CT.bg)
                         }
                         .frame(maxWidth: .infinity)

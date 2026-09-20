@@ -50,7 +50,7 @@ struct STTSettingsSection: View {
                 // Auto-transcribe toggle
                 HStack {
                     Text(NSLocalizedString("stt_auto_transcribe", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim)
                     Spacer()
                     Toggle("", isOn: $autoTranscribe)
@@ -65,7 +65,7 @@ struct STTSettingsSection: View {
                 // Engine selection
                 HStack {
                     Text(NSLocalizedString("stt_engine_label", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim)
                     Spacer()
                     Menu(selectedEngine.displayName) {
@@ -75,7 +75,7 @@ struct STTSettingsSection: View {
                             }
                         }
                     }
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.accent)
                 }
                 .padding(.horizontal, 12)
@@ -86,10 +86,10 @@ struct STTSettingsSection: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(NSLocalizedString("stt_translate_toggle", comment: ""))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                         Text(NSLocalizedString("stt_translate_footer", comment: ""))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.textDim.opacity(0.6))
                     }
                     Spacer()
@@ -125,7 +125,7 @@ struct STTSettingsSection: View {
             }
 
             Text(NSLocalizedString("stt_footer", comment: ""))
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundStyle(Color.CT.textDim)
                 .padding(.horizontal, 20)
                 .padding(.top, 6)
@@ -156,7 +156,7 @@ struct STTSettingsSection: View {
         #else
         HStack {
             Text(NSLocalizedString("stt_language_label", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
             Spacer()
             Menu(currentName) {
@@ -168,7 +168,7 @@ struct STTSettingsSection: View {
                     Button(lang.name) { transcriptionLanguage = lang.code }
                 }
             }
-            .font(CTFont.regular(13))
+            .font(CTFont.body)
             .foregroundColor(Color.CT.accent)
         }
         .padding(.horizontal, 12)
@@ -217,7 +217,7 @@ struct STTSettingsSection: View {
         let state = modelManager.modelStates[model] ?? .notDownloaded
         HStack(spacing: 0) {
             Text(model.displayName)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(preferredModel == model ? Color.CT.accent : Color.CT.text)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 13)
@@ -261,7 +261,7 @@ struct STTSettingsSection: View {
                     Image(systemName: "arrow.down.circle.fill")
                         .font(.system(size: 13))
                     Text(NSLocalizedString("stt_download", comment: ""))
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                 }
                 .foregroundColor(Color.CT.accent)
             }
@@ -274,7 +274,7 @@ struct STTSettingsSection: View {
                     .scaleEffect(0.65)
                     .tint(Color.CT.accent)
                 Text(String(format: "%.0f%%", progress * 100))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundColor(Color.CT.textDim)
             }
 
@@ -311,7 +311,7 @@ struct STTSettingsSection: View {
                     Image(systemName: "exclamationmark.arrow.circlepath")
                         .font(.system(size: 13))
                     Text(NSLocalizedString("stt_retry_download", comment: ""))
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                 }
                 .foregroundColor(Color.CT.danger)
             }

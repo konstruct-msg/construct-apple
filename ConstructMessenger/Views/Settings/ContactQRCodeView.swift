@@ -71,10 +71,10 @@ struct ContactQRCodeView: View {
                     // Identity header
                     VStack(spacing: ContactQRCodeLayout.identityHeaderSpacing) {
                         Text(displayName)
-                            .font(CTFont.bold(15))
+                            .font(CTFont.ui(15, weight: .bold))
                             .foregroundStyle(Color.CT.text)
                         Text(NSLocalizedString("qr_caption_trust", comment: ""))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundStyle(Color.CT.accent.opacity(0.5))
                     }
                     .frame(maxWidth: .infinity)
@@ -148,10 +148,10 @@ struct ContactQRCodeView: View {
                 .overlay {
                     VStack(spacing: ContactQRCodeLayout.qrCodeErrorSpacing) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(CTFont.regular(20))
+                            .font(CTFont.ui(20))
                             .foregroundStyle(Color.CT.danger)
                         Text(error)
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundStyle(Color.CT.textDim)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, ContactQRCodeLayout.qrCodeErrorHorizontalPadding)
@@ -181,7 +181,7 @@ struct ContactQRCodeView: View {
         if previewPayload == nil, qrPayloadBytes != nil || generationError != nil {
             Button { regenerateQRCode() } label: {
                 Text(NSLocalizedString("qr_new_code", comment: "").lowercased())
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.accent)
                     .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
                     .padding(.vertical, ContactQRCodeLayout.refreshButtonVerticalPadding)
@@ -225,7 +225,7 @@ struct ContactQRCodeView: View {
                 Image(systemName: copyFeedback == .idle ? "link" : "checkmark")
                     .font(.system(size: SettingsShareLayout.actionIconSize, weight: .regular))
                 Text(copyLabel.uppercased())
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                     .contentTransition(.numericText())
@@ -255,12 +255,12 @@ struct ContactQRCodeView: View {
                     InviteConfig.ttlDescription
                 )
             )
-            .font(CTFont.regular(11))
+            .font(CTFont.caption)
             .foregroundStyle(Color.CT.textDim)
 
             if let copyError {
                 Text("> \(copyError)")
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.danger)
             }
         }

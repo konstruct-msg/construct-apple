@@ -39,7 +39,7 @@ struct TranscriptionSettingsView: View {
                 CTSectionGroup {
                     HStack {
                         Text(NSLocalizedString("voice_continuous_playback", comment: ""))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                         Spacer()
                         Toggle("", isOn: $continuousVoicePlayback)
@@ -67,7 +67,7 @@ struct TranscriptionSettingsView: View {
 @ViewBuilder
 private func sectionFooter(_ key: String) -> some View {
     Text(LocalizedStringKey(key))
-        .font(CTFont.regular(11))
+        .font(CTFont.caption)
         .foregroundStyle(Color.CT.textDim)
         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
         .padding(.top, DataStorageSettingsLayout.footerTopPadding)

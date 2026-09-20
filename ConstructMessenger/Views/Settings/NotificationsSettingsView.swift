@@ -48,7 +48,7 @@ struct NotificationsSettingsView: View {
                 CTSectionGroup {
                     HStack {
                         Text(LocalizedStringKey("enable_notifications"))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                         Spacer()
                         Toggle("", isOn: $notificationsEnabled)
@@ -59,7 +59,7 @@ struct NotificationsSettingsView: View {
                     .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
                 }
                 Text(LocalizedStringKey("notifications_footer"))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
                     .padding(.bottom, NotificationsSettingsLayout.footerBottomPadding)
@@ -69,11 +69,11 @@ struct NotificationsSettingsView: View {
                 CTSectionGroup {
                     HStack {
                         Text(LocalizedStringKey("status"))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                         Spacer()
                         Text(statusText)
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(statusColor)
                         CTStatusBadge(status: statusBadge)
                     }
@@ -85,11 +85,11 @@ struct NotificationsSettingsView: View {
                         Button(action: openSystemSettings) {
                             HStack {
                                 Text(LocalizedStringKey("open_system_settings"))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundColor(Color.CT.textDim)
                                 Spacer()
                                 Image(systemName: "chevron.right")
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundColor(Color.CT.accent)
                             }
                             .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
@@ -102,11 +102,11 @@ struct NotificationsSettingsView: View {
                         Button(action: requestNotificationPermission) {
                             HStack {
                                 Text(LocalizedStringKey("grant_permission"))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundColor(Color.CT.accent)
                                 Spacer()
                                 Image(systemName: "chevron.right")
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundColor(Color.CT.accent)
                             }
                             .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
@@ -119,13 +119,13 @@ struct NotificationsSettingsView: View {
 
                 if authorizationStatus == .denied {
                     Text(LocalizedStringKey("notification_permissions_required"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(.orange)
                         .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
                         .padding(.bottom, NotificationsSettingsLayout.footerBottomPadding)
                 } else {
                     Text(LocalizedStringKey("system_settings_footer"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
                         .padding(.bottom, NotificationsSettingsLayout.footerBottomPadding)
@@ -137,7 +137,7 @@ struct NotificationsSettingsView: View {
                     CTSectionGroup {
                         HStack {
                             Text(LocalizedStringKey("show_message_notifications"))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundColor(Color.CT.textDim)
                             Spacer()
                             Toggle("", isOn: $showMessageNotifications)
@@ -151,7 +151,7 @@ struct NotificationsSettingsView: View {
 
                         HStack {
                             Text(LocalizedStringKey("notification_sound"))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundColor(Color.CT.textDim)
                             Spacer()
                             Toggle("", isOn: $notificationSound)
@@ -165,7 +165,7 @@ struct NotificationsSettingsView: View {
 
                         HStack {
                             Text(LocalizedStringKey("vibration"))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundColor(Color.CT.textDim)
                             Spacer()
                             Toggle("", isOn: $notificationVibration)
@@ -182,10 +182,10 @@ struct NotificationsSettingsView: View {
                         #if targetEnvironment(macCatalyst)
                         VStack(alignment: .leading, spacing: NotificationsSettingsLayout.pushDetailSpacing) {
                             Text(NSLocalizedString("push_not_available_mac", comment: ""))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundColor(Color.CT.textDim)
                             Text(NSLocalizedString("push_not_available_mac_hint", comment: ""))
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundColor(Color.CT.textDim)
                         }
                         .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
@@ -194,10 +194,10 @@ struct NotificationsSettingsView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: NotificationsSettingsLayout.pushDetailSpacing) {
                                 Text(LocalizedStringKey("enable_push_notifications"))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundColor(Color.CT.textDim)
                                 Text(LocalizedStringKey("push_notifications_footer"))
-                                    .font(CTFont.regular(11))
+                                    .font(CTFont.caption)
                                     .foregroundColor(Color.CT.textDim)
                             }
                             Spacer()
@@ -213,10 +213,10 @@ struct NotificationsSettingsView: View {
 
                         VStack(alignment: .leading, spacing: NotificationsSettingsLayout.pushDetailSpacing) {
                             Text(LocalizedStringKey("push_privacy_notice"))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundColor(Color.CT.textDim)
                             Text(LocalizedStringKey("push_privacy_notice_text"))
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundColor(Color.CT.textDim)
                                 .fixedSize(horizontal: false, vertical: true)
                         }

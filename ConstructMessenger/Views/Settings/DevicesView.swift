@@ -82,7 +82,7 @@ struct DevicesView: View {
                             }
                             if otherDevices.count > 1 {
                                 Text(LocalizedStringKey("other_devices_hint"))
-                                    .font(CTFont.regular(11))
+                                    .font(CTFont.caption)
                                     .foregroundStyle(Color.CT.textDim)
                                     .settingsSectionHintInsets()
                             }
@@ -113,7 +113,7 @@ struct DevicesView: View {
                                 #endif
                             }
                             Text(LocalizedStringKey("linked_devices_hint"))
-                                .font(CTFont.regular(12))
+                                .font(CTFont.secondary)
                                 .foregroundStyle(Color.CT.textDim)
                                 .settingsSectionHintInsets()
                         }
@@ -148,7 +148,7 @@ struct DevicesView: View {
                                 }
                             }
                             Text(LocalizedStringKey("history_sync_settings_hint"))
-                                .font(CTFont.regular(12))
+                                .font(CTFont.secondary)
                                 .foregroundStyle(Color.CT.textDim)
                                 .settingsSectionHintInsets()
                         }
@@ -175,7 +175,7 @@ struct DevicesView: View {
                             }
                         }
                         Text(LocalizedStringKey("sign_out_all_hint"))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundStyle(Color.CT.textDim)
                             .settingsSectionHintInsets()
                     }
@@ -342,7 +342,7 @@ private struct DeviceRow: View {
 
             VStack(alignment: .leading, spacing: DevicesSettingsLayout.deviceMetaSpacing) {
                 Text(displayName)
-                    .font(CTFont.bold(16))
+                    .font(CTFont.ui(16, weight: .bold))
 
                 // The device id, in the same eight hex characters every log line prints.
                 //
@@ -356,7 +356,7 @@ private struct DeviceRow: View {
                 // It is also the string `DEVICE_SET` prints at every authenticated session, so the
                 // screen and the log are comparable without translating between them.
                 Text(device.id.prefix(8))
-                    .font(CTFont.regular(DevicesSettingsLayout.deviceIdFontSize))
+                    .font(CTFont.mono(DevicesSettingsLayout.deviceIdFontSize))
                     .foregroundStyle(Color.CT.textDim)
                     .textSelection(.enabled)
 
@@ -366,12 +366,12 @@ private struct DeviceRow: View {
                             .font(.system(size: DevicesSettingsLayout.currentStatusDotSize))
                             .foregroundStyle(Color.CT.accent)
                         Text(LocalizedStringKey("device_active_now"))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundStyle(Color.CT.accent)
                     }
                 } else {
                     Text(lastSeenText)
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.textDim)
                 }
             }
@@ -381,7 +381,7 @@ private struct DeviceRow: View {
             if !isCurrent {
                 Button(role: .destructive, action: onRevoke) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(CTFont.bold(14))
+                        .font(CTFont.headline)
                         .foregroundStyle(Color.CT.danger)
                 }
                 .buttonStyle(.plain)

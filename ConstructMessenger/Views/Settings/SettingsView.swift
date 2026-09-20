@@ -40,7 +40,7 @@ struct SettingsView: View {
                 // Section title as plain left-aligned label (not a capsule)
                 HStack {
                     Text(NSLocalizedString("settings", comment: "").uppercased())
-                        .font(CTFont.bold(14))
+                        .font(CTFont.headline)
                         .foregroundColor(Color.CT.text)
                         .tracking(4)
                     Spacer()
@@ -134,23 +134,23 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: SettingsRootLayout.profileMetaSpacing) {
                 Text(profileDisplayName.uppercased())
-                    .font(CTFont.bold(15))
+                    .font(CTFont.ui(15, weight: .bold))
                     .foregroundColor(Color.CT.text)
                 Text(viewModel.username.isEmpty ? NSLocalizedString("username_not_set", comment: "") : "@\(viewModel.username)")
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundColor(Color.CT.textDim)
                 HStack(spacing: 5) {
                     CTStatusBadge(status: viewModel.isDiscoverable ? .on : .off, size: 11)
                     Text(viewModel.isDiscoverable
                         ? NSLocalizedString("searchable_indicator", comment: "")
                         : NSLocalizedString("searchable_indicator_off", comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundColor(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
                 }
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .font(CTFont.bold(14))
+                .font(CTFont.headline)
                 .foregroundColor(Color.CT.accent)
         }
         .padding(.horizontal, SettingsRootLayout.profileRowHorizontalPadding)
@@ -193,23 +193,23 @@ struct SettingsView: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text(profileDisplayName.uppercased())
-                            .font(CTFont.bold(22))
+                            .font(CTFont.ui(22, weight: .bold))
                             .foregroundColor(Color.CT.text)
                         Text(viewModel.username.isEmpty ? NSLocalizedString("username_not_set", comment: "") : "@\(viewModel.username)")
-                            .font(CTFont.regular(14))
+                            .font(CTFont.ui(14))
                             .foregroundColor(Color.CT.textDim)
                         HStack(spacing: 5) {
                             CTStatusBadge(status: viewModel.isDiscoverable ? .on : .off, size: 11)
                             Text(viewModel.isDiscoverable
                                 ? NSLocalizedString("searchable_indicator", comment: "")
                                 : NSLocalizedString("searchable_indicator_off", comment: ""))
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundColor(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
                         }
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(CTFont.bold(15))
+                        .font(CTFont.ui(15, weight: .bold))
                         .foregroundColor(Color.CT.accent)
                 }
                 .padding(.horizontal, SettingsRootLayout.profileRowHorizontalPadding)
@@ -367,17 +367,17 @@ struct SettingsView: View {
                 .foregroundColor(Color.CT.danger)
             VStack(alignment: .leading, spacing: SettingsRootLayout.recoveryBannerTextSpacing) {
                 Text(NSLocalizedString("recovery_not_configured_title", comment: "").uppercased())
-                    .font(CTFont.bold(11))
+                    .font(CTFont.badge)
                     .foregroundColor(Color.CT.danger)
                 Text(NSLocalizedString("recovery_banner_subtitle", comment: ""))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundColor(Color.CT.textDim)
                 Button {
                     showingRecoverySetup = true
                 } label: {
                     HStack(spacing: SettingsRootLayout.recoveryBannerActionSpacing) {
                         Text(NSLocalizedString("recovery_setup_action", comment: ""))
-                            .font(CTFont.bold(11))
+                            .font(CTFont.badge)
                         Image(systemName: "chevron.right")
                             .font(.system(size: SettingsRootLayout.recoveryBannerChevronSize, weight: .semibold))
                     }
