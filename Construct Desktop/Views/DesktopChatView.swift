@@ -317,8 +317,8 @@ struct DesktopChatView: View {
                 Button(role: .destructive) {
                     deleteSelectedMessages()
                 } label: {
-                    Text("[\(NSLocalizedString("delete_selected", comment: "")) →]")
-                        .font(CTFont.regular(13))
+                    Label(NSLocalizedString("delete_selected", comment: ""), systemImage: "trash")
+                        .font(CTFont.ui(13, weight: .medium, relativeTo: .footnote))
                         .foregroundStyle(Color.CT.danger)
                 }
                 Spacer()

@@ -562,7 +562,8 @@ private struct DesktopNodePopover: View {
             // Actions
             VStack(spacing: 0) {
                 popoverButton(
-                    label: "[\(NSLocalizedString("message", comment: "").uppercased()) →]",
+                    label: NSLocalizedString("message", comment: ""),
+                    symbol: "bubble.left.fill",
                     color: Color.CT.accent
                 ) {
                     onMessage()
@@ -572,7 +573,8 @@ private struct DesktopNodePopover: View {
                     .padding(.horizontal, 12)
 
                 popoverButton(
-                    label: "[✕ \(NSLocalizedString("synaps_prune_action", comment: "").uppercased())]",
+                    label: NSLocalizedString("synaps_prune_action", comment: ""),
+                    symbol: "xmark.circle",
                     color: Color.CT.danger
                 ) {
                     onRemove()
@@ -614,10 +616,10 @@ private struct DesktopNodePopover: View {
         )
     }
 
-    private func popoverButton(label: String, color: Color, action: @escaping () -> Void) -> some View {
+    private func popoverButton(label: String, symbol: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(label)
-                .font(CTFont.regular(12))
+            Label(label, systemImage: symbol)
+                .font(CTFont.ui(12, weight: .medium, relativeTo: .caption))
                 .foregroundStyle(color)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)

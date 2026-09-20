@@ -238,9 +238,7 @@ struct DesktopAccountSettingsView: View {
                     .foregroundStyle(Color.CT.accent)
                     .buttonStyle(.plain)
                 } else if viewModel.usernameSaved {
-                    Text("[ok]")
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.accent)
+                    CTStatusBadge(status: .ok, size: 13)
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
@@ -267,7 +265,10 @@ struct DesktopAccountSettingsView: View {
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.text)
                     Spacer()
-                    Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.CT.textDim)
+                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 12).padding(.vertical, 10)
                 .contentShape(Rectangle())
