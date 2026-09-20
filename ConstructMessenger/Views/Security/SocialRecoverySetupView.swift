@@ -74,10 +74,10 @@ struct SocialRecoverySetupView: View {
     private var introView: some View {
         VStack(spacing: 24) {
             Spacer()
-            Text("[share]")
-                .font(CTFont.bold(48))
-                .foregroundColor(Color.CT.accent)
-                .lineLimit(1).fixedSize()
+            Image(systemName: "person.2.wave.2.fill")
+                .font(.system(size: 48, weight: .regular))
+                .foregroundStyle(Color.CT.accent)
+                .accessibilityHidden(true)
             Text(NSLocalizedString("social_recovery_intro_title", comment: "").uppercased())
                 .font(CTFont.bold(18))
                 .foregroundColor(Color.CT.text)
@@ -142,10 +142,12 @@ struct SocialRecoverySetupView: View {
     private func schemeRow(label: String, hint: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 12) {
-                Text(selected ? "[●]" : "[○]")
-                    .font(CTFont.regular(14))
-                    .foregroundColor(selected ? Color.CT.accent : Color.CT.textDim)
-                    .fixedSize()
+                // Selection state. Was `[●]` / `[○]` in accent, which read as a label
+                // rather than as the radio it is.
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(selected ? Color.CT.accent : Color.CT.textDim)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(label)
                         .font(CTFont.regular(14))
@@ -290,10 +292,10 @@ struct SocialRecoverySetupView: View {
     private var doneView: some View {
         VStack(spacing: 24) {
             Spacer()
-            Text("[✓]")
-                .font(CTFont.bold(48))
-                .foregroundColor(Color.CT.accent)
-                .lineLimit(1).fixedSize()
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 48, weight: .regular))
+                .foregroundStyle(Color.CT.accent)
+                .accessibilityHidden(true)
             Text(NSLocalizedString("social_recovery_done_title", comment: ""))
                 .font(CTFont.bold(16))
                 .foregroundColor(Color.CT.text)

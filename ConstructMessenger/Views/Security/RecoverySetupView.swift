@@ -62,10 +62,10 @@ struct RecoverySetupView: View {
     private var introView: some View {
         VStack(spacing: 24) {
             Spacer()
-            Text("[key]")
-                .font(CTFont.bold(48))
-                .foregroundColor(Color.CT.accent)
-                .lineLimit(1).fixedSize()
+            Image(systemName: "key.fill")
+                .font(.system(size: 48, weight: .regular))
+                .foregroundStyle(Color.CT.accent)
+                .accessibilityHidden(true)
             Text(NSLocalizedString("recovery_intro_title", comment: ""))
                 .font(CTFont.bold(18))
                 .foregroundColor(Color.CT.text)
@@ -223,10 +223,10 @@ struct RecoverySetupView: View {
     private func doneView(fingerprint: String) -> some View {
         VStack(spacing: 24) {
             Spacer()
-            Text("[✓]")
-                .font(CTFont.bold(48))
-                .foregroundColor(Color.CT.accent)
-                .lineLimit(1).fixedSize()
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 48, weight: .regular))
+                .foregroundStyle(Color.CT.accent)
+                .accessibilityHidden(true)
             Text(NSLocalizedString("recovery_done_title", comment: ""))
                 .font(CTFont.bold(18))
                 .foregroundColor(Color.CT.text)

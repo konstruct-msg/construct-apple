@@ -104,9 +104,11 @@ struct SafetyNumberView: View {
                     .font(CTFont.regular(13))
                     .foregroundStyle(copied ? Color.CT.accent : Color.CT.text)
                 Spacer()
-                Text(copied ? "[✓]" : "[C]")
-                    .font(CTFont.bold(13))
+                // The copy action's own affordance. `[C]` needed a legend.
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(copied ? Color.CT.accent : Color.CT.textDim)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
