@@ -104,10 +104,10 @@ struct DeviceLinkShowQRView: View {
             VStack(spacing: CTLayout.sectionGap) {
                 HStack(spacing: 6) {
                     Text(">")
-                        .font(CTFont.bold(11))
+                        .font(CTFont.badge)
                         .foregroundColor(Color.CT.accent)
                     Text(NSLocalizedString("device_link_section", comment: "").uppercased())
-                        .font(CTFont.bold(11))
+                        .font(CTFont.badge)
                         .foregroundColor(Color.CT.accent)
                         .tracking(2)
                     Spacer()
@@ -116,7 +116,7 @@ struct DeviceLinkShowQRView: View {
                 .padding(.top, CTLayout.sectionGap)
 
                 Text(NSLocalizedString("device_link_request_instruction", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, CTLayout.sectionGap)
@@ -136,7 +136,7 @@ struct DeviceLinkShowQRView: View {
                             ? "device_link_waiting_approval"
                             : "device_link_request_steps"
                     ))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                 }

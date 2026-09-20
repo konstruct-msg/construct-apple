@@ -68,10 +68,10 @@ struct RegistrationStageView: View {
         VStack(spacing: 44) {
             VStack(spacing: 8) {
                 Text(LocalizedStringKey("reg_establishing_trust"))
-                    .font(CTFont.bold(18))
+                    .font(CTFont.title)
                     .foregroundColor(Color.CT.text)
                 Text(LocalizedStringKey("reg_joining_network"))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.textDim)
             }
 
@@ -79,7 +79,7 @@ struct RegistrationStageView: View {
                 .frame(height: 72)
 
             Text(phaseLabel)
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundColor(Color.CT.textDim)
                 .id(phaseLabel)
                 .transition(.opacity.animation(.easeInOut(duration: 0.4)))
@@ -92,7 +92,7 @@ struct RegistrationStageView: View {
     private var completeContent: some View {
         VStack(spacing: 28) {
             Text(LocalizedStringKey("reg_welcome"))
-                .font(CTFont.bold(24))
+                .font(CTFont.ui(24, weight: .bold))
                 .foregroundColor(Color.CT.text)
 
             VStack(spacing: 0) {
@@ -104,7 +104,7 @@ struct RegistrationStageView: View {
                     CTSep()
                 }
                 if !deviceId.isEmpty {
-                    DetailRow(label: NSLocalizedString("reg_label_device_id", comment: ""), value: String(deviceId.prefix(16)) + "…")
+                    DetailRow(label: NSLocalizedString("reg_label_device_id", comment: ""), value: String(deviceId.prefix(16)) + "…", technical: true)
                 }
             }
             .background(Color.CT.bgMsg)
@@ -118,10 +118,10 @@ struct RegistrationStageView: View {
     private func errorContent(_ message: String) -> some View {
         VStack(spacing: 20) {
             Text(LocalizedStringKey("reg_error_title"))
-                .font(CTFont.bold(18))
+                .font(CTFont.title)
                 .foregroundColor(Color.CT.danger)
             Text(message)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
         }
@@ -145,7 +145,7 @@ struct RegistrationStageView: View {
             .accessibilityIdentifier(A11y.Registration.retry)
         default:
             Button(NSLocalizedString("reg_cancel", comment: "")) { onDismiss?() }
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .buttonStyle(.plain)
                 .accessibilityIdentifier(A11y.Registration.cancel)
@@ -182,14 +182,17 @@ struct RegistrationStageView: View {
 
     struct DetailRow: View {
         let label: String; let value: String
+        /// The device id row is machine output and stays monospace; the username and the mode
+        /// are not. The row cannot tell, so the caller says.
+        var technical: Bool = false
         var body: some View {
             HStack {
                 Text(label)
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundColor(Color.CT.textDim)
                 Spacer()
                 Text(value)
-                    .font(CTFont.bold(12))
+                    .font(technical ? CTFont.mono(12, weight: .bold) : CTFont.ui(12, weight: .bold))
                     .foregroundColor(Color.CT.text)
             }
             .padding(.horizontal, CTLayout.edgePad)

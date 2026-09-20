@@ -33,12 +33,12 @@ struct OnboardingView: View {
                     CTLogoView(size: 100, color: Color.CT.text)
 
                     Text("construct_title")
-                        .font(CTFont.bold(26))
+                        .font(CTFont.ui(26, weight: .bold))
                         .foregroundColor(Color.CT.text)
                         .tracking(8)
 
                     Text(LocalizedStringKey("onboarding_tagline"))
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundColor(Color.CT.textDim)
                         .multilineTextAlignment(.center)
                 }
@@ -66,18 +66,18 @@ struct OnboardingView: View {
 
                     if let errorKey = usernameErrorKey {
                         Text(NSLocalizedString(errorKey, comment: ""))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.danger)
                     } else if isCheckingUsername {
                         Text(NSLocalizedString("username_checking", comment: ""))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.textDim)
                     } else if let available = usernameIsAvailable {
                         Text(NSLocalizedString(
                             available ? "username_available" : "username_unavailable",
                             comment: ""
                         ))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(available ? Color.CT.accentDim : Color.CT.danger)
                     }
                 }
@@ -101,7 +101,7 @@ struct OnboardingView: View {
 
                     Button { showingExistingIdentity = true } label: {
                         Text(NSLocalizedString("onboarding_already_have", comment: ""))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                             .multilineTextAlignment(.center)
                     }
@@ -114,7 +114,7 @@ struct OnboardingView: View {
                     // text on purpose — nobody who can reach clearnet needs to find it.
                     Button { showingVeilBootstrap = true } label: {
                         Text(NSLocalizedString("onboarding_cant_connect", comment: ""))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.textDim)
                             .multilineTextAlignment(.center)
                     }
@@ -129,7 +129,7 @@ struct OnboardingView: View {
                     Button { DiagnosticLogShare.present() } label: {
                         Label(NSLocalizedString("diagnostics_share_logs", comment: ""),
                               systemImage: "square.and.arrow.up")
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.textDim)
                     }
                     .buttonStyle(.plain)

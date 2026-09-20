@@ -38,7 +38,7 @@ struct DeviceLinkMethodView: View {
                 ScrollView {
                     VStack(spacing: CTLayout.sectionGap) {
                         Text(NSLocalizedString("link_method_intro", comment: ""))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, CTLayout.sectionGap)
@@ -82,11 +82,11 @@ struct DeviceLinkMethodView: View {
                     .frame(width: 32)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(NSLocalizedString(titleKey, comment: "").uppercased())
-                        .font(CTFont.bold(13))
+                        .font(CTFont.bodyEmphasis)
                         .foregroundStyle(Color.CT.text)
                         .tracking(1)
                     Text(NSLocalizedString(subtitleKey, comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .multilineTextAlignment(.leading)
                 }

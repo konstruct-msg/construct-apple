@@ -79,7 +79,7 @@ struct DesktopLinkRequestView: View {
             // Error shown via alert — show a retry button as fallback
             VStack(spacing: 16) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(CTFont.regular(48))
+                    .font(CTFont.ui(48))
                     .foregroundStyle(.orange)
                     .lineLimit(1).fixedSize()
                 Button {
@@ -87,7 +87,7 @@ struct DesktopLinkRequestView: View {
                     Task { await vm.generateJoinRequestQR() }
                 } label: {
                     Text(LocalizedStringKey("device_link_refresh"))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.text)
                         .padding(.horizontal, CTLayout.sectionGap).padding(.vertical, 10)
                         .background(Color.CT.bgMsg)
@@ -109,7 +109,7 @@ struct DesktopLinkRequestView: View {
                     .font(.system(size: 48, weight: .light))
                     .foregroundStyle(Color.CT.textDim)
                 Text("SCAN ON YOUR PHONE")
-                    .font(CTFont.bold(14))
+                    .font(CTFont.headline)
                     .foregroundStyle(Color.CT.textDim)
                     .tracking(1)
 

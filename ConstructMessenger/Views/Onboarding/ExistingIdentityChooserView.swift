@@ -29,7 +29,7 @@ struct ExistingIdentityChooserView: View {
             ScrollView {
                 VStack(spacing: CTLayout.sectionGap) {
                     Text(NSLocalizedString("onboarding_existing_intro", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, CTLayout.sectionGap)
@@ -58,7 +58,7 @@ struct ExistingIdentityChooserView: View {
                     // network. Same door, same weight as on the first screen.
                     Button { showingVeilBootstrap = true } label: {
                         Text(NSLocalizedString("onboarding_cant_connect", comment: ""))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.textDim)
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity)
@@ -103,11 +103,11 @@ struct ExistingIdentityChooserView: View {
                     .frame(width: 32)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(NSLocalizedString(titleKey, comment: "").uppercased())
-                        .font(CTFont.bold(13))
+                        .font(CTFont.bodyEmphasis)
                         .foregroundStyle(Color.CT.text)
                         .tracking(1)
                     Text(NSLocalizedString(subtitleKey, comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .multilineTextAlignment(.leading)
                 }

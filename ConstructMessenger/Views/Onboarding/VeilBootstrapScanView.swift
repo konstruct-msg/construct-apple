@@ -35,7 +35,7 @@ struct VeilBootstrapScanView: View {
             ScrollView {
                 VStack(spacing: CTLayout.sectionGap) {
                     Text(NSLocalizedString("veil_bootstrap_intro", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, CTLayout.sectionGap)
@@ -61,7 +61,7 @@ struct VeilBootstrapScanView: View {
 
                     if let message {
                         Text(message)
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(isError ? Color.CT.danger : Color.CT.accentDim)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, CTLayout.sectionGap)
@@ -98,11 +98,11 @@ struct VeilBootstrapScanView: View {
                 .font(.system(size: 28, weight: .medium))
                 .foregroundStyle(Color.CT.accent)
             Text(NSLocalizedString("veil_bootstrap_ok", comment: ""))
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundStyle(Color.CT.text)
                 .multilineTextAlignment(.center)
             Text(NSLocalizedString("veil_bootstrap_ok_hint", comment: ""))
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
             CTButton(label: NSLocalizedString("done", comment: "").uppercased()) { dismiss() }
@@ -130,11 +130,11 @@ struct VeilBootstrapScanView: View {
                     .frame(width: 32)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(NSLocalizedString(titleKey, comment: "").uppercased())
-                        .font(CTFont.bold(13))
+                        .font(CTFont.bodyEmphasis)
                         .foregroundStyle(Color.CT.text)
                         .tracking(1)
                     Text(NSLocalizedString(subtitleKey, comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .multilineTextAlignment(.leading)
                 }
