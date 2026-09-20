@@ -56,12 +56,12 @@ struct TransportDiagnosticsView: View {
             CTSettingsSectionHeader(title: "CURRENT STATE", color: .orange)
             VStack(alignment: .leading, spacing: 6) {
                 Text(stateHeadline)
-                    .font(CTFont.bold(18))
+                    .font(CTFont.mono(18, weight: .bold))
                     .foregroundStyle(.orange)
                     .textSelection(.enabled)
                 ForEach(stateDetailLines, id: \.self) { line in
                     Text(line)
-                        .font(CTFont.regular(12))
+                        .font(CTFont.mono(12))
                         .foregroundStyle(Color.CT.textDim)
                         .textSelection(.enabled)
                 }
@@ -92,10 +92,10 @@ struct TransportDiagnosticsView: View {
             )) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("veil-front native TLS")
-                        .font(CTFont.regular(13))
+                        .font(CTFont.mono(13))
                         .foregroundStyle(.orange)
                     Text("Terminate the veil-front TLS in Network.framework (native Apple ClientHello) instead of rustls-Chrome131. Toggle VEIL off/on to apply. Opt-in / debug.")
-                        .font(CTFont.regular(11))
+                        .font(CTFont.mono(11))
                         .foregroundStyle(Color.CT.textDim)
                 }
             }
@@ -112,14 +112,14 @@ struct TransportDiagnosticsView: View {
                     Task { await TransportRouter.shared.send(.manualReset) }
                 } label: {
                     Text("[ MANUAL RESET ]")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.mono(12))
                         .foregroundStyle(.orange)
                 }
                 Button {
                     mirror.clearHistory()
                 } label: {
                     Text("[ CLEAR LOG ]")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.mono(12))
                         .foregroundStyle(.orange)
                 }
                 Spacer()
@@ -136,7 +136,7 @@ struct TransportDiagnosticsView: View {
             )
             if mirror.recentTransitions.isEmpty {
                 Text("(no transitions yet)")
-                    .font(CTFont.regular(12))
+                    .font(CTFont.mono(12))
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 20)
             } else {
@@ -155,24 +155,24 @@ struct TransportDiagnosticsView: View {
         return VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(formatTime(entry.at))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.mono(11))
                     .foregroundStyle(Color.CT.textDim)
                 Text(entry.from.shortLabel)
-                    .font(CTFont.regular(11))
+                    .font(CTFont.mono(11))
                     .foregroundStyle(Color.CT.text)
                 Text(arrow)
-                    .font(CTFont.regular(11))
+                    .font(CTFont.mono(11))
                     .foregroundStyle(.orange)
                 Text(entry.to.shortLabel)
-                    .font(CTFont.bold(11))
+                    .font(CTFont.mono(11, weight: .bold))
                     .foregroundStyle(entry.from == entry.to ? Color.CT.textDim : .orange)
             }
             Text("event: \(entry.event)")
-                .font(CTFont.regular(10))
+                .font(CTFont.mono(10))
                 .foregroundStyle(Color.CT.textDim)
             if !entry.effects.isEmpty {
                 Text("effects: [\(entry.effects.joined(separator: ", "))]")
-                    .font(CTFont.regular(10))
+                    .font(CTFont.mono(10))
                     .foregroundStyle(Color.CT.textDim)
             }
             Rectangle()
@@ -188,11 +188,11 @@ struct TransportDiagnosticsView: View {
     private func row(_ label: String, value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(label)
-                .font(CTFont.regular(12))
+                .font(CTFont.mono(12))
                 .foregroundStyle(Color.CT.textDim)
                 .frame(width: 100, alignment: .leading)
             Text(value)
-                .font(CTFont.regular(12))
+                .font(CTFont.mono(12))
                 .foregroundStyle(Color.CT.text)
                 .textSelection(.enabled)
         }

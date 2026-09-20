@@ -124,7 +124,7 @@ struct DiagnosticsView: View {
                     }
                     if !push.isRegisteredWithServer {
                         Text(LocalizedStringKey("diagnostics_server_token_warning"))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.mono(11))
                             .foregroundStyle(.orange)
                             .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                     }
@@ -149,7 +149,7 @@ struct DiagnosticsView: View {
                             } label: {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("diagnostics_skip_backlog_title"))
-                                        .font(CTFont.regular(14))
+                                        .font(CTFont.mono(14))
                                         .foregroundStyle(.orange)
                                     Text(heldEntry.map {
                                         String(
@@ -157,14 +157,14 @@ struct DiagnosticsView: View {
                                             String($0.messageId.prefix(8)), $0.state, Int($0.age)
                                         )
                                     } ?? NSLocalizedString("diagnostics_skip_backlog_clear", comment: ""))
-                                        .font(CTFont.regular(11))
+                                        .font(CTFont.mono(11))
                                         .foregroundStyle(Color.CT.textDim)
                                     if let skipResult {
                                         Text(String(
                                             format: NSLocalizedString("diagnostics_skip_backlog_done", comment: ""),
                                             String(skipResult.prefix(20))
                                         ))
-                                        .font(CTFont.regular(11))
+                                        .font(CTFont.mono(11))
                                         .foregroundStyle(Color.CT.danger)
                                     }
                                 }
@@ -179,10 +179,10 @@ struct DiagnosticsView: View {
                             Toggle(isOn: $ownedInsetStackEnabled) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("diagnostics_owned_inset_title"))
-                                        .font(CTFont.regular(14))
+                                        .font(CTFont.mono(14))
                                         .foregroundStyle(.orange)
                                     Text(LocalizedStringKey("diagnostics_owned_inset_hint"))
-                                        .font(CTFont.regular(11))
+                                        .font(CTFont.mono(11))
                                         .foregroundStyle(Color.CT.textDim)
                                 }
                             }
@@ -195,10 +195,10 @@ struct DiagnosticsView: View {
                             Toggle(isOn: $stealthOverrideEnabled) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("diagnostics_stealth_override_title"))
-                                        .font(CTFont.regular(14))
+                                        .font(CTFont.mono(14))
                                         .foregroundStyle(.orange)
                                     Text(LocalizedStringKey("diagnostics_stealth_override_hint"))
-                                        .font(CTFont.regular(11))
+                                        .font(CTFont.mono(11))
                                         .foregroundStyle(Color.CT.textDim)
                                 }
                             }
@@ -242,11 +242,11 @@ struct DiagnosticsView: View {
                         }
                     }
                     Text(LocalizedStringKey("diagnostics_silent_reinit_footer"))
-                        .font(CTFont.regular(12))
+                        .font(CTFont.mono(12))
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                     Text(LocalizedStringKey("diagnostics_dev_tools_footer"))
-                        .font(CTFont.regular(12))
+                        .font(CTFont.mono(12))
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                 }
@@ -275,13 +275,13 @@ struct DiagnosticsView: View {
                             .fixedSize()
                             .frame(minWidth: SettingsLayout.rowIconMinWidth, alignment: .center)
                         Text(LocalizedStringKey("diagnostics_log_collection"))
-                            .font(CTFont.bold(16))
+                            .font(CTFont.mono(16, weight: .bold))
                             .foregroundStyle(Color.CT.text)
                         Spacer()
                         Text(isLogCollectionEnabled
                              ? NSLocalizedString("diagnostics_status_active", comment: "")
                              : NSLocalizedString("diagnostics_status_off", comment: ""))
-                            .font(CTFont.regular(14))
+                            .font(CTFont.mono(14))
                             .foregroundStyle(isLogCollectionEnabled ? Color.CT.accent : Color.CT.textDim)
                     }
                     .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
@@ -297,11 +297,11 @@ struct DiagnosticsView: View {
                                 .fixedSize()
                                 .frame(minWidth: SettingsLayout.rowIconMinWidth, alignment: .center)
                             Text(LocalizedStringKey("diagnostics_size"))
-                                .font(CTFont.bold(16))
+                                .font(CTFont.mono(16, weight: .bold))
                                 .foregroundStyle(Color.CT.text)
                             Spacer()
                             Text(logSize)
-                                .font(CTFont.regular(14))
+                                .font(CTFont.mono(14))
                                 .foregroundStyle(Color.CT.textDim)
                         }
                         .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
@@ -324,7 +324,7 @@ struct DiagnosticsView: View {
                         CTSectionGroup {
                             ScrollView {
                                 Text(logText)
-                                    .font(CTFont.regular(DiagnosticsLayout.recentLogFontSize))
+                                    .font(CTFont.mono(DiagnosticsLayout.recentLogFontSize))
                                     .foregroundStyle(Color.white)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(DiagnosticsLayout.recentLogPadding)
@@ -427,11 +427,11 @@ struct DiagnosticsView: View {
                 .frame(width: DiagnosticsLayout.statusDotSize, height: DiagnosticsLayout.statusDotSize)
                 .frame(width: SettingsLayout.rowIconMinWidth, alignment: .center)
             Text(label)
-                .font(CTFont.bold(16))
+                .font(CTFont.mono(16, weight: .bold))
                 .foregroundStyle(Color.CT.text)
             Spacer()
             Text(value)
-                .font(CTFont.regular(13))
+                .font(CTFont.mono(13))
                 .foregroundStyle(ok ? Color.CT.textDim : Color.CT.danger)
         }
         .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
