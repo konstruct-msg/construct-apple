@@ -59,17 +59,37 @@ Sibling repos: `~/Code/construct-core` (crypto), `~/Code/construct-transport` (Q
 
 ## Design system (read before touching any UI)
 
-Hybrid language: CT terminal aesthetic + Apple HIG. Terminal glyphs are **decorative-only**: SF
-Symbols and native controls for anything interactive or stateful (`CTStatusBadge`, `Toggle`,
-`chevron.*`); ASCII only as chrome (`> TITLE` headers, separators). Never regress a converted
-control back to ASCII.
+**Affordance is native, identity is ours** — three layers, and the line is fixed
+(`decisions/affordance-is-native-identity-is-ours.md`, staged plan
+`client/ios/NATIVE_AFFORDANCE_MIGRATION.md`):
+
+| Layer | Who decides the look |
+|---|---|
+| **Control and state** — buttons, toggles, navigation, selection, status, disclosure | the platform, always |
+| **Structure and rhythm** — grid and density, hairlines, section headers, palette, dark default, hex avatars, monospace for *technical data* | us; this is the identity |
+| **Content** — message text (`CTFont.message`) | the reader |
+
+The test: *does a person have to learn this app to know what it does?* If yes it is a control, and
+it looks like the platform's control.
+
+**No new ASCII control and no new ASCII status, anywhere** — including in feature work unrelated to
+the migration. SF Symbols and native controls for anything interactive or stateful (`CTStatusBadge`,
+`Toggle`, `chevron.*`); ASCII only as structure (`> TITLE` headers, the `>` system-message prefix,
+separators, keycap hints, debug surfaces). Never regress a converted control back to ASCII. The
+ASCII affordances still in the tree are enumerated debt, not the target state.
+
+A surface that does not exist yet is built under this rule from the start — it is not written in the
+old language and migrated later. If a token it needs is missing, the token lands first.
+
+`DESIGN_CONCEPT.md` §2.3 in the vault describes brackets as the affordance metaphor; that is
+**history, superseded 2026-09-20**, and the file says so. Do not implement from it.
 
 Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 
 | Kind | API |
 |------|-----|
 | Colors | `Color.CT.bg`, `.text`, `.textDim`, `.accent`, `.accentDim`, `.danger`, `.noise`, `.bgMsg`, `.outMsgBg`, `.outMsgText` |
-| Fonts | `CTFont.regular/medium/bold(size)` — always JetBrains Mono, for **chrome**. `CTFont.message(size)` for message text: the one face the reader chooses |
+| Fonts | `CTFont.regular/medium/bold(size)` — JetBrains Mono, for **chrome** today; being split into `CTFont.ui` (system) and `CTFont.mono` (technical content). `CTFont.message(size)` for message text: the one face the reader chooses |
 | Radii / Shapes | `CTRadius` (`badge` 6 · `card` 8 · `control` 10 · `pill` 999) via `CTShape.*()` — no magic `cornerRadius: 16\|18\|22` |
 | Layout | `CTLayout` (`edgePad` 12 · `controlHeight` 42 · `hitTarget` 44 · …) |
 | Glass | `.glassCapsule()` — defaults to pill; do not pass 18/22 |
@@ -77,13 +97,17 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 - Two surface languages, never mixed on one control: **form/card** (`CTRadius.card`, solid) vs
   **composer/glass** (`pill`, `.glassCapsule()`); `CTButton`/bubbles use `CTRadius.control`.
 - **Message text is the one thing the reader picks the font for.** `CTFont.message` — bubbles and
-  the composer that fills them — reads a preference; everything else is `CTFont.*` and stays
-  monospaced unconditionally. The split is chrome vs content, the same line that already puts SF
-  Symbols on anything interactive. Do not widen it: a preference read inside `CTFont.regular`
-  would turn nav bars, `> TITLE` headers and badges into a different product. Note the old "always"
-  was never true where it mattered — JetBrains Mono ships no CJK, so Japanese bubbles have always
-  been a substituted face. `CTFont.message` also carries the size preference and `relativeTo:
-  .body`; the chrome deliberately does not scale, because it is laid out against fixed metrics.
+  the composer that fills them — reads a preference. It stays a preference and nothing else gains
+  one: a font choice read inside the chrome tokens would make the product configurable rather than
+  designed. Note the old "always JetBrains Mono" was never true where it mattered — the family
+  ships no CJK, so Japanese bubbles have always been a substituted face. `CTFont.message` also
+  carries the size preference and `relativeTo: .body`.
+- **Monospace in the chrome is being retired as the default**, not as a token: it becomes the
+  deliberate choice for content that *is* machine output — hex ids, fingerprints, safety numbers,
+  device ids, counters, logs, diagnostics. Until `CTFont.ui` exists, `CTFont.regular` is still
+  mono and still correct to call; do not hand-roll `.system(...)` at a call site to get ahead of
+  the split. Whether the chrome should then scale with Dynamic Type is open — it is laid out
+  against fixed metrics today.
 - **No `NavigationStack` inside sheets** — `CTNavBar(showBack: true, backAction: { dismiss() })`.
 - Background always `Color.CT.bg` (`#090909`) via `.ctBackground()`.
 - New UI must use tokens; when editing a file with a literal `8`/`10`/`18`, migrate that call site.
