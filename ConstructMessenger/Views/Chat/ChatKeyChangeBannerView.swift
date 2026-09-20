@@ -42,16 +42,16 @@ struct ChatKeyChangeBannerView: View {
             VStack(alignment: .leading, spacing: CTLayout.chromeGap) {
                 HStack(alignment: .top, spacing: CTLayout.chromeGap) {
                     Image(systemName: "exclamationmark.shield.fill")
-                        .font(CTFont.regular(18))
+                        .font(CTFont.ui(18))
                         .foregroundStyle(Color.CT.danger)
                         .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(NSLocalizedString(titleKey, comment: ""))
-                            .font(CTFont.bold(12))
+                            .font(CTFont.ui(12, weight: .bold))
                             .foregroundStyle(Color.CT.text)
                         Text(subtitle)
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundStyle(Color.CT.textDim)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -62,7 +62,7 @@ struct ChatKeyChangeBannerView: View {
                 HStack(spacing: CTLayout.inlinePad) {
                     Button(action: onVerify) {
                         Text(NSLocalizedString("key_change_verify", comment: ""))
-                            .font(CTFont.bold(12))
+                            .font(CTFont.ui(12, weight: .bold))
                             .foregroundStyle(Color.CT.bg)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
@@ -74,7 +74,7 @@ struct ChatKeyChangeBannerView: View {
 
                     Button(action: onAccept) {
                         Text(NSLocalizedString("key_change_accept", comment: ""))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundStyle(Color.CT.accent)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)

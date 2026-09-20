@@ -98,7 +98,7 @@ struct VoicePreviewBar: View {
 
 private func timerLabel(_ duration: TimeInterval) -> some View {
     return Text(VoiceUIDurationFormatter.string(duration))
-        .font(CTFont.medium(14))
+        .font(CTFont.ui(14, weight: .medium))
         .foregroundStyle(Color.CT.textDim)
         .frame(minWidth: 42, alignment: .trailing)
 }

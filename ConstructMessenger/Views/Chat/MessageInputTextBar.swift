@@ -103,7 +103,7 @@ struct MessageInputTextBar: View {
                     .transition(.opacity)
             } else {
                 Text("\(remaining)")
-                    .font(CTFont.regular(10))
+                    .font(CTFont.micro)
                     .foregroundColor(Color.CT.textDim)
                     .padding(.trailing, 4)
                     .transition(.opacity)

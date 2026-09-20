@@ -131,7 +131,7 @@ struct MediaPickerSheet: View {
     private var chrome: some View {
         HStack(spacing: 12) {
             Text(NSLocalizedString("media_picker_recents", comment: "").uppercased())
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundStyle(Color.CT.text)
                 .tracking(2)
 
@@ -188,7 +188,7 @@ struct MediaPickerSheet: View {
         VStack(spacing: 16) {
             Spacer()
             Text(LocalizedStringKey("media_picker_allow_access"))
-                .font(CTFont.regular(14))
+                .font(CTFont.ui(14))
                 .foregroundStyle(Color.CT.text)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
@@ -196,7 +196,7 @@ struct MediaPickerSheet: View {
                 Task { await vm.prepare() }
             } label: {
                 Text(LocalizedStringKey("media_picker_allow_access_action"))
-                    .font(CTFont.bold(13))
+                    .font(CTFont.bodyEmphasis)
                     .foregroundStyle(Color.CT.bg)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
@@ -213,7 +213,7 @@ struct MediaPickerSheet: View {
         VStack(spacing: 16) {
             Spacer()
             Text(LocalizedStringKey("media_picker_access_denied"))
-                .font(CTFont.regular(14))
+                .font(CTFont.ui(14))
                 .foregroundStyle(Color.CT.text)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
@@ -221,7 +221,7 @@ struct MediaPickerSheet: View {
                 vm.openSettings()
             } label: {
                 Text(LocalizedStringKey("media_picker_open_settings"))
-                    .font(CTFont.bold(13))
+                    .font(CTFont.bodyEmphasis)
                     .foregroundStyle(Color.CT.accent)
             }
             .buttonStyle(.plain)
@@ -238,7 +238,7 @@ struct MediaPickerSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if vm.assets.isEmpty {
                 Text(LocalizedStringKey("media_picker_empty"))
-                    .font(CTFont.regular(14))
+                    .font(CTFont.ui(14))
                     .foregroundStyle(Color.CT.textDim)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -271,7 +271,7 @@ struct MediaPickerSheet: View {
         .overlay(alignment: .bottom) {
             if let msg = vm.statusMessage, !msg.isEmpty {
                 Text(msg)
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.danger)
                     .padding(8)
                     .background(Color.CT.bg.opacity(0.9))
@@ -380,7 +380,7 @@ struct MediaPickerSheet: View {
                 Image(systemName: systemImage)
                     .font(.system(size: 18, weight: .medium))
                 Text(LocalizedStringKey(titleKey))
-                    .font(CTFont.regular(10))
+                    .font(CTFont.micro)
             }
             .foregroundStyle(self.tab == tab ? Color.CT.accent : Color.CT.textDim)
             .frame(maxWidth: .infinity)
@@ -452,7 +452,7 @@ private struct MediaPickerCell: View {
                     Spacer()
                     HStack {
                         Text(formatDuration(asset.duration))
-                            .font(CTFont.regular(10))
+                            .font(CTFont.micro)
                             .foregroundStyle(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
@@ -487,7 +487,7 @@ private struct MediaPickerCell: View {
                 )
             if let selectionIndex {
                 Text("\(selectionIndex)")
-                    .font(CTFont.bold(11))
+                    .font(CTFont.badge)
                     .foregroundStyle(Color.CT.bg)
             }
         }

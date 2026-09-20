@@ -110,7 +110,7 @@ struct VoiceMessageBubbleView: View {
                 transcribeToggle
 
                 Text(durationLabel)
-                    .font(CTFont.regular(ChatUIConstants.Typography.durationSize))
+                    .font(CTFont.ui(ChatUIConstants.Typography.durationSize))
                     .foregroundColor(isSentByMe ? Color.CT.outMsgText.opacity(0.85) : Color.CT.textDim)
                     .monospacedDigit()
                     .frame(width: ChatUIConstants.Voice.durationWidth, alignment: .trailing)
@@ -192,7 +192,7 @@ struct VoiceMessageBubbleView: View {
         if let text = transcript, !text.isEmpty, isTranscriptExpanded {
             Rectangle().fill(Color.CT.noise).frame(height: 1)
             Text(text)
-                .font(CTFont.regular(ChatUIConstants.Typography.transcriptSize))
+                .font(CTFont.ui(ChatUIConstants.Typography.transcriptSize))
                 .foregroundColor(isSentByMe ? Color.CT.outMsgText.opacity(0.85) : Color.CT.textDim)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, ChatUIConstants.Voice.horizontalPadding)
@@ -222,7 +222,7 @@ struct VoiceMessageBubbleView: View {
             .opacity(0.4)
 
             Text(durationLabel)
-                .font(CTFont.regular(ChatUIConstants.Typography.durationSize))
+                .font(CTFont.ui(ChatUIConstants.Typography.durationSize))
                 .foregroundColor(isSentByMe ? Color.CT.outMsgText.opacity(0.7) : Color.CT.textDim)
                 .monospacedDigit()
                 .frame(width: ChatUIConstants.Voice.durationWidth, alignment: .trailing)
@@ -259,7 +259,7 @@ struct VoiceMessageBubbleView: View {
             .opacity(0.35)
 
             Text(durationLabel)
-                .font(CTFont.regular(ChatUIConstants.Typography.durationSize))
+                .font(CTFont.ui(ChatUIConstants.Typography.durationSize))
                 .foregroundColor(Color(hex: 0xE05555).opacity(0.8))
                 .monospacedDigit()
                 .frame(width: ChatUIConstants.Voice.durationWidth, alignment: .trailing)
@@ -293,7 +293,7 @@ struct VoiceMessageBubbleView: View {
             .opacity(0.2)
 
             Text(durationLabel)
-                .font(CTFont.regular(ChatUIConstants.Typography.durationSize))
+                .font(CTFont.ui(ChatUIConstants.Typography.durationSize))
                 .foregroundColor(Color.CT.textDim)
                 .monospacedDigit()
                 .frame(width: ChatUIConstants.Voice.durationWidth, alignment: .trailing)

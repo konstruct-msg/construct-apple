@@ -52,13 +52,13 @@ struct ChatNavBarView: View {
             Button(action: onOpenProfile) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title.uppercased())
-                        .font(CTFont.bold(14))
+                        .font(CTFont.headline)
                         .foregroundColor(Color.CT.text)
                         .tracking(4)
                         .lineLimit(1)
                     if let subtitle {
                         Text(subtitle)
-                            .font(CTFont.regular(10))
+                            .font(CTFont.micro)
                             .foregroundColor(Color.CT.accent)
                             .lineLimit(1)
                             .transition(.opacity)
@@ -145,7 +145,7 @@ struct ChatNavBarView: View {
         switch contactKTStatus {
         case .verified:
             Image(systemName: "checkmark.circle.fill")
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundColor(Color.CT.accent)
                 .accessibilityLabel(Text(LocalizedStringKey("kt_verified")))
         case .keyChanged, .failed:
@@ -153,7 +153,7 @@ struct ChatNavBarView: View {
                 onKTWarningTap?()
             } label: {
                 Image(systemName: "exclamationmark.shield.fill")
-                    .font(CTFont.bold(14))
+                    .font(CTFont.headline)
                     .foregroundColor(Color.CT.danger)
                     .frame(width: CTLayout.hitTarget * 0.7, height: CTLayout.hitTarget * 0.7)
                     .contentShape(Rectangle())

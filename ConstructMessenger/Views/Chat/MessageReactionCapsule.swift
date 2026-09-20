@@ -110,7 +110,7 @@ struct ReactionEmojiPickerSheet: View {
                             }
                         } header: {
                             Text("> " + NSLocalizedString(group.id, comment: "").uppercased())
-                                .font(CTFont.medium(ChatUIConstants.Typography.captionSize))
+                                .font(CTFont.ui(ChatUIConstants.Typography.captionSize, weight: .medium))
                                 .tracking(2)
                                 .foregroundColor(Color.CT.textDim)
                                 .frame(maxWidth: .infinity, alignment: .leading)

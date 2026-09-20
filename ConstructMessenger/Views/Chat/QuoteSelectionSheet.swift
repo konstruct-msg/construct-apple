@@ -37,7 +37,7 @@ struct QuoteSelectionSheet: View {
                     onConfirm(selectedText)
                     dismiss()
                 }
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundColor(selectedText.isEmpty ? Color.CT.textDim : Color.CT.accent)
                 .disabled(selectedText.isEmpty)
                 .buttonStyle(.plain)
@@ -45,7 +45,7 @@ struct QuoteSelectionSheet: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 Text(NSLocalizedString("quote_selection_hint", comment: ""))
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundColor(Color.CT.textDim)
                     .padding(.horizontal)
 
@@ -61,7 +61,7 @@ struct QuoteSelectionSheet: View {
                             .fill(Color.CT.accent)
                             .frame(width: 2)
                         Text(selectedText)
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.textDim)
                             .lineLimit(2)
                     }
@@ -76,7 +76,7 @@ struct QuoteSelectionSheet: View {
 
             HStack {
                 Button(NSLocalizedString("cancel", comment: "")) { dismiss() }
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.textDim)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)

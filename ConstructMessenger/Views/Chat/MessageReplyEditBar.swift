@@ -36,7 +36,7 @@ struct MessageReplyBar: View {
 
             VStack(alignment: .leading, spacing: ComposerAuxBarLayout.labelPreviewSpacing) {
                 Text(LocalizedStringKey("reply_to_colon"))
-                    .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                    .font(CTFont.ui(ChatUIConstants.Typography.metaSize))
                     .foregroundColor(Color.CT.textDim)
                 ReplyPreviewContent(
                     content: content,
@@ -76,10 +76,10 @@ struct MessageEditBar: View {
 
             VStack(alignment: .leading, spacing: ComposerAuxBarLayout.labelPreviewSpacing) {
                 Text(LocalizedStringKey("editing_message"))
-                    .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                    .font(CTFont.ui(ChatUIConstants.Typography.metaSize))
                     .foregroundColor(Color.CT.accent)
                 Text(content)
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .lineLimit(1)
                     .foregroundColor(Color.CT.textDim)
             }

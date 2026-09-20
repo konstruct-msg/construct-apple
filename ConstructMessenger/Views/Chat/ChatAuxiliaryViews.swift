@@ -17,7 +17,7 @@ struct ChatDropOverlayView: View {
                 .background(Color.CT.accent.opacity(0.05))
                 .overlay(
                     Text(LocalizedStringKey("drop_to_attach"))
-                        .font(CTFont.regular(16))
+                        .font(CTFont.ui(16))
                         .foregroundColor(Color.CT.accent)
                         .padding(CTLayout.sectionGap)
                         .background(Color.CT.bgMsg)
@@ -38,7 +38,7 @@ struct ChatSelectionBarView: View {
         HStack(alignment: .center, spacing: CTLayout.chromeGap) {
             Button(role: .destructive, action: onDelete) {
                 Text(NSLocalizedString("delete_selected", comment: "").uppercased())
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.danger)
                     .frame(minHeight: CTLayout.hitTarget)
             }
@@ -47,7 +47,7 @@ struct ChatSelectionBarView: View {
             Text(
                 "\(selectedCount) \(NSLocalizedString(selectedCount == 1 ? "message_selected" : "messages_selected", comment: ""))"
             )
-            .font(CTFont.regular(12))
+            .font(CTFont.secondary)
             .foregroundStyle(Color.CT.textDim)
         }
         .padding(.horizontal, CTLayout.edgePad)
@@ -98,7 +98,7 @@ struct ChatSearchOverlayView: View {
                                 resultCount
                             )
                         )
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.textDim)
                         Spacer()
                     }

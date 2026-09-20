@@ -36,7 +36,7 @@ struct FileAttachmentBubbleView: View {
             }
             if !fileContent.caption.isEmpty {
                 Text(fileContent.caption)
-                    .font(CTFont.regular(ChatUIConstants.Typography.captionSize))
+                    .font(CTFont.ui(ChatUIConstants.Typography.captionSize))
                     .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.text)
                     .padding(.top, 2)
             }
@@ -117,7 +117,7 @@ struct FileAttachmentBubbleView: View {
                     HStack {
                         Spacer()
                         Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
-                            .font(CTFont.regular(10))
+                            .font(CTFont.mono(10))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6).padding(.vertical, 3)
                             .background(Color.black.opacity(0.5))
@@ -145,11 +145,11 @@ struct FileAttachmentBubbleView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(file.filename)
-                        .font(CTFont.medium(13))
+                        .font(CTFont.ui(13, weight: .medium))
                         .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.text)
                         .lineLimit(1)
                     Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
-                        .font(CTFont.regular(ChatUIConstants.Typography.systemSize))
+                        .font(CTFont.mono(ChatUIConstants.Typography.systemSize))
                         .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.7) : Color.CT.textDim)
                 }
 
@@ -161,11 +161,11 @@ struct FileAttachmentBubbleView: View {
                         .scaleEffect(0.8)
                 } else if downloadedURLs[file.mediaId] != nil {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.8) : Color.CT.accent)
                 } else {
                     Image(systemName: "arrow.down.circle.fill")
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.8) : Color.CT.accent)
                 }
             }

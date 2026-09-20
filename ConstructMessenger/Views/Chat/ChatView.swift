@@ -483,7 +483,7 @@ struct ChatView: View {
         .overlay {
             if viewModel.isInitializingSession {
                 Text(NSLocalizedString("history_sync_composer_connecting", comment: ""))
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundStyle(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                     .padding(CTLayout.inlinePad)

@@ -99,7 +99,7 @@ struct AttachmentReviewView: View {
                 }
             } label: {
                 Label(NSLocalizedString("delete", comment: ""), systemImage: "trash")
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.danger)
                     .frame(maxWidth: .infinity)
                     .frame(height: CTLayout.controlHeight)
@@ -112,7 +112,7 @@ struct AttachmentReviewView: View {
             if current?.kind == .image {
                 Button { editing = true } label: {
                     Label(NSLocalizedString("edit", comment: ""), systemImage: "crop.rotate")
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.accent)
                         .frame(maxWidth: .infinity)
                         .frame(height: CTLayout.controlHeight)

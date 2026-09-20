@@ -326,7 +326,7 @@ struct MediaGalleryViewer: View {
             HStack(alignment: .center) {
                 Button { isPresented = false } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(CTFont.regular(20))
+                        .font(CTFont.ui(20))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                         .contentShape(Rectangle())
@@ -337,7 +337,7 @@ struct MediaGalleryViewer: View {
 
                 if entries.count > 1 {
                     Text("\(currentPosition) / \(entries.count)")
-                        .font(CTFont.medium(13))
+                        .font(CTFont.mono(13, weight: .medium))
                         .foregroundColor(.white.opacity(0.8))
                 }
 
@@ -345,7 +345,7 @@ struct MediaGalleryViewer: View {
 
                 Button { shareCurrentImage() } label: {
                     Image(systemName: "ellipsis.circle.fill")
-                        .font(CTFont.regular(20))
+                        .font(CTFont.ui(20))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                         .contentShape(Rectangle())
@@ -701,7 +701,7 @@ struct GalleryVideoPage: View {
                     Button { load(forceRetry: true) } label: {
                         VStack(spacing: 10) {
                             Image(systemName: "arrow.clockwise").font(.system(size: 28))
-                            Text(LocalizedStringKey("retry")).font(CTFont.regular(13))
+                            Text(LocalizedStringKey("retry")).font(CTFont.body)
                         }
                         .foregroundColor(.white.opacity(0.85))
                     }
@@ -711,7 +711,7 @@ struct GalleryVideoPage: View {
                         ProgressView().tint(.white).scaleEffect(1.3)
                         if progress > 0 {
                             Text("\(Int(progress * 100))%")
-                                .font(CTFont.regular(13)).foregroundColor(.white.opacity(0.8)).monospacedDigit()
+                                .font(CTFont.mono(13)).foregroundColor(.white.opacity(0.8)).monospacedDigit()
                         }
                     }
                 }

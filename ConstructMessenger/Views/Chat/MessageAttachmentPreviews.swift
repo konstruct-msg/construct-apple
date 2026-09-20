@@ -173,12 +173,12 @@ struct MessageFilePreviewBar: View {
 
                         VStack(alignment: .leading, spacing: 1) {
                             Text(url.lastPathComponent)
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundColor(Color.CT.text)
                                 .lineLimit(1)
                             if let size = fileSize(url) {
                                 Text(size)
-                                    .font(CTFont.regular(10))
+                                    .font(CTFont.micro)
                                     .foregroundColor(Color.CT.textDim)
                             }
                         }
