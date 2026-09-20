@@ -154,10 +154,52 @@ enum CTFont {
     static func ui(
         _ size: CGFloat,
         weight: Font.Weight = .regular,
-        relativeTo: Font.TextStyle = .footnote
+        relativeTo: Font.TextStyle? = nil
     ) -> Font {
-        .system(size: scaled(size, relativeTo: relativeTo), weight: weight)
+        let style = relativeTo ?? inferredStyle(for: size)
+        return .system(size: scaled(size, relativeTo: style), weight: weight)
     }
+
+    /// The Dynamic Type curve a bare size should follow when the call site names none.
+    /// Bands, not a table: what matters is that 13pt scales like a footnote and 48pt like a
+    /// large title, not that every size has its own entry.
+    private static func inferredStyle(for size: CGFloat) -> Font.TextStyle {
+        switch size {
+        case ..<12:  return .caption2
+        case ..<13:  return .caption
+        case ..<15:  return .footnote
+        case ..<18:  return .headline
+        case ..<28:  return .title3
+        default:     return .largeTitle
+        }
+    }
+
+    // MARK: - Roles
+
+    // The chrome's type scale as names. 685 call sites used 38 (weight, size) pairs and eleven
+    // of them covered 90%; these are those pairs, so that a change to "what body text is"
+    // happens here once. A role keeps the size it replaced — the migration onto it is a
+    // rename, not a redesign. Sizes not in this list are `ui(size, weight:)` directly.
+    //
+    // `.mono` is deliberately absent: monospace is `CTFont.mono(size)` at the site, because it
+    // is a decision about the content (this is a fingerprint) rather than a slot in the scale.
+
+    /// Screen and sheet titles. Was `bold(18)`.
+    static var title: Font        { ui(18, weight: .bold, relativeTo: .title3) }
+    /// Section titles and emphasised labels. Was `bold(14)`.
+    static var headline: Font     { ui(14, weight: .bold, relativeTo: .headline) }
+    /// Row labels and the ordinary text of the chrome. Was `regular(13)` — 208 sites.
+    static var body: Font         { ui(13, relativeTo: .footnote) }
+    /// Body with emphasis. Was `bold(13)`.
+    static var bodyEmphasis: Font { ui(13, weight: .bold, relativeTo: .footnote) }
+    /// Row values, secondary lines. Was `regular(12)`.
+    static var secondary: Font    { ui(12, relativeTo: .caption) }
+    /// Captions, timestamps, footers. Was `regular(11)` — 135 sites.
+    static var caption: Font      { ui(11, relativeTo: .caption2) }
+    /// The smallest text the chrome sets. Was `regular(10)`.
+    static var micro: Font        { ui(10, relativeTo: .caption2) }
+    /// Chips and tiny tags. Was `bold(11)`.
+    static var badge: Font        { ui(11, weight: .bold, relativeTo: .caption2) }
 
     /// Our point size put through the platform's Dynamic Type curve for `style`.
     ///
