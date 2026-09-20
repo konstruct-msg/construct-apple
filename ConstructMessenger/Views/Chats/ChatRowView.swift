@@ -139,7 +139,7 @@ private struct ChatRowLayout: View {
 
                     if let ts = chat.lastMessageTime {
                         Text(ChatRowView.rowTimestampText(ts))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.textDim)
                             .lineLimit(1)
                     }
@@ -153,7 +153,7 @@ private struct ChatRowLayout: View {
                 HStack(alignment: .center, spacing: CTLayout.inlinePad) {
                     if let lastMessage = chat.lastMessageText {
                         Text(Chat.formatPreviewText(lastMessage))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.textDim)
                             .lineLimit(1)
                             // Explicit dependency so SwiftUI cannot elide the Text when
@@ -163,7 +163,7 @@ private struct ChatRowLayout: View {
                     Spacer(minLength: 4)
                     if chat.unreadCount > 0 {
                         Text(chat.unreadCount < 10000 ? "\(chat.unreadCount)" : "9999+")
-                            .font(CTFont.bold(11))
+                            .font(CTFont.badge)
                             .foregroundColor(Color.CT.bg)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -187,12 +187,12 @@ private struct ChatRowLayout: View {
         let alias = user.localAlias?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let alias, !alias.isEmpty {
             Text(alias)
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundColor(Color.CT.text)
         } else {
             // Profile-shared name → username → generated (see User.resolvedDisplayName).
             Text(user.resolvedDisplayName)
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundColor(Color.CT.text)
         }
     }

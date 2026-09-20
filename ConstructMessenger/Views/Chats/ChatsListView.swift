@@ -273,12 +273,12 @@ struct ChatsListView: View {
                 .padding(.bottom, 4)
 
             Text(LocalizedStringKey("chats_empty_title"))
-                .font(CTFont.bold(16))
+                .font(CTFont.ui(16, weight: .bold))
                 .foregroundStyle(Color.CT.text)
                 .multilineTextAlignment(.center)
 
             Text(LocalizedStringKey("chats_empty_subtitle"))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, CTLayout.sectionGap)
@@ -325,7 +325,7 @@ struct ChatsListView: View {
                 Image(systemName: systemImage)
                     .font(.system(size: CTLayout.navIconSize, weight: .medium))
                 Text(NSLocalizedString(titleKey, comment: "").uppercased())
-                    .font(CTFont.bold(12))
+                    .font(CTFont.ui(12, weight: .bold))
                     .tracking(1)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")

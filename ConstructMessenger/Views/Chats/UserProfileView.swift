@@ -87,7 +87,7 @@ struct UserProfileView: View {
                     flatDivider(thick: true)
 
                     Text("> \(NSLocalizedString("end_to_end_encrypted", comment: ""))")
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.accent.opacity(0.5))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 20)
@@ -213,14 +213,14 @@ struct UserProfileView: View {
 
             profileRow(label: NSLocalizedString("username", comment: "")) {
                 Text("<@\(user.username.isEmpty ? "—" : user.username)>")
-                    .font(CTFont.regular(14))
+                    .font(CTFont.ui(14))
                     .foregroundStyle(Color.CT.textDim)
             }
             flatRowDivider()
 
             profileRow(label: NSLocalizedString("display_name", comment: "")) {
                 Text(user.resolvedDisplayName)
-                    .font(CTFont.regular(14))
+                    .font(CTFont.ui(14))
                     .foregroundStyle(Color.CT.text)
             }
             flatRowDivider()
@@ -235,7 +235,7 @@ struct UserProfileView: View {
                     HStack(spacing: 8) {
                         let hasAlias = !(user.localAlias ?? "").isEmpty
                         Text(hasAlias ? (user.localAlias ?? "") : NSLocalizedString("local_name_unset", comment: ""))
-                            .font(CTFont.regular(14))
+                            .font(CTFont.ui(14))
                             .foregroundStyle(hasAlias ? Color.CT.text : Color.CT.textDim)
                         Image(systemName: "pencil")
                             .font(.system(size: 12, weight: .semibold))
@@ -254,7 +254,7 @@ struct UserProfileView: View {
                     profileRow(label: NSLocalizedString("identity_fingerprint", comment: "")) {
                         HStack(spacing: 6) {
                             Text(fp)
-                                .font(CTFont.regular(12))
+                                .font(CTFont.mono(12))
                                 .foregroundStyle(Color.CT.accent)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
@@ -270,7 +270,7 @@ struct UserProfileView: View {
             } else {
                 profileRow(label: NSLocalizedString("identity_fingerprint", comment: "")) {
                     Text(NSLocalizedString("identity_fingerprint_unknown", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.textDim)
                 }
             }
@@ -281,7 +281,7 @@ struct UserProfileView: View {
                 let uid = user.id
                 let short = uid.count > 12 ? "\(uid.prefix(8))...\(uid.suffix(2))" : uid
                 Text(short)
-                    .font(CTFont.regular(13))
+                    .font(CTFont.mono(13))
                     .foregroundStyle(Color.CT.textDim.opacity(0.7))
             }
             #endif
@@ -350,7 +350,7 @@ struct UserProfileView: View {
             if let sharedAt = user.sharedWithMeAt, user.isSharingWithMe {
                 flatRowDivider()
                 Text(String(format: NSLocalizedString("sharing_with_you", comment: ""), formatDate(sharedAt)))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
@@ -387,7 +387,7 @@ struct UserProfileView: View {
 
             profileRow(label: "") {
                 Text(sessionSuiteLabel)
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(hasSession ? Color.CT.text : Color.CT.textDim)
             }
             flatRowDivider()
@@ -415,7 +415,7 @@ struct UserProfileView: View {
                     user.ktStatus == .failed ? "key_change_banner_title_failed" : "key_change_banner_title",
                     comment: ""
                 ))
-                .font(CTFont.bold(12))
+                .font(CTFont.ui(12, weight: .bold))
                 .foregroundStyle(Color.CT.danger)
             }
 
@@ -426,7 +426,7 @@ struct UserProfileView: View {
                     user.resolvedDisplayName
                  )
             )
-            .font(CTFont.regular(11))
+            .font(CTFont.caption)
             .foregroundStyle(Color.CT.textDim)
 
             HStack(spacing: 10) {
@@ -434,7 +434,7 @@ struct UserProfileView: View {
                     showingSafetyNumbers = true
                 } label: {
                     Text(NSLocalizedString("key_change_verify", comment: ""))
-                        .font(CTFont.bold(12))
+                        .font(CTFont.ui(12, weight: .bold))
                         .foregroundStyle(Color.CT.bg)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -449,7 +449,7 @@ struct UserProfileView: View {
                     }
                 } label: {
                     Text(NSLocalizedString("key_change_accept", comment: ""))
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.accent)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -520,10 +520,10 @@ struct UserProfileView: View {
     private func sectionHeader(_ title: String, color: Color = Color.CT.accent) -> some View {
         HStack(spacing: 6) {
             Text(">")
-                .font(CTFont.bold(12))
+                .font(CTFont.ui(12, weight: .bold))
                 .foregroundStyle(color)
             Text(title.uppercased())
-                .font(CTFont.bold(12))
+                .font(CTFont.ui(12, weight: .bold))
                 .foregroundStyle(color)
                 .tracking(2)
         }
@@ -535,7 +535,7 @@ struct UserProfileView: View {
         HStack {
             if !label.isEmpty {
                 Text(label.lowercased())
-                    .font(CTFont.regular(14))
+                    .font(CTFont.ui(14))
                     .foregroundStyle(Color.CT.textDim)
             }
             Spacer()
@@ -549,14 +549,14 @@ struct UserProfileView: View {
         Button(action: { guard !isLoading else { return }; action() }) {
             HStack {
                 Text(label.lowercased())
-                    .font(CTFont.regular(14))
+                    .font(CTFont.ui(14))
                     .foregroundStyle(color)
                 Spacer()
                 if isLoading {
                     ProgressView().scaleEffect(0.75).tint(Color.CT.textDim)
                 } else {
                     Image(systemName: "chevron.right")
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(color.opacity(0.6))
                 }
             }
@@ -571,7 +571,7 @@ struct UserProfileView: View {
     private func disabledRow(label: String) -> some View {
         HStack {
             Text(label.lowercased())
-                .font(CTFont.regular(14))
+                .font(CTFont.ui(14))
                 .foregroundStyle(Color.CT.textDim)
             Spacer()
             Text(NSLocalizedString("settings_coming_soon", comment: ""))
