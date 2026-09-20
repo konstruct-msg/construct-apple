@@ -132,7 +132,7 @@ struct SecurityView: View {
                 if securityViewModel.isDuresspinEnabled {
                     Button { showingDuressPinSetup = true } label: {
                         HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                            CTRowIcon("[]", color: Color.CT.danger)
+                            CTRowIcon(sf: "exclamationmark.lock.fill", color: Color.CT.danger)
                             Text(LocalizedStringKey("duress_pin_change"))
                                 .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.text)
@@ -161,7 +161,7 @@ struct SecurityView: View {
                 } else {
                     Button { showingDuressPinSetup = true } label: {
                         HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                            CTRowIcon("[]", color: securityViewModel.isPinEnabled
+                            CTRowIcon(sf: "exclamationmark.lock", color: securityViewModel.isPinEnabled
                                       ? Color.CT.textDim : Color.CT.textDim.opacity(0.4))
                             Text(LocalizedStringKey("enable_duress_pin"))
                                 .font(CTFont.regular(13))
@@ -291,7 +291,7 @@ struct SecurityView: View {
                 // MARK: - Discovery
                 let hasUsername = !authVM.currentUsername.isEmpty
                 HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                    CTRowIcon("[⊙]", color: settingsViewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
+                    CTRowIcon(sf: settingsViewModel.isDiscoverable ? "eye.fill" : "eye.slash", color: settingsViewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
                     Text(LocalizedStringKey("searchable_toggle_title"))
                         .font(CTFont.regular(13))
                         .foregroundStyle(hasUsername ? Color.CT.text : Color.CT.textDim)
@@ -383,7 +383,7 @@ struct SecurityView: View {
         @Bindable var securityViewModel = securityViewModel
         return Button { showingLockDelayPicker = true } label: {
             HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                CTRowIcon("[t]")
+                CTRowIcon(sf: "timer")
                 Text(LocalizedStringKey("lock_delay"))
                     .font(CTFont.regular(13))
                     .foregroundStyle(Color.CT.text)
@@ -470,7 +470,7 @@ private struct KTStatusSection: View {
         CTSettingsSectionHeader(title: NSLocalizedString("kt_section", comment: ""))
 
         HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-            CTRowIcon("[#]", color: statusColor)
+            CTRowIcon(sf: "number", color: statusColor)
             Text(LocalizedStringKey("kt_status"))
                 .font(CTFont.regular(13))
                 .foregroundStyle(Color.CT.text)
