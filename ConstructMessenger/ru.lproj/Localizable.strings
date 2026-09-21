@@ -600,6 +600,13 @@
 "sticker_picker_recent" = "Недавние";
 "sticker_catalog_empty" = "Наборов стикеров пока нет.";
 "sticker_install_fixture" = "Установить тестовый набор";
+"sticker_picker_more_packs" = "Ещё наборы";
+"sticker_get" = "Добавить";
+"sticker_pack_count" = "%d стикеров";
+"sticker_install_failed" = "Не удалось установить — попробуйте ещё раз";
+"sticker_catalog_failed" = "Не удалось загрузить наборы.";
+"sticker_catalog_retry" = "Повторить";
+"sticker_pack_remove" = "Убрать набор";
 
 // MARK: - Attachments
 "attach" = "Прикрепить";

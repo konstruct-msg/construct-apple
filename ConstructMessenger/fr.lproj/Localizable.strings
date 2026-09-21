@@ -556,6 +556,13 @@
 "sticker_picker_recent" = "Récents";
 "sticker_catalog_empty" = "Aucun pack de stickers pour l’instant.";
 "sticker_install_fixture" = "Installer le pack de test";
+"sticker_picker_more_packs" = "Autres packs";
+"sticker_get" = "Ajouter";
+"sticker_pack_count" = "%d stickers";
+"sticker_install_failed" = "Installation impossible — réessayez";
+"sticker_catalog_failed" = "Impossible de charger les packs.";
+"sticker_catalog_retry" = "Réessayer";
+"sticker_pack_remove" = "Retirer le pack";
 
 // MARK: - Attachments
 "attach" = "Joindre";

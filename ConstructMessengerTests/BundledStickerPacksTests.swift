@@ -89,6 +89,7 @@ final class BundledStickerPacksTests: XCTestCase {
         func manifestBytes(for pack: StickerPackID) async throws -> Data { throw URLError(.notConnectedToInternet) }
         func blobs(for pack: StickerPackID, have: [Data], onBlob: @escaping @Sendable (Data, Data) throws -> Void) async throws { throw URLError(.notConnectedToInternet) }
         func catalog() async throws -> [Shared_Proto_Services_V1_StickerPackSummary] { [] }
+        func blob(_ sha256: Data) async throws -> Data { throw URLError(.notConnectedToInternet) }
     }
 
     func testSeedsOnceAndRespectsAnUninstall() throws {

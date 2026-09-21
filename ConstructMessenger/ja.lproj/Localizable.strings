@@ -537,6 +537,13 @@
 "sticker_picker_recent" = "最近使用";
 "sticker_catalog_empty" = "ステッカーパックはまだありません。";
 "sticker_install_fixture" = "テスト用パックをインストール";
+"sticker_picker_more_packs" = "ほかのパック";
+"sticker_get" = "追加";
+"sticker_pack_count" = "%d枚";
+"sticker_install_failed" = "追加できませんでした — もう一度お試しください";
+"sticker_catalog_failed" = "パックを読み込めませんでした。";
+"sticker_catalog_retry" = "再試行";
+"sticker_pack_remove" = "パックを削除";
 
 // MARK: - Attachments
 "attach" = "添付";

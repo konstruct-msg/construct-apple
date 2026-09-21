@@ -168,6 +168,16 @@ final class StickerService {
         try await fetcher.catalog()
     }
 
+    /// One blob by hash, for a catalog cover. From the store when the device already holds
+    /// it, else fetched and checked against the hash — the summary that named it is not
+    /// signed, so the bytes are trusted only to be what the hash says.
+    func blob(_ sha256: Data) async throws -> Data {
+        if let local = store.blobs.data(for: sha256) { return local }
+        let data = try await fetcher.blob(sha256)
+        guard Data(SHA256.hash(data: data)) == sha256 else { throw StickerBlobStore.PutError.hashMismatch }
+        return data
+    }
+
     enum InstallError: Error, Equatable {
         case unavailable
     }

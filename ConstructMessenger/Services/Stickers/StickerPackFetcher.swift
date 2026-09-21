@@ -24,6 +24,9 @@ protocol StickerPackFetching: Sendable {
     ) async throws
     /// The catalog, all pages.
     func catalog() async throws -> [Shared_Proto_Services_V1_StickerPackSummary]
+    /// One blob by hash. A catalog cover, or cache repair — never a sticker on receive: that
+    /// is the per-sticker access pattern the design forbids.
+    func blob(_ sha256: Data) async throws -> Data
 }
 
 /// gRPC over the same channel prekey bundles use: sealed when the unauthenticated-transport flag
@@ -59,6 +62,15 @@ struct StickerPackFetcher: StickerPackFetching {
                     try onBlob(message.sha256, message.data)
                 }
             }
+        }
+    }
+
+    func blob(_ sha256: Data) async throws -> Data {
+        try await GRPCChannelManager.shared.performRPC(sealed: sealed, timeout: GRPCTimeouts.stickerManifest) { grpc in
+            let client = Shared_Proto_Services_V1_StickerService.Client(wrapping: grpc)
+            var request = Shared_Proto_Services_V1_GetStickerBlobRequest()
+            request.sha256 = sha256
+            return try await client.getStickerBlob(request: .init(message: request)).data
         }
     }
 

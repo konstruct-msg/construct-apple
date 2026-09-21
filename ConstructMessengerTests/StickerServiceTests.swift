@@ -69,6 +69,7 @@ final class StickerServiceTests: XCTestCase {
         }
 
         func catalog() async throws -> [Shared_Proto_Services_V1_StickerPackSummary] { [] }
+        func blob(_ sha256: Data) async throws -> Data { try blobReader(sha256) }
     }
 
     private var clock = Date()
