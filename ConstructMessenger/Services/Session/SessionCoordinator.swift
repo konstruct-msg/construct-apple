@@ -800,11 +800,11 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Seconds of clock-skew tolerance when deciding whether an END_SESSION pre-dates our session.
     private static let endSessionStaleFudge: UInt64 = 5
 
-    /// The relay blanks `sender_device` on an inbound teardown, so `peer.device` is `nil` on every
-    /// call that reaches here today and `SessionScope(peer)` resolves to the pinned device — the
-    /// only session such a teardown can be about while §D is missing. Written as a scope rather
-    /// than an account so that §D, when it lands, changes this by supplying the device and nothing
-    /// here has to be revisited. `lastInboundEndSessionAt` beside it is still account-keyed.
+    /// `peer.device` is the device that sent the teardown, recovered from its sealed certificate
+    /// (`ResolvedSender.senderDeviceId`) since 2026-09-21, so `SessionScope(peer)` is that
+    /// device's scope and the establishment it is compared against is that ratchet's. An
+    /// unsealed teardown names no device and resolves to the pinned one, the only session it can
+    /// be about. `lastInboundEndSessionAt` beside it is still account-keyed.
     func messageRouter(_ router: MessageRouter, isEndSessionStale peer: PeerAddress, timestamp: UInt64) -> Bool {
         let userId = peer.account
         let established = establishedAt(for: SessionScope(peer))

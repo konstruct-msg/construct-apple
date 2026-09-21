@@ -460,6 +460,16 @@ final class MessageRouter {
             // END_SESSION (21) and SESSION_RESET_INIT (24) still say anything here.
         }
 
+        // A message replayed from the confirm hold or the pending queue arrives here already
+        // resolved — `from` filled, sealed bytes spent — so the branch above does not run, but
+        // the device it named is still on the message. Without this the replay asked about the
+        // pinned device's session, found it down, and tore the peer down over a message whose
+        // own session was alive (stand, 2026-09-21 18:38:35: `device=pinned, hasSession=false`
+        // on two replays, then END_SESSION to the sibling).
+        if namedSenderDevice == nil, !message.senderDeviceId.isEmpty {
+            namedSenderDevice = message.senderDeviceId
+        }
+
         let otherUserId = message.from == currentUserId ? message.to : message.from
 
         guard beginProcessing(message.id) else {
@@ -587,20 +597,25 @@ final class MessageRouter {
             // establishment (a server backlog replay) is a duplicate to ACK-only. A *newer* init
             // is a live re-init and MUST be applied even while a session is active — dropping it
             // strands the RESPONDER on a dead ratchet → END_SESSION storm (2026-07-26 desync).
+            // Both halves, like END_SESSION below: the device from the certificate names the
+            // ratchet this init replaces. Two devices of one account re-initialising at once —
+            // the ordinary answer to a teardown sent to both — used to archive the pinned
+            // device's session twice and the sibling's never (stand, 2026-09-21 18:47:43).
+            let sriPeer = PeerAddress(account: otherUserId, device: message.senderDeviceId)
             if delegate?.messageRouter(
                 self,
-                isResetInitSuperseded: .account(otherUserId),
+                isResetInitSuperseded: sriPeer,
                 timestamp: message.timestamp,
                 initEphemeral: message.ephemeralPublicKey
             ) == true {
                 Log.info(
-                    "SESSION_RESET_INIT superseded for \(otherUserId.prefix(8))… — ACK only (pre-dates current session)",
+                    "SESSION_RESET_INIT superseded for \(sriPeer) — ACK only (pre-dates current session)",
                     category: "MessageRouter"
                 )
                 return
             }
-            Log.info("SESSION_RESET_INIT from \(otherUserId.prefix(8))…", category: "MessageRouter")
-            handleSessionResetInit(message: message, from: otherUserId, in: context)
+            Log.info("SESSION_RESET_INIT from \(sriPeer)", category: "MessageRouter")
+            handleSessionResetInit(message: message, from: sriPeer, in: context)
             // A handled SRI also counts as "we just reset this peer" for the END_SESSION coalescer
             // (preserves the cross-arm the removed inbound-control time-window provided).
             lastInboundEndSessionAt[otherUserId] = Date()
@@ -632,7 +647,13 @@ final class MessageRouter {
                 return
             }
             Log.info("Received END_SESSION from \(otherUserId)", category: "MessageRouter")
-            handleEndSession(from: otherUserId, messageTimestamp: message.timestamp, in: context)
+            // Both halves: the account from the envelope, the device from the certificate when
+            // the sender was sealed (`resolvingSealedSender` filled `senderDeviceId`). A teardown
+            // is about one ratchet, and only the device that sent it can say which.
+            handleEndSession(
+                from: PeerAddress(account: otherUserId, device: message.senderDeviceId),
+                messageTimestamp: message.timestamp, in: context
+            )
             return
         }
 
@@ -719,9 +740,17 @@ final class MessageRouter {
         // import (~5-10ms) if the session key is in Keychain but not yet loaded into the Rust core.
         // This prevents the false "session out of sync" banner that fires when the gRPC stream
         // delivers a mid-ratchet message (msgNum > 0) before sessions have been fully restored.
-        CryptoManager.shared.restoreSession(for: otherUserId)
-        let hasSession = CryptoManager.shared.hasSession(for: otherUserId)
-        Log.info("SESSION_STATE[incoming_message]: userId=\(otherUserId.prefix(8))..., hasSession=\(hasSession), messageId=\(message.id.prefix(8))...", category: "SessionInit")
+        //
+        // Asked of the device the certificate names, when it names one. By account this
+        // resolved to the pinned device, so a message from the peer's *other* device while the
+        // pinned session was down — a reset in flight, a teardown just applied — read as "no
+        // session, mid-ratchet" and answered with an END_SESSION for the whole peer, though the
+        // session it was actually sent on was alive and listed two lines below as the first
+        // decrypt candidate. An unnamed sender still resolves to the pinned device.
+        let sessionOwner = namedSenderDevice ?? otherUserId
+        CryptoManager.shared.restoreSession(for: sessionOwner)
+        let hasSession = CryptoManager.shared.hasSession(for: sessionOwner)
+        Log.info("SESSION_STATE[incoming_message]: userId=\(otherUserId.prefix(8))..., device=\(namedSenderDevice.map { String($0.prefix(8)) } ?? "pinned"), hasSession=\(hasSession), messageId=\(message.id.prefix(8))...", category: "SessionInit")
         
         if !hasSession {
             // First message from this user - need to initialize receiving session.
@@ -1851,7 +1880,13 @@ final class MessageRouter {
                     toUserId: userId,
                     in: context
                 )
-                delegate?.messageRouter(self, needsEndSession: .account(userId))
+                // The device the message came from, when the certificate named it: the session
+                // that is out of sync is that device's, and the coordinator tears down the device
+                // it is given. By account this resolved to the pinned device and tore down a
+                // sibling's healthy ratchet for a message it never sent.
+                delegate?.messageRouter(
+                    self, needsEndSession: PeerAddress(account: userId, device: message.senderDeviceId)
+                )
             }
             if isNewChat { context.delete(chat) }
             // Give-up: message is marked processed + sender asked to restart; nothing to drain,
@@ -2112,13 +2147,17 @@ final class MessageRouter {
     /// 2. Routes the X3DH payload through `handleFirstMessage` (normal RESPONDER init)
     private func handleSessionResetInit(
         message: ChatMessage,
-        from userId: String,
+        from peer: PeerAddress,
         in context: NSManagedObjectContext
     ) {
+        let userId = peer.account
         // 1. Archive old session via Rust orchestrator (canonical path); Swift fallback otherwise.
+        //    The session archived is the sending device's — `peer.device` from the certificate —
+        //    or the pinned device's when none is named. See `handleEndSession`.
         var rustHandled = false
+        let archiveContactId = peer.deviceOrPinned()
         if CryptoManager.shared.orchestratorCore != nil,
-           let archiveContactId = SessionAddressing.contactId(forPeer: userId) {
+           let archiveContactId {
             let endSessionData = Data("__END_SESSION__".utf8)
             let event = CfeIncomingEvent.messageReceived(
                 messageId: "sri_archive_\(userId)_\(Int(Date().timeIntervalSince1970))",
@@ -2139,13 +2178,15 @@ final class MessageRouter {
             }
         }
         if !rustHandled {
-            CryptoManager.shared.archiveSession(for: userId, reason: .endSessionReceived)
+            CryptoManager.shared.archiveSession(for: archiveContactId ?? userId, reason: .endSessionReceived)
         }
 
         // 2. Re-queue outgoing messages sent under the old session (cannot be decrypted by peer).
         requeueUndeliveredOutgoing(for: userId, in: context)
 
-        // 3. Remove stale pending messages and clear heal queue.
+        // 3. Remove stale pending messages and clear heal queue. Account-keyed still: an SRI from
+        //    one device drops a sibling's queued handshake here. Item 3 of
+        //    `a-peer-is-a-set-of-devices`, not closed by this change.
         pendingQueue.remove(for: userId)
         SessionHealingService.shared.clearQueue(for: userId, in: context)
 
@@ -2170,22 +2211,36 @@ final class MessageRouter {
     /// archive format is canonical and owned by the Rust orchestrator.
     /// Fallback: if the Rust path fails (e.g., no active session), use the
     /// existing Swift `archiveSession` to preserve existing behaviour.
-    private func handleEndSession(from userId: String, messageTimestamp: UInt64, in context: NSManagedObjectContext) {
+    /// `peer.device` is the device that sent the teardown, from its sealed certificate, and the
+    /// session archived is that device's. Until 2026-09-21 this took the account alone and
+    /// archived whatever `contactId(forPeer:)` named — the pinned device — so a "Reset session"
+    /// tapped on a peer's *second* device tore down our ratchet with its *first*: on the stand,
+    /// B's reset archived C's session with A (`acceptSessionTerminated: archived session for
+    /// c6bfaaef…` at 18:26:04, sent by b814c8ab), A kept sending on a session C no longer had,
+    /// and every one of those messages became `mid_ratchet_no_session` and an END_SESSION back —
+    /// 46 of them before it settled, one message lost to both of the account's devices. The
+    /// third defect in `decisions/a-peer-is-a-set-of-devices.md`, receive half.
+    ///
+    /// No device named (an unsealed teardown, or a certificate without one) falls back to the
+    /// pinned device through `deviceOrPinned()` — the only session such a teardown can be about.
+    private func handleEndSession(from peer: PeerAddress, messageTimestamp: UInt64, in context: NSManagedObjectContext) {
+        let userId = peer.account
         // Guard against stale END_SESSION messages: if the message's server timestamp
         // predates our current active session, it was queued from a previous session
         // cycle and re-delivered by the server. ACK it (already done) and stop here —
         // tearing down a healthy session based on a stale END_SESSION causes cascades.
-        if delegate?.messageRouter(self, isEndSessionStale: .account(userId), timestamp: messageTimestamp) == true {
-            Log.info("Discarding stale END_SESSION from \(userId.prefix(8))… (ts=\(messageTimestamp))", category: "MessageRouter")
+        if delegate?.messageRouter(self, isEndSessionStale: peer, timestamp: messageTimestamp) == true {
+            Log.info("Discarding stale END_SESSION from \(peer) (ts=\(messageTimestamp))", category: "MessageRouter")
             return
         }
 
-        Log.info("Handling END_SESSION from \(userId)", category: "MessageRouter")
+        Log.info("Handling END_SESSION from \(peer)", category: "MessageRouter")
 
         // 1. Archive the session — prefer Rust-owned archiving.
         var rustHandled = false
+        let archiveContactId = peer.deviceOrPinned()
         if CryptoManager.shared.orchestratorCore != nil,
-           let archiveContactId = SessionAddressing.contactId(forPeer: userId) {
+           let archiveContactId {
             let endSessionData = Data("__END_SESSION__".utf8)
             let event = CfeIncomingEvent.messageReceived(
                 messageId: "end_session_\(userId)_\(Int(Date().timeIntervalSince1970))",
@@ -2209,17 +2264,23 @@ final class MessageRouter {
         }
 
         if !rustHandled {
-            CryptoManager.shared.archiveSession(for: userId, reason: .endSessionReceived)
-            Log.debug("END_SESSION: session archived via Swift fallback for \(userId.prefix(8))…", category: "MessageRouter")
+            // A device id passes through the seam unchanged, so the fallback archives the same
+            // ratchet the Rust path would have.
+            CryptoManager.shared.archiveSession(for: archiveContactId ?? userId, reason: .endSessionReceived)
+            Log.debug("END_SESSION: session archived via Swift fallback for \(peer)", category: "MessageRouter")
         }
 
         // Defence-in-depth: guarantee Keychain is clear even if the Rust path
         // did not reach archive_session() (e.g. export failure returning vec![]).
         // The normal path now emits CfeAction.sessionTerminated which already clears
         // Keychain via acceptSessionTerminated(), so this is a no-op in the happy path.
-        KeychainManager.shared.deleteSession(for: userId)
-        KeychainManager.shared.deleteSessionSuiteId(userId: userId)
-        Log.debug("END_SESSION: Keychain hot session cleared for \(userId.prefix(8))… (post-archive)", category: "MessageRouter")
+        // Keyed by device: the session accounts and the suite id are both written by device,
+        // and deleting by account found nothing.
+        if let archiveContactId {
+            KeychainManager.shared.deleteSession(for: archiveContactId)
+            KeychainManager.shared.deleteSessionSuiteId(userId: archiveContactId)
+        }
+        Log.debug("END_SESSION: Keychain hot session cleared for \(peer) (post-archive)", category: "MessageRouter")
 
         // 2. Re-queue any outgoing messages that were sent to the server but not yet
         //    delivered (no ACK). These were encrypted with the now-archived session keys
@@ -2232,9 +2293,9 @@ final class MessageRouter {
         SessionHealingService.shared.clearQueue(for: userId, in: context)
 
         // 4. Notify coordinator so the natural INITIATOR can prewarm immediately.
-        delegate?.messageRouter(self, receivedEndSession: .account(userId), timestamp: messageTimestamp)
+        delegate?.messageRouter(self, receivedEndSession: peer, timestamp: messageTimestamp)
 
-        Log.info("END_SESSION handled for \(userId)", category: "MessageRouter")
+        Log.info("END_SESSION handled for \(peer)", category: "MessageRouter")
     }
     
     /// Marks outgoing messages that were sent to the server but never delivered as `.queued`,

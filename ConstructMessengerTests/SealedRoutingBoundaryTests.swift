@@ -31,8 +31,8 @@ final class SealedRoutingBoundaryTests: XCTestCase {
     /// *before* any crypto work, so classification can be observed without executing the
     /// handlers. Both return `true` to short-circuit the heavy path deliberately.
     private final class RecordingDelegate: MessageRouterDelegate {
-        var resetInitSupersededQueries: [String] = []
-        var endSessionStaleQueries: [String] = []
+        var resetInitSupersededQueries: [PeerAddress] = []
+        var endSessionStaleQueries: [PeerAddress] = []
         var endSessionRequests: [String] = []
 
         func messageRouter(_ router: MessageRouter, needsPublicKeyBundle peer: PeerAddress, for message: ChatMessage) {}
@@ -41,11 +41,11 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         }
         func messageRouter(_ router: MessageRouter, receivedEndSession peer: PeerAddress, timestamp: UInt64) {}
         func messageRouter(_ router: MessageRouter, isEndSessionStale peer: PeerAddress, timestamp: UInt64) -> Bool {
-            endSessionStaleQueries.append(peer.account)
+            endSessionStaleQueries.append(peer)
             return true   // short-circuit: classification is what we assert
         }
         func messageRouter(_ router: MessageRouter, isResetInitSuperseded peer: PeerAddress, timestamp: UInt64, initEphemeral: Data) -> Bool {
-            resetInitSupersededQueries.append(peer.account)
+            resetInitSupersededQueries.append(peer)
             return true   // short-circuit
         }
         func messageRouter(_ router: MessageRouter, didWinTieBreak peer: PeerAddress) {}
@@ -98,9 +98,19 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         router.routeIncomingMessage(sealedMessage(), in: context)
 
         XCTAssertEqual(
-            delegate.resetInitSupersededQueries, [peer],
+            delegate.resetInitSupersededQueries.map(\.account), [peer],
             "sealed ct=24 must route as SESSION_RESET_INIT — this is the f39e03b4 regression"
         )
+    }
+
+    /// The re-init names the device whose ratchet it replaces. Two devices of one account
+    /// re-initialising at once used to archive the pinned session twice and the sibling's never.
+    func testSealedResetInit_NamesTheCertifiedDevice() {
+        stubUnseal(contentType: 24)
+
+        router.routeIncomingMessage(sealedMessage(), in: context)
+
+        XCTAssertEqual(delegate.resetInitSupersededQueries.map(\.device), [senderDevice])
     }
 
     /// A sealed END_SESSION must reach the END_SESSION branch. Before the fix it was classified
@@ -111,8 +121,23 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         router.routeIncomingMessage(sealedMessage(), in: context)
 
         XCTAssertEqual(
-            delegate.endSessionStaleQueries, [peer],
+            delegate.endSessionStaleQueries.map(\.account), [peer],
             "sealed ct=21 must route as END_SESSION — this is the f39e03b4 regression"
+        )
+    }
+
+    /// A sealed END_SESSION names the device that sent it — the certificate's — to the
+    /// coordinator, so the stale check and the archive are about that ratchet and not the
+    /// pinned one. Until 2026-09-21 the router passed `.account(peer)` here and a reset from a
+    /// peer's second device tore down the session with its first.
+    func testSealedEndSession_NamesTheCertifiedDevice() {
+        stubUnseal(contentType: 21)
+
+        router.routeIncomingMessage(sealedMessage(), in: context)
+
+        XCTAssertEqual(
+            delegate.endSessionStaleQueries.map(\.device), [senderDevice],
+            "the teardown is about the sending device's session, and only the certificate can name it"
         )
     }
 
@@ -134,7 +159,7 @@ final class SealedRoutingBoundaryTests: XCTestCase {
 
         router.routeIncomingMessage(sealedMessage(), in: context)
 
-        XCTAssertEqual(delegate.resetInitSupersededQueries.first, peer,
+        XCTAssertEqual(delegate.resetInitSupersededQueries.first?.account, peer,
                        "routing identity must be the unsealed sender, not the empty outer `from`")
     }
 
