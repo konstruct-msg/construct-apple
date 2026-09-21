@@ -198,6 +198,23 @@ the authority on a peer's device set. See `decisions/a-peer-is-a-set-of-devices.
 
 ## Architecture invariants
 
+**A change on the delivery or crypto path answers three questions before it lands**, in the
+commit message or the session note — not "this is safe", but the answers:
+
+1. What does the server (or any relay) learn that it did not learn before?
+2. What can a party — server, sender, a sibling device — withhold or substitute that it could
+   not before?
+3. Which trust boundary moves, and in which direction?
+
+"An improvement must not cost security" is what everyone already nods at, and it has no
+content until it is a question with an answer. The questions are the content. A change whose
+honest answer to 1 or 2 is "something" is not merged on the strength of the improvement; it is
+a design decision and goes through `decisions/`. Example of the rule applied: the 2026-09-21
+mailbox merge filter (`construct-server` PR #53) — learns nothing new (the field was already
+read at dispatch), a sender can misdirect only its own envelopes and only as the cutover would
+anyway, and the boundary moved inward (ciphertext sealed to one device stops reaching its
+sibling). Asked before the merge, not after.
+
 Before any architectural decision, search the vault:
 `grep -ril <topic> ~/Code/construct-docs/{architecture,backend,client,cryptocore,security,decisions}`.
 Before touching `Networking/gRPC/VEIL/` or `Services/Calls/`, read
