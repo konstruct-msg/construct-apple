@@ -63,6 +63,31 @@ final class ResponderDeviceWalkTests: XCTestCase {
         XCTAssertEqual(ids(ordered), ["cccc3333", "aaaa1111", "bbbb2222", "dddd4444"])
     }
 
+    /// The device the carrier's certificate named goes before the pinned one: the pin says whom
+    /// we talked to before, the certificate says who wrote this. On the stand a re-init from the
+    /// sibling walked the pinned device first and archived its healthy session on the way.
+    ///
+    /// Mutation: apply the named move before the pinned one — this reddens on the first element.
+    func testTheNamedDeviceGoesBeforeThePinnedOne() {
+        let bundles = [bundle(device: "aaaa1111"), bundle(device: "bbbb2222"), bundle(device: "cccc3333")]
+        let ordered = PublicKeyBundleHandler.orderedByLikelihood(
+            bundles, pinnedDeviceId: "cccc3333", namedDeviceId: "bbbb2222"
+        )
+        XCTAssertEqual(ids(ordered), ["bbbb2222", "cccc3333", "aaaa1111"])
+    }
+
+    /// A name that matches no bundle — an unvouched certificate, or a device since revoked —
+    /// changes nothing; the pin still leads.
+    func testAnUnknownNamedDeviceLeavesThePinFirst() {
+        let bundles = [bundle(device: "aaaa1111"), bundle(device: "cccc3333")]
+        for named in [nil, "", "notoneofthem"] as [String?] {
+            let ordered = PublicKeyBundleHandler.orderedByLikelihood(
+                bundles, pinnedDeviceId: "cccc3333", namedDeviceId: named
+            )
+            XCTAssertEqual(ids(ordered), ["cccc3333", "aaaa1111"], "named=\(named ?? "nil")")
+        }
+    }
+
     /// Nothing is dropped and nothing is duplicated — the walk must be able to reach every device
     /// the account has, which is the entire point.
     ///
@@ -118,7 +143,12 @@ final class ResponderDeviceWalkTests: XCTestCase {
     /// Mutation: revert either call site to `fetchPublicKeyWithRetry` — this reddens.
     func testBothResponderPathsWalkTheDevices() throws {
         let source = try sourceOf("ConstructMessenger/Services/Session/SessionCoordinator.swift")
-        let occurrences = source.components(separatedBy: "responderBundleCandidates(userId:").count - 1
+        // Both sites now hand the walk the device the carrier's certificate named, so the call
+        // spans a line break: match the function and the label that follows, not one spelling.
+        let occurrences = source.components(separatedBy: "responderBundleCandidates(").count - 1
+        let named = source.components(separatedBy: "namedDevice: message.senderDeviceId").count - 1
+            + source.components(separatedBy: "namedDevice: failedMessage.senderDeviceId").count - 1
+        XCTAssertEqual(named, 2, "both walks name the certified sender device")
         XCTAssertEqual(
             occurrences, 2,
             "the first-message path and the heal path both open a message whose sending device the "

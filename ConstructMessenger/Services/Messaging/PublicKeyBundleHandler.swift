@@ -135,29 +135,46 @@ class PublicKeyBundleHandler {
     ///
     /// A move, not a sort: `sorted(by:)` is not stable in Swift, and reordering the devices we are
     /// *not* confident about would make the walk's order differ between runs for no reason.
+    ///
+    /// **The device the carrier names goes before the pinned one.** A sealed delivery carries
+    /// its sending device in the certificate (`ResolvedSender.senderDeviceId`), and that is a
+    /// stronger answer than the pin: the pin says which device we have talked to before, the
+    /// certificate says which device wrote this. Trying the pinned device first on a handshake
+    /// from the sibling is not free either — `initReceivingSession` archives an existing
+    /// session with a candidate before trying it, so on the stand (2026-09-21 19:25:13) a
+    /// re-init from B walked A first, put away C's healthy ratchet with A, then failed on it.
+    /// Unnamed (an unsealed carrier, or an unvouched certificate that named nothing) falls back
+    /// to the pin as before.
     nonisolated static func orderedByLikelihood(
         _ bundles: [DeviceBundleData],
-        pinnedDeviceId: String?
+        pinnedDeviceId: String?,
+        namedDeviceId: String? = nil
     ) -> [DeviceBundleData] {
-        guard let pinned = pinnedDeviceId, !pinned.isEmpty,
-              let index = bundles.firstIndex(where: { $0.deviceId == pinned }) else {
-            return bundles
-        }
         var ordered = bundles
-        ordered.insert(ordered.remove(at: index), at: 0)
+        // Pinned first, then the named device moved ahead of it — so the order is
+        // named, pinned, the rest as the server gave them.
+        for preferred in [pinnedDeviceId, namedDeviceId] {
+            guard let preferred, !preferred.isEmpty,
+                  let index = ordered.firstIndex(where: { $0.deviceId == preferred }) else { continue }
+            ordered.insert(ordered.remove(at: index), at: 0)
+        }
         return ordered
     }
 
-    func responderBundleCandidates(userId: String) async throws -> [PublicKeyBundleData] {
+    /// `namedDevice` is the sending device the carrier's certificate named, when it did.
+    func responderBundleCandidates(userId: String, namedDevice: String? = nil) async throws -> [PublicKeyBundleData] {
         let bundles = try await KeyServiceClient.shared.getPreKeyBundles(
             userId: userId,
             consumeOneTimePrekey: false
         )
         let ordered = Self.orderedByLikelihood(
-            bundles, pinnedDeviceId: SessionAddressing.cryptoIdentity(ofUser: userId)
+            bundles,
+            pinnedDeviceId: SessionAddressing.cryptoIdentity(ofUser: userId),
+            namedDeviceId: namedDevice
         )
         Log.info(
             "SESSION_STATE[responder_candidates]: userId=\(userId.prefix(8))… devices=\(ordered.count) "
+            + "named=\(namedDevice.map { String($0.prefix(8)) } ?? "—") "
             + "order=\(ordered.map { $0.deviceId.prefix(8) }.joined(separator: ","))",
             category: "SessionInit"
         )

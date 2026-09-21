@@ -979,7 +979,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     Log.error("SESSION_STATE[initiator_announce_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                 }
             )
-            await self.emitHandshakeControls(.tieBreakWin, to: userId)
+            await self.emitHandshakeControls(.tieBreakWin, to: .account(userId))
         }
         startTieBreakWatchdog(for: userId)
     }
@@ -1029,7 +1029,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     Log.error("SESSION_STATE[zombie_recover_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                 }
             )
-            await self.emitHandshakeControls(.tieBreakWin, to: userId)
+            await self.emitHandshakeControls(.tieBreakWin, to: .account(userId))
         }
         startTieBreakWatchdog(for: userId)
     }
@@ -1263,7 +1263,11 @@ final class SessionCoordinator: MessageRouterDelegate {
             //
             // A single-device peer yields one candidate and this is the previous behaviour exactly,
             // minus the one-time pre-key that fetch used to burn on every attempt.
-            let candidates = try await publicKeyBundleHandler.responderBundleCandidates(userId: userId)
+            // The device the triggering carrier's certificate named goes first; the plan below
+            // still crosses every carrier with every bundle, so a wrong name costs one attempt.
+            let candidates = try await publicKeyBundleHandler.responderBundleCandidates(
+                userId: userId, namedDevice: message.senderDeviceId
+            )
             Log.info("SESSION_STATE[bundle_fetched]: userId=\(userId.prefix(8))..., devices=\(candidates.count), duration=\(String(format: "%.2f", Date().timeIntervalSince(fetchStart)))s", category: "SessionInit")
 
             // Both dimensions vary, and the plan comes from the core. Until now the carrier was
@@ -1404,9 +1408,12 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // Phase 2 of two-phase handshake: notify INITIATOR that RESPONDER
                 // session is established. INITIATOR cancels its watchdog and flushes
                 // any buffered outgoing messages.
+                // Addressed to the device the walk opened with: the ready is encrypted on that
+                // ratchet and sealed to that key, and only that device is waiting for it.
+                let readyTo = PeerAddress(account: userId, device: openedDevice)
                 Task { [weak self] in
                     guard let self else { return }
-                    await self.emitHandshakeControls(.becameResponder, to: userId)
+                    await self.emitHandshakeControls(.becameResponder, to: readyTo)
                 }
             } else if !CryptoManager.shared.isInitialized {
                 // initReceivingSession failed because the crypto core isn't initialized
@@ -1465,7 +1472,9 @@ final class SessionCoordinator: MessageRouterDelegate {
             // Same walk as the first-message path: a heal that asks for one bundle asks about one
             // device, and the device that sent the message it is trying to open may be another of
             // the account's. Healing against the wrong keys fails exactly as the original init did.
-            let candidates = try await publicKeyBundleHandler.responderBundleCandidates(userId: userId)
+            let candidates = try await publicKeyBundleHandler.responderBundleCandidates(
+                userId: userId, namedDevice: failedMessage.senderDeviceId
+            )
 
             var healed = false
             for (index, bundle) in candidates.enumerated() {
@@ -1681,12 +1690,12 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Emit the control message(s) the reducer prescribes for a handshake transition — the single
     /// send-side authority (`SessionReducer.controlsToEmit`). Tie-break win → SESSION_RESET_INIT;
     /// RESPONDER established → session_ready.
-    private func emitHandshakeControls(_ transition: SessionReducer.HandshakeTransition, to userId: String) async {
+    private func emitHandshakeControls(_ transition: SessionReducer.HandshakeTransition, to peer: PeerAddress) async {
         for op in SessionReducer.controlsToEmit(on: transition) {
             switch op {
-            case .resetInit: await sendSessionResetInit(to: userId)
-            case .ready:     await sendSessionReady(to: userId)
-            case .ping:      await sendSessionPing(to: userId)
+            case .resetInit: await sendSessionResetInit(to: peer)
+            case .ready:     await sendSessionReady(to: peer)
+            case .ping:      await sendSessionPing(to: peer)
             case .endSession, .other: break
             }
         }
@@ -1698,16 +1707,32 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// dual-send fallback for peers predating typed dispatch — and sends with bounded retries +
     /// exponential back-off. `onExhaustion` runs after the final failed attempt (SRI's two-step
     /// fallback); `logTag` keeps the existing per-op log breadcrumbs.
+    ///
+    /// `peer.device` is the device whose ratchet this control speaks for. Named, the control is
+    /// encrypted on that device's session, sealed to that device's key — which is what routes it
+    /// (`SealedInner.recipient_device` is derived from the sealing key) — and its session checks
+    /// are about that ratchet. Unnamed, everything resolves to the pinned device as before.
+    ///
+    /// Why it has to be named: the RESPONDER walk opens a ratchet with **one** device of the
+    /// account, and `session_ready` is the INITIATOR's only proof that it did. Addressed to the
+    /// account it was encrypted on the pinned device's ratchet and sealed to the pinned device's
+    /// key, so after a re-init from the peer's *other* device the ready went to the wrong device
+    /// on a ratchet it did not hold, the initiator's watchdog never heard back, and it re-sent
+    /// its SESSION_RESET_INIT every tick — four inits on the stand for one reset, 2026-09-21.
     private func sendSessionControlCore(
         codecOp: SessionControlCodec.Op,
         contentType: Shared_Proto_Core_V1_ContentType,
-        to userId: String,
+        to peer: PeerAddress,
         maxAttempts: Int,
         logTag: String,
         onExhaustion: (() async -> Void)? = nil
     ) async {
-        guard CryptoManager.shared.hasSession(for: userId) else {
-            Log.info("SESSION_STATE[\(logTag)_skip]: no session for \(userId.prefix(8))…", category: "SessionInit")
+        let userId = peer.account
+        // The session this control is about. A device id passes through the seam unchanged; an
+        // account resolves to the pinned device, exactly as every call here did before.
+        guard let sessionOwner = peer.deviceOrPinned(),
+              CryptoManager.shared.hasSession(for: sessionOwner) else {
+            Log.info("SESSION_STATE[\(logTag)_skip]: no session for \(peer)", category: "SessionInit")
             return
         }
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
@@ -1732,18 +1757,18 @@ final class SessionCoordinator: MessageRouterDelegate {
         // Same defect and same remedy as `SessionReducer.shouldTearDownAfterEndSession`: identify
         // the session the decision was made about, rather than asserting that *a* session exists.
         // The `hasSession` guard above cannot see this — it was true throughout.
-        let announcedEpoch = CryptoManager.shared.sessionEpoch(for: userId)
+        let announcedEpoch = CryptoManager.shared.sessionEpoch(for: sessionOwner)
 
         for attempt in 1...maxAttempts {
             if attempt > 1 {
-                let stillLive = CryptoManager.shared.hasSession(for: userId)
+                let stillLive = CryptoManager.shared.hasSession(for: sessionOwner)
                 guard SessionReducer.shouldContinueControlRetry(
                     announced: announcedEpoch,
-                    current: CryptoManager.shared.sessionEpoch(for: userId),
+                    current: CryptoManager.shared.sessionEpoch(for: sessionOwner),
                     hasSession: stillLive
                 ) else {
                     let why = stillLive ? "replaced" : "gone"
-                    Log.info("SESSION_STATE[\(logTag)_superseded]: session for \(userId.prefix(8))… is \(why) between attempts — abandoning at \(attempt)/\(maxAttempts) rather than announcing a session that no longer exists", category: "SessionInit")
+                    Log.info("SESSION_STATE[\(logTag)_superseded]: session for \(peer) is \(why) between attempts — abandoning at \(attempt)/\(maxAttempts) rather than announcing a session that no longer exists", category: "SessionInit")
                     PerformanceMetrics.shared.record(.controlRetrySuperseded, label: "\(logTag):\(why)")
                     return
                 }
@@ -1756,7 +1781,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 let encryptedPayload = try OutboundSessionService.shared.encryptSessionControl(
                     payload: SessionControlCodec.encodePayload(op: codecOp, nonce: nonce),
                     messageId: msgId,
-                    recipientId: userId,
+                    recipientId: sessionOwner,
                     frameAs: frameType
                 )
 
@@ -1767,8 +1792,10 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // fails this attempt; the tie-break watchdog re-drives the handshake.
                 if StealthPolicy.shared.shouldUseSealedSender() {
                     let ctx = viewContext ?? PersistenceController.shared.container.viewContext
-                    guard let recipientIK = StealthSenderService.recipientIdentityKey(recipientId: userId, context: ctx) else {
-                        throw StealthDowngradeBlocked(reason: "no recipient identity key for \(logTag) → \(userId.prefix(8))…")
+                    // The device's key, so the seal names the device (`SealedInner.recipient_device`
+                    // is derived from it) and only that device can open it.
+                    guard let recipientIK = StealthSenderService.recipientIdentityKey(recipientId: sessionOwner, context: ctx) else {
+                        throw StealthDowngradeBlocked(reason: "no recipient identity key for \(logTag) → \(peer)")
                     }
                     let sealedInner = try await StealthSenderService.buildSealedInner(
                         recipientUserId: userId,
@@ -1803,11 +1830,13 @@ final class SessionCoordinator: MessageRouterDelegate {
                         conversationId: convId,
                         encryptedPayload: encryptedPayload,
                         timestamp: ts,
+                        // Unsealed, the device rides on the envelope instead of the seal.
+                        recipientDeviceId: peer.device,
                         contentType: wireContentType,
                         sealing: .identified(.stealthDisabled)
                     )
                 }
-                Log.info("SESSION_STATE[\(logTag)_sent]: to \(userId.prefix(8))… (attempt \(attempt))", category: "SessionInit")
+                Log.info("SESSION_STATE[\(logTag)_sent]: to \(peer) (attempt \(attempt))", category: "SessionInit")
                 return
             } catch {
                 Log.error("SESSION_STATE[\(logTag)_fail]: attempt \(attempt)/\(maxAttempts): \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
@@ -1828,9 +1857,10 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Encodes the X3DH init payload (`msgNum=0`) as `.sessionResetInit` (always typed — no peer
     /// predates this atomic form). Falls back to the legacy two-step (END_SESSION → ping) if all
     /// attempts fail (backward compat).
-    private func sendSessionResetInit(to userId: String) async {
+    private func sendSessionResetInit(to peer: PeerAddress) async {
+        let userId = peer.account
         await sendSessionControlCore(
-            codecOp: .resetInit, contentType: .sessionResetInit, to: userId,
+            codecOp: .resetInit, contentType: .sessionResetInit, to: peer,
             maxAttempts: pingMaxAttempts, logTag: "sri"
         ) { [weak self] in
             guard let self else { return }
@@ -1850,28 +1880,28 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
             }
             do { try await Task.sleep(nanoseconds: 300_000_000) } catch { return }
-            await self.sendSessionPing(to: userId)
+            await self.sendSessionPing(to: peer)
         }
     }
 
     /// Legacy tie-break ping (superseded by SESSION_RESET_INIT; survives only in the SRI fallback).
     /// Dual-send: typed `.sessionPing` for new consumers, `.e2EeSignal` + magic string otherwise.
-    private func sendSessionPing(to userId: String) async {
+    private func sendSessionPing(to peer: PeerAddress) async {
         await sendSessionControlCore(
             codecOp: .ping,
             contentType: .unspecified,  // the ping's type is in the frame; the wire says nothing
-            to: userId, maxAttempts: pingMaxAttempts, logTag: "tie_break_ping"
+            to: peer, maxAttempts: pingMaxAttempts, logTag: "tie_break_ping"
         )
     }
 
     /// RESPONDER → INITIATOR ack after a successful `initReceivingSession` (phase 2 of the two-phase
     /// handshake): lets the INITIATOR cancel its watchdog and flush. Single attempt (no retry).
     /// Dual-send: typed `.sessionReady` for new consumers, `.e2EeSignal` + magic string otherwise.
-    private func sendSessionReady(to userId: String) async {
+    private func sendSessionReady(to peer: PeerAddress) async {
         await sendSessionControlCore(
             codecOp: .ready,
             contentType: .unspecified,  // the ready's type is in the frame; the wire says nothing
-            to: userId, maxAttempts: 1, logTag: "session_ready"
+            to: peer, maxAttempts: 1, logTag: "session_ready"
         )
     }
 
@@ -1909,7 +1939,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                             Log.error("SESSION_STATE[watchdog_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
                         }
                     )
-                    await self.sendSessionResetInit(to: userId)
+                    await self.sendSessionResetInit(to: .account(userId))
                 case .giveUp:
                     // Confirm window exhausted — stop retrying, release the gate, drain the buffer
                     // (rather than waiting for the lazy TTL / next reconnect). New sends flow; if the
