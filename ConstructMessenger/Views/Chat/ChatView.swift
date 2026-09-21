@@ -469,6 +469,13 @@ struct ChatView: View {
                 // Same single path as a text send.
                 viewport.followExplicitly()
             },
+            onSendSticker: { ref in
+                viewModel.sendSticker(ref, replyTo: replyingTo)
+                replyingTo = nil
+                replyQuoteText = nil
+                clearReplyFocus(animated: true)
+                viewport.followExplicitly()
+            },
             onCancelReply: {
                 replyingTo = nil
                 replyQuoteText = nil

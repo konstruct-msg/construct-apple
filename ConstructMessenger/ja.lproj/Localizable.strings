@@ -533,6 +533,10 @@
 "video" = "動画";
 "file_attachment" = "ファイル";
 "sticker" = "ステッカー";
+"media_picker_tab_stickers" = "ステッカー";
+"sticker_picker_recent" = "最近使用";
+"sticker_catalog_empty" = "ステッカーパックはまだありません。";
+"sticker_install_fixture" = "テスト用パックをインストール";
 
 // MARK: - Attachments
 "attach" = "添付";

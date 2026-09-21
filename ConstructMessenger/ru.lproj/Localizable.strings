@@ -596,6 +596,10 @@
 "video" = "Видео";
 "file_attachment" = "Файл";
 "sticker" = "Стикер";
+"media_picker_tab_stickers" = "Стикеры";
+"sticker_picker_recent" = "Недавние";
+"sticker_catalog_empty" = "Наборов стикеров пока нет.";
+"sticker_install_fixture" = "Установить тестовый набор";
 
 // MARK: - Attachments
 "attach" = "Прикрепить";

@@ -21,6 +21,8 @@ struct IOSMessageInputView: View {
     let editingMessage: Message?
     let onSend: ([MediaAttachment], [URL]) -> Void
     var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
+    /// From the picker's Stickers tab. Sends at once — no composer strip.
+    var onSendSticker: ((StickerReference) -> Void)? = nil
     let onCancelReply: () -> Void
     let onCancelEdit: () -> Void
 
@@ -75,7 +77,8 @@ struct IOSMessageInputView: View {
                 },
                 onPickFiles: { urls in
                     attachments.handlePickedFiles(urls)
-                }
+                },
+                onSendSticker: onSendSticker
             )
         }
     }

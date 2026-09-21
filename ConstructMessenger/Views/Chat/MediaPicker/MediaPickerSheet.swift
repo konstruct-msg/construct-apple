@@ -3,7 +3,8 @@
 //  Construct Messenger
 //
 //  Custom media picker: CT chrome, multi-select grid, bottom quality segment +
-//  confirm checkmark. Gallery / Camera / Files. No in-sheet Send / HD chrome.
+//  confirm checkmark. Gallery · Stickers · Camera · Files. No in-sheet Send / HD chrome.
+//  Stickers is in-sheet content that sends on tap; Camera and Files are jump actions.
 //
 
 #if os(iOS)
@@ -17,18 +18,22 @@ struct MediaPickerSheet: View {
     let onConfirm: ([MediaAttachment]) -> Void
     /// Non-image / mixed document URLs from the Files tab.
     var onPickFiles: (([URL]) -> Void)? = nil
+    /// A tap on the Stickers tab sends at once and closes the sheet — no composer strip, no
+    /// caption. nil hides the tab (a caller with nowhere to send to).
+    var onSendSticker: ((StickerReference) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var vm: MediaPickerViewModel
     @State private var showCamera = false
     @State private var showFilePicker = false
     @State private var tab: PickerTab = .gallery
+    @State private var stickers = StickerLibrary()
 
     @AppStorage("composer.sendOriginalPhotos") private var sendOriginal = false
     @AppStorage("composer.videoQuality") private var videoQualityRaw = VideoQuality.p1080.rawValue
 
     private enum PickerTab: Hashable {
-        case gallery, camera, files
+        case gallery, stickers, camera, files
     }
 
     /// Which quality segment to show (last-selected kind wins when mixed).
@@ -40,11 +45,13 @@ struct MediaPickerSheet: View {
     init(
         maxSelection: Int = 99,
         onConfirm: @escaping ([MediaAttachment]) -> Void,
-        onPickFiles: (([URL]) -> Void)? = nil
+        onPickFiles: (([URL]) -> Void)? = nil,
+        onSendSticker: ((StickerReference) -> Void)? = nil
     ) {
         self.maxSelection = maxSelection
         self.onConfirm = onConfirm
         self.onPickFiles = onPickFiles
+        self.onSendSticker = onSendSticker
         _vm = State(initialValue: MediaPickerViewModel(maxSelection: maxSelection))
     }
 
@@ -81,9 +88,16 @@ struct MediaPickerSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             chrome
-            content
-            if vm.selectionCount > 0 {
-                selectionTray
+            if tab == .stickers, let onSendSticker {
+                StickerPickerView(library: stickers) { ref in
+                    onSendSticker(ref)
+                    dismiss()
+                }
+            } else {
+                content
+                if vm.selectionCount > 0 {
+                    selectionTray
+                }
             }
             bottomTabs
         }
@@ -130,7 +144,7 @@ struct MediaPickerSheet: View {
 
     private var chrome: some View {
         HStack(spacing: 12) {
-            Text(NSLocalizedString("media_picker_recents", comment: "").uppercased())
+            Text(NSLocalizedString(tab == .stickers ? "media_picker_tab_stickers" : "media_picker_recents", comment: "").uppercased())
                 .font(CTFont.bodyEmphasis)
                 .foregroundStyle(Color.CT.text)
                 .tracking(2)
@@ -360,6 +374,9 @@ struct MediaPickerSheet: View {
     private var bottomTabs: some View {
         HStack(spacing: 0) {
             tabButton(.gallery, titleKey: "media_picker_tab_gallery", systemImage: "photo.on.rectangle")
+            if onSendSticker != nil {
+                tabButton(.stickers, titleKey: "media_picker_tab_stickers", systemImage: "face.smiling")
+            }
             tabButton(.camera, titleKey: "camera", systemImage: "camera")
             tabButton(.files, titleKey: "files", systemImage: "doc")
         }
@@ -393,7 +410,7 @@ struct MediaPickerSheet: View {
     private func handleTab(_ tab: PickerTab) {
         self.tab = tab
         switch tab {
-        case .gallery:
+        case .gallery, .stickers:
             break
         case .camera:
             showCamera = true

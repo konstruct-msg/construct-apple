@@ -140,6 +140,10 @@ class ChatViewModel {
         sendCoordinator.sendVoiceMessage(url: url, duration: duration, waveform: waveform)
     }
 
+    func sendSticker(_ ref: StickerReference, replyTo: Message? = nil) {
+        sendCoordinator.sendSticker(ref, replyTo: replyTo)
+    }
+
     func editMessage(_ message: Message, newText: String) {
         sendCoordinator.editMessage(message, newText: newText) { [weak self] in
             self?.editingMessage = nil

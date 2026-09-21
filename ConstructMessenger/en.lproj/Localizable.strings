@@ -595,6 +595,10 @@
 "video" = "Video";
 "file_attachment" = "File";
 "sticker" = "Sticker";
+"media_picker_tab_stickers" = "Stickers";
+"sticker_picker_recent" = "Recent";
+"sticker_catalog_empty" = "No sticker packs yet.";
+"sticker_install_fixture" = "Install fixture pack";
 
 // MARK: - Attachments
 "attach" = "Attach";

@@ -552,6 +552,10 @@
 "video" = "Vidéo";
 "file_attachment" = "Pièce jointe";
 "sticker" = "Sticker";
+"media_picker_tab_stickers" = "Stickers";
+"sticker_picker_recent" = "Récents";
+"sticker_catalog_empty" = "Aucun pack de stickers pour l’instant.";
+"sticker_install_fixture" = "Installer le pack de test";
 
 // MARK: - Attachments
 "attach" = "Joindre";
