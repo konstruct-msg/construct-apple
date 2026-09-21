@@ -288,25 +288,63 @@ extension Color {
 /// Font helpers for the Construct visual language.
 /// Falls back to system monospaced/sans when custom fonts aren't loaded.
 struct ConstructFont {
-    /// Monospace — timestamps, fingerprints, status labels, crypto badges.
-    /// Target: JetBrains Mono (supports Cyrillic). Fallback: system monospaced.
-    /// - Parameter relativeTo: when given, the face scales with Dynamic Type. Left `nil` for the
-    ///   chrome, which is laid out against fixed metrics (`CTLayout.controlHeight`, badge insets)
-    ///   and would overflow them. Message text passes `.body`: nothing measures it, and a person
-    ///   who enlarged text at the OS level has until now got nothing from us at all.
+    /// Monospace — the chrome, and technical content inside it.
+    ///
+    /// Target: JetBrains Mono. **No font file is bundled** — there is no `UIAppFonts` entry and
+    /// never has been — so every build to date has rendered the fallback, SF Mono, and that is
+    /// the face people have been looking at and calling ours. Bundling the real family is a
+    /// product decision (files + `Info.plist`), not a code one; until it is made, this function
+    /// is SF Mono with a name reserved.
+    /// - Parameter relativeTo: when given, the face scales with Dynamic Type — on both paths, so
+    ///   that the bundled face and the fallback agree. `nil` keeps the fixed size.
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular, relativeTo: Font.TextStyle? = nil) -> Font {
         if let _ = fontExists("JetBrainsMono-Regular") {
             let name: String
             switch weight {
-            case .medium:  name = "JetBrainsMono-Medium"
-            case .bold:    name = "JetBrainsMono-Bold"
-            default:       name = "JetBrainsMono-Regular"
+            case .medium:   name = "JetBrainsMono-Medium"
+            case .semibold: name = "JetBrainsMono-SemiBold"
+            case .bold:     name = "JetBrainsMono-Bold"
+            default:        name = "JetBrainsMono-Regular"
             }
             if let relativeTo { return .custom(name, size: size, relativeTo: relativeTo) }
             return .custom(name, size: size)
         }
-        return .system(size: size, weight: weight, design: .monospaced)
+        let resolved = relativeTo.map { scaled(size, relativeTo: $0) } ?? size
+        return .system(size: resolved, weight: weight, design: .monospaced)
     }
+
+    /// A point size of ours put through the platform's Dynamic Type curve for `style`.
+    ///
+    /// `Font.system(size:weight:)` does not scale and `Font.custom(_:size:relativeTo:)` needs a
+    /// font name, so neither fits a system face at a size of ours. `UIFontMetrics` is the
+    /// supported way to ask for exactly that. SwiftUI rebuilds bodies when the size category
+    /// changes, so the value is recomputed then. macOS has no size category; the size stands.
+    static func scaled(_ size: CGFloat, relativeTo style: Font.TextStyle) -> CGFloat {
+        #if canImport(UIKit)
+        return UIFontMetrics(forTextStyle: uiTextStyle(style)).scaledValue(for: size)
+        #else
+        return size
+        #endif
+    }
+
+    #if canImport(UIKit)
+    private static func uiTextStyle(_ style: Font.TextStyle) -> UIFont.TextStyle {
+        switch style {
+        case .largeTitle:  return .largeTitle
+        case .title:       return .title1
+        case .title2:      return .title2
+        case .title3:      return .title3
+        case .headline:    return .headline
+        case .subheadline: return .subheadline
+        case .body:        return .body
+        case .callout:     return .callout
+        case .footnote:    return .footnote
+        case .caption:     return .caption1
+        case .caption2:    return .caption2
+        @unknown default:  return .footnote
+        }
+    }
+    #endif
 
     /// Display — contact names, headers, buttons.
     /// Target: Exo 2 (supports Cyrillic, geometric character). Fallback: system rounded.

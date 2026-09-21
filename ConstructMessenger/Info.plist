@@ -40,6 +40,13 @@
 	</array>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>Construct Messenger sends you notifications for new messages.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>JetBrainsMono-Regular.ttf</string>
+		<string>JetBrainsMono-Medium.ttf</string>
+		<string>JetBrainsMono-SemiBold.ttf</string>
+		<string>JetBrainsMono-Bold.ttf</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
