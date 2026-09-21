@@ -24,6 +24,12 @@ public class Message: NSManagedObject {
         MessageDisplayCache.shared.plaintext(for: self)
     }
 
+    /// The sticker this row carries, or nil. The bubble asks this before it parses anything —
+    /// a sticker has no text form, and `displayText` is empty for it on purpose.
+    var stickerReference: StickerReference? {
+        MessageDisplayCache.shared.payload(for: self).stickerReference
+    }
+
     /// True if this message has been decrypted — either via legacy `decryptedContent`
     /// or via the encrypted-storage path (`contentKeyRef`).
     var hasDecryptedContent: Bool {

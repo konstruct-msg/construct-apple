@@ -269,6 +269,9 @@ final class ChunkedMessageReassembler {
             if case .edit(let editMsg) = content.content {
                 return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: editMsg.newMedia)
             }
+            if let rejected = Self.rejectedSticker(in: content) {
+                return rejected
+            }
             let (text, quoted, mediaAlbum) = extract(content)
             let storage = LocalMessagePayload.storagePayload(forWireContent: content)
             return .assembled(
@@ -302,6 +305,9 @@ final class ChunkedMessageReassembler {
             }
             if case .edit(let editMsg) = content.content {
                 return .edit(targetMessageID: editMsg.targetMessageID, newText: editMsg.newText, newMedia: editMsg.newMedia)
+            }
+            if let rejected = Self.rejectedSticker(in: content) {
+                return rejected
             }
             let (text, quoted, mediaAlbum) = extract(content)
             return .assembled(
@@ -344,6 +350,18 @@ final class ChunkedMessageReassembler {
             action: msg.action,
             timestampMs: msg.timestampMs
         )
+    }
+
+    /// A sticker whose reference fails the cross-client rules is corrupt content and is refused
+    /// here, before anything is persisted — the alternative is a row that renders as nothing and
+    /// cannot be told from a message that arrived empty.
+    private static func rejectedSticker(
+        in content: Shared_Proto_Messaging_V1_MessageContent
+    ) -> ChunkedMessageResult? {
+        guard case .sticker(let wire) = content.content, StickerReference(wire: wire) == nil else {
+            return nil
+        }
+        return .invalid("sticker reference fails validation (pack_id \(wire.packID.count) bytes, emoji \(wire.emoji.utf8.count) bytes)")
     }
 
     private func extract(_ content: Shared_Proto_Messaging_V1_MessageContent)

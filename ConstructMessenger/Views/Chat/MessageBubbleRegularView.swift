@@ -66,8 +66,11 @@ struct MessageBubbleRegularView: View {
 
     var body: some View {
         // Parse once per body pass to avoid repeated JSON decode attempts.
-        let profileData = MessageBubbleContentParsing.parseProfileMessage(message.displayText)
-        let mediaContent = profileData == nil ? MessageBubbleContentParsing.parseMediaMessage(message.displayText) : nil
+        // The sticker is asked first and typed: it has no text form, so no parser below would
+        // find it, and `displayText` is empty for it on purpose.
+        let sticker = message.stickerReference
+        let profileData = sticker == nil ? MessageBubbleContentParsing.parseProfileMessage(message.displayText) : nil
+        let mediaContent = (sticker == nil && profileData == nil) ? MessageBubbleContentParsing.parseMediaMessage(message.displayText) : nil
         let fileContent = (profileData == nil && mediaContent == nil) ? MessageBubbleContentParsing.parseFileMessage(message.displayText) : nil
         let voiceContent = (profileData == nil && mediaContent == nil && fileContent == nil) ? MessageBubbleContentParsing.parseVoiceMessage(message.displayText) : nil
         let hasActionableText = MessageBubbleContentParsing.carriesActionableText(
@@ -117,7 +120,12 @@ struct MessageBubbleRegularView: View {
                 // the hold rule moves the offset by exactly that. This is the case that rule is for.
                 if capsulePlacement == .above { reactionCapsuleRow }
                 Group {
-                if let profileData {
+                if let sticker {
+                    VStack(alignment: .leading, spacing: 0) {
+                        replyIndicatorView
+                        StickerBubbleView(reference: sticker, isSelected: isSelected)
+                    }
+                } else if let profileData {
                     ProfileShareBubbleView(profileData: profileData)
                         .overlay(
                             CTShape.control()

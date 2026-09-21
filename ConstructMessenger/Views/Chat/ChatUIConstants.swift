@@ -93,6 +93,15 @@ enum ChatUIConstants {
         static let metaHorizontalPadding: CGFloat = 4
     }
 
+    /// A sticker in the transcript: a floating image, no bubble chrome.
+    enum Sticker {
+        /// Display edge. The asset is 512 and shown at a third of it; Dynamic Type scaling of
+        /// the image is a later decision, the emoji fallback scales now.
+        static let size: CGFloat = 160
+        /// The emoji rendered in the sticker's place when the pack is absent.
+        static let fallbackEmojiSize: CGFloat = 96
+    }
+
     /// Reaction badge on a bubble, and the quick-set capsule.
     enum Reaction {
         static let badgeFontSize: CGFloat = 14

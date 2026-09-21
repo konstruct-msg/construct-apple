@@ -457,9 +457,13 @@ final class ChatSendCoordinator {
         guard let reply = replyTo else { return nil }
         var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
         quoted.messageID = reply.id
+        // A sticker has no text form, so the quote carries what the chat list shows for it.
+        let stickerLine = reply.stickerReference.map {
+            "\($0.emoji) \(NSLocalizedString("sticker", comment: ""))"
+        }
         ReplyPreviewPayload.projecting(
             originalContent: reply.displayText,
-            textOverride: replyToContentOverride
+            textOverride: replyToContentOverride ?? stickerLine
         )?.apply(to: &quoted)
         return quoted
     }
@@ -916,6 +920,28 @@ final class ChatSendCoordinator {
                 )
             }
         }
+    }
+
+    // MARK: - Sticker
+
+    /// A sticker is sent the way text is: one `MessageContent`, one session send. Nothing is
+    /// uploaded — the pack is public and the recipient fetches it by hash — so there is no
+    /// placeholder and no upload task, and the reference is stored typed (CTM1 `messageContent`),
+    /// never as a JSON shape in the text.
+    func sendSticker(_ ref: StickerReference, replyTo: Message? = nil) {
+        var content = Shared_Proto_Messaging_V1_MessageContent()
+        content.sticker = ref.wire
+        guard let wirePlaintext = try? content.serializedData(), !wirePlaintext.isEmpty else {
+            Log.error("Failed to serialize sticker MessageContent", category: "ChatViewModel")
+            return
+        }
+        try? StickerPackStore.default().recordUsed(ref)
+        sendTextMessage(
+            text: "",
+            replyTo: replyTo,
+            wirePlaintext: wirePlaintext,
+            storagePayload: LocalMessagePayload.storagePayload(forWireContent: content)
+        )
     }
 
     // MARK: - Reaction

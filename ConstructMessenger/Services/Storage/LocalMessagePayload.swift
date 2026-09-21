@@ -149,6 +149,20 @@ enum LocalMessagePayload: Equatable {
         }
     }
 
+    // MARK: - Typed content
+
+    /// The sticker this row carries, validated, or nil. Typed on purpose: a sticker is never a
+    /// JSON shape in `displayString` the way media still is — the spec forbids it — so the bubble
+    /// asks this and not the text. A stored reference that fails validation reads as nil too; the
+    /// receive path refuses to persist one, so that is defence, not a case.
+    var stickerReference: StickerReference? {
+        guard case .messageContent(let body) = self,
+              let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: body),
+              case .sticker(let wire)? = content.content
+        else { return nil }
+        return StickerReference(wire: wire)
+    }
+
     // MARK: - Private display
 
     private static func displayString(forMediaAlbumBody body: Data) -> String {
@@ -178,6 +192,9 @@ enum LocalMessagePayload: Equatable {
             return MediaWireCodec.mediaJSON(from: album) ?? ""
         case .voice(let v):
             return MediaWireCodec.voiceJSON(from: v) ?? ""
+        case .sticker:
+            // Nothing to copy, quote or search: the bubble reads `stickerReference`.
+            return ""
         default:
             return ""
         }
@@ -206,6 +223,12 @@ enum LocalMessagePayload: Equatable {
             return NSLocalizedString("photo", comment: "")
         case .voice:
             return NSLocalizedString("voice_message", comment: "")
+        case .sticker(let wire):
+            // The emoji is what the sender's manifest said the sticker means; a chat list line
+            // is exactly the place it was duplicated for.
+            let label = NSLocalizedString("sticker", comment: "")
+            guard let ref = StickerReference(wire: wire) else { return label }
+            return "\(ref.emoji) \(label)"
         default:
             return NSLocalizedString("message_unavailable", comment: "")
         }
