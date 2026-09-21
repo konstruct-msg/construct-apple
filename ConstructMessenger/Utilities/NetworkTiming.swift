@@ -149,6 +149,10 @@ enum NetworkTiming {
             // Key service (session init / rotations)
             static let getPreKeyBundle: TimeInterval = 20
             static let getPreKeyBundles: TimeInterval = 25
+            /// One small message.
+            static let stickerManifest: TimeInterval = 20
+            /// Up to 120 blobs of 100 KiB in one stream; a slow link gets a minute.
+            static let stickerPack: TimeInterval = 60
             static let uploadPreKeys: TimeInterval = 30
             static let getPreKeyCount: TimeInterval = 15
             static let rotateSignedPreKey: TimeInterval = 20

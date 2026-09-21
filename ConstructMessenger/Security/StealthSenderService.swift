@@ -193,17 +193,11 @@ final class StealthSenderService: SealedSenderResolving {
     /// pins guarantee a sealed receive can be attested even when the fetched key was
     /// never cached (e.g. VEIL inactive, the 2026-07-05 incident) or after a rotation.
     private func trustedBundleKeys() -> [Curve25519.Signing.PublicKey] {
-        var raw: [Data] = []
-        if let fetched = UserDefaults.standard.data(forKey: VeilCertFetcher.cachedBundleSigningKeyKey) {
-            raw.append(fetched)
-        }
-        for b64 in VEILConfig.pinnedBundleSigningKeys {
-            if let d = Data(base64Encoded: b64) { raw.append(d) }
-        }
         #if DEBUG
-        raw.append(contentsOf: extraTrustedBundleKeysForTesting)
+        return BundleSigningTrust.trustedKeys(extra: extraTrustedBundleKeysForTesting)
+        #else
+        return BundleSigningTrust.trustedKeys()
         #endif
-        return raw.compactMap { try? Curve25519.Signing.PublicKey(rawRepresentation: $0) }
     }
 
     #if DEBUG

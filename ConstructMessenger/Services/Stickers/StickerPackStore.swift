@@ -44,11 +44,13 @@ struct StickerPackStore {
 
     // MARK: - Presence
 
-    /// The verified pack, or nil. Re-verified on read: the file is ours, but "present means
-    /// verified" is cheaper to keep true than to reason about.
+    /// The verified pack, or nil. Hash and entries are re-checked on read — the file is ours,
+    /// but "present means verified" is cheaper to keep true than to reason about. The
+    /// signature is not: it was checked against the pinned keys at install, and re-checking
+    /// it here would make every installed pack vanish on a key rotation.
     func pack(_ id: StickerPackID) -> StickerPack? {
         guard let bytes = try? Data(contentsOf: manifestURL(id)),
-              let pack = try? StickerPack.verify(manifestBytes: bytes, allowUnsigned: true),
+              let pack = try? StickerPack.verify(manifestBytes: bytes, allowUnsigned: true, checkSignature: false),
               pack.id == id
         else { return nil }
         return pack

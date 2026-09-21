@@ -25,7 +25,12 @@ final class StickerLibrary {
     /// Decoded, downscaled thumbnails by sha256 hex. NSCache so memory pressure can take them.
     private let thumbnails = NSCache<NSString, PlatformImage>()
 
-    init(store: StickerPackStore = .default()) {
+    @MainActor
+    convenience init() {
+        self.init(store: StickerService.shared.store)
+    }
+
+    init(store: StickerPackStore) {
         self.store = store
         thumbnails.countLimit = 256
     }
@@ -72,6 +77,7 @@ final class StickerLibrary {
         do {
             try StickerFixturePack.install(into: store)
             reload()
+            StickerService.shared.noteInstalledLocally()
         } catch {
             Log.error("Fixture sticker pack install failed: \(error)", category: "Stickers")
         }

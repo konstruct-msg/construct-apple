@@ -33,6 +33,7 @@ struct StickerPack: Equatable, Sendable {
         case packIdMismatch
         case badEntry(index: Int)
         case unsigned
+        case badSignature
     }
 
     /// The bytes a pack's identity is computed over: the manifest with `pack_id` and
@@ -53,9 +54,18 @@ struct StickerPack: Equatable, Sendable {
     /// cheapest refusal comes first and an unsigned manifest is refused only once everything
     /// else about it is known to be right (which is what makes the DEBUG exemption safe).
     ///
-    /// `allowUnsigned` is for fixture packs in a DEBUG bundle and nothing else; the pinned
-    /// publisher key arrives with the sticker service, and until then no signed pack exists.
-    static func verify(manifestBytes: Data, allowUnsigned: Bool = false) throws -> StickerPack {
+    /// `trustedKeys` are the bundle-signing keys (`BundleSigningTrust.trustedKeys()`); a
+    /// signature must verify against one of them over the canonical bytes. `allowUnsigned` is
+    /// for fixture packs in a DEBUG bundle and nothing else.
+    ///
+    /// `checkSignature: false` is for re-reading a manifest this client wrote to its own store:
+    /// the signature was checked once, at install, and the store's disk is not the server.
+    static func verify(
+        manifestBytes: Data,
+        allowUnsigned: Bool = false,
+        trustedKeys: [Curve25519.Signing.PublicKey] = [],
+        checkSignature: Bool = true
+    ) throws -> StickerPack {
         guard let manifest = try? Shared_Proto_Messaging_V1_StickerPackManifest(serializedBytes: manifestBytes) else {
             throw VerifyError.undecodable
         }
@@ -74,9 +84,13 @@ struct StickerPack: Equatable, Sendable {
         }
         if manifest.signature.isEmpty {
             guard allowUnsigned else { throw VerifyError.unsigned }
+        } else if checkSignature {
+            guard BundleSigningTrust.verify(
+                signature: manifest.signature,
+                over: try canonicalBytes(of: manifest),
+                keys: trustedKeys
+            ) else { throw VerifyError.badSignature }
         }
-        // A non-empty signature is not checked yet: there is no pinned key to check it against.
-        // When the service ships one, this is where the check goes, and `unsigned` stays.
         return StickerPack(id: id, title: manifest.title, publisher: manifest.publisher, stickers: entries)
     }
 
