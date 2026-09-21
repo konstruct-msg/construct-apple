@@ -22,7 +22,7 @@ final class BundledStickerPacksTests: XCTestCase {
         let manifests = Bundle.main.manifests()
         XCTAssertFalse(manifests.isEmpty, "no sticker-pack-*.pb in the app bundle")
         for bytes in manifests {
-            let pack = try StickerPack.verify(manifestBytes: bytes, allowUnsigned: true)
+            let pack = try StickerPack.verify(manifestBytes: bytes, allowUnsigned: true, trustedKeys: BundleSigningTrust.trustedKeys())
             XCTAssertFalse(pack.stickers.isEmpty)
             for (i, entry) in pack.stickers.enumerated() {
                 let data = try XCTUnwrap(Bundle.main.blob(entry.sha256), "\(pack.title) sticker \(i): blob missing from the bundle")
@@ -30,6 +30,18 @@ final class BundledStickerPacksTests: XCTestCase {
                 XCTAssertEqual(data.count, entry.byteLen)
                 XCTAssertTrue(try WebPHeader.parse(data).isStickerCanvas, "\(pack.title) sticker \(i): not a static 512×512 WebP")
             }
+        }
+    }
+
+    /// Release seeds only what the pinned keys sign. Verified here with `allowUnsigned: false`
+    /// against `BundleSigningTrust.trustedKeys()` — the same call the seeding makes — so the
+    /// DEBUG exemption cannot hide a shipped pack that release would refuse.
+    func testShippedPacksAreSignedByAPinnedKey() throws {
+        for bytes in Bundle.main.manifests() {
+            XCTAssertNoThrow(
+                try StickerPack.verify(manifestBytes: bytes, allowUnsigned: false, trustedKeys: BundleSigningTrust.trustedKeys()),
+                "a bundled pack release would refuse — sign it with the production key (sticker-publish --dry-run --out)"
+            )
         }
     }
 
