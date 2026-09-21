@@ -118,6 +118,47 @@ final class StickerService {
         installedGeneration += 1
     }
 
+    // MARK: - Bundled packs
+
+    /// Seed the packs that ship in the app, once each. Verified exactly as a fetched pack is
+    /// (`BundledStickerPacks` says where the one DEBUG exemption lies); a pack that fails is
+    /// logged and skipped, never trusted for being in the bundle. A pack already seeded is left
+    /// alone even if it is absent now — that is an uninstall, and it stands.
+    ///
+    /// Returns the ids seeded on this call.
+    @discardableResult
+    func seedBundledPacks(
+        from source: any BundledPackSource = Bundle.main,
+        defaults: UserDefaults = .standard
+    ) -> [StickerPackID] {
+        var seeded = Set(defaults.stringArray(forKey: BundledStickerPacks.seededDefaultsKey) ?? [])
+        var added: [StickerPackID] = []
+        for manifestBytes in source.manifests() {
+            do {
+                let pack = try StickerPack.verify(
+                    manifestBytes: manifestBytes,
+                    allowUnsigned: BundledStickerPacks.allowUnsigned,
+                    trustedKeys: trustedKeys()
+                )
+                if seeded.contains(pack.id.hex) { continue }
+                if !store.isPresent(pack.id) {
+                    try store.install(pack, manifestBytes: manifestBytes) { source.blob($0.sha256) }
+                }
+                try store.setInstalled(pack.id, true)
+                seeded.insert(pack.id.hex)
+                added.append(pack.id)
+                Log.info("Bundled sticker pack \(pack.id.hex.prefix(16))… seeded: \(pack.stickers.count) stickers", category: "Stickers")
+            } catch {
+                Log.error("Bundled sticker pack refused: \(error)", category: "Stickers")
+            }
+        }
+        if !added.isEmpty {
+            defaults.set(Array(seeded).sorted(), forKey: BundledStickerPacks.seededDefaultsKey)
+            installedGeneration += 1
+        }
+        return added
+    }
+
     #if DEBUG
     /// A pack put on disk by something other than a fetch (the fixture). Bubbles reload.
     func noteInstalledLocally() { installedGeneration += 1 }

@@ -71,6 +71,8 @@ struct Construct_MessengerApp: App {
                 // the composer-swap explanation for TODO 33 was fixed and the symptom stayed.
                 KeyboardEventTracer.shared.start()
                 MediaManager.shared.evictOldFiles()
+                // Packs that ship in the app, into the store once. No network; first launch only.
+                StickerService.shared.seedBundledPacks()
                 StorageMigrationService.shared.migrateIfNeeded(
                     context: rootContainer.viewContext
                 )

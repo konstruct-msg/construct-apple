@@ -61,6 +61,8 @@ struct Construct_DesktopApp: App {
                     chatsViewModel.setContext(viewContext)
 
                     MediaManager.shared.evictOldFiles()
+                // Packs that ship in the app, into the store once. No network; first launch only.
+                StickerService.shared.seedBundledPacks()
                     StorageMigrationService.shared.migrateIfNeeded(context: viewContext)
                     Log.debug("Desktop launch bootstrap — storage migration complete", category: "Desktop")
 
