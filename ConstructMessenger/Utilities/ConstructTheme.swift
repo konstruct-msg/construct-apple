@@ -135,7 +135,7 @@ private extension NSColor {
 
 /// Thin wrapper around ConstructFont so CT* views need no direct dependency on UIConstants.
 enum CTFont {
-    // Pre-split names. Still monospace and still correct to call. Every call site that was ours
+    // Pre-split names: monospace at a fixed size, no Dynamic Type. Every call site that was ours
     // is on a role, `ui` or `mono` now; the ones left are in files with unrelated work in flight,
     // and these are not marked deprecated so that work does not build under thirty warnings that
     // are not its own. When `grep -c 'CTFont\.\(regular\|medium\|bold\)('` reaches zero,
@@ -149,9 +149,15 @@ enum CTFont {
     /// Chrome: nav bars, labels, section headers, buttons — anything a person reads to operate
     /// the app rather than to read machine output.
     ///
-    /// System face, and it scales: `relativeTo` carries Apple's Dynamic Type curve while the size
+    /// Monospace, and it scales: `relativeTo` carries Apple's Dynamic Type curve while the size
     /// stays ours. Our scale sits below Apple's defaults on purpose — density is the identity —
     /// so the pair is "our size, their curve", not "their size".
+    ///
+    /// The chrome was the system face for one day (2026-09-20 → 21). Seen on a device the
+    /// monospace chrome was the identity worth keeping, and the reader's text is where the
+    /// system face belongs — `message` below. `ui` and `mono` resolve to the same family today;
+    /// the split stays because it says *why* a site is monospace, and because it is what lets
+    /// the chrome move again without the fingerprints moving with it.
     ///
     /// Do not hand-roll `.system(…)` at a call site — use this, or a role below.
     static func ui(
@@ -159,8 +165,7 @@ enum CTFont {
         weight: Font.Weight = .regular,
         relativeTo: Font.TextStyle? = nil
     ) -> Font {
-        let style = relativeTo ?? inferredStyle(for: size)
-        return .system(size: scaled(size, relativeTo: style), weight: weight)
+        ConstructFont.mono(size, weight: weight, relativeTo: relativeTo ?? inferredStyle(for: size))
     }
 
     /// The Dynamic Type curve a bare size should follow when the call site names none.
@@ -204,42 +209,9 @@ enum CTFont {
     /// Chips and tiny tags. Was `bold(11)`.
     static var badge: Font        { ui(11, weight: .bold, relativeTo: .caption2) }
 
-    /// Our point size put through the platform's Dynamic Type curve for `style`.
-    ///
-    /// `Font.system(size:weight:)` does not scale and `Font.custom(_:size:relativeTo:)` needs a
-    /// font name, so neither fits the system face at a size of ours. `UIFontMetrics` is the
-    /// supported way to ask for exactly that. SwiftUI rebuilds bodies when the size category
-    /// changes, so the value is recomputed then.
-    private static func scaled(_ size: CGFloat, relativeTo style: Font.TextStyle) -> CGFloat {
-        #if canImport(UIKit)
-        return UIFontMetrics(forTextStyle: uiTextStyle(style)).scaledValue(for: size)
-        #else
-        return size
-        #endif
-    }
-
-    #if canImport(UIKit)
-    private static func uiTextStyle(_ style: Font.TextStyle) -> UIFont.TextStyle {
-        switch style {
-        case .largeTitle:  return .largeTitle
-        case .title:       return .title1
-        case .title2:      return .title2
-        case .title3:      return .title3
-        case .headline:    return .headline
-        case .subheadline: return .subheadline
-        case .body:        return .body
-        case .callout:     return .callout
-        case .footnote:    return .footnote
-        case .caption:     return .caption1
-        case .caption2:    return .caption2
-        @unknown default:  return .footnote
-        }
-    }
-    #endif
-
     /// Technical content: hex ids, fingerprints, safety numbers, device ids, counters, logs,
     /// diagnostics. Monospace here is a decision about what the content *is*, not a house style —
-    /// it is what makes a fingerprint look different from the label beside it.
+    /// it is what makes a fingerprint stay a fingerprint whatever the chrome around it is set in.
     static func mono(
         _ size: CGFloat,
         weight: Font.Weight = .regular,
@@ -252,11 +224,12 @@ enum CTFont {
 
     /// The text of a message — in a bubble, and in the composer that produces it.
     ///
-    /// The only font in the app the reader chooses, and the scope is the point. `regular` sets
+    /// The only font in the app the reader chooses, and the scope is the point. `ui` sets
     /// everything: nav bars, `> TITLE` headers, badges, separators. A preference read there would
     /// turn the whole product into a different product, and that is not what anyone asked for.
     /// Monospace is the language of the **chrome**; what a person writes and reads is content, and
-    /// its typeface belongs to them.
+    /// its typeface belongs to them — which is why the default here is the system face, the one
+    /// the OS's own reading and accessibility settings are tuned for.
     ///
     /// The composer follows the bubble deliberately: typing in one face and watching it land in
     /// another is a mismatch on every single send.
@@ -264,11 +237,14 @@ enum CTFont {
     /// Note that "always JetBrains Mono" was never quite true where it mattered most — the family
     /// ships no CJK glyphs, so Japanese has always been rendered in a substituted face inside
     /// bubbles. This makes a choice out of what was already a fallback.
+    ///
+    /// Both faces scale with the `.body` curve: a person who enlarged text at the OS level gets
+    /// it here whichever face they picked.
     static func message(_ size: CGFloat) -> Font {
-        let scaled = size * ChatTextPreference.sizeMultiplier
+        let base = size * ChatTextPreference.sizeMultiplier
         switch ChatTextPreference.face {
-        case .mono:   return ConstructFont.mono(scaled, weight: .regular, relativeTo: .body)
-        case .system: return .system(size: scaled, weight: .regular)
+        case .system: return .system(size: ConstructFont.scaled(base, relativeTo: .body), weight: .regular)
+        case .mono:   return ConstructFont.mono(base, weight: .regular, relativeTo: .body)
         }
     }
 }
@@ -282,17 +258,22 @@ enum CTFont {
 enum ChatTextPreference {
 
     enum Face: String, CaseIterable {
-        /// JetBrains Mono — the terminal language, and the default.
-        case mono
-        /// The platform's own text face, which is what the OS's accessibility settings are tuned for.
+        /// The platform's own text face — the default. It is what the OS's reading and
+        /// accessibility settings are tuned for, and message text is the reader's, not ours.
         case system
+        /// The chrome's monospace, for a person who wants the whole screen in one voice.
+        case mono
     }
 
     static let faceKey = "chatTextFace"
     static let sizeKey = "textSize"
 
+    /// `.system` unless the reader said otherwise. Was `.mono` until 2026-09-21; a stored value
+    /// wins either way, so a person who had already chosen keeps their choice.
+    static let defaultFace: Face = .system
+
     static var face: Face {
-        Face(rawValue: UserDefaults.standard.string(forKey: faceKey) ?? "") ?? .mono
+        Face(rawValue: UserDefaults.standard.string(forKey: faceKey) ?? "") ?? defaultFace
     }
 
     /// Multiplier for the base message size.

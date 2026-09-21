@@ -66,7 +66,7 @@ Sibling repos: `~/Code/construct-core` (crypto), `~/Code/construct-transport` (Q
 | Layer | Who decides the look |
 |---|---|
 | **Control and state** — buttons, toggles, navigation, selection, status, disclosure | the platform, always |
-| **Structure and rhythm** — grid and density, hairlines, section headers, palette, dark default, hex avatars, monospace for *technical data* | us; this is the identity |
+| **Structure and rhythm** — grid and density, hairlines, section headers, palette, dark default, hex avatars, the monospace chrome | us; this is the identity |
 | **Content** — message text (`CTFont.message`) | the reader |
 
 The test: *does a person have to learn this app to know what it does?* If yes it is a control, and
@@ -89,7 +89,7 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 | Kind | API |
 |------|-----|
 | Colors | `Color.CT.bg`, `.text`, `.textDim`, `.accent`, `.accentDim`, `.danger`, `.noise`, `.bgMsg`, `.outMsgBg`, `.outMsgText` |
-| Fonts | `CTFont.regular/medium/bold(size)` — JetBrains Mono, for **chrome** today; being split into `CTFont.ui` (system) and `CTFont.mono` (technical content). `CTFont.message(size)` for message text: the one face the reader chooses |
+| Fonts | Chrome: the roles `CTFont.title/headline/body/bodyEmphasis/secondary/caption/micro/badge`, or `CTFont.ui(size, weight:)` for a size outside them — JetBrains Mono, Dynamic Type via `relativeTo:`. `CTFont.mono(size)` for content that *is* machine output. `CTFont.message(size)` for message text: the one face the reader chooses, system by default. `CTFont.regular/medium/bold` are the pre-split names, alive only until the four in-flight files migrate |
 | Radii / Shapes | `CTRadius` (`badge` 6 · `card` 8 · `control` 10 · `pill` 999) via `CTShape.*()` — no magic `cornerRadius: 16\|18\|22` |
 | Layout | `CTLayout` (`edgePad` 12 · `controlHeight` 42 · `hitTarget` 44 · …) |
 | Glass | `.glassCapsule()` — defaults to pill; do not pass 18/22 |
@@ -97,17 +97,23 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 - Two surface languages, never mixed on one control: **form/card** (`CTRadius.card`, solid) vs
   **composer/glass** (`pill`, `.glassCapsule()`); `CTButton`/bubbles use `CTRadius.control`.
 - **Message text is the one thing the reader picks the font for.** `CTFont.message` — bubbles and
-  the composer that fills them — reads a preference. It stays a preference and nothing else gains
-  one: a font choice read inside the chrome tokens would make the product configurable rather than
-  designed. Note the old "always JetBrains Mono" was never true where it mattered — the family
-  ships no CJK, so Japanese bubbles have always been a substituted face. `CTFont.message` also
-  carries the size preference and `relativeTo: .body`.
-- **Monospace in the chrome is being retired as the default**, not as a token: it becomes the
-  deliberate choice for content that *is* machine output — hex ids, fingerprints, safety numbers,
-  device ids, counters, logs, diagnostics. Until `CTFont.ui` exists, `CTFont.regular` is still
-  mono and still correct to call; do not hand-roll `.system(...)` at a call site to get ahead of
-  the split. Whether the chrome should then scale with Dynamic Type is open — it is laid out
-  against fixed metrics today.
+  the composer that fills them — reads a preference, **system face by default** since
+  2026-09-21. It stays a preference and nothing else gains one: a font choice read inside the
+  chrome tokens would make the product configurable rather than designed. Note "always JetBrains
+  Mono" was never true where it mattered — the family ships no CJK, so Japanese bubbles have
+  always been a substituted face. `CTFont.message` also carries the size preference and
+  `relativeTo: .body`.
+- **The chrome is monospace and stays so.** It was the system face for one day (2026-09-20 → 21)
+  and, seen on a device, the mono chrome was the identity worth keeping. `CTFont.ui` and
+  `CTFont.mono` resolve to the same family today; the split is kept because it records *why* a
+  site is monospace (this is a fingerprint) and is what lets the chrome move again without the
+  fingerprints moving with it. Do not hand-roll `.system(...)` or `.monospaced` at a call site.
+- **JetBrains Mono is bundled since 2026-09-21** — `ConstructMessenger/Fonts/` (four weights +
+  `OFL.txt`), `UIAppFonts` in the iOS `Info.plist`, `ATSApplicationFontsPath` in the Desktop one.
+  Before that the name was looked up and nothing answered: every build had rendered SF Mono under
+  the JetBrains name, for eight months, with nothing to say so. The synchronized group flattens
+  resources into the bundle root, so `UIAppFonts` lists bare file names — a `Fonts/` prefix is
+  ignored silently. `ThemeTypographyTests` asserts the four PostScript names resolve at runtime.
 - **No `NavigationStack` inside sheets** — `CTNavBar(showBack: true, backAction: { dismiss() })`.
 - Background always `Color.CT.bg` (`#090909`) via `.ctBackground()`.
 - New UI must use tokens; when editing a file with a literal `8`/`10`/`18`, migrate that call site.

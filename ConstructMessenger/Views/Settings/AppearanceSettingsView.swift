@@ -10,7 +10,7 @@ import SwiftUI
 struct AppearanceSettingsView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     @AppStorage("textSize") private var textSize: TextSize = .standard
-    @AppStorage(ChatTextPreference.faceKey) private var chatFace: ChatTextPreference.Face = .mono
+    @AppStorage(ChatTextPreference.faceKey) private var chatFace: ChatTextPreference.Face = ChatTextPreference.defaultFace
     @Environment(\.dismiss) private var dismiss
     private let allThemes = AppTheme.allCases
 
@@ -99,9 +99,11 @@ struct AppearanceSettingsView: View {
                                     // The row is set in the face it offers, so the choice is
                                     // visible before it is made. `CTFont.message` cannot be used
                                     // here — it reads the current preference, which would render
-                                    // both rows in the selected face and show nothing.
+                                    // both rows in the selected face and show nothing. Nor can
+                                    // `CTFont.ui`: that is the chrome, and the chrome is mono
+                                    // regardless of what the reader picked for their text.
                                     Text(face.displayName)
-                                        .font(face == .mono ? CTFont.ui(16, weight: .bold) : .system(size: 16, weight: .bold))
+                                        .font(face == .mono ? CTFont.mono(16, weight: .bold) : .system(size: 16, weight: .bold))
                                         .foregroundStyle(Color.CT.text)
                                     Spacer()
                                     if chatFace == face {
