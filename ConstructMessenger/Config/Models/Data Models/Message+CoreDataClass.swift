@@ -24,6 +24,14 @@ public class Message: NSManagedObject {
         MessageDisplayCache.shared.plaintext(for: self)
     }
 
+    /// What the chat list shows for this row. From the stored payload, not from `displayText`:
+    /// a sticker's text form is empty on purpose, and a preview recomputed from it read as a row
+    /// with no last message. Every writer of `Chat.lastMessageText` that looks at a row goes
+    /// through this, so the send path, the receive path and the reconcilers agree.
+    var previewText: String {
+        MessageDisplayCache.shared.payload(for: self).previewHint
+    }
+
     /// The sticker this row carries, or nil. The bubble asks this before it parses anything —
     /// a sticker has no text form, and `displayText` is empty for it on purpose.
     var stickerReference: StickerReference? {

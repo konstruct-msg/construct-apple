@@ -296,7 +296,7 @@ struct HistorySnapshotImporter {
         // Raw write: the guarded setter is for live writers racing receipts.
         row.deliveryStatusRaw = (message.isSentByMe ? DeliveryStatus.sent : DeliveryStatus.delivered).rawValue
         chatResult.chat.unreadCount = 0
-        chatResult.chat.applyPreview(text: row.displayText, timestamp: row.timestamp)
+        chatResult.chat.applyPreview(text: row.previewText, timestamp: row.timestamp)
         return .applied
     }
 

@@ -131,14 +131,14 @@ extension Chat {
             return false
         }
 
-        let text = Chat.formatPreviewText(newest.displayText)
+        let text = Chat.formatPreviewText(newest.previewText)
         if let current = lastMessageTime,
            abs(current.timeIntervalSince(newest.timestamp)) < 0.5,
            (lastMessageText ?? "") == text {
             return false
         }
 
-        applyPreview(text: newest.displayText, timestamp: newest.timestamp, force: true)
+        applyPreview(text: newest.previewText, timestamp: newest.timestamp, force: true)
         Log.debug(
             "Preview reconciled for \(id.prefix(8))… → '\(text.prefix(40))' ts=\(newest.timestamp)",
             category: "Chat"

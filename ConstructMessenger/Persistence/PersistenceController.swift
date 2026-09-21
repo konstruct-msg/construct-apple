@@ -140,7 +140,7 @@ struct PersistenceController {
                 ServerMessageOrder.effectiveKey(for: $0) < ServerMessageOrder.effectiveKey(for: $1)
             }
             if let newest {
-                chat.applyPreview(text: newest.displayText, timestamp: newest.timestamp, force: true)
+                chat.applyPreview(text: newest.previewText, timestamp: newest.timestamp, force: true)
             } else {
                 chat.lastMessageTime = now
             }

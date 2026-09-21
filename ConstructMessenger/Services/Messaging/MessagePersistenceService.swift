@@ -477,7 +477,7 @@ class MessagePersistenceService {
         
         if let lastMessage = try context.fetch(fetchRequest).first {
             // Recomputed from what survives — this is the one case that may move backwards.
-            chat.applyPreview(text: lastMessage.displayText, timestamp: lastMessage.timestamp, force: true)
+            chat.applyPreview(text: lastMessage.previewText, timestamp: lastMessage.timestamp, force: true)
         } else {
             chat.clearPreview()
         }
