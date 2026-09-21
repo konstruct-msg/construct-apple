@@ -457,7 +457,10 @@ final class ChatSendCoordinator {
         guard let reply = replyTo else { return nil }
         var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
         quoted.messageID = reply.id
-        quoted.textPreview = replyToContentOverride ?? reply.displayText
+        ReplyPreviewPayload.projecting(
+            originalContent: reply.displayText,
+            textOverride: replyToContentOverride
+        )?.apply(to: &quoted)
         return quoted
     }
 

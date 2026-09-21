@@ -2598,7 +2598,10 @@ final class MessageRouter {
         // Fallback: legacy replyToMessageId from envelope (old clients without proto payload).
         if let qm = quotedMessage, !qm.messageID.isEmpty {
             message.replyToMessageId = qm.messageID.lowercased()
-            message.replyToContent = qm.textPreview.isEmpty ? nil : qm.textPreview
+            message.replyToContent = ReplyPreviewPayload.receiving(
+                textPreview: qm.hasTextPreview ? qm.textPreview : nil,
+                mediaType: qm.hasMediaType ? qm.mediaType : nil
+            )?.storedContent
         } else if !messageData.replyToMessageId.isEmpty {
             message.replyToMessageId = messageData.replyToMessageId.lowercased()
             let replyFetch = Message.fetchRequest()
@@ -2606,8 +2609,9 @@ final class MessageRouter {
             replyFetch.fetchLimit = 1
             do {
                 if let replyMsg = try context.fetch(replyFetch).first {
-                    let replyText = replyMsg.displayText
-                    message.replyToContent = replyText.isEmpty ? nil : replyText
+                    message.replyToContent = ReplyPreviewPayload.projecting(
+                        originalContent: replyMsg.displayText
+                    )?.storedContent
                 }
             } catch {
                 Log.error("Failed to fetch reply context for \(messageData.id.prefix(8))…: \(error)", category: "MessageRouter")

@@ -92,8 +92,10 @@ class MessagePersistenceService {
             // Set reply information
             if let replyMessage = replyTo {
                 newMessage.replyToMessageId = replyMessage.id.lowercased()
-                let replyText = replyToContentOverride ?? replyMessage.displayText
-                newMessage.replyToContent = replyText.isEmpty ? nil : replyText
+                newMessage.replyToContent = ReplyPreviewPayload.projecting(
+                    originalContent: replyMessage.displayText,
+                    textOverride: replyToContentOverride
+                )?.storedContent
             }
 
             // Store all thumbnails indexed for multi-image messages
@@ -241,8 +243,10 @@ class MessagePersistenceService {
 
         if let replyMessage = replyTo {
             newMessage.replyToMessageId = replyMessage.id.lowercased()
-            let replyText = replyToContentOverride ?? replyMessage.displayText
-            newMessage.replyToContent = replyText.isEmpty ? nil : replyText
+            newMessage.replyToContent = ReplyPreviewPayload.projecting(
+                originalContent: replyMessage.displayText,
+                textOverride: replyToContentOverride
+            )?.storedContent
         }
 
         for (index, item) in items.enumerated() {

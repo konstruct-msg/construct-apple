@@ -7,7 +7,6 @@
 
 import SwiftUI
 import Combine
-import GRPCCore
 
 /// Single-item bubble sizing: preserve real orientation, clamp extreme aspect ratios
 /// (Telegram/Signal-style — panoramas and tall screenshots don't dominate the stream).
@@ -77,12 +76,24 @@ struct MediaMessageView: View {
             }
 
             if !mediaContent.caption.isEmpty {
-                Text(mediaContent.caption)
-                    .font(.body)
-                    .foregroundColor(.primary)
-                    .padding(.top, 2)
+                MediaCaptionText(caption: mediaContent.caption)
             }
         }
+    }
+}
+
+struct MediaCaptionText: View {
+    let caption: String
+
+    var body: some View {
+        Text(caption)
+            .font(CTFont.message(ChatUIConstants.Typography.captionSize))
+            .foregroundColor(Color.CT.text)
+            .frame(maxWidth: MediaPreviewLayout.maxWidth, alignment: .leading)
+            // Captions are message content. They wrap to their intrinsic height instead of
+            // accepting a compressed one-line proposal from the surrounding transcript row.
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, ChatUIConstants.Media.captionTopPadding)
     }
 }
 
@@ -102,6 +113,7 @@ private struct SingleMediaCell: View {
     @State private var hasFullCopy = false
     @State private var isLoading = false
     @State private var loadError: String?
+    @State private var isMissingMedia = false
     /// The media descriptor (mediaId/mediaUrl/mediaKey) is not readable yet — distinct from
     /// `loadError`, which means a download was attempted and failed. Kept apart because the two
     /// were one state and the "not yet" case rendered as "Failed to load" for a frame on every
@@ -162,6 +174,8 @@ private struct SingleMediaCell: View {
                 // "Waiting for the descriptor" and "downloading" look the same to the user and
                 // both end in a picture. Only a real failure gets the warning + Retry.
                 loadingPlaceholder
+            } else if isMissingMedia {
+                unavailablePlaceholder
             } else if loadError != nil {
                 errorPlaceholder
             } else {
@@ -227,6 +241,7 @@ private struct SingleMediaCell: View {
         )
         .onTapGesture {
             guard !isPlaceholder else { return }
+            guard !isMissingMedia else { return }
             if downloadedVideoURL != nil {
                 onTap()
             } else {
@@ -278,7 +293,12 @@ private struct SingleMediaCell: View {
 
     @ViewBuilder
     private var videoOverlayGlyph: some View {
-        if isDownloadingVideo {
+        if isMissingMedia {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: ChatUIConstants.Media.statusOverlayIconSize, weight: .semibold))
+                .foregroundColor(Color.CT.danger)
+                .accessibilityLabel(NSLocalizedString("media_unavailable", comment: ""))
+        } else if isDownloadingVideo {
             VStack(spacing: 6) {
                 if videoDownloadProgress > 0 {
                     ProgressView(value: videoDownloadProgress)
@@ -375,9 +395,10 @@ private struct SingleMediaCell: View {
         Rectangle()
             .fill(Color.CT.bgMsg).frame(width: previewSize.width, height: previewSize.height)
             .overlay {
-                VStack(spacing: 12) {
+                VStack(spacing: ChatUIConstants.Media.failureStackSpacing) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(CTFont.regular(36)).foregroundColor(.orange)
+                        .font(.system(size: ChatUIConstants.Media.failureIconSize, weight: .regular))
+                        .foregroundColor(Color.CT.danger)
                         .lineLimit(1).fixedSize()
                     Text(LocalizedStringKey("failed_to_load")).font(CTFont.regular(11)).foregroundColor(Color.CT.textDim)
                     Button { loadThumbnail(forceRetry: true) } label: {
@@ -390,6 +411,23 @@ private struct SingleMediaCell: View {
                         .background(Color.CT.accent.opacity(0.1))
                         .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.3), lineWidth: 1))
                     }
+                }
+            }
+            .overlay(Rectangle().stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2))
+    }
+
+    private var unavailablePlaceholder: some View {
+        Rectangle()
+            .fill(Color.CT.bgMsg).frame(width: previewSize.width, height: previewSize.height)
+            .overlay {
+                VStack(spacing: ChatUIConstants.Media.failureStackSpacing) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: ChatUIConstants.Media.failureIconSize, weight: .regular))
+                        .foregroundColor(Color.CT.danger)
+                        .lineLimit(1).fixedSize()
+                    Text(LocalizedStringKey("media_unavailable"))
+                        .font(CTFont.regular(11))
+                        .foregroundColor(Color.CT.textDim)
                 }
             }
             .overlay(Rectangle().stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2))
@@ -416,6 +454,7 @@ private struct SingleMediaCell: View {
         if hasFullCopy || isLoading { return }
         if loadError != nil && !forceRetry { return }
         loadError = nil
+        isMissingMedia = false
         isAwaitingDescriptor = false
         hasReceivedBytes = false
         downloadProgress = 0
@@ -516,10 +555,18 @@ private struct SingleMediaCell: View {
                     downloadProgress = 1.0
                 }
             } catch {
-                Log.error("Single media load failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                let disposition = MediaLoadFailurePolicy.disposition(for: error)
+                if disposition == .permanentlyUnavailable {
+                    Log.debug("Single media unavailable for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                } else {
+                    Log.error("Single media load failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                }
                 await MainActor.run {
                     isLoading = false
-                    if thumbnailImage == nil { loadError = error.localizedDescription }
+                    if thumbnailImage == nil {
+                        isMissingMedia = disposition == .permanentlyUnavailable
+                        loadError = error.localizedDescription
+                    }
                     hasReceivedBytes = false
                     downloadProgress = 0
                 }
@@ -571,10 +618,16 @@ private struct SingleMediaCell: View {
                 }
                 await GalleryVideoPage.cacheFirstFramePoster(from: url, messageId: message.id, itemIndex: itemIndex)
             } catch {
-                Log.error("Video preload failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                let disposition = MediaLoadFailurePolicy.disposition(for: error)
+                if disposition == .permanentlyUnavailable {
+                    Log.debug("Video unavailable for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                } else {
+                    Log.error("Video preload failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                }
                 await MainActor.run {
                     isDownloadingVideo = false
                     videoDownloadProgress = 0
+                    isMissingMedia = disposition == .permanentlyUnavailable
                 }
             }
         }
@@ -789,12 +842,13 @@ private struct GridCell: View {
         .onTapGesture {
             if isVideo {
                 guard !isPlaceholder else { return }
+                guard !isMissingMedia else { return }
                 if downloadedVideoURL != nil {
                     onTap()
                 } else {
                     startVideoDownloadAndOpen()
                 }
-            } else if loadFailed {
+            } else if loadFailed && !isMissingMedia {
                 loadThumbnail(forceRetry: true)
             } else if !isPlaceholder, thumbnailImage != nil {
                 onTap()
@@ -830,7 +884,7 @@ private struct GridCell: View {
         Color.CT.bgMsg
         Image(systemName: placeholderSymbolName)
             .font(.system(size: 22, weight: loadFailed ? .semibold : .regular))
-            .foregroundColor(loadFailed ? .orange : Color.CT.textDim)
+            .foregroundColor(loadFailed ? Color.CT.danger : Color.CT.textDim)
     }
 
     @ViewBuilder
@@ -860,7 +914,12 @@ private struct GridCell: View {
 
     @ViewBuilder
     private var videoOverlayGlyph: some View {
-        if isDownloadingVideo {
+        if isMissingMedia {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: ChatUIConstants.Media.statusOverlayIconSize, weight: .semibold))
+                .foregroundColor(Color.CT.danger)
+                .accessibilityLabel(NSLocalizedString("media_unavailable", comment: ""))
+        } else if isDownloadingVideo {
             VStack(spacing: 4) {
                 if videoDownloadProgress > 0 {
                     ProgressView(value: videoDownloadProgress)
@@ -993,11 +1052,16 @@ private struct GridCell: View {
                     downloadProgress = 1.0
                 }
             } catch {
-                Log.error("Grid media load failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                let disposition = MediaLoadFailurePolicy.disposition(for: error)
+                if disposition == .permanentlyUnavailable {
+                    Log.debug("Grid media unavailable for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                } else {
+                    Log.error("Grid media load failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                }
                 await MainActor.run {
                     isLoading = false
                     loadFailed = true
-                    isMissingMedia = isMediaMissingError(error)
+                    isMissingMedia = disposition == .permanentlyUnavailable
                     hasReceivedBytes = false
                     downloadProgress = 0
                 }
@@ -1049,19 +1113,20 @@ private struct GridCell: View {
                 }
                 await GalleryVideoPage.cacheFirstFramePoster(from: url, messageId: message.id, itemIndex: itemIndex)
             } catch {
-                Log.error("Grid video preload failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                let disposition = MediaLoadFailurePolicy.disposition(for: error)
+                if disposition == .permanentlyUnavailable {
+                    Log.debug("Grid video unavailable for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                } else {
+                    Log.error("Grid video preload failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
+                }
                 await MainActor.run {
                     isDownloadingVideo = false
                     videoDownloadProgress = 0
+                    isMissingMedia = disposition == .permanentlyUnavailable
                 }
             }
         }
     }
-}
-
-private func isMediaMissingError(_ error: Error) -> Bool {
-    guard let rpcError = error as? RPCError else { return false }
-    return rpcError.code == .notFound
 }
 
 /// "m:ss" for a media duration.

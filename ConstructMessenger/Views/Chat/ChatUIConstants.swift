@@ -175,6 +175,10 @@ enum ChatUIConstants {
     enum Media {
         static let cornerRadius: CGFloat = CTRadius.control
         static let badgeCornerRadius: CGFloat = CTRadius.badge
+        static let captionTopPadding: CGFloat = 2
+        static let failureStackSpacing: CGFloat = CTLayout.edgePad
+        static let failureIconSize: CGFloat = 36
+        static let statusOverlayIconSize: CGFloat = 20
         /// Progress chip over a video poster while downloading.
         static let overlayChipRadius: CGFloat = CTLayout.edgePad
         static let playButtonSize: CGFloat = 54

@@ -9,6 +9,12 @@
 import SwiftUI
 import Combine
 
+private enum ReplyPreviewLayout {
+    static let spacing: CGFloat = 6
+    static let iconSize: CGFloat = 14
+    static let labelSize: CGFloat = 12
+}
+
 struct ReplyPreviewContent: View {
     /// The content string — `replyToContent` stored on the replying message,
     /// or `decryptedContent` of the original message when composing.
@@ -23,41 +29,35 @@ struct ReplyPreviewContent: View {
 
     @State private var thumbnail: PlatformImage? = nil
 
+    private var preview: ReplyPreviewPayload? { ReplyPreviewPayload.fromStoredContent(content) }
     private var mediaContent: MediaMessageContent? { parseMediaContent(from: content) }
     private var firstMediaItem: [String: Any]? { mediaContent?.mediaItems.first ?? mediaContent?.media }
 
-    private var fileContent: FileMessageContent? {
-        guard let c = content,
-              let data = c.data(using: .utf8),
-              let json = try? JSONDecoder().decode(FileMessageContent.self, from: data),
-              json.type == "file" else { return nil }
-        return json
-    }
-
+    @ViewBuilder
     var body: some View {
-        if mediaContent != nil {
-            HStack(spacing: 6) {
+        if let preview, preview.kind == .image || preview.kind == .video || preview.kind == .animated {
+            HStack(spacing: ReplyPreviewLayout.spacing) {
                 thumbnailView
-                Text(mediaCaptionLabel)
-                    .font(CTFont.regular(12))
+                Text(preview.localizedDisplayText)
+                    .font(CTFont.regular(ReplyPreviewLayout.labelSize))
                     .foregroundColor(Color.CT.textDim)
-                    .lineLimit(1)
+                    .lineLimit(lineLimit)
             }
             .onAppear { loadThumbnailIfNeeded() }
-        } else if let fc = fileContent {
-            HStack(spacing: 6) {
-                Text(fileAscii(for: fc.files.first?.mediaType))
-                    .font(CTFont.regular(14))
+        } else if let preview, preview.kind != .text {
+            HStack(spacing: ReplyPreviewLayout.spacing) {
+                Image(systemName: symbolName(for: preview.kind))
+                    .font(.system(size: ReplyPreviewLayout.iconSize, weight: .regular))
                     .foregroundColor(Color.CT.textDim)
                     .lineLimit(1).fixedSize()
-                Text(fc.files.first?.filename ?? NSLocalizedString("file_attachment", comment: ""))
-                    .font(CTFont.regular(12))
+                Text(preview.localizedDisplayText)
+                    .font(CTFont.regular(ReplyPreviewLayout.labelSize))
                     .foregroundColor(Color.CT.textDim)
-                    .lineLimit(1)
+                    .lineLimit(lineLimit)
             }
         } else {
-            Text(content ?? "")
-                .font(CTFont.regular(12))
+            Text(preview?.localizedDisplayText ?? "")
+                .font(CTFont.regular(ReplyPreviewLayout.labelSize))
                 .foregroundColor(Color.CT.textDim)
                 .lineLimit(lineLimit)
         }
@@ -73,8 +73,8 @@ struct ReplyPreviewContent: View {
             } else {
                 Color.CT.bgMsg
                     .overlay(
-                        Image(systemName: "photo")
-                            .font(CTFont.regular(14))
+                        Image(systemName: preview?.kind == .video ? "video" : "photo")
+                            .font(.system(size: ReplyPreviewLayout.iconSize, weight: .regular))
                             .foregroundColor(Color.CT.textDim)
                             .lineLimit(1).fixedSize()
                     )
@@ -84,27 +84,18 @@ struct ReplyPreviewContent: View {
         .clipShape(Rectangle())
     }
 
-    private var mediaCaptionLabel: String {
-        let caption = mediaContent?.caption ?? ""
-        if !caption.isEmpty { return caption }
-        let mediaType = firstMediaItem?["mediaType"] as? String ?? ""
-        if mediaType.hasPrefix("video/") {
-            return NSLocalizedString("video", comment: "")
+    private func symbolName(for kind: ReplyPreviewPayload.Kind) -> String {
+        switch kind {
+        case .audio: return "waveform"
+        case .file: return "doc"
+        case .profile: return "person.crop.rectangle"
+        case .sticker: return "face.smiling"
+        case .unknownAttachment: return "paperclip"
+        case .image, .animated: return "photo"
+        case .video: return "video"
+        case .text: return "text.alignleft"
         }
-        return NSLocalizedString("photo", comment: "")
     }
-
-    private func fileAscii(for mimeType: String?) -> String {
-        guard let mime = mimeType else { return "[doc]" }
-        if mime.hasPrefix("image/") { return "[img]" }
-        if mime.hasPrefix("video/") { return "[vid]" }
-        if mime.hasPrefix("audio/") { return "[♪]" }
-        if mime.contains("pdf") { return "[pdf]" }
-        return "[doc]"
-    }
-
-    @available(*, unavailable)
-    private func fileIcon(for mimeType: String?) -> String { "" }
 
     private func loadThumbnailIfNeeded() {
         guard thumbnail == nil else { return }

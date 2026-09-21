@@ -576,7 +576,7 @@ class MessageRetryManager {
         if let replyId = message.replyToMessageId, !replyId.isEmpty {
             var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
             quoted.messageID = replyId
-            quoted.textPreview = message.replyToContent ?? ""
+            ReplyPreviewPayload.fromStoredContent(message.replyToContent)?.apply(to: &quoted)
             textMsg.quoted = quoted
         }
         var content = Shared_Proto_Messaging_V1_MessageContent()

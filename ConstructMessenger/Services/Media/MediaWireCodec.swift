@@ -253,7 +253,7 @@ enum MediaWireCodec {
 
     // MARK: - Helpers
 
-    private static func protoMediaType(for mime: String) -> Shared_Proto_Messaging_V1_MediaType {
+    static func protoMediaType(for mime: String) -> Shared_Proto_Messaging_V1_MediaType {
         let m = mime.lowercased()
         if m.hasPrefix("image/") { return m.contains("gif") ? .animated : .image }
         if m.hasPrefix("video/") { return .video }
