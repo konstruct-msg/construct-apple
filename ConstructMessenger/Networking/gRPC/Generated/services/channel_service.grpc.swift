@@ -29,7 +29,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "CreateChannel".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "CreateChannel"
+                method: "CreateChannel",
+                type: .unary
             )
         }
         /// Namespace for "GetChannel" metadata.
@@ -41,7 +42,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "GetChannel".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "GetChannel"
+                method: "GetChannel",
+                type: .unary
             )
         }
         /// Namespace for "UpdateChannel" metadata.
@@ -53,7 +55,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "UpdateChannel".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "UpdateChannel"
+                method: "UpdateChannel",
+                type: .unary
             )
         }
         /// Namespace for "SetChannelVisibility" metadata.
@@ -65,7 +68,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "SetChannelVisibility".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "SetChannelVisibility"
+                method: "SetChannelVisibility",
+                type: .unary
             )
         }
         /// Namespace for "DeleteChannel" metadata.
@@ -77,7 +81,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "DeleteChannel".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "DeleteChannel"
+                method: "DeleteChannel",
+                type: .unary
             )
         }
         /// Namespace for "SubscribeChannel" metadata.
@@ -89,7 +94,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "SubscribeChannel".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "SubscribeChannel"
+                method: "SubscribeChannel",
+                type: .unary
             )
         }
         /// Namespace for "UnsubscribeChannel" metadata.
@@ -101,7 +107,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "UnsubscribeChannel".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "UnsubscribeChannel"
+                method: "UnsubscribeChannel",
+                type: .unary
             )
         }
         /// Namespace for "ListSubscriptions" metadata.
@@ -113,7 +120,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "ListSubscriptions".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "ListSubscriptions"
+                method: "ListSubscriptions",
+                type: .unary
             )
         }
         /// Namespace for "GetSubscriberCount" metadata.
@@ -125,7 +133,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "GetSubscriberCount".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "GetSubscriberCount"
+                method: "GetSubscriberCount",
+                type: .unary
             )
         }
         /// Namespace for "PublishPost" metadata.
@@ -137,7 +146,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "PublishPost".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "PublishPost"
+                method: "PublishPost",
+                type: .unary
             )
         }
         /// Namespace for "ListPosts" metadata.
@@ -149,7 +159,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "ListPosts".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "ListPosts"
+                method: "ListPosts",
+                type: .unary
             )
         }
         /// Namespace for "GetPost" metadata.
@@ -161,7 +172,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "GetPost".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "GetPost"
+                method: "GetPost",
+                type: .unary
             )
         }
         /// Namespace for "DeletePost" metadata.
@@ -173,7 +185,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "DeletePost".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "DeletePost"
+                method: "DeletePost",
+                type: .unary
             )
         }
         /// Namespace for "GetCommentGroup" metadata.
@@ -185,7 +198,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "GetCommentGroup".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "GetCommentGroup"
+                method: "GetCommentGroup",
+                type: .unary
             )
         }
         /// Namespace for "AddAdmin" metadata.
@@ -197,7 +211,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "AddAdmin".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "AddAdmin"
+                method: "AddAdmin",
+                type: .unary
             )
         }
         /// Namespace for "RemoveAdmin" metadata.
@@ -209,7 +224,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "RemoveAdmin".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "RemoveAdmin"
+                method: "RemoveAdmin",
+                type: .unary
             )
         }
         /// Namespace for "ListAdmins" metadata.
@@ -221,7 +237,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "ListAdmins".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "ListAdmins"
+                method: "ListAdmins",
+                type: .unary
             )
         }
         /// Namespace for "CreateInviteLink" metadata.
@@ -233,7 +250,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "CreateInviteLink".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "CreateInviteLink"
+                method: "CreateInviteLink",
+                type: .unary
             )
         }
         /// Namespace for "RevokeInviteLink" metadata.
@@ -245,7 +263,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "RevokeInviteLink".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "RevokeInviteLink"
+                method: "RevokeInviteLink",
+                type: .unary
             )
         }
         /// Namespace for "ResolveInviteLink" metadata.
@@ -257,7 +276,8 @@ public enum Shared_Proto_Services_V1_ChannelService: Sendable {
             /// Descriptor for "ResolveInviteLink".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.ChannelService"),
-                method: "ResolveInviteLink"
+                method: "ResolveInviteLink",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.ChannelService" service.

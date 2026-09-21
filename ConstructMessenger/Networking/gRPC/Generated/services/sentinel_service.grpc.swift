@@ -29,7 +29,8 @@ public enum Shared_Proto_Sentinel_V1_SentinelService: Sendable {
             /// Descriptor for "ReportSpam".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
-                method: "ReportSpam"
+                method: "ReportSpam",
+                type: .unary
             )
         }
         /// Namespace for "BlockDevice" metadata.
@@ -41,7 +42,8 @@ public enum Shared_Proto_Sentinel_V1_SentinelService: Sendable {
             /// Descriptor for "BlockDevice".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
-                method: "BlockDevice"
+                method: "BlockDevice",
+                type: .unary
             )
         }
         /// Namespace for "UnblockDevice" metadata.
@@ -53,7 +55,8 @@ public enum Shared_Proto_Sentinel_V1_SentinelService: Sendable {
             /// Descriptor for "UnblockDevice".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
-                method: "UnblockDevice"
+                method: "UnblockDevice",
+                type: .unary
             )
         }
         /// Namespace for "GetBlockedDevices" metadata.
@@ -65,7 +68,8 @@ public enum Shared_Proto_Sentinel_V1_SentinelService: Sendable {
             /// Descriptor for "GetBlockedDevices".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
-                method: "GetBlockedDevices"
+                method: "GetBlockedDevices",
+                type: .unary
             )
         }
         /// Namespace for "GetTrustStatus" metadata.
@@ -77,7 +81,8 @@ public enum Shared_Proto_Sentinel_V1_SentinelService: Sendable {
             /// Descriptor for "GetTrustStatus".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
-                method: "GetTrustStatus"
+                method: "GetTrustStatus",
+                type: .unary
             )
         }
         /// Namespace for "CheckSendPermission" metadata.
@@ -89,7 +94,8 @@ public enum Shared_Proto_Sentinel_V1_SentinelService: Sendable {
             /// Descriptor for "CheckSendPermission".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
-                method: "CheckSendPermission"
+                method: "CheckSendPermission",
+                type: .unary
             )
         }
         /// Namespace for "GetProtectionStats" metadata.
@@ -101,7 +107,8 @@ public enum Shared_Proto_Sentinel_V1_SentinelService: Sendable {
             /// Descriptor for "GetProtectionStats".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
-                method: "GetProtectionStats"
+                method: "GetProtectionStats",
+                type: .unary
             )
         }
         /// Namespace for "AdminBanDevice" metadata.
@@ -113,7 +120,8 @@ public enum Shared_Proto_Sentinel_V1_SentinelService: Sendable {
             /// Descriptor for "AdminBanDevice".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
-                method: "AdminBanDevice"
+                method: "AdminBanDevice",
+                type: .unary
             )
         }
         /// Namespace for "AdminUnbanDevice" metadata.
@@ -125,7 +133,8 @@ public enum Shared_Proto_Sentinel_V1_SentinelService: Sendable {
             /// Descriptor for "AdminUnbanDevice".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
-                method: "AdminUnbanDevice"
+                method: "AdminUnbanDevice",
+                type: .unary
             )
         }
         /// Namespace for "AdminClearFlag" metadata.
@@ -137,7 +146,8 @@ public enum Shared_Proto_Sentinel_V1_SentinelService: Sendable {
             /// Descriptor for "AdminClearFlag".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
-                method: "AdminClearFlag"
+                method: "AdminClearFlag",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.sentinel.v1.SentinelService" service.

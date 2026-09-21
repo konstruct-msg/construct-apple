@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,13 +20,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// SessionResetReason - Why session was reset
-public enum Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified reason (must be 0)
@@ -90,7 +94,7 @@ public enum Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf.Enum, Sw
 }
 
 /// DecryptionErrorType - Type of decryption failure
-public enum Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified error (must be 0)
@@ -153,7 +157,7 @@ public enum Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf.Enum, S
 }
 
 /// SignalMessage - Double Ratchet message (after session established)
-public struct Shared_Proto_Messaging_V1_SignalMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_SignalMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -186,7 +190,7 @@ public struct Shared_Proto_Messaging_V1_SignalMessage: Sendable {
 
 /// PreKeySignalMessage - Initial message (X3DH handshake)
 /// Sent when no session exists between sender and recipient
-public struct Shared_Proto_Messaging_V1_PreKeySignalMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_PreKeySignalMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -282,7 +286,7 @@ public struct Shared_Proto_Messaging_V1_PreKeySignalMessage: Sendable {
 /// SenderKeyMessage - Group message (Sender Key protocol)
 /// Used for efficient group messaging before MLS adoption
 /// Note: Will be deprecated in favor of MLS
-public struct Shared_Proto_Messaging_V1_SenderKeyMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_SenderKeyMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -312,7 +316,7 @@ public struct Shared_Proto_Messaging_V1_SenderKeyMessage: Sendable {
 
 /// SenderKeyDistributionMessage - Distribute sender key to group
 /// Sent when new member joins or sender key rotates
-public struct Shared_Proto_Messaging_V1_SenderKeyDistributionMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_SenderKeyDistributionMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -339,7 +343,7 @@ public struct Shared_Proto_Messaging_V1_SenderKeyDistributionMessage: Sendable {
 
 /// SessionResetMessage - Reset E2EE session
 /// Sent when session corruption detected or security incident
-public struct Shared_Proto_Messaging_V1_SessionResetMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_SessionResetMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -369,7 +373,7 @@ public struct Shared_Proto_Messaging_V1_SessionResetMessage: Sendable {
 
 /// IdentityKeyChangeNotification - Alert when contact's identity key changes
 /// Security feature: prevents MITM attacks
-public struct Shared_Proto_Messaging_V1_IdentityKeyChangeNotification: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_IdentityKeyChangeNotification: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -408,7 +412,7 @@ public struct Shared_Proto_Messaging_V1_IdentityKeyChangeNotification: Sendable 
 
 /// SafetyNumberChangeEvent - Safety number verification change
 /// Displayed to users for manual verification
-public struct Shared_Proto_Messaging_V1_SafetyNumberChangeEvent: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_SafetyNumberChangeEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -435,7 +439,7 @@ public struct Shared_Proto_Messaging_V1_SafetyNumberChangeEvent: Sendable {
 
 /// DecryptionErrorMessage - Failed to decrypt message
 /// Sent back to sender to request re-send or session reset
-public struct Shared_Proto_Messaging_V1_DecryptionErrorMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_DecryptionErrorMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -470,7 +474,7 @@ public struct Shared_Proto_Messaging_V1_DecryptionErrorMessage: Sendable {
 }
 
 /// RatchetState - Snapshot of Double Ratchet state (for debugging)
-public struct Shared_Proto_Messaging_V1_RatchetState: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_RatchetState: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -497,17 +501,17 @@ public struct Shared_Proto_Messaging_V1_RatchetState: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.messaging.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.messaging.v1"
 
-extension Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SESSION_RESET_REASON_UNSPECIFIED\0\u{1}SESSION_RESET_REASON_CORRUPTION\0\u{1}SESSION_RESET_REASON_SECURITY\0\u{1}SESSION_RESET_REASON_USER\0\u{1}SESSION_RESET_REASON_DEVICE_CHANGED\0\u{1}SESSION_RESET_REASON_OTPK_UNREPRODUCIBLE\0")
 }
 
-extension Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DECRYPTION_ERROR_TYPE_UNSPECIFIED\0\u{1}DECRYPTION_ERROR_TYPE_MAC_FAILED\0\u{1}DECRYPTION_ERROR_TYPE_TOO_OLD\0\u{1}DECRYPTION_ERROR_TYPE_DUPLICATE\0\u{1}DECRYPTION_ERROR_TYPE_NO_SESSION\0\u{1}DECRYPTION_ERROR_TYPE_INVALID_FORMAT\0")
 }
 
-extension Shared_Proto_Messaging_V1_SignalMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_SignalMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SignalMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}version\0\u{3}ratchet_key\0\u{1}counter\0\u{3}previous_counter\0\u{1}ciphertext\0\u{1}mac\0\u{c}\u{7}\u{9}")
 
@@ -562,7 +566,7 @@ extension Shared_Proto_Messaging_V1_SignalMessage: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Messaging_V1_PreKeySignalMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_PreKeySignalMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PreKeySignalMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}version\0\u{3}registration_id\0\u{3}pre_key_id\0\u{3}signed_pre_key_id\0\u{3}base_key\0\u{3}identity_key\0\u{1}message\0\u{3}kem_ciphertext\0\u{3}kyber_pre_key_id\0\u{3}kyber_one_time_kem_ciphertext\0\u{3}kyber_one_time_pre_key_id\0\u{c}\u{c}\u{4}")
 
@@ -646,7 +650,7 @@ extension Shared_Proto_Messaging_V1_PreKeySignalMessage: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Messaging_V1_SenderKeyMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_SenderKeyMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SenderKeyMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}version\0\u{3}distribution_id\0\u{3}chain_id\0\u{1}iteration\0\u{1}ciphertext\0\u{1}mac\0\u{c}\u{7}\u{9}")
 
@@ -701,7 +705,7 @@ extension Shared_Proto_Messaging_V1_SenderKeyMessage: SwiftProtobuf.Message, Swi
   }
 }
 
-extension Shared_Proto_Messaging_V1_SenderKeyDistributionMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_SenderKeyDistributionMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SenderKeyDistributionMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}distribution_id\0\u{3}chain_id\0\u{1}iteration\0\u{3}chain_key\0\u{3}signing_key\0\u{c}\u{6}\u{a}")
 
@@ -751,7 +755,7 @@ extension Shared_Proto_Messaging_V1_SenderKeyDistributionMessage: SwiftProtobuf.
   }
 }
 
-extension Shared_Proto_Messaging_V1_SessionResetMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_SessionResetMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SessionResetMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}reason\0\u{3}reset_timestamp\0\u{3}new_pre_key_bundle\0\u{c}\u{4}\u{7}")
 
@@ -795,7 +799,7 @@ extension Shared_Proto_Messaging_V1_SessionResetMessage: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Messaging_V1_IdentityKeyChangeNotification: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_IdentityKeyChangeNotification: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IdentityKeyChangeNotification"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0\u{3}old_identity_key\0\u{3}new_identity_key\0\u{3}changed_at\0\u{3}change_reason\0\u{c}\u{7}\u{4}")
 
@@ -854,7 +858,7 @@ extension Shared_Proto_Messaging_V1_IdentityKeyChangeNotification: SwiftProtobuf
   }
 }
 
-extension Shared_Proto_Messaging_V1_SafetyNumberChangeEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_SafetyNumberChangeEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SafetyNumberChangeEvent"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_id\0\u{3}user_id\0\u{3}old_safety_number\0\u{3}new_safety_number\0\u{3}changed_at\0\u{c}\u{6}\u{5}")
 
@@ -904,7 +908,7 @@ extension Shared_Proto_Messaging_V1_SafetyNumberChangeEvent: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Messaging_V1_DecryptionErrorMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_DecryptionErrorMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DecryptionErrorMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}error_type\0\u{3}error_message\0\u{3}error_timestamp\0\u{3}ratchet_state\0\u{c}\u{6}\u{5}")
 
@@ -958,7 +962,7 @@ extension Shared_Proto_Messaging_V1_DecryptionErrorMessage: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Messaging_V1_RatchetState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_RatchetState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RatchetState"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}send_counter\0\u{3}recv_counter\0\u{3}prev_send_counter\0\u{3}has_root_key\0\u{3}has_chain_key\0\u{c}\u{6}\u{5}")
 

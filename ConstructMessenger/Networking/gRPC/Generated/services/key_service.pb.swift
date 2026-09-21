@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,12 +20,12 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
-public enum Shared_Proto_Services_V1_SignedPreKeyRotationReason: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Services_V1_SignedPreKeyRotationReason: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified (must be 0)
@@ -77,7 +81,7 @@ public enum Shared_Proto_Services_V1_SignedPreKeyRotationReason: SwiftProtobuf.E
 
 }
 
-public struct Shared_Proto_Services_V1_GetPreKeyBundleRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetPreKeyBundleRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -139,7 +143,7 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundleRequest: Sendable {
   fileprivate var _consumeOneTimePrekey: Bool? = nil
 }
 
-public struct Shared_Proto_Services_V1_GetPreKeyBundleResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetPreKeyBundleResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -201,7 +205,7 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundleResponse: Sendable {
 /// RFC 6962-style inclusion proof for a device's identity key in the KT log.
 /// The proof allows a client to verify that the identity key it received is
 /// permanently recorded in the server's append-only Merkle log.
-public struct Shared_Proto_Services_V1_KtInclusionProof: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_KtInclusionProof: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -229,7 +233,7 @@ public struct Shared_Proto_Services_V1_KtInclusionProof: Sendable {
 }
 
 /// Pre-key bundle for X3DH key agreement
-public struct Shared_Proto_Services_V1_PreKeyBundle: @unchecked Sendable {
+public nonisolated struct Shared_Proto_Services_V1_PreKeyBundle: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -453,7 +457,7 @@ public struct Shared_Proto_Services_V1_PreKeyBundle: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public struct Shared_Proto_Services_V1_GetPreKeyBundlesRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetPreKeyBundlesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -494,7 +498,7 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundlesRequest: Sendable {
   fileprivate var _consumeOneTimePrekey: Bool? = nil
 }
 
-public struct Shared_Proto_Services_V1_GetPreKeyBundlesResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetPreKeyBundlesResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -534,7 +538,7 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundlesResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_DevicePreKeyBundle: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DevicePreKeyBundle: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -589,7 +593,7 @@ public struct Shared_Proto_Services_V1_DevicePreKeyBundle: Sendable {
   fileprivate var _hybridKtProof: Shared_Proto_Services_V1_KtInclusionProof? = nil
 }
 
-public struct Shared_Proto_Services_V1_UploadPreKeysRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UploadPreKeysRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -692,7 +696,7 @@ public struct Shared_Proto_Services_V1_UploadPreKeysRequest: Sendable {
   fileprivate var _kyberSignedPreKeyHybridSignature: Data? = nil
 }
 
-public struct Shared_Proto_Services_V1_OneTimePreKey: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_OneTimePreKey: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -708,7 +712,7 @@ public struct Shared_Proto_Services_V1_OneTimePreKey: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_SignedPreKeyUpload: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SignedPreKeyUpload: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -728,7 +732,7 @@ public struct Shared_Proto_Services_V1_SignedPreKeyUpload: Sendable {
 }
 
 /// Single Kyber one-time pre-key upload
-public struct Shared_Proto_Services_V1_KyberOneTimePreKey: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_KyberOneTimePreKey: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -748,7 +752,7 @@ public struct Shared_Proto_Services_V1_KyberOneTimePreKey: Sendable {
 }
 
 /// Kyber signed pre-key upload (persistent, rotated like X25519 SPK)
-public struct Shared_Proto_Services_V1_KyberSignedPreKeyUpload: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_KyberSignedPreKeyUpload: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -767,7 +771,7 @@ public struct Shared_Proto_Services_V1_KyberSignedPreKeyUpload: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_UploadPreKeysResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UploadPreKeysResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -789,7 +793,7 @@ public struct Shared_Proto_Services_V1_UploadPreKeysResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GetPreKeyCountRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetPreKeyCountRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -802,7 +806,7 @@ public struct Shared_Proto_Services_V1_GetPreKeyCountRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GetPreKeyCountResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetPreKeyCountResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -821,7 +825,7 @@ public struct Shared_Proto_Services_V1_GetPreKeyCountResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_RotateSignedPreKeyRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RotateSignedPreKeyRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -890,7 +894,7 @@ public struct Shared_Proto_Services_V1_RotateSignedPreKeyRequest: Sendable {
   fileprivate var _kyberSignedPreKeyHybridSignature: Data? = nil
 }
 
-public struct Shared_Proto_Services_V1_RotateSignedPreKeyResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RotateSignedPreKeyResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -938,7 +942,7 @@ public struct Shared_Proto_Services_V1_RotateSignedPreKeyResponse: Sendable {
   fileprivate var _newKyberSpkRotationEpoch: UInt32? = nil
 }
 
-public struct Shared_Proto_Services_V1_GetSignedPreKeyAgeRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetSignedPreKeyAgeRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -951,7 +955,7 @@ public struct Shared_Proto_Services_V1_GetSignedPreKeyAgeRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GetSignedPreKeyAgeResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetSignedPreKeyAgeResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -976,7 +980,7 @@ public struct Shared_Proto_Services_V1_GetSignedPreKeyAgeResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GetIdentityKeyRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetIdentityKeyRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1001,7 +1005,7 @@ public struct Shared_Proto_Services_V1_GetIdentityKeyRequest: Sendable {
   fileprivate var _deviceID: String? = nil
 }
 
-public struct Shared_Proto_Services_V1_GetIdentityKeyResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetIdentityKeyResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1035,7 +1039,7 @@ public struct Shared_Proto_Services_V1_GetIdentityKeyResponse: Sendable {
   fileprivate var _previousFingerprint: String? = nil
 }
 
-public struct Shared_Proto_Services_V1_VerifySafetyNumberRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_VerifySafetyNumberRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1054,7 +1058,7 @@ public struct Shared_Proto_Services_V1_VerifySafetyNumberRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_VerifySafetyNumberResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_VerifySafetyNumberResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1075,13 +1079,13 @@ public struct Shared_Proto_Services_V1_VerifySafetyNumberResponse: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.services.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.services.v1"
 
-extension Shared_Proto_Services_V1_SignedPreKeyRotationReason: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SignedPreKeyRotationReason: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SIGNED_PRE_KEY_ROTATION_REASON_UNSPECIFIED\0\u{1}SIGNED_PRE_KEY_ROTATION_REASON_SCHEDULED\0\u{1}SIGNED_PRE_KEY_ROTATION_REASON_SECURITY\0\u{1}SIGNED_PRE_KEY_ROTATION_REASON_USER\0\u{1}SIGNED_PRE_KEY_ROTATION_REASON_REINSTALL\0")
 }
 
-extension Shared_Proto_Services_V1_GetPreKeyBundleRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetPreKeyBundleRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPreKeyBundleRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0\u{3}preferred_suite\0\u{3}consume_one_time_prekey\0\u{c}\u{5}\u{6}")
 
@@ -1130,7 +1134,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleRequest: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPreKeyBundleResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}bundle\0\u{3}device_id\0\u{3}has_one_time_key\0\u{4}\u{8}verifying_key\0\u{4}\u{9}kt_proof\0\u{3}hybrid_kt_proof\0\u{c}\u{4}\u{7}")
 
@@ -1189,7 +1193,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Services_V1_KtInclusionProof: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_KtInclusionProof: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".KtInclusionProof"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}leaf_index\0\u{3}tree_size\0\u{3}root_hash\0\u{3}proof_hashes\0\u{3}tree_head_signature\0")
 
@@ -1239,7 +1243,7 @@ extension Shared_Proto_Services_V1_KtInclusionProof: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PreKeyBundle"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registration_id\0\u{3}identity_key\0\u{3}signed_pre_key\0\u{3}signed_pre_key_id\0\u{3}signed_pre_key_signature\0\u{3}one_time_pre_key\0\u{3}one_time_pre_key_id\0\u{3}crypto_suite\0\u{3}generated_at\0\u{3}kyber_pre_key\0\u{3}kyber_pre_key_id\0\u{3}kyber_pre_key_signature\0\u{3}kyber_one_time_pre_key\0\u{3}kyber_one_time_pre_key_id\0\u{3}spk_uploaded_at\0\u{3}spk_rotation_epoch\0\u{3}kyber_spk_uploaded_at\0\u{3}kyber_spk_rotation_epoch\0\u{3}bundle_signature\0\u{3}hybrid_identity_key\0\u{3}hybrid_identity_signature\0\u{3}signed_pre_key_hybrid_signature\0\u{3}kyber_pre_key_hybrid_signature\0\u{3}supports_pq_ratchet\0")
 
@@ -1470,7 +1474,7 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-extension Shared_Proto_Services_V1_GetPreKeyBundlesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetPreKeyBundlesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPreKeyBundlesRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_ids\0\u{3}preferred_suite\0\u{3}consume_one_time_prekey\0")
 
@@ -1519,7 +1523,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundlesRequest: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Services_V1_GetPreKeyBundlesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetPreKeyBundlesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPreKeyBundlesResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}bundles\0\u{3}unavailable_devices\0\u{3}active_devices\0")
 
@@ -1559,7 +1563,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundlesResponse: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DevicePreKeyBundle"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}bundle\0\u{1}platform\0\u{3}kt_proof\0\u{3}verifying_key\0\u{3}hybrid_kt_proof\0")
 
@@ -1618,7 +1622,7 @@ extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_UploadPreKeysRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UploadPreKeysRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UploadPreKeysRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}pre_keys\0\u{3}signed_pre_key\0\u{4}\u{8}replace_existing\0\u{3}kyber_pre_keys\0\u{3}kyber_signed_pre_key\0\u{3}hybrid_identity_key\0\u{3}hybrid_identity_signature\0\u{3}signed_pre_key_hybrid_signature\0\u{3}kyber_signed_pre_key_hybrid_signature\0\u{3}supports_pq_ratchet\0\u{c}\u{4}\u{7}")
 
@@ -1702,7 +1706,7 @@ extension Shared_Proto_Services_V1_UploadPreKeysRequest: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_OneTimePreKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_OneTimePreKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OneTimePreKey"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_id\0\u{3}public_key\0")
 
@@ -1737,7 +1741,7 @@ extension Shared_Proto_Services_V1_OneTimePreKey: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-extension Shared_Proto_Services_V1_SignedPreKeyUpload: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SignedPreKeyUpload: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SignedPreKeyUpload"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_id\0\u{3}public_key\0\u{1}signature\0\u{c}\u{4}\u{1}")
 
@@ -1777,7 +1781,7 @@ extension Shared_Proto_Services_V1_SignedPreKeyUpload: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_KyberOneTimePreKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_KyberOneTimePreKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".KyberOneTimePreKey"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_id\0\u{3}public_key\0\u{1}signature\0")
 
@@ -1817,7 +1821,7 @@ extension Shared_Proto_Services_V1_KyberOneTimePreKey: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_KyberSignedPreKeyUpload: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_KyberSignedPreKeyUpload: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".KyberSignedPreKeyUpload"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_id\0\u{3}public_key\0\u{1}signature\0\u{c}\u{4}\u{1}")
 
@@ -1857,7 +1861,7 @@ extension Shared_Proto_Services_V1_KyberSignedPreKeyUpload: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Services_V1_UploadPreKeysResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UploadPreKeysResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UploadPreKeysResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}pre_key_count\0\u{3}uploaded_at\0\u{3}kyber_pre_key_count\0")
 
@@ -1902,7 +1906,7 @@ extension Shared_Proto_Services_V1_UploadPreKeysResponse: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_GetPreKeyCountRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetPreKeyCountRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPreKeyCountRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0")
 
@@ -1932,7 +1936,7 @@ extension Shared_Proto_Services_V1_GetPreKeyCountRequest: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_GetPreKeyCountResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetPreKeyCountResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPreKeyCountResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}count\0\u{3}recommended_minimum\0\u{3}last_upload_at\0")
 
@@ -1972,7 +1976,7 @@ extension Shared_Proto_Services_V1_GetPreKeyCountResponse: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_RotateSignedPreKeyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RotateSignedPreKeyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RotateSignedPreKeyRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}new_signed_pre_key\0\u{1}reason\0\u{3}new_kyber_signed_pre_key\0\u{3}signed_pre_key_hybrid_signature\0\u{3}kyber_signed_pre_key_hybrid_signature\0")
 
@@ -2031,7 +2035,7 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyRequest: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_RotateSignedPreKeyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RotateSignedPreKeyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RotateSignedPreKeyResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_key_id\0\u{3}old_key_valid_until\0\u{3}rotated_at\0\u{3}new_kyber_key_id\0\u{3}new_spk_rotation_epoch\0\u{3}new_kyber_spk_rotation_epoch\0")
 
@@ -2095,7 +2099,7 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyResponse: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_GetSignedPreKeyAgeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetSignedPreKeyAgeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetSignedPreKeyAgeRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0")
 
@@ -2125,7 +2129,7 @@ extension Shared_Proto_Services_V1_GetSignedPreKeyAgeRequest: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_GetSignedPreKeyAgeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetSignedPreKeyAgeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetSignedPreKeyAgeResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_id\0\u{3}uploaded_at\0\u{3}age_seconds\0\u{3}should_rotate\0\u{3}rotation_interval\0")
 
@@ -2175,7 +2179,7 @@ extension Shared_Proto_Services_V1_GetSignedPreKeyAgeResponse: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_GetIdentityKeyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetIdentityKeyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetIdentityKeyRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0")
 
@@ -2214,7 +2218,7 @@ extension Shared_Proto_Services_V1_GetIdentityKeyRequest: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_GetIdentityKeyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetIdentityKeyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetIdentityKeyResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}identity_key\0\u{1}fingerprint\0\u{3}first_seen_at\0\u{3}key_changed\0\u{3}previous_fingerprint\0")
 
@@ -2268,7 +2272,7 @@ extension Shared_Proto_Services_V1_GetIdentityKeyResponse: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_VerifySafetyNumberRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_VerifySafetyNumberRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VerifySafetyNumberRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}our_user_id\0\u{3}their_user_id\0\u{3}expected_safety_number\0")
 
@@ -2308,7 +2312,7 @@ extension Shared_Proto_Services_V1_VerifySafetyNumberRequest: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_VerifySafetyNumberResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_VerifySafetyNumberResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VerifySafetyNumberResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}matches\0\u{3}actual_safety_number\0\u{3}verified_at\0")
 

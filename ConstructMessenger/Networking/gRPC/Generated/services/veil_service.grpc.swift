@@ -29,7 +29,8 @@ public enum Shared_Proto_Services_V1_VeilService: Sendable {
             /// Descriptor for "IssueVeilCapability".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.VeilService"),
-                method: "IssueVeilCapability"
+                method: "IssueVeilCapability",
+                type: .unary
             )
         }
         /// Namespace for "IssueBootstrapVoucher" metadata.
@@ -41,7 +42,8 @@ public enum Shared_Proto_Services_V1_VeilService: Sendable {
             /// Descriptor for "IssueBootstrapVoucher".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.VeilService"),
-                method: "IssueBootstrapVoucher"
+                method: "IssueBootstrapVoucher",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.VeilService" service.

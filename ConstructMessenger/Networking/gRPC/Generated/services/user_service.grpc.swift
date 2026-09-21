@@ -29,7 +29,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "GetUserProfile".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "GetUserProfile"
+                method: "GetUserProfile",
+                type: .unary
             )
         }
         /// Namespace for "UpdateUserProfile" metadata.
@@ -41,7 +42,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "UpdateUserProfile".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "UpdateUserProfile"
+                method: "UpdateUserProfile",
+                type: .unary
             )
         }
         /// Namespace for "UpdateProfilePicture" metadata.
@@ -53,7 +55,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "UpdateProfilePicture".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "UpdateProfilePicture"
+                method: "UpdateProfilePicture",
+                type: .unary
             )
         }
         /// Namespace for "GetUserCapabilities" metadata.
@@ -65,7 +68,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "GetUserCapabilities".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "GetUserCapabilities"
+                method: "GetUserCapabilities",
+                type: .unary
             )
         }
         /// Namespace for "BlockUser" metadata.
@@ -77,7 +81,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "BlockUser".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "BlockUser"
+                method: "BlockUser",
+                type: .unary
             )
         }
         /// Namespace for "UnblockUser" metadata.
@@ -89,7 +94,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "UnblockUser".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "UnblockUser"
+                method: "UnblockUser",
+                type: .unary
             )
         }
         /// Namespace for "GetBlockedUsers" metadata.
@@ -101,7 +107,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "GetBlockedUsers".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "GetBlockedUsers"
+                method: "GetBlockedUsers",
+                type: .unary
             )
         }
         /// Namespace for "DeleteAccount" metadata.
@@ -113,7 +120,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "DeleteAccount".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "DeleteAccount"
+                method: "DeleteAccount",
+                type: .unary
             )
         }
         /// Namespace for "ExportUserData" metadata.
@@ -125,7 +133,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "ExportUserData".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "ExportUserData"
+                method: "ExportUserData",
+                type: .unary
             )
         }
         /// Namespace for "CheckUsernameAvailability" metadata.
@@ -137,7 +146,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "CheckUsernameAvailability".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "CheckUsernameAvailability"
+                method: "CheckUsernameAvailability",
+                type: .unary
             )
         }
         /// Namespace for "SetDiscoverable" metadata.
@@ -149,7 +159,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "SetDiscoverable".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "SetDiscoverable"
+                method: "SetDiscoverable",
+                type: .unary
             )
         }
         /// Namespace for "FindUser" metadata.
@@ -161,7 +172,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "FindUser".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "FindUser"
+                method: "FindUser",
+                type: .unary
             )
         }
         /// Namespace for "SendContactRequest" metadata.
@@ -173,7 +185,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "SendContactRequest".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "SendContactRequest"
+                method: "SendContactRequest",
+                type: .unary
             )
         }
         /// Namespace for "GetContactRequests" metadata.
@@ -185,7 +198,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "GetContactRequests".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "GetContactRequests"
+                method: "GetContactRequests",
+                type: .unary
             )
         }
         /// Namespace for "RespondToContactRequest" metadata.
@@ -197,7 +211,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "RespondToContactRequest".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "RespondToContactRequest"
+                method: "RespondToContactRequest",
+                type: .unary
             )
         }
         /// Namespace for "SetGroupInvitePolicy" metadata.
@@ -209,7 +224,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Descriptor for "SetGroupInvitePolicy".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
-                method: "SetGroupInvitePolicy"
+                method: "SetGroupInvitePolicy",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.UserService" service.

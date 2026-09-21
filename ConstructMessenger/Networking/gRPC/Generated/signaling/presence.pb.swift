@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,13 +20,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// PresenceStatus - User availability
-public enum Shared_Proto_Signaling_V1_PresenceStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Signaling_V1_PresenceStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unknown status (must be 0)
@@ -79,7 +83,7 @@ public enum Shared_Proto_Signaling_V1_PresenceStatus: SwiftProtobuf.Enum, Swift.
 }
 
 /// TypingState - Typing activity
-public enum Shared_Proto_Signaling_V1_TypingState: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Signaling_V1_TypingState: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified state (must be 0)
@@ -124,7 +128,7 @@ public enum Shared_Proto_Signaling_V1_TypingState: SwiftProtobuf.Enum, Swift.Cas
 }
 
 /// ReceiptStatus - Receipt status
-public enum Shared_Proto_Signaling_V1_ReceiptStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Signaling_V1_ReceiptStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified status (must be 0)
@@ -181,7 +185,7 @@ public enum Shared_Proto_Signaling_V1_ReceiptStatus: SwiftProtobuf.Enum, Swift.C
 }
 
 /// ActivityType - Type of user activity
-public enum Shared_Proto_Signaling_V1_ActivityType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Signaling_V1_ActivityType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified activity (must be 0)
@@ -238,7 +242,7 @@ public enum Shared_Proto_Signaling_V1_ActivityType: SwiftProtobuf.Enum, Swift.Ca
 }
 
 /// PresenceUpdate - User online/offline status
-public struct Shared_Proto_Signaling_V1_PresenceUpdate: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_PresenceUpdate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -292,7 +296,7 @@ public struct Shared_Proto_Signaling_V1_PresenceUpdate: Sendable {
 }
 
 /// TypingIndicator - User is typing
-public struct Shared_Proto_Signaling_V1_TypingIndicator: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_TypingIndicator: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -316,7 +320,7 @@ public struct Shared_Proto_Signaling_V1_TypingIndicator: Sendable {
 
 /// DeliveryReceipt - Message delivery/read receipt
 /// Supports both 1-to-1 (DirectReceipt) and group (GroupReceipt)
-public struct Shared_Proto_Signaling_V1_DeliveryReceipt: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_DeliveryReceipt: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -345,7 +349,7 @@ public struct Shared_Proto_Signaling_V1_DeliveryReceipt: Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Receipt type (determines which field is populated)
-  public enum OneOf_ReceiptType: Equatable, Sendable {
+  public nonisolated enum OneOf_ReceiptType: Equatable, Sendable {
     /// Direct 1-to-1 receipt
     case direct(Shared_Proto_Signaling_V1_DirectReceipt)
     /// Group receipt (MLS)
@@ -357,7 +361,7 @@ public struct Shared_Proto_Signaling_V1_DeliveryReceipt: Sendable {
 }
 
 /// DirectReceipt - Receipt for 1-to-1 messages
-public struct Shared_Proto_Signaling_V1_DirectReceipt: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_DirectReceipt: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -384,7 +388,7 @@ public struct Shared_Proto_Signaling_V1_DirectReceipt: Sendable {
 }
 
 /// GroupReceipt - Receipt for group messages
-public struct Shared_Proto_Signaling_V1_GroupReceipt: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_GroupReceipt: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -414,7 +418,7 @@ public struct Shared_Proto_Signaling_V1_GroupReceipt: Sendable {
 }
 
 /// ReadCursor - Marks last read message in conversation
-public struct Shared_Proto_Signaling_V1_ReadCursor: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_ReadCursor: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -440,7 +444,7 @@ public struct Shared_Proto_Signaling_V1_ReadCursor: Sendable {
 }
 
 /// PresenceSubscription - Subscribe to user's presence
-public struct Shared_Proto_Signaling_V1_PresenceSubscription: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_PresenceSubscription: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -457,7 +461,7 @@ public struct Shared_Proto_Signaling_V1_PresenceSubscription: Sendable {
 }
 
 /// PresenceBatch - Batch presence updates
-public struct Shared_Proto_Signaling_V1_PresenceBatch: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_PresenceBatch: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -474,7 +478,7 @@ public struct Shared_Proto_Signaling_V1_PresenceBatch: Sendable {
 }
 
 /// TypingUsers - Active typists in a conversation
-public struct Shared_Proto_Signaling_V1_TypingUsers: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_TypingUsers: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -494,7 +498,7 @@ public struct Shared_Proto_Signaling_V1_TypingUsers: Sendable {
 }
 
 /// ActivityIndicator - Generic user activity
-public struct Shared_Proto_Signaling_V1_ActivityIndicator: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_ActivityIndicator: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -527,25 +531,25 @@ public struct Shared_Proto_Signaling_V1_ActivityIndicator: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.signaling.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.signaling.v1"
 
-extension Shared_Proto_Signaling_V1_PresenceStatus: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_PresenceStatus: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PRESENCE_STATUS_UNSPECIFIED\0\u{1}PRESENCE_STATUS_ONLINE\0\u{1}PRESENCE_STATUS_AWAY\0\u{1}PRESENCE_STATUS_BUSY\0\u{1}PRESENCE_STATUS_OFFLINE\0")
 }
 
-extension Shared_Proto_Signaling_V1_TypingState: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_TypingState: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0TYPING_STATE_UNSPECIFIED\0\u{1}TYPING_STATE_STARTED\0\u{1}TYPING_STATE_STOPPED\0")
 }
 
-extension Shared_Proto_Signaling_V1_ReceiptStatus: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_ReceiptStatus: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RECEIPT_STATUS_UNSPECIFIED\0\u{1}RECEIPT_STATUS_DELIVERED\0\u{1}RECEIPT_STATUS_READ\0\u{1}RECEIPT_STATUS_FAILED\0\u{1}RECEIPT_STATUS_PLAYED\0")
 }
 
-extension Shared_Proto_Signaling_V1_ActivityType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_ActivityType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ACTIVITY_TYPE_UNSPECIFIED\0\u{1}ACTIVITY_TYPE_TYPING\0\u{1}ACTIVITY_TYPE_RECORDING\0\u{1}ACTIVITY_TYPE_UPLOADING\0\u{1}ACTIVITY_TYPE_PLAYING\0")
 }
 
-extension Shared_Proto_Signaling_V1_PresenceUpdate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_PresenceUpdate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PresenceUpdate"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{1}status\0\u{1}timestamp\0\u{3}last_seen\0\u{3}status_message\0\u{3}device_id\0\u{c}\u{7}\u{9}")
 
@@ -604,7 +608,7 @@ extension Shared_Proto_Signaling_V1_PresenceUpdate: SwiftProtobuf.Message, Swift
   }
 }
 
-extension Shared_Proto_Signaling_V1_TypingIndicator: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_TypingIndicator: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TypingIndicator"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_id\0\u{3}user_id\0\u{1}state\0\u{1}timestamp\0\u{c}\u{5}\u{6}")
 
@@ -649,7 +653,7 @@ extension Shared_Proto_Signaling_V1_TypingIndicator: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Signaling_V1_DeliveryReceipt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_DeliveryReceipt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeliveryReceipt"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}direct\0\u{1}group\0\u{c}\u{3}\u{8}")
 
@@ -716,7 +720,7 @@ extension Shared_Proto_Signaling_V1_DeliveryReceipt: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Signaling_V1_DirectReceipt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_DirectReceipt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DirectReceipt"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_ids\0\u{1}status\0\u{1}timestamp\0\u{3}sender_device_id\0\u{4}\u{7}recipient_user_id\0\u{c}\u{5}\u{6}")
 
@@ -766,7 +770,7 @@ extension Shared_Proto_Signaling_V1_DirectReceipt: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Signaling_V1_GroupReceipt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_GroupReceipt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupReceipt"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}message_ids\0\u{1}status\0\u{3}sender_index\0\u{1}timestamp\0\u{c}\u{7}\u{4}")
 
@@ -821,7 +825,7 @@ extension Shared_Proto_Signaling_V1_GroupReceipt: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-extension Shared_Proto_Signaling_V1_ReadCursor: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_ReadCursor: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ReadCursor"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_id\0\u{3}last_read_message_id\0\u{3}last_read_timestamp\0\u{3}user_id\0\u{3}device_id\0\u{c}\u{6}\u{5}")
 
@@ -871,7 +875,7 @@ extension Shared_Proto_Signaling_V1_ReadCursor: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-extension Shared_Proto_Signaling_V1_PresenceSubscription: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_PresenceSubscription: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PresenceSubscription"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_ids\0\u{1}subscribe\0\u{c}\u{3}\u{8}")
 
@@ -906,7 +910,7 @@ extension Shared_Proto_Signaling_V1_PresenceSubscription: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Signaling_V1_PresenceBatch: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_PresenceBatch: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PresenceBatch"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}updates\0\u{1}timestamp\0")
 
@@ -941,7 +945,7 @@ extension Shared_Proto_Signaling_V1_PresenceBatch: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Signaling_V1_TypingUsers: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_TypingUsers: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TypingUsers"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_id\0\u{3}user_ids\0\u{1}timestamp\0")
 
@@ -981,7 +985,7 @@ extension Shared_Proto_Signaling_V1_TypingUsers: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-extension Shared_Proto_Signaling_V1_ActivityIndicator: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_ActivityIndicator: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ActivityIndicator"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{1}activity\0\u{3}conversation_id\0\u{1}timestamp\0\u{c}\u{5}\u{6}")
 

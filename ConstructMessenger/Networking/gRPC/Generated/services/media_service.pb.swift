@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,13 +20,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// Запрос на генерацию upload token
-public struct Shared_Proto_Services_V1_GenerateUploadTokenRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GenerateUploadTokenRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -56,7 +60,7 @@ public struct Shared_Proto_Services_V1_GenerateUploadTokenRequest: Sendable {
 }
 
 /// Ответ с upload token
-public struct Shared_Proto_Services_V1_GenerateUploadTokenResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GenerateUploadTokenResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -79,7 +83,7 @@ public struct Shared_Proto_Services_V1_GenerateUploadTokenResponse: Sendable {
 }
 
 /// Запрос на загрузку медиа (streaming chunks)
-public struct Shared_Proto_Services_V1_UploadMediaRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UploadMediaRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -133,7 +137,7 @@ public struct Shared_Proto_Services_V1_UploadMediaRequest: Sendable {
 }
 
 /// Ответ после успешной загрузки
-public struct Shared_Proto_Services_V1_UploadMediaResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UploadMediaResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -159,7 +163,7 @@ public struct Shared_Proto_Services_V1_UploadMediaResponse: Sendable {
 }
 
 /// Запрос на скачивание медиа
-public struct Shared_Proto_Services_V1_DownloadMediaRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DownloadMediaRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -196,7 +200,7 @@ public struct Shared_Proto_Services_V1_DownloadMediaRequest: Sendable {
 }
 
 /// Ответ со stream чанков
-public struct Shared_Proto_Services_V1_DownloadMediaResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DownloadMediaResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -239,7 +243,7 @@ public struct Shared_Proto_Services_V1_DownloadMediaResponse: Sendable {
 }
 
 /// Запрос на удаление медиа
-public struct Shared_Proto_Services_V1_DeleteMediaRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DeleteMediaRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -256,7 +260,7 @@ public struct Shared_Proto_Services_V1_DeleteMediaRequest: Sendable {
 }
 
 /// Ответ на удаление
-public struct Shared_Proto_Services_V1_DeleteMediaResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DeleteMediaResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -273,7 +277,7 @@ public struct Shared_Proto_Services_V1_DeleteMediaResponse: Sendable {
 }
 
 /// Запрос метаданных медиа
-public struct Shared_Proto_Services_V1_GetMediaMetadataRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetMediaMetadataRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -287,7 +291,7 @@ public struct Shared_Proto_Services_V1_GetMediaMetadataRequest: Sendable {
 }
 
 /// Ответ с метаданными
-public struct Shared_Proto_Services_V1_GetMediaMetadataResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetMediaMetadataResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -329,9 +333,9 @@ public struct Shared_Proto_Services_V1_GetMediaMetadataResponse: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.services.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.services.v1"
 
-extension Shared_Proto_Services_V1_GenerateUploadTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GenerateUploadTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GenerateUploadTokenRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}expected_size\0\u{3}content_type\0")
 
@@ -370,7 +374,7 @@ extension Shared_Proto_Services_V1_GenerateUploadTokenRequest: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_GenerateUploadTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GenerateUploadTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GenerateUploadTokenResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}upload_token\0\u{3}upload_url\0\u{3}max_file_size\0\u{3}expires_at\0")
 
@@ -415,7 +419,7 @@ extension Shared_Proto_Services_V1_GenerateUploadTokenResponse: SwiftProtobuf.Me
   }
 }
 
-extension Shared_Proto_Services_V1_UploadMediaRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UploadMediaRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UploadMediaRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}upload_token\0\u{1}chunk\0\u{3}chunk_number\0\u{3}is_last\0\u{3}total_size\0\u{3}file_hash\0")
 
@@ -474,7 +478,7 @@ extension Shared_Proto_Services_V1_UploadMediaRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_UploadMediaResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UploadMediaResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UploadMediaResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}media_id\0\u{3}download_url\0\u{3}file_size\0\u{3}file_hash\0\u{3}expires_at\0")
 
@@ -524,7 +528,7 @@ extension Shared_Proto_Services_V1_UploadMediaResponse: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_DownloadMediaRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DownloadMediaRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DownloadMediaRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}media_id\0\u{3}range_start\0\u{3}range_end\0")
 
@@ -568,7 +572,7 @@ extension Shared_Proto_Services_V1_DownloadMediaRequest: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_DownloadMediaResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DownloadMediaResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DownloadMediaResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}chunk\0\u{3}chunk_number\0\u{3}is_last\0\u{3}total_size\0\u{3}content_type\0")
 
@@ -622,7 +626,7 @@ extension Shared_Proto_Services_V1_DownloadMediaResponse: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_DeleteMediaRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DeleteMediaRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeleteMediaRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}media_id\0\u{3}admin_token\0")
 
@@ -657,7 +661,7 @@ extension Shared_Proto_Services_V1_DeleteMediaRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_DeleteMediaResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DeleteMediaResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeleteMediaResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{1}message\0")
 
@@ -692,7 +696,7 @@ extension Shared_Proto_Services_V1_DeleteMediaResponse: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_GetMediaMetadataRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetMediaMetadataRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetMediaMetadataRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}media_id\0")
 
@@ -722,7 +726,7 @@ extension Shared_Proto_Services_V1_GetMediaMetadataRequest: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Services_V1_GetMediaMetadataResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetMediaMetadataResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetMediaMetadataResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}media_id\0\u{3}file_size\0\u{3}file_hash\0\u{3}content_type\0\u{3}created_at\0\u{3}expires_at\0\u{1}exists\0")
 

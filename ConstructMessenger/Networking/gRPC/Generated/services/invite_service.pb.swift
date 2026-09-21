@@ -15,13 +15,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// Запрос на принятие invite token
-public struct Shared_Proto_Services_V1_AcceptInviteRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_AcceptInviteRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -45,7 +45,7 @@ public struct Shared_Proto_Services_V1_AcceptInviteRequest: Sendable {
 }
 
 /// Структура invite token (MessagePack encoded)
-public struct Shared_Proto_Services_V1_InviteToken: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_InviteToken: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -114,7 +114,7 @@ public struct Shared_Proto_Services_V1_InviteToken: Sendable {
 }
 
 /// Ответ после успешного принятия invite
-public struct Shared_Proto_Services_V1_AcceptInviteResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_AcceptInviteResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -146,7 +146,7 @@ public struct Shared_Proto_Services_V1_AcceptInviteResponse: Sendable {
 }
 
 /// Запрос на отзыв invite token
-public struct Shared_Proto_Services_V1_RevokeInviteRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RevokeInviteRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -160,7 +160,7 @@ public struct Shared_Proto_Services_V1_RevokeInviteRequest: Sendable {
 }
 
 /// Ответ на отзыв invite
-public struct Shared_Proto_Services_V1_RevokeInviteResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RevokeInviteResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -178,9 +178,9 @@ public struct Shared_Proto_Services_V1_RevokeInviteResponse: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.services.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.services.v1"
 
-extension Shared_Proto_Services_V1_AcceptInviteRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_AcceptInviteRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AcceptInviteRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}invite\0")
 
@@ -214,7 +214,7 @@ extension Shared_Proto_Services_V1_AcceptInviteRequest: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InviteToken"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}v\0\u{1}jti\0\u{1}uuid\0\u{3}device_id\0\u{1}server\0\u{1}ts\0\u{3}eph_pub\0\u{1}sig\0\u{1}un\0\u{1}ttl\0")
 
@@ -293,7 +293,7 @@ extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-extension Shared_Proto_Services_V1_AcceptInviteResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_AcceptInviteResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AcceptInviteResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0\u{1}server\0\u{1}message\0")
 
@@ -342,7 +342,7 @@ extension Shared_Proto_Services_V1_AcceptInviteResponse: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_RevokeInviteRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RevokeInviteRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RevokeInviteRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}jti\0")
 
@@ -372,7 +372,7 @@ extension Shared_Proto_Services_V1_RevokeInviteRequest: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_RevokeInviteResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RevokeInviteResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RevokeInviteResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{1}message\0")
 

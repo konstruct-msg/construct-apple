@@ -29,7 +29,8 @@ public enum Shared_Proto_Signaling_V1_SignalingService: Sendable {
             /// Descriptor for "Signal".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.signaling.v1.SignalingService"),
-                method: "Signal"
+                method: "Signal",
+                type: .bidirectionalStreaming
             )
         }
         /// Namespace for "GetTurnCredentials" metadata.
@@ -41,7 +42,8 @@ public enum Shared_Proto_Signaling_V1_SignalingService: Sendable {
             /// Descriptor for "GetTurnCredentials".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.signaling.v1.SignalingService"),
-                method: "GetTurnCredentials"
+                method: "GetTurnCredentials",
+                type: .unary
             )
         }
         /// Namespace for "InitiateCall" metadata.
@@ -53,7 +55,8 @@ public enum Shared_Proto_Signaling_V1_SignalingService: Sendable {
             /// Descriptor for "InitiateCall".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.signaling.v1.SignalingService"),
-                method: "InitiateCall"
+                method: "InitiateCall",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.signaling.v1.SignalingService" service.

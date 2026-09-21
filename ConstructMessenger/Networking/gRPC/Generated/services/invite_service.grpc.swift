@@ -29,7 +29,8 @@ public enum Shared_Proto_Services_V1_InviteService: Sendable {
             /// Descriptor for "AcceptInvite".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.InviteService"),
-                method: "AcceptInvite"
+                method: "AcceptInvite",
+                type: .unary
             )
         }
         /// Namespace for "RevokeInvite" metadata.
@@ -41,7 +42,8 @@ public enum Shared_Proto_Services_V1_InviteService: Sendable {
             /// Descriptor for "RevokeInvite".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.InviteService"),
-                method: "RevokeInvite"
+                method: "RevokeInvite",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.InviteService" service.

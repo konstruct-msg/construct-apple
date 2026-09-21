@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,14 +20,14 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// CryptoSuite - Cryptographic algorithm suite
 /// Ordered by preference (strongest first)
-public enum Shared_Proto_Core_V1_CryptoSuite: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Core_V1_CryptoSuite: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified suite (must be 0)
@@ -84,7 +88,7 @@ public enum Shared_Proto_Core_V1_CryptoSuite: SwiftProtobuf.Enum, Swift.CaseIter
 }
 
 /// KeyRotationReason - Why keys were rotated
-public enum Shared_Proto_Core_V1_KeyRotationReason: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Core_V1_KeyRotationReason: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified reason (must be 0)
@@ -142,7 +146,7 @@ public enum Shared_Proto_Core_V1_KeyRotationReason: SwiftProtobuf.Enum, Swift.Ca
 
 /// KeyBundle - Cryptographic key package for E2EE handshake
 /// Used in X3DH (Signal Protocol) and MLS key distribution
-public struct Shared_Proto_Core_V1_KeyBundle: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_KeyBundle: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -190,7 +194,7 @@ public struct Shared_Proto_Core_V1_KeyBundle: Sendable {
 
 /// CryptoNegotiation - Algorithm negotiation for E2EE session
 /// Used in Noise Protocol prologue to ensure both parties agree
-public struct Shared_Proto_Core_V1_CryptoNegotiation: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_CryptoNegotiation: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -219,7 +223,7 @@ public struct Shared_Proto_Core_V1_CryptoNegotiation: Sendable {
 
 /// PreKeyRequest - Request for pre-keys from server
 /// Client fetches recipient's keys before sending first message
-public struct Shared_Proto_Core_V1_PreKeyRequest: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_PreKeyRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -258,7 +262,7 @@ public struct Shared_Proto_Core_V1_PreKeyRequest: Sendable {
 }
 
 /// PreKeyResponse - Server response with recipient's keys
-public struct Shared_Proto_Core_V1_PreKeyResponse: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_PreKeyResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -290,7 +294,7 @@ public struct Shared_Proto_Core_V1_PreKeyResponse: Sendable {
 
 /// KeyRotationEvent - Notification that device keys rotated
 /// Sent to all active sessions when signed_pre_key changes
-public struct Shared_Proto_Core_V1_KeyRotationEvent: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_KeyRotationEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -325,17 +329,17 @@ public struct Shared_Proto_Core_V1_KeyRotationEvent: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.core.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.core.v1"
 
-extension Shared_Proto_Core_V1_CryptoSuite: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_CryptoSuite: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CRYPTO_SUITE_UNSPECIFIED\0\u{1}CRYPTO_SUITE_HYBRID_KYBER1024_X25519\0\u{1}CRYPTO_SUITE_HYBRID_KYBER768_X25519\0\u{2}\u{8}CRYPTO_SUITE_CLASSIC_X25519_CHACHA20\0\u{1}CRYPTO_SUITE_CLASSIC_X25519_AES256\0")
 }
 
-extension Shared_Proto_Core_V1_KeyRotationReason: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_KeyRotationReason: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0KEY_ROTATION_REASON_UNSPECIFIED\0\u{1}KEY_ROTATION_REASON_SCHEDULED\0\u{1}KEY_ROTATION_REASON_SECURITY\0\u{1}KEY_ROTATION_REASON_COMPROMISED\0\u{1}KEY_ROTATION_REASON_REPLENISH\0")
 }
 
-extension Shared_Proto_Core_V1_KeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_KeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".KeyBundle"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0\u{3}crypto_suite\0\u{3}identity_key\0\u{3}signed_pre_key\0\u{1}signature\0\u{3}one_time_pre_keys\0\u{3}created_at\0\u{3}signed_pre_key_expires_at\0\u{1}version\0\u{c}\u{10}#\u{c}32")
 
@@ -410,7 +414,7 @@ extension Shared_Proto_Core_V1_KeyBundle: SwiftProtobuf.Message, SwiftProtobuf._
   }
 }
 
-extension Shared_Proto_Core_V1_CryptoNegotiation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_CryptoNegotiation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CryptoNegotiation"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}supported_suites\0\u{3}chosen_suite\0\u{1}prologue\0\u{3}negotiated_at\0\u{c}\u{5}\u{b}")
 
@@ -455,7 +459,7 @@ extension Shared_Proto_Core_V1_CryptoNegotiation: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-extension Shared_Proto_Core_V1_PreKeyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_PreKeyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PreKeyRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0\u{3}preferred_suite\0")
 
@@ -499,7 +503,7 @@ extension Shared_Proto_Core_V1_PreKeyRequest: SwiftProtobuf.Message, SwiftProtob
   }
 }
 
-extension Shared_Proto_Core_V1_PreKeyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_PreKeyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PreKeyResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_bundle\0\u{3}registration_id\0\u{3}remaining_one_time_keys\0")
 
@@ -543,7 +547,7 @@ extension Shared_Proto_Core_V1_PreKeyResponse: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Core_V1_KeyRotationEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_KeyRotationEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".KeyRotationEvent"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0\u{3}new_key_bundle\0\u{1}reason\0\u{3}rotated_at\0")
 

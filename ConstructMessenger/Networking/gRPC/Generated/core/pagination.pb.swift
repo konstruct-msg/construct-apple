@@ -15,13 +15,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// Direction - Pagination direction
-public enum Shared_Proto_Core_V1_Direction: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Core_V1_Direction: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified direction (must be 0)
@@ -71,7 +71,7 @@ public enum Shared_Proto_Core_V1_Direction: SwiftProtobuf.Enum, Swift.CaseIterab
 }
 
 /// ConversationType - Type of conversation
-public enum Shared_Proto_Core_V1_ConversationType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Core_V1_ConversationType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified type (must be 0)
@@ -124,7 +124,7 @@ public enum Shared_Proto_Core_V1_ConversationType: SwiftProtobuf.Enum, Swift.Cas
 /// Cursor - Opaque pagination cursor
 /// Server-generated, client should not parse or modify
 /// Combines multiple ordering strategies for robustness
-public struct Shared_Proto_Core_V1_Cursor: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_Cursor: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -162,7 +162,7 @@ public struct Shared_Proto_Core_V1_Cursor: Sendable {
 
 /// PageRequest - Generic page request
 /// Used across all paginated APIs (inbox, history, contacts, etc.)
-public struct Shared_Proto_Core_V1_PageRequest: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_PageRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -196,7 +196,7 @@ public struct Shared_Proto_Core_V1_PageRequest: Sendable {
 
 /// PageResponse - Generic page response
 /// Contains items and pagination metadata
-public struct Shared_Proto_Core_V1_PageResponse: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_PageResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -258,7 +258,7 @@ public struct Shared_Proto_Core_V1_PageResponse: Sendable {
 
 /// HistoryRequest - Request conversation history with pagination
 /// Specialized request for message history with filters
-public struct Shared_Proto_Core_V1_HistoryRequest: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_HistoryRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -313,7 +313,7 @@ public struct Shared_Proto_Core_V1_HistoryRequest: Sendable {
 }
 
 /// TimeRange - Time range filter for history queries
-public struct Shared_Proto_Core_V1_TimeRange: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_TimeRange: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -348,7 +348,7 @@ public struct Shared_Proto_Core_V1_TimeRange: Sendable {
 }
 
 /// InboxRequest - Request user's inbox with pagination
-public struct Shared_Proto_Core_V1_InboxRequest: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_InboxRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -394,17 +394,17 @@ public struct Shared_Proto_Core_V1_InboxRequest: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.core.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.core.v1"
 
-extension Shared_Proto_Core_V1_Direction: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_Direction: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DIRECTION_UNSPECIFIED\0\u{1}DIRECTION_NEWER\0\u{1}DIRECTION_OLDER\0")
 }
 
-extension Shared_Proto_Core_V1_ConversationType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_ConversationType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONVERSATION_TYPE_UNSPECIFIED\0\u{1}CONVERSATION_TYPE_DIRECT\0\u{1}CONVERSATION_TYPE_GROUP\0\u{1}CONVERSATION_TYPE_BROADCAST\0")
 }
 
-extension Shared_Proto_Core_V1_Cursor: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_Cursor: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Cursor"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_number\0\u{1}timestamp\0\u{3}backend_cursor\0\u{c}\u{4}\u{7}")
 
@@ -448,7 +448,7 @@ extension Shared_Proto_Core_V1_Cursor: SwiftProtobuf.Message, SwiftProtobuf._Mes
   }
 }
 
-extension Shared_Proto_Core_V1_PageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_PageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PageRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}page_size\0\u{1}cursor\0\u{1}direction\0\u{c}\u{4}\u{7}")
 
@@ -492,7 +492,7 @@ extension Shared_Proto_Core_V1_PageRequest: SwiftProtobuf.Message, SwiftProtobuf
   }
 }
 
-extension Shared_Proto_Core_V1_PageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_PageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PageResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}items\0\u{3}next_cursor\0\u{3}prev_cursor\0\u{3}has_more\0\u{3}total_remaining\0\u{c}\u{6}\u{5}")
 
@@ -546,7 +546,7 @@ extension Shared_Proto_Core_V1_PageResponse: SwiftProtobuf.Message, SwiftProtobu
   }
 }
 
-extension Shared_Proto_Core_V1_HistoryRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_HistoryRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".HistoryRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_id\0\u{1}page\0\u{3}filter_types\0\u{3}search_query\0\u{3}time_range\0\u{c}\u{6}\u{5}")
 
@@ -600,7 +600,7 @@ extension Shared_Proto_Core_V1_HistoryRequest: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Core_V1_TimeRange: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_TimeRange: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TimeRange"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}start_timestamp\0\u{3}end_timestamp\0")
 
@@ -639,7 +639,7 @@ extension Shared_Proto_Core_V1_TimeRange: SwiftProtobuf.Message, SwiftProtobuf._
   }
 }
 
-extension Shared_Proto_Core_V1_InboxRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_InboxRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InboxRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}page\0\u{3}filter_type\0\u{3}unread_only\0\u{c}\u{4}\u{7}")
 

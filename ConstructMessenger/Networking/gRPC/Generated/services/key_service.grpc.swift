@@ -29,7 +29,8 @@ public enum Shared_Proto_Services_V1_KeyService: Sendable {
             /// Descriptor for "GetPreKeyBundle".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.KeyService"),
-                method: "GetPreKeyBundle"
+                method: "GetPreKeyBundle",
+                type: .unary
             )
         }
         /// Namespace for "GetPreKeyBundles" metadata.
@@ -41,7 +42,8 @@ public enum Shared_Proto_Services_V1_KeyService: Sendable {
             /// Descriptor for "GetPreKeyBundles".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.KeyService"),
-                method: "GetPreKeyBundles"
+                method: "GetPreKeyBundles",
+                type: .unary
             )
         }
         /// Namespace for "UploadPreKeys" metadata.
@@ -53,7 +55,8 @@ public enum Shared_Proto_Services_V1_KeyService: Sendable {
             /// Descriptor for "UploadPreKeys".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.KeyService"),
-                method: "UploadPreKeys"
+                method: "UploadPreKeys",
+                type: .unary
             )
         }
         /// Namespace for "GetPreKeyCount" metadata.
@@ -65,7 +68,8 @@ public enum Shared_Proto_Services_V1_KeyService: Sendable {
             /// Descriptor for "GetPreKeyCount".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.KeyService"),
-                method: "GetPreKeyCount"
+                method: "GetPreKeyCount",
+                type: .unary
             )
         }
         /// Namespace for "RotateSignedPreKey" metadata.
@@ -77,7 +81,8 @@ public enum Shared_Proto_Services_V1_KeyService: Sendable {
             /// Descriptor for "RotateSignedPreKey".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.KeyService"),
-                method: "RotateSignedPreKey"
+                method: "RotateSignedPreKey",
+                type: .unary
             )
         }
         /// Namespace for "GetSignedPreKeyAge" metadata.
@@ -89,7 +94,8 @@ public enum Shared_Proto_Services_V1_KeyService: Sendable {
             /// Descriptor for "GetSignedPreKeyAge".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.KeyService"),
-                method: "GetSignedPreKeyAge"
+                method: "GetSignedPreKeyAge",
+                type: .unary
             )
         }
         /// Namespace for "GetIdentityKey" metadata.
@@ -101,7 +107,8 @@ public enum Shared_Proto_Services_V1_KeyService: Sendable {
             /// Descriptor for "GetIdentityKey".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.KeyService"),
-                method: "GetIdentityKey"
+                method: "GetIdentityKey",
+                type: .unary
             )
         }
         /// Namespace for "VerifySafetyNumber" metadata.
@@ -113,7 +120,8 @@ public enum Shared_Proto_Services_V1_KeyService: Sendable {
             /// Descriptor for "VerifySafetyNumber".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.KeyService"),
-                method: "VerifySafetyNumber"
+                method: "VerifySafetyNumber",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.KeyService" service.

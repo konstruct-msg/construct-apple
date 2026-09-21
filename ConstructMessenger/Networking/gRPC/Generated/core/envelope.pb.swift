@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,13 +20,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// ContentType - Type of message content
-public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified content type (must be 0)
@@ -38,7 +42,10 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
   /// Deprecated for SDP: use CONTENT_TYPE_CALL_SIGNAL for E2EE-wrapped call offer/answer.
   case webrtcSignal // = 10
 
-  /// Presence updates (typing, online, receipts)
+  /// Presence updates (typing, online).
+  /// Not produced or consumed by the iOS client: there is no typing indicator and no online
+  /// status by design, and since 2026-09-14 the client subscribes with include_presence=false.
+  /// Kept so the enum value is never reused.
   case presence // = 11
 
   /// E2EE-wrapped call signal (Double Ratchet).
@@ -55,12 +62,14 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
 
   /// DELIVERY_RECEIPT — end-to-end encrypted delivery confirmation (Variant 2).
   /// Sent from recipient to original sender as a regular DR message with content_type=14.
-  /// Payload is JSON: {"type":"delivery_receipt","message_ids":["<uuid>",...]}
+  /// Payload is a binary `signaling.v1.DeliveryReceipt` (the JSON form this comment used to
+  /// describe is gone; `parseBinaryReceipt` is the only reader).
   /// Hides communication metadata from the server (unlike the legacy relay-receipt path).
   /// If stealth mode is active, sealed sender is applied — server cannot correlate
   /// the receipt sender with the original sealed message recipient.
-  /// Backward compat: both this and the legacy stream receipt are sent; receiving side
-  /// deduplicates (guard message.deliveryStatus != .delivered).
+  /// This is the only receipt path. The legacy relay receipt on the message stream was removed
+  /// on 2026-08-02 with `sendReceipt`; nothing dual-sends any more. The receiving side still
+  /// guards on `deliveryStatus != .delivered`, which now only absorbs redelivery.
   case deliveryReceipt // = 14
 
   /// Key exchange initiation (X3DH handshake)
@@ -191,7 +200,7 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
 }
 
 /// MessagePriority - Delivery priority
-public enum Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Normal priority (default)
@@ -244,7 +253,7 @@ public enum Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf.Enum, Swift.Case
 /// Envelope - Universal message container
 /// Wraps all message types (text, media, E2EE, MLS, WebRTC signaling)
 /// Server only sees this outer envelope, content is encrypted
-public struct Shared_Proto_Core_V1_Envelope: @unchecked Sendable {
+public nonisolated struct Shared_Proto_Core_V1_Envelope: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -435,7 +444,7 @@ public struct Shared_Proto_Core_V1_Envelope: @unchecked Sendable {
   /// Message ID (for 1-to-1 direct messages)
   /// For group messages, use group_message_id instead
   /// This is a oneof to avoid ambiguity
-  public enum OneOf_MessageIDType: Equatable, Sendable {
+  public nonisolated enum OneOf_MessageIDType: Equatable, Sendable {
     /// Direct message ID (UUID v4)
     /// Example: "550e8400-e29b-41d4-a716-446655440000"
     case messageID(String)
@@ -452,7 +461,7 @@ public struct Shared_Proto_Core_V1_Envelope: @unchecked Sendable {
 
 /// ServerMetadata - Server-assigned metadata
 /// Read-only for clients, set by server during routing
-public struct Shared_Proto_Core_V1_ServerMetadata: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_ServerMetadata: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -502,7 +511,7 @@ public struct Shared_Proto_Core_V1_ServerMetadata: Sendable {
 
 /// EncryptedMetadataContent - Decrypted content of encrypted_metadata
 /// This is NOT transmitted in proto, but documented for client implementation
-public struct Shared_Proto_Core_V1_EncryptedMetadataContent: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_EncryptedMetadataContent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -528,7 +537,7 @@ public struct Shared_Proto_Core_V1_EncryptedMetadataContent: Sendable {
 ///
 /// SECURITY: every field here is visible to the server. These values are useful
 /// for tracing and debugging but must never drive E2E semantics.
-public struct Shared_Proto_Core_V1_ClientMetadata: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_ClientMetadata: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -568,7 +577,7 @@ public struct Shared_Proto_Core_V1_ClientMetadata: Sendable {
 
 /// GroupMessageId - Composite message ID for MLS groups
 /// Prevents message ID conflicts in multi-sender groups
-public struct Shared_Proto_Core_V1_GroupMessageId: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_GroupMessageId: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -593,7 +602,7 @@ public struct Shared_Proto_Core_V1_GroupMessageId: Sendable {
 }
 
 /// Reaction - Emoji reaction to a message
-public struct Shared_Proto_Core_V1_Reaction: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_Reaction: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -616,7 +625,7 @@ public struct Shared_Proto_Core_V1_Reaction: Sendable {
 /// SealedSenderEnvelope — outer wrapper on the wire / federation hop
 /// For federation: home server routes by recipient_server and forwards
 /// sealed_inner opaquely. Local SendSealedMessage may leave recipient_server empty.
-public struct Shared_Proto_Core_V1_SealedSenderEnvelope: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_SealedSenderEnvelope: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -646,7 +655,7 @@ public struct Shared_Proto_Core_V1_SealedSenderEnvelope: Sendable {
 /// Server-allowed knowledge: recipient_user_id, delivery_tag, token_*,
 /// ciphertext size. Not allowed for routing/UI: content kind, priority, TTL
 /// (those belong inside the E2E payload — see content_type deprecation note).
-public struct Shared_Proto_Core_V1_SealedInner: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_SealedInner: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -786,7 +795,7 @@ public struct Shared_Proto_Core_V1_SealedInner: Sendable {
 ///   2. Sender encrypts cert to recipient's identity key
 ///   3. Recipient decrypts → verifies server_signature against home server's public key
 ///   4. Recipient checks sender_identity_key matches existing session
-public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -827,17 +836,17 @@ public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.core.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.core.v1"
 
-extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0\u{1}CONTENT_TYPE_INTAKE_KEY\0")
 }
 
-extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MESSAGE_PRIORITY_NORMAL\0\u{1}MESSAGE_PRIORITY_HIGH\0\u{1}MESSAGE_PRIORITY_CRITICAL\0\u{1}MESSAGE_PRIORITY_LOW\0")
 }
 
-extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Envelope"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sender\0\u{3}sender_device\0\u{1}recipient\0\u{3}recipient_device\0\u{3}content_type\0\u{3}message_id\0\u{1}timestamp\0\u{1}ttl\0\u{1}priority\0\u{3}encrypted_payload\0\u{3}conversation_id\0\u{3}server_metadata\0\u{3}client_metadata\0\u{3}forwarding_path\0\u{4}\u{2}ephemeral_seconds\0\u{2}\u{3}reactions\0\u{1}mentions\0\u{3}group_message_id\0\u{4}(sealed_sender\0\u{b}edits_message_id\0\u{c}\u{f}\u{1}\u{c}\u{11}\u{1}\u{c}\u{12}\u{1}\u{c}\u{16}\u{1d}\u{c}3\u{a}\u{c}>\u{9}\u{c}G\u{1}\u{a}\u{c}Q\u{1}\u{14}")
 
@@ -1049,7 +1058,7 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
   }
 }
 
-extension Shared_Proto_Core_V1_ServerMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_ServerMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ServerMetadata"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_number\0\u{3}server_timestamp\0\u{3}delivery_attempts\0\u{3}processing_server_id\0\u{3}encrypted_metadata\0\u{c}\u{6}\u{5}")
 
@@ -1103,7 +1112,7 @@ extension Shared_Proto_Core_V1_ServerMetadata: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Core_V1_EncryptedMetadataContent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_EncryptedMetadataContent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".EncryptedMetadataContent"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}precise_timestamp\0\u{3}delivery_hops\0\u{3}processing_time_ms\0\u{c}\u{4}\u{7}")
 
@@ -1143,7 +1152,7 @@ extension Shared_Proto_Core_V1_EncryptedMetadataContent: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Core_V1_ClientMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_ClientMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ClientMetadata"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}client_timestamp\0\u{3}client_version\0\u{3}correlation_id\0\u{c}\u{4}\u{7}")
 
@@ -1187,7 +1196,7 @@ extension Shared_Proto_Core_V1_ClientMetadata: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Core_V1_GroupMessageId: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_GroupMessageId: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupMessageId"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}sender_index\0\u{1}generation\0")
 
@@ -1232,7 +1241,7 @@ extension Shared_Proto_Core_V1_GroupMessageId: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Core_V1_Reaction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_Reaction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Reaction"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{1}emoji\0\u{1}timestamp\0")
 
@@ -1272,7 +1281,7 @@ extension Shared_Proto_Core_V1_Reaction: SwiftProtobuf.Message, SwiftProtobuf._M
   }
 }
 
-extension Shared_Proto_Core_V1_SealedSenderEnvelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_SealedSenderEnvelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SealedSenderEnvelope"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_server\0\u{3}sealed_inner\0\u{3}forwarding_token\0\u{1}timestamp\0\u{c}\u{5}\u{b}")
 
@@ -1317,7 +1326,7 @@ extension Shared_Proto_Core_V1_SealedSenderEnvelope: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SealedInner"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{4}\u{9}token_nonce\0\u{3}token_bytes\0\u{3}token_spend_id\0\u{3}recipient_device\0\u{3}intake_tag_sealed\0\u{c}\u{8}\u{8}")
 
@@ -1402,7 +1411,7 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
   }
 }
 
-extension Shared_Proto_Core_V1_SenderCertificate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_SenderCertificate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SenderCertificate"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_user_id\0\u{3}sender_domain\0\u{3}sender_identity_key\0\u{3}sender_device_id\0\u{3}issued_at\0\u{3}expires_at\0\u{3}server_signature\0\u{c}\u{8}\u{8}")
 

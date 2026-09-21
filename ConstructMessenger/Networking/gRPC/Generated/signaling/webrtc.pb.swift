@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,13 +20,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// HangupReason - Why call ended
-public enum Shared_Proto_Signaling_V1_HangupReason: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Signaling_V1_HangupReason: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified reason (must be 0)
@@ -91,7 +95,7 @@ public enum Shared_Proto_Signaling_V1_HangupReason: SwiftProtobuf.Enum, Swift.Ca
 }
 
 /// MediaUpdateType - Type of media update
-public enum Shared_Proto_Signaling_V1_MediaUpdateType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Signaling_V1_MediaUpdateType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified update (must be 0)
@@ -142,7 +146,7 @@ public enum Shared_Proto_Signaling_V1_MediaUpdateType: SwiftProtobuf.Enum, Swift
 }
 
 /// MediaType - Type of media stream
-public enum Shared_Proto_Signaling_V1_MediaType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Signaling_V1_MediaType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified media (must be 0)
@@ -199,7 +203,7 @@ public enum Shared_Proto_Signaling_V1_MediaType: SwiftProtobuf.Enum, Swift.CaseI
 }
 
 /// CallType - Type of call
-public enum Shared_Proto_Signaling_V1_CallType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Signaling_V1_CallType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified call type (must be 0)
@@ -256,7 +260,7 @@ public enum Shared_Proto_Signaling_V1_CallType: SwiftProtobuf.Enum, Swift.CaseIt
 }
 
 /// CallStatus - Call state
-public enum Shared_Proto_Signaling_V1_CallStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Signaling_V1_CallStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified status (must be 0)
@@ -313,7 +317,7 @@ public enum Shared_Proto_Signaling_V1_CallStatus: SwiftProtobuf.Enum, Swift.Case
 }
 
 /// WebRTCSignal - Top-level WebRTC signaling message
-public struct Shared_Proto_Signaling_V1_WebRTCSignal: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_WebRTCSignal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -417,7 +421,7 @@ public struct Shared_Proto_Signaling_V1_WebRTCSignal: Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Signal type (determines which field is populated)
-  public enum OneOf_Signal: Equatable, Sendable {
+  public nonisolated enum OneOf_Signal: Equatable, Sendable {
     /// Call offer (SDP offer from caller)
     case offer(Shared_Proto_Signaling_V1_CallOffer)
     /// Call answer (SDP answer from callee)
@@ -446,7 +450,7 @@ public struct Shared_Proto_Signaling_V1_WebRTCSignal: Sendable {
 }
 
 /// CallOffer - WebRTC SDP offer
-public struct Shared_Proto_Signaling_V1_CallOffer: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_CallOffer: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -496,7 +500,7 @@ public struct Shared_Proto_Signaling_V1_CallOffer: Sendable {
 }
 
 /// CallAnswer - WebRTC SDP answer
-public struct Shared_Proto_Signaling_V1_CallAnswer: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_CallAnswer: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -543,7 +547,7 @@ public struct Shared_Proto_Signaling_V1_CallAnswer: Sendable {
 
 /// IceCandidate - ICE candidate for P2P connection
 /// Represents a potential network path (IP:port + protocol)
-public struct Shared_Proto_Signaling_V1_IceCandidate: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_IceCandidate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -590,7 +594,7 @@ public struct Shared_Proto_Signaling_V1_IceCandidate: Sendable {
 }
 
 /// IceCandidateBatch - Multiple ICE candidates (optimization)
-public struct Shared_Proto_Signaling_V1_IceCandidateBatch: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_IceCandidateBatch: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -607,7 +611,7 @@ public struct Shared_Proto_Signaling_V1_IceCandidateBatch: Sendable {
 }
 
 /// CallHangup - End call
-public struct Shared_Proto_Signaling_V1_CallHangup: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_CallHangup: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -639,7 +643,7 @@ public struct Shared_Proto_Signaling_V1_CallHangup: Sendable {
 }
 
 /// CallBusy - Recipient is busy
-public struct Shared_Proto_Signaling_V1_CallBusy: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_CallBusy: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -656,7 +660,7 @@ public struct Shared_Proto_Signaling_V1_CallBusy: Sendable {
 }
 
 /// CallRinging - Call is ringing on recipient device
-public struct Shared_Proto_Signaling_V1_CallRinging: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_CallRinging: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -676,7 +680,7 @@ public struct Shared_Proto_Signaling_V1_CallRinging: Sendable {
 /// Sent after iceConnectionState reaches "connected" (or "completed").
 /// This is a lightweight presence signal — no SDP payload — that tells the
 /// server the E2EE answer exchange succeeded and media is flowing P2P.
-public struct Shared_Proto_Signaling_V1_CallConnected: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_CallConnected: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -693,7 +697,7 @@ public struct Shared_Proto_Signaling_V1_CallConnected: Sendable {
 }
 
 /// MediaUpdate - Update media streams during call
-public struct Shared_Proto_Signaling_V1_MediaUpdate: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_MediaUpdate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -728,7 +732,7 @@ public struct Shared_Proto_Signaling_V1_MediaUpdate: Sendable {
 }
 
 /// CallState - Current state of a call
-public struct Shared_Proto_Signaling_V1_CallState: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_CallState: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -782,7 +786,7 @@ public struct Shared_Proto_Signaling_V1_CallState: Sendable {
 }
 
 /// CallParticipant - Participant in a call
-public struct Shared_Proto_Signaling_V1_CallParticipant: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_CallParticipant: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -823,7 +827,7 @@ public struct Shared_Proto_Signaling_V1_CallParticipant: Sendable {
 }
 
 /// TurnCredentials - TURN server credentials (for NAT traversal)
-public struct Shared_Proto_Signaling_V1_TurnCredentials: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_TurnCredentials: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -847,29 +851,29 @@ public struct Shared_Proto_Signaling_V1_TurnCredentials: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.signaling.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.signaling.v1"
 
-extension Shared_Proto_Signaling_V1_HangupReason: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_HangupReason: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HANGUP_REASON_UNSPECIFIED\0\u{1}HANGUP_REASON_NORMAL\0\u{1}HANGUP_REASON_BUSY\0\u{1}HANGUP_REASON_DECLINED\0\u{1}HANGUP_REASON_TIMEOUT\0\u{1}HANGUP_REASON_CONNECTION_FAILED\0\u{1}HANGUP_REASON_ACCEPTED_ELSEWHERE\0")
 }
 
-extension Shared_Proto_Signaling_V1_MediaUpdateType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_MediaUpdateType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MEDIA_UPDATE_TYPE_UNSPECIFIED\0\u{1}MEDIA_UPDATE_TYPE_ADD\0\u{1}MEDIA_UPDATE_TYPE_REMOVE\0\u{1}MEDIA_UPDATE_TYPE_MUTE\0")
 }
 
-extension Shared_Proto_Signaling_V1_MediaType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_MediaType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MEDIA_TYPE_UNSPECIFIED\0\u{1}MEDIA_TYPE_AUDIO\0\u{1}MEDIA_TYPE_VIDEO\0\u{1}MEDIA_TYPE_SCREEN\0\u{1}MEDIA_TYPE_DATA\0")
 }
 
-extension Shared_Proto_Signaling_V1_CallType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_CallType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CALL_TYPE_UNSPECIFIED\0\u{1}CALL_TYPE_AUDIO\0\u{1}CALL_TYPE_VIDEO\0\u{1}CALL_TYPE_SCREEN\0\u{1}CALL_TYPE_GROUP\0")
 }
 
-extension Shared_Proto_Signaling_V1_CallStatus: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_CallStatus: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CALL_STATUS_UNSPECIFIED\0\u{1}CALL_STATUS_INITIATED\0\u{1}CALL_STATUS_RINGING\0\u{1}CALL_STATUS_ACTIVE\0\u{1}CALL_STATUS_ENDED\0")
 }
 
-extension Shared_Proto_Signaling_V1_WebRTCSignal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_WebRTCSignal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WebRTCSignal"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}call_id\0\u{1}offer\0\u{1}answer\0\u{3}ice_candidate\0\u{3}ice_candidates\0\u{1}hangup\0\u{1}busy\0\u{1}ringing\0\u{3}media_update\0\u{3}sender_device_id\0\u{1}timestamp\0\u{2}\u{a}connected\0\u{c}\u{c}\u{9}")
 
@@ -1069,7 +1073,7 @@ extension Shared_Proto_Signaling_V1_WebRTCSignal: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-extension Shared_Proto_Signaling_V1_CallOffer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_CallOffer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CallOffer"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sdp\0\u{3}call_type\0\u{3}caller_device_id\0\u{3}caller_user_id\0\u{3}offered_at\0\u{3}ice_ufrag\0\u{3}ice_pwd\0\u{c}\u{8}\u{8}")
 
@@ -1133,7 +1137,7 @@ extension Shared_Proto_Signaling_V1_CallOffer: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Signaling_V1_CallAnswer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_CallAnswer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CallAnswer"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sdp\0\u{3}answerer_device_id\0\u{3}answerer_user_id\0\u{3}answered_at\0\u{3}ice_ufrag\0\u{3}ice_pwd\0\u{c}\u{7}\u{9}")
 
@@ -1192,7 +1196,7 @@ extension Shared_Proto_Signaling_V1_CallAnswer: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-extension Shared_Proto_Signaling_V1_IceCandidate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_IceCandidate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IceCandidate"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sdp_m_line_index\0\u{3}sdp_mid\0\u{1}candidate\0\u{3}username_fragment\0\u{c}\u{5}\u{6}")
 
@@ -1241,7 +1245,7 @@ extension Shared_Proto_Signaling_V1_IceCandidate: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-extension Shared_Proto_Signaling_V1_IceCandidateBatch: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_IceCandidateBatch: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IceCandidateBatch"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}candidates\0\u{1}timestamp\0")
 
@@ -1276,7 +1280,7 @@ extension Shared_Proto_Signaling_V1_IceCandidateBatch: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Signaling_V1_CallHangup: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_CallHangup: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CallHangup"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}reason\0\u{3}device_id\0\u{3}hangup_at\0\u{1}message\0\u{c}\u{5}\u{6}")
 
@@ -1325,7 +1329,7 @@ extension Shared_Proto_Signaling_V1_CallHangup: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-extension Shared_Proto_Signaling_V1_CallBusy: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_CallBusy: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CallBusy"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}busy_at\0")
 
@@ -1360,7 +1364,7 @@ extension Shared_Proto_Signaling_V1_CallBusy: SwiftProtobuf.Message, SwiftProtob
   }
 }
 
-extension Shared_Proto_Signaling_V1_CallRinging: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_CallRinging: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CallRinging"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}ringing_at\0")
 
@@ -1395,7 +1399,7 @@ extension Shared_Proto_Signaling_V1_CallRinging: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-extension Shared_Proto_Signaling_V1_CallConnected: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_CallConnected: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CallConnected"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}connected_at\0")
 
@@ -1430,7 +1434,7 @@ extension Shared_Proto_Signaling_V1_CallConnected: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Signaling_V1_MediaUpdate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_MediaUpdate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MediaUpdate"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}update_type\0\u{3}media_type\0\u{1}enabled\0\u{1}sdp\0\u{3}updated_at\0\u{c}\u{6}\u{5}")
 
@@ -1484,7 +1488,7 @@ extension Shared_Proto_Signaling_V1_MediaUpdate: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-extension Shared_Proto_Signaling_V1_CallState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_CallState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CallState"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}call_id\0\u{1}status\0\u{1}participants\0\u{3}started_at\0\u{3}ended_at\0\u{3}duration_seconds\0\u{c}\u{7}\u{9}")
 
@@ -1543,7 +1547,7 @@ extension Shared_Proto_Signaling_V1_CallState: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Signaling_V1_CallParticipant: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_CallParticipant: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CallParticipant"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0\u{3}joined_at\0\u{3}left_at\0\u{3}audio_enabled\0\u{3}video_enabled\0\u{3}screen_sharing\0\u{c}\u{8}\u{8}")
 
@@ -1607,7 +1611,7 @@ extension Shared_Proto_Signaling_V1_CallParticipant: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Signaling_V1_TurnCredentials: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_TurnCredentials: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TurnCredentials"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}urls\0\u{1}username\0\u{1}credential\0\u{3}expires_at\0\u{c}\u{5}\u{6}")
 

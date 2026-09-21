@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,13 +20,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// MediaType - Type of media attachment
-public enum Shared_Proto_Messaging_V1_MediaType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Messaging_V1_MediaType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified media type (must be 0)
@@ -91,7 +95,7 @@ public enum Shared_Proto_Messaging_V1_MediaType: SwiftProtobuf.Enum, Swift.CaseI
 }
 
 /// ReactionAction - Add or remove reaction
-public enum Shared_Proto_Messaging_V1_ReactionAction: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Messaging_V1_ReactionAction: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified action (must be 0)
@@ -136,7 +140,7 @@ public enum Shared_Proto_Messaging_V1_ReactionAction: SwiftProtobuf.Enum, Swift.
 }
 
 /// DeleteScope - Who sees the deletion
-public enum Shared_Proto_Messaging_V1_DeleteScope: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Messaging_V1_DeleteScope: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified scope (must be 0)
@@ -181,7 +185,7 @@ public enum Shared_Proto_Messaging_V1_DeleteScope: SwiftProtobuf.Enum, Swift.Cas
 }
 
 /// FormatType - Formatting type
-public enum Shared_Proto_Messaging_V1_FormatType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Messaging_V1_FormatType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified format (must be 0)
@@ -255,7 +259,7 @@ public enum Shared_Proto_Messaging_V1_FormatType: SwiftProtobuf.Enum, Swift.Case
 /// Carried as the E2EE payload of an Envelope whose content_type is
 /// CONTENT_TYPE_SESSION_PING (25) / SESSION_READY (26) / SESSION_RESET_INIT (24) /
 /// SESSION_RESET (21). The server forwards these opaquely (identical to E2EE_SIGNAL).
-public enum Shared_Proto_Messaging_V1_SessionOp: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Messaging_V1_SessionOp: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case ping // = 1
@@ -304,7 +308,7 @@ public enum Shared_Proto_Messaging_V1_SessionOp: SwiftProtobuf.Enum, Swift.CaseI
 /// MessageContent - Decrypted message content
 /// This is the plaintext content after E2EE decryption
 /// Never transmitted in plaintext over network
-public struct Shared_Proto_Messaging_V1_MessageContent: @unchecked Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MessageContent: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -405,6 +409,20 @@ public struct Shared_Proto_Messaging_V1_MessageContent: @unchecked Sendable {
     set {_uniqueStorage()._content = .mediaAlbum(newValue)}
   }
 
+  /// Sticker by reference: pack hash + index + emoji, never pixels. The pack is public,
+  /// content-addressed and fetched whole, out of band; what the ratchet carries is ~40 bytes.
+  /// Do not reuse MediaType.STICKER for this (pixels-on-wire, rejected —
+  /// construct-docs/decisions/sticker-id-wire-not-media.md; the shape is
+  /// decisions/sticker-packs-content-addressed.md). Golden vectors and the rules every client
+  /// must apply: conformance/knst_sticker_ref.json.
+  public var sticker: Shared_Proto_Messaging_V1_StickerRef {
+    get {
+      if case .sticker(let v)? = _storage._content {return v}
+      return Shared_Proto_Messaging_V1_StickerRef()
+    }
+    set {_uniqueStorage()._content = .sticker(newValue)}
+  }
+
   /// Formatting metadata (applies to all types)
   public var formatting: Shared_Proto_Messaging_V1_FormattingMetadata {
     get {_storage._formatting ?? Shared_Proto_Messaging_V1_FormattingMetadata()}
@@ -428,7 +446,7 @@ public struct Shared_Proto_Messaging_V1_MessageContent: @unchecked Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Message type (determines which field is populated)
-  public enum OneOf_Content: Equatable, Sendable {
+  public nonisolated enum OneOf_Content: Equatable, Sendable {
     /// Text message (UTF-8)
     case text(Shared_Proto_Messaging_V1_TextMessage)
     /// Media message (image, video, audio, file)
@@ -449,6 +467,13 @@ public struct Shared_Proto_Messaging_V1_MessageContent: @unchecked Sendable {
     case poll(Shared_Proto_Messaging_V1_PollMessage)
     /// Album of one or more media items (images/videos) sent as a single message.
     case mediaAlbum(Shared_Proto_Messaging_V1_MediaAlbumMessage)
+    /// Sticker by reference: pack hash + index + emoji, never pixels. The pack is public,
+    /// content-addressed and fetched whole, out of band; what the ratchet carries is ~40 bytes.
+    /// Do not reuse MediaType.STICKER for this (pixels-on-wire, rejected —
+    /// construct-docs/decisions/sticker-id-wire-not-media.md; the shape is
+    /// decisions/sticker-packs-content-addressed.md). Golden vectors and the rules every client
+    /// must apply: conformance/knst_sticker_ref.json.
+    case sticker(Shared_Proto_Messaging_V1_StickerRef)
 
   }
 
@@ -457,8 +482,39 @@ public struct Shared_Proto_Messaging_V1_MessageContent: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
+/// StickerRef - A sticker named by its pack's identity, inside E2EE.
+///
+/// Packs are content-addressed and immutable: pack_id is the SHA-256 of the pack's signed
+/// manifest, so a cached pack is correct forever or it is a different pack. The sticker is an
+/// index into that manifest — stable because the pack cannot change — which keeps the reference
+/// at ~40 bytes. emoji is duplicated from the manifest on purpose: it is the one thing a
+/// recipient can render with nothing downloaded, and it must survive the pack being unavailable.
+///
+/// Every client validates before anything else touches the fields
+/// (conformance/knst_sticker_ref.json, "rules"): pack_id is exactly 32 bytes, emoji is 1..32
+/// bytes of UTF-8. Anything else is a corrupt message — not rendered, not stored as a sticker.
+/// index is checked against the manifest once the pack is present, not here.
+public nonisolated struct Shared_Proto_Messaging_V1_StickerRef: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// SHA-256 of the pack's canonical manifest. Also the cache key.
+  public var packID: Data = Data()
+
+  /// Position in StickerPackManifest.stickers.
+  public var index: UInt32 = 0
+
+  /// The sticker's emoji, as in the manifest. The fallback render and the text preview.
+  public var emoji: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// TextMessage - Plain text message
-public struct Shared_Proto_Messaging_V1_TextMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_TextMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -487,7 +543,7 @@ public struct Shared_Proto_Messaging_V1_TextMessage: Sendable {
 }
 
 /// MediaMessage - Image, video, audio, or file
-public struct Shared_Proto_Messaging_V1_MediaMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MediaMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -591,7 +647,7 @@ public struct Shared_Proto_Messaging_V1_MediaMessage: Sendable {
 }
 
 /// MediaAlbumMessage - one or more media items sent as a single message (album/grid).
-public struct Shared_Proto_Messaging_V1_MediaAlbumMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MediaAlbumMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -628,7 +684,7 @@ public struct Shared_Proto_Messaging_V1_MediaAlbumMessage: Sendable {
 }
 
 /// MediaDimensions - Image/video dimensions
-public struct Shared_Proto_Messaging_V1_MediaDimensions: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MediaDimensions: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -645,7 +701,7 @@ public struct Shared_Proto_Messaging_V1_MediaDimensions: Sendable {
 }
 
 /// VoiceMessage - Voice recording (special audio type)
-public struct Shared_Proto_Messaging_V1_VoiceMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_VoiceMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -675,7 +731,7 @@ public struct Shared_Proto_Messaging_V1_VoiceMessage: Sendable {
 }
 
 /// ReactionMessage - Emoji reaction to a message
-public struct Shared_Proto_Messaging_V1_ReactionMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_ReactionMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -704,7 +760,7 @@ public struct Shared_Proto_Messaging_V1_ReactionMessage: Sendable {
 }
 
 /// EditMessage - Edit existing message
-public struct Shared_Proto_Messaging_V1_EditMessage: @unchecked Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_EditMessage: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -755,7 +811,7 @@ public struct Shared_Proto_Messaging_V1_EditMessage: @unchecked Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// New content (replaces original)
-  public enum OneOf_NewContent: Equatable, Sendable {
+  public nonisolated enum OneOf_NewContent: Equatable, Sendable {
     case newText(Shared_Proto_Messaging_V1_TextMessage)
     case newMedia(Shared_Proto_Messaging_V1_MediaMessage)
 
@@ -767,7 +823,7 @@ public struct Shared_Proto_Messaging_V1_EditMessage: @unchecked Sendable {
 }
 
 /// DeleteMessage - Delete/tombstone a message
-public struct Shared_Proto_Messaging_V1_DeleteMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_DeleteMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -787,7 +843,7 @@ public struct Shared_Proto_Messaging_V1_DeleteMessage: Sendable {
 }
 
 /// LocationMessage - Geographic location share
-public struct Shared_Proto_Messaging_V1_LocationMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_LocationMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -860,7 +916,7 @@ public struct Shared_Proto_Messaging_V1_LocationMessage: Sendable {
 }
 
 /// ContactMessage - Shared contact card
-public struct Shared_Proto_Messaging_V1_ContactMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_ContactMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -903,7 +959,7 @@ public struct Shared_Proto_Messaging_V1_ContactMessage: Sendable {
 }
 
 /// PollMessage - Poll/survey
-public struct Shared_Proto_Messaging_V1_PollMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_PollMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -938,7 +994,7 @@ public struct Shared_Proto_Messaging_V1_PollMessage: Sendable {
 }
 
 /// PollOption - Single poll option
-public struct Shared_Proto_Messaging_V1_PollOption: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_PollOption: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -961,7 +1017,7 @@ public struct Shared_Proto_Messaging_V1_PollOption: Sendable {
 }
 
 /// QuotedMessage - Quote/reply to another message
-public struct Shared_Proto_Messaging_V1_QuotedMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_QuotedMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1001,7 +1057,7 @@ public struct Shared_Proto_Messaging_V1_QuotedMessage: Sendable {
 }
 
 /// FormattingMetadata - Rich text formatting
-public struct Shared_Proto_Messaging_V1_FormattingMetadata: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_FormattingMetadata: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1015,7 +1071,7 @@ public struct Shared_Proto_Messaging_V1_FormattingMetadata: Sendable {
 }
 
 /// FormatEntity - Single formatting entity
-public struct Shared_Proto_Messaging_V1_FormatEntity: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_FormatEntity: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1047,7 +1103,7 @@ public struct Shared_Proto_Messaging_V1_FormatEntity: Sendable {
 }
 
 /// PreviewMetadata - Link preview metadata
-public struct Shared_Proto_Messaging_V1_PreviewMetadata: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_PreviewMetadata: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1106,7 +1162,7 @@ public struct Shared_Proto_Messaging_V1_PreviewMetadata: Sendable {
 }
 
 /// SessionControl - typed payload for a session-handshake control signal.
-public struct Shared_Proto_Messaging_V1_SessionControl: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_SessionControl: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1131,31 +1187,31 @@ public struct Shared_Proto_Messaging_V1_SessionControl: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.messaging.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.messaging.v1"
 
-extension Shared_Proto_Messaging_V1_MediaType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MediaType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MEDIA_TYPE_UNSPECIFIED\0\u{1}MEDIA_TYPE_IMAGE\0\u{1}MEDIA_TYPE_VIDEO\0\u{1}MEDIA_TYPE_AUDIO\0\u{1}MEDIA_TYPE_FILE\0\u{1}MEDIA_TYPE_ANIMATED\0\u{1}MEDIA_TYPE_STICKER\0")
 }
 
-extension Shared_Proto_Messaging_V1_ReactionAction: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_ReactionAction: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0REACTION_ACTION_UNSPECIFIED\0\u{1}REACTION_ACTION_ADD\0\u{1}REACTION_ACTION_REMOVE\0")
 }
 
-extension Shared_Proto_Messaging_V1_DeleteScope: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_DeleteScope: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DELETE_SCOPE_UNSPECIFIED\0\u{1}DELETE_SCOPE_FOR_SELF\0\u{1}DELETE_SCOPE_EVERYONE\0")
 }
 
-extension Shared_Proto_Messaging_V1_FormatType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_FormatType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0FORMAT_TYPE_UNSPECIFIED\0\u{1}FORMAT_TYPE_BOLD\0\u{1}FORMAT_TYPE_ITALIC\0\u{1}FORMAT_TYPE_CODE\0\u{1}FORMAT_TYPE_LINK\0\u{1}FORMAT_TYPE_MENTION\0\u{1}FORMAT_TYPE_STRIKETHROUGH\0")
 }
 
-extension Shared_Proto_Messaging_V1_SessionOp: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_SessionOp: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SESSION_OP_UNSPECIFIED\0\u{1}SESSION_OP_PING\0\u{1}SESSION_OP_READY\0\u{1}SESSION_OP_RESET_INIT\0\u{1}SESSION_OP_END\0")
 }
 
-extension Shared_Proto_Messaging_V1_MessageContent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MessageContent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageContent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{1}media\0\u{1}reaction\0\u{1}edit\0\u{1}delete\0\u{1}voice\0\u{1}location\0\u{1}contact\0\u{1}poll\0\u{3}media_album\0\u{2}\u{b}formatting\0\u{1}preview\0\u{c}\u{17}\u{1c}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{1}media\0\u{1}reaction\0\u{1}edit\0\u{1}delete\0\u{1}voice\0\u{1}location\0\u{1}contact\0\u{1}poll\0\u{3}media_album\0\u{1}sticker\0\u{2}\u{a}formatting\0\u{1}preview\0\u{c}\u{17}\u{1c}")
 
   fileprivate class _StorageClass {
     var _content: Shared_Proto_Messaging_V1_MessageContent.OneOf_Content?
@@ -1322,6 +1378,19 @@ extension Shared_Proto_Messaging_V1_MessageContent: SwiftProtobuf.Message, Swift
             _storage._content = .mediaAlbum(v)
           }
         }()
+        case 11: try {
+          var v: Shared_Proto_Messaging_V1_StickerRef?
+          var hadOneofValue = false
+          if let current = _storage._content {
+            hadOneofValue = true
+            if case .sticker(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._content = .sticker(v)
+          }
+        }()
         case 21: try { try decoder.decodeSingularMessageField(value: &_storage._formatting) }()
         case 22: try { try decoder.decodeSingularMessageField(value: &_storage._preview) }()
         default: break
@@ -1377,6 +1446,10 @@ extension Shared_Proto_Messaging_V1_MessageContent: SwiftProtobuf.Message, Swift
         guard case .mediaAlbum(let v)? = _storage._content else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
       }()
+      case .sticker?: try {
+        guard case .sticker(let v)? = _storage._content else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
+      }()
       case nil: break
       }
       try { if let v = _storage._formatting {
@@ -1406,7 +1479,47 @@ extension Shared_Proto_Messaging_V1_MessageContent: SwiftProtobuf.Message, Swift
   }
 }
 
-extension Shared_Proto_Messaging_V1_TextMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_StickerRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".StickerRef"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}pack_id\0\u{1}index\0\u{1}emoji\0\u{c}\u{4}\u{7}")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.packID) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.index) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.emoji) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.packID.isEmpty {
+      try visitor.visitSingularBytesField(value: self.packID, fieldNumber: 1)
+    }
+    if self.index != 0 {
+      try visitor.visitSingularUInt32Field(value: self.index, fieldNumber: 2)
+    }
+    if !self.emoji.isEmpty {
+      try visitor.visitSingularStringField(value: self.emoji, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Messaging_V1_StickerRef, rhs: Shared_Proto_Messaging_V1_StickerRef) -> Bool {
+    if lhs.packID != rhs.packID {return false}
+    if lhs.index != rhs.index {return false}
+    if lhs.emoji != rhs.emoji {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Messaging_V1_TextMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TextMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{1}mentions\0\u{1}quoted\0\u{c}\u{4}\u{7}")
 
@@ -1450,7 +1563,7 @@ extension Shared_Proto_Messaging_V1_TextMessage: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-extension Shared_Proto_Messaging_V1_MediaMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MediaMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MediaMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}media_type\0\u{3}file_url\0\u{3}encryption_key\0\u{3}file_hash\0\u{3}file_size\0\u{3}mime_type\0\u{1}filename\0\u{1}thumbnail\0\u{1}dimensions\0\u{3}duration_ms\0\u{1}caption\0\u{1}blurhash\0\u{3}media_id\0\u{c}\u{e}\u{7}")
 
@@ -1544,7 +1657,7 @@ extension Shared_Proto_Messaging_V1_MediaMessage: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-extension Shared_Proto_Messaging_V1_MediaAlbumMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MediaAlbumMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MediaAlbumMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}items\0\u{1}caption\0\u{1}quoted\0")
 
@@ -1588,7 +1701,7 @@ extension Shared_Proto_Messaging_V1_MediaAlbumMessage: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Messaging_V1_MediaDimensions: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MediaDimensions: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MediaDimensions"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}width\0\u{1}height\0")
 
@@ -1623,7 +1736,7 @@ extension Shared_Proto_Messaging_V1_MediaDimensions: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Messaging_V1_VoiceMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_VoiceMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VoiceMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}file_url\0\u{3}encryption_key\0\u{3}file_hash\0\u{3}duration_ms\0\u{1}waveform\0\u{1}codec\0\u{c}\u{7}\u{4}")
 
@@ -1678,7 +1791,7 @@ extension Shared_Proto_Messaging_V1_VoiceMessage: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-extension Shared_Proto_Messaging_V1_ReactionMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_ReactionMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ReactionMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}target_message_id\0\u{1}emoji\0\u{1}action\0\u{3}timestamp_ms\0\u{c}\u{5}\u{6}")
 
@@ -1723,7 +1836,7 @@ extension Shared_Proto_Messaging_V1_ReactionMessage: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Messaging_V1_EditMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_EditMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".EditMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}target_message_id\0\u{3}new_text\0\u{3}new_media\0\u{3}edited_at\0\u{3}edit_count\0\u{c}\u{6}\u{5}")
 
@@ -1847,7 +1960,7 @@ extension Shared_Proto_Messaging_V1_EditMessage: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-extension Shared_Proto_Messaging_V1_DeleteMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_DeleteMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeleteMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}target_message_id\0\u{1}scope\0\u{3}deleted_at\0\u{c}\u{4}\u{7}")
 
@@ -1887,7 +2000,7 @@ extension Shared_Proto_Messaging_V1_DeleteMessage: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Messaging_V1_LocationMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_LocationMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".LocationMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}latitude\0\u{1}longitude\0\u{1}accuracy\0\u{3}place_name\0\u{1}address\0\u{1}live\0\u{3}live_duration_seconds\0\u{c}\u{8}\u{3}")
 
@@ -1951,7 +2064,7 @@ extension Shared_Proto_Messaging_V1_LocationMessage: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Messaging_V1_ContactMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_ContactMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ContactMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}phone_numbers\0\u{1}emails\0\u{3}user_id\0\u{1}vcard\0\u{c}\u{6}\u{5}")
 
@@ -2005,7 +2118,7 @@ extension Shared_Proto_Messaging_V1_ContactMessage: SwiftProtobuf.Message, Swift
   }
 }
 
-extension Shared_Proto_Messaging_V1_PollMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_PollMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PollMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}question\0\u{1}options\0\u{3}multiple_choice\0\u{1}anonymous\0\u{3}expires_at\0\u{c}\u{6}\u{5}")
 
@@ -2059,7 +2172,7 @@ extension Shared_Proto_Messaging_V1_PollMessage: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-extension Shared_Proto_Messaging_V1_PollOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_PollOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PollOption"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}option_id\0\u{1}text\0\u{3}vote_count\0\u{1}voters\0")
 
@@ -2104,7 +2217,7 @@ extension Shared_Proto_Messaging_V1_PollOption: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-extension Shared_Proto_Messaging_V1_QuotedMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_QuotedMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".QuotedMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}sender_id\0\u{3}text_preview\0\u{3}media_type\0\u{c}\u{5}\u{6}")
 
@@ -2153,7 +2266,7 @@ extension Shared_Proto_Messaging_V1_QuotedMessage: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Messaging_V1_FormattingMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_FormattingMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FormattingMetadata"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}entities\0\u{c}\u{2}\u{9}")
 
@@ -2183,7 +2296,7 @@ extension Shared_Proto_Messaging_V1_FormattingMetadata: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Messaging_V1_FormatEntity: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_FormatEntity: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FormatEntity"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}offset\0\u{1}length\0\u{1}extra\0")
 
@@ -2232,7 +2345,7 @@ extension Shared_Proto_Messaging_V1_FormatEntity: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-extension Shared_Proto_Messaging_V1_PreviewMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_PreviewMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PreviewMetadata"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}title\0\u{1}description\0\u{3}image_url\0\u{3}site_name\0\u{c}\u{6}\u{5}")
 
@@ -2286,7 +2399,7 @@ extension Shared_Proto_Messaging_V1_PreviewMetadata: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Messaging_V1_SessionControl: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_SessionControl: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SessionControl"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}op\0\u{1}nonce\0\u{1}reason\0")
 

@@ -29,7 +29,8 @@ public enum Shared_Proto_Services_V1_NotificationService: Sendable {
             /// Descriptor for "SendBlindNotification".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.NotificationService"),
-                method: "SendBlindNotification"
+                method: "SendBlindNotification",
+                type: .unary
             )
         }
         /// Namespace for "RegisterDeviceToken" metadata.
@@ -41,7 +42,8 @@ public enum Shared_Proto_Services_V1_NotificationService: Sendable {
             /// Descriptor for "RegisterDeviceToken".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.NotificationService"),
-                method: "RegisterDeviceToken"
+                method: "RegisterDeviceToken",
+                type: .unary
             )
         }
         /// Namespace for "UnregisterDeviceToken" metadata.
@@ -53,7 +55,8 @@ public enum Shared_Proto_Services_V1_NotificationService: Sendable {
             /// Descriptor for "UnregisterDeviceToken".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.NotificationService"),
-                method: "UnregisterDeviceToken"
+                method: "UnregisterDeviceToken",
+                type: .unary
             )
         }
         /// Namespace for "UpdateNotificationPreferences" metadata.
@@ -65,7 +68,8 @@ public enum Shared_Proto_Services_V1_NotificationService: Sendable {
             /// Descriptor for "UpdateNotificationPreferences".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.NotificationService"),
-                method: "UpdateNotificationPreferences"
+                method: "UpdateNotificationPreferences",
+                type: .unary
             )
         }
         /// Namespace for "RegisterVoipToken" metadata.
@@ -77,7 +81,8 @@ public enum Shared_Proto_Services_V1_NotificationService: Sendable {
             /// Descriptor for "RegisterVoipToken".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.NotificationService"),
-                method: "RegisterVoipToken"
+                method: "RegisterVoipToken",
+                type: .unary
             )
         }
         /// Namespace for "UnregisterVoipToken" metadata.
@@ -89,7 +94,8 @@ public enum Shared_Proto_Services_V1_NotificationService: Sendable {
             /// Descriptor for "UnregisterVoipToken".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.NotificationService"),
-                method: "UnregisterVoipToken"
+                method: "UnregisterVoipToken",
+                type: .unary
             )
         }
         /// Namespace for "SendVoipIncomingCall" metadata.
@@ -101,7 +107,8 @@ public enum Shared_Proto_Services_V1_NotificationService: Sendable {
             /// Descriptor for "SendVoipIncomingCall".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.NotificationService"),
-                method: "SendVoipIncomingCall"
+                method: "SendVoipIncomingCall",
+                type: .unary
             )
         }
         /// Namespace for "SendKeyRotationWake" metadata.
@@ -113,7 +120,8 @@ public enum Shared_Proto_Services_V1_NotificationService: Sendable {
             /// Descriptor for "SendKeyRotationWake".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.NotificationService"),
-                method: "SendKeyRotationWake"
+                method: "SendKeyRotationWake",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.NotificationService" service.

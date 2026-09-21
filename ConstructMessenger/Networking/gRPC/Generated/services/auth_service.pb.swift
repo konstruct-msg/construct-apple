@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,13 +20,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// PushProvider - Push notification provider
-public enum Shared_Proto_Services_V1_PushProvider: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Services_V1_PushProvider: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified provider (must be 0)
@@ -79,7 +83,7 @@ public enum Shared_Proto_Services_V1_PushProvider: SwiftProtobuf.Enum, Swift.Cas
 }
 
 /// PushEnvironment - Push environment
-public enum Shared_Proto_Services_V1_PushEnvironment: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Services_V1_PushEnvironment: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified environment (must be 0)
@@ -124,7 +128,7 @@ public enum Shared_Proto_Services_V1_PushEnvironment: SwiftProtobuf.Enum, Swift.
 }
 
 /// RecoveryErrorCode - Recovery error codes
-public enum Shared_Proto_Services_V1_RecoveryErrorCode: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Services_V1_RecoveryErrorCode: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified error (must be 0)
@@ -192,7 +196,7 @@ public enum Shared_Proto_Services_V1_RecoveryErrorCode: SwiftProtobuf.Enum, Swif
 
 }
 
-public struct Shared_Proto_Services_V1_GetPowChallengeRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetPowChallengeRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -202,7 +206,7 @@ public struct Shared_Proto_Services_V1_GetPowChallengeRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GetPowChallengeResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetPowChallengeResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -218,7 +222,7 @@ public struct Shared_Proto_Services_V1_GetPowChallengeResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_DevicePublicKeys: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DevicePublicKeys: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -286,7 +290,7 @@ public struct Shared_Proto_Services_V1_DevicePublicKeys: Sendable {
   fileprivate var _signedPrekeyHybridSignature: Data? = nil
 }
 
-public struct Shared_Proto_Services_V1_PowSolution: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_PowSolution: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -302,7 +306,7 @@ public struct Shared_Proto_Services_V1_PowSolution: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_RegisterDeviceRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RegisterDeviceRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -370,7 +374,7 @@ public struct Shared_Proto_Services_V1_RegisterDeviceRequest: Sendable {
   fileprivate var _identityKeyType: UInt32? = nil
 }
 
-public struct Shared_Proto_Services_V1_AuthenticateDeviceRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_AuthenticateDeviceRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -388,7 +392,7 @@ public struct Shared_Proto_Services_V1_AuthenticateDeviceRequest: Sendable {
 }
 
 /// AuthTokensResponse - returned for all device auth/linking operations
-public struct Shared_Proto_Services_V1_AuthTokensResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_AuthTokensResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -422,7 +426,7 @@ public struct Shared_Proto_Services_V1_AuthTokensResponse: Sendable {
 /// Per-RPC response wrappers (buf lint RPC_RESPONSE_STANDARD_NAME)
 /// Each wraps AuthTokensResponse so callers get a uniquely-named type
 /// while the shared token payload can still evolve independently.
-public struct Shared_Proto_Services_V1_RegisterDeviceResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RegisterDeviceResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -443,7 +447,7 @@ public struct Shared_Proto_Services_V1_RegisterDeviceResponse: Sendable {
   fileprivate var _tokens: Shared_Proto_Services_V1_AuthTokensResponse? = nil
 }
 
-public struct Shared_Proto_Services_V1_AuthenticateDeviceResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_AuthenticateDeviceResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -464,7 +468,7 @@ public struct Shared_Proto_Services_V1_AuthenticateDeviceResponse: Sendable {
   fileprivate var _tokens: Shared_Proto_Services_V1_AuthTokensResponse? = nil
 }
 
-public struct Shared_Proto_Services_V1_ApproveJoinRequestResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ApproveJoinRequestResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -485,7 +489,7 @@ public struct Shared_Proto_Services_V1_ApproveJoinRequestResponse: Sendable {
   fileprivate var _tokens: Shared_Proto_Services_V1_AuthTokensResponse? = nil
 }
 
-public struct Shared_Proto_Services_V1_ConfirmDeviceLinkResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ConfirmDeviceLinkResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -507,7 +511,7 @@ public struct Shared_Proto_Services_V1_ConfirmDeviceLinkResponse: Sendable {
 }
 
 /// RefreshTokenRequest - Refresh access token
-public struct Shared_Proto_Services_V1_RefreshTokenRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RefreshTokenRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -524,7 +528,7 @@ public struct Shared_Proto_Services_V1_RefreshTokenRequest: Sendable {
 }
 
 /// RefreshTokenResponse - New access token
-public struct Shared_Proto_Services_V1_RefreshTokenResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RefreshTokenResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -553,7 +557,7 @@ public struct Shared_Proto_Services_V1_RefreshTokenResponse: Sendable {
 }
 
 /// VerifyTokenRequest - Validate token
-public struct Shared_Proto_Services_V1_VerifyTokenRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_VerifyTokenRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -567,7 +571,7 @@ public struct Shared_Proto_Services_V1_VerifyTokenRequest: Sendable {
 }
 
 /// VerifyTokenResponse - Token validation result
-public struct Shared_Proto_Services_V1_VerifyTokenResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_VerifyTokenResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -614,7 +618,7 @@ public struct Shared_Proto_Services_V1_VerifyTokenResponse: Sendable {
   fileprivate var _expiresAt: Int64? = nil
 }
 
-public struct Shared_Proto_Services_V1_LogoutRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_LogoutRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -628,7 +632,7 @@ public struct Shared_Proto_Services_V1_LogoutRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_LogoutResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_LogoutResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -641,7 +645,7 @@ public struct Shared_Proto_Services_V1_LogoutResponse: Sendable {
 }
 
 /// ListDevicesRequest - List user's devices
-public struct Shared_Proto_Services_V1_ListDevicesRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ListDevicesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -664,7 +668,7 @@ public struct Shared_Proto_Services_V1_ListDevicesRequest: Sendable {
 }
 
 /// DeviceInfo - Device information
-public struct Shared_Proto_Services_V1_DeviceInfo: @unchecked Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DeviceInfo: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -759,7 +763,7 @@ public struct Shared_Proto_Services_V1_DeviceInfo: @unchecked Sendable {
 }
 
 /// ListDevicesResponse - wraps a single device in the stream
-public struct Shared_Proto_Services_V1_ListDevicesResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ListDevicesResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -781,7 +785,7 @@ public struct Shared_Proto_Services_V1_ListDevicesResponse: Sendable {
 }
 
 /// GetDeviceInfoResponse - wraps a single device info response
-public struct Shared_Proto_Services_V1_GetDeviceInfoResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetDeviceInfoResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -803,7 +807,7 @@ public struct Shared_Proto_Services_V1_GetDeviceInfoResponse: Sendable {
 }
 
 /// SetDeviceMetadataRequest - Store the calling device's sealed name/platform
-public struct Shared_Proto_Services_V1_SetDeviceMetadataRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SetDeviceMetadataRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -822,7 +826,7 @@ public struct Shared_Proto_Services_V1_SetDeviceMetadataRequest: Sendable {
 }
 
 /// SetDeviceMetadataResponse - Stored
-public struct Shared_Proto_Services_V1_SetDeviceMetadataResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SetDeviceMetadataResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -843,7 +847,7 @@ public struct Shared_Proto_Services_V1_SetDeviceMetadataResponse: Sendable {
 /// Clients agree on this shape between themselves; the server ships nothing when it changes.
 /// A field added here is readable only by clients that know it, which is the ordinary proto3
 /// rule and is why this is a message and not a hand-rolled encoding.
-public struct Shared_Proto_Services_V1_DeviceMetadata: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DeviceMetadata: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -879,7 +883,7 @@ public struct Shared_Proto_Services_V1_DeviceMetadata: Sendable {
 /// Re-sealed whenever the account's device set changes. A device linked after the last re-seal
 /// has no copy and shows unnamed until its siblings re-seal, which is the ordinary path they
 /// already run when they notice a new sibling.
-public struct Shared_Proto_Services_V1_SealedDeviceMetadata: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SealedDeviceMetadata: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -892,7 +896,7 @@ public struct Shared_Proto_Services_V1_SealedDeviceMetadata: Sendable {
 }
 
 /// RevokeDeviceRequest - Revoke device
-public struct Shared_Proto_Services_V1_RevokeDeviceRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RevokeDeviceRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -906,7 +910,7 @@ public struct Shared_Proto_Services_V1_RevokeDeviceRequest: Sendable {
 }
 
 /// RevokeDeviceResponse - Revoke confirmation
-public struct Shared_Proto_Services_V1_RevokeDeviceResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RevokeDeviceResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -932,7 +936,7 @@ public struct Shared_Proto_Services_V1_RevokeDeviceResponse: Sendable {
 }
 
 /// UpdatePushTokenRequest - Update push token
-public struct Shared_Proto_Services_V1_UpdatePushTokenRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UpdatePushTokenRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -955,7 +959,7 @@ public struct Shared_Proto_Services_V1_UpdatePushTokenRequest: Sendable {
 }
 
 /// UpdatePushTokenResponse - Update confirmation
-public struct Shared_Proto_Services_V1_UpdatePushTokenResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UpdatePushTokenResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -969,7 +973,7 @@ public struct Shared_Proto_Services_V1_UpdatePushTokenResponse: Sendable {
 }
 
 /// UnregisterPushTokenRequest - Remove push token for a device
-public struct Shared_Proto_Services_V1_UnregisterPushTokenRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UnregisterPushTokenRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -983,7 +987,7 @@ public struct Shared_Proto_Services_V1_UnregisterPushTokenRequest: Sendable {
 }
 
 /// UnregisterPushTokenResponse - Removal confirmation
-public struct Shared_Proto_Services_V1_UnregisterPushTokenResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UnregisterPushTokenResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -997,7 +1001,7 @@ public struct Shared_Proto_Services_V1_UnregisterPushTokenResponse: Sendable {
 }
 
 /// VerifyDeviceRequest - Verify device (2FA)
-public struct Shared_Proto_Services_V1_VerifyDeviceRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_VerifyDeviceRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1014,7 +1018,7 @@ public struct Shared_Proto_Services_V1_VerifyDeviceRequest: Sendable {
 }
 
 /// VerifyDeviceResponse - Verification result
-public struct Shared_Proto_Services_V1_VerifyDeviceResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_VerifyDeviceResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1028,7 +1032,7 @@ public struct Shared_Proto_Services_V1_VerifyDeviceResponse: Sendable {
 }
 
 /// GetDeviceInfoRequest - Get specific device info
-public struct Shared_Proto_Services_V1_GetDeviceInfoRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetDeviceInfoRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1042,7 +1046,7 @@ public struct Shared_Proto_Services_V1_GetDeviceInfoRequest: Sendable {
 }
 
 /// SetRecoveryKeyRequest - Set up account recovery
-public struct Shared_Proto_Services_V1_SetRecoveryKeyRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SetRecoveryKeyRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1078,7 +1082,7 @@ public struct Shared_Proto_Services_V1_SetRecoveryKeyRequest: Sendable {
 }
 
 /// SetRecoveryKeyResponse - Recovery setup confirmation
-public struct Shared_Proto_Services_V1_SetRecoveryKeyResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SetRecoveryKeyResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1110,7 +1114,7 @@ public struct Shared_Proto_Services_V1_SetRecoveryKeyResponse: Sendable {
 }
 
 /// GetRecoveryStatusRequest - Check recovery status
-public struct Shared_Proto_Services_V1_GetRecoveryStatusRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetRecoveryStatusRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1121,7 +1125,7 @@ public struct Shared_Proto_Services_V1_GetRecoveryStatusRequest: Sendable {
 }
 
 /// GetRecoveryStatusResponse - Recovery status
-public struct Shared_Proto_Services_V1_GetRecoveryStatusResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetRecoveryStatusResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1172,7 +1176,7 @@ public struct Shared_Proto_Services_V1_GetRecoveryStatusResponse: Sendable {
 }
 
 /// RecoverAccountRequest - Recover account with seed phrase
-public struct Shared_Proto_Services_V1_RecoverAccountRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RecoverAccountRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1204,7 +1208,7 @@ public struct Shared_Proto_Services_V1_RecoverAccountRequest: Sendable {
 }
 
 /// NewDeviceForRecovery - New device info during recovery
-public struct Shared_Proto_Services_V1_NewDeviceForRecovery: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_NewDeviceForRecovery: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1236,7 +1240,7 @@ public struct Shared_Proto_Services_V1_NewDeviceForRecovery: Sendable {
 }
 
 /// RecoverAccountResponse - Recovery result
-public struct Shared_Proto_Services_V1_RecoverAccountResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RecoverAccountResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1285,7 +1289,7 @@ public struct Shared_Proto_Services_V1_RecoverAccountResponse: Sendable {
 }
 
 /// RecoveryError - Recovery failure reasons
-public struct Shared_Proto_Services_V1_RecoveryError: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RecoveryError: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1317,7 +1321,7 @@ public struct Shared_Proto_Services_V1_RecoveryError: Sendable {
 }
 
 /// StoreRecoveryBundleRequest
-public struct Shared_Proto_Services_V1_StoreRecoveryBundleRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_StoreRecoveryBundleRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1331,7 +1335,7 @@ public struct Shared_Proto_Services_V1_StoreRecoveryBundleRequest: Sendable {
 }
 
 /// StoreRecoveryBundleResponse
-public struct Shared_Proto_Services_V1_StoreRecoveryBundleResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_StoreRecoveryBundleResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1344,7 +1348,7 @@ public struct Shared_Proto_Services_V1_StoreRecoveryBundleResponse: Sendable {
 }
 
 /// GetRecoveryBundleRequest
-public struct Shared_Proto_Services_V1_GetRecoveryBundleRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetRecoveryBundleRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1358,7 +1362,7 @@ public struct Shared_Proto_Services_V1_GetRecoveryBundleRequest: Sendable {
 }
 
 /// GetRecoveryBundleResponse
-public struct Shared_Proto_Services_V1_GetRecoveryBundleResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetRecoveryBundleResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1376,7 +1380,7 @@ public struct Shared_Proto_Services_V1_GetRecoveryBundleResponse: Sendable {
 
 /// GetSenderCertificateRequest - Request a signed sender certificate
 /// Authenticated via JWT — server derives user/device identity from the token.
-public struct Shared_Proto_Services_V1_GetSenderCertificateRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetSenderCertificateRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1387,7 +1391,7 @@ public struct Shared_Proto_Services_V1_GetSenderCertificateRequest: Sendable {
 }
 
 /// GetSenderCertificateResponse - Signed sender certificate
-public struct Shared_Proto_Services_V1_GetSenderCertificateResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetSenderCertificateResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1415,7 +1419,7 @@ public struct Shared_Proto_Services_V1_GetSenderCertificateResponse: Sendable {
 
 /// InitiateDeviceLinkRequest - Primary device starts the linking flow
 /// Identity is taken from the authenticated JWT (no fields needed).
-public struct Shared_Proto_Services_V1_InitiateDeviceLinkRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_InitiateDeviceLinkRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1426,7 +1430,7 @@ public struct Shared_Proto_Services_V1_InitiateDeviceLinkRequest: Sendable {
 }
 
 /// InitiateDeviceLinkResponse - Short-lived token to encode in QR code
-public struct Shared_Proto_Services_V1_InitiateDeviceLinkResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_InitiateDeviceLinkResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1444,7 +1448,7 @@ public struct Shared_Proto_Services_V1_InitiateDeviceLinkResponse: Sendable {
 }
 
 /// ConfirmDeviceLinkRequest - New device presents scanned QR token + its public keys
-public struct Shared_Proto_Services_V1_ConfirmDeviceLinkRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ConfirmDeviceLinkRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1473,7 +1477,7 @@ public struct Shared_Proto_Services_V1_ConfirmDeviceLinkRequest: Sendable {
 }
 
 /// JoinRequestPayload - TUI device submits its keys and metadata
-public struct Shared_Proto_Services_V1_JoinRequestPayload: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_JoinRequestPayload: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1523,7 +1527,7 @@ public struct Shared_Proto_Services_V1_JoinRequestPayload: Sendable {
 }
 
 /// JoinRequestAck - Server acknowledges the join request was stored
-public struct Shared_Proto_Services_V1_JoinRequestAck: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_JoinRequestAck: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1537,7 +1541,7 @@ public struct Shared_Proto_Services_V1_JoinRequestAck: Sendable {
 }
 
 /// CheckJoinRequestStatusRequest - TUI polls with its pending_device_id
-public struct Shared_Proto_Services_V1_CheckJoinRequestStatusRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_CheckJoinRequestStatusRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1550,7 +1554,7 @@ public struct Shared_Proto_Services_V1_CheckJoinRequestStatusRequest: Sendable {
 }
 
 /// CheckJoinRequestStatusResponse - Current status of the join request
-public struct Shared_Proto_Services_V1_CheckJoinRequestStatusResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_CheckJoinRequestStatusResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1569,7 +1573,7 @@ public struct Shared_Proto_Services_V1_CheckJoinRequestStatusResponse: Sendable 
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public enum Status: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public nonisolated enum Status: SwiftProtobuf.Enum, Swift.CaseIterable {
     public typealias RawValue = Int
 
     /// Still waiting for phone approval
@@ -1625,7 +1629,7 @@ public struct Shared_Proto_Services_V1_CheckJoinRequestStatusResponse: Sendable 
 }
 
 /// ApproveJoinRequestRequest - Phone approves the TUI device
-public struct Shared_Proto_Services_V1_ApproveJoinRequestRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ApproveJoinRequestRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1644,7 +1648,7 @@ public struct Shared_Proto_Services_V1_ApproveJoinRequestRequest: Sendable {
 /// IssueTokensRequest - Client sends blinded Ristretto255 points for OPRF evaluation.
 /// All blinded points must be valid compressed Ristretto255 encodings (32 bytes each).
 /// Maximum 20 points per request (enforced server-side; excess → RESOURCE_EXHAUSTED).
-public struct Shared_Proto_Services_V1_IssueTokensRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_IssueTokensRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1661,7 +1665,7 @@ public struct Shared_Proto_Services_V1_IssueTokensRequest: Sendable {
 /// IssueTokensResponse - Server returns evaluated Ristretto255 points.
 /// Each evaluated_point[i] = k * blinded_points[i], where k = TOKEN_ISSUER_KEY.
 /// Returned in the same order as the request.
-public struct Shared_Proto_Services_V1_IssueTokensResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_IssueTokensResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1691,21 +1695,21 @@ public struct Shared_Proto_Services_V1_IssueTokensResponse: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.services.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.services.v1"
 
-extension Shared_Proto_Services_V1_PushProvider: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_PushProvider: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PUSH_PROVIDER_UNSPECIFIED\0\u{1}PUSH_PROVIDER_APNS\0\u{1}PUSH_PROVIDER_FCM\0\u{1}PUSH_PROVIDER_HMS\0\u{1}PUSH_PROVIDER_WEBPUSH\0")
 }
 
-extension Shared_Proto_Services_V1_PushEnvironment: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_PushEnvironment: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PUSH_ENVIRONMENT_UNSPECIFIED\0\u{1}PUSH_ENVIRONMENT_SANDBOX\0\u{1}PUSH_ENVIRONMENT_PRODUCTION\0")
 }
 
-extension Shared_Proto_Services_V1_RecoveryErrorCode: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RecoveryErrorCode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RECOVERY_ERROR_CODE_UNSPECIFIED\0\u{1}RECOVERY_ERROR_CODE_ACCOUNT_NOT_FOUND\0\u{1}RECOVERY_ERROR_CODE_NOT_SETUP\0\u{1}RECOVERY_ERROR_CODE_INVALID_SIGNATURE\0\u{1}RECOVERY_ERROR_CODE_CHALLENGE_EXPIRED\0\u{1}RECOVERY_ERROR_CODE_RATE_LIMITED\0\u{1}RECOVERY_ERROR_CODE_ACCOUNT_LOCKED\0")
 }
 
-extension Shared_Proto_Services_V1_GetPowChallengeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetPowChallengeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPowChallengeRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -1724,7 +1728,7 @@ extension Shared_Proto_Services_V1_GetPowChallengeRequest: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_GetPowChallengeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetPowChallengeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPowChallengeResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}challenge\0\u{1}difficulty\0\u{3}expires_at\0")
 
@@ -1764,7 +1768,7 @@ extension Shared_Proto_Services_V1_GetPowChallengeResponse: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DevicePublicKeys"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}verifying_key\0\u{3}identity_public\0\u{3}signed_prekey_public\0\u{3}signed_prekey_signature\0\u{3}crypto_suite\0\u{3}hybrid_identity_key\0\u{3}hybrid_identity_signature\0\u{3}signed_prekey_hybrid_signature\0\u{3}supports_pq_ratchet\0")
 
@@ -1838,7 +1842,7 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Services_V1_PowSolution: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_PowSolution: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PowSolution"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}challenge\0\u{1}nonce\0\u{1}hash\0")
 
@@ -1878,7 +1882,7 @@ extension Shared_Proto_Services_V1_PowSolution: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-extension Shared_Proto_Services_V1_RegisterDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RegisterDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RegisterDeviceRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}username\0\u{3}device_id\0\u{3}public_keys\0\u{3}pow_solution\0\u{3}identity_public_key\0\u{3}identity_key_type\0")
 
@@ -1937,7 +1941,7 @@ extension Shared_Proto_Services_V1_RegisterDeviceRequest: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_AuthenticateDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_AuthenticateDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AuthenticateDeviceRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}timestamp\0\u{1}signature\0")
 
@@ -1977,7 +1981,7 @@ extension Shared_Proto_Services_V1_AuthenticateDeviceRequest: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_AuthTokensResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_AuthTokensResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AuthTokensResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}access_token\0\u{3}refresh_token\0\u{3}expires_at\0\u{3}veil_bridge_cert\0")
 
@@ -2031,7 +2035,7 @@ extension Shared_Proto_Services_V1_AuthTokensResponse: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_RegisterDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RegisterDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RegisterDeviceResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tokens\0")
 
@@ -2065,7 +2069,7 @@ extension Shared_Proto_Services_V1_RegisterDeviceResponse: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_AuthenticateDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_AuthenticateDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AuthenticateDeviceResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tokens\0")
 
@@ -2099,7 +2103,7 @@ extension Shared_Proto_Services_V1_AuthenticateDeviceResponse: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_ApproveJoinRequestResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ApproveJoinRequestResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ApproveJoinRequestResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tokens\0")
 
@@ -2133,7 +2137,7 @@ extension Shared_Proto_Services_V1_ApproveJoinRequestResponse: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_ConfirmDeviceLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ConfirmDeviceLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ConfirmDeviceLinkResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tokens\0")
 
@@ -2167,7 +2171,7 @@ extension Shared_Proto_Services_V1_ConfirmDeviceLinkResponse: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_RefreshTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RefreshTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RefreshTokenRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}refresh_token\0\u{3}device_id\0")
 
@@ -2202,7 +2206,7 @@ extension Shared_Proto_Services_V1_RefreshTokenRequest: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_RefreshTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RefreshTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RefreshTokenResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}access_token\0\u{3}refresh_token\0\u{3}expires_at\0")
 
@@ -2246,7 +2250,7 @@ extension Shared_Proto_Services_V1_RefreshTokenResponse: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_VerifyTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_VerifyTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VerifyTokenRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}access_token\0")
 
@@ -2276,7 +2280,7 @@ extension Shared_Proto_Services_V1_VerifyTokenRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_VerifyTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_VerifyTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VerifyTokenResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}valid\0\u{3}user_id\0\u{3}device_id\0\u{3}expires_at\0")
 
@@ -2325,7 +2329,7 @@ extension Shared_Proto_Services_V1_VerifyTokenResponse: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_LogoutRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_LogoutRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".LogoutRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}access_token\0\u{3}all_devices\0")
 
@@ -2360,7 +2364,7 @@ extension Shared_Proto_Services_V1_LogoutRequest: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-extension Shared_Proto_Services_V1_LogoutResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_LogoutResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".LogoutResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -2390,7 +2394,7 @@ extension Shared_Proto_Services_V1_LogoutResponse: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Services_V1_ListDevicesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ListDevicesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ListDevicesRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}platform\0")
 
@@ -2424,7 +2428,7 @@ extension Shared_Proto_Services_V1_ListDevicesRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_DeviceInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DeviceInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeviceInfo"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0\u{3}device_name\0\u{1}platform\0\u{3}last_seen\0\u{3}created_at\0\u{3}push_provider\0\u{3}is_current\0\u{1}capabilities\0\u{3}is_primary\0\u{3}sealed_metadata\0\u{c}\u{b}\u{5}")
 
@@ -2557,7 +2561,7 @@ extension Shared_Proto_Services_V1_DeviceInfo: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Services_V1_ListDevicesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ListDevicesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ListDevicesResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0")
 
@@ -2591,7 +2595,7 @@ extension Shared_Proto_Services_V1_ListDevicesResponse: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_GetDeviceInfoResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetDeviceInfoResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetDeviceInfoResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0")
 
@@ -2625,7 +2629,7 @@ extension Shared_Proto_Services_V1_GetDeviceInfoResponse: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_SetDeviceMetadataRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SetDeviceMetadataRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetDeviceMetadataRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sealed_metadata\0")
 
@@ -2655,7 +2659,7 @@ extension Shared_Proto_Services_V1_SetDeviceMetadataRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_SetDeviceMetadataResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SetDeviceMetadataResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetDeviceMetadataResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -2685,7 +2689,7 @@ extension Shared_Proto_Services_V1_SetDeviceMetadataResponse: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_DeviceMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DeviceMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeviceMetadata"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_name\0\u{1}platform\0")
 
@@ -2720,7 +2724,7 @@ extension Shared_Proto_Services_V1_DeviceMetadata: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Services_V1_SealedDeviceMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SealedDeviceMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SealedDeviceMetadata"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}copies\0")
 
@@ -2750,7 +2754,7 @@ extension Shared_Proto_Services_V1_SealedDeviceMetadata: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_RevokeDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RevokeDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RevokeDeviceRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0")
 
@@ -2780,7 +2784,7 @@ extension Shared_Proto_Services_V1_RevokeDeviceRequest: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_RevokeDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RevokeDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RevokeDeviceResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}revoked_device\0")
 
@@ -2819,7 +2823,7 @@ extension Shared_Proto_Services_V1_RevokeDeviceResponse: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_UpdatePushTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UpdatePushTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UpdatePushTokenRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}push_token\0\u{1}provider\0\u{1}environment\0")
 
@@ -2864,7 +2868,7 @@ extension Shared_Proto_Services_V1_UpdatePushTokenRequest: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_UpdatePushTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UpdatePushTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UpdatePushTokenResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -2894,7 +2898,7 @@ extension Shared_Proto_Services_V1_UpdatePushTokenResponse: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Services_V1_UnregisterPushTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UnregisterPushTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UnregisterPushTokenRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0")
 
@@ -2924,7 +2928,7 @@ extension Shared_Proto_Services_V1_UnregisterPushTokenRequest: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_UnregisterPushTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UnregisterPushTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UnregisterPushTokenResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -2954,7 +2958,7 @@ extension Shared_Proto_Services_V1_UnregisterPushTokenResponse: SwiftProtobuf.Me
   }
 }
 
-extension Shared_Proto_Services_V1_VerifyDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_VerifyDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VerifyDeviceRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}verification_code\0")
 
@@ -2989,7 +2993,7 @@ extension Shared_Proto_Services_V1_VerifyDeviceRequest: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_VerifyDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_VerifyDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VerifyDeviceResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}verified\0")
 
@@ -3019,7 +3023,7 @@ extension Shared_Proto_Services_V1_VerifyDeviceResponse: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_GetDeviceInfoRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetDeviceInfoRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetDeviceInfoRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0")
 
@@ -3049,7 +3053,7 @@ extension Shared_Proto_Services_V1_GetDeviceInfoRequest: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_SetRecoveryKeyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SetRecoveryKeyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetRecoveryKeyRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recovery_public_key\0\u{3}setup_signature\0\u{1}timestamp\0\u{3}encrypted_backup\0\u{c}\u{5}\u{6}")
 
@@ -3098,7 +3102,7 @@ extension Shared_Proto_Services_V1_SetRecoveryKeyRequest: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_SetRecoveryKeyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SetRecoveryKeyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetRecoveryKeyResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{1}fingerprint\0\u{3}setup_at\0\u{1}error\0")
 
@@ -3147,7 +3151,7 @@ extension Shared_Proto_Services_V1_SetRecoveryKeyResponse: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_GetRecoveryStatusRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetRecoveryStatusRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetRecoveryStatusRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -3166,7 +3170,7 @@ extension Shared_Proto_Services_V1_GetRecoveryStatusRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_GetRecoveryStatusResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetRecoveryStatusResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetRecoveryStatusResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_setup\0\u{1}fingerprint\0\u{3}setup_at\0\u{3}last_used_at\0\u{3}has_backup\0")
 
@@ -3220,7 +3224,7 @@ extension Shared_Proto_Services_V1_GetRecoveryStatusResponse: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_RecoverAccountRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RecoverAccountRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RecoverAccountRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}identifier\0\u{1}challenge\0\u{3}recovery_signature\0\u{3}new_device\0\u{c}\u{5}\u{6}")
 
@@ -3269,7 +3273,7 @@ extension Shared_Proto_Services_V1_RecoverAccountRequest: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_NewDeviceForRecovery: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_NewDeviceForRecovery: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".NewDeviceForRecovery"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}public_keys\0\u{3}device_name\0\u{1}platform\0")
 
@@ -3318,7 +3322,7 @@ extension Shared_Proto_Services_V1_NewDeviceForRecovery: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_RecoverAccountResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RecoverAccountResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RecoverAccountResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}user_id\0\u{1}tokens\0\u{3}devices_revoked\0\u{3}recovered_at\0\u{1}warnings\0\u{1}error\0")
 
@@ -3382,7 +3386,7 @@ extension Shared_Proto_Services_V1_RecoverAccountResponse: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_RecoveryError: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RecoveryError: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RecoveryError"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}code\0\u{1}message\0\u{1}retryable\0\u{3}cooldown_seconds\0")
 
@@ -3431,7 +3435,7 @@ extension Shared_Proto_Services_V1_RecoveryError: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-extension Shared_Proto_Services_V1_StoreRecoveryBundleRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_StoreRecoveryBundleRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".StoreRecoveryBundleRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}bundle_ciphertext\0")
 
@@ -3461,7 +3465,7 @@ extension Shared_Proto_Services_V1_StoreRecoveryBundleRequest: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_StoreRecoveryBundleResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_StoreRecoveryBundleResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".StoreRecoveryBundleResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -3491,7 +3495,7 @@ extension Shared_Proto_Services_V1_StoreRecoveryBundleResponse: SwiftProtobuf.Me
   }
 }
 
-extension Shared_Proto_Services_V1_GetRecoveryBundleRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetRecoveryBundleRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetRecoveryBundleRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}username\0")
 
@@ -3521,7 +3525,7 @@ extension Shared_Proto_Services_V1_GetRecoveryBundleRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_GetRecoveryBundleResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetRecoveryBundleResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetRecoveryBundleResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}bundle_ciphertext\0\u{3}bundle_exists\0")
 
@@ -3556,7 +3560,7 @@ extension Shared_Proto_Services_V1_GetRecoveryBundleResponse: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_GetSenderCertificateRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetSenderCertificateRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetSenderCertificateRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -3575,7 +3579,7 @@ extension Shared_Proto_Services_V1_GetSenderCertificateRequest: SwiftProtobuf.Me
   }
 }
 
-extension Shared_Proto_Services_V1_GetSenderCertificateResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetSenderCertificateResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetSenderCertificateResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}certificate\0\u{3}expires_at\0\u{3}token_encryption_key\0")
 
@@ -3615,7 +3619,7 @@ extension Shared_Proto_Services_V1_GetSenderCertificateResponse: SwiftProtobuf.M
   }
 }
 
-extension Shared_Proto_Services_V1_InitiateDeviceLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_InitiateDeviceLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InitiateDeviceLinkRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -3634,7 +3638,7 @@ extension Shared_Proto_Services_V1_InitiateDeviceLinkRequest: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_InitiateDeviceLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_InitiateDeviceLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InitiateDeviceLinkResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}link_token\0\u{3}expires_at\0")
 
@@ -3669,7 +3673,7 @@ extension Shared_Proto_Services_V1_InitiateDeviceLinkResponse: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_ConfirmDeviceLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ConfirmDeviceLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ConfirmDeviceLinkRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}link_token\0\u{3}device_id\0\u{3}public_keys\0")
 
@@ -3713,7 +3717,7 @@ extension Shared_Proto_Services_V1_ConfirmDeviceLinkRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_JoinRequestPayload: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_JoinRequestPayload: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".JoinRequestPayload"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}pending_device_id\0\u{3}identity_public_b64\0\u{3}verifying_key_b64\0\u{3}signed_prekey_public_b64\0\u{3}signed_prekey_signature_b64\0\u{3}device_name\0\u{1}platform\0\u{3}identity_public\0\u{3}verifying_key\0\u{3}signed_prekey_public\0\u{3}signed_prekey_signature\0")
 
@@ -3793,7 +3797,7 @@ extension Shared_Proto_Services_V1_JoinRequestPayload: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_JoinRequestAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_JoinRequestAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".JoinRequestAck"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}pending_device_id\0")
 
@@ -3823,7 +3827,7 @@ extension Shared_Proto_Services_V1_JoinRequestAck: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Services_V1_CheckJoinRequestStatusRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_CheckJoinRequestStatusRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CheckJoinRequestStatusRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}pending_device_id\0")
 
@@ -3853,7 +3857,7 @@ extension Shared_Proto_Services_V1_CheckJoinRequestStatusRequest: SwiftProtobuf.
   }
 }
 
-extension Shared_Proto_Services_V1_CheckJoinRequestStatusResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_CheckJoinRequestStatusResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CheckJoinRequestStatusResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}status\0\u{1}tokens\0")
 
@@ -3892,11 +3896,11 @@ extension Shared_Proto_Services_V1_CheckJoinRequestStatusResponse: SwiftProtobuf
   }
 }
 
-extension Shared_Proto_Services_V1_CheckJoinRequestStatusResponse.Status: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_CheckJoinRequestStatusResponse.Status: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0STATUS_PENDING\0\u{1}STATUS_APPROVED\0\u{1}STATUS_REJECTED\0\u{1}STATUS_EXPIRED\0")
 }
 
-extension Shared_Proto_Services_V1_ApproveJoinRequestRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ApproveJoinRequestRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ApproveJoinRequestRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}pending_device_id\0\u{3}crypto_suite\0")
 
@@ -3931,7 +3935,7 @@ extension Shared_Proto_Services_V1_ApproveJoinRequestRequest: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_IssueTokensRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_IssueTokensRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IssueTokensRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}blinded_points\0")
 
@@ -3961,7 +3965,7 @@ extension Shared_Proto_Services_V1_IssueTokensRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_IssueTokensResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_IssueTokensResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IssueTokensResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}evaluated_points\0\u{3}server_pubkey\0\u{3}dleq_proof\0\u{3}issuer_key_version\0")
 

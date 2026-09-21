@@ -29,7 +29,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "CreateGroup".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "CreateGroup"
+                method: "CreateGroup",
+                type: .unary
             )
         }
         /// Namespace for "GetGroupState" metadata.
@@ -41,7 +42,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "GetGroupState".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "GetGroupState"
+                method: "GetGroupState",
+                type: .unary
             )
         }
         /// Namespace for "DissolveGroup" metadata.
@@ -53,7 +55,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "DissolveGroup".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "DissolveGroup"
+                method: "DissolveGroup",
+                type: .unary
             )
         }
         /// Namespace for "InviteToGroup" metadata.
@@ -65,7 +68,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "InviteToGroup".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "InviteToGroup"
+                method: "InviteToGroup",
+                type: .unary
             )
         }
         /// Namespace for "AcceptGroupInvite" metadata.
@@ -77,7 +81,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "AcceptGroupInvite".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "AcceptGroupInvite"
+                method: "AcceptGroupInvite",
+                type: .unary
             )
         }
         /// Namespace for "DeclineGroupInvite" metadata.
@@ -89,7 +94,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "DeclineGroupInvite".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "DeclineGroupInvite"
+                method: "DeclineGroupInvite",
+                type: .unary
             )
         }
         /// Namespace for "GetPendingInvites" metadata.
@@ -101,7 +107,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "GetPendingInvites".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "GetPendingInvites"
+                method: "GetPendingInvites",
+                type: .unary
             )
         }
         /// Namespace for "LeaveGroup" metadata.
@@ -113,7 +120,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "LeaveGroup".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "LeaveGroup"
+                method: "LeaveGroup",
+                type: .unary
             )
         }
         /// Namespace for "RemoveMember" metadata.
@@ -125,7 +133,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "RemoveMember".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "RemoveMember"
+                method: "RemoveMember",
+                type: .unary
             )
         }
         /// Namespace for "DelegateAdmin" metadata.
@@ -137,7 +146,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "DelegateAdmin".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "DelegateAdmin"
+                method: "DelegateAdmin",
+                type: .unary
             )
         }
         /// Namespace for "TransferOwnership" metadata.
@@ -149,7 +159,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "TransferOwnership".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "TransferOwnership"
+                method: "TransferOwnership",
+                type: .unary
             )
         }
         /// Namespace for "SubmitCommit" metadata.
@@ -161,7 +172,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "SubmitCommit".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "SubmitCommit"
+                method: "SubmitCommit",
+                type: .unary
             )
         }
         /// Namespace for "FetchCommits" metadata.
@@ -173,7 +185,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "FetchCommits".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "FetchCommits"
+                method: "FetchCommits",
+                type: .serverStreaming
             )
         }
         /// Namespace for "SendGroupMessage" metadata.
@@ -185,7 +198,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "SendGroupMessage".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "SendGroupMessage"
+                method: "SendGroupMessage",
+                type: .unary
             )
         }
         /// Namespace for "FetchGroupMessages" metadata.
@@ -197,7 +211,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "FetchGroupMessages".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "FetchGroupMessages"
+                method: "FetchGroupMessages",
+                type: .serverStreaming
             )
         }
         /// Namespace for "MessageStream" metadata.
@@ -209,7 +224,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "MessageStream".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "MessageStream"
+                method: "MessageStream",
+                type: .bidirectionalStreaming
             )
         }
         /// Namespace for "CreateTopic" metadata.
@@ -221,7 +237,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "CreateTopic".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "CreateTopic"
+                method: "CreateTopic",
+                type: .unary
             )
         }
         /// Namespace for "ListTopics" metadata.
@@ -233,7 +250,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "ListTopics".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "ListTopics"
+                method: "ListTopics",
+                type: .unary
             )
         }
         /// Namespace for "ArchiveTopic" metadata.
@@ -245,7 +263,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "ArchiveTopic".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "ArchiveTopic"
+                method: "ArchiveTopic",
+                type: .unary
             )
         }
         /// Namespace for "CreateInviteLink" metadata.
@@ -257,7 +276,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "CreateInviteLink".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "CreateInviteLink"
+                method: "CreateInviteLink",
+                type: .unary
             )
         }
         /// Namespace for "RevokeInviteLink" metadata.
@@ -269,7 +289,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "RevokeInviteLink".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "RevokeInviteLink"
+                method: "RevokeInviteLink",
+                type: .unary
             )
         }
         /// Namespace for "ResolveInviteLink" metadata.
@@ -281,7 +302,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "ResolveInviteLink".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "ResolveInviteLink"
+                method: "ResolveInviteLink",
+                type: .unary
             )
         }
         /// Namespace for "PublishKeyPackage" metadata.
@@ -293,7 +315,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "PublishKeyPackage".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "PublishKeyPackage"
+                method: "PublishKeyPackage",
+                type: .unary
             )
         }
         /// Namespace for "ConsumeKeyPackage" metadata.
@@ -305,7 +328,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "ConsumeKeyPackage".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "ConsumeKeyPackage"
+                method: "ConsumeKeyPackage",
+                type: .unary
             )
         }
         /// Namespace for "GetKeyPackageCount" metadata.
@@ -317,7 +341,8 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
             /// Descriptor for "GetKeyPackageCount".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
-                method: "GetKeyPackageCount"
+                method: "GetKeyPackageCount",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.MLSService" service.

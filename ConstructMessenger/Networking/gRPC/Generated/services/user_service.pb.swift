@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,13 +20,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// PrivacyLevel - Privacy visibility level
-public enum Shared_Proto_Services_V1_PrivacyLevel: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Services_V1_PrivacyLevel: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unknown level (must be 0)
@@ -73,7 +77,7 @@ public enum Shared_Proto_Services_V1_PrivacyLevel: SwiftProtobuf.Enum, Swift.Cas
 }
 
 /// Action enum for responding to a contact request.
-public enum Shared_Proto_Services_V1_ContactRequestAction: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Services_V1_ContactRequestAction: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
 
@@ -122,7 +126,7 @@ public enum Shared_Proto_Services_V1_ContactRequestAction: SwiftProtobuf.Enum, S
 }
 
 /// Status of a sent contact request.
-public enum Shared_Proto_Services_V1_ContactRequestStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Services_V1_ContactRequestStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case pending // = 1
@@ -169,7 +173,7 @@ public enum Shared_Proto_Services_V1_ContactRequestStatus: SwiftProtobuf.Enum, S
 }
 
 /// UserProfile - User profile information
-public struct Shared_Proto_Services_V1_UserProfile: @unchecked Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UserProfile: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -290,7 +294,7 @@ public struct Shared_Proto_Services_V1_UserProfile: @unchecked Sendable {
 }
 
 /// PrivacySettings - User privacy preferences
-public struct Shared_Proto_Services_V1_PrivacySettings: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_PrivacySettings: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -322,7 +326,7 @@ public struct Shared_Proto_Services_V1_PrivacySettings: Sendable {
 }
 
 /// GetUserProfileRequest - Fetch user profile
-public struct Shared_Proto_Services_V1_GetUserProfileRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetUserProfileRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -336,7 +340,7 @@ public struct Shared_Proto_Services_V1_GetUserProfileRequest: Sendable {
 }
 
 /// GetUserProfileResponse - wraps the fetched profile
-public struct Shared_Proto_Services_V1_GetUserProfileResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetUserProfileResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -358,7 +362,7 @@ public struct Shared_Proto_Services_V1_GetUserProfileResponse: Sendable {
 }
 
 /// UpdateUserProfileResponse - wraps the updated profile
-public struct Shared_Proto_Services_V1_UpdateUserProfileResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UpdateUserProfileResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -380,7 +384,7 @@ public struct Shared_Proto_Services_V1_UpdateUserProfileResponse: Sendable {
 }
 
 /// UpdateUserProfileRequest - Update profile
-public struct Shared_Proto_Services_V1_UpdateUserProfileRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UpdateUserProfileRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -406,7 +410,7 @@ public struct Shared_Proto_Services_V1_UpdateUserProfileRequest: Sendable {
 }
 
 /// BlockUserRequest - Block user
-public struct Shared_Proto_Services_V1_BlockUserRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_BlockUserRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -435,7 +439,7 @@ public struct Shared_Proto_Services_V1_BlockUserRequest: Sendable {
 }
 
 /// BlockUserResponse - Block confirmation
-public struct Shared_Proto_Services_V1_BlockUserResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_BlockUserResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -452,7 +456,7 @@ public struct Shared_Proto_Services_V1_BlockUserResponse: Sendable {
 }
 
 /// UnblockUserRequest - Unblock user
-public struct Shared_Proto_Services_V1_UnblockUserRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UnblockUserRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -469,7 +473,7 @@ public struct Shared_Proto_Services_V1_UnblockUserRequest: Sendable {
 }
 
 /// UnblockUserResponse - Unblock confirmation
-public struct Shared_Proto_Services_V1_UnblockUserResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UnblockUserResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -483,7 +487,7 @@ public struct Shared_Proto_Services_V1_UnblockUserResponse: Sendable {
 }
 
 /// GetBlockedUsersRequest - List blocked users
-public struct Shared_Proto_Services_V1_GetBlockedUsersRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetBlockedUsersRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -509,7 +513,7 @@ public struct Shared_Proto_Services_V1_GetBlockedUsersRequest: Sendable {
 }
 
 /// GetBlockedUsersResponse - Blocked users list
-public struct Shared_Proto_Services_V1_GetBlockedUsersResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetBlockedUsersResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -541,7 +545,7 @@ public struct Shared_Proto_Services_V1_GetBlockedUsersResponse: Sendable {
 }
 
 /// BlockedUser - Blocked user entry
-public struct Shared_Proto_Services_V1_BlockedUser: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_BlockedUser: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -573,7 +577,7 @@ public struct Shared_Proto_Services_V1_BlockedUser: Sendable {
 }
 
 /// UpdateProfilePictureRequest - Upload profile picture
-public struct Shared_Proto_Services_V1_UpdateProfilePictureRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UpdateProfilePictureRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -590,7 +594,7 @@ public struct Shared_Proto_Services_V1_UpdateProfilePictureRequest: Sendable {
 }
 
 /// UpdateProfilePictureResponse - Upload confirmation
-public struct Shared_Proto_Services_V1_UpdateProfilePictureResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UpdateProfilePictureResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -607,7 +611,7 @@ public struct Shared_Proto_Services_V1_UpdateProfilePictureResponse: Sendable {
 }
 
 /// GetUserCapabilitiesRequest - Get user capabilities
-public struct Shared_Proto_Services_V1_GetUserCapabilitiesRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetUserCapabilitiesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -621,7 +625,7 @@ public struct Shared_Proto_Services_V1_GetUserCapabilitiesRequest: Sendable {
 }
 
 /// GetUserCapabilitiesResponse - User capabilities
-public struct Shared_Proto_Services_V1_GetUserCapabilitiesResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetUserCapabilitiesResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -650,7 +654,7 @@ public struct Shared_Proto_Services_V1_GetUserCapabilitiesResponse: Sendable {
 }
 
 /// DeviceCapability - Capability per device
-public struct Shared_Proto_Services_V1_DeviceCapability: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DeviceCapability: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -670,7 +674,7 @@ public struct Shared_Proto_Services_V1_DeviceCapability: Sendable {
 }
 
 /// Request to delete user account
-public struct Shared_Proto_Services_V1_DeleteAccountRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DeleteAccountRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -696,7 +700,7 @@ public struct Shared_Proto_Services_V1_DeleteAccountRequest: Sendable {
 }
 
 /// Response after account deletion
-public struct Shared_Proto_Services_V1_DeleteAccountResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DeleteAccountResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -725,7 +729,7 @@ public struct Shared_Proto_Services_V1_DeleteAccountResponse: Sendable {
 }
 
 /// Request to export user data
-public struct Shared_Proto_Services_V1_ExportUserDataRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ExportUserDataRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -759,7 +763,7 @@ public struct Shared_Proto_Services_V1_ExportUserDataRequest: Sendable {
 }
 
 /// Response with exported data
-public struct Shared_Proto_Services_V1_ExportUserDataResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ExportUserDataResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -780,7 +784,7 @@ public struct Shared_Proto_Services_V1_ExportUserDataResponse: Sendable {
 
 /// Request to check if username is available
 /// Note: No authentication required
-public struct Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -794,7 +798,7 @@ public struct Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest: Sendabl
 }
 
 /// Response indicating availability
-public struct Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -822,7 +826,7 @@ public struct Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse: Sendab
 /// Request to opt in or out of username-based discovery.
 /// Requires authentication (x-user-id set by Envoy auth interceptor).
 /// The user must have a username set (username_hash != NULL) to opt in.
-public struct Shared_Proto_Services_V1_SetDiscoverableRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SetDiscoverableRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -836,7 +840,7 @@ public struct Shared_Proto_Services_V1_SetDiscoverableRequest: Sendable {
 }
 
 /// Confirmation that the flag was updated.
-public struct Shared_Proto_Services_V1_SetDiscoverableResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SetDiscoverableResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -851,7 +855,7 @@ public struct Shared_Proto_Services_V1_SetDiscoverableResponse: Sendable {
 
 /// Request to find a user by exact username match.
 /// Requires authentication. Rate-limited per caller.
-public struct Shared_Proto_Services_V1_FindUserRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_FindUserRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -867,7 +871,7 @@ public struct Shared_Proto_Services_V1_FindUserRequest: Sendable {
 /// Response with the found user's ID.
 /// Returns NOT_FOUND status for both "no such user" and "user not discoverable"
 /// so the response is indistinguishable to the caller.
-public struct Shared_Proto_Services_V1_FindUserResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_FindUserResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -881,7 +885,7 @@ public struct Shared_Proto_Services_V1_FindUserResponse: Sendable {
 }
 
 /// A contact request as seen by the recipient.
-public struct Shared_Proto_Services_V1_IncomingContactRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_IncomingContactRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -908,7 +912,7 @@ public struct Shared_Proto_Services_V1_IncomingContactRequest: Sendable {
 
 /// A sent contact request as seen by the sender.
 /// Note: to_user_id is intentionally NOT included — sender sees only their own status.
-public struct Shared_Proto_Services_V1_SentContactRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SentContactRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -929,7 +933,7 @@ public struct Shared_Proto_Services_V1_SentContactRequest: Sendable {
 
 /// Sender identity snapshot captured at request time.
 /// Server validates username against caller's stored hash; display_name is self-asserted.
-public struct Shared_Proto_Services_V1_ContactIdentitySnapshot: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ContactIdentitySnapshot: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -946,7 +950,7 @@ public struct Shared_Proto_Services_V1_ContactIdentitySnapshot: Sendable {
 }
 
 /// SendContactRequest
-public struct Shared_Proto_Services_V1_SendContactRequestRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SendContactRequestRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -971,7 +975,7 @@ public struct Shared_Proto_Services_V1_SendContactRequestRequest: Sendable {
   fileprivate var _fromIdentity: Shared_Proto_Services_V1_ContactIdentitySnapshot? = nil
 }
 
-public struct Shared_Proto_Services_V1_SendContactRequestResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SendContactRequestResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -988,7 +992,7 @@ public struct Shared_Proto_Services_V1_SendContactRequestResponse: Sendable {
 }
 
 /// GetContactRequests
-public struct Shared_Proto_Services_V1_GetContactRequestsRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetContactRequestsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -998,7 +1002,7 @@ public struct Shared_Proto_Services_V1_GetContactRequestsRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GetContactRequestsResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetContactRequestsResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1015,7 +1019,7 @@ public struct Shared_Proto_Services_V1_GetContactRequestsResponse: Sendable {
 }
 
 /// RespondToContactRequest
-public struct Shared_Proto_Services_V1_RespondToContactRequestRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RespondToContactRequestRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1031,7 +1035,7 @@ public struct Shared_Proto_Services_V1_RespondToContactRequestRequest: Sendable 
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_RespondToContactRequestResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RespondToContactRequestResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1044,7 +1048,7 @@ public struct Shared_Proto_Services_V1_RespondToContactRequestResponse: Sendable
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_SetGroupInvitePolicyRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SetGroupInvitePolicyRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1058,7 +1062,7 @@ public struct Shared_Proto_Services_V1_SetGroupInvitePolicyRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_SetGroupInvitePolicyResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SetGroupInvitePolicyResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1073,21 +1077,21 @@ public struct Shared_Proto_Services_V1_SetGroupInvitePolicyResponse: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.services.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.services.v1"
 
-extension Shared_Proto_Services_V1_PrivacyLevel: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_PrivacyLevel: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PRIVACY_LEVEL_UNSPECIFIED\0\u{1}PRIVACY_LEVEL_EVERYONE\0\u{1}PRIVACY_LEVEL_CONTACTS\0\u{1}PRIVACY_LEVEL_NOBODY\0")
 }
 
-extension Shared_Proto_Services_V1_ContactRequestAction: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ContactRequestAction: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTACT_REQUEST_ACTION_UNSPECIFIED\0\u{1}CONTACT_REQUEST_ACTION_ACCEPT\0\u{1}CONTACT_REQUEST_ACTION_DECLINE_BLOCK\0\u{1}CONTACT_REQUEST_ACTION_SPAM_BLOCK\0")
 }
 
-extension Shared_Proto_Services_V1_ContactRequestStatus: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ContactRequestStatus: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTACT_REQUEST_STATUS_UNSPECIFIED\0\u{1}CONTACT_REQUEST_STATUS_PENDING\0\u{1}CONTACT_REQUEST_STATUS_ACCEPTED\0\u{1}CONTACT_REQUEST_STATUS_DECLINED_BLOCKED\0\u{1}CONTACT_REQUEST_STATUS_SPAM_BLOCKED\0")
 }
 
-extension Shared_Proto_Services_V1_UserProfile: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UserProfile: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UserProfile"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{1}username\0\u{3}display_name\0\u{1}bio\0\u{3}profile_picture_url\0\u{1}email\0\u{1}phone\0\u{3}created_at\0\u{3}last_seen\0\u{3}public_key_fingerprint\0\u{1}privacy\0\u{1}verified\0\u{c}\u{d}&")
 
@@ -1234,7 +1238,7 @@ extension Shared_Proto_Services_V1_UserProfile: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-extension Shared_Proto_Services_V1_PrivacySettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_PrivacySettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PrivacySettings"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}last_seen_visibility\0\u{3}profile_picture_visibility\0\u{3}bio_visibility\0\u{3}message_visibility\0\u{3}call_visibility\0\u{3}read_receipts_enabled\0\u{3}typing_indicators_enabled\0\u{c}\u{8}\u{8}")
 
@@ -1294,7 +1298,7 @@ extension Shared_Proto_Services_V1_PrivacySettings: SwiftProtobuf.Message, Swift
   }
 }
 
-extension Shared_Proto_Services_V1_GetUserProfileRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetUserProfileRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetUserProfileRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0")
 
@@ -1324,7 +1328,7 @@ extension Shared_Proto_Services_V1_GetUserProfileRequest: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_GetUserProfileResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetUserProfileResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetUserProfileResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}profile\0")
 
@@ -1358,7 +1362,7 @@ extension Shared_Proto_Services_V1_GetUserProfileResponse: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_UpdateUserProfileResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UpdateUserProfileResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UpdateUserProfileResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}profile\0")
 
@@ -1392,7 +1396,7 @@ extension Shared_Proto_Services_V1_UpdateUserProfileResponse: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_UpdateUserProfileRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UpdateUserProfileRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UpdateUserProfileRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{1}username\0\u{c}\u{3}\u{8}")
 
@@ -1431,7 +1435,7 @@ extension Shared_Proto_Services_V1_UpdateUserProfileRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_BlockUserRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_BlockUserRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BlockUserRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}blocker_user_id\0\u{3}user_id\0\u{1}reason\0")
 
@@ -1475,7 +1479,7 @@ extension Shared_Proto_Services_V1_BlockUserRequest: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Services_V1_BlockUserResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_BlockUserResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BlockUserResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}blocked_at\0")
 
@@ -1510,7 +1514,7 @@ extension Shared_Proto_Services_V1_BlockUserResponse: SwiftProtobuf.Message, Swi
   }
 }
 
-extension Shared_Proto_Services_V1_UnblockUserRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UnblockUserRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UnblockUserRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}blocker_user_id\0\u{3}user_id\0")
 
@@ -1545,7 +1549,7 @@ extension Shared_Proto_Services_V1_UnblockUserRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_UnblockUserResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UnblockUserResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UnblockUserResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -1575,7 +1579,7 @@ extension Shared_Proto_Services_V1_UnblockUserResponse: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_GetBlockedUsersRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetBlockedUsersRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetBlockedUsersRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{1}page\0")
 
@@ -1614,7 +1618,7 @@ extension Shared_Proto_Services_V1_GetBlockedUsersRequest: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_GetBlockedUsersResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetBlockedUsersResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetBlockedUsersResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}blocked_users\0\u{3}total_count\0\u{3}next_cursor\0\u{3}has_more\0")
 
@@ -1663,7 +1667,7 @@ extension Shared_Proto_Services_V1_GetBlockedUsersResponse: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Services_V1_BlockedUser: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_BlockedUser: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BlockedUser"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{1}username\0\u{3}blocked_at\0\u{1}reason\0")
 
@@ -1712,7 +1716,7 @@ extension Shared_Proto_Services_V1_BlockedUser: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-extension Shared_Proto_Services_V1_UpdateProfilePictureRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UpdateProfilePictureRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UpdateProfilePictureRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}image_data\0\u{3}mime_type\0")
 
@@ -1747,7 +1751,7 @@ extension Shared_Proto_Services_V1_UpdateProfilePictureRequest: SwiftProtobuf.Me
   }
 }
 
-extension Shared_Proto_Services_V1_UpdateProfilePictureResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UpdateProfilePictureResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UpdateProfilePictureResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}profile_picture_url\0")
 
@@ -1782,7 +1786,7 @@ extension Shared_Proto_Services_V1_UpdateProfilePictureResponse: SwiftProtobuf.M
   }
 }
 
-extension Shared_Proto_Services_V1_GetUserCapabilitiesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetUserCapabilitiesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetUserCapabilitiesRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0")
 
@@ -1812,7 +1816,7 @@ extension Shared_Proto_Services_V1_GetUserCapabilitiesRequest: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_GetUserCapabilitiesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetUserCapabilitiesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetUserCapabilitiesResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}crypto_suites\0\u{3}supports_webrtc\0\u{3}supports_mls\0\u{3}supports_pq\0\u{3}device_capabilities\0\u{c}\u{7}\u{9}")
 
@@ -1867,7 +1871,7 @@ extension Shared_Proto_Services_V1_GetUserCapabilitiesResponse: SwiftProtobuf.Me
   }
 }
 
-extension Shared_Proto_Services_V1_DeviceCapability: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DeviceCapability: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeviceCapability"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}platform\0\u{1}capabilities\0")
 
@@ -1907,7 +1911,7 @@ extension Shared_Proto_Services_V1_DeviceCapability: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Services_V1_DeleteAccountRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DeleteAccountRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeleteAccountRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}confirmation\0\u{1}reason\0")
 
@@ -1946,7 +1950,7 @@ extension Shared_Proto_Services_V1_DeleteAccountRequest: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_DeleteAccountResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DeleteAccountResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeleteAccountResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{1}message\0\u{3}scheduled_deletion_at\0")
 
@@ -1990,7 +1994,7 @@ extension Shared_Proto_Services_V1_DeleteAccountResponse: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_ExportUserDataRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ExportUserDataRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ExportUserDataRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}format\0\u{3}include_messages\0")
 
@@ -2029,7 +2033,7 @@ extension Shared_Proto_Services_V1_ExportUserDataRequest: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_ExportUserDataResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ExportUserDataResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ExportUserDataResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}data\0\u{1}format\0\u{3}exported_at\0")
 
@@ -2069,7 +2073,7 @@ extension Shared_Proto_Services_V1_ExportUserDataResponse: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CheckUsernameAvailabilityRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}username\0")
 
@@ -2099,7 +2103,7 @@ extension Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest: SwiftProtob
   }
 }
 
-extension Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CheckUsernameAvailabilityResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}available\0\u{1}reason\0")
 
@@ -2138,7 +2142,7 @@ extension Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse: SwiftProto
   }
 }
 
-extension Shared_Proto_Services_V1_SetDiscoverableRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SetDiscoverableRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetDiscoverableRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}discoverable\0")
 
@@ -2168,7 +2172,7 @@ extension Shared_Proto_Services_V1_SetDiscoverableRequest: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_SetDiscoverableResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SetDiscoverableResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetDiscoverableResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}discoverable\0")
 
@@ -2198,7 +2202,7 @@ extension Shared_Proto_Services_V1_SetDiscoverableResponse: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Services_V1_FindUserRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_FindUserRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FindUserRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}username\0")
 
@@ -2228,7 +2232,7 @@ extension Shared_Proto_Services_V1_FindUserRequest: SwiftProtobuf.Message, Swift
   }
 }
 
-extension Shared_Proto_Services_V1_FindUserResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_FindUserResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FindUserResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0")
 
@@ -2258,7 +2262,7 @@ extension Shared_Proto_Services_V1_FindUserResponse: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Services_V1_IncomingContactRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_IncomingContactRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IncomingContactRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}request_id\0\u{3}from_user_id\0\u{3}from_display_name\0\u{3}from_username\0\u{3}created_at\0")
 
@@ -2308,7 +2312,7 @@ extension Shared_Proto_Services_V1_IncomingContactRequest: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_SentContactRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SentContactRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SentContactRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}request_id\0\u{1}status\0\u{3}created_at\0")
 
@@ -2348,7 +2352,7 @@ extension Shared_Proto_Services_V1_SentContactRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_ContactIdentitySnapshot: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ContactIdentitySnapshot: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ContactIdentitySnapshot"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}username\0\u{3}display_name\0")
 
@@ -2383,7 +2387,7 @@ extension Shared_Proto_Services_V1_ContactIdentitySnapshot: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Services_V1_SendContactRequestRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SendContactRequestRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendContactRequestRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}to_user_id\0\u{3}from_identity\0")
 
@@ -2422,7 +2426,7 @@ extension Shared_Proto_Services_V1_SendContactRequestRequest: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_SendContactRequestResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SendContactRequestResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendContactRequestResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}request_id\0\u{1}status\0")
 
@@ -2457,7 +2461,7 @@ extension Shared_Proto_Services_V1_SendContactRequestResponse: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_GetContactRequestsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetContactRequestsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetContactRequestsRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -2476,7 +2480,7 @@ extension Shared_Proto_Services_V1_GetContactRequestsRequest: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_GetContactRequestsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetContactRequestsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetContactRequestsResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}incoming\0\u{1}sent\0")
 
@@ -2511,7 +2515,7 @@ extension Shared_Proto_Services_V1_GetContactRequestsResponse: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_RespondToContactRequestRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RespondToContactRequestRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RespondToContactRequestRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}request_id\0\u{1}action\0")
 
@@ -2546,7 +2550,7 @@ extension Shared_Proto_Services_V1_RespondToContactRequestRequest: SwiftProtobuf
   }
 }
 
-extension Shared_Proto_Services_V1_RespondToContactRequestResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RespondToContactRequestResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RespondToContactRequestResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}status\0")
 
@@ -2576,7 +2580,7 @@ extension Shared_Proto_Services_V1_RespondToContactRequestResponse: SwiftProtobu
   }
 }
 
-extension Shared_Proto_Services_V1_SetGroupInvitePolicyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SetGroupInvitePolicyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetGroupInvitePolicyRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}allow_contact_invites\0")
 
@@ -2606,7 +2610,7 @@ extension Shared_Proto_Services_V1_SetGroupInvitePolicyRequest: SwiftProtobuf.Me
   }
 }
 
-extension Shared_Proto_Services_V1_SetGroupInvitePolicyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SetGroupInvitePolicyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetGroupInvitePolicyResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}allow_contact_invites\0")
 

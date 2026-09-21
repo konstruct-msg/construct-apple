@@ -15,12 +15,12 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
-public enum Shared_Proto_Sentinel_V1_TrustLevel: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Sentinel_V1_TrustLevel: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
 
@@ -86,7 +86,7 @@ public enum Shared_Proto_Sentinel_V1_TrustLevel: SwiftProtobuf.Enum, Swift.CaseI
 
 }
 
-public enum Shared_Proto_Sentinel_V1_SpamCategory: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Sentinel_V1_SpamCategory: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
 
@@ -146,7 +146,7 @@ public enum Shared_Proto_Sentinel_V1_SpamCategory: SwiftProtobuf.Enum, Swift.Cas
 
 }
 
-public enum Shared_Proto_Sentinel_V1_RestrictionType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Sentinel_V1_RestrictionType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
 
@@ -194,7 +194,7 @@ public enum Shared_Proto_Sentinel_V1_RestrictionType: SwiftProtobuf.Enum, Swift.
 
 }
 
-public struct Shared_Proto_Sentinel_V1_ReportSpamRequest: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_ReportSpamRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -210,7 +210,7 @@ public struct Shared_Proto_Sentinel_V1_ReportSpamRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_ReportSpamResponse: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_ReportSpamResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -226,7 +226,7 @@ public struct Shared_Proto_Sentinel_V1_ReportSpamResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_BlockDeviceRequest: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_BlockDeviceRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -239,7 +239,7 @@ public struct Shared_Proto_Sentinel_V1_BlockDeviceRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_BlockDeviceResponse: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_BlockDeviceResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -251,7 +251,7 @@ public struct Shared_Proto_Sentinel_V1_BlockDeviceResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_UnblockDeviceRequest: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_UnblockDeviceRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -263,7 +263,7 @@ public struct Shared_Proto_Sentinel_V1_UnblockDeviceRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_UnblockDeviceResponse: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_UnblockDeviceResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -275,7 +275,7 @@ public struct Shared_Proto_Sentinel_V1_UnblockDeviceResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_GetBlockedDevicesRequest: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_GetBlockedDevicesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -289,7 +289,7 @@ public struct Shared_Proto_Sentinel_V1_GetBlockedDevicesRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_GetBlockedDevicesResponse: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_GetBlockedDevicesResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -304,7 +304,7 @@ public struct Shared_Proto_Sentinel_V1_GetBlockedDevicesResponse: Sendable {
 }
 
 /// Caller identity comes from auth token — no explicit field needed.
-public struct Shared_Proto_Sentinel_V1_GetTrustStatusRequest: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_GetTrustStatusRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -314,7 +314,7 @@ public struct Shared_Proto_Sentinel_V1_GetTrustStatusRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_GetTrustStatusResponse: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_GetTrustStatusResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -355,7 +355,7 @@ public struct Shared_Proto_Sentinel_V1_GetTrustStatusResponse: Sendable {
   fileprivate var _restrictionReason: String? = nil
 }
 
-public struct Shared_Proto_Sentinel_V1_CheckSendPermissionRequest: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_CheckSendPermissionRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -371,7 +371,7 @@ public struct Shared_Proto_Sentinel_V1_CheckSendPermissionRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_CheckSendPermissionResponse: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_CheckSendPermissionResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -390,7 +390,7 @@ public struct Shared_Proto_Sentinel_V1_CheckSendPermissionResponse: Sendable {
 }
 
 /// Admin-authenticated requests only. No filters needed for MVP.
-public struct Shared_Proto_Sentinel_V1_GetProtectionStatsRequest: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_GetProtectionStatsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -400,7 +400,7 @@ public struct Shared_Proto_Sentinel_V1_GetProtectionStatsRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_GetProtectionStatsResponse: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_GetProtectionStatsResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -421,7 +421,7 @@ public struct Shared_Proto_Sentinel_V1_GetProtectionStatsResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_AdminBanDeviceRequest: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_AdminBanDeviceRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -439,7 +439,7 @@ public struct Shared_Proto_Sentinel_V1_AdminBanDeviceRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_AdminBanDeviceResponse: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_AdminBanDeviceResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -451,7 +451,7 @@ public struct Shared_Proto_Sentinel_V1_AdminBanDeviceResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -463,7 +463,7 @@ public struct Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -475,7 +475,7 @@ public struct Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_AdminClearFlagRequest: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_AdminClearFlagRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -487,7 +487,7 @@ public struct Shared_Proto_Sentinel_V1_AdminClearFlagRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Sentinel_V1_AdminClearFlagResponse: Sendable {
+public nonisolated struct Shared_Proto_Sentinel_V1_AdminClearFlagResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -501,21 +501,21 @@ public struct Shared_Proto_Sentinel_V1_AdminClearFlagResponse: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.sentinel.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.sentinel.v1"
 
-extension Shared_Proto_Sentinel_V1_TrustLevel: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_TrustLevel: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0TRUST_LEVEL_UNSPECIFIED\0\u{1}TRUST_LEVEL_NEW\0\u{1}TRUST_LEVEL_WARMING\0\u{1}TRUST_LEVEL_TRUSTED\0\u{1}TRUST_LEVEL_VERIFIED\0\u{1}TRUST_LEVEL_FLAGGED\0\u{1}TRUST_LEVEL_BANNED\0")
 }
 
-extension Shared_Proto_Sentinel_V1_SpamCategory: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_SpamCategory: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SPAM_CATEGORY_UNSPECIFIED\0\u{1}SPAM_CATEGORY_UNWANTED\0\u{1}SPAM_CATEGORY_HARASSMENT\0\u{1}SPAM_CATEGORY_SCAM\0\u{1}SPAM_CATEGORY_BOT_SUSPECTED\0\u{1}SPAM_CATEGORY_IMPERSONATION\0")
 }
 
-extension Shared_Proto_Sentinel_V1_RestrictionType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_RestrictionType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RESTRICTION_TYPE_UNSPECIFIED\0\u{1}RESTRICTION_TYPE_RATE_LIMITED\0\u{1}RESTRICTION_TYPE_FLAGGED\0\u{1}RESTRICTION_TYPE_BANNED\0")
 }
 
-extension Shared_Proto_Sentinel_V1_ReportSpamRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_ReportSpamRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ReportSpamRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}reported_device_id\0\u{1}category\0")
 
@@ -550,7 +550,7 @@ extension Shared_Proto_Sentinel_V1_ReportSpamRequest: SwiftProtobuf.Message, Swi
   }
 }
 
-extension Shared_Proto_Sentinel_V1_ReportSpamResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_ReportSpamResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ReportSpamResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}accepted\0\u{3}report_id\0")
 
@@ -585,7 +585,7 @@ extension Shared_Proto_Sentinel_V1_ReportSpamResponse: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Sentinel_V1_BlockDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_BlockDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BlockDeviceRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0")
 
@@ -615,7 +615,7 @@ extension Shared_Proto_Sentinel_V1_BlockDeviceRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Sentinel_V1_BlockDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_BlockDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BlockDeviceResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -645,7 +645,7 @@ extension Shared_Proto_Sentinel_V1_BlockDeviceResponse: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Sentinel_V1_UnblockDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_UnblockDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UnblockDeviceRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0")
 
@@ -675,7 +675,7 @@ extension Shared_Proto_Sentinel_V1_UnblockDeviceRequest: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Sentinel_V1_UnblockDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_UnblockDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UnblockDeviceResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -705,7 +705,7 @@ extension Shared_Proto_Sentinel_V1_UnblockDeviceResponse: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Sentinel_V1_GetBlockedDevicesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_GetBlockedDevicesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetBlockedDevicesRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}page\0\u{3}page_size\0")
 
@@ -740,7 +740,7 @@ extension Shared_Proto_Sentinel_V1_GetBlockedDevicesRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Sentinel_V1_GetBlockedDevicesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_GetBlockedDevicesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetBlockedDevicesResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_ids\0\u{3}has_more\0")
 
@@ -775,7 +775,7 @@ extension Shared_Proto_Sentinel_V1_GetBlockedDevicesResponse: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Sentinel_V1_GetTrustStatusRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_GetTrustStatusRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetTrustStatusRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -794,7 +794,7 @@ extension Shared_Proto_Sentinel_V1_GetTrustStatusRequest: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Sentinel_V1_GetTrustStatusResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_GetTrustStatusResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetTrustStatusResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}trust_level\0\u{3}messages_remaining_hour\0\u{3}new_recipients_remaining_day\0\u{3}group_messages_remaining_day\0\u{3}restriction_expires_at\0\u{3}restriction_reason\0")
 
@@ -853,7 +853,7 @@ extension Shared_Proto_Sentinel_V1_GetTrustStatusResponse: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Sentinel_V1_CheckSendPermissionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_CheckSendPermissionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CheckSendPermissionRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}target_device_id\0\u{3}sender_user_id\0")
 
@@ -888,7 +888,7 @@ extension Shared_Proto_Sentinel_V1_CheckSendPermissionRequest: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Sentinel_V1_CheckSendPermissionResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_CheckSendPermissionResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CheckSendPermissionResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}allowed\0\u{3}denial_reason\0\u{3}retry_after_seconds\0")
 
@@ -928,7 +928,7 @@ extension Shared_Proto_Sentinel_V1_CheckSendPermissionResponse: SwiftProtobuf.Me
   }
 }
 
-extension Shared_Proto_Sentinel_V1_GetProtectionStatsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_GetProtectionStatsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetProtectionStatsRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -947,7 +947,7 @@ extension Shared_Proto_Sentinel_V1_GetProtectionStatsRequest: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Sentinel_V1_GetProtectionStatsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_GetProtectionStatsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetProtectionStatsResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}spam_reports_24h\0\u{3}devices_flagged_24h\0\u{3}devices_banned_7d\0\u{3}rate_limit_violations_24h\0\u{3}blocks_created_24h\0")
 
@@ -997,7 +997,7 @@ extension Shared_Proto_Sentinel_V1_GetProtectionStatsResponse: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Sentinel_V1_AdminBanDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_AdminBanDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AdminBanDeviceRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}reason\0\u{3}duration_seconds\0")
 
@@ -1037,7 +1037,7 @@ extension Shared_Proto_Sentinel_V1_AdminBanDeviceRequest: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Sentinel_V1_AdminBanDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_AdminBanDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AdminBanDeviceResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -1067,7 +1067,7 @@ extension Shared_Proto_Sentinel_V1_AdminBanDeviceResponse: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AdminUnbanDeviceRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0")
 
@@ -1097,7 +1097,7 @@ extension Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AdminUnbanDeviceResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -1127,7 +1127,7 @@ extension Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Sentinel_V1_AdminClearFlagRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_AdminClearFlagRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AdminClearFlagRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0")
 
@@ -1157,7 +1157,7 @@ extension Shared_Proto_Sentinel_V1_AdminClearFlagRequest: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Sentinel_V1_AdminClearFlagResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Sentinel_V1_AdminClearFlagResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AdminClearFlagResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 

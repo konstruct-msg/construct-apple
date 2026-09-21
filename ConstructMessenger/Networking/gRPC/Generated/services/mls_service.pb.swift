@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,12 +20,12 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
-public enum Shared_Proto_Services_V1_AdminRole: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Services_V1_AdminRole: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
 
@@ -63,7 +67,7 @@ public enum Shared_Proto_Services_V1_AdminRole: SwiftProtobuf.Enum, Swift.CaseIt
 
 }
 
-public enum Shared_Proto_Services_V1_GroupErrorCode: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Services_V1_GroupErrorCode: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
 
@@ -141,7 +145,7 @@ public enum Shared_Proto_Services_V1_GroupErrorCode: SwiftProtobuf.Enum, Swift.C
 
 }
 
-public struct Shared_Proto_Services_V1_CreateGroupRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_CreateGroupRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -171,7 +175,7 @@ public struct Shared_Proto_Services_V1_CreateGroupRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_CreateGroupResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_CreateGroupResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -188,7 +192,7 @@ public struct Shared_Proto_Services_V1_CreateGroupResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GetGroupStateRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetGroupStateRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -212,7 +216,7 @@ public struct Shared_Proto_Services_V1_GetGroupStateRequest: Sendable {
   fileprivate var _knownEpoch: UInt64? = nil
 }
 
-public struct Shared_Proto_Services_V1_GetGroupStateResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetGroupStateResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -249,7 +253,7 @@ public struct Shared_Proto_Services_V1_GetGroupStateResponse: Sendable {
   fileprivate var _settings: Shared_Proto_Services_V1_GroupSettings? = nil
 }
 
-public struct Shared_Proto_Services_V1_GroupSettings: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GroupSettings: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -273,7 +277,7 @@ public struct Shared_Proto_Services_V1_GroupSettings: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_DissolveGroupRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DissolveGroupRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -290,7 +294,7 @@ public struct Shared_Proto_Services_V1_DissolveGroupRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_DissolveGroupResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DissolveGroupResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -304,7 +308,7 @@ public struct Shared_Proto_Services_V1_DissolveGroupResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_InviteToGroupRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_InviteToGroupRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -328,7 +332,7 @@ public struct Shared_Proto_Services_V1_InviteToGroupRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_InviteToGroupResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_InviteToGroupResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -343,7 +347,7 @@ public struct Shared_Proto_Services_V1_InviteToGroupResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_AcceptGroupInviteRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_AcceptGroupInviteRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -371,7 +375,7 @@ public struct Shared_Proto_Services_V1_AcceptGroupInviteRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_AcceptGroupInviteResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_AcceptGroupInviteResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -388,7 +392,7 @@ public struct Shared_Proto_Services_V1_AcceptGroupInviteResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_DeclineGroupInviteRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DeclineGroupInviteRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -402,7 +406,7 @@ public struct Shared_Proto_Services_V1_DeclineGroupInviteRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_DeclineGroupInviteResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DeclineGroupInviteResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -414,7 +418,7 @@ public struct Shared_Proto_Services_V1_DeclineGroupInviteResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GetPendingInvitesRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetPendingInvitesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -439,7 +443,7 @@ public struct Shared_Proto_Services_V1_GetPendingInvitesRequest: Sendable {
   fileprivate var _cursor: String? = nil
 }
 
-public struct Shared_Proto_Services_V1_GetPendingInvitesResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetPendingInvitesResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -462,7 +466,7 @@ public struct Shared_Proto_Services_V1_GetPendingInvitesResponse: Sendable {
   fileprivate var _nextCursor: String? = nil
 }
 
-public struct Shared_Proto_Services_V1_PendingGroupInvite: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_PendingGroupInvite: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -483,7 +487,7 @@ public struct Shared_Proto_Services_V1_PendingGroupInvite: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_LeaveGroupRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_LeaveGroupRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -498,7 +502,7 @@ public struct Shared_Proto_Services_V1_LeaveGroupRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_LeaveGroupResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_LeaveGroupResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -512,7 +516,7 @@ public struct Shared_Proto_Services_V1_LeaveGroupResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_RemoveMemberRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RemoveMemberRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -547,7 +551,7 @@ public struct Shared_Proto_Services_V1_RemoveMemberRequest: Sendable {
   fileprivate var _encryptedReason: Data? = nil
 }
 
-public struct Shared_Proto_Services_V1_RemoveMemberResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RemoveMemberResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -563,7 +567,7 @@ public struct Shared_Proto_Services_V1_RemoveMemberResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_DelegateAdminRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DelegateAdminRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -588,7 +592,7 @@ public struct Shared_Proto_Services_V1_DelegateAdminRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_DelegateAdminResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DelegateAdminResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -602,7 +606,7 @@ public struct Shared_Proto_Services_V1_DelegateAdminResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_TransferOwnershipRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_TransferOwnershipRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -630,7 +634,7 @@ public struct Shared_Proto_Services_V1_TransferOwnershipRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_TransferOwnershipResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_TransferOwnershipResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -644,7 +648,7 @@ public struct Shared_Proto_Services_V1_TransferOwnershipResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_SubmitCommitRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SubmitCommitRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -668,7 +672,7 @@ public struct Shared_Proto_Services_V1_SubmitCommitRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_WelcomeDelivery: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_WelcomeDelivery: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -684,7 +688,7 @@ public struct Shared_Proto_Services_V1_WelcomeDelivery: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_SubmitCommitResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SubmitCommitResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -700,7 +704,7 @@ public struct Shared_Proto_Services_V1_SubmitCommitResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_FetchCommitsRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_FetchCommitsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -714,7 +718,7 @@ public struct Shared_Proto_Services_V1_FetchCommitsRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_CommitEnvelope: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_CommitEnvelope: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -749,7 +753,7 @@ public struct Shared_Proto_Services_V1_CommitEnvelope: Sendable {
   fileprivate var _mlsWelcome: Data? = nil
 }
 
-public struct Shared_Proto_Services_V1_SendGroupMessageRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SendGroupMessageRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -795,7 +799,7 @@ public struct Shared_Proto_Services_V1_SendGroupMessageRequest: Sendable {
   fileprivate var _topicID: String? = nil
 }
 
-public struct Shared_Proto_Services_V1_SendGroupMessageResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SendGroupMessageResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -816,7 +820,7 @@ public struct Shared_Proto_Services_V1_SendGroupMessageResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_FetchGroupMessagesRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_FetchGroupMessagesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -864,7 +868,7 @@ public struct Shared_Proto_Services_V1_FetchGroupMessagesRequest: Sendable {
   fileprivate var _topicID: String? = nil
 }
 
-public struct Shared_Proto_Services_V1_GroupMessageEnvelope: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GroupMessageEnvelope: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -914,7 +918,7 @@ public struct Shared_Proto_Services_V1_GroupMessageEnvelope: Sendable {
   fileprivate var _topicID: String? = nil
 }
 
-public struct Shared_Proto_Services_V1_GroupStreamRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GroupStreamRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -949,7 +953,7 @@ public struct Shared_Proto_Services_V1_GroupStreamRequest: Sendable {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public enum OneOf_Request: Equatable, Sendable {
+  public nonisolated enum OneOf_Request: Equatable, Sendable {
     case subscribe(Shared_Proto_Services_V1_GroupSubscribeRequest)
     case send(Shared_Proto_Services_V1_SendGroupMessageRequest)
     case heartbeat(Shared_Proto_Services_V1_GroupHeartbeat)
@@ -959,7 +963,7 @@ public struct Shared_Proto_Services_V1_GroupStreamRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1039,7 +1043,7 @@ public struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public enum OneOf_Response: Equatable, Sendable {
+  public nonisolated enum OneOf_Response: Equatable, Sendable {
     /// Incoming group message
     case message(Shared_Proto_Services_V1_GroupMessageEnvelope)
     /// New MLS commit (membership or key change)
@@ -1061,7 +1065,7 @@ public struct Shared_Proto_Services_V1_GroupStreamResponse: Sendable {
   fileprivate var _responseID: String? = nil
 }
 
-public struct Shared_Proto_Services_V1_GroupSubscribeRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GroupSubscribeRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1073,7 +1077,7 @@ public struct Shared_Proto_Services_V1_GroupSubscribeRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GroupHeartbeat: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GroupHeartbeat: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1085,7 +1089,7 @@ public struct Shared_Proto_Services_V1_GroupHeartbeat: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GroupHeartbeatAck: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GroupHeartbeatAck: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1099,7 +1103,7 @@ public struct Shared_Proto_Services_V1_GroupHeartbeatAck: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GroupMessageAck: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GroupMessageAck: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1117,7 +1121,7 @@ public struct Shared_Proto_Services_V1_GroupMessageAck: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GroupStreamError: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GroupStreamError: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1135,7 +1139,7 @@ public struct Shared_Proto_Services_V1_GroupStreamError: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GroupDissolvedNotice: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GroupDissolvedNotice: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1149,7 +1153,7 @@ public struct Shared_Proto_Services_V1_GroupDissolvedNotice: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_PublishKeyPackageRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_PublishKeyPackageRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1165,7 +1169,7 @@ public struct Shared_Proto_Services_V1_PublishKeyPackageRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_PublishKeyPackageResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_PublishKeyPackageResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1180,7 +1184,7 @@ public struct Shared_Proto_Services_V1_PublishKeyPackageResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_ConsumeKeyPackageRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ConsumeKeyPackageRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1205,7 +1209,7 @@ public struct Shared_Proto_Services_V1_ConsumeKeyPackageRequest: Sendable {
   fileprivate var _preferredDeviceID: String? = nil
 }
 
-public struct Shared_Proto_Services_V1_ConsumeKeyPackageResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ConsumeKeyPackageResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1224,7 +1228,7 @@ public struct Shared_Proto_Services_V1_ConsumeKeyPackageResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_GetKeyPackageCountRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetKeyPackageCountRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1247,7 +1251,7 @@ public struct Shared_Proto_Services_V1_GetKeyPackageCountRequest: Sendable {
   fileprivate var _deviceID: String? = nil
 }
 
-public struct Shared_Proto_Services_V1_GetKeyPackageCountResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetKeyPackageCountResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1268,7 +1272,7 @@ public struct Shared_Proto_Services_V1_GetKeyPackageCountResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_CreateTopicRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_CreateTopicRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1292,7 +1296,7 @@ public struct Shared_Proto_Services_V1_CreateTopicRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_CreateTopicResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_CreateTopicResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1306,7 +1310,7 @@ public struct Shared_Proto_Services_V1_CreateTopicResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_ListTopicsRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ListTopicsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1321,7 +1325,7 @@ public struct Shared_Proto_Services_V1_ListTopicsRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_ListTopicsResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ListTopicsResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1333,7 +1337,7 @@ public struct Shared_Proto_Services_V1_ListTopicsResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_TopicInfo: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_TopicInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1366,7 +1370,7 @@ public struct Shared_Proto_Services_V1_TopicInfo: Sendable {
   fileprivate var _archivedAt: Int64? = nil
 }
 
-public struct Shared_Proto_Services_V1_ArchiveTopicRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ArchiveTopicRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1385,7 +1389,7 @@ public struct Shared_Proto_Services_V1_ArchiveTopicRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_ArchiveTopicResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ArchiveTopicResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1399,7 +1403,7 @@ public struct Shared_Proto_Services_V1_ArchiveTopicResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_CreateInviteLinkRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_CreateInviteLinkRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1422,7 +1426,7 @@ public struct Shared_Proto_Services_V1_CreateInviteLinkRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_CreateInviteLinkResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_CreateInviteLinkResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1449,7 +1453,7 @@ public struct Shared_Proto_Services_V1_CreateInviteLinkResponse: Sendable {
   fileprivate var _expiresAt: Int64? = nil
 }
 
-public struct Shared_Proto_Services_V1_RevokeInviteLinkRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RevokeInviteLinkRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1468,7 +1472,7 @@ public struct Shared_Proto_Services_V1_RevokeInviteLinkRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_RevokeInviteLinkResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RevokeInviteLinkResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1482,7 +1486,7 @@ public struct Shared_Proto_Services_V1_RevokeInviteLinkResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_ResolveInviteLinkRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ResolveInviteLinkRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1495,7 +1499,7 @@ public struct Shared_Proto_Services_V1_ResolveInviteLinkRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_ResolveInviteLinkResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ResolveInviteLinkResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1527,17 +1531,17 @@ public struct Shared_Proto_Services_V1_ResolveInviteLinkResponse: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.services.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.services.v1"
 
-extension Shared_Proto_Services_V1_AdminRole: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_AdminRole: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ADMIN_ROLE_UNSPECIFIED\0\u{1}ADMIN_ROLE_FULL\0\u{1}ADMIN_ROLE_MODERATOR\0")
 }
 
-extension Shared_Proto_Services_V1_GroupErrorCode: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GroupErrorCode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GROUP_ERROR_CODE_UNSPECIFIED\0\u{1}GROUP_ERROR_CODE_NOT_MEMBER\0\u{1}GROUP_ERROR_CODE_EPOCH_MISMATCH\0\u{1}GROUP_ERROR_CODE_GROUP_FULL\0\u{1}GROUP_ERROR_CODE_DISSOLVED\0\u{1}GROUP_ERROR_CODE_RATE_LIMIT\0\u{1}GROUP_ERROR_CODE_NOT_ADMIN\0\u{1}GROUP_ERROR_CODE_INVITE_EXPIRED\0\u{1}GROUP_ERROR_CODE_NO_KEY_PACKAGE\0")
 }
 
-extension Shared_Proto_Services_V1_CreateGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_CreateGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CreateGroupRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}initial_ratchet_tree\0\u{3}encrypted_group_context\0\u{3}max_members\0\u{3}message_retention_days\0\u{3}threads_enabled\0\u{c}\u{7}\u{e}")
 
@@ -1592,7 +1596,7 @@ extension Shared_Proto_Services_V1_CreateGroupRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_CreateGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_CreateGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CreateGroupResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}created_at\0")
 
@@ -1632,7 +1636,7 @@ extension Shared_Proto_Services_V1_CreateGroupResponse: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_GetGroupStateRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetGroupStateRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetGroupStateRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}known_epoch\0")
 
@@ -1671,7 +1675,7 @@ extension Shared_Proto_Services_V1_GetGroupStateRequest: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_GetGroupStateResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetGroupStateResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetGroupStateResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}epoch\0\u{3}ratchet_tree\0\u{3}pending_commits\0\u{1}settings\0")
 
@@ -1720,7 +1724,7 @@ extension Shared_Proto_Services_V1_GetGroupStateResponse: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_GroupSettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GroupSettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupSettings"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}max_members\0\u{3}member_count\0\u{3}message_retention_days\0\u{3}threads_enabled\0\u{3}created_at\0\u{3}messages_deleted_before\0")
 
@@ -1775,7 +1779,7 @@ extension Shared_Proto_Services_V1_GroupSettings: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-extension Shared_Proto_Services_V1_DissolveGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DissolveGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DissolveGroupRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}admin_proof\0\u{3}signature_timestamp\0")
 
@@ -1815,7 +1819,7 @@ extension Shared_Proto_Services_V1_DissolveGroupRequest: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_DissolveGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DissolveGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DissolveGroupResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}dissolved_at\0")
 
@@ -1850,7 +1854,7 @@ extension Shared_Proto_Services_V1_DissolveGroupResponse: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_InviteToGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_InviteToGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InviteToGroupRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}mls_welcome\0\u{3}key_package_ref\0\u{1}epoch\0\u{3}expires_in_seconds\0\u{c}\u{6}\u{a}")
 
@@ -1900,7 +1904,7 @@ extension Shared_Proto_Services_V1_InviteToGroupRequest: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_InviteToGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_InviteToGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InviteToGroupResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}invite_id\0\u{3}expires_at\0")
 
@@ -1935,7 +1939,7 @@ extension Shared_Proto_Services_V1_InviteToGroupResponse: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_AcceptGroupInviteRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_AcceptGroupInviteRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AcceptGroupInviteRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}invite_id\0\u{3}acceptance_signature\0\u{3}signature_timestamp\0\u{3}mls_commit\0\u{3}new_ratchet_tree\0\u{c}\u{7}\u{9}")
 
@@ -1990,7 +1994,7 @@ extension Shared_Proto_Services_V1_AcceptGroupInviteRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_AcceptGroupInviteResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_AcceptGroupInviteResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AcceptGroupInviteResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_epoch\0\u{3}joined_at\0")
 
@@ -2030,7 +2034,7 @@ extension Shared_Proto_Services_V1_AcceptGroupInviteResponse: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_DeclineGroupInviteRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DeclineGroupInviteRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeclineGroupInviteRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}invite_id\0")
 
@@ -2065,7 +2069,7 @@ extension Shared_Proto_Services_V1_DeclineGroupInviteRequest: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_DeclineGroupInviteResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DeclineGroupInviteResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeclineGroupInviteResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -2095,7 +2099,7 @@ extension Shared_Proto_Services_V1_DeclineGroupInviteResponse: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_GetPendingInvitesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetPendingInvitesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPendingInvitesRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}cursor\0\u{1}limit\0")
 
@@ -2139,7 +2143,7 @@ extension Shared_Proto_Services_V1_GetPendingInvitesRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_GetPendingInvitesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetPendingInvitesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPendingInvitesResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}invites\0\u{3}next_cursor\0")
 
@@ -2178,7 +2182,7 @@ extension Shared_Proto_Services_V1_GetPendingInvitesResponse: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_PendingGroupInvite: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_PendingGroupInvite: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PendingGroupInvite"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}invite_id\0\u{3}group_id\0\u{3}mls_welcome\0\u{3}expires_at\0\u{3}invited_at\0\u{c}\u{6}\u{a}")
 
@@ -2228,7 +2232,7 @@ extension Shared_Proto_Services_V1_PendingGroupInvite: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_LeaveGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_LeaveGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".LeaveGroupRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}mls_remove_proposal\0")
 
@@ -2263,7 +2267,7 @@ extension Shared_Proto_Services_V1_LeaveGroupRequest: SwiftProtobuf.Message, Swi
   }
 }
 
-extension Shared_Proto_Services_V1_LeaveGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_LeaveGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".LeaveGroupResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}left_at\0")
 
@@ -2298,7 +2302,7 @@ extension Shared_Proto_Services_V1_LeaveGroupResponse: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_RemoveMemberRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RemoveMemberRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RemoveMemberRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}target_device_id\0\u{3}mls_remove_proposal\0\u{3}admin_proof\0\u{3}signature_timestamp\0\u{3}encrypted_reason\0\u{c}\u{7}\u{9}")
 
@@ -2357,7 +2361,7 @@ extension Shared_Proto_Services_V1_RemoveMemberRequest: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_RemoveMemberResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RemoveMemberResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RemoveMemberResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_epoch\0\u{3}removed_at\0")
 
@@ -2397,7 +2401,7 @@ extension Shared_Proto_Services_V1_RemoveMemberResponse: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_DelegateAdminRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DelegateAdminRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DelegateAdminRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}target_device_id\0\u{1}role\0\u{3}admin_proof\0\u{3}signature_timestamp\0\u{3}encrypted_admin_token\0")
 
@@ -2452,7 +2456,7 @@ extension Shared_Proto_Services_V1_DelegateAdminRequest: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_DelegateAdminResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_DelegateAdminResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DelegateAdminResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}delegated_at\0")
 
@@ -2487,7 +2491,7 @@ extension Shared_Proto_Services_V1_DelegateAdminResponse: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_TransferOwnershipRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_TransferOwnershipRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TransferOwnershipRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}new_owner_device_id\0\u{3}owner_signature\0\u{3}new_owner_acceptance\0\u{3}signature_timestamp\0\u{c}\u{6}\u{a}")
 
@@ -2537,7 +2541,7 @@ extension Shared_Proto_Services_V1_TransferOwnershipRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_TransferOwnershipResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_TransferOwnershipResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TransferOwnershipResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}transferred_at\0")
 
@@ -2572,7 +2576,7 @@ extension Shared_Proto_Services_V1_TransferOwnershipResponse: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_SubmitCommitRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SubmitCommitRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SubmitCommitRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}mls_commit\0\u{3}welcome_deliveries\0\u{3}new_ratchet_tree\0\u{c}\u{6}\u{a}")
 
@@ -2622,7 +2626,7 @@ extension Shared_Proto_Services_V1_SubmitCommitRequest: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_WelcomeDelivery: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_WelcomeDelivery: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WelcomeDelivery"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}key_package_ref\0")
 
@@ -2657,7 +2661,7 @@ extension Shared_Proto_Services_V1_WelcomeDelivery: SwiftProtobuf.Message, Swift
   }
 }
 
-extension Shared_Proto_Services_V1_SubmitCommitResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SubmitCommitResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SubmitCommitResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_epoch\0\u{3}committed_at\0")
 
@@ -2697,7 +2701,7 @@ extension Shared_Proto_Services_V1_SubmitCommitResponse: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_FetchCommitsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_FetchCommitsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FetchCommitsRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}since_epoch\0")
 
@@ -2732,7 +2736,7 @@ extension Shared_Proto_Services_V1_FetchCommitsRequest: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_CommitEnvelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_CommitEnvelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CommitEnvelope"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}epoch_from\0\u{3}epoch_to\0\u{3}mls_commit\0\u{3}ratchet_tree\0\u{3}mls_welcome\0\u{3}committed_at\0\u{c}\u{8}\u{8}")
 
@@ -2796,7 +2800,7 @@ extension Shared_Proto_Services_V1_CommitEnvelope: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Services_V1_SendGroupMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SendGroupMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendGroupMessageRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}mls_ciphertext\0\u{1}epoch\0\u{3}client_message_id\0\u{3}thread_id\0\u{3}topic_id\0\u{c}\u{7}\u{9}")
 
@@ -2855,7 +2859,7 @@ extension Shared_Proto_Services_V1_SendGroupMessageRequest: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Services_V1_SendGroupMessageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SendGroupMessageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendGroupMessageResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}sent_at\0\u{3}sequence_number\0\u{3}expires_at\0")
 
@@ -2900,7 +2904,7 @@ extension Shared_Proto_Services_V1_SendGroupMessageResponse: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_FetchGroupMessagesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_FetchGroupMessagesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FetchGroupMessagesRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}after_sequence\0\u{1}limit\0\u{3}thread_id\0\u{3}topic_id\0")
 
@@ -2954,7 +2958,7 @@ extension Shared_Proto_Services_V1_FetchGroupMessagesRequest: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_GroupMessageEnvelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GroupMessageEnvelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupMessageEnvelope"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}group_id\0\u{1}epoch\0\u{3}mls_ciphertext\0\u{3}sent_at\0\u{3}sequence_number\0\u{3}thread_id\0\u{3}expires_at\0\u{3}topic_id\0\u{c}\u{a}\u{6}")
 
@@ -3028,7 +3032,7 @@ extension Shared_Proto_Services_V1_GroupMessageEnvelope: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_GroupStreamRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GroupStreamRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupStreamRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}subscribe\0\u{1}send\0\u{1}heartbeat\0\u{4}\u{7}request_id\0\u{c}\u{4}\u{6}\u{c}\u{b}\u{a}")
 
@@ -3117,7 +3121,7 @@ extension Shared_Proto_Services_V1_GroupStreamRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_GroupStreamResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GroupStreamResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupStreamResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}commit\0\u{1}ack\0\u{1}error\0\u{3}heartbeat_ack\0\u{1}invite\0\u{1}dissolved\0\u{4}\u{3}response_id\0\u{c}\u{8}\u{2}\u{c}\u{b}\u{a}")
 
@@ -3274,7 +3278,7 @@ extension Shared_Proto_Services_V1_GroupStreamResponse: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_GroupSubscribeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GroupSubscribeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupSubscribeRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_ids\0")
 
@@ -3304,7 +3308,7 @@ extension Shared_Proto_Services_V1_GroupSubscribeRequest: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_GroupHeartbeat: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GroupHeartbeat: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupHeartbeat"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}timestamp\0")
 
@@ -3334,7 +3338,7 @@ extension Shared_Proto_Services_V1_GroupHeartbeat: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Services_V1_GroupHeartbeatAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GroupHeartbeatAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupHeartbeatAck"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}timestamp\0\u{3}server_timestamp\0")
 
@@ -3369,7 +3373,7 @@ extension Shared_Proto_Services_V1_GroupHeartbeatAck: SwiftProtobuf.Message, Swi
   }
 }
 
-extension Shared_Proto_Services_V1_GroupMessageAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GroupMessageAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupMessageAck"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}client_message_id\0\u{3}server_message_id\0\u{3}sequence_number\0\u{3}server_timestamp\0")
 
@@ -3414,7 +3418,7 @@ extension Shared_Proto_Services_V1_GroupMessageAck: SwiftProtobuf.Message, Swift
   }
 }
 
-extension Shared_Proto_Services_V1_GroupStreamError: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GroupStreamError: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupStreamError"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}request_id\0\u{3}error_code\0\u{3}error_message\0\u{1}retryable\0")
 
@@ -3459,7 +3463,7 @@ extension Shared_Proto_Services_V1_GroupStreamError: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Services_V1_GroupDissolvedNotice: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GroupDissolvedNotice: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupDissolvedNotice"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}dissolved_at\0")
 
@@ -3494,7 +3498,7 @@ extension Shared_Proto_Services_V1_GroupDissolvedNotice: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_PublishKeyPackageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_PublishKeyPackageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PublishKeyPackageRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}key_packages\0\u{c}\u{3}\u{8}")
 
@@ -3529,7 +3533,7 @@ extension Shared_Proto_Services_V1_PublishKeyPackageRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_PublishKeyPackageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_PublishKeyPackageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PublishKeyPackageResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}count\0\u{3}published_at\0")
 
@@ -3564,7 +3568,7 @@ extension Shared_Proto_Services_V1_PublishKeyPackageResponse: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_ConsumeKeyPackageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ConsumeKeyPackageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ConsumeKeyPackageRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}preferred_device_id\0")
 
@@ -3603,7 +3607,7 @@ extension Shared_Proto_Services_V1_ConsumeKeyPackageRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_ConsumeKeyPackageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ConsumeKeyPackageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ConsumeKeyPackageResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_package\0\u{3}device_id\0\u{3}key_package_ref\0")
 
@@ -3643,7 +3647,7 @@ extension Shared_Proto_Services_V1_ConsumeKeyPackageResponse: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_GetKeyPackageCountRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetKeyPackageCountRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetKeyPackageCountRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}device_id\0")
 
@@ -3682,7 +3686,7 @@ extension Shared_Proto_Services_V1_GetKeyPackageCountRequest: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_GetKeyPackageCountResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetKeyPackageCountResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetKeyPackageCountResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}count\0\u{3}recommended_minimum\0\u{3}last_published_at\0\u{3}cannot_be_invited\0")
 
@@ -3727,7 +3731,7 @@ extension Shared_Proto_Services_V1_GetKeyPackageCountResponse: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_CreateTopicRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_CreateTopicRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CreateTopicRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}encrypted_name\0\u{3}sort_order\0\u{3}admin_proof\0\u{3}signature_timestamp\0\u{c}\u{6}\u{a}")
 
@@ -3777,7 +3781,7 @@ extension Shared_Proto_Services_V1_CreateTopicRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_CreateTopicResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_CreateTopicResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CreateTopicResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_id\0\u{3}created_at\0")
 
@@ -3812,7 +3816,7 @@ extension Shared_Proto_Services_V1_CreateTopicResponse: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_ListTopicsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ListTopicsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ListTopicsRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}include_archived\0")
 
@@ -3847,7 +3851,7 @@ extension Shared_Proto_Services_V1_ListTopicsRequest: SwiftProtobuf.Message, Swi
   }
 }
 
-extension Shared_Proto_Services_V1_ListTopicsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ListTopicsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ListTopicsResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}topics\0")
 
@@ -3877,7 +3881,7 @@ extension Shared_Proto_Services_V1_ListTopicsResponse: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_TopicInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_TopicInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TopicInfo"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}topic_id\0\u{3}group_id\0\u{3}encrypted_name\0\u{3}sort_order\0\u{3}created_at\0\u{3}archived_at\0")
 
@@ -3936,7 +3940,7 @@ extension Shared_Proto_Services_V1_TopicInfo: SwiftProtobuf.Message, SwiftProtob
   }
 }
 
-extension Shared_Proto_Services_V1_ArchiveTopicRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ArchiveTopicRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ArchiveTopicRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}topic_id\0\u{3}admin_proof\0\u{3}signature_timestamp\0")
 
@@ -3981,7 +3985,7 @@ extension Shared_Proto_Services_V1_ArchiveTopicRequest: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_ArchiveTopicResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ArchiveTopicResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ArchiveTopicResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}archived_at\0")
 
@@ -4016,7 +4020,7 @@ extension Shared_Proto_Services_V1_ArchiveTopicResponse: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_CreateInviteLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_CreateInviteLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CreateInviteLinkRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}admin_proof\0\u{3}signature_timestamp\0\u{3}max_uses\0\u{3}expires_in_seconds\0\u{c}\u{6}\u{a}")
 
@@ -4066,7 +4070,7 @@ extension Shared_Proto_Services_V1_CreateInviteLinkRequest: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Services_V1_CreateInviteLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_CreateInviteLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CreateInviteLinkResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0\u{3}created_at\0\u{3}expires_at\0")
 
@@ -4110,7 +4114,7 @@ extension Shared_Proto_Services_V1_CreateInviteLinkResponse: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_RevokeInviteLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RevokeInviteLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RevokeInviteLinkRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}token\0\u{3}admin_proof\0\u{3}signature_timestamp\0")
 
@@ -4155,7 +4159,7 @@ extension Shared_Proto_Services_V1_RevokeInviteLinkRequest: SwiftProtobuf.Messag
   }
 }
 
-extension Shared_Proto_Services_V1_RevokeInviteLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RevokeInviteLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RevokeInviteLinkResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}revoked_at\0")
 
@@ -4190,7 +4194,7 @@ extension Shared_Proto_Services_V1_RevokeInviteLinkResponse: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_ResolveInviteLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ResolveInviteLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ResolveInviteLinkRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0")
 
@@ -4220,7 +4224,7 @@ extension Shared_Proto_Services_V1_ResolveInviteLinkRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_ResolveInviteLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ResolveInviteLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ResolveInviteLinkResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{3}member_count\0\u{1}valid\0\u{3}expires_at\0")
 
