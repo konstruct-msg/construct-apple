@@ -16,6 +16,18 @@
 //
 
 import CoreGraphics
+import SwiftUI
+
+/// The native context menu is still dismissing when its React action runs. Its transaction can
+/// otherwise animate the newly inserted row from zero height even when the caller supplies
+/// `animation = nil`, leaving only a clipped strip until the dismissal settles.
+enum ReactionCapsulePresentation {
+    static var immediateInsertion: Transaction {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        return transaction
+    }
+}
 
 enum ReactionCapsulePlacement: Equatable {
     case above

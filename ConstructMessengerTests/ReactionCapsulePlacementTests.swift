@@ -10,9 +10,37 @@ import XCTest
 import SwiftUI
 @testable import Construct_Messenger
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 final class ReactionCapsulePlacementTests: XCTestCase {
 
     private let height: CGFloat = 44
+
+    func testPresentationRejectsContextMenuAnimation() {
+        let transaction = ReactionCapsulePresentation.immediateInsertion
+
+        XCTAssertTrue(transaction.disablesAnimations)
+        XCTAssertNil(transaction.animation)
+    }
+
+    #if canImport(UIKit)
+    @MainActor
+    func testCapsuleIntrinsicHeightMatchesReservedHeight() {
+        let host = UIHostingController(
+            rootView: MessageReactionCapsule(
+                currentEmoji: nil,
+                onPick: { _ in },
+                onPickMore: {}
+            )
+        )
+
+        let size = host.sizeThatFits(in: CGSize(width: 1_000, height: 1_000))
+
+        XCTAssertEqual(size.height, ChatUIConstants.Reaction.capsuleHeight, accuracy: 0.5)
+    }
+    #endif
 
     func testBothFit_PrefersBelow() {
         XCTAssertEqual(

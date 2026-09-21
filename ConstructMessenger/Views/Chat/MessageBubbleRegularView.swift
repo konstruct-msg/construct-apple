@@ -597,17 +597,22 @@ struct MessageBubbleRegularView: View {
             // padding on the side facing the bubble.
             .padding(capsulePlacement == .above ? .bottom : .top, ChatUIConstants.Reaction.capsuleGap)
             .fixedSize(horizontal: true, vertical: true)
-            .transition(.opacity)
+            // The system context-menu dismissal supplies its own animation transaction after the
+            // action returns. Reject it at the inserted subtree as well as at the state mutation.
+            .transaction { transaction in
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
         }
     }
 
     private func openReactionCapsule() {
         updateCapsulePlacement()
-        // Inserting the row under an implicit animation grows its height from 0 and
-        // clips the glass for a beat. Appear at full size.
-        var t = Transaction()
-        t.animation = nil
-        withTransaction(t) { showReactionCapsule = true }
+        // Appear at full size. `animation = nil` alone does not veto the native context menu's
+        // dismissal transaction; `disablesAnimations` does.
+        withTransaction(ReactionCapsulePresentation.immediateInsertion) {
+            showReactionCapsule = true
+        }
     }
 
     private func updateCapsulePlacement() {
