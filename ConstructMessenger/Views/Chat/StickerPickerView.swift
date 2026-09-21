@@ -80,6 +80,7 @@ struct StickerPickerView: View {
                     .foregroundStyle(.orange)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier(A11y.MediaPicker.installFixture)
             #endif
             Spacer()
         }
@@ -113,6 +114,7 @@ private struct StickerCell: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text("\(reference.emoji) \(NSLocalizedString("sticker", comment: ""))"))
+        .accessibilityIdentifier(A11y.MediaPicker.sticker(reference))
         .task(id: reference) {
             image = await library.thumbnail(for: reference, side: StickerPickerLayout.thumbnailSide)
         }

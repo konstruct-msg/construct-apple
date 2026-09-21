@@ -405,6 +405,7 @@ struct MediaPickerSheet: View {
         }
         .buttonStyle(.plain)
         .disabled(vm.isExporting)
+        .accessibilityIdentifier(tab == .stickers ? A11y.MediaPicker.tabStickers : "mediaPicker.tab.\(tab)")
     }
 
     private func handleTab(_ tab: PickerTab) {

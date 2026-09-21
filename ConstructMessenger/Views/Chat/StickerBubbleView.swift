@@ -44,6 +44,7 @@ struct StickerBubbleView: View {
                 )
         )
         .accessibilityLabel(Text("\(reference.emoji) \(NSLocalizedString("sticker", comment: ""))"))
+        .accessibilityIdentifier(A11y.Chat.sticker(reference))
         .task(id: reference) {
             image = await Self.load(reference)
         }

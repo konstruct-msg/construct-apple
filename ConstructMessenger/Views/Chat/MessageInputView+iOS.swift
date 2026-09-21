@@ -270,6 +270,7 @@ struct IOSMessageInputView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(LocalizedStringKey("attach")))
+        .accessibilityIdentifier(A11y.Chat.attach)
     }
 
     private var canSend: Bool {
