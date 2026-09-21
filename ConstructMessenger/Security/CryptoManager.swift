@@ -202,27 +202,33 @@ class CryptoManager {
 
     // MARK: - Prekey ID Tracking
     
-    /// Track a prekey ID for a user and detect reinstall
-    /// Returns true if prekey changed (potential reinstall detected)
-    public func trackPreKeyId(_ preKeyId: String, for userId: String) -> Bool {
-        let result = preKeyTracker.track(preKeyId: preKeyId, for: userId)
+    /// Record the signed pre-key a **device** just presented and detect a reinstall or rotation
+    /// of that device. Returns true if its SPK changed since it was last seen.
+    ///
+    /// Per device, not per account: the responder walk calls this once per candidate bundle,
+    /// and an account-keyed slot read the other device's SPK as a change — and archived the
+    /// pinned device's session for it. A change now archives the session of the device whose
+    /// SPK changed, which is the only session the evidence is about.
+    public func trackPreKeyId(_ preKeyId: String, forDevice deviceId: String) -> Bool {
+        let result = preKeyTracker.track(preKeyId: preKeyId, forDevice: deviceId)
         switch result {
         case .firstSeen:
-            Log.debug("Tracking prekey for \(userId): \(preKeyId.prefix(8))...", category: "CryptoManager")
+            Log.debug("Tracking prekey for device \(deviceId.prefix(8))…: \(preKeyId.prefix(8))...", category: "CryptoManager")
             return false
-        case .unchanged:
+        case .unchanged, .refused:
             return false
         case .changed(let previous):
             let previousPrefix = previous.isEmpty ? "unknown" : String(previous.prefix(8))
-            Log.info("Prekey changed for \(userId): \(previousPrefix)... -> \(preKeyId.prefix(8))...", category: "CryptoManager")
+            Log.info("Prekey changed for device \(deviceId.prefix(8))…: \(previousPrefix)... -> \(preKeyId.prefix(8))...", category: "CryptoManager")
             Log.info("This indicates app reinstall or key rotation", category: "CryptoManager")
-            
-            // Archive existing session (if any)
-            if hasSession(for: userId) {
-                archiveSession(for: userId, reason: .preKeyChanged)
+
+            // Archive that device's session (if any). A device id passes through the seam
+            // unchanged, so this names exactly the ratchet whose SPK moved.
+            if hasSession(for: deviceId) {
+                archiveSession(for: deviceId, reason: .preKeyChanged)
                 Log.info("Session archived due to prekey change", category: "CryptoManager")
             }
-            
+
             return true
         }
     }

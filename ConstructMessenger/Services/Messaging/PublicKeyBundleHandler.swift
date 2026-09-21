@@ -207,11 +207,16 @@ class PublicKeyBundleHandler {
             Log.debug("PublicKeyBundleHandler: user found for \(data.userId.prefix(8))…", category: "PublicKeyBundleHandler")
         }
         
-        // Track prekey ID and detect reinstall
+        // Track this device's SPK and detect a reinstall of it. The device is named from the key
+        // in hand, never from the account: this runs once per candidate bundle of a multi-device
+        // peer, and keyed by account the slot flipped between siblings on every walk.
         // trackPreKeyId uses base64 as stable string key for change detection/storage
-        let prekeyChanged = CryptoManager.shared.trackPreKeyId(data.signedPrekeyPublic.base64EncodedString(), for: data.userId)
+        let candidateDevice = SessionAddressing.cryptoIdentity(ofIdentityKey: data.identityPublic) ?? ""
+        let prekeyChanged = CryptoManager.shared.trackPreKeyId(
+            data.signedPrekeyPublic.base64EncodedString(), forDevice: candidateDevice
+        )
         if prekeyChanged {
-            Log.info("Prekey changed for \(data.userId) - potential reinstall detected!", category: "PublicKeyBundleHandler")
+            Log.info("Prekey changed for \(data.userId.prefix(8))… device \(candidateDevice.prefix(8))… - potential reinstall detected!", category: "PublicKeyBundleHandler")
             // Session was already archived by trackPreKeyId()
         }
         
