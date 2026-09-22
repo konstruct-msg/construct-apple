@@ -94,7 +94,7 @@ final class PeerAddressTests: XCTestCase {
         }
 
         XCTAssertEqual(
-            SessionAddressing.contactId(forPeer: accountA), pinned.deviceId,
+            SessionAddressing.pinnedDevice(ofPeer: accountA), pinned.deviceId,
             "pre-condition: the account resolves to the pinned device, which is NOT the diverged one"
         )
         XCTAssertEqual(

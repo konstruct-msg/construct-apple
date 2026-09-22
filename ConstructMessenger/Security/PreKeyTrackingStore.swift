@@ -10,7 +10,7 @@
 //  For a two-device peer the slot flipped between the two devices' SPKs on every walk (17 flips
 //  in 20 walks on 2026-08-30; still firing on the 2026-09-21 stand: C read A's bundle after B's
 //  and logged "potential reinstall detected"), and each flip archived the session
-//  `contactId(forPeer:)` named — the pinned device's, which was the one healthy ratchet. An SPK
+//  `pinnedDevice(ofPeer:)` named — the pinned device's, which was the one healthy ratchet. An SPK
 //  is a property of a device; a store that cannot say whose SPK it holds cannot say whether it
 //  changed. See `decisions/a-peer-is-a-set-of-devices.md`, item 4.
 //

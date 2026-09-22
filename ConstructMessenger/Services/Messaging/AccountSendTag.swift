@@ -60,7 +60,7 @@ enum AccountSendTag {
         static let production = Keys(
             ourIdentityPrivate: { KeychainManager.shared.loadDeviceIdentityKey() },
             pinnedIdentityPublic: { SessionAddressing.pinnedIdentityKey(ofUser: $0) },
-            pinnedDevice: { SessionAddressing.contactId(forPeer: $0) },
+            pinnedDevice: { SessionAddressing.pinnedDevice(ofPeer: $0) },
             deviceIdentityPublic: { deviceId in
                 // A private context: `sendMessage` runs off the main actor, and the view
                 // context read from another thread returns an empty result rather than an error.

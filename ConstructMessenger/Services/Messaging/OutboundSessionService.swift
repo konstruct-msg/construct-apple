@@ -94,21 +94,21 @@ final class OutboundSessionService {
     /// - Parameters:
     ///   - plaintext: Serialised plaintext bytes (protobuf, binary KNST frame, or UTF-8).
     ///   - messageId: Unique message UUID for ACK tracking.
-    ///   - recipientId: Contact user ID.
+    ///   - recipientDeviceId: the device whose ratchet encrypts this copy.
     ///   - contentType: Proto ContentType raw value (0 = regular message, default).
+    ///
+    /// One copy, one device. The orchestrator is a second door into the same core and stores a
+    /// session under a device id like everything else below the seam; an account id resolved here
+    /// was the pinned device, so every caller that held only an account got the same ratchet no
+    /// matter which device it meant to reach. Callers hold the device now — the send pipeline
+    /// loops the set, the control emitter names it through `PeerAddress.deviceOrPinned()`.
     func encryptOutgoing(
         plaintext: Data,
         messageId: String,
-        recipientId: String,
+        toDevice recipientDeviceId: String,
         contentType: UInt8 = 0
     ) throws -> Data {
-        // The orchestrator is a second door into the same core, and what it stores a session
-        // under is a device id like everything else below the seam. The account id has to be
-        // translated here rather than inside `handleOrchestratorEvent`, because the actions
-        // coming back name the same peer and the caller matches them against what it asked for —
-        // so the two sides of the exchange have to agree on which space they are speaking.
-        guard let contactId = SessionAddressing.contactId(forPeer: recipientId) else {
-            Log.error("encryptOutgoing: cannot name a device for \(recipientId.prefix(8))… — no pinned identity key", category: "OutboundSession")
+        guard let contactId = SessionAddressing.asDevice(recipientDeviceId) else {
             throw CryptoManagerError.sessionNotFound
         }
         let event = CfeIncomingEvent.outgoingMessage(
@@ -127,7 +127,7 @@ final class OutboundSessionService {
         // because nothing was sent. See decisions/sender-state-durability-before-send.md.
         let sendStateDurable = executeStorageActions(actions)
         guard sendStateDurable else {
-            Log.error("encryptOutgoing: session-state persist FAILED for \(recipientId.prefix(8))… (msg \(messageId.prefix(8))…) — refusing to release ciphertext (prevents ratchet number reuse)", category: "OutboundSession")
+            Log.error("encryptOutgoing: session-state persist FAILED for \(contactId.prefix(8))… (msg \(messageId.prefix(8))…) — refusing to release ciphertext (prevents ratchet number reuse)", category: "OutboundSession")
             throw SessionStatePersistError.sendStateNotDurable
         }
 
@@ -139,7 +139,7 @@ final class OutboundSessionService {
         throw NSError(
             domain: "OutboundSessionService",
             code: 1001,
-            userInfo: [NSLocalizedDescriptionKey: "Orchestrator returned no SendEncryptedMessage for \(recipientId.prefix(8))…"]
+            userInfo: [NSLocalizedDescriptionKey: "Orchestrator returned no SendEncryptedMessage for \(contactId.prefix(8))…"]
         )
     }
 
@@ -150,12 +150,12 @@ final class OutboundSessionService {
     func encryptSessionControl(
         plaintext: String,
         messageId: String,
-        recipientId: String
+        toDevice recipientDeviceId: String
     ) throws -> Data {
         try encryptSessionControl(
             payload: Data(plaintext.utf8),
             messageId: messageId,
-            recipientId: recipientId
+            toDevice: recipientDeviceId
         )
     }
 
@@ -175,7 +175,7 @@ final class OutboundSessionService {
     func encryptSessionControl(
         payload: Data,
         messageId: String,
-        recipientId: String,
+        toDevice recipientDeviceId: String,
         frameAs contentType: UInt8? = nil
     ) throws -> Data {
         let plaintext = contentType.map {
@@ -186,7 +186,7 @@ final class OutboundSessionService {
         return try encryptOutgoing(
             plaintext: plaintext,
             messageId: messageId,
-            recipientId: recipientId,
+            toDevice: recipientDeviceId,
             contentType: 0
         )
     }
@@ -242,7 +242,7 @@ final class OutboundSessionService {
                     messageId: UUID(uuidString: heartbeatId) ?? UUID()
                 ),
                 messageId: heartbeatId,
-                recipientId: contactId
+                toDevice: contactId
             )
             // Sealed, like every other envelope directed at a peer. The exclusion this send
             // used to carry was decided 2026-06-19 on the cost of Privacy Pass tokens under the
@@ -363,7 +363,7 @@ final class OutboundSessionService {
     static func sessionDevices(of contactId: String) -> [String] {
         let context = PersistenceController.shared.container.viewContext
         var devices = SessionAddressing.devices(ofPeer: contactId, in: context).map(\.deviceId)
-        if devices.isEmpty, let pinned = SessionAddressing.contactId(forPeer: contactId) {
+        if devices.isEmpty, let pinned = SessionAddressing.pinnedDevice(ofPeer: contactId) {
             devices = [pinned]
         }
         return devices.filter { CryptoManager.shared.hasSession(for: $0) }

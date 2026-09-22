@@ -601,7 +601,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             return SessionReducer.shouldPrewarm(
                 coreReady: coreReady,
                 isNaturalInitiator: weInitiate,
-                sessionExistsOrRestorable: CryptoManager.shared.hasOrRestoreSession(for: peer)
+                sessionExistsOrRestorable: CryptoManager.shared.hasOrRestoreSessionWithAnyDevice(ofPeer: peer)
             )
         }
         guard !toPrewarm.isEmpty else { return }
@@ -618,7 +618,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // would slip past the guard, race through fetchBundle, and the second
                 // would delete the session just created by the first.
                 let scope = SessionScope.forAccount(contactId)
-                guard !CryptoManager.shared.hasOrRestoreSession(for: contactId),
+                guard !CryptoManager.shared.hasOrRestoreSessionWithAnyDevice(ofPeer: contactId),
                       !self.isInitializing(scope) else {
                     Log.info("Prewarm skipped — session exists or init in progress for \(scope)", category: "SessionInit")
                     continue
@@ -845,7 +845,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // in-memory establishment record, so we CANNOT filter a possibly-stale END_SESSION — and
         // if a live Rust session exists, it is about to be torn down. Surface this in device logs.
         if established == nil {
-            let hasLive = CryptoManager.shared.hasSession(for: userId)
+            let hasLive = CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId)
             Log.info("SESSION_STATE[end_session_stale_check]: \(userId.prefix(8))… ts=\(timestamp) established=nil hasLiveSession=\(hasLive) → not filtered\(hasLive ? " live session will be reset by a possibly-stale END_SESSION (no in-memory establishedAt)" : "")", category: "SessionInit")
         } else {
             Log.info("SESSION_STATE[end_session_stale_check]: \(userId.prefix(8))… ts=\(timestamp) established=\(established!) → \(stale ? "STALE (filtered)" : "fresh (acted on)")", category: "SessionInit")
@@ -938,7 +938,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             // from the same stream flush just made us RESPONDER. Re-initing over it would
             // destroy a working session and re-open the desync it just closed.
             guard SessionReducer.endSessionReinitStillNeeded(
-                hasSession: CryptoManager.shared.hasSession(for: userId)
+                hasSession: CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId)
             ) else {
                 Log.info("SESSION_STATE[reinit_skipped_fresh_session]: session with \(userId.prefix(8))… established after END_SESSION — keeping it", category: "SessionInit")
                 return
@@ -1044,7 +1044,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             Log.info("reestablishSessionForQueuedOutbound: crypto core not ready — deferring for \(userId.prefix(8))…", category: "SessionInit")
             return
         }
-        guard !CryptoManager.shared.hasSession(for: userId) else { return }
+        guard !CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId) else { return }
         let scope = SessionScope.forAccount(userId)
         guard !isInitializing(scope) else {
             Log.debug("reestablishSessionForQueuedOutbound: init already in progress for \(scope)", category: "SessionInit")
@@ -1244,7 +1244,7 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// told about.
     nonisolated static func finalizeContactId(openedDevice: String?, pinnedDevice: String?) -> String? {
         // Normalised here rather than at three call sites: an empty string reads as a named device
-        // at every `!= nil` downstream, and `contactId(forPeer:)` is not the only thing that can
+        // at every `!= nil` downstream, and `pinnedDevice(ofPeer:)` is not the only thing that can
         // hand one back.
         if let openedDevice, !openedDevice.isEmpty { return openedDevice }
         guard let pinnedDevice, !pinnedDevice.isEmpty else { return nil }
@@ -1389,11 +1389,11 @@ final class SessionCoordinator: MessageRouterDelegate {
                 do {
                     // The device the session actually opened against — not the one the contact
                     // list can name. Both `exportSession` and the event below resolve through
-                    // `contactId(forPeer:)`, which reads the pinned `User.knownIdentityKey`; at
+                    // `pinnedDevice(ofPeer:)`, which reads the pinned `User.knownIdentityKey`; at
                     // first contact that row is not written yet, and first contact is exactly when
                     // a RESPONDER init runs. `openedDevice` is derived from the bundle in hand by
                     // the same `deriveDeviceId` the seam uses, so it answers when the pin cannot,
-                    // and passing it through `contactId(forPeer:)` is a no-op — a crypto identity
+                    // and passing it through `pinnedDevice(ofPeer:)` is a no-op — a crypto identity
                     // is returned unchanged.
                     //
                     // Devices 2026-09-04 09:38:21, one account and one device on each side: a
@@ -1404,7 +1404,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     // it.
                     guard let resolvedContact = Self.finalizeContactId(
                         openedDevice: openedDevice,
-                        pinnedDevice: SessionAddressing.contactId(forPeer: userId)
+                        pinnedDevice: SessionAddressing.pinnedDevice(ofPeer: userId)
                     ) else {
                         throw CryptoManagerError.sessionNotFound
                     }
@@ -1440,7 +1440,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // reads this back by device on the next launch.
                 let openedScope = Self.finalizeContactId(
                     openedDevice: openedDevice,
-                    pinnedDevice: SessionAddressing.contactId(forPeer: userId)
+                    pinnedDevice: SessionAddressing.pinnedDevice(ofPeer: userId)
                 ).map(SessionScope.device) ?? scope
                 perform(apply(.initSucceeded(at: UInt64(Date().timeIntervalSince1970)), for: openedScope),
                         for: userId, alreadyHandled: opened?.id)
@@ -1858,7 +1858,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 let encryptedPayload = try OutboundSessionService.shared.encryptSessionControl(
                     payload: SessionControlCodec.encodePayload(op: codecOp, nonce: nonce),
                     messageId: msgId,
-                    recipientId: sessionOwner,
+                    toDevice: sessionOwner,
                     frameAs: frameType
                 )
 
@@ -2060,7 +2060,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // Override gate — the mirror of the watchdog, via the reducer authority.
                 let scope = SessionScope.forAccount(userId)
                 guard SessionReducer.shouldResponderOverride(
-                    hasSession: CryptoManager.shared.hasSession(for: userId),
+                    hasSession: CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId),
                     isInitializing: self.isInitializing(scope)
                 ) else {
                     Log.debug("RESPONDER fallback: session already established / initializing for \(userId.prefix(8))… — skipping", category: "SessionInit")
@@ -2400,7 +2400,7 @@ final class SessionCoordinator: MessageRouterDelegate {
     }
 
     private func ensureSendingSession(for userId: String) async throws {
-        if CryptoManager.shared.hasSession(for: userId) {
+        if CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId) {
             return
         }
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in

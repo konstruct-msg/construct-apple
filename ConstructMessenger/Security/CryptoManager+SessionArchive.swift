@@ -18,7 +18,7 @@ extension CryptoManager {
     /// The account-shaped counterpart to `archiveSession(for:)`, which names one device. Three
     /// callers mean the person and not a device — a redeemed invite retiring what came before, a
     /// deleted chat, a deleted contact — and each of them retired whichever single device
-    /// `contactId(forPeer:)` happened to name, leaving the other N−1 ratchets in the Keychain.
+    /// `pinnedDevice(ofPeer:)` happened to name, leaving the other N−1 ratchets in the Keychain.
     ///
     /// The comment on the contact-deletion site already described that as the worse half of the
     /// defect: "the contact is gone from every list and its ratchet is still in the Keychain, ready
@@ -35,10 +35,7 @@ extension CryptoManager {
     @discardableResult
     func archiveAllSessions(ofPeer peerId: String, reason: ArchiveReason) -> Int {
         var retired = 0
-        for device in SessionAddressing.deviceIds(
-            ofPeer: peerId,
-            in: PersistenceController.shared.container.viewContext
-        ) {
+        for device in SessionAddressing.deviceIds(ofPeer: peerId) {
             guard hasStoredSessionState(for: device) else { continue }
             archiveSession(for: device, reason: reason)
             clearArchivedSessions(for: device)
@@ -53,15 +50,26 @@ extension CryptoManager {
     /// `hasStoredSessionState(for: accountId)` answers about one device, so a peer whose pinned
     /// device has no session but whose second device does would be skipped entirely.
     func hasStoredSessionStateForAnyDevice(ofPeer peerId: String) -> Bool {
-        SessionAddressing.deviceIds(
-            ofPeer: peerId,
-            in: PersistenceController.shared.container.viewContext
-        ).contains { hasStoredSessionState(for: $0) }
+        SessionAddressing.deviceIds(ofPeer: peerId).contains { hasStoredSessionState(for: $0) }
     }
 
-    func clearArchivedSessions(for userId: String) {
-        archiveManager.clearArchives(for: userId)
-        Log.info("Cleared all archived sessions for \(userId)", category: "CryptoManager")
+    /// Forget one device's archives. Keyed by device, like the archives themselves —
+    /// `archiveAllSessions` walks the set and calls this per device.
+    func clearArchivedSessions(for deviceId: String) {
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return }
+        archiveManager.clearArchives(for: contactId)
+        Log.info("Cleared all archived sessions for \(contactId)", category: "CryptoManager")
+    }
+
+    /// Forget every archive we hold for a person.
+    ///
+    /// The account-shaped caller — a redeemed invite starting over — wants nothing of the old
+    /// pairing left, and "nothing" is per device now that archives are keyed the way sessions
+    /// are. Clearing under the account id cleared a key nothing had written to.
+    func clearArchivedSessionsForAllDevices(ofPeer peerId: String) {
+        for device in SessionAddressing.deviceIds(ofPeer: peerId) {
+            clearArchivedSessions(for: device)
+        }
     }
 
     func cleanupArchivedSessions() {
@@ -148,12 +156,13 @@ extension CryptoManager {
     }
 
     @discardableResult
-    func restoreSession(for userId: String) -> Bool {
+    func restoreSession(for deviceId: String) -> Bool {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { return false }
-        // A peer we cannot name has no session on file under any name.
-        guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return false }
+        // Keychain session entries are keyed by device, so there is nothing on file under any
+        // other name to look for.
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
         if core.hasSession(contactId: contactId) { return true }
         guard let sessionData = KeychainManager.shared.loadSessionData(for: contactId) else {
             // Not an error: a chat can exist with no session on file — never messaged, or the
@@ -161,12 +170,12 @@ extension CryptoManager {
             // treats `false` as "establish one", and the bulk path reports the aggregate below.
             // This was ERROR until 2026-08-03 and fired on every launch for such contacts, which
             // is noise in the one signal a release run is judged by.
-            Log.info("No stored session for \(userId.prefix(8))… — will be established on demand", category: "CryptoManager")
+            Log.info("No stored session for \(contactId.prefix(8))… — will be established on demand", category: "CryptoManager")
             return false
         }
         do {
             _ = try core.importSession(contactId: contactId, data: [UInt8](sessionData))
-            Log.debug("Restored session (CFE): \(userId)", category: "CryptoManager")
+            Log.debug("Restored session (CFE): \(contactId)", category: "CryptoManager")
             return true
         } catch {
             // Three causes reach here, and the error text distinguishes them: a corrupt blob, a
@@ -180,32 +189,26 @@ extension CryptoManager {
             // Delete cleanly rather than writing empty bytes (writing Data() followed by a failed
             // SecItemAdd would silently delete the key).
             KeychainManager.shared.deleteSession(for: contactId)
-            Log.error("Session import FAILED for \(userId) (unusable — deleted): \(error)", category: "CryptoManager")
+            Log.error("Session import FAILED for \(contactId) (unusable — deleted): \(error)", category: "CryptoManager")
             return false
         }
     }
 
-    func getSessionId(for userId: String) -> String? {
-        guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return nil }
-        return (orchestratorCore?.hasSession(contactId: contactId) == true) ? userId : nil
-    }
-
     // MARK: - Archive Write
 
-    func archiveSession(for userId: String, reason: ArchiveReason) {
+    func archiveSession(for deviceId: String, reason: ArchiveReason) {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else {
             Log.error("Cannot archive session: Core not initialized", category: "CryptoManager")
             return
         }
-        // Nothing to put away for a peer we cannot name: a session was never opened under one.
-        guard let contactId = SessionAddressing.contactId(forPeer: userId) else {
-            Log.info("archiveSession: \(userId.prefix(8))… has no pinned key — nothing addressed to archive", category: "CryptoManager")
-            return
-        }
+        // One device, one ratchet, one archive. Retiring a whole person is `archiveAllSessions`,
+        // which walks the set and calls this per device — the two were the same function until
+        // step 6, and the account-shaped callers retired whichever device happened to be pinned.
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return }
 
-        Log.info("Archiving session for \(userId), reason: \(reason.rawValue)", category: "CryptoManager")
+        Log.info("Archiving session for \(contactId), reason: \(reason.rawValue)", category: "CryptoManager")
 
         // A session lives in two places — the core's memory and the Keychain — and only the first
         // is loaded eagerly. `restoreRecentSessions` imports the recent ones at launch; a contact
@@ -227,12 +230,12 @@ extension CryptoManager {
             do {
                 _ = try core.importSession(contactId: contactId, data: [UInt8](stored))
                 Log.info(
-                    "archiveSession: imported on-disk session for \(userId.prefix(8))… before archiving",
+                    "archiveSession: imported on-disk session for \(contactId.prefix(8))… before archiving",
                     category: "CryptoManager"
                 )
             } catch {
                 Log.error(
-                    "archiveSession: stored session for \(userId.prefix(8))… could not be imported: \(error)",
+                    "archiveSession: stored session for \(contactId.prefix(8))… could not be imported: \(error)",
                     category: "CryptoManager"
                 )
             }
@@ -249,16 +252,16 @@ extension CryptoManager {
                 archivedAt: Date(),
                 reason: reason
             )
-            archiveManager.storeArchive(archive, for: userId)
-            let count = archiveManager.loadArchives(for: userId)?.count ?? 0
+            archiveManager.storeArchive(archive, for: contactId)
+            let count = archiveManager.loadArchives(for: contactId)?.count ?? 0
             Log.info("Session archived (\(count) total for user)", category: "CryptoManager")
         } catch {
             // If the session is already gone from Rust (SessionNotFound) and we already have
             // an archive (e.g. Rust archived it when we received END_SESSION first), treat
             // this as a successful archive-by-other-means and just clean up.
-            let existingCount = archiveManager.loadArchives(for: userId)?.count ?? 0
+            let existingCount = archiveManager.loadArchives(for: contactId)?.count ?? 0
             if existingCount > 0 {
-                Log.info("archiveSession: session already archived via Rust for \(userId.prefix(8))… (reason: \(reason.rawValue)), cleaning up", category: "CryptoManager")
+                Log.info("archiveSession: session already archived via Rust for \(contactId.prefix(8))… (reason: \(reason.rawValue)), cleaning up", category: "CryptoManager")
                 KeychainManager.shared.deleteSessionSuiteId(userId: contactId)
                 _ = orchestratorCore?.removeSession(contactId: contactId)
                 KeychainManager.shared.deleteSession(for: contactId)
@@ -276,7 +279,7 @@ extension CryptoManager {
             // the severity moves, and only when the core agrees nothing is there.
             if core.hasSession(contactId: contactId) == false {
                 Log.info(
-                    "archiveSession: nothing to archive for \(userId.prefix(8))… (reason: \(reason.rawValue))",
+                    "archiveSession: nothing to archive for \(contactId.prefix(8))… (reason: \(reason.rawValue))",
                     category: "CryptoManager"
                 )
                 return
@@ -289,17 +292,17 @@ extension CryptoManager {
 
         // 2. Remove from active storage — only reached when archive is safely stored above.
         KeychainManager.shared.deleteSessionSuiteId(userId: contactId)
-        Log.info("Removed session suite ID from Keychain: \(userId)", category: "CryptoManager")
+        Log.info("Removed session suite ID from Keychain: \(contactId)", category: "CryptoManager")
 
         let removed = (orchestratorCore?.removeSession(contactId: contactId)) ?? false
         if removed {
-            Log.info("Removed session from Rust core: \(userId)", category: "CryptoManager")
+            Log.info("Removed session from Rust core: \(contactId)", category: "CryptoManager")
         } else {
-            Log.info("Session not found in Rust core: \(userId)", category: "CryptoManager")
+            Log.info("Session not found in Rust core: \(contactId)", category: "CryptoManager")
         }
 
         KeychainManager.shared.deleteSession(for: contactId)
-        Log.info("Removed session from Keychain: \(userId)", category: "CryptoManager")
+        Log.info("Removed session from Keychain: \(contactId)", category: "CryptoManager")
     }
 
     /// Store a session archive produced by Rust's `lifecycle.archive_session` and clear the
@@ -307,10 +310,9 @@ extension CryptoManager {
     ///
     /// Rust has already removed the session from memory — do NOT call `exportSession` here.
     func acceptSessionTerminated(contactId peerId: String, archiveBytes: Data) {
-        // `peerId` arrives from the core's `SessionTerminated`, so it already names a device; the
-        // seam passes it through. Resolving keeps this honest if a caller ever hands an account id.
-        guard let contactId = SessionAddressing.contactId(forPeer: peerId) else {
-            Log.error("acceptSessionTerminated: cannot name \(peerId.prefix(8))… — archive dropped", category: "CryptoManager")
+        // `peerId` arrives from the core's `SessionTerminated`, so it already names a device.
+        guard let contactId = SessionAddressing.asDevice(peerId) else {
+            Log.error("acceptSessionTerminated: \(peerId.prefix(8))… is not a device — archive dropped", category: "CryptoManager")
             return
         }
         guard !archiveBytes.isEmpty else {
@@ -331,32 +333,35 @@ extension CryptoManager {
     /// after a failed decrypt the INITIATOR session was just moved to archives —
     /// this undoes that and makes it active again so we keep the INITIATOR role.
     @discardableResult
-    func restoreLatestArchive(for userId: String) -> Bool {
-        guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return false }
+    func restoreLatestArchive(for deviceId: String) -> Bool {
+        // Resolved once and used for every store below. It was resolved once and used for the
+        // core only: the archives, the suite id and the re-save were all read and written under
+        // the caller's id, so an account id read an archive list nothing had written under.
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore,
-              let archives = archiveManager.loadArchives(for: userId),
+              let archives = archiveManager.loadArchives(for: contactId),
               !archives.isEmpty else { return false }
         let idx = archives.count - 1
         let latest = archives[idx]
         do {
-            let suiteIdBefore = KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0
+            let suiteIdBefore = KeychainManager.shared.loadSessionSuiteId(userId: contactId) ?? 0
             _ = try core.importSession(contactId: contactId, data: [UInt8](latest.sessionData))
             // Use typed accessor — no JSON round-trip needed.
             let suiteId = core.getSessionSuiteId(contactId: contactId)
             if suiteId > 0 {
                 KeychainManager.shared.saveSessionSuiteId(userId: contactId, suiteId: suiteId)
-                Log.info("SESSION_STATE[restore_suite_id]: peer=\(userId.prefix(8))… suiteId \(suiteIdBefore) → \(suiteId)", category: "SessionInit")
+                Log.info("SESSION_STATE[restore_suite_id]: device=\(contactId.prefix(8))… suiteId \(suiteIdBefore) → \(suiteId)", category: "SessionInit")
             } else {
-                Log.error("SESSION_STATE[restore_suite_id_failed]: peer=\(userId.prefix(8))… suiteId_before=\(suiteIdBefore) — getSessionSuiteId returned 0 after import; remote decrypt will likely fail", category: "CryptoManager")
+                Log.error("SESSION_STATE[restore_suite_id_failed]: device=\(contactId.prefix(8))… suiteId_before=\(suiteIdBefore) — getSessionSuiteId returned 0 after import; remote decrypt will likely fail", category: "CryptoManager")
             }
-            saveSessionToKeychain(for: userId)
-            archiveManager.restoreArchiveToCurrent(for: userId, index: idx)
-            Log.info("Restored INITIATOR session from archive for \(userId.prefix(8))… (tie-break)", category: "CryptoManager")
+            saveSessionToKeychain(forDevice: contactId)
+            archiveManager.restoreArchiveToCurrent(for: contactId, index: idx)
+            Log.info("Restored INITIATOR session from archive for \(contactId.prefix(8))… (tie-break)", category: "CryptoManager")
             return true
         } catch {
-            Log.error("restoreLatestArchive failed for \(userId.prefix(8))…: \(error)", category: "CryptoManager")
+            Log.error("restoreLatestArchive failed for \(contactId.prefix(8))…: \(error)", category: "CryptoManager")
             return false
         }
     }
@@ -366,7 +371,9 @@ extension CryptoManager {
     /// Try to decrypt message with archived sessions.
     /// Returns raw plaintext bytes if successful, throws if all archives fail.
     func tryDecryptWithArchivedSessions(message: ChatMessage) throws -> Data {
-        guard let contactId = SessionAddressing.contactId(forPeer: message.from) else {
+        // Same id for the core and for the archive store, for the reason above: these were two
+        // ids and the archives were loaded under the unresolved one.
+        guard let contactId = SessionAddressing.asDevice(message.from) else {
             throw CryptoManagerError.sessionNotFound
         }
         coreLock.lock()
@@ -375,14 +382,14 @@ extension CryptoManager {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        let archives = archiveManager.loadArchives(for: message.from)
+        let archives = archiveManager.loadArchives(for: contactId)
 
         guard let archives = archives, !archives.isEmpty else {
-            Log.debug("No archived sessions available for \(message.from)", category: "CryptoManager")
+            Log.debug("No archived sessions available for \(contactId)", category: "CryptoManager")
             throw CryptoManagerError.sessionNotFound
         }
 
-        Log.info("Trying \(archives.count) archived sessions for \(message.from)", category: "CryptoManager")
+        Log.info("Trying \(archives.count) archived sessions for \(contactId)", category: "CryptoManager")
 
         // Snapshot the active session so we can restore it if all archives fail.
         let activeSessionSnapshot = try? Data(core.exportSession(contactId: contactId))
@@ -404,8 +411,8 @@ extension CryptoManager {
                 )
 
                 Log.info("Decrypted with archived session #\(index) (archived at: \(archive.archivedAt))", category: "CryptoManager")
-                saveSessionToKeychain(for: message.from)
-                archiveManager.restoreArchiveToCurrent(for: message.from, index: index)
+                saveSessionToKeychain(forDevice: contactId)
+                archiveManager.restoreArchiveToCurrent(for: contactId, index: index)
                 Log.info("Restored archived session as current", category: "CryptoManager")
                 return Data(result.plaintext)
 

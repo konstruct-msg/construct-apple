@@ -136,7 +136,7 @@ final class ChatSendCoordinator {
             return
         }
 
-        let hasSession = CryptoManager.shared.hasSession(for: recipientId)
+        let hasSession = CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: recipientId)
 
         if !hasSession {
             enqueueUntilSessionExists(

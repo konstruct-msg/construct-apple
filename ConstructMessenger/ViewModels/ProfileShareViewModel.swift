@@ -66,7 +66,7 @@ class ProfileShareViewModel {
             defer { self.isSharingProfile = false }
 
             // Check if session is ready; if not, initialize it on-demand
-            if !CryptoManager.shared.hasSession(for: userId) {
+            if !CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId) {
                 Log.info("No session for \(userId) — initializing before profile share", category: "ProfileShare")
                 let service = SessionInitializationService.shared
                 do {

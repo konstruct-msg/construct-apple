@@ -36,7 +36,7 @@ final class CryptoSessionInitializationService {
         // A bundle with no usable identity key names nobody, and a session cannot be opened with
         // nobody — better to fail here than to open one under an account id.
         guard let contactId = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientBundle.identityPublic)
-            ?? SessionAddressing.contactId(forPeer: userId) else {
+            ?? SessionAddressing.pinnedDevice(ofPeer: userId) else {
             Log.error("Session init: cannot name a device for \(userId.prefix(8))… — bundle carries no usable identity key", category: "CryptoManager")
             throw CryptoManagerError.invalidKeyData
         }
@@ -137,7 +137,7 @@ final class CryptoSessionInitializationService {
         // A bundle with no usable identity key names nobody, and a session cannot be opened with
         // nobody — better to fail here than to open one under an account id.
         guard let contactId = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientBundle.identityPublic)
-            ?? SessionAddressing.contactId(forPeer: userId) else {
+            ?? SessionAddressing.pinnedDevice(ofPeer: userId) else {
             Log.error("Session init: cannot name a device for \(userId.prefix(8))… — bundle carries no usable identity key", category: "CryptoManager")
             throw CryptoManagerError.invalidKeyData
         }

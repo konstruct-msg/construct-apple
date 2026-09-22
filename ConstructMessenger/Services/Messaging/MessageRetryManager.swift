@@ -191,7 +191,7 @@ class MessageRetryManager {
         recipientId: String,
         context: NSManagedObjectContext
     ) -> [StoredCopy] {
-        let pinnedDevice = SessionAddressing.contactId(forPeer: recipientId)
+        let pinnedDevice = SessionAddressing.pinnedDevice(ofPeer: recipientId)
         var copies: [StoredCopy] = []
         for chunk in chunks {
             guard let device = chunk.recipientDeviceId ?? pinnedDevice else { continue }
@@ -391,7 +391,7 @@ class MessageRetryManager {
         //
         // If the core is NOT ready, hasSession returns false for every contact (startup race);
         // a plain defer is correct — a later forceReconnect re-triggers us once the core builds.
-        guard CryptoManager.shared.hasSession(for: recipientId) else {
+        guard CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: recipientId) else {
             if CryptoManager.shared.isCoreReady {
                 for message in queuedMessages {
                     OutgoingWirePayloadStore.shared.remove(baseMessageId: message.id)
@@ -672,7 +672,7 @@ class MessageRetryManager {
             return .failed
         }
 
-        guard CryptoManager.shared.hasSession(for: recipientId) else {
+        guard CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: recipientId) else {
             // Session vanished again before we got here — nudge a re-establish and keep it queued.
             SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
             return .queued

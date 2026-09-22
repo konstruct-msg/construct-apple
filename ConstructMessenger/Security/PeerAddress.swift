@@ -92,7 +92,7 @@ struct PeerAddress: Equatable, Sendable, CustomStringConvertible {
     /// tie-break — which have no account-keyed meaning at all. `nil` when the peer has no pinned
     /// key, which is the state in which no session with them exists.
     func deviceOrPinned() -> String? {
-        device ?? SessionAddressing.contactId(forPeer: account)
+        device ?? SessionAddressing.pinnedDevice(ofPeer: account)
     }
 
     /// Short form for logs: `<account>…/<device>…`, or `<account>…/—` when no device is named.

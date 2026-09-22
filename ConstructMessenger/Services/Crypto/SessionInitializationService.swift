@@ -155,12 +155,17 @@ class SessionInitializationService {
         deleteExisting: Bool = true,
         allowStale: Bool = false
     ) throws -> Void {
-        // Proactively delete stale session if requested
-        if deleteExisting {
-            if CryptoManager.shared.hasSession(for: userId) {
-                CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
-                Log.info("Proactively deleted any existing session for \(userId) before initialization.", category: "SessionInit")
-            }
+        // Proactively delete stale session if requested.
+        //
+        // The device is named by the bundle in hand, not by the contact list: this init is about
+        // to open a ratchet with *that* device, so that is the one whose stale session has to go.
+        // Resolving the account instead retired whichever device was pinned — on a multi-device
+        // peer, routinely a healthy session with a device this init never touches.
+        if deleteExisting,
+           let target = SessionAddressing.cryptoIdentity(ofIdentityKey: bundle.identityPublic),
+           CryptoManager.shared.hasSession(for: target) {
+            CryptoManager.shared.archiveSession(for: target, reason: .manualReset)
+            Log.info("Proactively deleted the existing session with \(target.prefix(8))… before initialization.", category: "SessionInit")
         }
 
         // Epoch replay-attack check: reject bundles where the server's monotonic
@@ -287,10 +292,10 @@ class SessionInitializationService {
     /// burning a second OTPK and replacing the first session, which is the 2026-07-31 divergence
     /// this map exists to prevent.
     ///
-    /// What unblocks it is the run naming its target device up front instead of resolving
-    /// `contactId(forPeer:)` inside — step 6 of the same decision. Until then the account key is
-    /// the correct one, because today one INITIATOR run targets exactly one pinned device and the
-    /// two keys are 1:1.
+    /// What unblocks it is the run naming its target device up front instead of resolving the
+    /// pinned one inside. Step 6 took that resolution out of the crypto layer; this service still
+    /// does it, and until it stops the account key is the correct one, because one INITIATOR run
+    /// targets exactly one pinned device and the two keys are 1:1.
     private var proactiveInitTasks: [String: Task<ProactiveInitOutcome, Never>] = [:]
 
     /// Whether the peer's own session init is in our hands — received and not yet completed.
@@ -347,7 +352,7 @@ class SessionInitializationService {
             myDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
             // The peer's pinned device, or nothing at first contact — the core takes an
             // unnameable peer as "cannot rank", not as "cannot write to".
-            peerDeviceId: SessionAddressing.contactId(forPeer: userId) ?? "",
+            peerDeviceId: SessionAddressing.pinnedDevice(ofPeer: userId) ?? "",
             ourInitInFlight: proactiveInitTasks[userId] != nil,
             peerInitInFlight: peerInitInFlight?(userId) ?? false,
             haveOutboundWork: hasOutboundWork
@@ -567,7 +572,7 @@ class SessionInitializationService {
         /// offline for a long time and no amount of waiting will help — degrade instead.
         let staleSPKFastFailDays: Double = 30.25
 
-        let resolvedDevice = SessionAddressing.contactId(forPeer: userId)
+        let resolvedDevice = SessionAddressing.pinnedDevice(ofPeer: userId)
         var opened: [String] = []
         /// A device we already hold a session with and left alone. Not an opening, and not a
         /// failure either: the caller's `onSuccess` is what flushes a queue, and a run that
@@ -682,7 +687,7 @@ class SessionInitializationService {
     /// `stale-peer-reachability` decision record (Phase 2).
     func upgradeAtRiskSessionIfPeerFresh(userId: String) async {
         guard KeychainManager.shared.loadSessionAtRiskFlag(for: userId) else { return }
-        guard CryptoManager.shared.hasSession(for: userId) else { return }
+        guard CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId) else { return }
 
         // Rate-limit per contact.
         let attemptKey = Self.atRiskUpgradeAttemptPrefix + userId

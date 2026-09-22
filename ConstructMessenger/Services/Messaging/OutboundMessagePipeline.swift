@@ -100,10 +100,11 @@ struct RecipientSendReport {
 ///
 /// ## What is deliberately unchanged
 ///
-/// Session *establishment*. Callers still gate on `CryptoManager.hasSession(for: account)` — a
-/// session with the pinned device — and hand a peer without one to the handshake; a device
-/// found here without a session is opened from its bundle, as the fan-out always did. Which
-/// devices a send must hold sessions with, and who opens them, is the machine's question
+/// Session *establishment*. Callers still gate on `CryptoManager.hasSessionWithAnyDevice(ofPeer:)`
+/// — since step 6 that is a fold over the set rather than a question about the pinned device — and
+/// hand a peer with no session at all to the handshake; a device found here without a session is
+/// opened from its bundle, as the fan-out always did. Which devices a send must hold sessions
+/// with, and who opens them, is the machine's question
 /// (`decisions/session-is-one-state-machine.md`) and is not answered by moving the loop.
 @MainActor
 final class OutboundMessagePipeline {
@@ -372,7 +373,7 @@ final class OutboundMessagePipeline {
             let encryptedPayload = try OutboundSessionService.shared.encryptOutgoing(
                 plaintext: payload,
                 messageId: chunkMessageId,
-                recipientId: target.deviceId
+                toDevice: target.deviceId
             )
             if kind == .message {
                 OutgoingWirePayloadStore.shared.saveChunk(
@@ -413,7 +414,7 @@ final class OutboundMessagePipeline {
                 try await Task.sleep(nanoseconds: jitterMs * 1_000_000)
             }
         }
-        CryptoManager.shared.saveSessionToKeychain(for: target.deviceId)
+        CryptoManager.shared.saveSessionToKeychain(forDevice: target.deviceId)
         return Self.aggregate(responses: responses, baseMessageId: baseMessageId)
     }
 

@@ -150,7 +150,13 @@ final class MessageRouter {
         // Stamp the session this was held *against*. Without it the replay cannot tell an init
         // that is still live from one a later handshake has already replaced — see
         // SessionReducer.heldReplayDisposition.
-        heldAgainstEpoch[message.id] = CryptoManager.shared.sessionEpoch(for: userId)
+        // The gate is keyed by account and the epoch is per ratchet, so this stamps the pinned
+        // device's — which is what it stamped before, when `sessionEpoch` resolved the account
+        // itself. Both stamps come from here and from `replayHeldMessages`, so they compare like
+        // for like. The gate's account keying is the coordinator's remaining half
+        // (`decisions/session-is-one-state-machine.md`, steps 3–5), and this moves with it.
+        heldAgainstEpoch[message.id] = SessionAddressing.pinnedDevice(ofPeer: userId)
+            .flatMap { CryptoManager.shared.sessionEpoch(for: $0) }
         Log.info("SESSION_STATE[confirm_hold]: holding msgNum=\(message.messageNumber) from \(userId.prefix(8))… (\(reason)) — buffer \(pendingQueue.count(for: userId))", category: "MessageRouter")
         PerformanceMetrics.shared.record(.confirmHold, label: reason)
         return .deferred
@@ -176,7 +182,8 @@ final class MessageRouter {
         }
         let held = pendingQueue.drain(for: userId)
         guard !held.isEmpty else { return }
-        let current = CryptoManager.shared.sessionEpoch(for: userId)
+        let current = SessionAddressing.pinnedDevice(ofPeer: userId)
+            .flatMap { CryptoManager.shared.sessionEpoch(for: $0) }
         var replayed = 0
         var superseded = 0
         for message in held {
@@ -526,7 +533,7 @@ final class MessageRouter {
                 && !message.isEndSession
                 && !message.isSessionResetInit
                 && !message.isSenderSync
-                && !CryptoManager.shared.hasSession(for: otherUserId)
+                && !CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: otherUserId)
                 && !FailedInitMessageStore.shared.contains(message.id)
             if !isOrphanedInit {
                 Log.debug("Skipping already-processed message \(message.id.prefix(8))… (ACK store)", category: "MessageRouter")
@@ -752,10 +759,13 @@ final class MessageRouter {
         // pinned session was down — a reset in flight, a teardown just applied — read as "no
         // session, mid-ratchet" and answered with an END_SESSION for the whole peer, though the
         // session it was actually sent on was alive and listed two lines below as the first
-        // decrypt candidate. An unnamed sender still resolves to the pinned device.
-        let sessionOwner = namedSenderDevice ?? otherUserId
-        CryptoManager.shared.restoreSession(for: sessionOwner)
-        let hasSession = CryptoManager.shared.hasSession(for: sessionOwner)
+        // decrypt candidate. An unnamed sender still falls back to the pinned device — named here
+        // rather than resolved inside `hasSession`, which takes a device since step 6.
+        let sessionOwner = namedSenderDevice ?? SessionAddressing.pinnedDevice(ofPeer: otherUserId)
+        let hasSession = sessionOwner.map {
+            CryptoManager.shared.restoreSession(for: $0)
+            return CryptoManager.shared.hasSession(for: $0)
+        } ?? false
         Log.info("SESSION_STATE[incoming_message]: userId=\(otherUserId.prefix(8))..., device=\(namedSenderDevice.map { String($0.prefix(8)) } ?? "pinned"), hasSession=\(hasSession), messageId=\(message.id.prefix(8))...", category: "SessionInit")
         
         if !hasSession {
@@ -816,7 +826,7 @@ final class MessageRouter {
         }
         // An account is a set of devices and each has its own ratchet, so "which session decrypts
         // this" has as many answers as the peer has devices. Until now it had exactly one —
-        // `contactId(forPeer:)` — and a message from the peer's second device was fed to the first
+        // `pinnedDevice(ofPeer:)` — and a message from the peer's second device was fed to the first
         // device's session, failed AEAD on keys that were entirely valid, and was treated as a
         // broken session: heal, and a teardown of the healthy one.
         //
@@ -1228,7 +1238,7 @@ final class MessageRouter {
         namedSender: String?,
         in context: NSManagedObjectContext
     ) -> [String] {
-        let pinned = SessionAddressing.contactId(forPeer: otherUserId)
+        let pinned = SessionAddressing.pinnedDevice(ofPeer: otherUserId)
         guard let core = CryptoManager.shared.orchestratorCore else {
             return pinned.map { [$0] } ?? []
         }
@@ -1291,9 +1301,9 @@ final class MessageRouter {
         // contact row — and stays one; only what crosses into the core is translated.
         //
         // Which device is now the caller's to decide, because an account has several and only
-        // decryption can say which one sent this. `contactId(forPeer:)` remains the answer when
+        // decryption can say which one sent this. `pinnedDevice(ofPeer:)` remains the answer when
         // the caller has nothing better — that is the single-device case, unchanged.
-        guard let contactId = asDevice ?? SessionAddressing.contactId(forPeer: otherUserId) else {
+        guard let contactId = asDevice ?? SessionAddressing.pinnedDevice(ofPeer: otherUserId) else {
             Log.error("buildIncomingEvent: cannot name a device for \(otherUserId.prefix(8))… — no pinned identity key", category: "MessageRouter")
             return nil
         }
@@ -1343,7 +1353,7 @@ final class MessageRouter {
             return nil
         }
 
-        guard let contactId = asDevice ?? SessionAddressing.contactId(forPeer: otherUserId) else {
+        guard let contactId = asDevice ?? SessionAddressing.pinnedDevice(ofPeer: otherUserId) else {
             Log.error("buildIncomingEventLegacy: cannot name a device for \(otherUserId.prefix(8))…", category: "MessageRouter")
             return nil
         }
@@ -1388,7 +1398,7 @@ final class MessageRouter {
                 kyberOtpkId: message.kyberOtpkId,
                 contactId: contactId
             )
-            CryptoManager.shared.saveSessionToKeychain(for: contactId)
+            CryptoManager.shared.saveSessionToKeychain(forDevice: contactId)
         } catch {
             // Downgrade rather than tear down: the classic ratchet is intact and the peer stays
             // reachable. The flag is what stops us claiming a PQ guarantee we do not hold.
@@ -2004,10 +2014,12 @@ final class MessageRouter {
             }
             Log.info("SESSION_STATE[heal_triggered]: becoming RESPONDER (core ranked \(ranked)), suiteId=\(suiteId)", category: "SessionInit")
             // The desynchronised session is the one the core just named. Archiving by account
-            // resolves through `contactId(forPeer:)` to the peer's *pinned* device, which on a
+            // resolves through `pinnedDevice(ofPeer:)` to the peer's *pinned* device, which on a
             // multi-device peer is not necessarily this one — so it put away a healthy session
             // and left the broken one in place.
-            CryptoManager.shared.archiveSession(for: peer.deviceOrPinned() ?? peer.account, reason: .manualReset)
+            if let diverged = peer.deviceOrPinned() {
+                CryptoManager.shared.archiveSession(for: diverged, reason: .manualReset)
+            }
             SessionHealingService.shared.enqueue(message, in: context)
             pendingQueue.enqueue(message, for: peer.account)
             delegate?.messageRouter(self, needsSessionHeal: peer, failedMessage: message)
@@ -2188,8 +2200,8 @@ final class MessageRouter {
                 Log.error("SESSION_RESET_INIT: Rust archive failed for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
             }
         }
-        if !rustHandled {
-            CryptoManager.shared.archiveSession(for: archiveContactId ?? userId, reason: .endSessionReceived)
+        if !rustHandled, let archiveContactId {
+            CryptoManager.shared.archiveSession(for: archiveContactId, reason: .endSessionReceived)
         }
 
         // 2. Re-queue outgoing messages sent under the old session (cannot be decrypted by peer).
@@ -2237,7 +2249,7 @@ final class MessageRouter {
     /// existing Swift `archiveSession` to preserve existing behaviour.
     /// `peer.device` is the device that sent the teardown, from its sealed certificate, and the
     /// session archived is that device's. Until 2026-09-21 this took the account alone and
-    /// archived whatever `contactId(forPeer:)` named — the pinned device — so a "Reset session"
+    /// archived whatever `pinnedDevice(ofPeer:)` named — the pinned device — so a "Reset session"
     /// tapped on a peer's *second* device tore down our ratchet with its *first*: on the stand,
     /// B's reset archived C's session with A (`acceptSessionTerminated: archived session for
     /// c6bfaaef…` at 18:26:04, sent by b814c8ab), A kept sending on a session C no longer had,
@@ -2287,10 +2299,12 @@ final class MessageRouter {
             }
         }
 
-        if !rustHandled {
-            // A device id passes through the seam unchanged, so the fallback archives the same
-            // ratchet the Rust path would have.
-            CryptoManager.shared.archiveSession(for: archiveContactId ?? userId, reason: .endSessionReceived)
+        if !rustHandled, let archiveContactId {
+            // The device the teardown is about — the same ratchet the Rust path would have put
+            // away. The `?? userId` that used to stand here handed an account to a per-device
+            // archive, which resolved back to the pinned device: a different ratchet whenever the
+            // sender was not the pinned one.
+            CryptoManager.shared.archiveSession(for: archiveContactId, reason: .endSessionReceived)
             Log.debug("END_SESSION: session archived via Swift fallback for \(peer)", category: "MessageRouter")
         }
 
@@ -3162,7 +3176,7 @@ final class MessageRouter {
 
         if !original.senderDeviceId.isEmpty {
             CryptoManager.shared.saveSessionToKeychain(
-                for: original.senderDeviceId
+                forDevice: original.senderDeviceId
             )
         }
         Log.info("SENDER_SYNC: saved outgoing message in conversation with \(partnerUserId.prefix(8))…", category: "MessageRouter")

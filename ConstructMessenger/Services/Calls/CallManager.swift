@@ -98,7 +98,12 @@ final class CallManager: CallUIManaging {
     /// be running as RESPONDER (D858E6FE). `reestablishSessionForQueuedOutbound`
     /// no-ops when an init is in flight or a session already exists.
     private func ensureSessionForOutgoingSignal(to userId: String) async throws {
-        switch outgoingCallSessionDisposition(hasSession: CryptoManager.shared.hasSession(for: userId)) {
+        // The device the offer will actually be encrypted for — the pinned one, as call
+        // signalling still is. Asking about any device of the account would answer yes on a
+        // session this send cannot use.
+        let signalDevice = SessionAddressing.pinnedDevice(ofPeer: userId)
+        let holds = { signalDevice.map { CryptoManager.shared.hasSession(for: $0) } ?? false }
+        switch outgoingCallSessionDisposition(hasSession: holds()) {
         case .encryptNow:
             return
         case .waitThenInit:
@@ -111,7 +116,7 @@ final class CallManager: CallUIManaging {
         SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: userId)
         let deadline = Date().addingTimeInterval(NetworkTiming.Calls.sessionReadyWait)
         while Date() < deadline {
-            if CryptoManager.shared.hasSession(for: userId) {
+            if holds() {
                 Log.info("DR session ready for call signal to \(userId.prefix(8))…", category: "Calls")
                 return
             }
@@ -1298,7 +1303,13 @@ final class CallManager: CallUIManaging {
         // (VoIP push is unaffected — it comes from signaling-service's own RPC, not from this
         // envelope's type.) See decisions/sealed-content-type-inside-the-plaintext-frame.md.
         // Seam: the orchestrator keeps sessions under a device id like the rest of the core.
-        guard let peerContactId = SessionAddressing.contactId(forPeer: peerUserId) else {
+        //
+        // **Still the pinned device, and named as such.** Call signalling is the one surface step
+        // 6 did not convert: an offer reaches whichever device the pin happens to hold, so a
+        // person's second device never rings. Fixing it is not a rename — it is deciding what a
+        // call to someone with two devices means, which is its own decision and not this one.
+        // `decisions/a-peer-is-a-set-of-devices.md`.
+        guard let peerContactId = SessionAddressing.pinnedDevice(ofPeer: peerUserId) else {
             Log.error("Call signal: cannot name a device for \(peerUserId.prefix(8))… — no pinned identity key", category: "Calls")
             return .failed
         }
@@ -1400,7 +1411,7 @@ final class CallManager: CallUIManaging {
                     // copy of the `session_` prefix rule and did nothing at all for every other
                     // slot — silently, because a string key has no case the compiler can miss.
                     if case .session(let contactId) = slot {
-                        CryptoManager.shared.saveSessionToKeychain(for: contactId)
+                        CryptoManager.shared.saveSessionToKeychain(forDevice: contactId)
                         CryptoManager.shared.saveOrchestratorStateCFE()
                     }
                 case .notifyError(let code, let msg):

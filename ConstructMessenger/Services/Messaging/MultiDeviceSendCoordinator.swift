@@ -786,7 +786,7 @@ final class MultiDeviceSendCoordinator {
             let encPayload = try OutboundSessionService.shared.encryptOutgoing(
                 plaintext: plaintext,
                 messageId: messageId,
-                recipientId: contactId
+                toDevice: contactId
             )
 
             // conversation_id stays empty on purpose. `direct:<me>:<partner>` names the person on
@@ -812,7 +812,7 @@ final class MultiDeviceSendCoordinator {
                 sealing: .identified(.ownDevices)
             )
 
-            CryptoManager.shared.saveSessionToKeychain(for: contactId)
+            CryptoManager.shared.saveSessionToKeychain(forDevice: contactId)
             Log.info("MultiDevice[sync]: sent to \(contactId.prefix(20))…", category: "MultiDevice")
             return true
         } catch {

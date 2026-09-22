@@ -500,7 +500,7 @@ struct DiagnosticsView: View {
         let chats = (try? context.fetch(Chat.fetchRequest())) ?? []
         reinitTargets = chats.compactMap { chat in
             guard let user = chat.otherUser, !user.id.isEmpty else { return nil }
-            guard CryptoManager.shared.hasSession(for: user.id) else { return nil }
+            guard CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: user.id) else { return nil }
             return ReinitTarget(id: user.id, name: user.resolvedDisplayName)
         }
         if reinitTargets.isEmpty {

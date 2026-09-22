@@ -64,35 +64,64 @@ enum SessionAddressing {
         return deriveDeviceId(identityPublicKey: [UInt8](identityKey))
     }
 
-    /// Translate an id from the account space into the crypto space.
+    /// The id as a device id, or `nil` when it is not one.
     ///
-    /// This is the seam. **Above it** — view models, routers, Core Data — an id names a person:
-    /// a `ServerUserId`. **Below it** — the Rust core, the Keychain session accounts, the AD of
-    /// every ratchet — an id names a device: a `CryptoDeviceId`. Everything that crosses passes
-    /// through here, and nothing else in the app is allowed to know both spaces.
+    /// **What the crypto layer asks.** Everything below the seam — the core, the Keychain session
+    /// accounts, the AD of every ratchet — operates on exactly one device, so an id arriving there
+    /// either names one or names nothing this operation can act on. Checking is all that is left
+    /// to do; there is nothing to translate.
+    ///
+    /// This replaced a resolution (`contactId(forPeer:)`, now `pinnedDevice(ofPeer:)`) at those
+    /// call sites, and the difference is the whole of step 6 of
+    /// `decisions/a-peer-is-a-set-of-devices.md`. Resolving here looked like generosity — hand it
+    /// an account and it finds you a device — but for a peer with two devices "a device" is not an
+    /// answer, and the one it found was always the same one: whichever `User.knownIdentityKey`
+    /// happened to hold. Encrypt, `hasSession`, archive and background decrypt each inherited that
+    /// choice without anyone choosing it.
+    ///
+    /// `nil` is a **defect at the call site**, not a state: it means an account id reached a
+    /// per-device operation, which is the fault the three-simulator stand caught twice on
+    /// 2026-08-26. It is logged as an error for that reason, and `#function` names the caller so
+    /// the log says which one rather than that it happened.
+    ///
+    /// A caller holding an account id expands it first — `deviceIds(ofPeer:in:)` — and acts on
+    /// every device in the set.
+    static func asDevice(_ id: String, caller: StaticString = #function) -> String? {
+        if isCryptoIdentity(id) { return id }
+        Log.error(
+            "\(caller) was handed \(id.prefix(8))… — an account id where a device id is required",
+            category: "Crypto"
+        )
+        return nil
+    }
+
+    /// The single device derived from the peer's pinned identity key — **the offline answer**.
+    ///
+    /// Not "which device is this peer". For an account with two devices there is no such answer,
+    /// and this returns the one whose key `User.knownIdentityKey` happens to hold — a slot with
+    /// room for one. A Desktop linked 2026-08-30 failed to unseal 155 of 155 envelopes because
+    /// every caller below the seam addressed that one device as though it were the account.
+    ///
+    /// It survived that decision, under a name that says what it is, because one thing it does is
+    /// still needed and nothing else does it: it answers **with no network and no Core Data
+    /// relationship**, from a key pinned at verify time, during a locked-device background
+    /// decrypt. `PeerDevice` rows are the set, and the set is asked first; this is what is left
+    /// when the set is empty, which is every account whose bundle has never been fetched on this
+    /// install.
+    ///
+    /// Three call sites outside this file may use it, and each names it `pinned…` at the variable:
+    /// the offline fallback in `deviceIds(ofPeer:in:)`, the send-tag fallback, and the coordinator's
+    /// teardown addressing when the set is empty. Anything on the encrypt, `hasSession` or decrypt
+    /// path asks `asDevice(_:)` instead and is handed a device by its caller.
     ///
     /// An id that is already a device id passes through unchanged. This branch is an
     /// **optimisation, not a correctness rule**: removing it is behaviour-preserving, because a
-    /// device id has no `User` row and the resolution below returns nil for it either way. It is
-    /// here so the per-device paths — sender-sync, fan-out, candidate walking, all of which
-    /// already hold a device id — do not take a Core Data fetch per call on the receive path.
-    ///
-    /// ## Why this returns nil rather than the id it was given
-    ///
-    /// It used to hand back the input when the peer's key had never been pinned, on the reasoning
-    /// that the call which followed would fail as "no session" anyway. That made this function
-    /// answer two different questions with the same type — here is the device, and here is what
-    /// you gave me — which is the defect class the whole flip was undertaken to remove, left
-    /// standing in the one function whose job is to remove it.
-    ///
-    /// It also cost the guard. With an account id able to leave here legitimately, nothing could
-    /// assert that what reaches the core is a device id, and two of the four defects the
-    /// three-simulator stand caught on 2026-08-26 were exactly an account id reaching the core.
+    /// device id has no `User` row and the resolution below returns nil for it either way.
     ///
     /// `nil` means "this peer cannot be named", which is the same state in which no session can
     /// exist. Callers treat it as "no session" — never as an error, and never by substituting the
     /// account id.
-    static func contactId(forPeer id: String) -> String? {
+    static func pinnedDevice(ofPeer id: String) -> String? {
         if SessionAddressing.isCryptoIdentity(id) { return id }
         guard let deviceId = SessionAddressing.cryptoIdentity(ofUser: id) else {
             Log.debug("No pinned identity key for \(id.prefix(8))… — cannot name a device", category: "Crypto")
@@ -157,8 +186,9 @@ enum SessionAddressing {
 
     /// Every device of `accountId` this app has been told about, oldest first.
     ///
-    /// **This is the replacement for `contactId(forPeer:)`.** That function answered "which device
-    /// is this peer", and for an account with two devices there is no such answer — it returned the
+    /// **This is what an account id becomes.** The function that used to stand here answered
+    /// "which device is this peer" — it is `pinnedDevice(ofPeer:)` now, named for what it does —
+    /// and for an account with two devices there is no such answer: it returned the
     /// one derived from the single `User.knownIdentityKey` slot, and every caller below it then
     /// addressed that device as though it were the account. A Desktop linked 2026-08-30 failed to
     /// unseal 155 of 155 envelopes for exactly that reason. See
@@ -339,9 +369,8 @@ enum SessionAddressing {
     /// pinned for it.
     ///
     /// The fallback is deliberate and narrow: an account we have never fetched a bundle for has no
-    /// pinned set, and `contactId(forPeer:)` is then the only name we hold. That is the
-    /// single-device case the pin was always right for, and it is the last place in this file
-    /// allowed to call that function — everything else takes the set.
+    /// pinned set, and `pinnedDevice(ofPeer:)` is then the only name we hold. That is the
+    /// single-device case the pin was always right for.
     ///
     /// Empty means we cannot name anyone, which is the same state in which no session exists.
     /// Callers skip; they must never fall back to addressing the account — that is what put a
@@ -353,7 +382,30 @@ enum SessionAddressing {
         if isCryptoIdentity(peerId) { return [peerId] }
         let set = devices(ofPeer: peerId, in: context).map(\.deviceId)
         if !set.isEmpty { return set }
-        return contactId(forPeer: peerId).map { [$0] } ?? []
+        return pinnedDevice(ofPeer: peerId).map { [$0] } ?? []
+    }
+
+    /// The peer's device set, read on a context it is legal to read it on.
+    ///
+    /// The overload above takes a context because its callers have one. These callers do not: a
+    /// send gate, a retry decision, a preflight — and several of them run off the main actor,
+    /// where `viewContext` does not fail but **returns nothing**, which reads as "this peer has no
+    /// devices" and is indistinguishable from the truth at the call site. `AccountSendTag` found
+    /// this first and says so in its own comment; every `ofPeer:` fold has the same exposure.
+    ///
+    /// A fresh background context rather than `viewContext.performAndWait` off the main thread:
+    /// `performAndWait` would block on the main queue, and the background decrypt path already
+    /// hops the other way (`DispatchQueue.main.sync`), so the two together are a deadlock. A
+    /// `PeerDevice` fetch is a handful of rows on an indexed column; the context is the cheap part
+    /// of being right.
+    static func deviceIds(ofPeer peerId: String) -> [String] {
+        if Thread.isMainThread {
+            return deviceIds(ofPeer: peerId, in: PersistenceController.shared.container.viewContext)
+        }
+        let context = PersistenceController.shared.container.newBackgroundContext()
+        var out: [String] = []
+        context.performAndWait { out = deviceIds(ofPeer: peerId, in: context) }
+        return out
     }
 
     /// One row by device id. Runs on `context`'s queue.
@@ -487,7 +539,11 @@ enum SessionAddressing {
     /// Callers decide what to do with it explicitly; none of them may substitute an account id.
     static func isNaturalInitiator(againstPeer peerId: String) -> Bool? {
         let mine = localIdentity()
-        guard !mine.isEmpty, let theirs = contactId(forPeer: peerId) else { return nil }
+        // Still the pinned device, and still account-keyed at two of its three call sites. That
+        // is the session coordinator's remaining half — the tie-break role belongs to the core
+        // machine (`decisions/session-is-one-state-machine.md`, steps 3–5), which ranks a pair of
+        // devices and has no account to rank. Moving it here would only relocate the fold.
+        guard !mine.isEmpty, let theirs = pinnedDevice(ofPeer: peerId) else { return nil }
         // Equal ids — self, or an echo of our own copy — need no special case here: the core
         // answers `Responder` for them and pins that in `test_an_id_does_not_win_against_itself`.
         // A guard restating it would be the same duplicate this function exists to remove; it was

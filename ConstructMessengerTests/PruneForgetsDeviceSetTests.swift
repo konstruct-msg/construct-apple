@@ -50,7 +50,7 @@ final class PruneForgetsDeviceSetTests: XCTestCase {
     /// The case the ordering exists for.
     ///
     /// A contact we have only ever received from has no `PeerDevice` row, so `deviceIds(ofPeer:)`
-    /// falls back to `contactId(forPeer:)` — derived from `User.knownIdentityKey`, the row
+    /// falls back to `pinnedDevice(ofPeer:)` — derived from `User.knownIdentityKey`, the row
     /// `pruneContactLocally` deletes. Resolve after the delete and the answer is empty, so every
     /// session with that contact survives the prune that was supposed to end it.
     ///

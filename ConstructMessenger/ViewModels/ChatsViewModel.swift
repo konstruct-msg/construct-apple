@@ -146,8 +146,8 @@ class ChatsViewModel {
                 )
             }
             SessionLifecycleController.shared.prewarmSessions(for: [user.id])
-        } else if !CryptoManager.shared.hasSession(for: user.id) {
-            CryptoManager.shared.clearArchivedSessions(for: user.id)
+        } else if !CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: user.id) {
+            CryptoManager.shared.clearArchivedSessionsForAllDevices(ofPeer: user.id)
             SessionLifecycleController.shared.prewarmSessions(for: [user.id])
         }
         return chat
@@ -192,7 +192,7 @@ class ChatsViewModel {
         // Every device of this contact, resolved **before** anything local is destroyed.
         //
         // `deviceIds(ofPeer:)` prefers `PeerDevice` rows — which survive the prune, having no
-        // relationship to `User` — but falls back to `contactId(forPeer:)`, and that reads
+        // relationship to `User` — but falls back to `pinnedDevice(ofPeer:)`, and that reads
         // `User.knownIdentityKey`, which does not. So for a contact we hold no `PeerDevice` row
         // for, which is every peer we have only ever received from, resolving after the prune
         // returns nothing. `archiveSessions(ofPeer:)` ran in exactly that position and archived

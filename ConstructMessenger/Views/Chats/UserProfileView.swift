@@ -595,7 +595,7 @@ struct UserProfileView: View {
         let sessionExists = SessionLifecycleController.shared.hasActiveSession(for: user.id)
         // Real negotiated suite from the Rust core (Keychain only as fallback) —
         // suite 3 is negotiated per-session and never appears in the peer's bundle.
-        let suiteId = Int(CryptoManager.shared.sessionSuiteId(for: user.id))
+        let suiteId = Int(CryptoManager.shared.sessionSuiteIdAcrossDevices(ofPeer: user.id))
         hasSession = sessionExists
         if sessionExists && suiteId > 0 {
             var label = cryptoSuiteName(suiteId: suiteId)

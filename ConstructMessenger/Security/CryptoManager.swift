@@ -242,29 +242,29 @@ class CryptoManager {
     /// (`MessageCryptoService.encryptMessage`) gates the release of a ciphertext on this so an
     /// un-persisted sending-chain advance never reaches the peer (message-number-reuse desync).
     @discardableResult
-    func saveSessionToKeychain(for userId: String) -> Bool {
+    func saveSessionToKeychain(forDevice deviceId: String) -> Bool {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { return false }
         do {
-            guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return false }
+            guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
             let sessionData = Data(try core.exportSession(contactId: contactId))
             var saved = false
             for attempt in 1...3 {
                 saved = KeychainManager.shared.saveSessionData(sessionData, for: contactId)
                 guard saved else {
-                    Log.error("Keychain write failed (attempt \(attempt)/3): \(userId)", category: "CryptoManager")
+                    Log.error("Keychain write failed (attempt \(attempt)/3): \(contactId)", category: "CryptoManager")
                     continue
                 }
                 // Verify round-trip: read back and compare byte count.
                 if let readBack = KeychainManager.shared.loadSessionData(for: contactId),
                    readBack.count == sessionData.count {
-                    Log.debug("Session saved+verified (\(sessionData.count)B): \(userId)", category: "CryptoManager")
+                    Log.debug("Session saved+verified (\(sessionData.count)B): \(contactId)", category: "CryptoManager")
                     return true
                 }
-                Log.error("Session verify-after-write mismatch (attempt \(attempt)/3): \(userId)", category: "CryptoManager")
+                Log.error("Session verify-after-write mismatch (attempt \(attempt)/3): \(contactId)", category: "CryptoManager")
             }
-            Log.error("Failed to save session to Keychain after 3 attempts: \(userId)", category: "CryptoManager")
+            Log.error("Failed to save session to Keychain after 3 attempts: \(contactId)", category: "CryptoManager")
             return false
         } catch {
             Log.error("Session export failed: \(error)", category: "CryptoManager")
@@ -457,17 +457,32 @@ class CryptoManager {
         orchestratorCore?.ackMarkProcessed(messageId: messageId)
     }
 
-    /// The NEGOTIATED crypto suite of the live session with `userId` — read from the
+    /// The NEGOTIATED crypto suite of the session with one device — read from the
     /// Rust core (authoritative; suite 3 is negotiated, the bundle only ever says 1/2).
     /// Falls back to the Keychain copy when the session isn't loaded into the core yet.
     /// Returns 0 when no session is known at all.
-    func sessionSuiteId(for userId: String) -> UInt16 {
+    func sessionSuiteId(forDevice deviceId: String) -> UInt16 {
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return 0 }
         coreLock.lock()
-        let coreSuite = SessionAddressing.contactId(forPeer: userId)
-            .map { orchestratorCore?.getSessionSuiteId(contactId: $0) ?? 0 } ?? 0
+        let coreSuite = orchestratorCore?.getSessionSuiteId(contactId: contactId) ?? 0
         coreLock.unlock()
         if coreSuite > 0 { return coreSuite }
-        return KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0
+        return KeychainManager.shared.loadSessionSuiteId(userId: contactId) ?? 0
+    }
+
+    /// The suite a **conversation** runs at: the weakest of the suites we hold with the person's
+    /// devices, ignoring devices we have no session with.
+    ///
+    /// The weakest and not the first, because that is what the answer is used for — the badge on
+    /// the profile screen tells a reader what protects what they send, and what they send goes to
+    /// every device. A person reading "suite 3" while one of their peer's two devices is on
+    /// suite 1 has been told the strength of a copy, not of the conversation.
+    ///
+    /// 0 means we hold no session with any of them, the same as the per-device answer.
+    func sessionSuiteIdAcrossDevices(ofPeer peerId: String) -> UInt16 {
+        let suites = SessionAddressing.deviceIds(ofPeer: peerId)
+            .map { sessionSuiteId(forDevice: $0) }.filter { $0 > 0 }
+        return suites.min() ?? 0
     }
 
     // MARK: - Orchestrator Event Bridge
@@ -675,7 +690,7 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        guard let resolved = SessionAddressing.contactId(forPeer: contactId) else {
+        guard let resolved = SessionAddressing.asDevice(contactId) else {
             throw CryptoManagerError.sessionNotFound
         }
         try core.applyPqContribution(contactId: resolved, kemSharedSecret: kemSharedSecret)
@@ -687,7 +702,7 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { return false }
-        guard let resolved = SessionAddressing.contactId(forPeer: contactId) else { return false }
+        guard let resolved = SessionAddressing.asDevice(contactId) else { return false }
         core.registerPqDeferred(contactId: resolved, otpkId: otpkId, sharedSecret: sharedSecret)
         PQCKeyManager.saveCFESnapshot(to: core)
         return true
@@ -780,7 +795,7 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        guard let resolved = SessionAddressing.contactId(forPeer: contactId) else {
+        guard let resolved = SessionAddressing.asDevice(contactId) else {
             throw CryptoManagerError.sessionNotFound
         }
         return try core.exportSession(contactId: resolved)
@@ -874,8 +889,8 @@ class CryptoManager {
                     Log.info("Existing session found for \(userId) - archiving before reinitialization to prevent desync", category: "CryptoManager")
                     self?.archiveSession(for: userId, reason: reason)
                 },
-                saveSession: { [weak self] userId in
-                    self?.saveSessionToKeychain(for: userId)
+                saveSession: { [weak self] deviceId in
+                    self?.saveSessionToKeychain(forDevice: deviceId)
                 }
             )
             Log.info("Session initialized for user: \(userId)", category: "CryptoManager")
@@ -997,9 +1012,28 @@ class CryptoManager {
         UserDefaults.standard.set(true, forKey: migrationKey)
     }
 
-    func hasSession(for userId: String) -> Bool {
-        guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return false }
+    /// Whether the core holds a live ratchet with **one device**.
+    ///
+    /// Takes a device id: a ratchet is between two devices, so "do we have a session with this
+    /// person" is a different question and has its own name below. Until step 6 this resolved an
+    /// account to the pinned device and answered about that one, which read as the whole person —
+    /// a peer whose second device had a session and whose first did not was reported sessionless,
+    /// and the paths that act on "no session" are the destructive ones.
+    func hasSession(for deviceId: String) -> Bool {
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
         return orchestratorCore?.hasSession(contactId: contactId) ?? false
+    }
+
+    /// Whether we hold a live ratchet with **any** device of a person.
+    ///
+    /// The account-shaped question, and the one every "is this chat ready", "may I encrypt",
+    /// "should I prewarm" gate is actually asking. It folds the set with `contains` rather than
+    /// picking a device, so nothing downstream inherits a choice nobody made.
+    ///
+    /// A caller that then *acts* on one session must name which device it means; this answers
+    /// only whether there is anything to act on.
+    func hasSessionWithAnyDevice(ofPeer peerId: String) -> Bool {
+        SessionAddressing.deviceIds(ofPeer: peerId).contains { hasSession(for: $0) }
     }
 
     /// Whether session state exists for `userId` **anywhere** — loaded in the core, or on disk.
@@ -1012,8 +1046,8 @@ class CryptoManager {
     ///
     /// Ask this one wherever the question is "is there anything here to put away", never the
     /// other one.
-    func hasStoredSessionState(for userId: String) -> Bool {
-        guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return false }
+    func hasStoredSessionState(for deviceId: String) -> Bool {
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
         if orchestratorCore?.hasSession(contactId: contactId) == true { return true }
         return KeychainManager.shared.loadSessionData(for: contactId) != nil
     }
@@ -1033,15 +1067,22 @@ class CryptoManager {
     /// `restoreRecentSessions` has imported the on-disk session — which otherwise looks
     /// like a missing session and triggers a destructive END_SESSION + fresh re-init,
     /// discarding the ratchet and breaking decryption of the peer's in-flight messages.
-    func hasOrRestoreSession(for userId: String) -> Bool {
+    func hasOrRestoreSession(for deviceId: String) -> Bool {
         guard isCoreReady else { return false }
-        return restoreSession(for: userId)
+        return restoreSession(for: deviceId)
     }
 
-    /// Return a read-only health snapshot for the session with `userId`.
+    /// Restore-aware `hasSessionWithAnyDevice`: the same fold, with the lazy Keychain import each
+    /// device gets from `restoreSession`.
+    func hasOrRestoreSessionWithAnyDevice(ofPeer peerId: String) -> Bool {
+        guard isCoreReady else { return false }
+        return SessionAddressing.deviceIds(ofPeer: peerId).contains { restoreSession(for: $0) }
+    }
+
+    /// Return a read-only health snapshot for the session with one device.
     /// Returns `nil` if no session exists or the core is not initialized.
-    func getSessionHealth(for userId: String) -> SessionHealthReport? {
-        guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return nil }
+    func getSessionHealth(for deviceId: String) -> SessionHealthReport? {
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return nil }
         return orchestratorCore?.getSessionHealth(contactId: contactId)
     }
 
@@ -1053,8 +1094,8 @@ class CryptoManager {
     /// identical on both sides, so it means the same thing across the wire.
     ///
     /// `nil` means there is no session (or the core is not ready) — never "unknown".
-    func sessionEpoch(for userId: String) -> SessionEpoch? {
-        guard let sessionId = getSessionHealth(for: userId)?.sessionId else { return nil }
+    func sessionEpoch(for deviceId: String) -> SessionEpoch? {
+        guard let sessionId = getSessionHealth(for: deviceId)?.sessionId else { return nil }
         return SessionEpoch(rawValue: sessionId)
     }
 
@@ -1097,8 +1138,8 @@ class CryptoManager {
                     Log.info("Existing session found for \(userId) - archiving before receiving session init to prevent desync", category: "CryptoManager")
                     self?.archiveSession(for: userId, reason: reason)
                 },
-                saveSession: { [weak self] userId in
-                    self?.saveSessionToKeychain(for: userId)
+                saveSession: { [weak self] deviceId in
+                    self?.saveSessionToKeychain(forDevice: deviceId)
                 }
             )
             Log.info("Receiving session initialized for user: \(userId), decrypted message length: \(plaintext.count)", category: "CryptoManager")
@@ -1144,27 +1185,30 @@ class CryptoManager {
     /// Result of message encryption with separate fields per server ChatMessage spec
     typealias EncryptedMessageComponents = MessageCryptoService.EncryptedMessageComponents
 
-    /// Encrypts a plaintext message using the session for a specific user
-    /// Returns separate components per server ChatMessage format
-    func encryptMessage(_ message: String, for userId: String) throws -> EncryptedMessageComponents {
+    /// Encrypts a plaintext message for **one device** of the recipient.
+    /// Returns separate components per server ChatMessage format.
+    ///
+    /// One call, one copy, one ratchet — `OutboundMessagePipeline` loops the recipient's device
+    /// set and calls this once per device. See `decisions/a-peer-is-a-set-of-devices.md`.
+    func encryptMessage(_ message: String, forDevice deviceId: String) throws -> EncryptedMessageComponents {
         // coreLock serializes Rust FFI calls so that a background task and the main
         // actor cannot advance the DR ratchet concurrently (would corrupt chain state).
         coreLock.lock()
         defer { coreLock.unlock() }
         let components = try messageCrypto.encryptMessage(
             message,
-            for: userId,
+            forDevice: deviceId,
             core: orchestratorCore,
-            restoreSession: { [weak self] userId in
-                Log.info("Session not in memory, attempting restore: \(userId)", category: "CryptoManager")
-                return self?.restoreSession(for: userId) ?? false
+            restoreSession: { [weak self] device in
+                Log.info("Session not in memory, attempting restore: \(device)", category: "CryptoManager")
+                return self?.restoreSession(for: device) ?? false
             },
-            saveSession: { [weak self] userId in
-                self?.saveSessionToKeychain(for: userId) ?? false
+            saveSession: { [weak self] device in
+                self?.saveSessionToKeychain(forDevice: device) ?? false
             },
-            archiveSession: { [weak self] userId, reason in
-                Log.debug("Archiving session for \(userId) to allow reinitialization", category: "CryptoManager")
-                self?.archiveSession(for: userId, reason: reason)
+            archiveSession: { [weak self] device, reason in
+                Log.debug("Archiving session for \(device) to allow reinitialization", category: "CryptoManager")
+                self?.archiveSession(for: device, reason: reason)
             }
         )
 
@@ -1240,8 +1284,8 @@ class CryptoManager {
                     Log.info("Session not in memory, attempting restore: \(userId)", category: "CryptoManager")
                     return self?.restoreSession(for: userId) ?? false
                 },
-                saveSession: { [weak self] userId in
-                    self?.saveSessionToKeychain(for: userId)
+                saveSession: { [weak self] deviceId in
+                    self?.saveSessionToKeychain(forDevice: deviceId)
                 },
                 archiveSession: { [weak self] userId, reason in
                     // ERROR-level so this appears in exported logs even at INFO filter.
@@ -1291,7 +1335,11 @@ class CryptoManager {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        guard let contactId = SessionAddressing.contactId(forPeer: message.from),
+        // `message.from` names the sending device by the time a background decrypt sees it. It
+        // is not resolved here: the locked-device path is exactly where the pinned key was the
+        // only answer available, so a resolution would always have succeeded and always with the
+        // same device, decrypting a sibling device's message against the wrong ratchet.
+        guard let contactId = SessionAddressing.asDevice(message.from),
               core.hasSession(contactId: contactId) else {
             throw CryptoManagerError.sessionNotFound
         }
@@ -1308,7 +1356,7 @@ class CryptoManager {
                 pqMessageEpoch: message.pqMessageEpoch,
                 pqRatchetField: [UInt8](message.pqRatchetField)
             )
-            saveSessionToKeychain(for: message.from)
+            saveSessionToKeychain(forDevice: contactId)
             Log.info("BG decrypt OK \(message.id.prefix(8))… msgNum=\(message.messageNumber) (\(result.plaintext.count) bytes)", category: "CryptoManager")
             return MessageDecryptResult(plaintext: Data(result.plaintext), storageKey: Data(result.storageKey))
         } catch {
@@ -1361,7 +1409,7 @@ class CryptoManager {
         // Zip back to ChatMessage for the caller.
         return zip(filtered, results).map { (chatMsg, batchResult) in
             if let plaintext = batchResult.plaintext {
-                saveSessionToKeychain(for: chatMsg.from)
+                saveSessionToKeychain(forDevice: chatMsg.from)
                 Log.info("Batch BG decrypt OK \(chatMsg.id.prefix(8))… msgNum=\(chatMsg.messageNumber) (\(plaintext.count) bytes)", category: "CryptoManager")
                 return OfflineBatchDecryptResult(
                     message: chatMsg,
@@ -1405,11 +1453,11 @@ class CryptoManager {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        guard let resolved = SessionAddressing.contactId(forPeer: contactId) else {
+        guard let resolved = SessionAddressing.asDevice(contactId) else {
             throw CryptoManagerError.sessionNotFound
         }
         if !core.hasSession(contactId: resolved) {
-            if !restoreSession(for: contactId) {
+            if !restoreSession(for: resolved) {
                 throw CryptoManagerError.sessionNotFound
             }
         }
@@ -1428,7 +1476,7 @@ class CryptoManager {
             pqMessageEpoch: pqMessageEpoch,
             pqRatchetField: [UInt8](pqRatchetField)
         )
-        saveSessionToKeychain(for: contactId)
+        saveSessionToKeychain(forDevice: resolved)
         return String(data: Data(result.plaintext), encoding: .utf8) ?? ""
     }
 

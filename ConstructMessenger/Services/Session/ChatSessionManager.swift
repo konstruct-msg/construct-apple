@@ -41,7 +41,7 @@ final class ChatSessionManager {
 
     func checkExistingSession() {
         guard let userId = chat.otherUser?.id else { return }
-        let ready = CryptoManager.shared.hasSession(for: userId)
+        let ready = CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId)
         viewModel?.isSessionReady = ready
         if ready {
             Log.info("Session already exists for user: \(userId)", category: "ChatViewModel")
@@ -79,7 +79,7 @@ final class ChatSessionManager {
         // could never become true — a permanent loop. Ask the crypto core instead
         // (authoritative; `isSessionReady` is per-ViewModel view state that resets on each
         // chat open) and leave username backfill to the profile path, which owns it.
-        let sessionExists = CryptoManager.shared.hasSession(for: userId)
+        let sessionExists = CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId)
         if sessionExists {
             viewModel?.isSessionReady = true
             // Skip the network entirely only when the identity key is already available —
@@ -137,7 +137,7 @@ final class ChatSessionManager {
         publicKeyFetchTimer?.invalidate()
         publicKeyFetchTimer = nil
         viewModel?.isSessionReady = true
-        if CryptoManager.shared.hasSession(for: data.userId) {
+        if CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: data.userId) {
             Log.info("SESSION_STATE[bundle_fetched_session_exists]: session already established for \(data.userId.prefix(8))…", category: "ChatViewModel")
         } else {
             Log.info("SESSION_STATE[bundle_cached]: bundle ready for \(data.userId.prefix(8))…, session will be created on first send", category: "ChatViewModel")

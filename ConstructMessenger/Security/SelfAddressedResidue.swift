@@ -28,7 +28,7 @@ import Foundation
 /// 3. **A Double Ratchet session keyed by our account UUID** — deleted with the per-session
 ///    Keychain entries that hang off the same id. Wrong twice over: a session with ourselves, and
 ///    an id that names an account where everything below the seam must name a device. Nothing can
-///    look it up again in any case — `contactId(forPeer:)` now answers with a device id.
+///    look it up again in any case — `pinnedDevice(ofPeer:)` now answers with a device id.
 ///
 /// Idempotent. The flag is set only after a run that actually reached Core Data, so a launch where
 /// the store is not ready yet retries on the next one instead of recording the work as done — the

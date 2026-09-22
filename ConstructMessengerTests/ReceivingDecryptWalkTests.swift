@@ -4,7 +4,7 @@ import XCTest
 /// Э3: an incoming message is tried against every device session we hold with the sender.
 ///
 /// A peer's account is a set of devices and each has its own ratchet. The receive path resolved
-/// exactly one — `SessionAddressing.contactId(forPeer:)` — and handed it every message the account
+/// exactly one — `SessionAddressing.pinnedDevice(ofPeer:)` — and handed it every message the account
 /// sent, so a message from the second device failed AEAD on keys that were entirely valid. That is
 /// indistinguishable from a broken session and was treated as one: heal, and a teardown of the
 /// healthy session behind it.

@@ -25,13 +25,24 @@ final class MessageCryptoService {
         let storageKey: Data  // 32-byte random key — store in MessageKeyStore keyed by message_id
     }
 
-    private static func suiteId(for userId: String) -> UInt16 {
-        KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0
+    /// The Keychain's copy of a session's negotiated suite. Keyed by **device**, like the entry
+    /// the core writes back — it used to be read under whatever id the caller held and written
+    /// under the resolved one, so on an account id the fallback read a key nothing had written.
+    private static func suiteId(forDevice deviceId: String) -> UInt16 {
+        KeychainManager.shared.loadSessionSuiteId(userId: deviceId) ?? 0
     }
 
+    /// Encrypt one copy, for one device.
+    ///
+    /// **Takes a device id.** A ciphertext is produced by one ratchet and readable by one device,
+    /// so there is no version of this that takes a person: a message to someone with two devices
+    /// is two calls here, which is what `OutboundMessagePipeline` does. Until step 6 of
+    /// `decisions/a-peer-is-a-set-of-devices.md` this resolved an account id to the pinned device
+    /// and encrypted for that one — the copy addressed to the account's second device was sealed
+    /// to the first device's ratchet, and the second device could not open it.
     func encryptMessage(
         _ message: String,
-        for userId: String,
+        forDevice deviceId: String,
         core: OrchestratorCore?,
         restoreSession: (String) -> Bool,
         saveSession: (String) -> Bool,
@@ -41,15 +52,12 @@ final class MessageCryptoService {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        // Resolved once, at the top: a peer we cannot name has no session to encrypt with, and
-        // the alternative — carrying the account id onwards — is what put an account id in the AD.
-        guard let contactId = SessionAddressing.contactId(forPeer: userId) else {
-            Log.info("encryptMessage: \(userId.prefix(8))… has no pinned key — no session to use", category: "CryptoManager")
+        guard let contactId = SessionAddressing.asDevice(deviceId) else {
             throw CryptoManagerError.sessionNotFound
         }
 
         if !core.hasSession(contactId: contactId) {
-            if !restoreSession(userId) {
+            if !restoreSession(contactId) {
                 throw CryptoManagerError.sessionNotFound
             }
         }
@@ -65,9 +73,9 @@ final class MessageCryptoService {
         if suiteId == 0 {
             // Rust core doesn't know the suiteId yet (session not fully loaded?) —
             // fall back to UserDefaults and log so we can investigate.
-            suiteId = Self.suiteId(for: userId)
+            suiteId = Self.suiteId(forDevice: contactId)
             if suiteId > 0 {
-                Log.info("ENCRYPT: suiteId from Rust=0, falling back to UserDefaults=\(suiteId) for \(userId.prefix(8))…", category: "CryptoManager")
+                Log.info("ENCRYPT: suiteId from Rust=0, falling back to UserDefaults=\(suiteId) for \(contactId.prefix(8))…", category: "CryptoManager")
             }
         } else {
             // Keep Keychain in sync so the fallback path stays correct.
@@ -76,7 +84,7 @@ final class MessageCryptoService {
 
         #if DEBUG
         Log.debug("ENCRYPT: Preparing to encrypt message", category: "CryptoManager")
-        Log.debug("   userId: \(userId)", category: "CryptoManager")
+        Log.debug("   deviceId: \(contactId)", category: "CryptoManager")
         Log.debug("   suiteId: \(suiteId)", category: "CryptoManager")
         Log.debug("   plaintext length: \(message.count) chars", category: "CryptoManager")
         Log.debug("   plaintext preview: \(message.prefix(50))...", category: "CryptoManager")
@@ -118,8 +126,8 @@ final class MessageCryptoService {
             // Calls share this DR session with messages, so releasing this signaling ciphertext when
             // the advance is not durable risks a message-number-reuse desync on a crash + stale
             // reload. Refuse; the caller treats it as a signaling failure and retries.
-            guard saveSession(userId) else {
-                Log.error("encryptMessage: session persist FAILED for \(userId.prefix(8))… — refusing to release ciphertext (prevents ratchet number reuse)", category: "CryptoManager")
+            guard saveSession(contactId) else {
+                Log.error("encryptMessage: session persist FAILED for \(contactId.prefix(8))… — refusing to release ciphertext (prevents ratchet number reuse)", category: "CryptoManager")
                 throw CryptoManagerError.encryptionFailed
             }
             return components
@@ -141,14 +149,19 @@ final class MessageCryptoService {
             throw CryptoManagerError.coreNotInitialized
         }
 
+        // `contactIdOverride` is the sender's device when the envelope named one; `message.from`
+        // is a device on every path that reaches here, because the sealed-sender resolve and the
+        // candidate walk both hand one down. An account id is a defect, and `asDevice` says so
+        // rather than quietly decrypting against the pinned device — which is how a message from
+        // a peer's second device used to be fed to the first device's ratchet, failing to open
+        // and then archiving the healthy session it was never sent on.
         let peerId = contactIdOverride ?? message.from
-        guard let contactId = SessionAddressing.contactId(forPeer: peerId) else {
-            Log.info("decryptMessage: \(peerId.prefix(8))… has no pinned key — no session to try", category: "CryptoManager")
+        guard let contactId = SessionAddressing.asDevice(peerId) else {
             throw CryptoManagerError.sessionNotFound
         }
 
         if !core.hasSession(contactId: contactId) {
-            if !restoreSession(peerId) {
+            if !restoreSession(contactId) {
                 throw CryptoManagerError.sessionNotFound
             }
         }

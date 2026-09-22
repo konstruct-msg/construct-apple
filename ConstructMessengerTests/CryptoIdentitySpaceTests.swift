@@ -130,10 +130,96 @@ final class CryptoIdentitySpaceTests: XCTestCase {
         let offenders = sites.filter { accountSpaced.contains($0.text) }
         XCTAssertTrue(
             offenders.isEmpty,
-            "these hand the core an account id — resolve through SessionAddressing.contactId(forPeer:):\n"
+            "these hand the core an account id — expand it with SessionAddressing.deviceIds(ofPeer:in:):\n"
                 + offenders.map { "  \($0.file):\($0.line) — contactId: \($0.text)" }
                     .sorted().joined(separator: "\n")
         )
+    }
+
+    // MARK: - Step 6: a peer is a set, and nobody picks from it
+
+    /// Every `.swift` under the app, with its text. One walk for the scans below.
+    private func appSources() throws -> [(name: String, path: String, text: String)] {
+        let fm = FileManager.default
+        guard let walker = fm.enumerator(at: sourceRoot, includingPropertiesForKeys: nil) else {
+            throw XCTSkip("app sources not reachable from \(sourceRoot.path)")
+        }
+        var out: [(String, String, String)] = []
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            if url.lastPathComponent == "construct_core.swift" { continue }
+            if url.path.contains("/Generated/") { continue }
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            out.append((url.lastPathComponent, url.path, text))
+        }
+        return out
+    }
+
+    /// **The device set is enumerated, never sampled.**
+    ///
+    /// `deviceIds(ofPeer:in:)` replaced a function that answered with one device, and the way to
+    /// undo that replacement without noticing is to take `.first` of the set — which restores the
+    /// old behaviour exactly, including its bug, while reading as if the set were being used. The
+    /// order is deliberate and stable (`firstSeenAt`, then `deviceId`), so the first element is
+    /// precisely the device the pin used to name.
+    ///
+    /// Required by step 6 of `decisions/a-peer-is-a-set-of-devices.md`.
+    func testNobodyTakesOneDeviceOutOfThePeersSet() throws {
+        var offenders: [String] = []
+        for file in try appSources() {
+            for (index, line) in file.text.components(separatedBy: "\n").enumerated() {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix("//") || trimmed.hasPrefix("///") { continue }
+                guard line.contains("deviceIds(ofPeer:") || line.contains("devices(ofPeer:") else { continue }
+                // `.first { … }` is a search through the set, not a pick of its head; `.first`
+                // and `[0]` are the pick.
+                let picks = line.contains(").first)") || line.contains(").first ")
+                    || line.contains(").first?") || line.contains(").first,")
+                    || line.contains(").first\n") || line.hasSuffix(").first")
+                    || line.contains(")[0]") || line.contains(".first!")
+                if picks { offenders.append("\(file.name):\(index + 1) — \(trimmed)") }
+            }
+        }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "a peer's device set was sampled instead of walked — that is the pinned device again:\n"
+                + offenders.sorted().joined(separator: "\n")
+        )
+    }
+
+    /// **The crypto layer is handed a device; it does not go looking for one.**
+    ///
+    /// `pinnedDevice(ofPeer:)` is the offline single-device answer and has legitimate callers —
+    /// the send tag, the control emitter, call signalling, the first-contact init fallback. What
+    /// it may not do is sit under `encryptMessage`, `hasSession`, `archiveSession` or the
+    /// background decrypt, where it silently chose one ratchet for every caller that held only an
+    /// account. Step 6 took it out of these three files; this keeps it out.
+    func testTheCryptoLayerDoesNotResolveThePeerItself() throws {
+        let cryptoLayer: Set<String> = [
+            "CryptoManager.swift", "CryptoManager+SessionArchive.swift", "MessageCryptoService.swift"
+        ]
+        var offenders: [String] = []
+        for file in try appSources() where cryptoLayer.contains(file.name) {
+            for (index, line) in file.text.components(separatedBy: "\n").enumerated() {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix("//") || trimmed.hasPrefix("///") { continue }
+                if line.contains("pinnedDevice(ofPeer:") || line.contains("cryptoIdentity(ofUser:") {
+                    offenders.append("\(file.name):\(index + 1) — \(trimmed)")
+                }
+            }
+        }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "the crypto layer resolved a peer to one device instead of being handed one:\n"
+                + offenders.sorted().joined(separator: "\n")
+        )
+    }
+
+    /// The scan above is only worth anything if the file set it names still exists.
+    func testTheCryptoLayerFilesAreWhereTheScanLooks() throws {
+        let names = Set(try appSources().map(\.name))
+        for expected in ["CryptoManager.swift", "CryptoManager+SessionArchive.swift", "MessageCryptoService.swift"] {
+            XCTAssertTrue(names.contains(expected), "\(expected) moved — the step 6 scan now guards nothing")
+        }
     }
 
     /// The seam is the only thing that produces a crypto identity, and it can fail. A call site

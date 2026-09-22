@@ -48,7 +48,20 @@ final class SessionActivityTracker {
     /// - Returns: `true` if the session is healthy and the caller may proceed with encryption.
     ///   `false` if the session was unhealthy and a proactive reinit was triggered (caller
     ///   should wait for the new `NotifySessionCreated` event before retrying).
-    func preflight(for contactId: String) async -> Bool {
+    /// `peerId` is the person. A message to them goes to every device they have, so the answer
+    /// is the **worst** of their sessions: one device far enough into skipped keys to need a
+    /// reinit is a copy that will not open, and a fold that reported the best of them would clear
+    /// the send anyway. Before step 6 this asked about the pinned device and called it the peer.
+    func preflight(for peerId: String) async -> Bool {
+        for device in SessionAddressing.deviceIds(ofPeer: peerId) where !preflightDevice(device) {
+            return false
+        }
+        return true
+    }
+
+    /// One device's answer. Activity is recorded per device by the send and receive paths, so a
+    /// device with no record is one nothing has spoken to recently enough to doubt.
+    private func preflightDevice(_ contactId: String) -> Bool {
         guard let age = secondsSinceLastActivity(for: contactId),
               age > prefightThreshold else {
             return true  // Recent activity → skip check

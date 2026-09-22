@@ -156,9 +156,16 @@ final class CallSignalCrypto {
     /// block before encryption, so every candidate under that ceiling produces the same 283-byte
     /// ciphertext. A second scheme used to re-pad this to 1024 bytes — see the 2026-08-21 removal
     /// of `MessagePadding`, which made call signals the one traffic class with a distinct size.
+    ///
+    /// Encrypts for the peer's **pinned** device, like the offer that opened the call — the two
+    /// have to name the same ratchet, so this surface moves when call signalling does, not before
+    /// (`decisions/a-peer-is-a-set-of-devices.md`).
     func encryptCandidate(_ plaintext: String, for peerUserId: String) throws -> Data {
+        guard let peerDevice = SessionAddressing.pinnedDevice(ofPeer: peerUserId) else {
+            throw CallSignalCryptoError.missingSession(peerUserId: peerUserId)
+        }
         do {
-            let c = try CryptoManager.shared.encryptMessage(plaintext, for: peerUserId)
+            let c = try CryptoManager.shared.encryptMessage(plaintext, forDevice: peerDevice)
             return CallSignalFrame.encode(
                 CallSignalFrame.Fields(
                     suiteId: c.suiteId,
@@ -176,11 +183,14 @@ final class CallSignalCrypto {
 
     // MARK: Decrypt
 
-    /// Decrypt a candidate from a peer.
+    /// Decrypt a candidate from a peer — on the same pinned device's ratchet it was encrypted for.
     func decryptCandidate(_ frame: Data, from peerUserId: String) throws -> String {
+        guard let peerDevice = SessionAddressing.pinnedDevice(ofPeer: peerUserId) else {
+            throw CallSignalCryptoError.missingSession(peerUserId: peerUserId)
+        }
         let f = try CallSignalFrame.decode(frame)
         return try CryptoManager.shared.decryptRawComponents(
-            contactId: peerUserId,
+            contactId: peerDevice,
             ephemeralPublicKey: f.ephemeralPublicKey,
             messageNumber: f.messageNumber,
             content: f.ciphertext,
